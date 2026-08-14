@@ -12,9 +12,12 @@ use aurora_voice_sherpa::{
     SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
 #[cfg(feature = "native-sherpa-tts")]
-use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsVitsPiperModelFiles, SherpaTtsProvider};
+use aurora_voice_sherpa::{
+    NativeTtsBackend, NativeTtsPocketModelFiles, NativeTtsReferenceAudio,
+    NativeTtsVitsPiperModelFiles, SherpaTtsProvider,
+};
 
-use crate::{NativeModelStore, SpeechModelBindings, SpeechPackManager};
+use crate::{NativeModelStore, SpeechModelBindings, SpeechPackBindings, SpeechPackManager};
 
 /// Native desktop VAD provider bound to the currently active compatible pack.
 pub fn build_active_vad_provider(
@@ -178,23 +181,64 @@ pub fn build_installed_tts_provider(
     manager: &SpeechPackManager,
     voice_id: &str,
 ) -> Result<SherpaTtsProvider<NativeTtsBackend>, EngineError> {
+    build_installed_tts_provider_with_reference(manager, voice_id, None, None)
+}
+
+/// Native desktop TTS provider bound to an installed TTS catalog voice and
+/// caller-selected reference audio for PocketTTS voices.
+#[cfg(feature = "native-sherpa-tts")]
+pub fn build_installed_tts_provider_with_reference(
+    manager: &SpeechPackManager,
+    voice_id: &str,
+    reference_audio: Option<NativeTtsReferenceAudio>,
+    reference_text: Option<String>,
+) -> Result<SherpaTtsProvider<NativeTtsBackend>, EngineError> {
     let bindings = manager
         .resolve_voice_bindings(voice_id)
         .map_err(|_| EngineError::TaskUnavailable)?;
     if bindings.task_binding.task() != VoiceTask::TextToSpeech {
         return Err(EngineError::InvalidRequest);
     }
-    let files = NativeTtsVitsPiperModelFiles {
-        model_file_id: "model".to_owned(),
-        model_path: bindings.model.clone(),
-        tokens_file_id: "tokens".to_owned(),
-        tokens_path: bindings.tokens.clone(),
-        espeak_data_file_id: "espeak-ng-data".to_owned(),
-        espeak_data_dir: bindings.data_dir.clone(),
-        lexicon_file_id: None,
-        lexicon_path: None,
+    let backend = match bindings.task_binding.catalog_model_family() {
+        Some("vits_piper") => {
+            let files = NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: bindings.model.clone(),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: bindings.tokens.clone(),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: bindings.data_dir.clone(),
+                lexicon_file_id: None,
+                lexicon_path: None,
+            };
+            NativeTtsBackend::from_catalog_vits_piper_model(&bindings.task_binding, files)?
+        }
+        Some("pockettts") => {
+            let Some(reference_audio) = reference_audio else {
+                return Err(EngineError::TaskUnavailable);
+            };
+            let files = NativeTtsPocketModelFiles {
+                lm_flow_file_id: "lm-flow".to_owned(),
+                lm_flow_path: catalog_path_for_voice(&bindings, "lm-flow")?,
+                lm_main_file_id: "lm-main".to_owned(),
+                lm_main_path: catalog_path_for_voice(&bindings, "lm-main")?,
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: catalog_path_for_voice(&bindings, "encoder")?,
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: catalog_path_for_voice(&bindings, "decoder")?,
+                text_conditioner_file_id: "text-conditioner".to_owned(),
+                text_conditioner_path: catalog_path_for_voice(&bindings, "text-conditioner")?,
+                vocab_file_id: "vocab".to_owned(),
+                vocab_path: catalog_path_for_voice(&bindings, "vocab")?,
+                token_scores_file_id: "token-scores".to_owned(),
+                token_scores_path: catalog_path_for_voice(&bindings, "token-scores")?,
+                reference_audio: Some(reference_audio),
+                reference_text,
+            };
+            NativeTtsBackend::from_catalog_pockettts_model(&bindings.task_binding, files)?
+        }
+        _ => return Err(EngineError::InvalidRequest),
     };
-    let backend = NativeTtsBackend::from_catalog_vits_piper_model(&bindings.task_binding, files)?;
     SherpaTtsProvider::new(bindings.task_binding, backend)
 }
 
@@ -249,6 +293,17 @@ fn catalog_path(
 ) -> Result<std::path::PathBuf, EngineError> {
     bindings
         .bindings
+        .get(file_id)
+        .cloned()
+        .ok_or(EngineError::InvalidRequest)
+}
+
+fn catalog_path_for_voice(
+    bindings: &SpeechPackBindings,
+    file_id: &str,
+) -> Result<std::path::PathBuf, EngineError> {
+    bindings
+        .files
         .get(file_id)
         .cloned()
         .ok_or(EngineError::InvalidRequest)

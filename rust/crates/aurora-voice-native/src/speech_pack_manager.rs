@@ -13,8 +13,6 @@ use aurora_voice_engine::{
     RuntimeTarget, SpeechCatalogEntry, SpeechCatalogTask, SpeechModelCatalog, TargetArch, TargetOs,
     TaskPackBinding, TtsCatalogEntry, TtsVoiceCatalog,
 };
-#[cfg(test)]
-use aurora_voice_engine::VoiceTask;
 use bzip2::read::BzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -101,6 +99,7 @@ pub struct SpeechPackBindings {
     pub archive_sha256: String,
     pub task_binding: TaskPackBinding,
     pub root: PathBuf,
+    pub files: BTreeMap<String, PathBuf>,
     pub model: PathBuf,
     pub config: PathBuf,
     pub tokens: PathBuf,
@@ -739,23 +738,30 @@ impl SpeechPackManager {
         verify_extracted(&self.config.root, entry)?;
         let root = extract_root(&self.config.root, &entry.archive.sha256);
         let pack_root = root.join(&entry.archive.root);
+        let files = resolved_tts_files(entry, &root)?;
         let bindings = SpeechPackBindings {
             voice_id: entry.voice_id.clone(),
             archive_sha256: entry.archive.sha256.clone(),
-            task_binding: tts_task_binding(entry, &root.join(&entry.bindings.config))?,
+            task_binding: tts_task_binding(entry, &root)?,
             root: pack_root.clone(),
-            model: root.join(&entry.bindings.model),
-            config: root.join(&entry.bindings.config),
-            tokens: root.join(&entry.bindings.tokens),
-            data_dir: root.join(&entry.bindings.data_dir),
-            model_card: root.join(&entry.bindings.model_card),
+            model: files.get("model").cloned().unwrap_or_default(),
+            config: files.get("config").cloned().unwrap_or_default(),
+            tokens: files.get("tokens").cloned().unwrap_or_default(),
+            data_dir: if entry.bindings.data_dir.is_empty() {
+                PathBuf::new()
+            } else {
+                root.join(&entry.bindings.data_dir)
+            },
+            model_card: files.get("model-card").cloned().unwrap_or_default(),
+            files,
         };
         ensure_contained(&root, &bindings.root)?;
-        ensure_contained(&root, &bindings.model)?;
-        ensure_contained(&root, &bindings.config)?;
-        ensure_contained(&root, &bindings.tokens)?;
-        ensure_contained(&root, &bindings.data_dir)?;
-        ensure_contained(&root, &bindings.model_card)?;
+        for path in bindings.files.values() {
+            ensure_contained(&root, path)?;
+        }
+        if !bindings.data_dir.as_os_str().is_empty() {
+            ensure_contained(&root, &bindings.data_dir)?;
+        }
         Ok(bindings)
     }
 
@@ -867,7 +873,7 @@ fn catalog_task_binding(entry: &SpeechCatalogEntry) -> Result<TaskPackBinding, S
 
 fn tts_task_binding(
     entry: &TtsCatalogEntry,
-    config_path: &Path,
+    extracted_root: &Path,
 ) -> Result<TaskPackBinding, SpeechPackError> {
     let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
     TaskPackBinding::from_tts_catalog_entry(
@@ -876,9 +882,17 @@ fn tts_task_binding(
         RuntimeTarget::Desktop,
         current_target_os(),
         current_target_arch(),
-        read_tts_sample_rate_hz(config_path)?,
+        tts_sample_rate_hz(entry, extracted_root)?,
     )
     .map_err(|_| SpeechPackError::InvalidArchive)
+}
+
+fn tts_sample_rate_hz(entry: &TtsCatalogEntry, root: &Path) -> Result<u32, SpeechPackError> {
+    match entry.model_family.as_str() {
+        "vits_piper" => read_tts_sample_rate_hz(&root.join(&entry.bindings.config)),
+        "pockettts" => entry.sample_rate_hz.ok_or(SpeechPackError::InvalidArchive),
+        _ => Err(SpeechPackError::InvalidArchive),
+    }
 }
 
 fn read_tts_sample_rate_hz(config_path: &Path) -> Result<u32, SpeechPackError> {
@@ -964,11 +978,17 @@ struct InstalledModelRecord {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct BindingReceipt {
     root: DirectoryReceipt,
-    model: FileReceipt,
-    config: FileReceipt,
-    tokens: FileReceipt,
-    data_dir: DirectoryReceipt,
+    #[serde(default)]
+    model: Option<FileReceipt>,
+    #[serde(default)]
+    config: Option<FileReceipt>,
+    #[serde(default)]
+    tokens: Option<FileReceipt>,
+    #[serde(default)]
+    data_dir: Option<DirectoryReceipt>,
     model_card: FileReceipt,
+    #[serde(default)]
+    bindings: BTreeMap<String, FileReceipt>,
     extracted_paths: Vec<ExtractedPathReceipt>,
 }
 
@@ -1382,12 +1402,106 @@ fn verify_model_extracted(
 fn verify_bindings_in_root(root: &Path, entry: &TtsCatalogEntry) -> Result<(), SpeechPackError> {
     let pack_root = root.join(&entry.archive.root);
     require_directory(root, &pack_root)?;
-    require_file(root, &root.join(&entry.bindings.model))?;
-    require_file(root, &root.join(&entry.bindings.config))?;
-    require_file(root, &root.join(&entry.bindings.tokens))?;
-    require_directory(root, &root.join(&entry.bindings.data_dir))?;
-    require_file(root, &root.join(&entry.bindings.model_card))?;
+    for relative in required_tts_file_bindings(entry)?.values() {
+        require_file(root, &root.join(relative))?;
+    }
+    if entry.model_family == "vits_piper" {
+        require_directory(root, &root.join(&entry.bindings.data_dir))?;
+    }
+    for sample in &entry.reference_samples {
+        require_file(root, &root.join(&sample.path))?;
+    }
     Ok(())
+}
+
+fn required_tts_file_bindings(
+    entry: &TtsCatalogEntry,
+) -> Result<BTreeMap<String, String>, SpeechPackError> {
+    let mut bindings = BTreeMap::new();
+    match entry.model_family.as_str() {
+        "vits_piper" => {
+            bindings.insert("config".to_owned(), entry.bindings.config.clone());
+            bindings.insert("model".to_owned(), entry.bindings.model.clone());
+            bindings.insert("model-card".to_owned(), entry.bindings.model_card.clone());
+            bindings.insert("tokens".to_owned(), entry.bindings.tokens.clone());
+        }
+        "pockettts" => {
+            bindings.insert(
+                "decoder".to_owned(),
+                entry
+                    .bindings
+                    .decoder
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert(
+                "encoder".to_owned(),
+                entry
+                    .bindings
+                    .encoder
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert(
+                "lm-flow".to_owned(),
+                entry
+                    .bindings
+                    .lm_flow
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert(
+                "lm-main".to_owned(),
+                entry
+                    .bindings
+                    .lm_main
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert("model-card".to_owned(), entry.bindings.model_card.clone());
+            bindings.insert(
+                "text-conditioner".to_owned(),
+                entry
+                    .bindings
+                    .text_conditioner
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert(
+                "token-scores".to_owned(),
+                entry
+                    .bindings
+                    .token_scores_json
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+            bindings.insert(
+                "vocab".to_owned(),
+                entry
+                    .bindings
+                    .vocab_json
+                    .clone()
+                    .ok_or(SpeechPackError::InvalidArchive)?,
+            );
+        }
+        _ => return Err(SpeechPackError::InvalidArchive),
+    }
+    if bindings.values().any(|relative| relative.is_empty()) {
+        return Err(SpeechPackError::InvalidArchive);
+    }
+    Ok(bindings)
+}
+
+fn resolved_tts_files(
+    entry: &TtsCatalogEntry,
+    root: &Path,
+) -> Result<BTreeMap<String, PathBuf>, SpeechPackError> {
+    required_tts_file_bindings(entry).map(|bindings| {
+        bindings
+            .into_iter()
+            .map(|(name, relative)| (name, root.join(relative)))
+            .collect()
+    })
 }
 
 fn verify_model_bindings_in_root(
@@ -1411,13 +1525,19 @@ fn build_binding_receipt(
     entry: &TtsCatalogEntry,
 ) -> Result<BindingReceipt, SpeechPackError> {
     verify_bindings_in_root(root, entry)?;
+    let bindings = binding_file_receipts(root, entry)?;
     Ok(BindingReceipt {
         root: directory_receipt(&entry.archive.root),
-        model: file_receipt(root, &entry.bindings.model)?,
-        config: file_receipt(root, &entry.bindings.config)?,
-        tokens: file_receipt(root, &entry.bindings.tokens)?,
-        data_dir: directory_receipt(&entry.bindings.data_dir),
+        model: bindings.get("model").cloned(),
+        config: bindings.get("config").cloned(),
+        tokens: bindings.get("tokens").cloned(),
+        data_dir: if entry.bindings.data_dir.is_empty() {
+            None
+        } else {
+            Some(directory_receipt(&entry.bindings.data_dir))
+        },
         model_card: file_receipt(root, &entry.bindings.model_card)?,
+        bindings,
         extracted_paths: extracted_path_receipts(root)?,
     })
 }
@@ -1444,13 +1564,19 @@ fn verify_binding_receipt(
     receipt: &BindingReceipt,
 ) -> Result<(), SpeechPackError> {
     verify_bindings_in_root(root, entry)?;
+    let bindings = binding_file_receipts(root, entry)?;
     let expected = BindingReceipt {
         root: directory_receipt(&entry.archive.root),
-        model: file_receipt(root, &entry.bindings.model)?,
-        config: file_receipt(root, &entry.bindings.config)?,
-        tokens: file_receipt(root, &entry.bindings.tokens)?,
-        data_dir: directory_receipt(&entry.bindings.data_dir),
+        model: bindings.get("model").cloned(),
+        config: bindings.get("config").cloned(),
+        tokens: bindings.get("tokens").cloned(),
+        data_dir: if entry.bindings.data_dir.is_empty() {
+            None
+        } else {
+            Some(directory_receipt(&entry.bindings.data_dir))
+        },
         model_card: file_receipt(root, &entry.bindings.model_card)?,
+        bindings,
         extracted_paths: extracted_path_receipts(root)?,
     };
     if &expected == receipt {
@@ -1458,6 +1584,16 @@ fn verify_binding_receipt(
     } else {
         Err(SpeechPackError::CorruptCache)
     }
+}
+
+fn binding_file_receipts(
+    root: &Path,
+    entry: &TtsCatalogEntry,
+) -> Result<BTreeMap<String, FileReceipt>, SpeechPackError> {
+    required_tts_file_bindings(entry)?
+        .into_iter()
+        .map(|(name, relative)| Ok((name, file_receipt(root, &relative)?)))
+        .collect()
 }
 
 fn verify_model_receipt(
@@ -2210,7 +2346,7 @@ mod tests {
         );
         let state = read_state(directory.path()).expect("state");
         assert_eq!(state.installed.len(), 1);
-        assert!(manager.resolve_entry_bindings_for_test(&entry).is_ok());
+        assert!(manager.resolve_catalog_entry_for_test(&entry).is_ok());
         assert!(progress.contains(&SpeechPackInstallPhase::Downloading));
         assert!(progress.contains(&SpeechPackInstallPhase::Extracting));
         assert_eq!(progress.last(), Some(&SpeechPackInstallPhase::Ready));
@@ -2707,6 +2843,76 @@ mod tests {
         assert!(bindings.data_dir.is_dir());
     }
 
+    fn fixture_tts_task_binding(
+        entry: &TtsCatalogEntry,
+        extracted_root: &Path,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        TaskPackBinding::from_ios_cached_sherpa(
+            aurora_voice_engine::VoiceTask::TextToSpeech,
+            entry.voice_id.clone(),
+            TtsVoiceCatalog::embedded()
+                .map_err(|_| SpeechPackError::State)?
+                .revision()
+                .to_owned(),
+            entry.archive.sha256.clone(),
+            entry.model_family.clone(),
+            fixture_tts_selected_file_ids(entry)?,
+            entry.language.clone(),
+            tts_sample_rate_hz(entry, extracted_root)?,
+            1,
+            entry.archive.byte_size,
+        )
+        .map_err(|_| SpeechPackError::InvalidArchive)
+    }
+
+    fn fixture_model_task_binding(
+        entry: &SpeechCatalogEntry,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        TaskPackBinding::from_ios_cached_sherpa(
+            fixture_voice_task(entry.task),
+            entry.model_id.clone(),
+            SpeechModelCatalog::embedded()
+                .map_err(|_| SpeechPackError::State)?
+                .revision()
+                .to_owned(),
+            entry.archive.sha256.clone(),
+            entry.model_family.clone(),
+            entry.bindings.keys().cloned().collect(),
+            entry
+                .languages
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "generic".to_owned()),
+            16_000,
+            1,
+            entry.archive.byte_size,
+        )
+        .map_err(|_| SpeechPackError::InvalidArchive)
+    }
+
+    fn fixture_voice_task(task: SpeechCatalogTask) -> aurora_voice_engine::VoiceTask {
+        match task {
+            SpeechCatalogTask::SpeechToText => aurora_voice_engine::VoiceTask::SpeechToText,
+            SpeechCatalogTask::VoiceActivityDetection => {
+                aurora_voice_engine::VoiceTask::VoiceActivityDetection
+            }
+            SpeechCatalogTask::KeywordSpotting => aurora_voice_engine::VoiceTask::KeywordSpotting,
+        }
+    }
+
+    fn fixture_tts_selected_file_ids(
+        entry: &TtsCatalogEntry,
+    ) -> Result<Vec<String>, SpeechPackError> {
+        let mut selected = required_tts_file_bindings(entry)?
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        if entry.model_family == "vits_piper" {
+            selected.insert(1, "espeak-ng-data".to_owned());
+        }
+        Ok(selected)
+    }
+
     impl SpeechPackManager {
         async fn install_catalog_entry_for_test<F>(
             &self,
@@ -2879,23 +3085,30 @@ mod tests {
             verify_extracted(&self.config.root, entry)?;
             let root = extract_root(&self.config.root, &entry.archive.sha256);
             let pack_root = root.join(&entry.archive.root);
+            let files = resolved_tts_files(entry, &root)?;
             let bindings = SpeechPackBindings {
                 voice_id: entry.voice_id.clone(),
                 archive_sha256: entry.archive.sha256.clone(),
-                task_binding: tts_task_binding_for_test(entry, &root.join(&entry.bindings.config))?,
+                task_binding: fixture_tts_task_binding(entry, &root)?,
                 root: pack_root.clone(),
-                model: root.join(&entry.bindings.model),
-                config: root.join(&entry.bindings.config),
-                tokens: root.join(&entry.bindings.tokens),
-                data_dir: root.join(&entry.bindings.data_dir),
-                model_card: root.join(&entry.bindings.model_card),
+                model: files.get("model").cloned().unwrap_or_default(),
+                config: files.get("config").cloned().unwrap_or_default(),
+                tokens: files.get("tokens").cloned().unwrap_or_default(),
+                data_dir: if entry.bindings.data_dir.is_empty() {
+                    PathBuf::new()
+                } else {
+                    root.join(&entry.bindings.data_dir)
+                },
+                model_card: files.get("model-card").cloned().unwrap_or_default(),
+                files,
             };
             ensure_contained(&root, &bindings.root)?;
-            ensure_contained(&root, &bindings.model)?;
-            ensure_contained(&root, &bindings.config)?;
-            ensure_contained(&root, &bindings.tokens)?;
-            ensure_contained(&root, &bindings.data_dir)?;
-            ensure_contained(&root, &bindings.model_card)?;
+            for path in bindings.files.values() {
+                ensure_contained(&root, path)?;
+            }
+            if !bindings.data_dir.as_os_str().is_empty() {
+                ensure_contained(&root, &bindings.data_dir)?;
+            }
             Ok(bindings)
         }
 
@@ -2923,7 +3136,7 @@ mod tests {
                 model_id: entry.model_id.clone(),
                 task: entry.task,
                 archive_sha256: entry.archive.sha256.clone(),
-                task_binding: catalog_task_binding_for_test(entry)?,
+                task_binding: fixture_model_task_binding(entry)?,
                 root: model_root,
                 bindings,
                 languages: entry.languages.clone(),
@@ -3012,63 +3225,5 @@ mod tests {
             }
             Ok(())
         }
-    }
-
-    fn catalog_task_binding_for_test(
-        entry: &SpeechCatalogEntry,
-    ) -> Result<TaskPackBinding, SpeechPackError> {
-        let task = match entry.task {
-            SpeechCatalogTask::SpeechToText => VoiceTask::SpeechToText,
-            SpeechCatalogTask::VoiceActivityDetection => VoiceTask::VoiceActivityDetection,
-            SpeechCatalogTask::KeywordSpotting => VoiceTask::KeywordSpotting,
-        };
-        TaskPackBinding::from_ios_cached_sherpa(
-            task,
-            entry.model_id.clone(),
-            SpeechModelCatalog::embedded()
-                .map_err(|_| SpeechPackError::State)?
-                .revision()
-                .to_owned(),
-            entry.archive.sha256.clone(),
-            entry.model_family.clone(),
-            entry.bindings.keys().cloned().collect(),
-            entry
-                .languages
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "und".to_owned()),
-            16_000,
-            1_600,
-            entry.archive.byte_size.max(1),
-        )
-        .map_err(|_| SpeechPackError::InvalidArchive)
-    }
-
-    fn tts_task_binding_for_test(
-        entry: &TtsCatalogEntry,
-        config_path: &Path,
-    ) -> Result<TaskPackBinding, SpeechPackError> {
-        TaskPackBinding::from_ios_cached_sherpa(
-            VoiceTask::TextToSpeech,
-            entry.voice_id.clone(),
-            TtsVoiceCatalog::embedded()
-                .map_err(|_| SpeechPackError::State)?
-                .revision()
-                .to_owned(),
-            entry.archive.sha256.clone(),
-            entry.model_family.clone(),
-            vec![
-                "config".to_owned(),
-                "espeak-ng-data".to_owned(),
-                "model".to_owned(),
-                "model-card".to_owned(),
-                "tokens".to_owned(),
-            ],
-            entry.language.clone(),
-            read_tts_sample_rate_hz(config_path)?,
-            1_600,
-            entry.archive.byte_size.max(1),
-        )
-        .map_err(|_| SpeechPackError::InvalidArchive)
     }
 }

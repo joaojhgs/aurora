@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use thiserror::Error;
 
-use crate::{canonical_json, sha256_hex};
+use crate::{canonical_json, sha256_hex, TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ};
 
 const EMBEDDED_SHERPA_TTS_CATALOG: &str = include_str!("../resources/sherpa_onnx_tts_catalog.json");
 const CATALOG_SCHEMA_VERSION: u32 = 1;
@@ -18,8 +18,8 @@ const SOURCE_RELEASE_TAG: &str = "tts-models";
 const SOURCE_CHECKSUM_ASSET_ID: u64 = 424_712_825;
 const SOURCE_CHECKSUM_SHA256: &str =
     "30d65b392bba8dfbdbc3479928d3f80adff2c71d4f518ce893d572b8aff021ee";
-const ENTRIES_SHA256: &str = "74dd6a6413828c8cbdc26dcd62289214a3c56f12c166b7d1f1d60632c2967f28";
-const EXPECTED_ENTRY_COUNT: usize = 536;
+const ENTRIES_SHA256: &str = "ec1aec3887e058c23f4a18894b25ffe5aac4ba8bcb146a2e48eda7f8e4fa380e";
+const EXPECTED_ENTRY_COUNT: usize = 537;
 const EXPECTED_LANGUAGE_COUNT: usize = 50;
 const MAX_CATALOG_BYTES: usize = 1_500_000;
 const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
@@ -162,18 +162,27 @@ pub struct TtsCatalogEntry {
     pub language: String,
     pub quality: Option<String>,
     pub precision: Option<String>,
+    #[serde(default)]
+    pub sample_rate_hz: Option<u32>,
     pub engine: String,
     pub model_family: String,
     pub archive: TtsCatalogArchive,
     pub bindings: TtsCatalogBindings,
+    #[serde(default)]
+    pub reference_samples: Vec<TtsCatalogReferenceSample>,
     pub terms: TtsCatalogTerms,
 }
 
 impl TtsCatalogEntry {
     fn validate(&self) -> Result<(), TtsCatalogError> {
-        let Some(voice_slug) = self.voice_id.strip_prefix("standard:piper:") else {
-            return Err(TtsCatalogError::Invalid);
-        };
+        let (voice_prefix, voice_slug) =
+            if let Some(slug) = self.voice_id.strip_prefix("standard:piper:") {
+                ("standard:piper:", slug)
+            } else if let Some(slug) = self.voice_id.strip_prefix("standard:pockettts:") {
+                ("standard:pockettts:", slug)
+            } else {
+                return Err(TtsCatalogError::Invalid);
+            };
         if voice_slug.is_empty()
             || voice_slug.len() > 64
             || !voice_slug.bytes().all(|byte| {
@@ -183,7 +192,7 @@ impl TtsCatalogEntry {
             || self.display_name.len() > 128
             || !valid_language(&self.language)
             || self.engine != "sherpa_onnx"
-            || self.model_family != "vits_piper"
+            || !matches!(self.model_family.as_str(), "vits_piper" | "pockettts")
             || !matches!(
                 self.quality.as_deref(),
                 None | Some("x_low" | "low" | "medium" | "high")
@@ -192,18 +201,39 @@ impl TtsCatalogEntry {
                 self.precision.as_deref(),
                 None | Some("fp16" | "fp32" | "int8")
             )
+            || !valid_tts_sample_rate(self.model_family.as_str(), self.sample_rate_hz)
         {
             return Err(TtsCatalogError::Invalid);
         }
-        let model_stem = self.archive.validate(voice_slug)?;
-        self.bindings.validate(&self.archive.root, model_stem)?;
-        if self.terms.source != "upstream_model_card"
-            || self.terms.redistributed_by_aurora
+        let model_stem = self
+            .archive
+            .validate(&self.model_family, voice_prefix, voice_slug)?;
+        self.bindings
+            .validate(&self.model_family, &self.archive.root, model_stem)?;
+        validate_reference_samples(
+            &self.model_family,
+            &self.archive.root,
+            &self.reference_samples,
+        )?;
+        if !matches!(
+            self.terms.source.as_str(),
+            "upstream_model_card" | "upstream_model_card_restricted_non_commercial"
+        ) || self.terms.redistributed_by_aurora
             || !self.terms.download_initiated_by_user
         {
             return Err(TtsCatalogError::Invalid);
         }
         Ok(())
+    }
+}
+
+fn valid_tts_sample_rate(model_family: &str, sample_rate_hz: Option<u32>) -> bool {
+    match (model_family, sample_rate_hz) {
+        ("vits_piper", None) => true,
+        ("pockettts", Some(sample_rate_hz)) => {
+            (TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
+        }
+        _ => false,
     }
 }
 
@@ -222,9 +252,21 @@ pub struct TtsCatalogArchive {
 }
 
 impl TtsCatalogArchive {
-    fn validate<'a>(&'a self, voice_slug: &str) -> Result<&'a str, TtsCatalogError> {
-        let Some(model_stem) = self.root.strip_prefix("vits-piper-") else {
-            return Err(TtsCatalogError::Invalid);
+    fn validate<'a>(
+        &'a self,
+        model_family: &str,
+        voice_prefix: &str,
+        voice_slug: &str,
+    ) -> Result<&'a str, TtsCatalogError> {
+        let (expected_voice_prefix, model_stem) = match model_family {
+            "vits_piper" => {
+                let Some(model_stem) = self.root.strip_prefix("vits-piper-") else {
+                    return Err(TtsCatalogError::Invalid);
+                };
+                ("standard:piper:", model_stem)
+            }
+            "pockettts" => ("standard:pockettts:", self.root.as_str()),
+            _ => return Err(TtsCatalogError::Invalid),
         };
         let expected_filename = format!("{}.tar.bz2", self.root);
         if self.asset_id == 0
@@ -235,6 +277,7 @@ impl TtsCatalogArchive {
             || !valid_sha256(&self.sha256)
             || self.format != "tar_bzip2"
             || self.updated_at.is_empty()
+            || voice_prefix != expected_voice_prefix
             || model_stem.to_ascii_lowercase() != voice_slug
             || !safe_path_segment(&self.root)
         {
@@ -248,36 +291,132 @@ impl TtsCatalogArchive {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TtsCatalogBindings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lm_flow: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lm_main: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_conditioner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vocab_json: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_scores_json: Option<String>,
+    #[serde(default)]
     pub model: String,
+    #[serde(default)]
     pub config: String,
+    #[serde(default)]
     pub tokens: String,
+    #[serde(default)]
     pub data_dir: String,
+    #[serde(default)]
     pub model_card: String,
 }
 
 impl TtsCatalogBindings {
-    fn validate(&self, root: &str, model_stem: &str) -> Result<(), TtsCatalogError> {
+    fn validate(
+        &self,
+        model_family: &str,
+        root: &str,
+        model_stem: &str,
+    ) -> Result<(), TtsCatalogError> {
         let expected_prefix = format!("{root}/");
-        let expected_model = format!("{expected_prefix}{model_stem}.onnx");
-        if self.model != expected_model
-            || self.config != format!("{expected_model}.json")
-            || self.tokens != format!("{expected_prefix}tokens.txt")
-            || self.data_dir != format!("{expected_prefix}espeak-ng-data")
-            || self.model_card != format!("{expected_prefix}MODEL_CARD")
-            || [
-                &self.model,
-                &self.config,
-                &self.tokens,
-                &self.data_dir,
-                &self.model_card,
-            ]
-            .iter()
-            .any(|path| !safe_relative_path(path) || !path.starts_with(&expected_prefix))
-        {
-            return Err(TtsCatalogError::Invalid);
+        match model_family {
+            "vits_piper" => {
+                let expected_model = format!("{expected_prefix}{model_stem}.onnx");
+                if self.model != expected_model
+                    || self.config != format!("{expected_model}.json")
+                    || self.tokens != format!("{expected_prefix}tokens.txt")
+                    || self.data_dir != format!("{expected_prefix}espeak-ng-data")
+                    || self.model_card != format!("{expected_prefix}MODEL_CARD")
+                    || self.lm_flow.is_some()
+                    || self.lm_main.is_some()
+                    || self.encoder.is_some()
+                    || self.decoder.is_some()
+                    || self.text_conditioner.is_some()
+                    || self.vocab_json.is_some()
+                    || self.token_scores_json.is_some()
+                    || [
+                        &self.model,
+                        &self.config,
+                        &self.tokens,
+                        &self.data_dir,
+                        &self.model_card,
+                    ]
+                    .iter()
+                    .any(|path| !safe_relative_path(path) || !path.starts_with(&expected_prefix))
+                {
+                    return Err(TtsCatalogError::Invalid);
+                }
+            }
+            "pockettts" => {
+                let required = [
+                    (
+                        self.lm_flow.as_deref(),
+                        format!("{expected_prefix}lm_flow.int8.onnx"),
+                    ),
+                    (
+                        self.lm_main.as_deref(),
+                        format!("{expected_prefix}lm_main.int8.onnx"),
+                    ),
+                    (
+                        self.encoder.as_deref(),
+                        format!("{expected_prefix}encoder.onnx"),
+                    ),
+                    (
+                        self.decoder.as_deref(),
+                        format!("{expected_prefix}decoder.int8.onnx"),
+                    ),
+                    (
+                        self.text_conditioner.as_deref(),
+                        format!("{expected_prefix}text_conditioner.onnx"),
+                    ),
+                    (
+                        self.vocab_json.as_deref(),
+                        format!("{expected_prefix}vocab.json"),
+                    ),
+                    (
+                        self.token_scores_json.as_deref(),
+                        format!("{expected_prefix}token_scores.json"),
+                    ),
+                    (
+                        Some(self.model_card.as_str()),
+                        format!("{expected_prefix}README.md"),
+                    ),
+                ];
+                if !self.model.is_empty()
+                    || !self.config.is_empty()
+                    || !self.tokens.is_empty()
+                    || !self.data_dir.is_empty()
+                    || required.iter().any(|(actual, expected)| {
+                        actual != &Some(expected.as_str())
+                            || !actual.is_some_and(|path| {
+                                safe_relative_path(path) && path.starts_with(&expected_prefix)
+                            })
+                    })
+                {
+                    return Err(TtsCatalogError::Invalid);
+                }
+            }
+            _ => return Err(TtsCatalogError::Invalid),
         }
         Ok(())
     }
+}
+
+/// Deterministic metadata for reference audio shipped in an upstream archive.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TtsCatalogReferenceSample {
+    pub sample_id: String,
+    pub display_name: String,
+    pub path: String,
+    pub byte_size: u64,
+    pub sha256: String,
 }
 
 /// Product distribution boundary for upstream-hosted voice data.
@@ -287,6 +426,19 @@ pub struct TtsCatalogTerms {
     pub source: String,
     pub redistributed_by_aurora: bool,
     pub download_initiated_by_user: bool,
+}
+
+fn validate_reference_samples(
+    model_family: &str,
+    root: &str,
+    samples: &[TtsCatalogReferenceSample],
+) -> Result<(), TtsCatalogError> {
+    let _ = (model_family, root);
+    if samples.is_empty() {
+        Ok(())
+    } else {
+        Err(TtsCatalogError::Invalid)
+    }
 }
 
 /// Sanitized catalog failures; URLs and paths are intentionally omitted.
@@ -354,7 +506,7 @@ mod tests {
                 .iter()
                 .map(|entry| entry.archive.byte_size)
                 .sum::<u64>(),
-            23_023_622_353
+            23_121_958_873
         );
         assert!(catalog.entries.iter().all(|entry| {
             entry.terms.download_initiated_by_user && !entry.terms.redistributed_by_aurora

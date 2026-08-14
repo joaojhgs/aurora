@@ -468,14 +468,16 @@ impl TaskPackBinding {
         if catalog != canonical_catalog
             || entry != canonical_entry
             || entry.engine != "sherpa_onnx"
-            || entry.model_family != "vits_piper"
-            || !entry.voice_id.starts_with("standard:piper:")
+            || !matches!(entry.model_family.as_str(), "vits_piper" | "pockettts")
+            || !(entry.voice_id.starts_with("standard:piper:")
+                || entry.voice_id.starts_with("standard:pockettts:"))
             || entry.archive.sha256.len() != 64
             || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
         {
             return Err(EngineError::InvalidRequest);
         }
         let entry = canonical_entry;
+        let selected_file_ids = tts_catalog_selected_file_ids(entry)?;
         Ok(Self {
             source: TaskBindingSource::SpeechCatalog {
                 catalog_id: catalog.catalog_id().to_owned(),
@@ -489,13 +491,7 @@ impl TaskPackBinding {
             pack_id: entry.voice_id.clone(),
             pack_version: catalog.revision().to_owned(),
             variant_id: entry.archive.sha256.clone(),
-            selected_file_ids: vec![
-                "config".to_owned(),
-                "espeak-ng-data".to_owned(),
-                "model".to_owned(),
-                "model-card".to_owned(),
-                "tokens".to_owned(),
-            ],
+            selected_file_ids,
             compatibility_group_id: format!("tts-catalog:{}", entry.model_family),
             voice_state_compatibility_group_id: format!("tts-catalog:{}", entry.voice_id),
             target,
@@ -536,6 +532,13 @@ impl TaskPackBinding {
 
     pub fn source(&self) -> &TaskBindingSource {
         &self.source
+    }
+
+    pub fn catalog_model_family(&self) -> Option<&str> {
+        match &self.source {
+            TaskBindingSource::SpeechCatalog { model_family, .. } => Some(model_family),
+            TaskBindingSource::ModelPackManifest { .. } => None,
+        }
     }
 
     pub fn task(&self) -> VoiceTask {
@@ -628,6 +631,29 @@ impl TaskPackBinding {
 
     pub fn validate_language(&self, language: Option<&str>) -> Result<(), EngineError> {
         validate_binding_language(self, language)
+    }
+}
+
+fn tts_catalog_selected_file_ids(entry: &TtsCatalogEntry) -> Result<Vec<String>, EngineError> {
+    match entry.model_family.as_str() {
+        "vits_piper" => Ok(vec![
+            "config".to_owned(),
+            "espeak-ng-data".to_owned(),
+            "model".to_owned(),
+            "model-card".to_owned(),
+            "tokens".to_owned(),
+        ]),
+        "pockettts" => Ok(vec![
+            "decoder".to_owned(),
+            "encoder".to_owned(),
+            "lm-flow".to_owned(),
+            "lm-main".to_owned(),
+            "model-card".to_owned(),
+            "text-conditioner".to_owned(),
+            "token-scores".to_owned(),
+            "vocab".to_owned(),
+        ]),
+        _ => Err(EngineError::InvalidRequest),
     }
 }
 

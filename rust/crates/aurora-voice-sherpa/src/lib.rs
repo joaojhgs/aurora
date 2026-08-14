@@ -2784,8 +2784,8 @@ mod native_stt_backend {
 mod native_tts_backend {
     use super::*;
     use aurora_voice_sherpa_sys::{
-        OfflineTtsConfig, OfflineTtsGenerationConfig, OfflineTtsSynthesizer,
-        TtsError as NativeTtsError,
+        OfflineTtsConfig, OfflineTtsGenerationConfig, OfflineTtsPocketModelFiles,
+        OfflineTtsSynthesizer, TtsError as NativeTtsError, TtsReferenceAudio,
     };
     use std::path::PathBuf;
 
@@ -2793,9 +2793,27 @@ mod native_tts_backend {
     const TTS_TOKENS_FILE_ID: &str = "tokens";
     const TTS_ESPEAK_DATA_FILE_ID: &str = "espeak-ng-data";
     const TTS_LEXICON_FILE_ID: &str = "lexicon";
+    const POCKET_LM_FLOW_FILE_ID: &str = "lm-flow";
+    const POCKET_LM_MAIN_FILE_ID: &str = "lm-main";
+    const POCKET_ENCODER_FILE_ID: &str = "encoder";
+    const POCKET_DECODER_FILE_ID: &str = "decoder";
+    const POCKET_TEXT_CONDITIONER_FILE_ID: &str = "text-conditioner";
+    const POCKET_VOCAB_FILE_ID: &str = "vocab";
+    const POCKET_TOKEN_SCORES_FILE_ID: &str = "token-scores";
+    const POCKET_NUM_STEPS: i32 = 5;
+    const POCKET_EXTRA: &str = r#"{"max_reference_audio_len":10.0,"seed":42}"#;
 
     pub struct NativeTtsBackend {
         synthesizer: OfflineTtsSynthesizer,
+        family: NativeTtsFamily,
+    }
+
+    enum NativeTtsFamily {
+        VitsPiper,
+        Pocket {
+            reference_audio: Option<TtsReferenceAudio>,
+            reference_text: Option<String>,
+        },
     }
 
     impl fmt::Debug for NativeTtsBackend {
@@ -2803,11 +2821,19 @@ mod native_tts_backend {
             formatter
                 .debug_struct("NativeTtsBackend")
                 .field("synthesizer", &"<redacted>")
+                .field("family", &self.family_name())
                 .finish()
         }
     }
 
     impl NativeTtsBackend {
+        fn family_name(&self) -> &'static str {
+            match self.family {
+                NativeTtsFamily::VitsPiper => "vits_piper",
+                NativeTtsFamily::Pocket { .. } => "pockettts",
+            }
+        }
+
         pub fn from_selected_vits_piper_model(
             binding: &TaskPackBinding,
             files: NativeTtsVitsPiperModelFiles,
@@ -2838,7 +2864,10 @@ mod native_tts_backend {
             if sample_rate != binding.sample_rate_hz() {
                 return Err(EngineError::InvalidRequest);
             }
-            Ok(Self { synthesizer })
+            Ok(Self {
+                synthesizer,
+                family: NativeTtsFamily::VitsPiper,
+            })
         }
 
         pub fn from_catalog_vits_piper_model(
@@ -2847,6 +2876,9 @@ mod native_tts_backend {
         ) -> Result<Self, EngineError> {
             validate_tts_binding(binding)?;
             require_speech_catalog_binding(binding)?;
+            if binding.catalog_model_family() != Some("vits_piper") {
+                return Err(EngineError::InvalidRequest);
+            }
             require_catalog_selected_file(binding, &files.model_file_id, TTS_MODEL_FILE_ID)?;
             require_catalog_selected_file(binding, &files.tokens_file_id, TTS_TOKENS_FILE_ID)?;
             require_catalog_selected_file(
@@ -2862,6 +2894,78 @@ mod native_tts_backend {
                 _ => return Err(EngineError::InvalidRequest),
             }
             Self::from_selected_vits_piper_model(binding, files)
+        }
+
+        pub fn from_selected_pockettts_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsPocketModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_selected_file(binding, &files.lm_flow_file_id, POCKET_LM_FLOW_FILE_ID)?;
+            require_selected_file(binding, &files.lm_main_file_id, POCKET_LM_MAIN_FILE_ID)?;
+            require_selected_file(binding, &files.encoder_file_id, POCKET_ENCODER_FILE_ID)?;
+            require_selected_file(binding, &files.decoder_file_id, POCKET_DECODER_FILE_ID)?;
+            require_selected_file(
+                binding,
+                &files.text_conditioner_file_id,
+                POCKET_TEXT_CONDITIONER_FILE_ID,
+            )?;
+            require_selected_file(binding, &files.vocab_file_id, POCKET_VOCAB_FILE_ID)?;
+            require_selected_file(
+                binding,
+                &files.token_scores_file_id,
+                POCKET_TOKEN_SCORES_FILE_ID,
+            )?;
+            let config = OfflineTtsConfig::pocket(OfflineTtsPocketModelFiles::new(
+                files.lm_flow_path,
+                files.lm_main_path,
+                files.encoder_path,
+                files.decoder_path,
+                files.text_conditioner_path,
+                files.vocab_path,
+                files.token_scores_path,
+            ))
+            .with_num_threads(1);
+            let synthesizer = OfflineTtsSynthesizer::new(&config).map_err(native_tts_error)?;
+            let sample_rate = u32::try_from(synthesizer.sample_rate())
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if sample_rate != binding.sample_rate_hz() {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(Self {
+                synthesizer,
+                family: NativeTtsFamily::Pocket {
+                    reference_audio: files.reference_audio.map(|reference| reference.audio),
+                    reference_text: files.reference_text,
+                },
+            })
+        }
+
+        pub fn from_catalog_pockettts_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsPocketModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            if binding.catalog_model_family() != Some("pockettts") {
+                return Err(EngineError::InvalidRequest);
+            }
+            require_catalog_selected_file(binding, &files.lm_flow_file_id, POCKET_LM_FLOW_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.lm_main_file_id, POCKET_LM_MAIN_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, POCKET_ENCODER_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.decoder_file_id, POCKET_DECODER_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.text_conditioner_file_id,
+                POCKET_TEXT_CONDITIONER_FILE_ID,
+            )?;
+            require_catalog_selected_file(binding, &files.vocab_file_id, POCKET_VOCAB_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.token_scores_file_id,
+                POCKET_TOKEN_SCORES_FILE_ID,
+            )?;
+            Self::from_selected_pockettts_model(binding, files)
         }
     }
 
@@ -2895,6 +2999,82 @@ mod native_tts_backend {
         }
     }
 
+    pub struct NativeTtsReferenceAudio {
+        audio: TtsReferenceAudio,
+    }
+
+    impl NativeTtsReferenceAudio {
+        pub fn new(sample_rate: i32, samples: Vec<f32>) -> Result<Self, EngineError> {
+            Ok(Self {
+                audio: TtsReferenceAudio::new(sample_rate, samples)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            })
+        }
+    }
+
+    impl fmt::Debug for NativeTtsReferenceAudio {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsReferenceAudio")
+                .field("sample_rate", &self.audio.sample_rate())
+                .field("sample_count", &self.audio.samples().len())
+                .field("samples", &"<redacted>")
+                .finish()
+        }
+    }
+
+    pub struct NativeTtsPocketModelFiles {
+        pub lm_flow_file_id: String,
+        pub lm_flow_path: PathBuf,
+        pub lm_main_file_id: String,
+        pub lm_main_path: PathBuf,
+        pub encoder_file_id: String,
+        pub encoder_path: PathBuf,
+        pub decoder_file_id: String,
+        pub decoder_path: PathBuf,
+        pub text_conditioner_file_id: String,
+        pub text_conditioner_path: PathBuf,
+        pub vocab_file_id: String,
+        pub vocab_path: PathBuf,
+        pub token_scores_file_id: String,
+        pub token_scores_path: PathBuf,
+        pub reference_audio: Option<NativeTtsReferenceAudio>,
+        pub reference_text: Option<String>,
+    }
+
+    impl fmt::Debug for NativeTtsPocketModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsPocketModelFiles")
+                .field("lm_flow_file_id_bytes", &self.lm_flow_file_id.len())
+                .field("lm_flow_path", &"<redacted>")
+                .field("lm_main_file_id_bytes", &self.lm_main_file_id.len())
+                .field("lm_main_path", &"<redacted>")
+                .field("encoder_file_id_bytes", &self.encoder_file_id.len())
+                .field("encoder_path", &"<redacted>")
+                .field("decoder_file_id_bytes", &self.decoder_file_id.len())
+                .field("decoder_path", &"<redacted>")
+                .field(
+                    "text_conditioner_file_id_bytes",
+                    &self.text_conditioner_file_id.len(),
+                )
+                .field("text_conditioner_path", &"<redacted>")
+                .field("vocab_file_id_bytes", &self.vocab_file_id.len())
+                .field("vocab_path", &"<redacted>")
+                .field(
+                    "token_scores_file_id_bytes",
+                    &self.token_scores_file_id.len(),
+                )
+                .field("token_scores_path", &"<redacted>")
+                .field("reference_audio_present", &self.reference_audio.is_some())
+                .field(
+                    "reference_text_bytes",
+                    &self.reference_text.as_ref().map(String::len),
+                )
+                .finish()
+        }
+    }
+
     impl SherpaTtsBackend for NativeTtsBackend {
         fn synthesize(
             &mut self,
@@ -2907,7 +3087,25 @@ mod native_tts_backend {
             if cancellation() {
                 return Err(SherpaAdapterError::Cancelled);
             }
-            let config = OfflineTtsGenerationConfig::new(speaker_id, speed);
+            let mut config = OfflineTtsGenerationConfig::new(speaker_id, speed);
+            match &self.family {
+                NativeTtsFamily::VitsPiper => {}
+                NativeTtsFamily::Pocket {
+                    reference_audio,
+                    reference_text,
+                } => {
+                    let Some(reference_audio) = reference_audio.clone() else {
+                        return Err(SherpaAdapterError::InvalidConfig);
+                    };
+                    config = config
+                        .with_reference_audio(reference_audio)
+                        .with_num_steps(POCKET_NUM_STEPS)
+                        .with_extra(POCKET_EXTRA);
+                    if let Some(reference_text) = reference_text {
+                        config = config.with_reference_text(reference_text.clone());
+                    }
+                }
+            }
             let audio = self
                 .synthesizer
                 .generate_with_cancel_flag(text, &config, cancellation_token.as_atomic())
@@ -2991,7 +3189,10 @@ pub use native_kws_backend::{NativeKwsBackend, NativeKwsModelFiles};
 pub use native_stt_backend::{NativeSttBackend, NativeSttModelFiles};
 
 #[cfg(feature = "native-tts")]
-pub use native_tts_backend::{NativeTtsBackend, NativeTtsVitsPiperModelFiles};
+pub use native_tts_backend::{
+    NativeTtsBackend, NativeTtsPocketModelFiles, NativeTtsReferenceAudio,
+    NativeTtsVitsPiperModelFiles,
+};
 
 #[cfg(feature = "native-vad")]
 pub use native_backend::NativeVadBackend;

@@ -26,6 +26,8 @@ pub use android_capture::{
     AndroidPcmIngressStats, AndroidPcmPushResult,
 };
 pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
+#[cfg(feature = "native-sherpa-tts")]
+pub use android_session::AndroidTtsReferenceProfile;
 pub use android_session::{
     AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
     AndroidVoiceSessionPhase, AndroidVoiceSessionStatus,
@@ -37,14 +39,16 @@ pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
     NativeInputDevice, NativeInputDeviceId,
 };
-#[cfg(feature = "native-sherpa-tts")]
-pub use desktop_engine::build_installed_tts_provider;
 #[cfg(feature = "native-sherpa")]
 pub use desktop_engine::{
     build_active_kws_provider, build_active_stt_provider, build_active_vad_provider,
     build_installed_kws_provider, build_installed_kws_provider_from_phrases,
     build_installed_stt_provider, build_installed_vad_provider, warm_active_kws,
     warm_installed_kws,
+};
+#[cfg(feature = "native-sherpa-tts")]
+pub use desktop_engine::{
+    build_installed_tts_provider, build_installed_tts_provider_with_reference,
 };
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,

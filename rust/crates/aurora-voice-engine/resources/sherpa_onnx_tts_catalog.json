@@ -16616,9 +16616,44 @@
         "source": "upstream_model_card"
       },
       "voice_id": "standard:piper:zh_cn-xiao_ya-medium-int8"
+    },
+    {
+      "archive": {
+        "asset_id": 353678269,
+        "byte_size": 98336520,
+        "filename": "sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2",
+        "format": "tar_bzip2",
+        "root": "sherpa-onnx-pocket-tts-int8-2026-01-26",
+        "sha256": "2f3b88823cbbb9bf0b2477ec8ae7b3fec417b3a87b6bb5f256dba66f2ad967cb",
+        "updated_at": "2026-02-10T15:40:31Z",
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2"
+      },
+      "bindings": {
+        "decoder": "sherpa-onnx-pocket-tts-int8-2026-01-26/decoder.int8.onnx",
+        "encoder": "sherpa-onnx-pocket-tts-int8-2026-01-26/encoder.onnx",
+        "lm_flow": "sherpa-onnx-pocket-tts-int8-2026-01-26/lm_flow.int8.onnx",
+        "lm_main": "sherpa-onnx-pocket-tts-int8-2026-01-26/lm_main.int8.onnx",
+        "model_card": "sherpa-onnx-pocket-tts-int8-2026-01-26/README.md",
+        "text_conditioner": "sherpa-onnx-pocket-tts-int8-2026-01-26/text_conditioner.onnx",
+        "token_scores_json": "sherpa-onnx-pocket-tts-int8-2026-01-26/token_scores.json",
+        "vocab_json": "sherpa-onnx-pocket-tts-int8-2026-01-26/vocab.json"
+      },
+      "display_name": "PocketTTS English int8",
+      "engine": "sherpa_onnx",
+      "language": "en-us",
+      "model_family": "pockettts",
+      "precision": "int8",
+      "quality": null,
+      "sample_rate_hz": 24000,
+      "terms": {
+        "download_initiated_by_user": true,
+        "redistributed_by_aurora": false,
+        "source": "upstream_model_card_restricted_non_commercial"
+      },
+      "voice_id": "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"
     }
   ],
-  "entries_sha256": "74dd6a6413828c8cbdc26dcd62289214a3c56f12c166b7d1f1d60632c2967f28",
+  "entries_sha256": "ec1aec3887e058c23f4a18894b25ffe5aac4ba8bcb146a2e48eda7f8e4fa380e",
   "languages": [
     "ar-jo",
     "ca-es",

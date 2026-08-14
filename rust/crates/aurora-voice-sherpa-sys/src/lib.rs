@@ -265,6 +265,10 @@ const MIN_TTS_SILENCE_SCALE: f32 = 0.0;
 const MAX_TTS_SILENCE_SCALE: f32 = 2.0;
 const MAX_TTS_TEXT_BYTES: usize = 4096;
 const MAX_TTS_AUDIO_SECONDS: f32 = 60.0;
+const MAX_TTS_REFERENCE_AUDIO_SECONDS: f32 = 30.0;
+const MAX_TTS_EXTRA_BYTES: usize = 4096;
+#[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
+const DEFAULT_TTS_NUM_STEPS: i32 = 5;
 const MAX_TTS_AUDIO_SAMPLES: usize = 2_880_000;
 #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
 const MAX_TTS_CALLBACK_CHUNK_SAMPLES: i32 = 192_000;
@@ -1259,10 +1263,12 @@ impl OfflineSttRecognizer {
 
 #[derive(Clone)]
 pub struct OfflineTtsConfig {
+    model_kind: OfflineTtsModelKind,
     model_path: PathBuf,
     tokens_path: PathBuf,
     espeak_data_dir: PathBuf,
     lexicon_path: Option<PathBuf>,
+    pocket: Option<OfflineTtsPocketModelFiles>,
     num_threads: i32,
     provider: String,
     max_num_sentences: i32,
@@ -1273,6 +1279,123 @@ pub struct OfflineTtsConfig {
     max_audio_seconds: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OfflineTtsModelKind {
+    VitsPiper,
+    Pocket,
+}
+
+#[derive(Clone)]
+pub struct OfflineTtsPocketModelFiles {
+    lm_flow_path: PathBuf,
+    lm_main_path: PathBuf,
+    encoder_path: PathBuf,
+    decoder_path: PathBuf,
+    text_conditioner_path: PathBuf,
+    vocab_json_path: PathBuf,
+    token_scores_json_path: PathBuf,
+    voice_embedding_cache_capacity: i32,
+}
+
+impl OfflineTtsPocketModelFiles {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        lm_flow_path: impl Into<PathBuf>,
+        lm_main_path: impl Into<PathBuf>,
+        encoder_path: impl Into<PathBuf>,
+        decoder_path: impl Into<PathBuf>,
+        text_conditioner_path: impl Into<PathBuf>,
+        vocab_json_path: impl Into<PathBuf>,
+        token_scores_json_path: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            lm_flow_path: lm_flow_path.into(),
+            lm_main_path: lm_main_path.into(),
+            encoder_path: encoder_path.into(),
+            decoder_path: decoder_path.into(),
+            text_conditioner_path: text_conditioner_path.into(),
+            vocab_json_path: vocab_json_path.into(),
+            token_scores_json_path: token_scores_json_path.into(),
+            voice_embedding_cache_capacity: 50,
+        }
+    }
+
+    pub fn with_voice_embedding_cache_capacity(mut self, capacity: i32) -> Self {
+        self.voice_embedding_cache_capacity = capacity;
+        self
+    }
+
+    pub fn lm_flow_path(&self) -> &Path {
+        &self.lm_flow_path
+    }
+
+    pub fn lm_main_path(&self) -> &Path {
+        &self.lm_main_path
+    }
+
+    pub fn encoder_path(&self) -> &Path {
+        &self.encoder_path
+    }
+
+    pub fn decoder_path(&self) -> &Path {
+        &self.decoder_path
+    }
+
+    pub fn text_conditioner_path(&self) -> &Path {
+        &self.text_conditioner_path
+    }
+
+    pub fn vocab_json_path(&self) -> &Path {
+        &self.vocab_json_path
+    }
+
+    pub fn token_scores_json_path(&self) -> &Path {
+        &self.token_scores_json_path
+    }
+
+    pub fn voice_embedding_cache_capacity(&self) -> i32 {
+        self.voice_embedding_cache_capacity
+    }
+
+    fn validate(&self) -> Result<(), TtsError> {
+        validate_tts_model_file(&self.lm_flow_path, ErrorCode::ConfigModelPathEmpty)?;
+        validate_tts_model_file(&self.lm_main_path, ErrorCode::ConfigModelPathEmpty)?;
+        validate_tts_model_file(&self.encoder_path, ErrorCode::ConfigEncoderPathEmpty)?;
+        validate_tts_model_file(&self.decoder_path, ErrorCode::ConfigDecoderPathEmpty)?;
+        validate_tts_model_file(&self.text_conditioner_path, ErrorCode::ConfigModelPathEmpty)?;
+        validate_tts_model_file(&self.vocab_json_path, ErrorCode::ConfigTokensPathEmpty)?;
+        validate_tts_model_file(
+            &self.token_scores_json_path,
+            ErrorCode::ConfigTokensPathEmpty,
+        )?;
+        if !(1..=1024).contains(&self.voice_embedding_cache_capacity) {
+            return Err(TtsError::InvalidConfig {
+                code: ErrorCode::ConfigMaxActivePathsRange,
+            });
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for OfflineTtsPocketModelFiles {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfflineTtsPocketModelFiles")
+            .field("lm_flow_path", &"<redacted>")
+            .field("lm_main_path", &"<redacted>")
+            .field("encoder_path", &"<redacted>")
+            .field("decoder_path", &"<redacted>")
+            .field("text_conditioner_path", &"<redacted>")
+            .field("vocab_json_path", &"<redacted>")
+            .field("token_scores_json_path", &"<redacted>")
+            .field(
+                "voice_embedding_cache_capacity",
+                &self.voice_embedding_cache_capacity,
+            )
+            .finish()
+    }
+}
+
 impl OfflineTtsConfig {
     pub fn vits_piper(
         model_path: impl Into<PathBuf>,
@@ -1280,10 +1403,12 @@ impl OfflineTtsConfig {
         espeak_data_dir: impl Into<PathBuf>,
     ) -> Self {
         Self {
+            model_kind: OfflineTtsModelKind::VitsPiper,
             model_path: model_path.into(),
             tokens_path: tokens_path.into(),
             espeak_data_dir: espeak_data_dir.into(),
             lexicon_path: None,
+            pocket: None,
             num_threads: DEFAULT_NUM_THREADS,
             provider: DEFAULT_PROVIDER.to_owned(),
             max_num_sentences: DEFAULT_TTS_MAX_NUM_SENTENCES,
@@ -1293,6 +1418,33 @@ impl OfflineTtsConfig {
             length_scale: DEFAULT_TTS_LENGTH_SCALE,
             max_audio_seconds: MAX_TTS_AUDIO_SECONDS,
         }
+    }
+
+    pub fn pocket(files: OfflineTtsPocketModelFiles) -> Self {
+        Self {
+            model_kind: OfflineTtsModelKind::Pocket,
+            model_path: PathBuf::new(),
+            tokens_path: PathBuf::new(),
+            espeak_data_dir: PathBuf::new(),
+            lexicon_path: None,
+            pocket: Some(files),
+            num_threads: DEFAULT_NUM_THREADS,
+            provider: DEFAULT_PROVIDER.to_owned(),
+            max_num_sentences: DEFAULT_TTS_MAX_NUM_SENTENCES,
+            silence_scale: DEFAULT_TTS_SILENCE_SCALE,
+            noise_scale: DEFAULT_TTS_NOISE_SCALE,
+            noise_scale_w: DEFAULT_TTS_NOISE_SCALE_W,
+            length_scale: DEFAULT_TTS_LENGTH_SCALE,
+            max_audio_seconds: MAX_TTS_AUDIO_SECONDS,
+        }
+    }
+
+    pub fn model_kind(&self) -> OfflineTtsModelKind {
+        self.model_kind
+    }
+
+    pub fn pocket_files(&self) -> Option<&OfflineTtsPocketModelFiles> {
+        self.pocket.as_ref()
     }
 
     pub fn model_path(&self) -> &Path {
@@ -1389,11 +1541,33 @@ impl OfflineTtsConfig {
     }
 
     pub fn validate(&self) -> Result<(), TtsError> {
-        validate_tts_model_file(&self.model_path, ErrorCode::ConfigModelPathEmpty)?;
-        validate_tts_model_file(&self.tokens_path, ErrorCode::ConfigTokensPathEmpty)?;
-        validate_tts_data_dir(&self.espeak_data_dir)?;
-        if let Some(lexicon_path) = &self.lexicon_path {
-            validate_tts_model_file(lexicon_path, ErrorCode::ConfigLexiconPathEmpty)?;
+        match self.model_kind {
+            OfflineTtsModelKind::VitsPiper => {
+                validate_tts_model_file(&self.model_path, ErrorCode::ConfigModelPathEmpty)?;
+                validate_tts_model_file(&self.tokens_path, ErrorCode::ConfigTokensPathEmpty)?;
+                validate_tts_data_dir(&self.espeak_data_dir)?;
+                if let Some(lexicon_path) = &self.lexicon_path {
+                    validate_tts_model_file(lexicon_path, ErrorCode::ConfigLexiconPathEmpty)?;
+                }
+                if self.pocket.is_some() {
+                    return Err(TtsError::InvalidConfig {
+                        code: ErrorCode::ConfigModelPathUnavailable,
+                    });
+                }
+            }
+            OfflineTtsModelKind::Pocket => {
+                self.pocket
+                    .as_ref()
+                    .ok_or(TtsError::InvalidConfig {
+                        code: ErrorCode::ConfigModelPathEmpty,
+                    })?
+                    .validate()?;
+                if self.lexicon_path.is_some() {
+                    return Err(TtsError::InvalidConfig {
+                        code: ErrorCode::ConfigLexiconPathUnreadable,
+                    });
+                }
+            }
         }
         if !(1..=MAX_NUM_THREADS).contains(&self.num_threads) {
             return Err(TtsError::InvalidConfig {
@@ -1442,10 +1616,12 @@ impl fmt::Debug for OfflineTtsConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("OfflineTtsConfig")
+            .field("model_kind", &self.model_kind)
             .field("model_path", &"<redacted>")
             .field("tokens_path", &"<redacted>")
             .field("espeak_data_dir", &"<redacted>")
             .field("lexicon_path_present", &self.lexicon_path.is_some())
+            .field("pocket_files_present", &self.pocket.is_some())
             .field("num_threads", &self.num_threads)
             .field("provider", &"<redacted>")
             .field("max_num_sentences", &self.max_num_sentences)
@@ -1458,11 +1634,68 @@ impl fmt::Debug for OfflineTtsConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct OfflineTtsGenerationConfig {
     speaker_id: i32,
     speed: f32,
     silence_scale: f32,
+    reference_audio: Option<TtsReferenceAudio>,
+    reference_text: Option<String>,
+    num_steps: Option<i32>,
+    extra: Option<String>,
+}
+
+impl fmt::Debug for OfflineTtsGenerationConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OfflineTtsGenerationConfig")
+            .field("speaker_id", &self.speaker_id)
+            .field("speed", &self.speed)
+            .field("silence_scale", &self.silence_scale)
+            .field("reference_audio_present", &self.reference_audio.is_some())
+            .field(
+                "reference_text_bytes",
+                &self.reference_text.as_ref().map(String::len),
+            )
+            .field("num_steps", &self.num_steps)
+            .field("extra_bytes", &self.extra.as_ref().map(String::len))
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TtsReferenceAudio {
+    sample_rate: i32,
+    samples: Vec<f32>,
+}
+
+impl TtsReferenceAudio {
+    pub fn new(sample_rate: i32, samples: Vec<f32>) -> Result<Self, TtsError> {
+        validate_tts_audio(sample_rate, &samples, MAX_TTS_REFERENCE_AUDIO_SECONDS)?;
+        Ok(Self {
+            sample_rate,
+            samples,
+        })
+    }
+
+    pub fn sample_rate(&self) -> i32 {
+        self.sample_rate
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+impl fmt::Debug for TtsReferenceAudio {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TtsReferenceAudio")
+            .field("sample_rate", &self.sample_rate)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .finish()
+    }
 }
 
 impl OfflineTtsGenerationConfig {
@@ -1471,6 +1704,10 @@ impl OfflineTtsGenerationConfig {
             speaker_id,
             speed,
             silence_scale: DEFAULT_TTS_SILENCE_SCALE,
+            reference_audio: None,
+            reference_text: None,
+            num_steps: None,
+            extra: None,
         }
     }
 
@@ -1486,8 +1723,44 @@ impl OfflineTtsGenerationConfig {
         self.silence_scale
     }
 
+    pub fn reference_audio(&self) -> Option<&TtsReferenceAudio> {
+        self.reference_audio.as_ref()
+    }
+
+    pub fn reference_text(&self) -> Option<&str> {
+        self.reference_text.as_deref()
+    }
+
+    pub fn num_steps(&self) -> Option<i32> {
+        self.num_steps
+    }
+
+    pub fn extra(&self) -> Option<&str> {
+        self.extra.as_deref()
+    }
+
     pub fn with_silence_scale(mut self, silence_scale: f32) -> Self {
         self.silence_scale = silence_scale;
+        self
+    }
+
+    pub fn with_reference_audio(mut self, reference_audio: TtsReferenceAudio) -> Self {
+        self.reference_audio = Some(reference_audio);
+        self
+    }
+
+    pub fn with_reference_text(mut self, reference_text: impl Into<String>) -> Self {
+        self.reference_text = Some(reference_text.into());
+        self
+    }
+
+    pub fn with_num_steps(mut self, num_steps: i32) -> Self {
+        self.num_steps = Some(num_steps);
+        self
+    }
+
+    pub fn with_extra(mut self, extra: impl Into<String>) -> Self {
+        self.extra = Some(extra.into());
         self
     }
 
@@ -1510,7 +1783,32 @@ impl OfflineTtsGenerationConfig {
             MIN_TTS_SILENCE_SCALE,
             MAX_TTS_SILENCE_SCALE,
             ErrorCode::ConfigSilenceScaleRange,
-        )
+        )?;
+        if let Some(reference_audio) = &self.reference_audio {
+            validate_tts_audio(
+                reference_audio.sample_rate,
+                &reference_audio.samples,
+                MAX_TTS_REFERENCE_AUDIO_SECONDS,
+            )?;
+        }
+        if let Some(reference_text) = &self.reference_text {
+            validate_tts_text(reference_text)?;
+        }
+        if let Some(num_steps) = self.num_steps {
+            if !(1..=100).contains(&num_steps) {
+                return Err(TtsError::InvalidConfig {
+                    code: ErrorCode::ConfigMaxDecodeStepsRange,
+                });
+            }
+        }
+        if let Some(extra) = &self.extra {
+            if extra.len() > MAX_TTS_EXTRA_BYTES || extra.as_bytes().contains(&0) {
+                return Err(TtsError::InvalidConfig {
+                    code: ErrorCode::ConfigProviderNul,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
