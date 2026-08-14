@@ -1001,7 +1001,7 @@ class ToolingApprovalPolicyRule(BaseConfigModel):
 
 
 class Tts(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable TTS service
     """
@@ -1050,7 +1050,7 @@ class Tts(BaseConfigModel):
 
 
 class Coordinator(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable STT coordinator
     """
@@ -1079,7 +1079,7 @@ class Coordinator(BaseConfigModel):
 
 
 class Wakeword(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable wake word detection
     """
@@ -1104,7 +1104,7 @@ class Wakeword(BaseConfigModel):
 
 
 class Transcription(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable transcription service
     """
@@ -1138,7 +1138,7 @@ class Transcription(BaseConfigModel):
 
 class Stt(BaseConfigModel):
     language: str | None = Field(
-        "en",
+        "",
         max_length=255,
         pattern="^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
     )

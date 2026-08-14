@@ -655,6 +655,7 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
 
 
 class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
+    cache_dir: ConfigPath
     executable_path: ConfigPath
     model_config_file_path: ConfigPath
     model_file_path: ConfigPath
@@ -662,6 +663,7 @@ class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
 
     def __new__(cls) -> _ServicesTtsProvidersPiperConfigPath:
         self = super().__new__(cls, "services.tts.providers.piper")
+        self.cache_dir = ConfigPath("services.tts.providers.piper.cache_dir")
         self.executable_path = ConfigPath("services.tts.providers.piper.executable_path")
         self.model_config_file_path = ConfigPath(
             "services.tts.providers.piper.model_config_file_path"

@@ -540,6 +540,7 @@ class ConfigManager:
         allowed_objects = {
             "services.tts.providers": {"piper", "pockettts"},
             "services.tts.providers.piper": {
+                "cache_dir",
                 "model_file_path",
                 "model_config_file_path",
                 "model_sample_rate",

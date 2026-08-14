@@ -278,6 +278,32 @@ class TestSupervisorServiceLifecycle:
             assert len(supervisor.services) > 0
 
     @pytest.mark.asyncio
+    async def test_thread_start_uses_voice_on_defaults_when_config_read_fails(
+        self, supervisor, mock_bus
+    ):
+        """Voice services stay production-on if config reads fall back to code defaults."""
+        supervisor._bus = mock_bus
+
+        async def return_gate_default(_key_path, default):
+            return default
+
+        with (
+            _inject_supervisor_thread_service_classes() as svc_mocks,
+            patch.object(supervisor, "_get_config_bool", side_effect=return_gate_default),
+        ):
+            for mock_cls in svc_mocks.values():
+                inst = Mock()
+                inst.start = AsyncMock()
+                mock_cls.return_value = inst
+
+            await supervisor.start_services()
+
+        assert svc_mocks["tts"].called
+        assert svc_mocks["wakeword"].called
+        assert svc_mocks["transcription"].called
+        assert svc_mocks["coordinator"].called
+
+    @pytest.mark.asyncio
     async def test_shutdown(self, supervisor, mock_bus):
         """Test supervisor shutdown."""
         supervisor._bus = mock_bus

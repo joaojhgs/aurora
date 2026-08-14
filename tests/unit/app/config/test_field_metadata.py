@@ -2,9 +2,16 @@
 Tests for configuration field metadata extraction
 """
 
+import json
+from pathlib import Path
+
 import pytest
 
 from app.services.config.config_manager import ConfigManager
+
+CONFIG_DEFAULTS_PATH = (
+    Path(__file__).resolve().parents[4] / "app/services/config/config_defaults.json"
+)
 
 
 class TestConfigFieldMetadata:
@@ -121,6 +128,16 @@ class TestConfigFieldMetadata:
         expected_langs = ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"]
         assert lang_field["choices"] == expected_langs
         assert "auto-detect" in lang_field["description"]
+
+    def test_generated_defaults_start_local_voice_services(self):
+        """New installs should start local speech services and leave STT language automatic."""
+        defaults = json.loads(CONFIG_DEFAULTS_PATH.read_text(encoding="utf-8"))
+
+        assert defaults["services"]["tts"]["enabled"] is True
+        assert defaults["services"]["stt"]["language"] == ""
+        assert defaults["services"]["stt"]["coordinator"]["enabled"] is True
+        assert defaults["services"]["stt"]["wakeword"]["enabled"] is True
+        assert defaults["services"]["stt"]["transcription"]["enabled"] is True
 
     def test_mcp_enabled_field(self, config_manager):
         """Test that MCP enabled field has correct metadata."""

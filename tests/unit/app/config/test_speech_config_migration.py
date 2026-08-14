@@ -43,6 +43,7 @@ def test_flat_piper_config_migrates_in_memory_without_mutating_source() -> None:
 
     assert source == original
     assert normalized["services"]["tts"]["providers"]["piper"] == {
+        "cache_dir": "voice_models/piper",
         "model_file_path": "legacy.onnx",
         "model_config_file_path": "legacy.onnx.json",
         "model_sample_rate": 16000,

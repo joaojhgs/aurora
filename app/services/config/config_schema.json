@@ -438,7 +438,7 @@
             "enabled": {
               "type": "boolean",
               "description": "Enable TTS service",
-              "default": false
+              "default": true
             },
             "provider": {
               "type": "string",
@@ -764,10 +764,23 @@
           "properties": {
             "language": {
               "type": "string",
+              "ui_type": "choice",
+              "ui_choices": [
+                "",
+                "en",
+                "pt",
+                "es",
+                "fr",
+                "de",
+                "it",
+                "ja",
+                "ko",
+                "zh"
+              ],
               "pattern": "^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
               "maxLength": 255,
               "description": "BCP 47 language tag for speech recognition (empty for auto-detect)",
-              "default": "en"
+              "default": ""
             },
             "coordinator": {
               "type": "object",
@@ -777,7 +790,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable STT coordinator",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
@@ -898,7 +911,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable wake word detection",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
@@ -949,7 +962,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable transcription service",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"

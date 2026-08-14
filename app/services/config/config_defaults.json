@@ -82,7 +82,7 @@
       "audit_retention_days": 90
     },
     "tts": {
-      "enabled": false,
+      "enabled": true,
       "provider": "piper",
       "fallback_provider": null,
       "default_voice_id": null,
@@ -163,9 +163,9 @@
       "piper_path": ""
     },
     "stt": {
-      "language": "en",
+      "language": "",
       "coordinator": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -206,7 +206,7 @@
         }
       },
       "wakeword": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -234,7 +234,7 @@
         "inference_framework": "onnx"
       },
       "transcription": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
