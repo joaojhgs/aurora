@@ -24,6 +24,12 @@ typedef struct AuroraIosVoiceTaskPackBinding {
   const char *slot_id;
   // Required NUL-terminated UTF-8 active pack path selected by Swift.
   const char *pack_path;
+  // Required NUL-terminated lowercase hex SHA-256 selected from the catalog.
+  const char *expected_sha256;
+  // Required exact byte size selected from the catalog.
+  uint64_t expected_size_bytes;
+  // Required NUL-terminated runtime/catalog revision selected from the catalog.
+  const char *runtime_revision;
 } AuroraIosVoiceTaskPackBinding;
 
 enum {

@@ -54,7 +54,7 @@ assert(
 )
 assert(
   sessionHost.includes('requiredSlots: ["stt"]')
-    && sessionHost.includes('AuroraIOSVoicePackManager.boundPackPaths')
+    && sessionHost.includes('AuroraIOSVoicePackManager.boundPackBindings')
     && sessionHost.includes('requiredTaskPackUnavailable'),
   'session host must require slot-bound ready packs before native session construction',
 )
@@ -63,6 +63,14 @@ assert(
     && sessionHost.includes('aurora_ios_voice_session_new_with_pack_bindings'),
   'session host must pass selected pack bindings to Rust',
 )
+for (const exactBindingField of [
+  'expected_sha256',
+  'expected_size_bytes',
+  'runtime_revision',
+]) {
+  assert(header.includes(exactBindingField), `iOS ABI must carry exact binding field ${exactBindingField}`)
+  assert(sessionHost.includes(exactBindingField), `Swift session host must pass ${exactBindingField}`)
+}
 assert(
   credentialStore.includes('kSecAttrAccessibleWhenUnlockedThisDeviceOnly'),
   'voice credentials must be device-only Keychain data',
@@ -116,13 +124,15 @@ for (const command of [
   assert(plugin.includes(command), `native plugin must expose ${command}`)
 }
 assert(
-  plugin.includes('nativeTurnTransportAvailable = false')
+  !plugin.includes('nativeTurnTransportAvailable = false')
     && plugin.includes('nativeTurnTransportReady()')
     && plugin.includes('packCatalogReady'),
-  'public iOS voice capture must remain withheld while reporting pack readiness honestly',
+  'public iOS voice capture readiness must not be hardcoded off after pack/native bridge wiring',
 )
 for (const snippet of [
   'operationQueue.sync',
+  'normalizeTrustedHosts',
+  'hostAllowedByCatalog',
   'validateDownloadTarget',
   'resolvesToAllowedHost',
   'getaddrinfo',
@@ -136,11 +146,23 @@ for (const snippet of [
   'stagingPrefix',
   'metadata.json',
   'active.json',
+  'trusted-hosts.json',
   'boundPackPaths(for slots:',
+  'boundPackBindings(for slots:',
+  'localSha256 == catalogEntry.sha256',
+  'metadata.bytesDownloaded == catalogEntry.fileSize',
+  'metadata.pack.runtimeRevision == catalogEntry.runtimeRevision',
+  'isSafeCachedPackFile',
+  'isSymbolicLink',
   'entry.acknowledged',
 ]) {
   assert(packManager.includes(snippet), `voice pack manager must preserve safety policy: ${snippet}`)
 }
+assert(
+  packManager.includes('let sanitized = try entries.map')
+    && !packManager.includes('compactMap { entry -> AuroraIOSVoicePackCatalogEntry?'),
+  'invalid catalog entries must fail the whole catalog instead of being silently dropped',
+)
 assert(
   !packManager.includes('Bundle.main') && !packManager.includes('.onnx'),
   'voice pack manager must not use embedded model weights',

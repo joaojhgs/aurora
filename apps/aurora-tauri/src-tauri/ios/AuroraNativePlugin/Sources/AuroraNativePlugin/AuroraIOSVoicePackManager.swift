@@ -194,10 +194,29 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
 struct AuroraIOSVoicePackCatalogSetArgs: Decodable {
   let entries: [AuroraIOSVoicePackCatalogEntry]
   let replaceExisting: Bool
+  let trustedHosts: [String]
 
-  init(entries: [AuroraIOSVoicePackCatalogEntry], replaceExisting: Bool = true) {
+  enum CodingKeys: String, CodingKey {
+    case entries
+    case replaceExisting
+    case trustedHosts
+  }
+
+  init(
+    entries: [AuroraIOSVoicePackCatalogEntry],
+    replaceExisting: Bool = true,
+    trustedHosts: [String] = []
+  ) {
     self.entries = entries
     self.replaceExisting = replaceExisting
+    self.trustedHosts = trustedHosts
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    entries = try container.decode([AuroraIOSVoicePackCatalogEntry].self, forKey: .entries)
+    replaceExisting = try container.decodeIfPresent(Bool.self, forKey: .replaceExisting) ?? true
+    trustedHosts = try container.decodeIfPresent([String].self, forKey: .trustedHosts) ?? []
   }
 }
 
@@ -214,6 +233,15 @@ private struct AuroraIOSVoicePackInstalledRecord: Codable {
   let installedAtMs: UInt64
   let localSha256: String
   let bytesDownloaded: UInt64
+}
+
+struct AuroraIOSVoicePackPathBinding: Equatable {
+  let slot: String
+  let task: String
+  let packPath: String
+  let sha256: String
+  let fileSize: UInt64
+  let runtimeRevision: String
 }
 
 private struct AuroraIOSVoicePackActiveSelection: Codable {
@@ -248,6 +276,7 @@ enum AuroraIOSVoicePackManagerError: Error {
 
 enum AuroraIOSVoicePackManager {
   static let catalogFileName = "catalog.json"
+  static let trustedHostsFileName = "trusted-hosts.json"
   static let activeFileName = "active.json"
   static let catalogDirectoryName = "voice-packs"
   static let stagingPrefix = "staging-"
@@ -275,13 +304,19 @@ enum AuroraIOSVoicePackManager {
     }
   }
 
-  static func setCatalog(entries: [AuroraIOSVoicePackCatalogEntry], replaceExisting: Bool = true) throws -> [String: Any] {
+  static func setCatalog(
+    entries: [AuroraIOSVoicePackCatalogEntry],
+    replaceExisting: Bool = true,
+    trustedHosts: [String] = []
+  ) throws -> [String: Any] {
     try withSerializedState {
-      let sanitized = try entries
-        .compactMap { entry -> AuroraIOSVoicePackCatalogEntry? in
-          guard try isValidEntry(entry) else { return nil }
-          return entry
+      let normalizedTrustedHosts = try normalizeTrustedHosts(trustedHosts, entries: entries)
+      let sanitized = try entries.map { entry -> AuroraIOSVoicePackCatalogEntry in
+        guard try isValidEntry(entry, trustedHosts: normalizedTrustedHosts) else {
+          throw AuroraIOSVoicePackManagerError.invalidPack
         }
+        return entry
+      }
       guard sanitized.count <= catalogEntryLimit else { throw AuroraIOSVoicePackManagerError.invalidPack }
 
       let entriesToStore: [AuroraIOSVoicePackCatalogEntry]
@@ -299,6 +334,7 @@ enum AuroraIOSVoicePackManager {
       encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
       let data = try encoder.encode(entriesToStore)
       try writeAtomically(data: data, to: catalogFileURL())
+      try writeAtomically(data: try encoder.encode(Array(normalizedTrustedHosts).sorted()), to: trustedHostsFileURL())
       return try statusLocked()
     }
   }
@@ -456,6 +492,13 @@ enum AuroraIOSVoicePackManager {
     try withSerializedState {
       let normalizedSlots = Set(slots.map { $0.lowercased() })
       return try boundPackPathsForSlotsLocked(normalizedSlots)
+    }
+  }
+
+  static func boundPackBindings(for slots: [String]) throws -> [AuroraIOSVoicePackPathBinding] {
+    try withSerializedState {
+      let normalizedSlots = Set(slots.map { $0.lowercased() })
+      return try boundPackBindingsForSlotsLocked(normalizedSlots)
     }
   }
 
@@ -640,7 +683,10 @@ enum AuroraIOSVoicePackManager {
     return !value.isEmpty && value.rangeOfCharacter(from: allowed.inverted) == nil
   }
 
-  private static func isValidEntry(_ entry: AuroraIOSVoicePackCatalogEntry) throws -> Bool {
+  private static func isValidEntry(
+    _ entry: AuroraIOSVoicePackCatalogEntry,
+    trustedHosts: Set<String>? = nil
+  ) throws -> Bool {
     let packId = try sanitizePackId(entry.packId)
     let fileName = try sanitizeFileName(entry.fileName)
     guard packId == entry.packId,
@@ -654,7 +700,11 @@ enum AuroraIOSVoicePackManager {
       return false
     }
     let url = try parseDownloadUrl(entry.downloadUrl)
-    guard validateDownloadTarget(url), entry.compatiblePlatforms.isEmpty == false else { return false }
+    guard validateDownloadTarget(url),
+          hostAllowedByCatalog(url, trustedHosts: trustedHosts),
+          entry.compatiblePlatforms.isEmpty == false else {
+      return false
+    }
     return isPackCompatible(entry) && validateDownloadTarget(url)
   }
 
@@ -686,6 +736,50 @@ enum AuroraIOSVoicePackManager {
       throw AuroraIOSVoicePackManagerError.invalidUri
     }
     return url
+  }
+
+  private static func normalizeTrustedHosts(
+    _ trustedHosts: [String],
+    entries: [AuroraIOSVoicePackCatalogEntry]
+  ) throws -> Set<String> {
+    let sourceHosts = try entries.map { entry -> String in
+      let url = try parseDownloadUrl(entry.downloadUrl)
+      guard let host = url.host?.lowercased(), !host.isEmpty else {
+        throw AuroraIOSVoicePackManagerError.invalidUri
+      }
+      return host
+    }
+    let rawHosts = trustedHosts.isEmpty ? sourceHosts : trustedHosts
+    let normalized = try rawHosts.map { value -> String in
+      let host = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      guard isValidTrustedHost(host), !isDisallowedHost(host) else {
+        throw AuroraIOSVoicePackManagerError.invalidUri
+      }
+      return host
+    }
+    let result = Set(normalized)
+    guard !result.isEmpty, sourceHosts.allSatisfy({ result.contains($0) }) else {
+      throw AuroraIOSVoicePackManagerError.invalidUri
+    }
+    return result
+  }
+
+  private static func isValidTrustedHost(_ host: String) -> Bool {
+    guard !host.isEmpty, host.count <= 253, !host.contains("/") else { return false }
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+    guard host.rangeOfCharacter(from: allowed.inverted) == nil,
+          !host.hasPrefix("."),
+          !host.hasSuffix("."),
+          !host.contains("..") else {
+      return false
+    }
+    return true
+  }
+
+  private static func hostAllowedByCatalog(_ url: URL, trustedHosts: Set<String>?) -> Bool {
+    guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
+    let hosts = trustedHosts ?? ((try? loadTrustedHosts()) ?? [])
+    return hosts.contains(host)
   }
 
   private static func isDisallowedHost(_ host: String) -> Bool {
@@ -872,22 +966,39 @@ enum AuroraIOSVoicePackManager {
   }
 
   private static func boundPackPathsForSlotsLocked(_ slots: Set<String>) throws -> [String: String] {
-    guard !slots.isEmpty else { return [:] }
+    Dictionary(uniqueKeysWithValues: try boundPackBindingsForSlotsLocked(slots).map { ($0.slot, $0.packPath) })
+  }
+
+  private static func boundPackBindingsForSlotsLocked(_ slots: Set<String>) throws -> [AuroraIOSVoicePackPathBinding] {
+    guard !slots.isEmpty else { return [] }
     let active = try readActiveSelectionLocked()
     let root = try cacheRoot()
     let catalog = try loadCatalog()
     let catalogById = Dictionary(uniqueKeysWithValues: catalog.map { ($0.packId, $0) })
-    var bindings: [String: String] = [:]
+    var bindings: [AuroraIOSVoicePackPathBinding] = []
     for slot in slots where slot.isEmpty == false {
       guard let packId = active[slot], let catalogEntry = catalogById[packId] else {
         continue
       }
       guard let metadata = try? readInstalledRecord(for: packId) else { continue }
-      guard isPackCompatible(catalogEntry) && metadata.pack.acknowledged else { continue }
+      guard isPackCompatible(catalogEntry),
+            metadata.pack.acknowledged,
+            metadata.localSha256 == catalogEntry.sha256,
+            metadata.bytesDownloaded == catalogEntry.fileSize,
+            metadata.pack.runtimeRevision == catalogEntry.runtimeRevision else {
+        continue
+      }
       let packDirectory = root.appendingPathComponent(packId, isDirectory: true)
       let packPath = packDirectory.appendingPathComponent(catalogEntry.fileName)
-      if FileManager.default.fileExists(atPath: packPath.path) {
-        bindings[slot] = packPath.path
+      if isSafeCachedPackFile(packDirectory, candidate: packPath, expectedSize: catalogEntry.fileSize) {
+        bindings.append(AuroraIOSVoicePackPathBinding(
+          slot: slot,
+          task: catalogEntry.task.lowercased(),
+          packPath: packPath.path,
+          sha256: catalogEntry.sha256,
+          fileSize: catalogEntry.fileSize,
+          runtimeRevision: catalogEntry.runtimeRevision
+        ))
       }
     }
     return bindings
@@ -907,6 +1018,13 @@ enum AuroraIOSVoicePackManager {
     guard FileManager.default.fileExists(atPath: file.path) else { return [] }
     let data = try Data(contentsOf: file)
     return try JSONDecoder().decode([AuroraIOSVoicePackCatalogEntry].self, from: data)
+  }
+
+  private static func loadTrustedHosts() throws -> Set<String> {
+    let file = trustedHostsFileURL()
+    guard FileManager.default.fileExists(atPath: file.path) else { return [] }
+    let data = try Data(contentsOf: file)
+    return Set(try JSONDecoder().decode([String].self, from: data).map { $0.lowercased() })
   }
 
   private static func cacheRoot() throws -> URL {
@@ -931,6 +1049,14 @@ enum AuroraIOSVoicePackManager {
         .appendingPathComponent(catalogFileName)
   }
 
+  private static func trustedHostsFileURL() -> URL {
+    (try? cacheRoot().appendingPathComponent(trustedHostsFileName)) ??
+      FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        .first!
+        .appendingPathComponent(trustedHostsFileName)
+  }
+
   private static func activeFileURL() -> URL {
     (try? cacheRoot().appendingPathComponent(activeFileName)) ??
       FileManager.default
@@ -951,6 +1077,40 @@ enum AuroraIOSVoicePackManager {
     let normalizedCandidate = candidate.standardized.resolvingSymlinksInPath().path
     let rootPrefix = normalizedRoot.hasSuffix("/") ? normalizedRoot : normalizedRoot + "/"
     return normalizedCandidate == normalizedRoot || normalizedCandidate.hasPrefix(rootPrefix)
+  }
+
+  private static func isSafeCachedPackFile(_ root: URL, candidate: URL, expectedSize: UInt64) -> Bool {
+    guard isSafeCachedURL(root, candidate: candidate) else { return false }
+    do {
+      let values = try candidate.resourceValues(forKeys: [
+        .isRegularFileKey,
+        .isSymbolicLinkKey,
+        .fileSizeKey
+      ])
+      guard let fileSize = values.fileSize, fileSize >= 0 else { return false }
+      guard values.isRegularFile == true,
+            values.isSymbolicLink != true,
+            UInt64(fileSize) == expectedSize else {
+        return false
+      }
+      let actualSha256 = try sha256File(candidate)
+      let installedSha256 = try readInstalledRecord(for: root.lastPathComponent).localSha256
+      return actualSha256 == installedSha256
+    } catch {
+      return false
+    }
+  }
+
+  private static func sha256File(_ url: URL) throws -> String {
+    let handle = try FileHandle(forReadingFrom: url)
+    defer { try? handle.close() }
+    var hasher = SHA256()
+    while true {
+      let data = try handle.read(upToCount: 1024 * 1024) ?? Data()
+      if data.isEmpty { break }
+      hasher.update(data: data)
+    }
+    return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
   }
 
   private static func cleanupStagingFiles(in packDirectory: URL) {

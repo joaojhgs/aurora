@@ -21,8 +21,11 @@ use aurora_voice_engine::{
 use aurora_voice_ios_bridge::{
     AuroraIosAudioInput, AuroraIosAudioOutput, AuroraIosAudioState, AuroraIosCaptureControl,
 };
+use sha2::{Digest, Sha256};
 use std::fmt;
+use std::fs;
 use std::future::Future;
+use std::io::Read;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{mpsc, Arc, Mutex};
@@ -105,6 +108,9 @@ pub struct IosVoicePackBinding {
     task: PackTask,
     slot_id: String,
     pack_path: PathBuf,
+    expected_sha256: String,
+    expected_size_bytes: u64,
+    runtime_revision: String,
 }
 
 impl IosVoicePackBinding {
@@ -112,12 +118,20 @@ impl IosVoicePackBinding {
         task: PackTask,
         slot_id: impl Into<String>,
         pack_path: impl Into<PathBuf>,
+        expected_sha256: impl Into<String>,
+        expected_size_bytes: u64,
+        runtime_revision: impl Into<String>,
     ) -> Result<Self, ModelPackError> {
         let slot_id = slot_id.into();
         ModelStoreScope::new(task, slot_id.clone())?;
         let pack_path = pack_path.into();
+        let expected_sha256 = expected_sha256.into();
+        let runtime_revision = runtime_revision.into();
         if pack_path.as_os_str().is_empty()
             || pack_path.as_os_str().len() > MAX_IOS_PACK_PATH_BYTES
+            || !is_hex_sha256(&expected_sha256)
+            || expected_size_bytes == 0
+            || runtime_revision.is_empty()
             || !matches!(
                 task,
                 PackTask::Kws | PackTask::Wakeword | PackTask::Vad | PackTask::Stt | PackTask::Tts
@@ -129,6 +143,9 @@ impl IosVoicePackBinding {
             task,
             slot_id,
             pack_path,
+            expected_sha256,
+            expected_size_bytes,
+            runtime_revision,
         })
     }
 
@@ -143,6 +160,18 @@ impl IosVoicePackBinding {
     pub fn pack_path(&self) -> &PathBuf {
         &self.pack_path
     }
+
+    pub fn expected_sha256(&self) -> &str {
+        &self.expected_sha256
+    }
+
+    pub fn expected_size_bytes(&self) -> u64 {
+        self.expected_size_bytes
+    }
+
+    pub fn runtime_revision(&self) -> &str {
+        &self.runtime_revision
+    }
 }
 
 impl fmt::Debug for IosVoicePackBinding {
@@ -152,6 +181,9 @@ impl fmt::Debug for IosVoicePackBinding {
             .field("task", &self.task)
             .field("slot_id", &self.slot_id)
             .field("pack_path", &"<redacted>")
+            .field("expected_sha256_bytes", &self.expected_sha256.len())
+            .field("expected_size_bytes", &self.expected_size_bytes)
+            .field("runtime_revision_bytes", &self.runtime_revision.len())
             .finish()
     }
 }
@@ -440,9 +472,7 @@ fn build_runtime(
     output: AuroraIosAudioOutput,
     sink: IosSessionSink,
 ) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
-    if !config.pack_bindings.is_empty() {
-        return Err(IosVoiceSessionCommandError::Unavailable);
-    }
+    verify_ios_pack_bindings(&config.pack_bindings)?;
     let policy = microphone_policy(config)?;
     let scope = if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
         FiniteSttRouteScope::LoopbackSidecar
@@ -504,6 +534,58 @@ fn build_runtime(
         IOS_RUNTIME_ID,
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
+
+fn verify_ios_pack_bindings(
+    bindings: &IosVoicePackBindings,
+) -> Result<(), IosVoiceSessionCommandError> {
+    for binding in bindings.iter() {
+        verify_ios_pack_binding(binding)?;
+    }
+    Ok(())
+}
+
+fn verify_ios_pack_binding(
+    binding: &IosVoicePackBinding,
+) -> Result<(), IosVoiceSessionCommandError> {
+    let metadata = fs::symlink_metadata(binding.pack_path())
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if metadata.file_type().is_symlink()
+        || !metadata.file_type().is_file()
+        || metadata.len() != binding.expected_size_bytes()
+        || binding.runtime_revision().is_empty()
+    {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    let digest =
+        sha256_path(binding.pack_path()).map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    if digest != binding.expected_sha256() {
+        return Err(IosVoiceSessionCommandError::Unavailable);
+    }
+    Ok(())
+}
+
+fn sha256_path(path: &PathBuf) -> Result<String, std::io::Error> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 1024 * 64];
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(""))
+}
+
+fn is_hex_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn is_loopback(url: &Url) -> bool {
@@ -804,10 +886,19 @@ mod tests {
 
     #[test]
     fn ios_pack_bindings_are_bounded_deduplicated_and_redacted() {
-        let binding = IosVoicePackBinding::new(PackTask::Stt, "default", "/private/model-pack")
-            .expect("binding");
+        let binding = IosVoicePackBinding::new(
+            PackTask::Stt,
+            "default",
+            "/private/model-pack",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            12,
+            "sherpa-onnx-1.13.4",
+        )
+        .expect("binding");
         assert_eq!(binding.task(), PackTask::Stt);
         assert_eq!(binding.slot_id(), "default");
+        assert_eq!(binding.expected_size_bytes(), 12);
+        assert_eq!(binding.runtime_revision(), "sherpa-onnx-1.13.4");
         assert_eq!(
             IosVoicePackBindings::new(vec![binding.clone()])
                 .expect("bindings")
@@ -821,11 +912,18 @@ mod tests {
     }
 
     #[test]
-    fn ios_session_with_pack_bindings_fails_closed_without_native_engine() {
+    fn ios_session_accepts_cached_exact_pack_bindings() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pack = dir.path().join("model.pack");
+        std::fs::write(&pack, b"cached model").expect("write pack");
+        let sha256 = sha256_path(&pack).expect("hash");
         let bindings = IosVoicePackBindings::new(vec![IosVoicePackBinding::new(
             PackTask::Stt,
             "default",
-            "/private/model-pack",
+            pack,
+            sha256,
+            12,
+            "sherpa-onnx-1.13.4",
         )
         .expect("binding")])
         .expect("bindings");
@@ -841,8 +939,29 @@ mod tests {
         let sink = IosSessionSink {
             status: Arc::new(Mutex::new(IosVoiceSessionStatus::default())),
         };
+        assert!(build_runtime(&config, input, output, sink).is_ok());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn ios_session_rejects_symlinked_pack_bindings() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let target = dir.path().join("target.pack");
+        let link = dir.path().join("link.pack");
+        std::fs::write(&target, b"cached model").expect("write pack");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        let sha256 = sha256_path(&target).expect("hash");
+        let binding = IosVoicePackBinding::new(
+            PackTask::Stt,
+            "default",
+            link,
+            sha256,
+            12,
+            "sherpa-onnx-1.13.4",
+        )
+        .expect("binding");
         assert!(matches!(
-            build_runtime(&config, input, output, sink),
+            verify_ios_pack_binding(&binding),
             Err(IosVoiceSessionCommandError::Unavailable)
         ));
     }

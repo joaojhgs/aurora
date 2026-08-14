@@ -41,6 +41,12 @@ pub struct AuroraIosVoiceTaskPackBinding {
     pub slot_id: *const c_char,
     /// Required NUL-terminated UTF-8 active pack path selected by Swift.
     pub pack_path: *const c_char,
+    /// Required NUL-terminated lowercase hex SHA-256 selected by Swift.
+    pub expected_sha256: *const c_char,
+    /// Required exact byte size selected by Swift.
+    pub expected_size_bytes: u64,
+    /// Required NUL-terminated runtime/catalog revision selected by Swift.
+    pub runtime_revision: *const c_char,
 }
 
 /// # Safety
@@ -113,7 +119,19 @@ unsafe fn parse_pack_bindings(
         let slot_id =
             unsafe { bounded_string(binding.slot_id, 64) }.unwrap_or_else(|| "default".to_owned());
         let pack_path = unsafe { bounded_string(binding.pack_path, 4096) }?;
-        parsed.push(IosVoicePackBinding::new(task, slot_id, pack_path).ok()?);
+        let expected_sha256 = unsafe { bounded_string(binding.expected_sha256, 64) }?;
+        let runtime_revision = unsafe { bounded_string(binding.runtime_revision, 128) }?;
+        parsed.push(
+            IosVoicePackBinding::new(
+                task,
+                slot_id,
+                pack_path,
+                expected_sha256,
+                binding.expected_size_bytes,
+                runtime_revision,
+            )
+            .ok()?,
+        );
     }
     IosVoicePackBindings::new(parsed).ok()
 }

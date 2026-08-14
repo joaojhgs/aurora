@@ -40,11 +40,6 @@ struct AuroraShowNotificationArgs: Decodable {
 
 @objc(AuroraNativePlugin)
 public final class AuroraNativePlugin: Plugin {
-  // The iOS bridge owns bounded capture/playback plumbing and on-demand pack
-  // materialization. It must not report a usable local voice turn or open the
-  // microphone until the native catalog-to-engine transport is wired and
-  // verified by the app target.
-  private static let nativeTurnTransportAvailable = false
   private static let maxSharedTextLength = 8192
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
@@ -613,7 +608,8 @@ public final class AuroraNativePlugin: Plugin {
       let args = try invoke.parseArgs(AuroraIOSVoicePackCatalogSetArgs.self)
       let payload = try packManager.setCatalog(
         entries: args.entries,
-        replaceExisting: args.replaceExisting
+        replaceExisting: args.replaceExisting,
+        trustedHosts: args.trustedHosts
       )
       invoke.resolve(payload)
     } catch {
@@ -1255,15 +1251,6 @@ public final class AuroraNativePlugin: Plugin {
     let catalogStatus = AuroraIOSVoicePackManager.status()
     let catalogCount = catalogStatus["count"] ?? 0
 
-    guard nativeTurnTransportAvailable else {
-      return (
-        false,
-        "iOS native voice transport is not available on this build.",
-        activePack,
-        catalogCount,
-        packReady
-      )
-    }
     guard packReady else {
       return (
         false,
