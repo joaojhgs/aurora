@@ -69,21 +69,35 @@ describe('Android native voice route policy', () => {
     expect(voiceStore).not.toContain('host == "::1"')
   })
 
-  it('keeps assistant and background voice entry points disabled before native session creation', () => {
+  it('starts assistant and background voice through the native session with fail-closed readiness', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
     const assistantService = repoText(
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt',
     )
 
-    expect(plugin).toContain('if (args.backgroundSession) {')
+    expect(plugin).toContain('if (args.backgroundSession && !status.getBoolean("backgroundStartable"))')
     expect(plugin).toContain('reason", "background_voice_unavailable"')
-    expect(foregroundService).toContain('private const val BACKGROUND_VOICE_AVAILABLE = false')
+    expect(plugin).toContain('if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND')
     expect(foregroundService).toContain('ACTION_START_ASSISTANT')
-    expect(foregroundService).toContain('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
     expect(foregroundService).toContain('nativeSession.startBackground()')
     expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
+
+    const backgroundReadinessBody = foregroundService.slice(
+      foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable()'),
+      foregroundService.indexOf('private fun hasPostNotificationsPermission()', foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable()')),
+    )
+    expect(backgroundReadinessBody).toContain('Manifest.permission.RECORD_AUDIO')
+    expect(backgroundReadinessBody).toContain('Manifest.permission.FOREGROUND_SERVICE_MICROPHONE')
+    expect(backgroundReadinessBody).toContain('canPostNotifications()')
+    expect(backgroundReadinessBody).toContain('AuroraVoiceNativeConfigStore.isConfigured(this)')
+    for (const task of ['STT', 'TTS', 'VAD', 'KWS']) {
+      expect(backgroundReadinessBody).toContain(`isActivePackReady(AuroraSpeechPackTask.${task})`)
+    }
+    expect(backgroundReadinessBody).toContain('wakePhraseSelection() != null')
 
     const onCreateBody = foregroundService.slice(
       foregroundService.indexOf('override fun onCreate()'),
@@ -96,13 +110,13 @@ describe('Android native voice route policy', () => {
       foregroundService.indexOf('override fun onStartCommand'),
       foregroundService.indexOf('private fun initializeNativeVoiceSession', foregroundService.indexOf('override fun onStartCommand')),
     )
-    expect(onStartBody.indexOf('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')).toBeGreaterThanOrEqual(0)
-    expect(onStartBody.indexOf('initializeNativeVoiceSession()')).toBeGreaterThan(
-      onStartBody.indexOf('backgroundSession && !BACKGROUND_VOICE_AVAILABLE'),
+    expect(onStartBody.indexOf('backgroundSession && !isBackgroundVoiceSessionAvailable()')).toBeGreaterThanOrEqual(0)
+    expect(onStartBody.indexOf('initializeNativeVoiceSession(backgroundSession)')).toBeGreaterThan(
+      onStartBody.indexOf('backgroundSession && !isBackgroundVoiceSessionAvailable()'),
     )
   })
 
-  it('caches selected Android voice packs without advertising the local engine as ready', () => {
+  it('advertises Android local speech only after exact installed pack and route readiness', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
     const permission = repoText(permissionPath)
@@ -166,21 +180,25 @@ describe('Android native voice route policy', () => {
     expect(plugin).toContain('isPrivateOrLocalHostAddress')
     expect(plugin).toContain('uri.scheme?.lowercase(Locale.getDefault()) != "https"')
 
-    expect(localLightBody).toContain('ret.put("available", false)')
-    expect(localLightBody).toContain('ret.put("modelRuntimeProvider", false)')
-    expect(localLightBody).toContain('ret.put("engineReady", false)')
-    expect(localLightBody).toContain('ret.put("rustCatalogBridgeReady", false)')
-    expect(localLightBody).toContain('ret.put("activePackReadyForRuntime", false)')
+    expect(localLightBody).toContain('ret.put("available", activeCacheReady && routeConfigured)')
+    expect(localLightBody).toContain('ret.put("modelRuntimeProvider", true)')
+    expect(localLightBody).toContain('ret.put("engineReady", activeCacheReady)')
+    expect(localLightBody).toContain('ret.put("rustCatalogBridgeReady", true)')
+    expect(localLightBody).toContain('ret.put("activePackReadyForRuntime", activeCacheReady)')
     expect(localLightBody).toContain('ret.put("activePackCacheReady", activeCacheReady)')
-    expect(localLightBody).toContain('"rust_catalog_bridge_pending"')
-    expect(plugin).toContain('item.put("readyForRuntime", false)')
-    expect(plugin).toContain('item.put("readyForInstall", isPackReadyForRuntime(entry))')
+    expect(localLightBody).toContain('ret.put("routeConfigured", routeConfigured)')
+    expect(plugin).toContain('item.put("readyForRuntime", installed && task != null && isPackReadyForRuntime(entry))')
+    expect(plugin).toContain('item.put("readyForInstall", task != null && isPackDownloadReady(entry))')
 
-    expect(foregroundStatusBody).toContain('val backgroundRuntimeReady = false')
-    expect(foregroundStatusBody).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady')
-    expect(foregroundStatusBody).not.toContain('background_pack_runtime_unavailable')
-    expect(foregroundService).toContain('BACKGROUND_VOICE_AVAILABLE = false')
-    expect(foregroundService).toContain('backgroundSession && !BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundStatusBody).toContain('val localDuplexReady = nativeRouteReady &&')
+    expect(foregroundStatusBody).toContain('val backgroundRuntimeReady = localDuplexReady &&')
+    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.VAD)')
+    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.KWS)')
+    expect(foregroundStatusBody).toContain('wakePhraseSelection() != null')
+    expect(foregroundStatusBody).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeRouteReady')
+    expect(foregroundStatusBody).toContain('val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && backgroundRuntimeReady')
+    expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
+    expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
   })
 
   it('releases foreground microphone access on Android focus or foreground loss', () => {
