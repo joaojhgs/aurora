@@ -13,6 +13,8 @@ use aurora_voice_engine::{
     RuntimeTarget, SpeechCatalogEntry, SpeechCatalogTask, SpeechModelCatalog, TargetArch, TargetOs,
     TaskPackBinding, TtsCatalogEntry, TtsVoiceCatalog,
 };
+#[cfg(test)]
+use aurora_voice_engine::VoiceTask;
 use bzip2::read::BzDecoder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -2208,7 +2210,7 @@ mod tests {
         );
         let state = read_state(directory.path()).expect("state");
         assert_eq!(state.installed.len(), 1);
-        assert!(manager.resolve_entry_bindings(&entry).is_ok());
+        assert!(manager.resolve_entry_bindings_for_test(&entry).is_ok());
         assert!(progress.contains(&SpeechPackInstallPhase::Downloading));
         assert!(progress.contains(&SpeechPackInstallPhase::Extracting));
         assert_eq!(progress.last(), Some(&SpeechPackInstallPhase::Ready));
@@ -2732,7 +2734,7 @@ mod tests {
                 completed_bytes: report.extracted_bytes,
                 expected_bytes: self.config.max_extracted_bytes,
             });
-            let bindings = self.resolve_entry_bindings(entry)?;
+            let bindings = self.resolve_entry_bindings_for_test(entry)?;
             let receipt = build_binding_receipt(
                 &extract_root(&self.config.root, &entry.archive.sha256),
                 entry,
@@ -2776,7 +2778,7 @@ mod tests {
                 state.installed.insert(entry.voice_id.clone(), updated);
                 write_state_atomic(&self.config.root, &state)?;
             }
-            self.resolve_entry_bindings(entry)
+            self.resolve_entry_bindings_for_test(entry)
         }
 
         async fn cache_model_entry_for_test<F>(
@@ -2824,7 +2826,7 @@ mod tests {
                 expected_bytes: self.config.max_extracted_bytes,
             });
             let root = extract_root(&self.config.root, &entry.archive.sha256);
-            let bindings = self.resolve_model_entry_bindings(entry)?;
+            let bindings = self.resolve_model_entry_bindings_for_test(entry)?;
             let receipt = build_model_receipt(&root, entry)?;
             let mut state = read_state(&self.config.root)?;
             state.speech_models.insert(
@@ -2867,7 +2869,66 @@ mod tests {
                 state.speech_models.insert(entry.model_id.clone(), updated);
                 write_state_atomic(&self.config.root, &state)?;
             }
-            self.resolve_model_entry_bindings(entry)
+            self.resolve_model_entry_bindings_for_test(entry)
+        }
+
+        fn resolve_entry_bindings_for_test(
+            &self,
+            entry: &TtsCatalogEntry,
+        ) -> Result<SpeechPackBindings, SpeechPackError> {
+            verify_extracted(&self.config.root, entry)?;
+            let root = extract_root(&self.config.root, &entry.archive.sha256);
+            let pack_root = root.join(&entry.archive.root);
+            let bindings = SpeechPackBindings {
+                voice_id: entry.voice_id.clone(),
+                archive_sha256: entry.archive.sha256.clone(),
+                task_binding: tts_task_binding_for_test(entry, &root.join(&entry.bindings.config))?,
+                root: pack_root.clone(),
+                model: root.join(&entry.bindings.model),
+                config: root.join(&entry.bindings.config),
+                tokens: root.join(&entry.bindings.tokens),
+                data_dir: root.join(&entry.bindings.data_dir),
+                model_card: root.join(&entry.bindings.model_card),
+            };
+            ensure_contained(&root, &bindings.root)?;
+            ensure_contained(&root, &bindings.model)?;
+            ensure_contained(&root, &bindings.config)?;
+            ensure_contained(&root, &bindings.tokens)?;
+            ensure_contained(&root, &bindings.data_dir)?;
+            ensure_contained(&root, &bindings.model_card)?;
+            Ok(bindings)
+        }
+
+        fn resolve_model_entry_bindings_for_test(
+            &self,
+            entry: &SpeechCatalogEntry,
+        ) -> Result<SpeechModelBindings, SpeechPackError> {
+            verify_model_extracted(&self.config.root, entry)?;
+            let root = extract_root(&self.config.root, &entry.archive.sha256);
+            let model_root = entry
+                .archive
+                .root
+                .as_ref()
+                .map(|relative| root.join(relative));
+            let mut bindings = BTreeMap::new();
+            for (name, relative) in &entry.bindings {
+                let path = root.join(relative);
+                require_file(&root, &path)?;
+                bindings.insert(name.clone(), path);
+            }
+            if let Some(model_root) = &model_root {
+                require_directory(&root, model_root)?;
+            }
+            Ok(SpeechModelBindings {
+                model_id: entry.model_id.clone(),
+                task: entry.task,
+                archive_sha256: entry.archive.sha256.clone(),
+                task_binding: catalog_task_binding_for_test(entry)?,
+                root: model_root,
+                bindings,
+                languages: entry.languages.clone(),
+                language_scope: entry.language_scope.clone(),
+            })
         }
 
         fn list_model_entries_for_test(
@@ -2951,5 +3012,63 @@ mod tests {
             }
             Ok(())
         }
+    }
+
+    fn catalog_task_binding_for_test(
+        entry: &SpeechCatalogEntry,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        let task = match entry.task {
+            SpeechCatalogTask::SpeechToText => VoiceTask::SpeechToText,
+            SpeechCatalogTask::VoiceActivityDetection => VoiceTask::VoiceActivityDetection,
+            SpeechCatalogTask::KeywordSpotting => VoiceTask::KeywordSpotting,
+        };
+        TaskPackBinding::from_ios_cached_sherpa(
+            task,
+            entry.model_id.clone(),
+            SpeechModelCatalog::embedded()
+                .map_err(|_| SpeechPackError::State)?
+                .revision()
+                .to_owned(),
+            entry.archive.sha256.clone(),
+            entry.model_family.clone(),
+            entry.bindings.keys().cloned().collect(),
+            entry
+                .languages
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "und".to_owned()),
+            16_000,
+            1_600,
+            entry.archive.byte_size.max(1),
+        )
+        .map_err(|_| SpeechPackError::InvalidArchive)
+    }
+
+    fn tts_task_binding_for_test(
+        entry: &TtsCatalogEntry,
+        config_path: &Path,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        TaskPackBinding::from_ios_cached_sherpa(
+            VoiceTask::TextToSpeech,
+            entry.voice_id.clone(),
+            TtsVoiceCatalog::embedded()
+                .map_err(|_| SpeechPackError::State)?
+                .revision()
+                .to_owned(),
+            entry.archive.sha256.clone(),
+            entry.model_family.clone(),
+            vec![
+                "config".to_owned(),
+                "espeak-ng-data".to_owned(),
+                "model".to_owned(),
+                "model-card".to_owned(),
+                "tokens".to_owned(),
+            ],
+            entry.language.clone(),
+            read_tts_sample_rate_hz(config_path)?,
+            1_600,
+            entry.archive.byte_size.max(1),
+        )
+        .map_err(|_| SpeechPackError::InvalidArchive)
     }
 }

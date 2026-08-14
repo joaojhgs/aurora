@@ -14,9 +14,6 @@ use crate::{
 use crate::{
     AndroidAudioInput, AndroidAudioOutput, AndroidCaptureControl, AndroidPcmIngress, GatewayAuth,
     MicrophoneAudioPolicy, NativeGatewayTransport, TransportLimits,
-};
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-use crate::{
     NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTtsConfig,
     NativeGatewayTtsSynthesizer,
 };
@@ -28,12 +25,16 @@ use aurora_voice_core::{
     RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
     VoiceCoreError, VoiceRuntime, VoiceState,
 };
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-use aurora_voice_core::{RouteFiniteSttBinding, RouteTtsBinding};
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-use aurora_voice_engine::{FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ};
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
-use aurora_voice_engine::{KwsConfig, VadConfig};
+use aurora_voice_engine::{
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio, FiniteSttPort,
+    FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TtsSynthesisPort,
+    TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
+};
+use aurora_voice_engine::{
+    FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, RouteFiniteSttBinding, RouteTtsBinding,
+    VAD_SAMPLE_RATE_HZ,
+};
 #[cfg(feature = "native-sherpa")]
 use aurora_voice_sherpa::{
     NativeKwsBackend, NativeSttBackend, NativeVadBackend, SherpaFiniteSttEngine,
@@ -61,8 +62,8 @@ const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 type RuntimeCore = VoiceRuntime<
     AndroidAudioInput,
-    SherpaFiniteSttEngine<NativeSttBackend>,
-    SherpaTtsProvider<NativeTtsBackend>,
+    AndroidFiniteSttProvider,
+    AndroidTtsProvider,
     NativeGatewayTransport,
     AndroidAudioOutput,
     AndroidSessionSink,
@@ -77,6 +78,101 @@ type RuntimeCore = VoiceRuntime<
     AndroidAudioOutput,
     AndroidSessionSink,
 >;
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+enum AndroidFiniteSttProvider {
+    Local(SherpaFiniteSttEngine<NativeSttBackend>),
+    Gateway(NativeGatewayFiniteStt),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl FiniteSttPort for AndroidFiniteSttProvider {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.finite_stt_binding(),
+            Self::Gateway(provider) => provider.finite_stt_binding(),
+        }
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_finite_stt(binding).await,
+            Self::Gateway(provider) => provider.warm_finite_stt(binding).await,
+        }
+    }
+
+    async fn transcribe_finite(
+        &mut self,
+        request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<FiniteSttResult, EngineError> {
+        match self {
+            Self::Local(provider) => provider.transcribe_finite(request, audio, cancellation).await,
+            Self::Gateway(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
+        }
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_finite_stt_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_finite_stt_generation(generation).await,
+        }
+    }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+enum AndroidTtsProvider {
+    Local(SherpaTtsProvider<NativeTtsBackend>),
+    Gateway(NativeGatewayTtsSynthesizer),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl TtsSynthesisPort for AndroidTtsProvider {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesis_binding(),
+            Self::Gateway(provider) => provider.synthesis_binding(),
+        }
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_synthesis(binding).await,
+            Self::Gateway(provider) => provider.warm_synthesis(binding).await,
+        }
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesize_text(request, cancellation).await,
+            Self::Gateway(provider) => provider.synthesize_text(request, cancellation).await,
+        }
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_synthesis_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_synthesis_generation(generation).await,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(
@@ -357,12 +453,29 @@ fn build_runtime(
 ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
     #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     {
-        return build_local_runtime(config, input, output, sink);
+        if has_complete_local_pack_selection(config) {
+            build_local_runtime(config, input, output, sink)
+        } else {
+            build_gateway_runtime(config, input, output, sink)
+        }
     }
     #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
     {
         build_gateway_runtime(config, input, output, sink)
     }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn has_complete_local_pack_selection(config: &AndroidVoiceSessionConfig) -> bool {
+    config.pack_store_root.is_some()
+        && config
+            .stt_model_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        && config
+            .tts_voice_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -402,8 +515,8 @@ fn build_local_runtime(
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let mut runtime = VoiceRuntime::new(
         input,
-        stt,
-        tts,
+        AndroidFiniteSttProvider::Local(stt),
+        AndroidTtsProvider::Local(tts),
         transport_for_assistant,
         output,
         sink,
@@ -481,13 +594,13 @@ fn build_wake_runtime_parts(
     Ok(Some((vad, kws, wake_config)))
 }
 
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
 fn build_gateway_runtime(
     config: &AndroidVoiceSessionConfig,
     input: AndroidAudioInput,
     output: AndroidAudioOutput,
     sink: AndroidSessionSink,
 ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
     if config.pack_store_root.is_some()
         || config.stt_model_id.is_some()
         || config.tts_voice_id.is_some()
@@ -545,6 +658,10 @@ fn build_gateway_runtime(
         NativeGatewayTtsConfig::new(tts_route, None, 1.0, 16_000 * 30)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     );
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    let stt = AndroidFiniteSttProvider::Gateway(stt);
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    let tts = AndroidTtsProvider::Gateway(tts);
     VoiceRuntime::new(
         input,
         stt,
