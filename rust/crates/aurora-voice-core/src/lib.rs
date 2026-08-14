@@ -1765,9 +1765,12 @@ where
         };
         let release_result = self.leases.release(&lease.owner, lease.generation);
 
-        if result.is_err() {
-            self.reset_state_after_cleanup(lease.generation, lease.route_revision);
-        }
+        let state_reset_result = if result.is_err() {
+            self.emit_state_after_cleanup(lease.generation, lease.route_revision)
+                .await
+        } else {
+            Ok(())
+        };
 
         match result {
             Ok(value) => {
@@ -1782,17 +1785,25 @@ where
             Err(error) => {
                 let _ = stop_result;
                 let _ = release_result;
+                let state_reset_result = if matches!(error, VoiceCoreError::InvalidTransition) {
+                    let _ = state_reset_result;
+                    Ok(())
+                } else {
+                    state_reset_result
+                };
                 match (
                     output_stop_result,
                     wake_cancel_result,
                     stt_cancel_result,
                     tts_cancel_result,
+                    state_reset_result,
                 ) {
-                    (Err(stop_error), _, _, _) => Err(Self::playback_cleanup_failed(stop_error)),
-                    (_, Err(wake_error), _, _) => Err(Self::wake_cleanup_failed(wake_error)),
-                    (_, _, Err(stt_error), _) => Err(Self::stt_cleanup_failed(stt_error)),
-                    (_, _, _, Err(tts_error)) => Err(Self::tts_cleanup_failed(tts_error)),
-                    (Ok(()), Ok(()), Ok(()), Ok(())) => Err(error),
+                    (Err(stop_error), _, _, _, _) => Err(Self::playback_cleanup_failed(stop_error)),
+                    (_, Err(wake_error), _, _, _) => Err(Self::wake_cleanup_failed(wake_error)),
+                    (_, _, Err(stt_error), _, _) => Err(Self::stt_cleanup_failed(stt_error)),
+                    (_, _, _, Err(tts_error), _) => Err(Self::tts_cleanup_failed(tts_error)),
+                    (_, _, _, _, Err(state_error)) => Err(Self::state_cleanup_failed(state_error)),
+                    (Ok(()), Ok(()), Ok(()), Ok(()), Ok(())) => Err(error),
                 }
             }
         }
@@ -1845,24 +1856,77 @@ where
         VoiceCoreError::TransportFault { code }
     }
 
-    fn reset_state_after_cleanup(&mut self, generation: Generation, route_revision: RouteRevision) {
+    fn state_cleanup_failed(error: VoiceCoreError) -> VoiceCoreError {
+        let code = match error {
+            VoiceCoreError::TransportFault { code } if code.starts_with("state_cleanup_") => code,
+            VoiceCoreError::TransportFault { .. } => "state_cleanup_transport_fault".to_owned(),
+            VoiceCoreError::Cancelled => "state_cleanup_cancelled".to_owned(),
+            VoiceCoreError::InvalidTransition => "state_cleanup_invalid_transition".to_owned(),
+            VoiceCoreError::StaleGeneration => "state_cleanup_stale_generation".to_owned(),
+            VoiceCoreError::LockPoisoned => "state_cleanup_lock_poisoned".to_owned(),
+            VoiceCoreError::Engine(_) => "state_cleanup_engine_fault".to_owned(),
+            _ => "state_cleanup_failed".to_owned(),
+        };
+        VoiceCoreError::TransportFault { code }
+    }
+
+    async fn emit_state_after_cleanup(
+        &mut self,
+        generation: Generation,
+        route_revision: RouteRevision,
+    ) -> Result<(), VoiceCoreError> {
         if matches!(self.state.state(), VoiceState::Disabled) {
-            return;
+            return Ok(());
         }
-        let _ = self.state.transition(
-            VoiceState::Stopping,
-            TransitionReason::Cancel,
-            generation,
-            route_revision,
-            TimestampMicros(0),
-        );
-        let _ = self.state.transition(
-            VoiceState::Idle,
-            TransitionReason::Stop,
-            generation,
-            route_revision,
-            TimestampMicros(0),
-        );
+        let mut first_error = None;
+        if !matches!(self.state.state(), VoiceState::Stopping) {
+            if let Err(error) = self
+                .transition_cleanup_emit(
+                    VoiceState::Stopping,
+                    TransitionReason::Cancel,
+                    generation,
+                    route_revision,
+                    TimestampMicros(0),
+                )
+                .await
+            {
+                first_error = Some(error);
+            }
+        }
+        if !matches!(self.state.state(), VoiceState::Idle) {
+            if let Err(error) = self
+                .transition_cleanup_emit(
+                    VoiceState::Idle,
+                    TransitionReason::Stop,
+                    generation,
+                    route_revision,
+                    TimestampMicros(0),
+                )
+                .await
+            {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+
+    async fn transition_cleanup_emit(
+        &mut self,
+        to: VoiceState,
+        reason: TransitionReason,
+        generation: Generation,
+        route_revision: RouteRevision,
+        at: TimestampMicros,
+    ) -> Result<(), VoiceCoreError> {
+        let transition = self
+            .state
+            .transition(to, reason, generation, route_revision, at)?;
+        self.sink.event(RuntimeEvent::State { transition }).await
     }
 
     async fn transition_emit(
@@ -2962,6 +3026,16 @@ mod tests {
         Ok((runtime, engine, handles))
     }
 
+    fn observed_states(sink: &FakeEventSink) -> Vec<VoiceState> {
+        sink.events
+            .iter()
+            .filter_map(|event| match event {
+                RuntimeEvent::State { transition } => Some(transition.to),
+                _ => None,
+            })
+            .collect()
+    }
+
     #[tokio::test]
     async fn wake_turn_without_ready_providers_fails_before_capture() -> Result<(), VoiceCoreError>
     {
@@ -3013,11 +3087,17 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(engine.transcribed_audio().is_empty());
         let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
-        assert!(!sink.events.iter().any(|event| matches!(
-            event,
-            RuntimeEvent::State { transition }
-                if transition.to == VoiceState::WakeDetected
-        )));
+        let states = observed_states(&sink);
+        assert_eq!(
+            states,
+            vec![
+                VoiceState::Idle,
+                VoiceState::ListeningForWake,
+                VoiceState::Stopping,
+                VoiceState::Idle,
+            ]
+        );
+        assert!(!states.contains(&VoiceState::WakeDetected));
         Ok(())
     }
 
@@ -3040,16 +3120,18 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(engine.transcribed_audio().is_empty());
         let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
-        assert!(sink.events.iter().any(|event| matches!(
-            event,
-            RuntimeEvent::State { transition }
-                if transition.to == VoiceState::WakeDetected
-        )));
-        assert!(!sink.events.iter().any(|event| matches!(
-            event,
-            RuntimeEvent::State { transition }
-                if transition.to == VoiceState::CapturingUtterance
-        )));
+        let states = observed_states(&sink);
+        assert_eq!(
+            states,
+            vec![
+                VoiceState::Idle,
+                VoiceState::ListeningForWake,
+                VoiceState::WakeDetected,
+                VoiceState::Stopping,
+                VoiceState::Idle,
+            ]
+        );
+        assert!(!states.contains(&VoiceState::CapturingUtterance));
         Ok(())
     }
 
@@ -3073,14 +3155,7 @@ mod tests {
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert_eq!(engine.transcribed_audio(), vec![vec![0.4, 0.5]]);
         let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
-        let transitions = sink
-            .events
-            .iter()
-            .filter_map(|event| match event {
-                RuntimeEvent::State { transition } => Some(transition.to),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
+        let transitions = observed_states(&sink);
         assert!(transitions.contains(&VoiceState::ListeningForWake));
         assert!(transitions.contains(&VoiceState::WakeDetected));
         assert!(transitions.contains(&VoiceState::CapturingUtterance));
