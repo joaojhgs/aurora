@@ -101,6 +101,17 @@ describe('openHostedBrowserSttSpeechPack', () => {
         readAll: async () => new Uint8Array([1, 2, 3, 4]),
         readChunk: async () => new Uint8Array([1]),
       }],
+      models: [{
+        task: 'stt',
+        family: 'whisper',
+        kind: 'offline-asr',
+        files: [{
+          role: 'tokens',
+          fileId: 'tokens',
+          virtualPath: '/models/stt/tokens.txt',
+        }],
+        config: { language: 'en' },
+      }],
     }
     voiceWeb.openExistingHost.mockResolvedValueOnce(fakeModelStoreHost())
     voiceWeb.openActive.mockResolvedValueOnce(pack)
@@ -122,6 +133,12 @@ describe('openHostedBrowserSttSpeechPack', () => {
     expect(Object.isFrozen(result.pack)).toBe(true)
     expect(Object.isFrozen(result.pack.files)).toBe(true)
     expect(Object.isFrozen(result.pack.files[0])).toBe(true)
+    expect(result.pack.models).toEqual(pack.models)
+    expect(Object.isFrozen(result.pack.models)).toBe(true)
+    expect(Object.isFrozen(result.pack.models[0])).toBe(true)
+    expect(Object.isFrozen(result.pack.models[0]?.files)).toBe(true)
+    expect(Object.isFrozen(result.pack.models[0]?.files[0])).toBe(true)
+    expect(Object.isFrozen(result.pack.models[0]?.config)).toBe(true)
   })
 
   it('keeps corrupted or tampered packs rejected instead of treating them as absent', async () => {

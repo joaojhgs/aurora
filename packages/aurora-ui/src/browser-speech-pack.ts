@@ -4,7 +4,7 @@ import {
   type AuroraBrowserActiveModelPack,
   type AuroraBrowserModelPackReleaseTrustKey,
 } from '@aurora/voice-web/browser'
-import type { AuroraWebModelStoreHost } from '@aurora/voice-web'
+import type { AuroraVoiceWebModelDescriptor, AuroraWebModelStoreHost } from '@aurora/voice-web'
 
 export interface AuroraHostedBrowserSpeechPackTrustInput {
   readonly releaseKeyId: string
@@ -128,12 +128,24 @@ function normalizeTrustInput(
 
 function freezePack(pack: AuroraBrowserActiveModelPack): AuroraBrowserActiveModelPack {
   const files = Object.freeze(pack.files.map((file) => Object.freeze(file)))
+  const models = Object.freeze(pack.models.map((model): AuroraVoiceWebModelDescriptor => {
+    const frozenModel = {
+      ...model,
+      files: Object.freeze(model.files.map((file) => Object.freeze({ ...file }))),
+    }
+    if (!model.config) return Object.freeze(frozenModel)
+    return Object.freeze({
+      ...frozenModel,
+      config: Object.freeze({ ...model.config }),
+    })
+  }))
   return Object.freeze({
     identity: Object.freeze({
       ...pack.identity,
       scope: Object.freeze({ ...pack.identity.scope }),
     }),
     files,
+    models,
   })
 }
 
