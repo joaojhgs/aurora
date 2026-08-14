@@ -58,8 +58,9 @@ pub use ios_session::{
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use speech_pack_manager::{
-    InstalledSpeechPack, SpeechPackBindings, SpeechPackError, SpeechPackInstallPhase,
-    SpeechPackInstallProgress, SpeechPackManager, SpeechPackManagerConfig,
+    InstalledSpeechModel, InstalledSpeechPack, SpeechModelBindings, SpeechPackBindings,
+    SpeechPackError, SpeechPackInstallPhase, SpeechPackInstallProgress, SpeechPackManager,
+    SpeechPackManagerConfig,
 };
 pub use transport::{
     GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,

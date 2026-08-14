@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aurora_voice_core::CancellationToken;
-use aurora_voice_engine::{TtsCatalogEntry, TtsVoiceCatalog};
+use aurora_voice_engine::{
+    SpeechCatalogEntry, SpeechCatalogTask, SpeechModelCatalog, TtsCatalogEntry, TtsVoiceCatalog,
+};
 use bzip2::read::BzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -96,6 +98,29 @@ pub struct SpeechPackBindings {
     pub model_card: PathBuf,
 }
 
+/// Resolved local file bindings for a verified installed STT, VAD, or KWS model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpeechModelBindings {
+    pub model_id: String,
+    pub task: SpeechCatalogTask,
+    pub archive_sha256: String,
+    pub root: Option<PathBuf>,
+    pub bindings: BTreeMap<String, PathBuf>,
+    pub languages: Vec<String>,
+    pub language_scope: String,
+}
+
+impl fmt::Display for SpeechModelBindings {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SpeechModelBindings")
+            .field("model_id", &self.model_id)
+            .field("task", &self.task)
+            .field("archive_sha256", &self.archive_sha256)
+            .finish_non_exhaustive()
+    }
+}
+
 impl fmt::Display for SpeechPackBindings {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -112,6 +137,20 @@ pub struct InstalledSpeechPack {
     pub voice_id: String,
     pub display_name: String,
     pub language: String,
+    pub archive_sha256: String,
+    pub archive_bytes: u64,
+    pub extracted_bytes: u64,
+    pub installed_at: u64,
+}
+
+/// Durable metadata for an installed selected speech model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InstalledSpeechModel {
+    pub model_id: String,
+    pub display_name: String,
+    pub task: SpeechCatalogTask,
+    pub languages: Vec<String>,
+    pub language_scope: String,
     pub archive_sha256: String,
     pub archive_bytes: u64,
     pub extracted_bytes: u64,
@@ -237,6 +276,99 @@ impl SpeechPackManager {
         Ok(bindings)
     }
 
+    /// Cache exactly one selected STT, VAD, or KWS model archive without installing it.
+    pub async fn cache_model<F>(
+        &self,
+        model_id: &str,
+        cancellation: &CancellationToken,
+        progress: F,
+    ) -> Result<(), SpeechPackError>
+    where
+        F: FnMut(DownloadProgress),
+    {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .model(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?
+            .clone();
+        let _guard = SelectionLock::acquire(self.locks.clone(), &entry.model_id)?;
+        self.ensure_model_quota_for_archive(&entry)?;
+        self.ensure_model_archive_cached(&entry, cancellation, progress)
+            .await?;
+        Ok(())
+    }
+
+    /// Install exactly one selected STT, VAD, or KWS model from the embedded catalog.
+    pub async fn install_model<F>(
+        &self,
+        model_id: &str,
+        cancellation: &CancellationToken,
+        mut progress: F,
+    ) -> Result<SpeechModelBindings, SpeechPackError>
+    where
+        F: FnMut(SpeechPackInstallProgress),
+    {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .model(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?
+            .clone();
+        let _guard = SelectionLock::acquire(self.locks.clone(), &entry.model_id)?;
+        if cancellation.is_cancelled() {
+            return Err(SpeechPackError::Cancelled);
+        }
+        self.ensure_model_quota_for_archive(&entry)?;
+        let archive = self
+            .ensure_model_archive_cached(&entry, cancellation, |download| {
+                progress(SpeechPackInstallProgress {
+                    phase: SpeechPackInstallPhase::Downloading,
+                    completed_bytes: download.downloaded_bytes,
+                    expected_bytes: download.expected_bytes,
+                });
+            })
+            .await?;
+        if cancellation.is_cancelled() {
+            return Err(SpeechPackError::Cancelled);
+        }
+        let extract_report = self
+            .ensure_model_extracted(&entry, &archive, cancellation)
+            .await?;
+        progress(SpeechPackInstallProgress {
+            phase: SpeechPackInstallPhase::Extracting,
+            completed_bytes: extract_report.extracted_bytes,
+            expected_bytes: self.config.max_extracted_bytes,
+        });
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        let receipt = build_model_receipt(&root, &entry)?;
+        let bindings = self.resolve_model_entry_bindings(&entry)?;
+        let installed = InstalledModelRecord {
+            model_id: entry.model_id.clone(),
+            display_name: entry.display_name.clone(),
+            task: entry.task,
+            languages: entry.languages.clone(),
+            language_scope: entry.language_scope.clone(),
+            archive_sha256: entry.archive.sha256.clone(),
+            archive_bytes: entry.archive.byte_size,
+            extracted_bytes: extract_report.extracted_bytes,
+            installed_at: now_epoch_seconds(),
+            receipt,
+        };
+        {
+            let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+            let mut state = read_state(&self.config.root)?;
+            state
+                .speech_models
+                .insert(entry.model_id.clone(), installed);
+            write_state_atomic(&self.config.root, &state)?;
+        }
+        progress(SpeechPackInstallProgress {
+            phase: SpeechPackInstallPhase::Ready,
+            completed_bytes: entry.archive.byte_size,
+            expected_bytes: entry.archive.byte_size,
+        });
+        Ok(bindings)
+    }
+
     /// Return durable installed voices whose bindings still verify on disk.
     pub fn list_installed_voices(&self) -> Result<Vec<InstalledSpeechPack>, SpeechPackError> {
         let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
@@ -274,6 +406,60 @@ impl SpeechPackManager {
         Ok(installed)
     }
 
+    /// Return installed speech models that still verify on disk.
+    pub fn list_installed_models(
+        &self,
+        task: Option<SpeechCatalogTask>,
+        language: Option<&str>,
+    ) -> Result<Vec<InstalledSpeechModel>, SpeechPackError> {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let mut state = read_state(&self.config.root)?;
+        let mut changed = false;
+        let mut installed = Vec::new();
+        let model_ids = state.speech_models.keys().cloned().collect::<Vec<_>>();
+        for model_id in model_ids {
+            let Some(record) = state.speech_models.get(&model_id).cloned() else {
+                continue;
+            };
+            let Some(entry) = catalog.model(&record.model_id) else {
+                continue;
+            };
+            if task.is_some_and(|task| entry.task != task) {
+                continue;
+            }
+            if let Some(language) = language {
+                let language_matches = entry
+                    .languages
+                    .iter()
+                    .any(|candidate| candidate == language)
+                    || entry.language_scope == "language_independent";
+                if !language_matches {
+                    continue;
+                }
+            }
+            match self.ensure_model_record_verified_or_recovered(entry, record) {
+                Ok(updated) => {
+                    if state.speech_models.get(&model_id) != Some(&updated) {
+                        state.speech_models.insert(model_id, updated.clone());
+                        changed = true;
+                    }
+                    installed.push(updated.into_public());
+                }
+                Err(SpeechPackError::CorruptCache) | Err(SpeechPackError::InvalidArchive) => {
+                    state.speech_models.remove(&model_id);
+                    changed = true;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        if changed {
+            write_state_atomic(&self.config.root, &state)?;
+        }
+        installed.sort_by(|left, right| left.model_id.cmp(&right.model_id));
+        Ok(installed)
+    }
+
     /// Resolve verified local bindings for an installed selected voice.
     pub fn resolve_voice_bindings(
         &self,
@@ -298,6 +484,30 @@ impl SpeechPackManager {
         self.resolve_entry_bindings(entry)
     }
 
+    /// Resolve verified local bindings for an installed selected speech model.
+    pub fn resolve_model_bindings(
+        &self,
+        model_id: &str,
+    ) -> Result<SpeechModelBindings, SpeechPackError> {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .model(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let mut state = read_state(&self.config.root)?;
+        let record = state
+            .speech_models
+            .get(model_id)
+            .cloned()
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        let updated = self.ensure_model_record_verified_or_recovered(entry, record)?;
+        if state.speech_models.get(model_id) != Some(&updated) {
+            state.speech_models.insert(model_id.to_owned(), updated);
+            write_state_atomic(&self.config.root, &state)?;
+        }
+        self.resolve_model_entry_bindings(entry)
+    }
+
     /// Remove one selected voice install and its digest-addressed cache when unused.
     pub fn remove_voice(&self, voice_id: &str) -> Result<(), SpeechPackError> {
         let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
@@ -315,6 +525,38 @@ impl SpeechPackManager {
             .installed
             .values()
             .any(|other| other.archive_sha256 == record.archive_sha256)
+            && !state
+                .speech_models
+                .values()
+                .any(|other| other.archive_sha256 == record.archive_sha256)
+        {
+            remove_dir_if_exists(&extract_root(&self.config.root, &entry.archive.sha256))?;
+            remove_dir_if_exists(&cache_root(&self.config.root, &entry.archive.sha256))?;
+        }
+        Ok(())
+    }
+
+    /// Remove one selected speech model install and its digest-addressed cache when unused.
+    pub fn remove_model(&self, model_id: &str) -> Result<(), SpeechPackError> {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .model(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        let _guard = SelectionLock::acquire(self.locks.clone(), model_id)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let mut state = read_state(&self.config.root)?;
+        let Some(record) = state.speech_models.remove(model_id) else {
+            return Ok(());
+        };
+        write_state_atomic(&self.config.root, &state)?;
+        if !state
+            .installed
+            .values()
+            .any(|other| other.archive_sha256 == record.archive_sha256)
+            && !state
+                .speech_models
+                .values()
+                .any(|other| other.archive_sha256 == record.archive_sha256)
         {
             remove_dir_if_exists(&extract_root(&self.config.root, &entry.archive.sha256))?;
             remove_dir_if_exists(&cache_root(&self.config.root, &entry.archive.sha256))?;
@@ -325,6 +567,47 @@ impl SpeechPackManager {
     async fn ensure_archive_cached<F>(
         &self,
         entry: &TtsCatalogEntry,
+        cancellation: &CancellationToken,
+        mut progress: F,
+    ) -> Result<CachedArchive, SpeechPackError>
+    where
+        F: FnMut(DownloadProgress),
+    {
+        if cancellation.is_cancelled() {
+            return Err(SpeechPackError::Cancelled);
+        }
+        let archive_path = archive_path(&self.config.root, &entry.archive.sha256);
+        if archive_path.exists() {
+            let actual = inspect_file(&archive_path)?;
+            if actual.sha256 == entry.archive.sha256 && actual.byte_size == entry.archive.byte_size
+            {
+                progress(DownloadProgress {
+                    downloaded_bytes: actual.byte_size,
+                    expected_bytes: entry.archive.byte_size,
+                });
+                return Ok(CachedArchive { path: archive_path });
+            }
+            remove_dir_if_exists(&cache_root(&self.config.root, &entry.archive.sha256))?;
+        }
+        let source = Url::parse(&entry.archive.url).map_err(|_| SpeechPackError::UnsafeSource)?;
+        let integrity = AssetIntegrity::new(entry.archive.byte_size, entry.archive.sha256.clone())?;
+        let staging = staging_path(&self.config.root, &entry.archive.sha256);
+        let receipt = self
+            .downloader
+            .download_to_staging(&source, &staging, &integrity, cancellation, progress)
+            .await?;
+        if receipt.byte_size != entry.archive.byte_size || receipt.sha256 != entry.archive.sha256 {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        fs::create_dir_all(cache_root(&self.config.root, &entry.archive.sha256))
+            .map_err(|_| SpeechPackError::State)?;
+        promote_file_atomic(&staging, &archive_path)?;
+        Ok(CachedArchive { path: archive_path })
+    }
+
+    async fn ensure_model_archive_cached<F>(
+        &self,
+        entry: &SpeechCatalogEntry,
         cancellation: &CancellationToken,
         mut progress: F,
     ) -> Result<CachedArchive, SpeechPackError>
@@ -384,7 +667,46 @@ impl SpeechPackManager {
         .map_err(|_| SpeechPackError::State)?
     }
 
+    async fn ensure_model_extracted(
+        &self,
+        entry: &SpeechCatalogEntry,
+        archive: &CachedArchive,
+        cancellation: &CancellationToken,
+    ) -> Result<ExtractReport, SpeechPackError> {
+        if extract_root(&self.config.root, &entry.archive.sha256).exists() {
+            let report = verify_model_extracted(&self.config.root, entry)?;
+            return Ok(report);
+        }
+        let config = self.config.clone();
+        let entry = entry.clone();
+        let archive_path = archive.path.clone();
+        let cancellation = cancellation.clone();
+        tokio::task::spawn_blocking(move || {
+            extract_model_archive_bounded(&config, &entry, &archive_path, &cancellation)
+        })
+        .await
+        .map_err(|_| SpeechPackError::State)?
+    }
+
     fn ensure_quota_for_archive(&self, entry: &TtsCatalogEntry) -> Result<(), SpeechPackError> {
+        let Some(quota) = self.config.quota_bytes else {
+            return Ok(());
+        };
+        let used = directory_size(&cache_dir(&self.config.root))?
+            .saturating_add(directory_size(&extracted_dir(&self.config.root))?);
+        let required = used
+            .checked_add(entry.archive.byte_size)
+            .ok_or(SpeechPackError::ResourceLimit)?;
+        if required > quota {
+            return Err(SpeechPackError::ResourceLimit);
+        }
+        Ok(())
+    }
+
+    fn ensure_model_quota_for_archive(
+        &self,
+        entry: &SpeechCatalogEntry,
+    ) -> Result<(), SpeechPackError> {
         let Some(quota) = self.config.quota_bytes else {
             return Ok(());
         };
@@ -425,6 +747,37 @@ impl SpeechPackManager {
         Ok(bindings)
     }
 
+    fn resolve_model_entry_bindings(
+        &self,
+        entry: &SpeechCatalogEntry,
+    ) -> Result<SpeechModelBindings, SpeechPackError> {
+        verify_model_extracted(&self.config.root, entry)?;
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        let model_root = entry
+            .archive
+            .root
+            .as_ref()
+            .map(|relative| root.join(relative));
+        let mut bindings = BTreeMap::new();
+        for (name, relative) in &entry.bindings {
+            let path = root.join(relative);
+            require_file(&root, &path)?;
+            bindings.insert(name.clone(), path);
+        }
+        if let Some(model_root) = &model_root {
+            require_directory(&root, model_root)?;
+        }
+        Ok(SpeechModelBindings {
+            model_id: entry.model_id.clone(),
+            task: entry.task,
+            archive_sha256: entry.archive.sha256.clone(),
+            root: model_root,
+            bindings,
+            languages: entry.languages.clone(),
+            language_scope: entry.language_scope.clone(),
+        })
+    }
+
     fn ensure_record_verified_or_recovered(
         &self,
         entry: &TtsCatalogEntry,
@@ -452,6 +805,39 @@ impl SpeechPackManager {
         record.receipt = build_binding_receipt(&root, entry)?;
         Ok(record)
     }
+
+    fn ensure_model_record_verified_or_recovered(
+        &self,
+        entry: &SpeechCatalogEntry,
+        mut record: InstalledModelRecord,
+    ) -> Result<InstalledModelRecord, SpeechPackError> {
+        if record.archive_sha256 != entry.archive.sha256
+            || record.archive_bytes != entry.archive.byte_size
+            || record.task != entry.task
+        {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        if verify_model_receipt(&root, entry, &record.receipt).is_ok() {
+            return Ok(record);
+        }
+
+        let archive = archive_path(&self.config.root, &entry.archive.sha256);
+        let actual = inspect_file(&archive)?;
+        if actual.sha256 != entry.archive.sha256 || actual.byte_size != entry.archive.byte_size {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        remove_dir_if_exists(&root)?;
+        let report = extract_model_archive_bounded(
+            &self.config,
+            entry,
+            &archive,
+            &CancellationToken::new(),
+        )?;
+        record.extracted_bytes = report.extracted_bytes;
+        record.receipt = build_model_receipt(&root, entry)?;
+        Ok(record)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -468,6 +854,8 @@ struct ExtractReport {
 struct StoreState {
     schema_version: u32,
     installed: BTreeMap<String, InstalledRecord>,
+    #[serde(default)]
+    speech_models: BTreeMap<String, InstalledModelRecord>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -480,6 +868,20 @@ struct InstalledRecord {
     extracted_bytes: u64,
     installed_at: u64,
     receipt: BindingReceipt,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct InstalledModelRecord {
+    model_id: String,
+    display_name: String,
+    task: SpeechCatalogTask,
+    languages: Vec<String>,
+    language_scope: String,
+    archive_sha256: String,
+    archive_bytes: u64,
+    extracted_bytes: u64,
+    installed_at: u64,
+    receipt: ModelReceipt,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -519,6 +921,13 @@ enum ExtractedPathKind {
     File,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct ModelReceipt {
+    root: Option<DirectoryReceipt>,
+    bindings: BTreeMap<String, FileReceipt>,
+    extracted_paths: Vec<ExtractedPathReceipt>,
+}
+
 impl InstalledRecord {
     fn into_public(self) -> InstalledSpeechPack {
         InstalledSpeechPack {
@@ -533,11 +942,28 @@ impl InstalledRecord {
     }
 }
 
+impl InstalledModelRecord {
+    fn into_public(self) -> InstalledSpeechModel {
+        InstalledSpeechModel {
+            model_id: self.model_id,
+            display_name: self.display_name,
+            task: self.task,
+            languages: self.languages,
+            language_scope: self.language_scope,
+            archive_sha256: self.archive_sha256,
+            archive_bytes: self.archive_bytes,
+            extracted_bytes: self.extracted_bytes,
+            installed_at: self.installed_at,
+        }
+    }
+}
+
 impl Default for StoreState {
     fn default() -> Self {
         Self {
             schema_version: STATE_SCHEMA_VERSION,
             installed: BTreeMap::new(),
+            speech_models: BTreeMap::new(),
         }
     }
 }
@@ -595,6 +1021,41 @@ fn extract_archive_bounded(
             fs::rename(&temp_root, &final_root).map_err(|_| SpeechPackError::State)?;
             fsync_parent(&final_root)?;
             verify_extracted(&config.root, entry)
+        }
+        Err(error) => {
+            let _ = remove_dir_if_exists(&temp_root);
+            Err(error)
+        }
+    }
+}
+
+fn extract_model_archive_bounded(
+    config: &SpeechPackManagerConfig,
+    entry: &SpeechCatalogEntry,
+    archive_path: &Path,
+    cancellation: &CancellationToken,
+) -> Result<ExtractReport, SpeechPackError> {
+    if cancellation.is_cancelled() {
+        return Err(SpeechPackError::Cancelled);
+    }
+    let temp_root =
+        extracted_dir(&config.root).join(format!("{}{}", TMP_PREFIX, entry.archive.sha256));
+    remove_dir_if_exists(&temp_root)?;
+    fs::create_dir_all(&temp_root).map_err(|_| SpeechPackError::State)?;
+    let result = if entry.archive.format == "file" {
+        extract_direct_model_file(config, entry, archive_path, &temp_root, cancellation)
+    } else if entry.archive.format == "tar_bzip2" {
+        extract_model_archive_contents(config, entry, archive_path, &temp_root, cancellation)
+    } else {
+        Err(SpeechPackError::InvalidArchive)
+    };
+    match result {
+        Ok(_report) => {
+            let final_root = extract_root(&config.root, &entry.archive.sha256);
+            remove_dir_if_exists(&final_root)?;
+            fs::rename(&temp_root, &final_root).map_err(|_| SpeechPackError::State)?;
+            fsync_parent(&final_root)?;
+            verify_model_extracted(&config.root, entry)
         }
         Err(error) => {
             let _ = remove_dir_if_exists(&temp_root);
@@ -694,12 +1155,148 @@ fn extract_archive_contents(
     Ok(report)
 }
 
+fn extract_model_archive_contents(
+    config: &SpeechPackManagerConfig,
+    entry: &SpeechCatalogEntry,
+    archive_path: &Path,
+    temp_root: &Path,
+    cancellation: &CancellationToken,
+) -> Result<ExtractReport, SpeechPackError> {
+    let expected_root = entry
+        .archive
+        .root
+        .as_ref()
+        .ok_or(SpeechPackError::InvalidArchive)?;
+    let archive = File::open(archive_path).map_err(|_| SpeechPackError::CorruptCache)?;
+    let decoder = BzDecoder::new(archive);
+    let mut archive = tar::Archive::new(decoder);
+    let quota_baseline = quota_baseline_without_temp(config, temp_root)?;
+    let mut seen = BTreeSet::new();
+    let mut entries_seen = 0_usize;
+    let mut files_seen = 0_usize;
+    let mut extracted_bytes = 0_u64;
+    for item in archive
+        .entries()
+        .map_err(|_| SpeechPackError::InvalidArchive)?
+    {
+        if cancellation.is_cancelled() {
+            return Err(SpeechPackError::Cancelled);
+        }
+        entries_seen = entries_seen
+            .checked_add(1)
+            .ok_or(SpeechPackError::ResourceLimit)?;
+        if entries_seen > config.max_entries {
+            return Err(SpeechPackError::ResourceLimit);
+        }
+        let mut item = item.map_err(|_| SpeechPackError::InvalidArchive)?;
+        let entry_type = item.header().entry_type();
+        if !(entry_type == EntryType::Regular || entry_type == EntryType::Directory) {
+            return Err(SpeechPackError::InvalidArchive);
+        }
+        let relative =
+            safe_archive_path(&item.path().map_err(|_| SpeechPackError::InvalidArchive)?)?;
+        if !relative.starts_with(expected_root) {
+            return Err(SpeechPackError::InvalidArchive);
+        }
+        let key = relative.to_string_lossy().into_owned();
+        if !seen.insert(key) {
+            return Err(SpeechPackError::InvalidArchive);
+        }
+        let output = temp_root.join(&relative);
+        ensure_contained(temp_root, &output)?;
+        if entry_type == EntryType::Directory {
+            fs::create_dir_all(&output).map_err(|_| SpeechPackError::State)?;
+            continue;
+        }
+        files_seen = files_seen
+            .checked_add(1)
+            .ok_or(SpeechPackError::ResourceLimit)?;
+        if files_seen > config.max_files {
+            return Err(SpeechPackError::ResourceLimit);
+        }
+        let declared = item
+            .header()
+            .size()
+            .map_err(|_| SpeechPackError::InvalidArchive)?;
+        extracted_bytes =
+            checked_extracted_bytes(config, quota_baseline, extracted_bytes, declared)?;
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent).map_err(|_| SpeechPackError::State)?;
+        }
+        let mut output_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&output)
+            .map_err(|_| SpeechPackError::InvalidArchive)?;
+        copy_limited(&mut item, &mut output_file, declared)?;
+        output_file.sync_all().map_err(|_| SpeechPackError::State)?;
+    }
+    let report = ExtractReport { extracted_bytes };
+    verify_model_bindings_in_root(temp_root, entry)?;
+    Ok(report)
+}
+
+fn extract_direct_model_file(
+    config: &SpeechPackManagerConfig,
+    entry: &SpeechCatalogEntry,
+    archive_path: &Path,
+    temp_root: &Path,
+    cancellation: &CancellationToken,
+) -> Result<ExtractReport, SpeechPackError> {
+    if cancellation.is_cancelled() {
+        return Err(SpeechPackError::Cancelled);
+    }
+    if entry.archive.root.is_some() || entry.bindings.len() != 1 {
+        return Err(SpeechPackError::InvalidArchive);
+    }
+    let binding_path = entry
+        .bindings
+        .values()
+        .next()
+        .ok_or(SpeechPackError::InvalidArchive)?;
+    if binding_path != &entry.archive.filename {
+        return Err(SpeechPackError::InvalidArchive);
+    }
+    let relative = safe_archive_path(Path::new(binding_path))?;
+    let output = temp_root.join(&relative);
+    ensure_contained(temp_root, &output)?;
+    let quota_baseline = quota_baseline_without_temp(config, temp_root)?;
+    let extracted_bytes =
+        checked_extracted_bytes(config, quota_baseline, 0, entry.archive.byte_size)?;
+    let mut input = File::open(archive_path).map_err(|_| SpeechPackError::CorruptCache)?;
+    let mut output_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&output)
+        .map_err(|_| SpeechPackError::InvalidArchive)?;
+    copy_limited(&mut input, &mut output_file, entry.archive.byte_size)?;
+    output_file.sync_all().map_err(|_| SpeechPackError::State)?;
+    let actual = inspect_file(&output)?;
+    if actual.sha256 != entry.archive.sha256 || actual.byte_size != entry.archive.byte_size {
+        return Err(SpeechPackError::CorruptCache);
+    }
+    let report = ExtractReport { extracted_bytes };
+    verify_model_bindings_in_root(temp_root, entry)?;
+    Ok(report)
+}
+
 fn verify_extracted(
     root: &Path,
     entry: &TtsCatalogEntry,
 ) -> Result<ExtractReport, SpeechPackError> {
     let root = extract_root(root, &entry.archive.sha256);
     verify_bindings_in_root(&root, entry)?;
+    Ok(ExtractReport {
+        extracted_bytes: directory_size(&root)?,
+    })
+}
+
+fn verify_model_extracted(
+    root: &Path,
+    entry: &SpeechCatalogEntry,
+) -> Result<ExtractReport, SpeechPackError> {
+    let root = extract_root(root, &entry.archive.sha256);
+    verify_model_bindings_in_root(&root, entry)?;
     Ok(ExtractReport {
         extracted_bytes: directory_size(&root)?,
     })
@@ -716,6 +1313,22 @@ fn verify_bindings_in_root(root: &Path, entry: &TtsCatalogEntry) -> Result<(), S
     Ok(())
 }
 
+fn verify_model_bindings_in_root(
+    root: &Path,
+    entry: &SpeechCatalogEntry,
+) -> Result<(), SpeechPackError> {
+    if let Some(model_root) = &entry.archive.root {
+        require_directory(root, &root.join(model_root))?;
+    }
+    if entry.bindings.is_empty() {
+        return Err(SpeechPackError::InvalidArchive);
+    }
+    for relative in entry.bindings.values() {
+        require_file(root, &root.join(relative))?;
+    }
+    Ok(())
+}
+
 fn build_binding_receipt(
     root: &Path,
     entry: &TtsCatalogEntry,
@@ -728,6 +1341,22 @@ fn build_binding_receipt(
         tokens: file_receipt(root, &entry.bindings.tokens)?,
         data_dir: directory_receipt(&entry.bindings.data_dir),
         model_card: file_receipt(root, &entry.bindings.model_card)?,
+        extracted_paths: extracted_path_receipts(root)?,
+    })
+}
+
+fn build_model_receipt(
+    root: &Path,
+    entry: &SpeechCatalogEntry,
+) -> Result<ModelReceipt, SpeechPackError> {
+    verify_model_bindings_in_root(root, entry)?;
+    let mut bindings = BTreeMap::new();
+    for (name, relative) in &entry.bindings {
+        bindings.insert(name.clone(), file_receipt(root, relative)?);
+    }
+    Ok(ModelReceipt {
+        root: entry.archive.root.as_ref().map(directory_receipt),
+        bindings,
         extracted_paths: extracted_path_receipts(root)?,
     })
 }
@@ -752,6 +1381,46 @@ fn verify_binding_receipt(
     } else {
         Err(SpeechPackError::CorruptCache)
     }
+}
+
+fn verify_model_receipt(
+    root: &Path,
+    entry: &SpeechCatalogEntry,
+    receipt: &ModelReceipt,
+) -> Result<(), SpeechPackError> {
+    verify_model_bindings_in_root(root, entry)?;
+    let expected = build_model_receipt(root, entry)?;
+    if &expected == receipt {
+        Ok(())
+    } else {
+        Err(SpeechPackError::CorruptCache)
+    }
+}
+
+fn checked_extracted_bytes(
+    config: &SpeechPackManagerConfig,
+    quota_baseline: u64,
+    current: u64,
+    declared: u64,
+) -> Result<u64, SpeechPackError> {
+    if declared > config.max_file_bytes {
+        return Err(SpeechPackError::ResourceLimit);
+    }
+    let extracted_bytes = current
+        .checked_add(declared)
+        .ok_or(SpeechPackError::ResourceLimit)?;
+    if extracted_bytes > config.max_extracted_bytes {
+        return Err(SpeechPackError::ResourceLimit);
+    }
+    if let Some(quota) = config.quota_bytes {
+        let required = quota_baseline
+            .checked_add(extracted_bytes)
+            .ok_or(SpeechPackError::ResourceLimit)?;
+        if required > quota {
+            return Err(SpeechPackError::ResourceLimit);
+        }
+    }
+    Ok(extracted_bytes)
 }
 
 fn directory_receipt(path: impl AsRef<Path>) -> DirectoryReceipt {
@@ -1187,6 +1856,9 @@ mod tests {
     use super::*;
 
     const VOICE_ID: &str = "standard:piper:en_us-ljspeech-medium";
+    const STT_MODEL_ID: &str = "stt:whisper:tiny.en";
+    const VAD_MODEL_ID: &str = "vad:silero:current-int8";
+    const KWS_MODEL_ID: &str = "kws:zipformer:gigaspeech-mobile";
 
     struct OneShotServer {
         url: Url,
@@ -1238,6 +1910,15 @@ mod tests {
     fn test_entry(url: String, body: &[u8]) -> TtsCatalogEntry {
         let catalog = TtsVoiceCatalog::embedded().expect("catalog");
         let mut entry = catalog.voice(VOICE_ID).expect("voice").clone();
+        entry.archive.url = url;
+        entry.archive.byte_size = body.len() as u64;
+        entry.archive.sha256 = encode_hex(&Sha256::digest(body));
+        entry
+    }
+
+    fn test_model_entry(model_id: &str, url: String, body: &[u8]) -> SpeechCatalogEntry {
+        let catalog = SpeechModelCatalog::embedded().expect("speech model catalog");
+        let mut entry = catalog.model(model_id).expect("model").clone();
         entry.archive.url = url;
         entry.archive.byte_size = body.len() as u64;
         entry.archive.sha256 = encode_hex(&Sha256::digest(body));
@@ -1310,6 +1991,34 @@ mod tests {
                 std::io::empty(),
             )
             .expect("symlink");
+        let encoder = builder.into_inner().expect("finish tar");
+        encoder.finish().expect("finish bz2")
+    }
+
+    fn make_model_archive(entry: &SpeechCatalogEntry) -> Vec<u8> {
+        if entry.archive.format == "file" {
+            return b"onnx".to_vec();
+        }
+        let root = entry.archive.root.as_deref().expect("archive root");
+        let encoder = BzEncoder::new(Vec::new(), Compression::best());
+        let mut builder = Builder::new(encoder);
+        append_dir(&mut builder, root);
+        for (name, relative) in &entry.bindings {
+            append_file(&mut builder, relative, name.as_bytes());
+        }
+        let encoder = builder.into_inner().expect("finish tar");
+        encoder.finish().expect("finish bz2")
+    }
+
+    fn make_model_archive_with_extra(entry: &SpeechCatalogEntry) -> Vec<u8> {
+        let root = entry.archive.root.as_deref().expect("archive root");
+        let encoder = BzEncoder::new(Vec::new(), Compression::best());
+        let mut builder = Builder::new(encoder);
+        append_dir(&mut builder, root);
+        for (name, relative) in &entry.bindings {
+            append_file(&mut builder, relative, name.as_bytes());
+        }
+        append_file(&mut builder, &format!("{root}/extra.bin"), b"extra");
         let encoder = builder.into_inner().expect("finish tar");
         encoder.finish().expect("finish bz2")
     }
@@ -1623,6 +2332,201 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn installs_exact_selected_models_for_stt_vad_and_kws() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 4096);
+        for model_id in [STT_MODEL_ID, VAD_MODEL_ID, KWS_MODEL_ID] {
+            let prototype = SpeechModelCatalog::embedded()
+                .expect("catalog")
+                .model(model_id)
+                .expect("model");
+            let body = make_model_archive(prototype);
+            let server = OneShotServer::new(body.clone());
+            let entry = test_model_entry(model_id, server.url.to_string(), &body);
+            let bindings = manager
+                .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+                .await
+                .expect("install model");
+            assert_eq!(bindings.model_id, model_id);
+            assert_eq!(bindings.bindings.len(), entry.bindings.len());
+            for (name, path) in &bindings.bindings {
+                assert!(entry.bindings.contains_key(name));
+                assert!(path.exists());
+            }
+        }
+
+        let state = read_state(directory.path()).expect("state");
+        assert_eq!(state.speech_models.len(), 3);
+        assert!(state.installed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn model_list_filters_by_task_and_language_metadata_only() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 4096);
+        for model_id in [STT_MODEL_ID, VAD_MODEL_ID, KWS_MODEL_ID] {
+            let prototype = SpeechModelCatalog::embedded()
+                .expect("catalog")
+                .model(model_id)
+                .expect("model");
+            let body = make_model_archive(prototype);
+            let server = OneShotServer::new(body.clone());
+            let entry = test_model_entry(model_id, server.url.to_string(), &body);
+            manager
+                .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+                .await
+                .expect("install model");
+        }
+
+        let kws = manager
+            .list_model_entries_for_test(Some(SpeechCatalogTask::KeywordSpotting), Some("en"))
+            .expect("list kws");
+        assert_eq!(kws.len(), 1);
+        assert_eq!(kws[0].model_id, KWS_MODEL_ID);
+        let vad = manager
+            .list_model_entries_for_test(
+                Some(SpeechCatalogTask::VoiceActivityDetection),
+                Some("fr"),
+            )
+            .expect("list vad");
+        assert_eq!(vad.len(), 1);
+        assert_eq!(vad[0].model_id, VAD_MODEL_ID);
+    }
+
+    #[tokio::test]
+    async fn cached_model_archive_installs_without_second_download() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let prototype = SpeechModelCatalog::embedded()
+            .expect("catalog")
+            .model(KWS_MODEL_ID)
+            .expect("model");
+        let body = make_model_archive(prototype);
+        let server = OneShotServer::new(body.clone());
+        let entry = test_model_entry(KWS_MODEL_ID, server.url.to_string(), &body);
+        let manager = test_manager(directory.path(), body.len() as u64 + 100);
+        manager
+            .cache_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("cache");
+        drop(server);
+
+        let bindings = manager
+            .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install from cache");
+
+        assert_eq!(bindings.model_id, KWS_MODEL_ID);
+        assert!(archive_path(directory.path(), &entry.archive.sha256).exists());
+    }
+
+    #[tokio::test]
+    async fn model_tamper_is_restored_from_verified_archive_after_restart() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let prototype = SpeechModelCatalog::embedded()
+            .expect("catalog")
+            .model(STT_MODEL_ID)
+            .expect("model");
+        let body = make_model_archive(prototype);
+        let server = OneShotServer::new(body.clone());
+        let entry = test_model_entry(STT_MODEL_ID, server.url.to_string(), &body);
+        let manager = test_manager(directory.path(), body.len() as u64 + 100);
+        manager
+            .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install");
+        let tampered = extract_root(directory.path(), &entry.archive.sha256)
+            .join(entry.bindings.get("tokens").expect("tokens"));
+        fs::write(&tampered, b"tampered").expect("tamper");
+
+        let reopened = test_manager(directory.path(), body.len() as u64 + 100);
+        let bindings = reopened
+            .resolve_model_entry_for_test(&entry)
+            .expect("resolve after recovery");
+
+        assert_eq!(
+            fs::read(bindings.bindings.get("tokens").expect("tokens")).expect("tokens"),
+            b"tokens"
+        );
+    }
+
+    #[tokio::test]
+    async fn model_receipt_detects_extra_file_tamper() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let prototype = SpeechModelCatalog::embedded()
+            .expect("catalog")
+            .model(KWS_MODEL_ID)
+            .expect("model");
+        let body = make_model_archive_with_extra(prototype);
+        let server = OneShotServer::new(body.clone());
+        let entry = test_model_entry(KWS_MODEL_ID, server.url.to_string(), &body);
+        let manager = test_manager(directory.path(), body.len() as u64 + 100);
+        manager
+            .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install");
+        let extra = extract_root(directory.path(), &entry.archive.sha256)
+            .join(entry.archive.root.as_ref().expect("root"))
+            .join("extra.bin");
+        fs::write(&extra, b"tampered").expect("tamper");
+
+        manager
+            .resolve_model_entry_for_test(&entry)
+            .expect("resolve after recovery");
+
+        assert_eq!(fs::read(extra).expect("extra"), b"extra");
+    }
+
+    #[tokio::test]
+    async fn removes_selected_model_without_touching_voice_state() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 4096);
+        write_embedded_disk_install(directory.path());
+        let prototype = SpeechModelCatalog::embedded()
+            .expect("catalog")
+            .model(VAD_MODEL_ID)
+            .expect("model");
+        let body = make_model_archive(prototype);
+        let server = OneShotServer::new(body.clone());
+        let entry = test_model_entry(VAD_MODEL_ID, server.url.to_string(), &body);
+        manager
+            .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect("install model");
+
+        manager
+            .remove_model_entry_for_test(&entry)
+            .expect("remove model");
+
+        assert!(manager
+            .list_model_entries_for_test(None, None)
+            .expect("models")
+            .is_empty());
+        assert_eq!(manager.list_installed_voices().expect("voices").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn model_public_errors_do_not_leak_paths() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let prototype = SpeechModelCatalog::embedded()
+            .expect("catalog")
+            .model(KWS_MODEL_ID)
+            .expect("model");
+        let body = make_archive_with_link(prototype.archive.root.as_deref().expect("root"));
+        let server = OneShotServer::new(body.clone());
+        let entry = test_model_entry(KWS_MODEL_ID, server.url.to_string(), &body);
+        let manager = test_manager(directory.path(), body.len() as u64 + 100);
+
+        let error = manager
+            .install_model_entry_for_test(&entry, &CancellationToken::new(), |_| {})
+            .await
+            .expect_err("invalid archive");
+        let rendered = error.to_string();
+
+        assert!(!rendered.contains(directory.path().to_string_lossy().as_ref()));
+        assert!(!rendered.contains("outside"));
+    }
+
+    #[tokio::test]
     async fn cancellation_before_install_leaves_no_installed_voice() {
         let directory = tempfile::tempdir().expect("tempdir");
         let root = "vits-piper-en_US-ljspeech-medium";
@@ -1741,6 +2645,179 @@ mod tests {
                 write_state_atomic(&self.config.root, &state)?;
             }
             self.resolve_entry_bindings(entry)
+        }
+
+        async fn cache_model_entry_for_test<F>(
+            &self,
+            entry: &SpeechCatalogEntry,
+            cancellation: &CancellationToken,
+            progress: F,
+        ) -> Result<(), SpeechPackError>
+        where
+            F: FnMut(DownloadProgress),
+        {
+            let _guard = SelectionLock::acquire(self.locks.clone(), &entry.model_id)?;
+            self.ensure_model_quota_for_archive(entry)?;
+            self.ensure_model_archive_cached(entry, cancellation, progress)
+                .await?;
+            Ok(())
+        }
+
+        async fn install_model_entry_for_test<F>(
+            &self,
+            entry: &SpeechCatalogEntry,
+            cancellation: &CancellationToken,
+            mut progress: F,
+        ) -> Result<SpeechModelBindings, SpeechPackError>
+        where
+            F: FnMut(SpeechPackInstallProgress),
+        {
+            let _guard = SelectionLock::acquire(self.locks.clone(), &entry.model_id)?;
+            self.ensure_model_quota_for_archive(entry)?;
+            let archive = self
+                .ensure_model_archive_cached(entry, cancellation, |download| {
+                    progress(SpeechPackInstallProgress {
+                        phase: SpeechPackInstallPhase::Downloading,
+                        completed_bytes: download.downloaded_bytes,
+                        expected_bytes: download.expected_bytes,
+                    });
+                })
+                .await?;
+            let report = self
+                .ensure_model_extracted(entry, &archive, cancellation)
+                .await?;
+            progress(SpeechPackInstallProgress {
+                phase: SpeechPackInstallPhase::Extracting,
+                completed_bytes: report.extracted_bytes,
+                expected_bytes: self.config.max_extracted_bytes,
+            });
+            let root = extract_root(&self.config.root, &entry.archive.sha256);
+            let bindings = self.resolve_model_entry_bindings(entry)?;
+            let receipt = build_model_receipt(&root, entry)?;
+            let mut state = read_state(&self.config.root)?;
+            state.speech_models.insert(
+                entry.model_id.clone(),
+                InstalledModelRecord {
+                    model_id: entry.model_id.clone(),
+                    display_name: entry.display_name.clone(),
+                    task: entry.task,
+                    languages: entry.languages.clone(),
+                    language_scope: entry.language_scope.clone(),
+                    archive_sha256: entry.archive.sha256.clone(),
+                    archive_bytes: entry.archive.byte_size,
+                    extracted_bytes: report.extracted_bytes,
+                    installed_at: now_epoch_seconds(),
+                    receipt,
+                },
+            );
+            write_state_atomic(&self.config.root, &state)?;
+            progress(SpeechPackInstallProgress {
+                phase: SpeechPackInstallPhase::Ready,
+                completed_bytes: entry.archive.byte_size,
+                expected_bytes: entry.archive.byte_size,
+            });
+            Ok(bindings)
+        }
+
+        fn resolve_model_entry_for_test(
+            &self,
+            entry: &SpeechCatalogEntry,
+        ) -> Result<SpeechModelBindings, SpeechPackError> {
+            let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+            let mut state = read_state(&self.config.root)?;
+            let record = state
+                .speech_models
+                .get(&entry.model_id)
+                .cloned()
+                .ok_or(SpeechPackError::UnknownVoice)?;
+            let updated = self.ensure_model_record_verified_or_recovered(entry, record)?;
+            if state.speech_models.get(&entry.model_id) != Some(&updated) {
+                state.speech_models.insert(entry.model_id.clone(), updated);
+                write_state_atomic(&self.config.root, &state)?;
+            }
+            self.resolve_model_entry_bindings(entry)
+        }
+
+        fn list_model_entries_for_test(
+            &self,
+            task: Option<SpeechCatalogTask>,
+            language: Option<&str>,
+        ) -> Result<Vec<InstalledSpeechModel>, SpeechPackError> {
+            let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+            let mut state = read_state(&self.config.root)?;
+            let mut changed = false;
+            let mut installed = Vec::new();
+            let model_ids = state.speech_models.keys().cloned().collect::<Vec<_>>();
+            for model_id in model_ids {
+                let Some(record) = state.speech_models.get(&model_id).cloned() else {
+                    continue;
+                };
+                let mut entry = SpeechModelCatalog::embedded()
+                    .map_err(|_| SpeechPackError::State)?
+                    .model(&record.model_id)
+                    .ok_or(SpeechPackError::UnknownVoice)?
+                    .clone();
+                entry.archive.sha256 = record.archive_sha256.clone();
+                entry.archive.byte_size = record.archive_bytes;
+                if task.is_some_and(|task| record.task != task) {
+                    continue;
+                }
+                if let Some(language) = language {
+                    let language_matches = record
+                        .languages
+                        .iter()
+                        .any(|candidate| candidate == language)
+                        || record.language_scope == "language_independent";
+                    if !language_matches {
+                        continue;
+                    }
+                }
+                match self.ensure_model_record_verified_or_recovered(&entry, record) {
+                    Ok(updated) => {
+                        if state.speech_models.get(&model_id) != Some(&updated) {
+                            state.speech_models.insert(model_id, updated.clone());
+                            changed = true;
+                        }
+                        installed.push(updated.into_public());
+                    }
+                    Err(SpeechPackError::CorruptCache) | Err(SpeechPackError::InvalidArchive) => {
+                        state.speech_models.remove(&model_id);
+                        changed = true;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            if changed {
+                write_state_atomic(&self.config.root, &state)?;
+            }
+            installed.sort_by(|left, right| left.model_id.cmp(&right.model_id));
+            Ok(installed)
+        }
+
+        fn remove_model_entry_for_test(
+            &self,
+            entry: &SpeechCatalogEntry,
+        ) -> Result<(), SpeechPackError> {
+            let _guard = SelectionLock::acquire(self.locks.clone(), &entry.model_id)?;
+            let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+            let mut state = read_state(&self.config.root)?;
+            let Some(record) = state.speech_models.remove(&entry.model_id) else {
+                return Ok(());
+            };
+            write_state_atomic(&self.config.root, &state)?;
+            if !state
+                .installed
+                .values()
+                .any(|other| other.archive_sha256 == record.archive_sha256)
+                && !state
+                    .speech_models
+                    .values()
+                    .any(|other| other.archive_sha256 == record.archive_sha256)
+            {
+                remove_dir_if_exists(&extract_root(&self.config.root, &entry.archive.sha256))?;
+                remove_dir_if_exists(&cache_root(&self.config.root, &entry.archive.sha256))?;
+            }
+            Ok(())
         }
     }
 }
