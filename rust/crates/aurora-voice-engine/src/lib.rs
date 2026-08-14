@@ -4,6 +4,7 @@
 
 pub mod catalog;
 pub mod model_pack;
+pub mod speech_catalog;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,7 @@ use thiserror::Error;
 
 pub use catalog::*;
 pub use model_pack::*;
+pub use speech_catalog::*;
 
 pub const VAD_SAMPLE_RATE_HZ: u32 = 16_000;
 pub const MONO_CHANNELS: u16 = 1;
