@@ -3,6 +3,7 @@ import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceTtsAudio,
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
@@ -15,6 +16,8 @@ import {
 } from './types.js'
 
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
+const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
+const MAX_TTS_TEXT_CHARS = 1_000
 
 export interface AuroraVoiceWasmBridge {
   initialize?(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
@@ -22,6 +25,7 @@ export interface AuroraVoiceWasmBridge {
   pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined>
   stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio>
   finishTurn(sessionId: string, generation: number, outcome: AuroraVoiceTurnFinishOutcome): Promise<void>
+  synthesizeSpeech?(request: { readonly text: string; readonly generation: number; readonly voiceId?: string; readonly speakerId?: number; readonly speed?: number }): Promise<AuroraVoiceTtsAudio>
   cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void>
   snapshot(): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
 }
@@ -56,7 +60,7 @@ export class AuroraVoiceWorkerDispatcher {
   private async handleValidRequest(request: AuroraVoiceWorkerRequestEnvelope): Promise<void> {
     try {
       const response = await this.dispatch(request.command)
-      this.reply(request.requestId, response, response.type === 'stop_result' ? [response.capturedAudio.pcm.buffer] : [])
+      this.reply(request.requestId, response, transferForResponse(response))
     } catch {
       this.reply(request.requestId, {
         type: 'reject',
@@ -136,7 +140,17 @@ export class AuroraVoiceWorkerDispatcher {
         this.pendingStoppedSession = null
         return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
       }
+      case 'synthesize_tts': {
+        this.requireInitialized()
+        if (this.bridge.synthesizeSpeech === undefined) throw new Error('tts_unavailable')
+        const audio = boundedTtsAudio(await this.bridge.synthesizeSpeech(command), command.generation)
+        return { type: 'tts_result', generation: command.generation, audio }
+      }
       case 'cancel':
+        if (command.sessionId === null) {
+          await this.bridge.cancelGeneration(null, command.generation, 'cancelled')
+          return { type: 'ack', sessionId: '', generation: command.generation, sequence: null }
+        }
         if (this.activeSession !== null && command.sessionId === this.activeSession.sessionId && command.generation === this.activeSession.generation) {
           await this.bridge.cancelGeneration(command.sessionId, command.generation, 'cancelled')
           this.activeSession = null
@@ -220,6 +234,31 @@ function boundedCapturedAudio(audio: AuroraCapturedAudio, sessionId: string, gen
   return Object.freeze({ ...audio, pcm: new Int16Array(audio.pcm) })
 }
 
+function boundedTtsAudio(audio: AuroraVoiceTtsAudio, generation: number): AuroraVoiceTtsAudio {
+  if (
+    audio.generation !== generation ||
+    !Number.isSafeInteger(audio.sampleRateHz) ||
+    audio.sampleRateHz < 8_000 ||
+    audio.sampleRateHz > 48_000 ||
+    audio.channels !== 1 ||
+    audio.sampleCount !== audio.pcm.length ||
+    audio.sampleCount <= 0 ||
+    audio.sampleCount > MAX_TTS_AUDIO_SAMPLES ||
+    audio.durationMs <= 0 ||
+    audio.durationMs > 60_000 ||
+    audio.redacted !== true
+  ) {
+    throw new Error('tts_audio')
+  }
+  return Object.freeze({ ...audio, pcm: new Int16Array(audio.pcm) })
+}
+
+function transferForResponse(response: AuroraVoiceWorkerResponse): readonly Transferable[] {
+  if (response.type === 'stop_result') return [response.capturedAudio.pcm.buffer]
+  if (response.type === 'tts_result') return [response.audio.pcm.buffer]
+  return []
+}
+
 function assertValidCommand(command: unknown): asserts command is AuroraVoiceWorkerCommand {
   if (typeof command !== 'object' || command === null) throw new Error('command')
   const type = (command as { type?: unknown }).type
@@ -255,6 +294,17 @@ function assertValidCommand(command: unknown): asserts command is AuroraVoiceWor
       if (!safeString(finish.sessionId) || !safePositiveInteger(finish.generation) || !validFinishOutcome(finish.outcome)) {
         throw new Error('command')
       }
+      return
+    }
+    case 'synthesize_tts': {
+      const synthesize = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'synthesize_tts' }>>
+      if (
+        !safePositiveInteger(synthesize.generation) ||
+        !validTtsText(synthesize.text) ||
+        !(synthesize.voiceId === undefined || safeString(synthesize.voiceId)) ||
+        !(synthesize.speakerId === undefined || safeNonNegativeInteger(synthesize.speakerId)) ||
+        !(synthesize.speed === undefined || validTtsSpeed(synthesize.speed))
+      ) throw new Error('command')
       return
     }
     case 'cancel': {
@@ -308,7 +358,7 @@ function validCapabilities(capabilities: unknown): capabilities is AuroraVoiceWe
   return typeof candidate.vad === 'boolean' &&
     typeof candidate.kws === 'boolean' &&
     typeof candidate.stt === 'boolean' &&
-    candidate.tts === false
+    typeof candidate.tts === 'boolean'
 }
 
 function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelBindings | undefined {
@@ -322,7 +372,7 @@ function validModelBindings(bindings: unknown): bindings is AuroraVoiceWebModelB
   return files.every((file) => {
     if (typeof file !== 'object' || file === null) return false
     const candidate = file as Record<string, unknown>
-    return (candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt') &&
+    return (candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt' || candidate.task === 'tts') &&
       safeString(candidate.fileId) &&
       safeVirtualPath(candidate.virtualPath) &&
       typeof candidate.sha256 === 'string' &&
@@ -337,9 +387,9 @@ function validModelDescriptor(model: unknown): boolean {
   if (typeof model !== 'object' || model === null) return false
   const candidate = model as Record<string, unknown>
   if (
-    !(candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt') ||
-    !(candidate.family === 'silero-vad' || candidate.family === 'moonshine' || candidate.family === 'whisper' || candidate.family === 'sense-voice' || candidate.family === 'sherpa-kws-transducer') ||
-    !(candidate.kind === 'vad' || candidate.kind === 'offline-asr' || candidate.kind === 'keyword-spotter') ||
+    !(candidate.task === 'vad' || candidate.task === 'kws' || candidate.task === 'stt' || candidate.task === 'tts') ||
+    !(candidate.family === 'silero-vad' || candidate.family === 'moonshine' || candidate.family === 'whisper' || candidate.family === 'sense-voice' || candidate.family === 'sherpa-kws-transducer' || candidate.family === 'piper' || candidate.family === 'pockettts') ||
+    !(candidate.kind === 'vad' || candidate.kind === 'offline-asr' || candidate.kind === 'keyword-spotter' || candidate.kind === 'offline-tts') ||
     !Array.isArray(candidate.files) ||
     candidate.files.length === 0
   ) return false
@@ -347,7 +397,7 @@ function validModelDescriptor(model: unknown): boolean {
     typeof file === 'object' &&
     file !== null &&
     (file as { role?: unknown }).role !== undefined &&
-    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab'].includes(String((file as { role?: unknown }).role)) &&
+    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson'].includes(String((file as { role?: unknown }).role)) &&
     safeString((file as { fileId?: unknown }).fileId) &&
     safeVirtualPath((file as { virtualPath?: unknown }).virtualPath)
   ))
@@ -420,7 +470,7 @@ function safeGenerationFor(command: unknown): number {
     const generation = (command as { frame?: Partial<AuroraPcmFrameEnvelope> }).frame?.generation
     return safePositiveInteger(generation) ? generation : 0
   }
-  if (type === 'stop' || type === 'finish_turn' || type === 'cancel' || type === 'shutdown') {
+  if (type === 'stop' || type === 'finish_turn' || type === 'synthesize_tts' || type === 'cancel' || type === 'shutdown') {
     const generation = (command as { generation?: unknown }).generation
     return safePositiveInteger(generation) ? generation : 0
   }
@@ -439,6 +489,14 @@ function safeString(value: unknown): value is string {
 
 function validFinishOutcome(value: unknown): value is AuroraVoiceTurnFinishOutcome {
   return value === 'completed' || value === 'abandoned'
+}
+
+function validTtsText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= MAX_TTS_TEXT_CHARS
+}
+
+function validTtsSpeed(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.25 && value <= 4.0
 }
 
 function safePositiveInteger(value: unknown): value is number {

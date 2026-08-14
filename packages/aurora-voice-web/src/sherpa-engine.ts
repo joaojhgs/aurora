@@ -2,6 +2,8 @@ import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntimeError,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceTtsAudio,
+  type AuroraVoiceTtsRequest,
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebModelBindings,
@@ -17,12 +19,17 @@ const SAMPLE_RATE_HZ = 16_000
 const MAX_MODEL_FILES = 64
 const MAX_MODEL_FILE_BYTES = 256 * 1024 * 1024
 const MAX_VIRTUAL_PATH_BYTES = 256
+const MAX_TTS_TEXT_CHARS = 1_000
+const MAX_TTS_SECONDS = 60
+const MAX_TTS_SAMPLES = 48_000 * MAX_TTS_SECONDS
 
 export interface AuroraSherpaVoiceEngine {
   initialize(bindings: AuroraVoiceWebModelBindings | undefined): Promise<AuroraVoiceWebCapabilities>
   startSession(): Promise<void>
   pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined>
   stopSession(): Promise<void>
+  synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio>
+  cancelTtsGeneration?(generation: number): void
   dispose(): void
 }
 
@@ -32,6 +39,7 @@ interface SherpaRuntimeHandles {
   readonly recognizerStream: SherpaOfflineStream | null
   readonly kws: SherpaKws | null
   readonly kwsStream: SherpaKwsStream | null
+  readonly tts: SherpaOfflineTts | null
 }
 
 interface ValidatedModelBindings {
@@ -41,6 +49,7 @@ interface ValidatedModelBindings {
 
 export interface SherpaModule {
   FS_createDataFile(parent: string, name: string, data: Uint8Array, canRead: boolean, canWrite: boolean, canOwn: boolean): void
+  FS_createPath?(parent: string, path: string, canRead: boolean, canWrite: boolean): void
   FS_unlink?(path: string): void
 }
 
@@ -86,16 +95,26 @@ interface SherpaKwsStream {
   free(): void
 }
 
+interface SherpaOfflineTts {
+  readonly sampleRate?: number
+  readonly numSpeakers?: number
+  generate?(config: unknown): unknown
+  generateWithConfig?(text: string, config: unknown): unknown
+  free(): void
+}
+
 interface SherpaHelpers {
   readonly createVad?: (module: SherpaModule, config: unknown) => SherpaVad
   readonly createOfflineRecognizer?: (module: SherpaModule, config: unknown) => SherpaOfflineRecognizer
   readonly createKws?: (module: SherpaModule, config: unknown) => SherpaKws
+  readonly createOfflineTts?: (module: SherpaModule, config: unknown) => SherpaOfflineTts
 }
 
 type MutableSherpaHelpers = {
   createVad?: (module: SherpaModule, config: unknown) => SherpaVad
   createOfflineRecognizer?: (module: SherpaModule, config: unknown) => SherpaOfflineRecognizer
   createKws?: (module: SherpaModule, config: unknown) => SherpaKws
+  createOfflineTts?: (module: SherpaModule, config: unknown) => SherpaOfflineTts
 }
 
 type OfflineRecognizerConstructor = new(config: unknown, module: SherpaModule) => SherpaOfflineRecognizer
@@ -135,14 +154,18 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
     const assets = this.engineAssets
     const needsVadAsr = tasks.has('vad') || tasks.has('stt')
     const needsKws = tasks.has('kws')
+    const needsTts = tasks.has('tts')
     const vadAsrModuleUrl = assets?.vadAsrModuleUrl
     const kwsModuleUrl = assets?.kwsModuleUrl
+    const ttsModuleUrl = assets?.ttsModuleUrl
     if (needsVadAsr && !vadAsrModuleUrl) throw unavailable('missing_vad_asr_engine')
     if (needsKws && !kwsModuleUrl) throw unavailable('missing_kws_engine')
+    if (needsTts && !ttsModuleUrl) throw unavailable('missing_tts_engine')
 
     const helperUrls = [
       ...(needsVadAsr ? [assets?.vadHelperUrl, assets?.asrHelperUrl] : []),
-      ...(needsKws ? [assets?.kwsHelperUrl] : [])
+      ...(needsKws ? [assets?.kwsHelperUrl] : []),
+      ...(needsTts ? [assets?.ttsHelperUrl] : [])
     ].filter((url): url is string => typeof url === 'string')
     const helpers = await this.loadHelpers(helperUrls)
     let vadAsrModule: SherpaModule | null = null
@@ -152,6 +175,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
     let recognizerStream: SherpaOfflineStream | null = null
     let kws: SherpaKws | null = null
     let kwsStream: SherpaKwsStream | null = null
+    let tts: SherpaOfflineTts | null = null
 
     try {
       if (needsVadAsr) {
@@ -176,16 +200,23 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
         kwsStream = kws.createStream()
         if (!validKwsStream(kwsStream)) throw unavailable('missing_kws_helper')
       }
-      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream }
+      if (needsTts) {
+        if (!helpers.createOfflineTts) throw unavailable('missing_tts_helper')
+        const ttsModule = await this.loadModule(ttsModuleUrl!, files.filter((file) => file.task === 'tts'))
+        mountSelectedModelFiles(ttsModule, files.filter((file) => file.task === 'tts'))
+        tts = helpers.createOfflineTts(ttsModule, ttsConfig(models))
+        if (!validTts(tts)) throw unavailable('missing_tts_helper')
+      }
+      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts }
       this.capabilities = Object.freeze({
         vad: vad !== null,
         kws: kws !== null,
         stt: recognizer !== null && recognizerStream !== null,
-        tts: false
+        tts: tts !== null
       })
       return this.capabilities
     } catch (error) {
-      freeHandles({ vad, recognizer, recognizerStream, kws, kwsStream })
+      freeHandles({ vad, recognizer, recognizerStream, kws, kwsStream, tts })
       throw error
     }
   }
@@ -234,6 +265,20 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
     handles?.vad?.flush?.()
     handles?.recognizerStream?.inputFinished?.()
     handles?.kwsStream?.inputFinished()
+  }
+
+  async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
+    const handles = this.handles
+    const tts = handles?.tts ?? null
+    if (tts === null || !this.capabilities.tts) throw unavailable('tts_unavailable')
+    const text = validateTtsText(request.text)
+    const generation = boundedGeneration(request.generation)
+    const speed = boundedFloat(request.speed ?? 1.0, 0.25, 4.0, 'invalid_tts_request')
+    const speakerId = boundedSpeakerId(request.speakerId)
+    const audio = typeof tts.generateWithConfig === 'function'
+      ? tts.generateWithConfig(text, { sid: speakerId, speed })
+      : tts.generate?.({ text, sid: speakerId, speed })
+    return Object.freeze(validateTtsAudio(audio, generation))
   }
 
   dispose(): void {
@@ -375,6 +420,64 @@ function kwsConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
   }
 }
 
+function ttsConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
+  const model = requireModel(models, 'tts')
+  const vits = {
+    model: model.family === 'piper' ? requireRole(model, 'model') : '',
+    lexicon: model.family === 'piper' ? optionalRole(model, 'lexicon') : '',
+    tokens: model.family === 'piper' ? requireRole(model, 'tokens') : '',
+    dataDir: model.family === 'piper' ? optionalRole(model, 'dataDir') : '',
+    noiseScale: model.config?.noiseScale ?? 0.667,
+    noiseScaleW: model.config?.noiseScaleW ?? 0.8,
+    lengthScale: model.config?.lengthScale ?? 1.0
+  }
+  const pocket = {
+    lmFlow: model.family === 'pockettts' ? requireRole(model, 'lmFlow') : '',
+    lmMain: model.family === 'pockettts' ? requireRole(model, 'lmMain') : '',
+    encoder: model.family === 'pockettts' ? requireRole(model, 'encoder') : '',
+    decoder: model.family === 'pockettts' ? requireRole(model, 'decoder') : '',
+    textConditioner: model.family === 'pockettts' ? requireRole(model, 'textConditioner') : '',
+    vocabJson: model.family === 'pockettts' ? requireRole(model, 'vocabJson') : '',
+    tokenScoresJson: model.family === 'pockettts' ? requireRole(model, 'tokenScoresJson') : '',
+    voiceEmbeddingCacheCapacity: 50
+  }
+  return {
+    offlineTtsModelConfig: {
+      offlineTtsVitsModelConfig: vits,
+      offlineTtsMatchaModelConfig: {
+        acousticModel: '',
+        vocoder: '',
+        lexicon: '',
+        tokens: '',
+        dataDir: '',
+        noiseScale: 0.667,
+        lengthScale: 1.0
+      },
+      offlineTtsKokoroModelConfig: { model: '', voices: '', tokens: '', dataDir: '', lengthScale: 1.0, lexicon: '', lang: '' },
+      offlineTtsKittenModelConfig: { model: '', voices: '', tokens: '', dataDir: '', lengthScale: 1.0 },
+      offlineTtsZipVoiceModelConfig: {
+        tokens: '',
+        encoder: '',
+        decoder: '',
+        vocoder: '',
+        dataDir: '',
+        lexicon: '',
+        featScale: 0.1,
+        tShift: 0.5,
+        targetRMS: 0.1,
+        guidanceScale: 1.0
+      },
+      offlineTtsPocketModelConfig: pocket,
+      numThreads: 1,
+      debug: 0,
+      provider: 'cpu'
+    },
+    ruleFsts: '',
+    ruleFars: '',
+    maxNumSentences: 1
+  }
+}
+
 async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: typeof fetch): Promise<SherpaHelpers> {
   const helpers: MutableSherpaHelpers = {}
   for (const url of urls) await fetchNeutralEngineSource(url, fetchImpl)
@@ -387,6 +490,7 @@ async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: t
       helpers.createOfflineRecognizer = (sherpaModule, config) => new OfflineRecognizer(config, sherpaModule)
     }
     if (typeof module.createKws === 'function') helpers.createKws = module.createKws
+    if (typeof module.createOfflineTts === 'function') helpers.createOfflineTts = module.createOfflineTts
   }
   return helpers
 }
@@ -447,7 +551,24 @@ const BUNDLED_DATA_PATTERNS = [
 ]
 
 function mountSelectedModelFiles(module: SherpaModule, files: readonly AuroraVoiceWebModelFileBinding[]): void {
-  for (const file of files) module.FS_createDataFile('/', file.virtualPath.slice(1), new Uint8Array(file.bytes), true, false, true)
+  const createdDirs = new Set<string>(['/'])
+  for (const file of files) {
+    const name = file.virtualPath.slice(1)
+    const parent = name.split('/').slice(0, -1).join('/')
+    if (parent !== '') createParentDirectories(module, parent, createdDirs)
+    module.FS_createDataFile('/', name, new Uint8Array(file.bytes), true, false, true)
+  }
+}
+
+function createParentDirectories(module: SherpaModule, path: string, createdDirs: Set<string>): void {
+  const parts = path.split('/').filter(Boolean)
+  let current = ''
+  for (const part of parts) {
+    current = current === '' ? part : `${current}/${part}`
+    if (createdDirs.has(current)) continue
+    module.FS_createPath?.('/', current, true, true)
+    createdDirs.add(current)
+  }
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -467,7 +588,8 @@ function validateModelDescriptor(
   if (
     (model.task === 'vad' && (model.kind !== 'vad' || model.family !== 'silero-vad')) ||
     (model.task === 'kws' && (model.kind !== 'keyword-spotter' || model.family !== 'sherpa-kws-transducer')) ||
-    (model.task === 'stt' && model.kind !== 'offline-asr')
+    (model.task === 'stt' && model.kind !== 'offline-asr') ||
+    (model.task === 'tts' && (model.kind !== 'offline-tts' || !(model.family === 'piper' || model.family === 'pockettts')))
   ) throw unavailable('invalid_model_metadata')
   const refs = model.files.map((ref) => validateModelFileReference(ref, model.task, fileIds))
   requireRoles(model, refs)
@@ -497,6 +619,14 @@ function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['
   if (config.keywords !== undefined && config.keywords.length > 4096) throw unavailable('invalid_model_metadata')
   if (config.keywordsScore !== undefined && (!Number.isFinite(config.keywordsScore) || config.keywordsScore < 0)) throw unavailable('invalid_model_metadata')
   if (config.keywordsThreshold !== undefined && (!Number.isFinite(config.keywordsThreshold) || config.keywordsThreshold < 0)) throw unavailable('invalid_model_metadata')
+  if (config.voiceId !== undefined && !/^[A-Za-z0-9_.:-]{1,96}$/.test(config.voiceId)) throw unavailable('invalid_model_metadata')
+  if (config.speakerId !== undefined && (!Number.isSafeInteger(config.speakerId) || config.speakerId < 0 || config.speakerId > 10_000)) {
+    throw unavailable('invalid_model_metadata')
+  }
+  if (config.speed !== undefined) boundedFloat(config.speed, 0.25, 4.0, 'invalid_model_metadata')
+  if (config.noiseScale !== undefined) boundedFloat(config.noiseScale, 0, 10, 'invalid_model_metadata')
+  if (config.noiseScaleW !== undefined) boundedFloat(config.noiseScaleW, 0, 10, 'invalid_model_metadata')
+  if (config.lengthScale !== undefined) boundedFloat(config.lengthScale, 0.1, 10, 'invalid_model_metadata')
   return Object.freeze({ ...config })
 }
 
@@ -510,6 +640,8 @@ function requireRoles(model: AuroraVoiceWebModelDescriptor, refs: readonly Auror
   if (model.family === 'whisper') requireEvery(['encoder', 'decoder', 'tokens'])
   if (model.family === 'sense-voice') requireEvery(['model', 'tokens'])
   if (model.family === 'sherpa-kws-transducer') requireEvery(['encoder', 'decoder', 'joiner', 'tokens'])
+  if (model.family === 'piper') requireEvery(['model', 'tokens'])
+  if (model.family === 'pockettts') requireEvery(['lmFlow', 'lmMain', 'encoder', 'decoder', 'textConditioner', 'vocabJson', 'tokenScoresJson'])
 }
 
 function requireModel(models: readonly AuroraVoiceWebModelDescriptor[], task: AuroraVoiceWebModelTask): AuroraVoiceWebModelDescriptor {
@@ -552,6 +684,11 @@ function validKwsStream(stream: SherpaKwsStream): boolean {
   return typeof stream.acceptWaveform === 'function' && typeof stream.inputFinished === 'function' && typeof stream.free === 'function'
 }
 
+function validTts(tts: SherpaOfflineTts): boolean {
+  return (typeof tts.generate === 'function' || typeof tts.generateWithConfig === 'function') &&
+    typeof tts.free === 'function'
+}
+
 function sttModelType(model: AuroraVoiceWebModelDescriptor): string {
   if (model.family === 'sense-voice') return 'sense-voice'
   if (model.family === 'whisper') return 'whisper'
@@ -585,6 +722,7 @@ function freeHandles(handles: SherpaRuntimeHandles): void {
   try { handles.vad?.free() } catch {}
   try { handles.recognizer?.free() } catch {}
   try { handles.kws?.free() } catch {}
+  try { handles.tts?.free() } catch {}
 }
 
 function hasAnyCapability(capabilities: AuroraVoiceWebCapabilities): boolean {
@@ -597,20 +735,92 @@ function pcmI16ToF32(pcm: Int16Array): Float32Array {
   return out
 }
 
+function validateTtsText(text: string): string {
+  if (typeof text !== 'string') throw unavailable('invalid_tts_request')
+  const normalized = text.trim()
+  if (normalized.length === 0 || normalized.length > MAX_TTS_TEXT_CHARS) throw unavailable('invalid_tts_request')
+  return normalized
+}
+
+function boundedGeneration(value: number | undefined): number {
+  if (value === undefined) return 1
+  if (!Number.isSafeInteger(value) || value < 1) throw unavailable('invalid_tts_request')
+  return value
+}
+
+function boundedSpeakerId(value: number | undefined): number {
+  if (value === undefined) return 0
+  if (!Number.isSafeInteger(value) || value < 0 || value > 10_000) throw unavailable('invalid_tts_request')
+  return value
+}
+
+function boundedFloat(value: number, min: number, max: number, code: string): number {
+  if (!Number.isFinite(value) || value < min || value > max) throw unavailable(code)
+  return value
+}
+
+function validateTtsAudio(value: unknown, generation: number): AuroraVoiceTtsAudio {
+  if (typeof value !== 'object' || value === null) throw unavailable('tts_generation_failed')
+  const sampleRate = (value as { sampleRate?: unknown }).sampleRate
+  const samples = (value as { samples?: unknown }).samples
+  if (!Number.isSafeInteger(sampleRate) || typeof sampleRate !== 'number' || sampleRate < 8_000 || sampleRate > 48_000) {
+    throw unavailable('tts_generation_failed')
+  }
+  if (!(samples instanceof Float32Array) || samples.length === 0 || samples.length > MAX_TTS_SAMPLES) {
+    throw unavailable('tts_generation_failed')
+  }
+  const pcm = new Int16Array(samples.length)
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index]!
+    if (!Number.isFinite(sample)) throw unavailable('tts_generation_failed')
+    const clamped = Math.max(-1, Math.min(1, sample))
+    pcm[index] = clamped < 0 ? Math.round(clamped * 32768) : Math.round(clamped * 32767)
+  }
+  return {
+    generation,
+    sampleRateHz: sampleRate,
+    channels: 1,
+    sampleCount: pcm.length,
+    durationMs: Math.ceil((pcm.length / sampleRate) * 1_000),
+    pcm,
+    redacted: true
+  }
+}
+
 function isTask(value: unknown): value is AuroraVoiceWebModelTask {
-  return value === 'vad' || value === 'kws' || value === 'stt'
+  return value === 'vad' || value === 'kws' || value === 'stt' || value === 'tts'
 }
 
 function isFamily(value: unknown): value is AuroraVoiceWebModelDescriptor['family'] {
-  return value === 'silero-vad' || value === 'moonshine' || value === 'whisper' || value === 'sense-voice' || value === 'sherpa-kws-transducer'
+  return value === 'silero-vad' ||
+    value === 'moonshine' ||
+    value === 'whisper' ||
+    value === 'sense-voice' ||
+    value === 'sherpa-kws-transducer' ||
+    value === 'piper' ||
+    value === 'pockettts'
 }
 
 function isKind(value: unknown): value is AuroraVoiceWebModelDescriptor['kind'] {
-  return value === 'vad' || value === 'offline-asr' || value === 'keyword-spotter'
+  return value === 'vad' || value === 'offline-asr' || value === 'keyword-spotter' || value === 'offline-tts'
 }
 
 function isRole(value: unknown): value is AuroraVoiceWebModelFileRole {
-  return value === 'model' || value === 'encoder' || value === 'decoder' || value === 'mergedDecoder' || value === 'tokens' || value === 'joiner' || value === 'keywords' || value === 'bpeVocab'
+  return value === 'model' ||
+    value === 'encoder' ||
+    value === 'decoder' ||
+    value === 'mergedDecoder' ||
+    value === 'tokens' ||
+    value === 'joiner' ||
+    value === 'keywords' ||
+    value === 'bpeVocab' ||
+    value === 'lexicon' ||
+    value === 'dataDir' ||
+    value === 'lmFlow' ||
+    value === 'lmMain' ||
+    value === 'textConditioner' ||
+    value === 'vocabJson' ||
+    value === 'tokenScoresJson'
 }
 
 function safeId(value: unknown): value is string {

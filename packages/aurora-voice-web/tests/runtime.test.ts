@@ -15,7 +15,7 @@ import {
   type AuroraVoiceWorkerRequestOptions,
   type AuroraVoiceWorkerResponse
 } from '../src/index.js'
-import { capturedAudio, RecordingVoiceWorkerHost } from '../src/test-doubles/worker-host.js'
+import { capturedAudio, RecordingVoiceWorkerHost, ttsAudio } from '../src/test-doubles/worker-host.js'
 
 describe('AuroraVoiceWebRuntime', () => {
   it('starts foreground-only sessions with unavailable capabilities until promoted by the host', async () => {
@@ -39,6 +39,40 @@ describe('AuroraVoiceWebRuntime', () => {
 
     await expect(runtime.stop()).resolves.toMatchObject({ sampleRateHz: 16_000, channels: 1, sampleCount: 0 })
     await runtime.completeTurn()
+  })
+
+  it('synthesizes foreground speech through the worker when a selected TTS pack is ready', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'init') {
+        return {
+          type: 'ready',
+          protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+          capabilities: { vad: false, kws: false, stt: false, tts: true },
+          maxFrameSamples: command.maxFrameSamples,
+          maxQueuedBytes: command.maxQueuedBytes
+        }
+      }
+      if (command.type === 'synthesize_tts') {
+        return { type: 'tts_result', generation: command.generation, audio: ttsAudio(command.generation, [10, -10, 0]) }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker })
+
+    await expect(runtime.synthesizeSpeech({ text: ' Hello Aurora ', speakerId: 1, speed: 1.1 })).resolves.toMatchObject({
+      generation: 1,
+      sampleRateHz: 16_000,
+      channels: 1,
+      sampleCount: 3,
+      redacted: true
+    })
+    expect(worker.commandsOf('synthesize_tts')[0]).toMatchObject({
+      generation: 1,
+      text: 'Hello Aurora',
+      speakerId: 1,
+      speed: 1.1
+    })
   })
 
   it('enforces one active owner', async () => {
@@ -592,6 +626,20 @@ function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorke
       return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
     case 'finish_turn':
       return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
+    case 'synthesize_tts':
+      return {
+        type: 'tts_result',
+        generation: command.generation,
+        audio: {
+          generation: command.generation,
+          sampleRateHz: 16_000,
+          channels: 1,
+          sampleCount: 3,
+          durationMs: 1,
+          pcm: Int16Array.from([0, 128, -128]),
+          redacted: true
+        }
+      }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':

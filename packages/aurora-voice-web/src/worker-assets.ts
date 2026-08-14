@@ -5,6 +5,8 @@ export const AURORA_VOICE_SHERPA_VAD_HELPER_QUERY = 'sherpa_vad_helper'
 export const AURORA_VOICE_SHERPA_ASR_HELPER_QUERY = 'sherpa_asr_helper'
 export const AURORA_VOICE_SHERPA_KWS_QUERY = 'sherpa_kws'
 export const AURORA_VOICE_SHERPA_KWS_HELPER_QUERY = 'sherpa_kws_helper'
+export const AURORA_VOICE_SHERPA_TTS_QUERY = 'sherpa_tts'
+export const AURORA_VOICE_SHERPA_TTS_HELPER_QUERY = 'sherpa_tts_helper'
 
 export interface AuroraVoiceWorkerSherpaAssetUrls {
   readonly vadAsrModuleUrl?: Pick<URL, 'href'>
@@ -12,6 +14,8 @@ export interface AuroraVoiceWorkerSherpaAssetUrls {
   readonly asrHelperUrl?: Pick<URL, 'href'>
   readonly kwsModuleUrl?: Pick<URL, 'href'>
   readonly kwsHelperUrl?: Pick<URL, 'href'>
+  readonly ttsModuleUrl?: Pick<URL, 'href'>
+  readonly ttsHelperUrl?: Pick<URL, 'href'>
 }
 
 export interface AuroraVoiceWorkerSherpaAssets {
@@ -20,6 +24,8 @@ export interface AuroraVoiceWorkerSherpaAssets {
   readonly asrHelperUrl?: string
   readonly kwsModuleUrl?: string
   readonly kwsHelperUrl?: string
+  readonly ttsModuleUrl?: string
+  readonly ttsHelperUrl?: string
 }
 
 const SHERPA_ASSET_BASENAMES = new Set([
@@ -29,9 +35,12 @@ const SHERPA_ASSET_BASENAMES = new Set([
   'sherpa-onnx-wasm-main-offline-asr.wasm',
   'sherpa-onnx-wasm-kws-main.js',
   'sherpa-onnx-wasm-kws-main.wasm',
+  'sherpa-onnx-wasm-main-tts.js',
+  'sherpa-onnx-wasm-main-tts.wasm',
   'sherpa-onnx-vad.js',
   'sherpa-onnx-asr.js',
-  'sherpa-onnx-kws.js'
+  'sherpa-onnx-kws.js',
+  'sherpa-onnx-tts.js'
 ])
 
 function currentPageUrl(): string | undefined {
@@ -56,6 +65,8 @@ export function buildAuroraVoiceWorkerUrl(
   setOptionalSameOriginQuery(url, AURORA_VOICE_SHERPA_ASR_HELPER_QUERY, sherpaAssets.asrHelperUrl)
   setOptionalSameOriginQuery(url, AURORA_VOICE_SHERPA_KWS_QUERY, sherpaAssets.kwsModuleUrl)
   setOptionalSameOriginQuery(url, AURORA_VOICE_SHERPA_KWS_HELPER_QUERY, sherpaAssets.kwsHelperUrl)
+  setOptionalSameOriginQuery(url, AURORA_VOICE_SHERPA_TTS_QUERY, sherpaAssets.ttsModuleUrl)
+  setOptionalSameOriginQuery(url, AURORA_VOICE_SHERPA_TTS_HELPER_QUERY, sherpaAssets.ttsHelperUrl)
   return url
 }
 
@@ -78,7 +89,9 @@ export function resolveSameOriginSherpaAssetUrls(location: Pick<Location, 'href'
     ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_VAD_HELPER_QUERY, 'vadHelperUrl'),
     ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_ASR_HELPER_QUERY, 'asrHelperUrl'),
     ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_KWS_QUERY, 'kwsModuleUrl'),
-    ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_KWS_HELPER_QUERY, 'kwsHelperUrl')
+    ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_KWS_HELPER_QUERY, 'kwsHelperUrl'),
+    ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_TTS_QUERY, 'ttsModuleUrl'),
+    ...resolveOptionalSameOriginQuery(workerUrl, AURORA_VOICE_SHERPA_TTS_HELPER_QUERY, 'ttsHelperUrl')
   }
 }
 

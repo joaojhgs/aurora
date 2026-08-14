@@ -41,6 +41,8 @@ export interface AuroraBrowserVoiceRuntimeOptions {
     readonly asrHelperUrl?: URL
     readonly kwsModuleUrl?: URL
     readonly kwsHelperUrl?: URL
+    readonly ttsModuleUrl?: URL
+    readonly ttsHelperUrl?: URL
   }
   readonly modelBindings?: AuroraVoiceWebModelBindings
   readonly pcmSource?: AuroraAudioWorkletPcmSource
@@ -160,7 +162,7 @@ function isEligible(eligibility: AuroraVoiceLifecycleEligibility): boolean {
 export async function loadAuroraBrowserVoiceModelBindings(
   host: AuroraWebModelStoreHost,
   trust: AuroraBrowserModelPackTrustOptions,
-  tasks: readonly AuroraVoiceWebModelTask[] = ['vad', 'kws', 'stt']
+  tasks: readonly AuroraVoiceWebModelTask[] = ['vad', 'kws', 'stt', 'tts']
 ): Promise<AuroraVoiceWebModelBindings | undefined> {
   const files: AuroraVoiceWebModelFileBinding[] = []
   const models: AuroraVoiceWebModelDescriptor[] = []

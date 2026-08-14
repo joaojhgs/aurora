@@ -2,6 +2,8 @@ import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
+  type AuroraVoiceTtsAudio,
+  type AuroraVoiceTtsRequest,
   type AuroraVoiceInferenceOutput,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTurnFinishOutcome,
@@ -155,8 +157,21 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     this.pendingStopped = null
   }
 
+  async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
+    await this.ensureRuntime()
+    try {
+      return await this.sherpaEngine.synthesizeSpeech(request)
+    } catch {
+      throw sanitizedError('tts_failed')
+    }
+  }
+
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {
     const normalizedReason = /^[A-Za-z0-9_.-]{1,48}$/.test(reason) ? reason : 'cancelled'
+    if (sessionId === null && normalizedReason === 'cancelled') {
+      this.sherpaEngine.cancelTtsGeneration?.(generation)
+      return
+    }
     if (this.active !== null && this.matches(this.active, sessionId, generation)) {
       const ownership = this.active
       await this.withRuntime((runtime) => {

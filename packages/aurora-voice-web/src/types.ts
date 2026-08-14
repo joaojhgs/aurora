@@ -77,9 +77,16 @@ export interface AuroraCapturedAudio {
   readonly redacted: true
 }
 
-export type AuroraVoiceWebModelTask = 'vad' | 'kws' | 'stt'
-export type AuroraVoiceWebModelFamily = 'silero-vad' | 'moonshine' | 'whisper' | 'sense-voice' | 'sherpa-kws-transducer'
-export type AuroraVoiceWebModelKind = 'vad' | 'offline-asr' | 'keyword-spotter'
+export type AuroraVoiceWebModelTask = 'vad' | 'kws' | 'stt' | 'tts'
+export type AuroraVoiceWebModelFamily =
+  | 'silero-vad'
+  | 'moonshine'
+  | 'whisper'
+  | 'sense-voice'
+  | 'sherpa-kws-transducer'
+  | 'piper'
+  | 'pockettts'
+export type AuroraVoiceWebModelKind = 'vad' | 'offline-asr' | 'keyword-spotter' | 'offline-tts'
 export type AuroraVoiceWebModelFileRole =
   | 'model'
   | 'encoder'
@@ -89,6 +96,13 @@ export type AuroraVoiceWebModelFileRole =
   | 'joiner'
   | 'keywords'
   | 'bpeVocab'
+  | 'lexicon'
+  | 'dataDir'
+  | 'lmFlow'
+  | 'lmMain'
+  | 'textConditioner'
+  | 'vocabJson'
+  | 'tokenScoresJson'
 
 export interface AuroraVoiceWebModelFileReference {
   readonly role: AuroraVoiceWebModelFileRole
@@ -107,6 +121,12 @@ export interface AuroraVoiceWebModelDescriptor {
     readonly keywords?: string
     readonly keywordsScore?: number
     readonly keywordsThreshold?: number
+    readonly voiceId?: string
+    readonly speakerId?: number
+    readonly speed?: number
+    readonly noiseScale?: number
+    readonly noiseScaleW?: number
+    readonly lengthScale?: number
   }
 }
 
@@ -149,6 +169,24 @@ export interface AuroraVoiceInferenceOutput {
   readonly vad?: AuroraVoiceVadState
   readonly kwsHits: readonly AuroraVoiceKwsHit[]
   readonly stt: readonly AuroraVoiceSttResult[]
+  readonly redacted: true
+}
+
+export interface AuroraVoiceTtsRequest {
+  readonly text: string
+  readonly generation?: number
+  readonly voiceId?: string
+  readonly speakerId?: number
+  readonly speed?: number
+}
+
+export interface AuroraVoiceTtsAudio {
+  readonly generation: number
+  readonly sampleRateHz: number
+  readonly channels: 1
+  readonly sampleCount: number
+  readonly durationMs: number
+  readonly pcm: Int16Array
   readonly redacted: true
 }
 
@@ -222,6 +260,14 @@ export type AuroraVoiceWorkerCommand =
       readonly outcome: AuroraVoiceTurnFinishOutcome
     }
   | {
+      readonly type: 'synthesize_tts'
+      readonly generation: number
+      readonly text: string
+      readonly voiceId?: string
+      readonly speakerId?: number
+      readonly speed?: number
+    }
+  | {
       readonly type: 'cancel'
       readonly sessionId: string | null
       readonly generation: number
@@ -260,6 +306,11 @@ export type AuroraVoiceWorkerResponse =
       readonly sessionId: string
       readonly generation: number
       readonly capturedAudio: AuroraCapturedAudio
+    }
+  | {
+      readonly type: 'tts_result'
+      readonly generation: number
+      readonly audio: AuroraVoiceTtsAudio
     }
 
 export interface AuroraVoiceWorkerRequestEnvelope {

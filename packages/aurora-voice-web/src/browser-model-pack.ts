@@ -528,13 +528,13 @@ function validVariantModelBindings(bindings: readonly AuroraVoiceWebModelDescrip
   if (!Array.isArray(bindings) || bindings.length === 0 || bindings.length > 64) return false
   const ids = new Set(variantFileIds)
   return bindings.every((model) => (
-    (model.task === 'vad' || model.task === 'kws' || model.task === 'stt') &&
-    (model.family === 'silero-vad' || model.family === 'moonshine' || model.family === 'whisper' || model.family === 'sense-voice' || model.family === 'sherpa-kws-transducer') &&
-    (model.kind === 'vad' || model.kind === 'offline-asr' || model.kind === 'keyword-spotter') &&
+    (model.task === 'vad' || model.task === 'kws' || model.task === 'stt' || model.task === 'tts') &&
+    (model.family === 'silero-vad' || model.family === 'moonshine' || model.family === 'whisper' || model.family === 'sense-voice' || model.family === 'sherpa-kws-transducer' || model.family === 'piper' || model.family === 'pockettts') &&
+    (model.kind === 'vad' || model.kind === 'offline-asr' || model.kind === 'keyword-spotter' || model.kind === 'offline-tts') &&
     Array.isArray(model.files) &&
     model.files.length > 0 &&
     model.files.every((file: AuroraVoiceWebModelDescriptor['files'][number]) => (
-      ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords'].includes(file.role) &&
+      ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson'].includes(file.role) &&
       ids.has(file.fileId) &&
       safeId(file.fileId) &&
       typeof file.virtualPath === 'string' &&
