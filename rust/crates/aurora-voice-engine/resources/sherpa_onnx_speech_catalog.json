@@ -150,6 +150,7 @@
         "decoder": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/decoder-epoch-13-avg-2-chunk-16-left-64.onnx",
         "encoder": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx",
         "joiner": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx",
+        "lexicon": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/en.phone",
         "tokens": "sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/tokens.txt"
       },
       "display_name": "Chinese and English wake words",
@@ -1442,7 +1443,7 @@
       }
     }
   ],
-  "entries_sha256": "d2a7f52543cb738248839e39f1cea803e29d38e28089bbe17a1ebb42ed84f5c8",
+  "entries_sha256": "7aaf44b88a5f3f039ed1b90c30fe4de0f257d2cc02940fa3f1ecef881c347149",
   "languages": [
     "af",
     "am",

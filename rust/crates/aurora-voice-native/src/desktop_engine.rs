@@ -6,10 +6,10 @@ use aurora_voice_engine::{
     TaskPackBinding, VadConfig, VerifiedManifest, VoiceTask,
 };
 use aurora_voice_sherpa::{
-    compile_gigaspeech_sentencepiece_phrase_set, NativeKwsBackend, NativeKwsModelFiles,
-    NativeSttBackend, NativeSttModelFiles, NativeVadBackend, SherpaFiniteSttEngine,
-    SherpaKwsPhraseCompileError, SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider,
-    SherpaVadProvider,
+    compile_gigaspeech_sentencepiece_phrase_set, compile_wenetspeech_pinyin_phrase_set,
+    compile_zh_en_2025_phrase_set, NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend,
+    NativeSttModelFiles, NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhraseCompileError,
+    SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
 #[cfg(feature = "desktop-sherpa-tts")]
 use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsVitsPiperModelFiles, SherpaTtsProvider};
@@ -110,6 +110,23 @@ pub fn build_installed_kws_provider_from_phrases(
                 .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)
                 .map_err(SherpaKwsPhraseCompileError::into_engine_error)?;
             compile_gigaspeech_sentencepiece_phrase_set(phrase_revision, tokenizer_path, phrases)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?
+        }
+        InstalledKwsCompilerFamily::WenetSpeechPartialPinyin => {
+            let tokens_path = catalog_path(&bindings, "tokens")
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?;
+            compile_wenetspeech_pinyin_phrase_set(phrase_revision, tokens_path, phrases)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?
+        }
+        InstalledKwsCompilerFamily::BilingualPhonePartialPinyin => {
+            let tokens_path = catalog_path(&bindings, "tokens")
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?;
+            let lexicon_path = catalog_path(&bindings, "lexicon")
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidLexicon)
+                .map_err(SherpaKwsPhraseCompileError::into_engine_error)?;
+            compile_zh_en_2025_phrase_set(phrase_revision, tokens_path, lexicon_path, phrases)
                 .map_err(SherpaKwsPhraseCompileError::into_engine_error)?
         }
     };
@@ -248,6 +265,8 @@ fn catalog_voice_task(task: SpeechCatalogTask) -> VoiceTask {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InstalledKwsCompilerFamily {
     GigaspeechSentencePiece,
+    WenetSpeechPartialPinyin,
+    BilingualPhonePartialPinyin,
 }
 
 fn installed_kws_compiler_family(
@@ -257,9 +276,10 @@ fn installed_kws_compiler_family(
         "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
             Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
         }
-        "kws:zipformer:wenetspeech"
-        | "kws:zipformer:wenetspeech-mobile"
-        | "kws:zipformer:zh-en-2025" => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
+        "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
+            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
+        }
+        "kws:zipformer:zh-en-2025" => Ok(InstalledKwsCompilerFamily::BilingualPhonePartialPinyin),
         _ => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
     }
 }
@@ -371,15 +391,15 @@ mod tests {
         );
         assert_eq!(
             installed_kws_compiler_family("kws:zipformer:wenetspeech"),
-            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
         );
         assert_eq!(
             installed_kws_compiler_family("kws:zipformer:wenetspeech-mobile"),
-            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
         );
         assert_eq!(
             installed_kws_compiler_family("kws:zipformer:zh-en-2025"),
-            Err(SherpaKwsPhraseCompileError::UnsupportedFamily)
+            Ok(InstalledKwsCompilerFamily::BilingualPhonePartialPinyin)
         );
     }
 

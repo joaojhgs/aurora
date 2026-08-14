@@ -12,7 +12,7 @@ const EMBEDDED_CATALOG: &str = include_str!("../resources/sherpa_onnx_speech_cat
 const CATALOG_SCHEMA_VERSION: u32 = 1;
 const CATALOG_ID: &str = "sherpa-onnx-speech-models-v1";
 const CATALOG_REVISION: &str = "github-releases-130628817-145831594-4e34edcb-284637b2";
-const ENTRIES_SHA256: &str = "d2a7f52543cb738248839e39f1cea803e29d38e28089bbe17a1ebb42ed84f5c8";
+const ENTRIES_SHA256: &str = "7aaf44b88a5f3f039ed1b90c30fe4de0f257d2cc02940fa3f1ecef881c347149";
 const EXPECTED_ENTRY_COUNT: usize = 21;
 const EXPECTED_LANGUAGE_COUNT: usize = 100;
 const MAX_CATALOG_BYTES: usize = 250_000;
@@ -396,6 +396,9 @@ impl SpeechCatalogEntry {
         ) {
             expected.insert("tokenizer".to_owned(), format!("{root}/bpe.model"));
         }
+        if self.model_id == "kws:zipformer:zh-en-2025" {
+            expected.insert("lexicon".to_owned(), format!("{root}/en.phone"));
+        }
         let expected_languages: BTreeSet<&str> = match self.model_id.as_str() {
             "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
                 BTreeSet::from(["en"])
@@ -583,22 +586,34 @@ mod tests {
     }
 
     #[test]
-    fn kws_sentencepiece_tokenizer_binding_is_gigaspeech_only() {
+    fn kws_tokenizer_and_lexicon_bindings_are_family_specific() {
         let catalog = SpeechModelCatalog::embedded().expect("embedded catalog validates");
         for entry in catalog.models_for_task(SpeechCatalogTask::KeywordSpotting) {
             let has_tokenizer = entry.bindings.contains_key("tokenizer");
+            let has_lexicon = entry.bindings.contains_key("lexicon");
             match entry.model_id.as_str() {
                 "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
                     assert!(has_tokenizer);
+                    assert!(!has_lexicon);
                     assert!(entry
                         .bindings
                         .get("tokenizer")
                         .expect("tokenizer binding")
                         .ends_with("/bpe.model"));
                 }
-                "kws:zipformer:wenetspeech"
-                | "kws:zipformer:wenetspeech-mobile"
-                | "kws:zipformer:zh-en-2025" => assert!(!has_tokenizer),
+                "kws:zipformer:zh-en-2025" => {
+                    assert!(!has_tokenizer);
+                    assert!(has_lexicon);
+                    assert!(entry
+                        .bindings
+                        .get("lexicon")
+                        .expect("lexicon binding")
+                        .ends_with("/en.phone"));
+                }
+                "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
+                    assert!(!has_tokenizer);
+                    assert!(!has_lexicon);
+                }
                 _ => panic!("unexpected KWS model"),
             }
         }

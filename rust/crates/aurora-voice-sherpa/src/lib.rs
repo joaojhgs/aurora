@@ -18,7 +18,7 @@ use aurora_voice_engine::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-#[cfg(feature = "kws-sentencepiece")]
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -35,8 +35,17 @@ const MAX_PHRASE_REVISION_BYTES: usize = 128;
 const MAX_KWS_PHRASE_TEXT_BYTES: usize = 128;
 #[cfg(feature = "kws-sentencepiece")]
 const MAX_KWS_SENTENCEPIECE_MODEL_BYTES: u64 = 2 * 1024 * 1024;
-#[cfg(feature = "kws-sentencepiece")]
 const MAX_COMPILED_KWS_TOKENS: usize = 64;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_TOKEN_TABLE_BYTES: u64 = 1024 * 1024;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_TOKEN_TABLE_ENTRIES: usize = 16_384;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_LEXICON_BYTES: u64 = 8 * 1024 * 1024;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_LEXICON_ENTRIES: usize = 200_000;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_METADATA_LINE_BYTES: usize = 512;
 const SHERPA_FINITE_STT_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MIN_SPEED: f32 = 0.5;
@@ -127,6 +136,8 @@ pub enum SherpaKwsPhraseCompileError {
     InvalidPhrase,
     #[error("invalid keyword tokenizer model")]
     InvalidTokenizer,
+    #[error("invalid keyword lexicon")]
+    InvalidLexicon,
     #[error("keyword phrase output exceeds limits")]
     ResourceLimit,
 }
@@ -135,7 +146,9 @@ impl SherpaKwsPhraseCompileError {
     pub fn into_engine_error(self) -> EngineError {
         match self {
             Self::UnsupportedFamily => EngineError::TaskUnavailable,
-            Self::InvalidPhrase | Self::InvalidTokenizer => EngineError::InvalidRequest,
+            Self::InvalidPhrase | Self::InvalidTokenizer | Self::InvalidLexicon => {
+                EngineError::InvalidRequest
+            }
             Self::ResourceLimit => EngineError::ResourceLimit,
         }
     }
@@ -359,6 +372,75 @@ pub fn compile_gigaspeech_sentencepiece_phrase_set(
         compiled.push(
             SherpaKwsPhrase::new(phrase.logical_id(), normalized, keyword_spec_line)
                 .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
+}
+
+#[cfg(feature = "kws-pinyin")]
+pub fn compile_wenetspeech_pinyin_phrase_set(
+    revision: impl Into<String>,
+    tokens_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let token_table = load_kws_token_table(tokens_path)?;
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let native_label = normalize_chinese_kws_phrase(phrase.phrase_text())?;
+        let pieces = compile_partial_pinyin_tokens(&native_label)?;
+        validate_compiled_token_sequence(&pieces, &token_table)?;
+        compiled.push(
+            SherpaKwsPhrase::new(
+                phrase.logical_id(),
+                native_label.clone(),
+                keyword_spec_with_label(&pieces, &native_label),
+            )
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
+}
+
+#[cfg(feature = "kws-pinyin")]
+pub fn compile_zh_en_2025_phrase_set(
+    revision: impl Into<String>,
+    tokens_path: impl AsRef<Path>,
+    lexicon_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let token_table = load_kws_token_table(tokens_path)?;
+    let lexicon = load_kws_phone_lexicon(lexicon_path)?;
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let phrase_text = phrase.phrase_text();
+        let (pieces, native_label) = if phrase_text.chars().any(|ch| is_cjk_unified(ch)) {
+            if phrase_text.chars().any(|ch| ch.is_ascii_alphabetic()) {
+                return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+            }
+            let native_label = normalize_chinese_kws_phrase(phrase_text)?;
+            (compile_partial_pinyin_tokens(&native_label)?, native_label)
+        } else {
+            let words = normalize_english_phone_phrase(phrase_text)?;
+            let mut pieces = Vec::new();
+            for word in words.split(' ') {
+                let phones = lexicon
+                    .get(word)
+                    .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?;
+                pieces.extend(phones.iter().cloned());
+            }
+            let native_label = words.replace(' ', "_");
+            (pieces, native_label)
+        };
+        validate_compiled_token_sequence(&pieces, &token_table)?;
+        compiled.push(
+            SherpaKwsPhrase::new(
+                phrase.logical_id(),
+                native_label.clone(),
+                keyword_spec_with_label(&pieces, &native_label),
+            )
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
         );
     }
     SherpaKwsPhraseSet::new(revision, compiled)
@@ -1753,7 +1835,209 @@ fn normalize_gigaspeech_phrase(value: &str) -> Result<String, SherpaKwsPhraseCom
     Ok(normalized)
 }
 
-#[cfg(feature = "kws-sentencepiece")]
+#[cfg(feature = "kws-pinyin")]
+fn normalize_chinese_kws_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
+    let normalized = value.trim();
+    if normalized.is_empty()
+        || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || normalized
+            .chars()
+            .any(|ch| !is_cjk_unified(ch) || pinyin::ToPinyin::to_pinyin(&ch).is_none())
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(normalized.to_owned())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn normalize_english_phone_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
+    if value.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || value
+            .chars()
+            .any(|ch| !(ch == '\'' || ch.is_ascii_alphabetic() || ch.is_ascii_whitespace()))
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    let normalized = value
+        .split_ascii_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    if normalized.is_empty() || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(normalized)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn is_cjk_unified(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0x20000..=0x2A6DF
+            | 0x2A700..=0x2B73F
+            | 0x2B740..=0x2B81F
+            | 0x2B820..=0x2CEAF
+            | 0x2CEB0..=0x2EBEF
+            | 0x30000..=0x3134F
+    )
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn compile_partial_pinyin_tokens(value: &str) -> Result<Vec<String>, SherpaKwsPhraseCompileError> {
+    let mut pieces = Vec::new();
+    for ch in value.chars() {
+        let pinyin = pinyin::ToPinyin::to_pinyin(&ch)
+            .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?
+            .with_tone();
+        let (initial, final_part) = split_partial_pinyin(pinyin)?;
+        if let Some(initial) = initial {
+            pieces.push(initial.to_owned());
+        }
+        pieces.push(final_part.to_owned());
+    }
+    Ok(pieces)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn split_partial_pinyin(value: &str) -> Result<(Option<&str>, &str), SherpaKwsPhraseCompileError> {
+    const INITIALS: &[&str] = &[
+        "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x",
+        "r", "z", "c", "s", "y", "w",
+    ];
+    for initial in INITIALS {
+        if let Some(final_part) = value.strip_prefix(initial) {
+            if final_part.is_empty() {
+                return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+            }
+            return Ok((Some(initial), final_part));
+        }
+    }
+    if value.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok((None, value))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn keyword_spec_with_label(pieces: &[String], native_label: &str) -> String {
+    format!("{} @{native_label}", pieces.join(" "))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn validate_compiled_token_sequence(
+    pieces: &[String],
+    token_table: &BTreeSet<String>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    if pieces.is_empty()
+        || pieces.len() > MAX_COMPILED_KWS_TOKENS
+        || pieces
+            .iter()
+            .any(|piece| !valid_compiled_kws_piece(piece) || !token_table.contains(piece.as_str()))
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn load_kws_token_table(
+    tokens_path: impl AsRef<Path>,
+) -> Result<BTreeSet<String>, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(tokens_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    if metadata.len() > MAX_KWS_TOKEN_TABLE_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let content = std::fs::read_to_string(tokens_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    let mut tokens = BTreeSet::new();
+    for line in content.lines() {
+        if line.len() > MAX_KWS_METADATA_LINE_BYTES {
+            return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+        }
+        let Some(token) = line.split_ascii_whitespace().next() else {
+            continue;
+        };
+        if !valid_compiled_kws_piece(token) || !tokens.insert(token.to_owned()) {
+            return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+        }
+        if tokens.len() > MAX_KWS_TOKEN_TABLE_ENTRIES {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+    }
+    if tokens.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    Ok(tokens)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn load_kws_phone_lexicon(
+    lexicon_path: impl AsRef<Path>,
+) -> Result<BTreeMap<String, Vec<String>>, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(lexicon_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidLexicon)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+    }
+    if metadata.len() > MAX_KWS_LEXICON_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let content = std::fs::read_to_string(lexicon_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidLexicon)?;
+    let mut lexicon = BTreeMap::new();
+    for line in content.lines() {
+        if line.len() > MAX_KWS_METADATA_LINE_BYTES {
+            return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+        }
+        let mut parts = line.split_ascii_whitespace();
+        let Some(raw_word) = parts.next() else {
+            continue;
+        };
+        let phones = parts.map(str::to_owned).collect::<Vec<_>>();
+        if phones.is_empty()
+            || phones.len() > MAX_COMPILED_KWS_TOKENS
+            || phones.iter().any(|phone| !valid_compiled_kws_piece(phone))
+        {
+            return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+        }
+        let Some(word) = canonical_lexicon_word(raw_word) else {
+            continue;
+        };
+        lexicon.entry(word).or_insert(phones);
+        if lexicon.len() > MAX_KWS_LEXICON_ENTRIES {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+    }
+    if lexicon.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+    }
+    Ok(lexicon)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn canonical_lexicon_word(value: &str) -> Option<String> {
+    let without_variant = value
+        .strip_suffix(')')
+        .and_then(|prefix| prefix.rsplit_once('(').map(|(word, _)| word))
+        .unwrap_or(value);
+    if without_variant.is_empty()
+        || without_variant.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || without_variant
+            .chars()
+            .any(|ch| !(ch == '\'' || ch.is_ascii_alphabetic()))
+    {
+        return None;
+    }
+    Some(without_variant.to_ascii_uppercase())
+}
+
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
 fn valid_compiled_kws_piece(value: &str) -> bool {
     valid_plain_field(value, 1, MAX_NATIVE_KEYWORD_BYTES)
         && value.len() <= MAX_NATIVE_KEYWORD_BYTES
@@ -2697,6 +2981,49 @@ mod tests {
     const EXPECTED_STT_TEXT: &str =
         "Ask not what your country can do for you. Ask what you can do for your country.";
 
+    #[cfg(feature = "kws-pinyin")]
+    fn write_temp_kws_file(name: &str, content: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("aurora-{name}-{}-{nonce}.txt", std::process::id()));
+        std::fs::write(&path, content).expect("write KWS temp file");
+        path
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    fn read_keyword_fixture_pairs(raw_path: &Path, expected_path: &Path) -> Vec<(String, String)> {
+        let raw = std::fs::read_to_string(raw_path).expect("read raw keyword fixture");
+        let expected =
+            std::fs::read_to_string(expected_path).expect("read compiled keyword fixture");
+        let raw_lines = raw
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        let expected_lines = expected
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(raw_lines.len(), expected_lines.len());
+        raw_lines
+            .into_iter()
+            .zip(expected_lines)
+            .map(|(raw, expected)| (raw.to_owned(), expected.to_owned()))
+            .collect()
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    fn raw_phrase_text(raw_line: &str) -> &str {
+        raw_line
+            .split_once(" @")
+            .map(|(phrase, _)| phrase.trim())
+            .unwrap_or(raw_line.trim())
+    }
+
     #[derive(Debug, Default)]
     struct FakeBackend {
         calls: Vec<&'static str>,
@@ -3576,6 +3903,135 @@ mod tests {
             phrases.logical_id_for_native("HEY AURORA"),
             Some("wake.main")
         );
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    fn wenetspeech_pinyin_compiler_matches_official_partial_pinyin_shape() {
+        let tokens_path = write_temp_kws_file(
+            "wenetspeech-tokens",
+            "<blk> 0\n<sos/eos> 1\n<unk> 2\nn 3\nǐ 4\nh 5\nǎo 6\nj 7\nūn 8\ng 9\nē 10\n",
+        );
+        let phrases = compile_wenetspeech_pinyin_phrase_set(
+            "rev-zh",
+            &tokens_path,
+            [SherpaKwsPhraseInput::new("wake.zh", "你好军哥").expect("phrase input")],
+        )
+        .expect("compile phrase");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.zh"),
+            Some("n ǐ h ǎo j ūn g ē @你好军哥")
+        );
+        assert_eq!(phrases.logical_id_for_native("你好军哥"), Some("wake.zh"));
+        assert_eq!(
+            compile_wenetspeech_pinyin_phrase_set(
+                "rev-zh",
+                &tokens_path,
+                [SherpaKwsPhraseInput::new("wake.en", "LIGHT UP").expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        let _ = std::fs::remove_file(tokens_path);
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    fn zh_en_phone_pinyin_compiler_uses_verified_tokens_and_lexicon() {
+        let tokens_path = write_temp_kws_file(
+            "zh-en-tokens",
+            "<blk> 0\n<sos/eos> 1\n<unk> 2\nL 3\nAY1 4\nT 5\nAH1 6\nP 7\nl 8\nuò 9\nsh 10\ní 11\n",
+        );
+        let lexicon_path = write_temp_kws_file("zh-en-lexicon", "LIGHT L AY1 T\nUP AH1 P\n");
+        let phrases = compile_zh_en_2025_phrase_set(
+            "rev-bilingual",
+            &tokens_path,
+            &lexicon_path,
+            [
+                SherpaKwsPhraseInput::new("wake.en", "light up").expect("phrase input"),
+                SherpaKwsPhraseInput::new("wake.zh", "落实").expect("phrase input"),
+            ],
+        )
+        .expect("compile phrases");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.en"),
+            Some("L AY1 T AH1 P @LIGHT_UP")
+        );
+        assert_eq!(phrases.logical_id_for_native("LIGHT_UP"), Some("wake.en"));
+        assert_eq!(phrases.keyword_spec_for("wake.zh"), Some("l uò sh í @落实"));
+        assert_eq!(phrases.logical_id_for_native("落实"), Some("wake.zh"));
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [SherpaKwsPhraseInput::new("wake.unknown", "unknown").expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        let _ = std::fs::remove_file(tokens_path);
+        let _ = std::fs::remove_file(lexicon_path);
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_WENETSPEECH_DIR to point at the pinned WenetSpeech KWS archive root"]
+    fn live_wenetspeech_pinyin_compiler_matches_pinned_archive_examples() {
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_WENETSPEECH_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WENETSPEECH_DIR");
+        let pairs =
+            read_keyword_fixture_pairs(&dir.join("keywords_raw.txt"), &dir.join("keywords.txt"));
+        let inputs = pairs
+            .iter()
+            .enumerate()
+            .map(|(index, (raw, _))| {
+                SherpaKwsPhraseInput::new(format!("wake.{index}"), raw_phrase_text(raw))
+                    .expect("phrase input")
+            })
+            .collect::<Vec<_>>();
+        let phrase_set =
+            compile_wenetspeech_pinyin_phrase_set("rev-live", dir.join("tokens.txt"), inputs)
+                .expect("compile phrases");
+        for (index, (_, expected)) in pairs.iter().enumerate() {
+            assert_eq!(
+                phrase_set.keyword_spec_for(&format!("wake.{index}")),
+                Some(expected.as_str())
+            );
+        }
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR to point at the pinned zh-en KWS archive root"]
+    fn live_zh_en_2025_compiler_matches_pinned_archive_examples() {
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR");
+        let pairs = read_keyword_fixture_pairs(
+            &dir.join("test_wavs").join("keywords_raw.txt"),
+            &dir.join("test_wavs").join("keywords.txt"),
+        );
+        let inputs = pairs
+            .iter()
+            .enumerate()
+            .map(|(index, (raw, _))| {
+                SherpaKwsPhraseInput::new(format!("wake.{index}"), raw_phrase_text(raw))
+                    .expect("phrase input")
+            })
+            .collect::<Vec<_>>();
+        let phrase_set = compile_zh_en_2025_phrase_set(
+            "rev-live",
+            dir.join("tokens.txt"),
+            dir.join("en.phone"),
+            inputs,
+        )
+        .expect("compile phrases");
+        for (index, (_, expected)) in pairs.iter().enumerate() {
+            assert_eq!(
+                phrase_set.keyword_spec_for(&format!("wake.{index}")),
+                Some(expected.as_str())
+            );
+        }
     }
 
     #[test]
