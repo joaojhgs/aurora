@@ -101,6 +101,7 @@ writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
 console.log(`Wrote ${report.artifact} (${bytes} bytes, sha256 ${sha256})`)
 
 function releaseFilter(source) {
+  if (!existsSync(source)) return false
   const stat = lstatSync(source)
   if (stat.isSymbolicLink() && !existsSync(source)) return false
   const parts = relative(packageRoot, source).split(/[\\/]/u)
