@@ -776,6 +776,20 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
         and case["input"]["packs"][0]["voices"][0]["ready"] is False
         for case in language_packs_negative_cases
     )
+    assert any(
+        case["issue_path"] == "$"
+        and case["input"]["stale_default_voice_id"]
+        == case["input"]["packs"][0]["voices"][0]["voice_id"]
+        and case["input"]["packs"][0]["voices"][0]["ready"] is True
+        for case in language_packs_negative_cases
+    )
+    assert any(
+        case["normalized"]["stale_default_voice_id"]
+        == case["normalized"]["packs"][0]["voices"][0]["voice_id"]
+        and case["normalized"]["packs"][0]["voices"][0]["ready"] is False
+        and case["normalized"]["packs"][0]["voices"][0]["default"] is False
+        for case in by_model["TTSListLanguagePacksResponse"]["vectors"]["positive_cases"]
+    )
 
     disallowed_methods = {"Tooling.GetStats", "Tooling.GetMCPStatus"}
     assert disallowed_methods.isdisjoint({item["method_id"] for item in schema["schemas"]})

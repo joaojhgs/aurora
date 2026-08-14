@@ -2051,6 +2051,12 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                     ],
                 }
             )
+            cases.append(
+                {
+                    **base,
+                    "stale_default_voice_id": base["default_voice_id"],
+                }
+            )
     if model_name == "AssistantStreamEvent":
         base = _positive_fixture(model_name)
         if isinstance(base, dict):
@@ -2119,6 +2125,31 @@ def _positive_fixtures(model_name: str) -> list[Any]:
                             "legacy_global_tool_ids": ["legacy-a"] * 20 + ["legacy-b"] * 20,
                         }
                     ],
+                }
+            )
+    if model_name == "TTSListLanguagePacksResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            pack = dict(base["packs"][0])
+            voice = {
+                **pack["voices"][0],
+                "ready": False,
+                "default": False,
+                "active": False,
+            }
+            cases.append(
+                {
+                    **base,
+                    "packs": [
+                        {
+                            **pack,
+                            "ready": False,
+                            "default": False,
+                            "ready_voice_count": 0,
+                            "voices": [voice],
+                        }
+                    ],
+                    "stale_default_voice_id": base["default_voice_id"],
                 }
             )
     return cases

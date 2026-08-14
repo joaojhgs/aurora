@@ -1102,6 +1102,83 @@ async def test_language_pack_listing_keeps_default_active_and_stale_default_sepa
     assert stale_response.packs[0].default is False
 
 
+@pytest.mark.parametrize(
+    ("registry_ready_state", "include_registry_entry", "expected_installed"),
+    [
+        ("installing", True, True),
+        ("failed", True, True),
+        ("deleted", False, False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_language_pack_listing_reports_configured_unusable_defaults_as_stale(
+    registry_ready_state: str,
+    include_registry_entry: bool,
+    expected_installed: bool,
+    monkeypatch,
+    mock_bus,
+) -> None:
+    del mock_bus
+    default_voice_id = "standard:starter_en:bela"
+    service = TTSService()
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item(
+            default_voice_id,
+            display_name="Bela",
+            language_bundle="en",
+            installed=expected_installed,
+            ready=False,
+        ),
+    )
+    FakeVoiceRegistry.installed = (
+        [
+            types.SimpleNamespace(
+                voice_id=default_voice_id,
+                display_name="Bela",
+                kind="standard",
+                visibility="public",
+                ready_state=registry_ready_state,
+                runtime_target="pockettts-python",
+                language_bundle="en",
+                compatibility_group="pockettts-base",
+                artifact_revision=f"rev-{registry_ready_state}",
+                artifact_refs=("artifacts/bela/voice-state.safetensors",),
+                source_retained=False,
+                license_name="Test License",
+                attribution=None,
+            )
+        ]
+        if include_registry_entry
+        else []
+    )
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id=default_voice_id),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert response.default_voice_id == default_voice_id
+    assert response.stale_default_voice_id == default_voice_id
+    pack = response.packs[0]
+    assert pack.default is False
+    assert pack.ready is False
+    assert pack.ready_voice_count == 0
+    voice = pack.voices[0]
+    assert voice.voice_id == default_voice_id
+    assert voice.installed is expected_installed
+    assert voice.ready is False
+    assert voice.default is False
+    assert voice.active is False
+
+
 @pytest.mark.asyncio
 async def test_voice_discovery_skips_provider_voices_without_exact_language(
     monkeypatch, mock_bus

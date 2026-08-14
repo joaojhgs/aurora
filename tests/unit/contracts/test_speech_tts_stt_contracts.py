@@ -456,6 +456,42 @@ def test_tts_language_pack_contracts_are_redacted_and_exact() -> None:
         stale_default_voice_id=STANDARD_ID,
     )
     assert stale.stale_default_voice_id == STANDARD_ID
+    stale_unready_voice = TTSLanguagePackVoice(
+        voice_id=STANDARD_ID,
+        display_name="Default",
+        installed=True,
+        ready=False,
+        default=False,
+        active=False,
+        revision="voice-rev-2",
+    )
+    stale_unready_pack = TTSLanguagePackDescriptor(
+        pack_id="en",
+        language="en",
+        display_name="English",
+        installed=True,
+        ready=False,
+        default=False,
+        voice_count=1,
+        installed_voice_count=1,
+        ready_voice_count=0,
+        voices=[stale_unready_voice],
+        revision="pack-rev-2",
+    )
+    listed_stale = TTSListLanguagePacksResponse(
+        packs=[stale_unready_pack],
+        catalog_status="available",
+        default_voice_id=STANDARD_ID,
+        stale_default_voice_id=STANDARD_ID,
+    )
+    assert listed_stale.packs[0].voices[0].ready is False
+    with pytest.raises(ValidationError, match="stale default voice"):
+        TTSListLanguagePacksResponse(
+            packs=[pack],
+            catalog_status="available",
+            default_voice_id=STANDARD_ID,
+            stale_default_voice_id=STANDARD_ID,
+        )
     with pytest.raises(ValidationError, match="requires an error code"):
         TTSListLanguagePacksResponse(catalog_status="unavailable")
 

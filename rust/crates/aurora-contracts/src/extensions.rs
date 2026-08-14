@@ -277,6 +277,13 @@ fn validate_markers(schema: &Map<String, Value>, value: &Value) -> Result<(), St
         validate_tts_language_pack_voice(value)?;
     }
     if schema
+        .get("x-aurora-tts-language-pack-list-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_language_pack_list(value)?;
+    }
+    if schema
         .get("x-aurora-projection-page-termination")
         .and_then(Value::as_bool)
         == Some(true)
@@ -404,6 +411,38 @@ fn validate_tts_language_pack_voice(value: &Value) -> Result<(), String> {
     }
     if (default || active) && !ready {
         return Err("default or active language pack voice must be ready".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_language_pack_list(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let Some(stale_default) = object.get("stale_default_voice_id").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    let Some(packs) = object.get("packs").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    for pack in packs {
+        let Some(voices) = pack
+            .as_object()
+            .and_then(|pack| pack.get("voices"))
+            .and_then(Value::as_array)
+        else {
+            continue;
+        };
+        for voice in voices {
+            let Some(voice) = voice.as_object() else {
+                continue;
+            };
+            let ready = voice.get("ready").and_then(Value::as_bool) == Some(true);
+            let voice_id = voice.get("voice_id").and_then(Value::as_str);
+            if ready && voice_id == Some(stale_default) {
+                return Err("stale default voice cannot be ready in listed voices".to_owned());
+            }
+        }
     }
     Ok(())
 }

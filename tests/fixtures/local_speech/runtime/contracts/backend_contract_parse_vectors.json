@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "17422e17d13490cc1f4c756dc67b2fbbd57ee57ff4b4ef44a0c56c93da887382",
+  "schema_content_hash": "f329953fc87d20105e5eb8ac08043a17a8007ed8bdc98758d80d01c98631e135",
   "vectors": [
     {
       "accepted": true,
@@ -2031,6 +2031,78 @@
       "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
     },
     {
+      "accepted": true,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": false,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": false,
+            "ready_voice_count": 0,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": false,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": false,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ],
+        "stale_default_voice_id": "standard:starter_en:alba"
+      },
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "normalized": {
+        "capability_revision": 0,
+        "catalog_error_code": null,
+        "catalog_status": "available",
+        "correlation_id": null,
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": false,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": "en",
+            "pack_id": "en",
+            "ready": false,
+            "ready_voice_count": 0,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": false,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": false,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ],
+        "stale_default_voice_id": "standard:starter_en:alba"
+      },
+      "normalized_hash": "51e320825db440c1568415c8cd6022c51472b43721b2d7d5be2eda9ba2b4567b",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
       "accepted": false,
       "case_index": 0,
       "direction": "output",
@@ -2065,6 +2137,46 @@
       },
       "issue_category": "value_error",
       "issue_path": "$.packs.0.voices.0",
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ],
+        "stale_default_voice_id": "standard:starter_en:alba"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
       "method_id": "TTS.ListLanguagePacks",
       "model_name": "TTSListLanguagePacksResponse",
       "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"

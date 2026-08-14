@@ -7808,6 +7808,41 @@
             },
             "issue_category": "value_error",
             "issue_path": "$.packs.0.voices.0"
+          },
+          {
+            "accepted": false,
+            "input": {
+              "catalog_status": "available",
+              "default_voice_id": "standard:starter_en:alba",
+              "packs": [
+                {
+                  "default": true,
+                  "display_name": "English",
+                  "installed": true,
+                  "installed_voice_count": 1,
+                  "language": " EN ",
+                  "pack_id": "en",
+                  "ready": true,
+                  "ready_voice_count": 1,
+                  "revision": "pack-rev-1",
+                  "voice_count": 1,
+                  "voices": [
+                    {
+                      "active": false,
+                      "default": true,
+                      "display_name": "Voice",
+                      "installed": true,
+                      "ready": true,
+                      "revision": "rev-1",
+                      "voice_id": "standard:starter_en:alba"
+                    }
+                  ]
+                }
+              ],
+              "stale_default_voice_id": "standard:starter_en:alba"
+            },
+            "issue_category": "value_error",
+            "issue_path": "$"
           }
         ],
         "positive": {
@@ -7875,7 +7910,76 @@
             "stale_default_voice_id": null
           },
           "normalized_hash": "6780615ed4d9a25668d25c952cad376e96f413d84e409d13262c362cb95136fa"
-        }
+        },
+        "positive_cases": [
+          {
+            "accepted": true,
+            "input": {
+              "catalog_status": "available",
+              "default_voice_id": "standard:starter_en:alba",
+              "packs": [
+                {
+                  "default": false,
+                  "display_name": "English",
+                  "installed": true,
+                  "installed_voice_count": 1,
+                  "language": " EN ",
+                  "pack_id": "en",
+                  "ready": false,
+                  "ready_voice_count": 0,
+                  "revision": "pack-rev-1",
+                  "voice_count": 1,
+                  "voices": [
+                    {
+                      "active": false,
+                      "default": false,
+                      "display_name": "Voice",
+                      "installed": true,
+                      "ready": false,
+                      "revision": "rev-1",
+                      "voice_id": "standard:starter_en:alba"
+                    }
+                  ]
+                }
+              ],
+              "stale_default_voice_id": "standard:starter_en:alba"
+            },
+            "normalized": {
+              "capability_revision": 0,
+              "catalog_error_code": null,
+              "catalog_status": "available",
+              "correlation_id": null,
+              "default_voice_id": "standard:starter_en:alba",
+              "packs": [
+                {
+                  "default": false,
+                  "display_name": "English",
+                  "installed": true,
+                  "installed_voice_count": 1,
+                  "language": "en",
+                  "pack_id": "en",
+                  "ready": false,
+                  "ready_voice_count": 0,
+                  "revision": "pack-rev-1",
+                  "voice_count": 1,
+                  "voices": [
+                    {
+                      "active": false,
+                      "default": false,
+                      "display_name": "Voice",
+                      "installed": true,
+                      "ready": false,
+                      "revision": "rev-1",
+                      "voice_id": "standard:starter_en:alba"
+                    }
+                  ]
+                }
+              ],
+              "stale_default_voice_id": "standard:starter_en:alba"
+            },
+            "normalized_hash": "51e320825db440c1568415c8cd6022c51472b43721b2d7d5be2eda9ba2b4567b"
+          }
+        ]
       }
     },
     {
