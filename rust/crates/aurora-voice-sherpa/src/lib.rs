@@ -325,6 +325,7 @@ pub trait SherpaTtsBackend {
         speaker_id: i32,
         speed: f32,
         cancellation: &dyn Fn() -> bool,
+        cancellation_token: &SherpaTtsCancellationToken,
     ) -> Result<SherpaTtsAudio, SherpaAdapterError>;
 
     fn cancel(&mut self) -> Result<(), SherpaAdapterError>;
@@ -899,6 +900,11 @@ impl SherpaTtsCancellationToken {
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Acquire)
     }
+
+    #[cfg(feature = "native-tts")]
+    pub(crate) fn as_atomic(&self) -> &AtomicBool {
+        &self.cancelled
+    }
 }
 
 impl fmt::Debug for SherpaTtsCancellationToken {
@@ -1124,11 +1130,13 @@ where
         self.active_generation = Some(generation);
         self.cancellation_token.reset();
         let cancellation_token = self.cancellation_token.clone();
-        let result = self
-            .backend
-            .synthesize(request.text(), self.speaker_id, self.speed, &|| {
-                cancellation() || cancellation_token.is_cancelled()
-            });
+        let result = self.backend.synthesize(
+            request.text(),
+            self.speaker_id,
+            self.speed,
+            &|| cancellation() || cancellation_token.is_cancelled(),
+            &cancellation_token,
+        );
         let audio = match self.capture_backend(result) {
             Ok(audio) => audio,
             Err(SherpaAdapterError::Cancelled) => {
@@ -2166,12 +2174,19 @@ mod native_tts_backend {
             speaker_id: i32,
             speed: f32,
             cancellation: &dyn Fn() -> bool,
+            cancellation_token: &SherpaTtsCancellationToken,
         ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
             let config = OfflineTtsGenerationConfig::new(speaker_id, speed);
             let audio = self
                 .synthesizer
-                .generate(text, &config, cancellation)
+                .generate_with_cancel_flag(text, &config, cancellation_token.as_atomic())
                 .map_err(native_tts_adapter_error)?;
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
             let sample_rate =
                 u32::try_from(audio.sample_rate()).map_err(|_| SherpaAdapterError::InvalidAudio)?;
             SherpaTtsAudio::new(sample_rate, audio.samples().to_vec())
@@ -2426,6 +2441,7 @@ mod tests {
             speaker_id: i32,
             speed: f32,
             cancellation: &dyn Fn() -> bool,
+            _cancellation_token: &SherpaTtsCancellationToken,
         ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
             self.calls.push("synthesize");
             self.last_text_bytes = Some(text.len());
@@ -2461,6 +2477,7 @@ mod tests {
             _speaker_id: i32,
             _speed: f32,
             cancellation: &dyn Fn() -> bool,
+            _cancellation_token: &SherpaTtsCancellationToken,
         ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
             self.started.send(()).expect("started signal");
             while !cancellation() {

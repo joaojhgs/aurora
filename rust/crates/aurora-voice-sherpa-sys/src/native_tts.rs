@@ -1,8 +1,8 @@
 use std::ffi::CString;
 use std::fmt;
 use std::os::raw::{c_char, c_float, c_int, c_void};
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::{
     path_bytes_for_tts, ErrorCode, OfflineTtsConfig, OfflineTtsGenerationConfig, TtsAudio,
@@ -221,7 +221,7 @@ impl OfflineTts {
         &self,
         text: &str,
         config: &OfflineTtsGenerationConfig,
-        cancellation: &dyn Fn() -> bool,
+        cancellation: &AtomicBool,
     ) -> Result<TtsAudio, TtsError> {
         let text = string_cstring(text, ErrorCode::TextNul)?;
         let raw_config = SherpaOnnxGenerationConfig {
@@ -234,7 +234,6 @@ impl OfflineTts {
             cancellation,
             invalid_audio: false,
             cancelled: false,
-            callback_failed: false,
         };
         let audio = unsafe {
             SherpaOnnxOfflineTtsGenerateWithConfig(
@@ -249,17 +248,7 @@ impl OfflineTts {
             destroy_generated_audio_if_present(audio);
             return Err(TtsError::NativeInvalidAudio);
         }
-        if callback_state.callback_failed {
-            destroy_generated_audio_if_present(audio);
-            return Err(TtsError::CallbackFailed);
-        }
-        let stopped_after_generate =
-            callback_state.cancelled || poll_cancellation(&mut callback_state);
-        if callback_state.callback_failed {
-            destroy_generated_audio_if_present(audio);
-            return Err(TtsError::CallbackFailed);
-        }
-        if stopped_after_generate {
+        if callback_state.cancelled || cancellation.load(Ordering::Acquire) {
             destroy_generated_audio_if_present(audio);
             return Err(TtsError::Cancelled);
         }
@@ -315,10 +304,9 @@ impl Drop for GeneratedAudioHandle {
 }
 
 struct CallbackState<'a> {
-    cancellation: &'a dyn Fn() -> bool,
+    cancellation: &'a AtomicBool,
     invalid_audio: bool,
     cancelled: bool,
-    callback_failed: bool,
 }
 
 extern "C" fn progress_callback(
@@ -331,7 +319,8 @@ extern "C" fn progress_callback(
         return 0;
     }
     let state = unsafe { &mut *arg.cast::<CallbackState<'_>>() };
-    if poll_cancellation(state) {
+    if state.cancellation.load(Ordering::Acquire) {
+        state.cancelled = true;
         return 0;
     }
     if !(0..=MAX_TTS_CALLBACK_CHUNK_SAMPLES).contains(&n) {
@@ -353,21 +342,6 @@ extern "C" fn progress_callback(
         }
     }
     1
-}
-
-fn poll_cancellation(state: &mut CallbackState<'_>) -> bool {
-    match catch_unwind(AssertUnwindSafe(|| (state.cancellation)())) {
-        Ok(cancelled) => {
-            if cancelled {
-                state.cancelled = true;
-            }
-            cancelled
-        }
-        Err(_) => {
-            state.callback_failed = true;
-            true
-        }
-    }
 }
 
 fn destroy_generated_audio_if_present(audio: *const SherpaOnnxGeneratedAudio) {

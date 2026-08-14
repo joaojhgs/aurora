@@ -14,6 +14,7 @@ use std::fs::File;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(all(feature = "native-vad", not(target_arch = "wasm32")))]
 mod native;
@@ -177,6 +178,7 @@ mod native_tts;
 #[cfg(not(all(feature = "native-tts", not(target_arch = "wasm32"))))]
 mod native_tts {
     use super::{OfflineTtsConfig, OfflineTtsGenerationConfig, TtsAudio, TtsError};
+    use std::sync::atomic::AtomicBool;
 
     pub(crate) struct OfflineTts;
 
@@ -206,7 +208,7 @@ mod native_tts {
             &self,
             _text: &str,
             _config: &OfflineTtsGenerationConfig,
-            _cancellation: &dyn Fn() -> bool,
+            _cancellation: &AtomicBool,
         ) -> Result<TtsAudio, TtsError> {
             Err(TtsError::NativeUnavailable)
         }
@@ -1513,12 +1515,31 @@ impl OfflineTtsSynthesizer {
         if cancellation() {
             return Err(TtsError::Cancelled);
         }
+        let cancellation_flag = AtomicBool::new(false);
+        let audio = self.generate_with_cancel_flag(text, config, &cancellation_flag)?;
+        if cancellation() {
+            return Err(TtsError::Cancelled);
+        }
+        Ok(audio)
+    }
+
+    pub fn generate_with_cancel_flag(
+        &mut self,
+        text: &str,
+        config: &OfflineTtsGenerationConfig,
+        cancellation: &AtomicBool,
+    ) -> Result<TtsAudio, TtsError> {
+        validate_tts_text(text)?;
+        config.validate(Some(self.num_speakers))?;
+        if cancellation.load(Ordering::Acquire) {
+            return Err(TtsError::Cancelled);
+        }
         let audio = self.inner.generate(text, config, cancellation)?;
         validate_tts_audio(self.sample_rate, audio.samples(), self.max_audio_seconds)?;
         if audio.sample_rate() != self.sample_rate {
             return Err(TtsError::NativeInvalidAudio);
         }
-        if cancellation() {
+        if cancellation.load(Ordering::Acquire) {
             return Err(TtsError::Cancelled);
         }
         Ok(audio)
@@ -2835,32 +2856,21 @@ mod tests {
             .iter()
             .all(|sample| sample.is_finite() && (-1.0..=1.0).contains(sample)));
 
-        let checks = std::cell::Cell::new(0usize);
-        let cancelled = synthesizer
-            .generate("This request should stop.", &generation, &|| {
-                let current = checks.get();
-                checks.set(current + 1);
-                current > 0
-            })
-            .expect_err("callback cancellation should stop generation");
+        let cancellation = std::sync::Arc::new(AtomicBool::new(false));
+        let cancellation_setter = std::sync::Arc::clone(&cancellation);
+        let setter = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            cancellation_setter.store(true, Ordering::Release);
+        });
+        let result = synthesizer.generate_with_cancel_flag(
+            "This longer request should stop from the atomic callback flag before it completes.",
+            &generation,
+            &cancellation,
+        );
+        setter.join().expect("cancellation setter");
+        let cancelled = result.expect_err("atomic callback cancellation should stop generation");
         assert_eq!(cancelled, TtsError::Cancelled);
-        assert!(checks.get() > 1);
-
-        let panicking_checks = std::cell::Cell::new(0usize);
-        let callback_failed = synthesizer
-            .generate(
-                "This request should fail inside the callback.",
-                &generation,
-                &|| {
-                    let current = panicking_checks.get();
-                    panicking_checks.set(current + 1);
-                    assert_eq!(current, 0, "callback panic should be contained");
-                    false
-                },
-            )
-            .expect_err("callback panic should be sanitized");
-        assert_eq!(callback_failed, TtsError::CallbackFailed);
-        assert!(panicking_checks.get() > 1);
+        assert!(cancellation.load(Ordering::Acquire));
     }
 
     #[cfg(not(feature = "native-vad"))]
