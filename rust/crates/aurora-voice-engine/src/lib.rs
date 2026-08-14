@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod catalog;
 pub mod model_pack;
 
 use async_trait::async_trait;
@@ -11,6 +12,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use thiserror::Error;
 
+pub use catalog::*;
 pub use model_pack::*;
 
 pub const VAD_SAMPLE_RATE_HZ: u32 = 16_000;
