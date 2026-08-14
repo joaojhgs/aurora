@@ -525,6 +525,7 @@ dependencies = [
  "aurora-voice-core",
  "aurora-voice-engine",
  "aurora-voice-sherpa-sys",
+ "sentencepiece-rust",
  "thiserror 2.0.18",
 ]
 
@@ -5278,6 +5279,12 @@ dependencies = [
  "serde",
  "serde_core",
 ]
+
+[[package]]
+name = "sentencepiece-rust"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60f271394c88f9c091ea275db6ed526566bb40a232e64dfe702c66cf47c3dee6"
 
 [[package]]
 name = "serde"

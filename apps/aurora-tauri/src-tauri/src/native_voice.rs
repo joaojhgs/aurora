@@ -21,16 +21,16 @@ use {
         VadConfig, VadStreamProvider, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
     },
     aurora_voice_native::{
-        build_installed_kws_provider, build_installed_stt_provider, build_installed_tts_provider,
-        build_installed_vad_provider, CpalAudioInput, CpalAudioOutput, GatewayAuth,
-        MicrophoneAudioPolicy, NativeAudioConfig, NativeCaptureConfig, NativeCaptureControl,
-        NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
-        NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
-        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
-        SpeechPackManagerConfig, TransportLimits,
+        build_installed_kws_provider_from_phrases, build_installed_stt_provider,
+        build_installed_tts_provider, build_installed_vad_provider, CpalAudioInput,
+        CpalAudioOutput, GatewayAuth, MicrophoneAudioPolicy, NativeAudioConfig,
+        NativeCaptureConfig, NativeCaptureControl, NativeGatewayCaptureGrant,
+        NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig, NativeGatewayFiniteStt,
+        NativeGatewayFiniteSttConfig, NativeGatewayTransport, NativeGatewayTtsConfig,
+        NativeGatewayTtsSynthesizer, SpeechPackManager, SpeechPackManagerConfig, TransportLimits,
     },
     aurora_voice_sherpa::{
-        NativeKwsBackend, NativeVadBackend, SherpaKwsPhrase, SherpaKwsPhraseSet, SherpaKwsProvider,
+        NativeKwsBackend, NativeVadBackend, SherpaKwsPhraseInput, SherpaKwsProvider,
         SherpaVadProvider,
     },
     serde_json::Value,
@@ -79,12 +79,8 @@ const SHUTDOWN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HOST_STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(75);
 #[cfg(all(desktop, test))]
 const DEFAULT_WAKE_PHRASE_ID: &str = "wake.aurora";
-#[cfg(desktop)]
+#[cfg(all(desktop, test))]
 const DEFAULT_WAKE_PHRASE_TEXT: &str = "HEY AURORA";
-#[cfg(desktop)]
-const DEFAULT_WAKE_PHRASE_NATIVE_LABEL: &str = "HEY_AURORA";
-#[cfg(desktop)]
-const DEFAULT_WAKE_PHRASE_SPEC: &str = "▁HE Y ▁A UR OR A @HEY_AURORA";
 #[cfg(all(desktop, test))]
 const DEFAULT_WAKE_PHRASE_REVISION: &str = "phrases:aurora-default:v1";
 
@@ -1152,8 +1148,7 @@ fn installed_wake_bindings_ready(app: &AppHandle, profile: &RuntimeProfile) -> b
         return false;
     };
     manager.resolve_model_bindings(&vad.pack_id).is_ok()
-        && manager.resolve_model_bindings(&kws.pack_id).is_ok()
-        && selected_wake_phrase_set(kws, phrase).is_ok()
+        && build_selected_wake_kws_provider(&manager, kws, phrase).is_ok()
 }
 
 #[cfg(desktop)]
@@ -1296,9 +1291,7 @@ fn build_wake_runtime(
     let vad_config = VadConfig::default();
     let vad = build_installed_vad_provider(manager, &vad_selection.pack_id, &vad_config)
         .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
-    let phrase_set = selected_wake_phrase_set(kws_selection, wake_phrase)
-        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
-    let kws = build_installed_kws_provider(manager, &kws_selection.pack_id, phrase_set)
+    let kws = build_selected_wake_kws_provider(manager, kws_selection, wake_phrase)
         .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
     let kws_config = KwsConfig::new([&wake_phrase.phrase_id], &wake_phrase.revision, 0.25, 30, 1)
         .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
@@ -1446,25 +1439,18 @@ impl KwsStreamProvider for DesktopWakeKws {
 }
 
 #[cfg(desktop)]
-fn selected_wake_phrase_set(
+fn build_selected_wake_kws_provider(
+    manager: &SpeechPackManager,
     kws_selection: &LocalSpeechAssetSelection,
     phrase: &LocalWakePhraseSelection,
-) -> Result<SherpaKwsPhraseSet, EngineError> {
-    if !kws_selection
-        .pack_id
-        .starts_with("kws:zipformer:gigaspeech")
-        || phrase.language != "en"
-        || phrase.phrase.trim().to_uppercase() != DEFAULT_WAKE_PHRASE_TEXT
-    {
-        return Err(EngineError::TaskUnavailable);
-    }
-    SherpaKwsPhraseSet::new(
+) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+    let phrase_input = SherpaKwsPhraseInput::new(&phrase.phrase_id, &phrase.phrase)
+        .map_err(|_| EngineError::InvalidRequest)?;
+    build_installed_kws_provider_from_phrases(
+        manager,
+        &kws_selection.pack_id,
         &phrase.revision,
-        [SherpaKwsPhrase::new(
-            &phrase.phrase_id,
-            DEFAULT_WAKE_PHRASE_NATIVE_LABEL,
-            DEFAULT_WAKE_PHRASE_SPEC,
-        )?],
+        [phrase_input],
     )
 }
 
@@ -3038,17 +3024,14 @@ mod tests {
             local_speech: local_wake.local_speech().clone(),
         };
         assert!(remote_wake.background_voice_eligible());
-        assert!(selected_wake_phrase_set(
-            local_wake
-                .local_speech()
-                .kws
-                .as_ref()
-                .expect("kws selection"),
-            local_wake
+        assert!(SherpaKwsPhraseInput::new(
+            DEFAULT_WAKE_PHRASE_ID,
+            &local_wake
                 .local_speech()
                 .wake_phrase
                 .as_ref()
-                .expect("wake phrase"),
+                .expect("wake phrase")
+                .phrase,
         )
         .is_ok());
     }
