@@ -24,9 +24,14 @@ use aurora_voice_core::{
     RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
     VoiceCoreError, VoiceRuntime, VoiceState,
 };
+#[cfg(any(
+    test,
+    all(feature = "native-sherpa", feature = "native-sherpa-tts")
+))]
+use aurora_voice_core::EngineError;
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio, FiniteSttPort,
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
     FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TtsSynthesisPort,
     TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
 };
@@ -435,6 +440,10 @@ impl AndroidVoiceSession {
 
     pub fn output(&self) -> AndroidAudioOutput {
         self.output.clone()
+    }
+
+    pub fn clear_ingress(&self) -> bool {
+        self.ingress.clear_pending()
     }
 
     pub fn status(&self) -> AndroidVoiceSessionStatus {
@@ -976,7 +985,7 @@ fn phase_for_state(state: VoiceState) -> AndroidVoiceSessionPhase {
 fn set_active(status: &Arc<Mutex<AndroidVoiceSessionStatus>>, generation: Generation) {
     if let Ok(mut status) = status.lock() {
         status.active = true;
-        status.phase = AndroidVoiceSessionPhase::Starting;
+        status.phase = AndroidVoiceSessionPhase::Idle;
         status.generation = Some(generation);
         status.last_error = None;
     }
@@ -991,6 +1000,7 @@ fn finish_status(
     result: Result<String, VoiceCoreError>,
 ) {
     if let Ok(mut status) = status.lock() {
+        let terminal_phase = status.phase;
         status.active = false;
         status.phase = if result.is_ok() {
             AndroidVoiceSessionPhase::Idle
@@ -1002,7 +1012,11 @@ fn finish_status(
             Ok(_) => status.completed_turns = status.completed_turns.saturating_add(1),
             Err(error) => {
                 status.failed_turns = status.failed_turns.saturating_add(1);
-                status.last_error = Some(error_code(&error).to_owned());
+                let code = error_code(&error, terminal_phase);
+                eprintln!(
+                    "aurora_android_voice_turn_failed phase={terminal_phase:?} reason={code}"
+                );
+                status.last_error = Some(code.to_owned());
             }
         }
     }
@@ -1016,13 +1030,24 @@ fn set_fault(status: &Arc<Mutex<AndroidVoiceSessionStatus>>, code: &str) {
     }
 }
 
-fn error_code(error: &VoiceCoreError) -> &'static str {
+fn error_code(error: &VoiceCoreError, terminal_phase: AndroidVoiceSessionPhase) -> &'static str {
     match error {
         VoiceCoreError::Cancelled => "cancelled",
-        VoiceCoreError::TransportFault { .. } => "transport_fault",
-        VoiceCoreError::Engine(_) => "engine_fault",
-        VoiceCoreError::Backpressure => "backpressure",
-        VoiceCoreError::InvalidTransition => "invalid_transition",
+        VoiceCoreError::TransportFault { .. }
+            if terminal_phase == AndroidVoiceSessionPhase::Speaking =>
+        {
+            "playback_failed"
+        }
+        VoiceCoreError::Engine(_) if terminal_phase == AndroidVoiceSessionPhase::Speaking => {
+            "tts_failed"
+        }
+        VoiceCoreError::TransportFault { .. } => "assistant_unavailable",
+        VoiceCoreError::Engine(_) => "transcription_failed",
+        VoiceCoreError::Backpressure => "audio_overloaded",
+        VoiceCoreError::InvalidTransition => "voice_state_invalid",
+        VoiceCoreError::WakeNotDetected => "wake_not_detected",
+        VoiceCoreError::SpeechNotDetected => "speech_not_detected",
+        VoiceCoreError::SpeechTimeout => "speech_timeout",
         _ => "turn_failed",
     }
 }
@@ -1057,6 +1082,69 @@ mod tests {
         assert_eq!(
             phase_for_state(VoiceState::Faulted),
             AndroidVoiceSessionPhase::Faulted
+        );
+    }
+
+    #[test]
+    fn accepted_start_waits_for_runtime_capture_before_advertising_a_capture_phase() {
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+        let generation = Generation(7);
+
+        set_active(&status, generation);
+
+        let status = status.lock().expect("status");
+        assert!(status.active);
+        assert_eq!(status.phase, AndroidVoiceSessionPhase::Idle);
+        assert_eq!(status.generation, Some(generation));
+    }
+
+    #[test]
+    fn terminal_errors_identify_the_failed_voice_stage() {
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::Engine(EngineError::InvalidRequest),
+                AndroidVoiceSessionPhase::Speaking,
+            ),
+            "tts_failed",
+        );
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::TransportFault {
+                    code: "output-stream-error".to_owned(),
+                },
+                AndroidVoiceSessionPhase::Speaking,
+            ),
+            "playback_failed",
+        );
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::TransportFault {
+                    code: "request_failed".to_owned(),
+                },
+                AndroidVoiceSessionPhase::Processing,
+            ),
+            "assistant_unavailable",
+        );
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::WakeNotDetected,
+                AndroidVoiceSessionPhase::Starting,
+            ),
+            "wake_not_detected",
+        );
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::SpeechNotDetected,
+                AndroidVoiceSessionPhase::Listening,
+            ),
+            "speech_not_detected",
+        );
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::SpeechTimeout,
+                AndroidVoiceSessionPhase::Listening,
+            ),
+            "speech_timeout",
         );
     }
 

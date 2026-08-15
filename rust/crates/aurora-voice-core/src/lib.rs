@@ -21,7 +21,7 @@ pub use aurora_voice_engine::{
     RouteTtsBinding, RouteTtsSynthesisRequest, StreamResetReason, StreamingAudioFrame,
     TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig,
     TtsSynthesisPort, TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
-    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
+    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -981,6 +981,72 @@ struct WakeRuntime {
     config: WakeOrchestrationConfig,
 }
 
+struct WakeSessions {
+    vad: BoundStreamSession,
+    kws: BoundStreamSession,
+}
+
+#[derive(Debug)]
+struct BufferedVadFrame {
+    sequence: u64,
+    samples: Vec<f32>,
+    end_tail: bool,
+}
+
+#[derive(Debug, Default)]
+struct VadFrameBuffer {
+    samples: VecDeque<f32>,
+    next_sequence: Option<u64>,
+    last_source_sequence: Option<u64>,
+}
+
+impl VadFrameBuffer {
+    fn push(&mut self, source_sequence: u64, samples: &[f32]) -> Vec<BufferedVadFrame> {
+        if self.samples.is_empty() {
+            self.next_sequence = Some(
+                self.next_sequence
+                    .map_or(source_sequence, |next| next.max(source_sequence)),
+            );
+        }
+        self.last_source_sequence = Some(source_sequence);
+        self.samples.extend(samples.iter().copied());
+
+        let mut frames = Vec::new();
+        while self.samples.len() >= VAD_WINDOW_SIZE_SAMPLES {
+            let sequence = self.next_sequence.unwrap_or(source_sequence);
+            frames.push(BufferedVadFrame {
+                sequence,
+                samples: self.samples.drain(..VAD_WINDOW_SIZE_SAMPLES).collect(),
+                end_tail: false,
+            });
+            self.next_sequence = Some(sequence.saturating_add(1));
+        }
+        frames
+    }
+
+    fn take_tail(&mut self) -> Option<BufferedVadFrame> {
+        if self.samples.is_empty() {
+            return None;
+        }
+        let sequence = self
+            .next_sequence
+            .unwrap_or_default()
+            .max(self.last_source_sequence.unwrap_or_default());
+        self.next_sequence = Some(sequence.saturating_add(1));
+        Some(BufferedVadFrame {
+            sequence,
+            samples: self.samples.drain(..).collect(),
+            end_tail: true,
+        })
+    }
+
+    fn clear(&mut self) {
+        self.samples.clear();
+        self.next_sequence = None;
+        self.last_source_sequence = None;
+    }
+}
+
 impl WakeRuntime {
     fn new(
         vad: WakeVadProvider,
@@ -1004,6 +1070,42 @@ impl WakeRuntime {
             (Ok(()), Ok(())) => Ok(()),
         }
     }
+
+    async fn push_vad_frame(
+        &mut self,
+        vad_session: &BoundStreamSession,
+        kws_session: &BoundStreamSession,
+        frame: &BufferedVadFrame,
+        cancellation: &CancellationToken,
+    ) -> Result<aurora_voice_engine::VadAcceptResult, EngineError> {
+        let stream_frame = if frame.end_tail {
+            StreamingAudioFrame::end_tail(
+                frame.sequence,
+                VAD_SAMPLE_RATE_HZ,
+                MONO_CHANNELS,
+                &frame.samples,
+                false,
+            )?
+        } else {
+            StreamingAudioFrame::new(
+                frame.sequence,
+                VAD_SAMPLE_RATE_HZ,
+                MONO_CHANNELS,
+                &frame.samples,
+                false,
+            )?
+        };
+        let result = self
+            .vad
+            .push_vad_frame(vad_session, stream_frame, &|| cancellation.is_cancelled())
+            .await?;
+        if result.reset().is_some() {
+            self.kws
+                .reset_kws_session(kws_session, StreamResetReason::NewGeneration)
+                .await?;
+        }
+        Ok(result)
+    }
 }
 
 fn provider_ready_for(provider: &dyn TaskProvider, binding: &TaskPackBinding) -> bool {
@@ -1013,6 +1115,36 @@ fn provider_ready_for(provider: &dyn TaskProvider, binding: &TaskPackBinding) ->
                 && capability.task() == binding.task()
                 && capability.binding() == binding
         })
+}
+
+async fn apply_vad_result<S: RuntimeEventSink>(
+    state: &mut VoiceStateMachine,
+    sink: &mut S,
+    result: &aurora_voice_engine::VadAcceptResult,
+    lease: &VoiceCaptureLease,
+    at: TimestampMicros,
+    speech_started: &mut bool,
+    segmented_samples: &mut Vec<Vec<f32>>,
+) -> Result<bool, VoiceCoreError> {
+    if result.detected() && !*speech_started {
+        *speech_started = true;
+        let transition = state.transition(
+            VoiceState::CapturingUtterance,
+            TransitionReason::SpeechStarted,
+            lease.generation,
+            lease.route_revision,
+            TimestampMicros(at.0.saturating_add(1)),
+        )?;
+        sink.event(RuntimeEvent::State { transition }).await?;
+    }
+    segmented_samples.extend(
+        result
+            .segments()
+            .iter()
+            .filter(|segment| !segment.samples().is_empty())
+            .map(|segment| segment.samples().to_vec()),
+    );
+    Ok(*speech_started && !segmented_samples.is_empty())
 }
 
 pub struct VoiceRuntime<A, E, P, T, O, S> {
@@ -1177,19 +1309,75 @@ where
         }
         let lease = self.leases.request_start(lease)?;
         let mut capture_started = false;
-        let result = match cancellation.check() {
-            Ok(()) => match self.audio.start(lease.clone()).await {
-                Ok(()) => {
-                    capture_started = true;
-                    self.run_wake_turn_after_start(lease.clone(), at, cancellation.clone())
+        let prepared = match cancellation.check() {
+            Ok(()) => self.prepare_wake_sessions(&lease).await,
+            Err(error) => Err(error),
+        };
+        let result = match prepared {
+            Ok(sessions) => match cancellation.check() {
+                Ok(()) => match self.audio.start(lease.clone()).await {
+                    Ok(()) => {
+                        capture_started = true;
+                        self.run_wake_turn_after_start(
+                            lease.clone(),
+                            at,
+                            cancellation.clone(),
+                            sessions,
+                        )
                         .await
-                }
+                    }
+                    Err(error) => Err(error),
+                },
                 Err(error) => Err(error),
             },
             Err(error) => Err(error),
         };
         self.finish_with_cleanup(result, lease, cancellation, capture_started)
             .await
+    }
+
+    async fn prepare_wake_sessions(
+        &mut self,
+        lease: &VoiceCaptureLease,
+    ) -> Result<WakeSessions, VoiceCoreError> {
+        let wake = self.wake.as_mut().ok_or(VoiceCoreError::WakeUnavailable)?;
+        if !wake.ready() {
+            return Err(VoiceCoreError::WakeUnavailable);
+        }
+        wake.config.validate()?;
+        let vad_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::VoiceActivityDetection,
+                language: None,
+                generation: lease.generation.0,
+            },
+            wake.config.vad_binding.clone(),
+        )?;
+        let kws_request = BoundTaskRequest::new(
+            TaskRequest {
+                task: VoiceTask::KeywordSpotting,
+                language: None,
+                generation: lease.generation.0,
+            },
+            wake.config.kws_binding.clone(),
+        )?;
+        wake.vad.warm_task(vad_request.clone()).await?;
+        wake.kws.warm_task(kws_request.clone()).await?;
+        let vad = wake
+            .vad
+            .start_vad_session(BoundVadRequest::new(
+                vad_request,
+                wake.config.vad_config.clone(),
+            )?)
+            .await?;
+        let kws = wake
+            .kws
+            .start_kws_session(BoundKwsRequest::new(
+                kws_request,
+                wake.config.kws_config.clone(),
+            )?)
+            .await?;
+        Ok(WakeSessions { vad, kws })
     }
 
     async fn run_push_to_talk_turn_after_start(
@@ -1228,6 +1416,7 @@ where
         lease: VoiceCaptureLease,
         at: TimestampMicros,
         cancellation: CancellationToken,
+        sessions: WakeSessions,
     ) -> Result<String, VoiceCoreError> {
         cancellation.check()?;
         self.ensure_idle(lease.generation, lease.route_revision, at)
@@ -1247,6 +1436,7 @@ where
                 &lease,
                 TimestampMicros(at.0.saturating_add(2)),
                 &cancellation,
+                sessions,
             )
             .await?;
         cancellation.check()?;
@@ -1264,52 +1454,21 @@ where
         lease: &VoiceCaptureLease,
         at: TimestampMicros,
         cancellation: &CancellationToken,
+        sessions: WakeSessions,
     ) -> Result<Vec<Vec<f32>>, VoiceCoreError> {
         let wake = self.wake.as_mut().ok_or(VoiceCoreError::WakeUnavailable)?;
-        if !wake.ready() {
-            return Err(VoiceCoreError::WakeUnavailable);
-        }
-        wake.config.validate()?;
-        let vad_request = BoundTaskRequest::new(
-            TaskRequest {
-                task: VoiceTask::VoiceActivityDetection,
-                language: None,
-                generation: lease.generation.0,
-            },
-            wake.config.vad_binding.clone(),
-        )?;
-        let kws_request = BoundTaskRequest::new(
-            TaskRequest {
-                task: VoiceTask::KeywordSpotting,
-                language: None,
-                generation: lease.generation.0,
-            },
-            wake.config.kws_binding.clone(),
-        )?;
-        wake.vad.warm_task(vad_request.clone()).await?;
-        wake.kws.warm_task(kws_request.clone()).await?;
-        let vad_session = wake
-            .vad
-            .start_vad_session(BoundVadRequest::new(
-                vad_request,
-                wake.config.vad_config.clone(),
-            )?)
-            .await?;
-        let kws_session = wake
-            .kws
-            .start_kws_session(BoundKwsRequest::new(
-                kws_request,
-                wake.config.kws_config.clone(),
-            )?)
-            .await?;
+        let vad_session = sessions.vad;
+        let kws_session = sessions.kws;
 
         let mut wake_frames = 0_u64;
         let mut utterance_frames = 0_u64;
         let mut wake_detected = false;
         let mut speech_started = false;
         let mut segmented_samples = Vec::<Vec<f32>>::new();
+        let mut vad_frames = VadFrameBuffer::default();
+        let mut utterance_timed_out = false;
 
-        loop {
+        'capture: loop {
             cancellation.check()?;
             let Some(frame) = self.audio.next_frame().await? else {
                 break;
@@ -1317,7 +1476,7 @@ where
             if frame.generation() != lease.generation {
                 continue;
             }
-            if frame.route_revision() != lease.route_revision || frame.discontinuity() {
+            if frame.route_revision() != lease.route_revision {
                 Self::finish_wake_sessions(
                     wake,
                     &vad_session,
@@ -1328,6 +1487,32 @@ where
                 .await?;
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
+            }
+            if frame.discontinuity() {
+                if wake_detected {
+                    Self::finish_wake_sessions(
+                        wake,
+                        &vad_session,
+                        &kws_session,
+                        lease.generation,
+                        StreamResetReason::Discontinuity,
+                    )
+                    .await?;
+                    return Err(VoiceCoreError::SpeechNotDetected);
+                }
+                Self::reset_wake_sessions(
+                    wake,
+                    &vad_session,
+                    &kws_session,
+                    StreamResetReason::Discontinuity,
+                )
+                .await?;
+                wake_frames = 0;
+                utterance_frames = 0;
+                speech_started = false;
+                segmented_samples.clear();
+                vad_frames.clear();
+                continue;
             }
 
             let stream_frame = StreamingAudioFrame::new(
@@ -1371,54 +1556,53 @@ where
                     at,
                 )?;
                 self.sink.event(RuntimeEvent::State { transition }).await?;
+                // The matching KWS frame still contains the wake phrase. Keep it
+                // out of VAD so STT receives only the user's post-wake utterance.
+                continue;
             }
 
             utterance_frames = utterance_frames.saturating_add(1);
             if utterance_frames > wake.config.max_utterance_frames {
-                let flushed = wake
-                    .vad
-                    .flush_vad_session(&vad_session, &|| cancellation.is_cancelled())
+                utterance_timed_out = true;
+                break;
+            }
+            for vad_frame in vad_frames.push(frame.sequence(), frame.samples()) {
+                let vad_result = wake
+                    .push_vad_frame(&vad_session, &kws_session, &vad_frame, cancellation)
                     .await?;
-                Self::push_segments(&mut segmented_samples, &flushed);
-                Self::finish_wake_sessions(
-                    wake,
-                    &vad_session,
-                    &kws_session,
-                    lease.generation,
-                    StreamResetReason::Manual,
+                if apply_vad_result(
+                    &mut self.state,
+                    &mut self.sink,
+                    &vad_result,
+                    lease,
+                    at,
+                    &mut speech_started,
+                    &mut segmented_samples,
                 )
-                .await?;
-                if segmented_samples.is_empty() {
-                    return Err(VoiceCoreError::SpeechTimeout);
+                .await?
+                {
+                    break 'capture;
                 }
-                break;
-            }
-            let vad_result = wake
-                .vad
-                .push_vad_frame(&vad_session, stream_frame, &|| cancellation.is_cancelled())
-                .await?;
-            if vad_result.reset().is_some() {
-                wake.kws
-                    .reset_kws_session(&kws_session, StreamResetReason::NewGeneration)
-                    .await?;
-            }
-            if vad_result.detected() && !speech_started {
-                speech_started = true;
-                let transition = self.state.transition(
-                    VoiceState::CapturingUtterance,
-                    TransitionReason::SpeechStarted,
-                    lease.generation,
-                    lease.route_revision,
-                    TimestampMicros(at.0.saturating_add(1)),
-                )?;
-                self.sink.event(RuntimeEvent::State { transition }).await?;
-            }
-            Self::push_segments(&mut segmented_samples, vad_result.segments());
-            if speech_started && !segmented_samples.is_empty() {
-                break;
             }
         }
 
+        if wake_detected && segmented_samples.is_empty() {
+            if let Some(tail) = vad_frames.take_tail() {
+                let vad_result = wake
+                    .push_vad_frame(&vad_session, &kws_session, &tail, cancellation)
+                    .await?;
+                apply_vad_result(
+                    &mut self.state,
+                    &mut self.sink,
+                    &vad_result,
+                    lease,
+                    at,
+                    &mut speech_started,
+                    &mut segmented_samples,
+                )
+                .await?;
+            }
+        }
         if wake_detected && speech_started && segmented_samples.is_empty() {
             let flushed = wake
                 .vad
@@ -1438,7 +1622,11 @@ where
             return Err(VoiceCoreError::WakeNotDetected);
         }
         if !speech_started || segmented_samples.is_empty() {
-            return Err(VoiceCoreError::SpeechNotDetected);
+            return Err(if utterance_timed_out {
+                VoiceCoreError::SpeechTimeout
+            } else {
+                VoiceCoreError::SpeechNotDetected
+            });
         }
         Ok(segmented_samples)
     }
@@ -2017,6 +2205,22 @@ mod tests {
         )
     }
 
+    fn frame_with_samples_and_discontinuity(
+        sequence: u64,
+        generation: Generation,
+        samples: Vec<f32>,
+        discontinuity: bool,
+    ) -> Result<PcmFrame, VoiceCoreError> {
+        PcmFrame::new(
+            samples,
+            TimestampMicros(sequence),
+            sequence,
+            discontinuity,
+            RouteRevision(1),
+            generation,
+        )
+    }
+
     struct AcceptingVerifier;
 
     impl SignatureVerifier for AcceptingVerifier {
@@ -2187,6 +2391,7 @@ mod tests {
     struct FakeAudioInput {
         frames: Rc<RefCell<VecDeque<PcmFrame>>>,
         stopped: Rc<RefCell<Vec<TransitionReason>>>,
+        preparation_events: Arc<Mutex<Vec<&'static str>>>,
     }
 
     impl FakeAudioInput {
@@ -2194,6 +2399,7 @@ mod tests {
             Self {
                 frames: Rc::new(RefCell::new(frames.into())),
                 stopped: Rc::new(RefCell::new(Vec::new())),
+                preparation_events: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -2204,11 +2410,19 @@ mod tests {
         fn push_frame(&self, frame: PcmFrame) {
             self.frames.borrow_mut().push_back(frame);
         }
+
+        fn preparation_events(&self) -> Arc<Mutex<Vec<&'static str>>> {
+            Arc::clone(&self.preparation_events)
+        }
     }
 
     #[async_trait(?Send)]
     impl AudioInput for FakeAudioInput {
         async fn start(&mut self, _lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            self.preparation_events
+                .lock()
+                .map_err(|_| VoiceCoreError::LockPoisoned)?
+                .push("audio.start");
             Ok(())
         }
 
@@ -2256,7 +2470,7 @@ mod tests {
                 "route.stt.fake",
                 FiniteSttRouteScope::LoopbackSidecar,
                 VAD_SAMPLE_RATE_HZ,
-                10,
+                VAD_SAMPLE_RATE_HZ as usize * 10,
                 1,
             )?))
         }
@@ -2439,6 +2653,8 @@ mod tests {
         kws_cancelled: Arc<Mutex<Vec<u64>>>,
         vad_resets: Arc<Mutex<Vec<StreamResetReason>>>,
         kws_resets: Arc<Mutex<Vec<StreamResetReason>>>,
+        preparation_events: Arc<Mutex<Vec<&'static str>>>,
+        vad_frames: Arc<Mutex<Vec<(u64, usize, bool)>>>,
         fail_vad_cancel: Arc<Mutex<bool>>,
         fail_kws_cancel: Arc<Mutex<bool>>,
         fail_vad_reset: Arc<Mutex<bool>>,
@@ -2457,6 +2673,34 @@ mod tests {
             self.kws_cancelled
                 .lock()
                 .expect("KWS cancellation handle should not be poisoned")
+                .clone()
+        }
+
+        fn vad_resets(&self) -> Vec<StreamResetReason> {
+            self.vad_resets
+                .lock()
+                .expect("VAD reset handle should not be poisoned")
+                .clone()
+        }
+
+        fn kws_resets(&self) -> Vec<StreamResetReason> {
+            self.kws_resets
+                .lock()
+                .expect("KWS reset handle should not be poisoned")
+                .clone()
+        }
+
+        fn preparation_events(&self) -> Vec<&'static str> {
+            self.preparation_events
+                .lock()
+                .expect("preparation event handle should not be poisoned")
+                .clone()
+        }
+
+        fn vad_frames(&self) -> Vec<(u64, usize, bool)> {
+            self.vad_frames
+                .lock()
+                .expect("VAD frame handle should not be poisoned")
                 .clone()
         }
 
@@ -2513,6 +2757,13 @@ mod tests {
 
         async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
             if request.binding() == &self.binding {
+                self.handles
+                    .preparation_events
+                    .lock()
+                    .map_err(|_| EngineError::ProviderFault {
+                        code: EngineFaultCode::Provider,
+                    })?
+                    .push("kws.warm");
                 Ok(())
             } else {
                 Err(EngineError::TaskUnavailable)
@@ -2553,6 +2804,13 @@ mod tests {
             &mut self,
             request: BoundKwsRequest,
         ) -> Result<BoundStreamSession, EngineError> {
+            self.handles
+                .preparation_events
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push("kws.start");
             BoundStreamSession::new(aurora_voice_engine::StreamSessionId(1), request.request())
         }
 
@@ -2652,6 +2910,13 @@ mod tests {
 
         async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
             if request.binding() == &self.binding {
+                self.handles
+                    .preparation_events
+                    .lock()
+                    .map_err(|_| EngineError::ProviderFault {
+                        code: EngineFaultCode::Provider,
+                    })?
+                    .push("vad.warm");
                 Ok(())
             } else {
                 Err(EngineError::TaskUnavailable)
@@ -2692,6 +2957,13 @@ mod tests {
             &mut self,
             request: BoundVadRequest,
         ) -> Result<BoundStreamSession, EngineError> {
+            self.handles
+                .preparation_events
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push("vad.start");
             BoundStreamSession::new(aurora_voice_engine::StreamSessionId(2), request.request())
         }
 
@@ -2701,6 +2973,13 @@ mod tests {
             frame: StreamingAudioFrame<'_>,
             _cancellation: &dyn Fn() -> bool,
         ) -> Result<aurora_voice_engine::VadAcceptResult, EngineError> {
+            self.handles
+                .vad_frames
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?
+                .push((frame.sequence(), frame.samples().len(), frame.is_end_tail()));
             let detected = self.speech_sequences.contains(&frame.sequence());
             let segments = if self.segment_sequences.contains(&frame.sequence()) {
                 vec![aurora_voice_engine::SpeechSegment::new(
@@ -3078,7 +3357,10 @@ mod tests {
         let vad_binding = test_task_binding(VoiceTask::VoiceActivityDetection, PackTask::Vad);
         let kws_binding = test_task_binding(VoiceTask::KeywordSpotting, PackTask::Kws);
         let engine = FakeEngine::new("wake transcript");
-        let handles = FakeWakeProviderHandles::default();
+        let handles = FakeWakeProviderHandles {
+            preparation_events: audio.preparation_events(),
+            ..FakeWakeProviderHandles::default()
+        };
         let runtime = VoiceRuntime::new(
             audio,
             engine.clone(),
@@ -3224,8 +3506,8 @@ mod tests {
     async fn wake_turn_transcribes_only_vad_segmented_utterance() -> Result<(), VoiceCoreError> {
         let frames = vec![
             frame_with_samples(1, Generation(1), vec![0.1])?,
-            frame_with_samples(2, Generation(1), vec![0.2, 0.3])?,
-            frame_with_samples(3, Generation(1), vec![0.4, 0.5])?,
+            frame_with_samples(2, Generation(1), vec![0.2; VAD_WINDOW_SIZE_SAMPLES])?,
+            frame_with_samples(3, Generation(1), vec![0.4; VAD_WINDOW_SIZE_SAMPLES])?,
         ];
         let (mut runtime, engine) = runtime_with_wake(frames, [1], [2, 3], [3], 4, 4)?;
 
@@ -3238,13 +3520,140 @@ mod tests {
             .await?;
         assert_eq!(response, "wake answer");
         assert_eq!(runtime.state(), VoiceState::Idle);
-        assert_eq!(engine.transcribed_audio(), vec![vec![0.4, 0.5]]);
+        assert_eq!(
+            engine.transcribed_audio(),
+            vec![vec![0.4; VAD_WINDOW_SIZE_SAMPLES]]
+        );
         let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
         let transitions = observed_states(&sink);
         assert!(transitions.contains(&VoiceState::ListeningForWake));
         assert!(transitions.contains(&VoiceState::WakeDetected));
         assert!(transitions.contains(&VoiceState::CapturingUtterance));
         assert!(transitions.contains(&VoiceState::Transcribing));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_excludes_keyword_detection_frame_from_utterance(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, engine) = runtime_with_wake(frames, [1], [1, 2], [1, 2], 4, 4)?;
+
+        runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(40)),
+                TimestampMicros(40),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(engine.transcribed_audio(), vec![vec![0.2]]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_turn_reframes_android_chunks_for_exact_vad_windows() -> Result<(), VoiceCoreError>
+    {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1; 1_600])?,
+            frame_with_samples(2, Generation(1), vec![0.2; 1_600])?,
+        ];
+        let (mut runtime, _engine, handles) =
+            runtime_with_wake_handles(frames, [1], [5], [5], 4, 4)?;
+
+        runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(40)),
+                TimestampMicros(40),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(
+            handles.vad_frames(),
+            vec![
+                (2, 512, false),
+                (3, 512, false),
+                (4, 512, false),
+                (5, 64, true),
+            ]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn background_wake_prepares_providers_before_audio_capture_starts(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, _engine, handles) =
+            runtime_with_wake_handles(frames, [1], [2], [2], 4, 4)?;
+
+        runtime
+            .run_background_turn(
+                VoiceCaptureLease {
+                    background_eligible: true,
+                    ..default_test_lease(CaptureOwnerKind::Native, TimestampMicros(41))
+                },
+                TimestampMicros(41),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        let events = handles.preparation_events();
+        let audio_start = events
+            .iter()
+            .position(|event| *event == "audio.start")
+            .expect("audio capture should start");
+        for required in ["vad.warm", "kws.warm", "vad.start", "kws.start"] {
+            let provider_event = events
+                .iter()
+                .position(|event| *event == required)
+                .unwrap_or_else(|| panic!("missing provider preparation event: {required}"));
+            assert!(
+                provider_event < audio_start,
+                "{required} must happen before audio capture starts"
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn background_wake_recovers_from_same_route_discontinuity_before_wake(
+    ) -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples_and_discontinuity(1, Generation(1), vec![0.1], true)?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+            frame_with_samples(3, Generation(1), vec![0.3])?,
+        ];
+        let (mut runtime, engine, handles) =
+            runtime_with_wake_handles(frames, [2], [3], [3], 4, 4)?;
+
+        let response = runtime
+            .run_background_turn(
+                VoiceCaptureLease {
+                    background_eligible: true,
+                    ..default_test_lease(CaptureOwnerKind::Native, TimestampMicros(42))
+                },
+                TimestampMicros(42),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(response, "wake answer");
+        assert_eq!(engine.transcribed_audio(), vec![vec![0.3]]);
+        assert!(handles
+            .vad_resets()
+            .contains(&StreamResetReason::Discontinuity));
+        assert!(handles
+            .kws_resets()
+            .contains(&StreamResetReason::Discontinuity));
+        assert_eq!(runtime.state(), VoiceState::Idle);
         Ok(())
     }
 

@@ -10,8 +10,10 @@ use jni::objects::{JClass, JFloatArray, JShortArray, JString};
 use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray, jstring};
 use jni::JNIEnv;
 use serde_json::json;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 use url::Url;
 
@@ -80,10 +82,23 @@ fn float_vec_from_jni(env: &mut JNIEnv<'_>, value: JFloatArray<'_>) -> Option<Ve
     Some(samples)
 }
 
-fn manager_from_root(root: String) -> Option<SpeechPackManager> {
-    SpeechPackManagerConfig::new(PathBuf::from(root), None)
-        .ok()
-        .and_then(|config| SpeechPackManager::open(config).ok())
+fn manager_from_root(root: String) -> Option<Arc<SpeechPackManager>> {
+    static MANAGERS: OnceLock<Mutex<HashMap<PathBuf, Arc<SpeechPackManager>>>> = OnceLock::new();
+
+    let root = PathBuf::from(root);
+    let managers = MANAGERS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut managers = managers.lock().ok()?;
+    if let Some(manager) = managers.get(&root) {
+        return Some(Arc::clone(manager));
+    }
+
+    // Opening a manager performs stale-install recovery. Android polls catalog
+    // state while a download is active, so reopening here would mistake the
+    // live extraction directory for stale work and delete it mid-install.
+    let config = SpeechPackManagerConfig::new(root.clone(), None).ok()?;
+    let manager = Arc::new(SpeechPackManager::open(config).ok()?);
+    managers.insert(root, Arc::clone(&manager));
+    Some(manager)
 }
 
 fn speech_catalog_task(task: &str) -> Option<SpeechCatalogTask> {
@@ -168,18 +183,27 @@ fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
     };
     runtime.block_on(async move {
         let cancellation = CancellationToken::new();
-        if task == "tts" || task == "text-to-speech" {
+        let result = if task == "tts" || task == "text-to-speech" {
             manager
                 .install_voice(&pack_id, &cancellation, |_| {})
                 .await
-                .is_ok()
+                .map(|_| ())
         } else if speech_catalog_task(&task).is_some() {
             manager
                 .install_model(&pack_id, &cancellation, |_| {})
                 .await
-                .is_ok()
+                .map(|_| ())
         } else {
-            false
+            return false;
+        };
+        match result {
+            Ok(()) => true,
+            Err(error) => {
+                // SpeechPackError messages are deliberately sanitized and never
+                // contain source URLs, local paths, headers, or downloaded bytes.
+                eprintln!("aurora_android_voice_pack_install_failed reason={error}");
+                false
+            }
         }
     })
 }
@@ -193,6 +217,11 @@ fn resolve_pack_blocking(root: String, pack_id: String, task: String) -> bool {
     } else {
         speech_catalog_task(&task).is_some() && manager.resolve_model_bindings(&pack_id).is_ok()
     }
+}
+
+fn installed_pack_ids_json(root: String) -> Option<String> {
+    let manager = manager_from_root(root)?;
+    serde_json::to_string(&manager.recorded_pack_ids().ok()?).ok()
 }
 
 fn remove_pack_blocking(root: String, pack_id: String, task: String) -> bool {
@@ -288,6 +317,23 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPack
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeInstalledPackIdsJson(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    root: JString<'_>,
+) -> jstring {
+    let Some(root) = string_from_jni(&mut env, root) else {
+        return ptr::null_mut();
+    };
+    let Some(pack_ids) = installed_pack_ids_json(root) else {
+        return ptr::null_mut();
+    };
+    env.new_string(pack_ids)
+        .map(|value| value.into_raw())
+        .unwrap_or_else(|_| ptr::null_mut())
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeCreate(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
@@ -326,23 +372,12 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
     if env.get_short_array_region(&samples, 0, &mut pcm).is_err() {
         return AUDIO_INVALID_ARGUMENT;
     }
-    match state.push(&pcm, sequence.max(0) as u64) {
+    match state.push_latest(&pcm, sequence.max(0) as u64) {
         AndroidPcmPushResult::Accepted => AUDIO_OK,
         AndroidPcmPushResult::Backpressure => AUDIO_BACKPRESSURE,
         AndroidPcmPushResult::Closed => AUDIO_CLOSED,
         AndroidPcmPushResult::InvalidArgument => AUDIO_INVALID_ARGUMENT,
     }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridge_nativeDrainOne(
-    _env: JNIEnv<'_>,
-    _class: JClass<'_>,
-    handle: jlong,
-) -> jint {
-    state_from_handle(handle)
-        .map(|state| state.drain_one() as jint)
-        .unwrap_or(0)
 }
 
 #[no_mangle]
@@ -694,11 +729,27 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     if env.get_short_array_region(&samples, 0, &mut pcm).is_err() {
         return AUDIO_INVALID_ARGUMENT;
     }
-    match session.ingress().push(&pcm, sequence.max(0) as u64) {
+    match session.ingress().push_latest(&pcm, sequence.max(0) as u64) {
         AndroidPcmPushResult::Accepted => AUDIO_OK,
         AndroidPcmPushResult::Backpressure => AUDIO_BACKPRESSURE,
         AndroidPcmPushResult::Closed => AUDIO_CLOSED,
         AndroidPcmPushResult::InvalidArgument => AUDIO_INVALID_ARGUMENT,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeClearIngress(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jint {
+    let Some(session) = session_from_handle(handle) else {
+        return AUDIO_INVALID_ARGUMENT;
+    };
+    if session.clear_ingress() {
+        AUDIO_OK
+    } else {
+        AUDIO_CLOSED
     }
 }
 
@@ -761,6 +812,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         status.completed_turns as jlong,
         status.failed_turns as jlong,
         session.output().queued_chunks() as jlong,
+        android_voice_error_code(status.last_error.as_deref()),
     ];
     let Ok(array) = env.new_long_array(values.len() as jint) else {
         return ptr::null_mut();
@@ -769,6 +821,23 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return ptr::null_mut();
     }
     array.into_raw()
+}
+
+fn android_voice_error_code(code: Option<&str>) -> jlong {
+    match code {
+        None => 0,
+        Some("cancelled") => 1,
+        Some("assistant_unavailable") => 2,
+        Some("transcription_failed") => 3,
+        Some("tts_failed") => 4,
+        Some("playback_failed") => 5,
+        Some("audio_overloaded") => 6,
+        Some("voice_state_invalid") => 7,
+        Some("wake_not_detected") => 8,
+        Some("speech_not_detected") => 9,
+        Some("speech_timeout") => 10,
+        Some(_) => 11,
+    }
 }
 
 #[no_mangle]

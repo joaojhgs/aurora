@@ -673,6 +673,26 @@ if (argv[0] === 'build:frontend:android-client') {
       ),
     ).toBe(true)
 
+    writeFileSync(
+      join(x86_64NativeLibDir, 'libsherpa-onnx-c-api.so'),
+      'TTS is not enabled. Please rebuild sherpa-onnx\n',
+    )
+    const ttsDisabledResult = spawnSync(process.execPath, [syncNativePlugin], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64,x86_64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+      },
+    })
+    expect(ttsDisabledResult.status).not.toBe(0)
+    expect(ttsDisabledResult.stderr).toContain(
+      'SHERPA_ONNX_ENABLE_TTS=ON',
+    )
+
     const preflightResult = spawnSync(
       process.execPath,
       [androidPreflight, '--require-android-project'],

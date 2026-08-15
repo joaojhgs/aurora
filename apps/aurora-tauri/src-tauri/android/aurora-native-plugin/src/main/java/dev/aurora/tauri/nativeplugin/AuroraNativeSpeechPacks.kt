@@ -3,6 +3,7 @@ package dev.aurora.tauri.nativeplugin
 import android.content.Context
 import java.io.File
 import java.util.Locale
+import org.json.JSONArray
 
 internal const val AURORA_SPEECH_PACK_STORE_DIR = "aurora_speech_packs"
 internal const val AURORA_SPEECH_PACK_PREFS = "aurora_voice_pack_cache"
@@ -87,10 +88,20 @@ internal object AuroraNativeSpeechPackBridge {
     fun embeddedCatalogJson(): String =
         nativeEmbeddedCatalogJson()
 
+    fun installedPackIds(context: Context): Set<String> {
+        val entries = JSONArray(nativeInstalledPackIdsJson(auroraSpeechPackStoreRoot(context).path))
+        val packIds = mutableSetOf<String>()
+        for (index in 0 until entries.length()) {
+            entries.optString(index).trim().takeIf { it.isNotEmpty() }?.let(packIds::add)
+        }
+        return packIds
+    }
+
     private external fun nativeInstall(root: String, packId: String, task: String): Boolean
     private external fun nativeResolve(root: String, packId: String, task: String): Boolean
     private external fun nativeRemove(root: String, packId: String, task: String): Boolean
     private external fun nativeEmbeddedCatalogJson(): String
+    private external fun nativeInstalledPackIdsJson(root: String): String
 
     init {
         System.loadLibrary("aurora_tauri_lib")

@@ -40,6 +40,9 @@ const requiredNativeSpeechLibraries = [
   'libonnxruntime.so',
   'libsherpa-onnx-c-api.so',
 ]
+const sherpaTtsDisabledMarker = Buffer.from(
+  'TTS is not enabled. Please rebuild sherpa-onnx',
+)
 
 if (!existsSync(appManifestPath)) {
   throw new Error('Tauri Android project is missing. Run android:init before installing the Aurora native plugin.')
@@ -219,6 +222,7 @@ function syncNativeSpeechLibraries() {
       if (!existsSync(source)) {
         throw new Error(`${spec.libDirEnv} is missing ${library}: ${sourceDir}`)
       }
+      assertNativeSpeechLibraryCapabilities(source, library, spec.abi)
       cpSync(source, join(destinationDir, library), { force: true })
     }
     staged.push(spec.abi)
@@ -227,6 +231,18 @@ function syncNativeSpeechLibraries() {
   console.log(
     `Staged Android native speech runtime libraries for ${staged.join(', ')}.`,
   )
+}
+
+function assertNativeSpeechLibraryCapabilities(path, library, abi) {
+  if (library !== 'libsherpa-onnx-c-api.so') return
+
+  // sherpa-onnx keeps its disabled TTS constructor as an exported stub. Symbol
+  // checks therefore pass even when the native runtime cannot create Piper TTS.
+  if (readFileSync(path).includes(sherpaTtsDisabledMarker)) {
+    throw new Error(
+      `Android native speech runtime for ${abi} was built without TTS; rebuild sherpa-onnx with SHERPA_ONNX_ENABLE_TTS=ON`,
+    )
+  }
 }
 
 function patchFile(path, patch) {

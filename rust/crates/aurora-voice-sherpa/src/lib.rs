@@ -4762,7 +4762,7 @@ mod tests {
         let wav = read_pcm16_mono_wav(&phase4_wav_path("AURORA_SHERPA_ONNX_TEST_WAV", KWS_MODEL));
         assert_eq!(wav.sample_rate, VAD_SAMPLE_RATE_HZ);
         let mut detected = false;
-        for chunk in wav.pcm.chunks(1600) {
+        for chunk in wav.pcm.chunks(VAD_WINDOW_SIZE_SAMPLES) {
             let frame =
                 StreamingAudioFrame::new(1, VAD_SAMPLE_RATE_HZ, MONO_CHANNELS, chunk, false)
                     .expect("frame");

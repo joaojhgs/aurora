@@ -47,15 +47,22 @@ function parseStatus(
   const nested = isRecord(record.status) ? record.status : record;
   const running = nested.running === true;
   const captureActive = nested.captureActive === true;
-  const reasonCode = typeof nested.captureError === "string"
+  const backgroundSessionActive = nested.backgroundSessionActive === true;
+  const captureError = typeof nested.captureError === "string" && nested.captureError.trim()
     ? nested.captureError
+    : null;
+  const reasonCode = captureError
+    ? captureError
     : typeof nested.reason === "string"
       ? nested.reason
       : null;
+  const faulted = captureError !== null
+    || nested.runtimePhase === "faulted"
+    || nested.state === "faulted";
   const available = (options.background ? nested.backgroundStartable === true : nested.startable === true) || running;
   const phase: NativeMobileVoicePhase = !available
     ? "unavailable"
-    : reasonCode && !running
+    : faulted
       ? "faulted"
       : captureActive
         ? "listening"
@@ -67,7 +74,7 @@ function parseStatus(
     phase,
     running,
     captureActive,
-    backgroundActive: options.background === true && running,
+    backgroundActive: options.background === true && backgroundSessionActive,
     reasonCode,
     redacted: true,
   };

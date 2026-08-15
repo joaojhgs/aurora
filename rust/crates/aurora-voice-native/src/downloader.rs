@@ -356,6 +356,10 @@ async fn client_for_pinned_url(
         .ok_or(DownloadError::UnsafeSource)?;
     let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
     reqwest::Client::builder()
+        // A proxy would bypass the DNS-pinned destination policy below. It also
+        // makes client construction depend on untrusted process proxy variables,
+        // which is unsafe on the bounded JNI worker stack used by Android.
+        .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .resolve_to_addrs(host, &pinned)
         .build()

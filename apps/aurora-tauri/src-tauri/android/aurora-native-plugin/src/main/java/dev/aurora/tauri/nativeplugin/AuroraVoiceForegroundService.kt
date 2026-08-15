@@ -25,15 +25,19 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
-import java.io.File
-import java.io.FileInputStream
 import java.net.URI
-import org.json.JSONObject
 import java.security.KeyStore
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONObject
 
 private const val AURORA_VOICE_CHANNEL_ID = "aurora_voice_capture"
 private const val AURORA_VOICE_NOTIFICATION_ID = 4203
@@ -41,12 +45,15 @@ private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
 private const val MAX_CHUNK_SAMPLES = 4_096
+private const val VOICE_CAPTURE_FRAME_SAMPLES = SAMPLE_RATE_HZ / 10
 private const val VOICE_STATS_RUNTIME_ACTIVE_INDEX = 5
 private const val VOICE_STATS_RUNTIME_PHASE_INDEX = 6
 private const val VOICE_STATS_SESSION_GENERATION_INDEX = 7
 private const val VOICE_STATS_COMPLETED_TURNS_INDEX = 8
 private const val VOICE_STATS_FAILED_TURNS_INDEX = 9
 private const val VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX = 10
+private const val VOICE_STATS_LAST_ERROR_INDEX = 11
+private const val VOICE_RUNTIME_INIT_STACK_SIZE_BYTES = 16L * 1024L * 1024L
 private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION
 private const val VOICE_SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val VOICE_SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
@@ -62,8 +69,6 @@ private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
 private const val VOICE_PACK_CATALOG_KEY = "catalog"
-private const val VOICE_PACK_ACTIVE_ID_KEY = "active_voice_pack_id"
-private const val VOICE_PACK_CACHE_DIR = "aurora_voice_packs"
 private val voicePackCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
 private const val VOICE_PACK_MIN_BYTES = 4L * 1024L
 private const val VOICE_PACK_SHA256_HEX_LENGTH = 64
@@ -198,7 +203,6 @@ object AuroraVoiceNativeConfigStore {
 
 private interface AuroraPcmIngressBridge : AutoCloseable {
     fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int
-    fun drainOne(): Int
     fun stats(): LongArray
 }
 
@@ -235,6 +239,37 @@ private fun auroraVoiceRuntimePhase(value: Long): String = when (value) {
     else -> "unknown"
 }
 
+private fun auroraVoiceRuntimeError(value: Long): String? = when (value) {
+    0L -> null
+    1L -> "cancelled"
+    2L -> "assistant_unavailable"
+    3L -> "transcription_failed"
+    4L -> "tts_failed"
+    5L -> "playback_failed"
+    6L -> "audio_overloaded"
+    7L -> "voice_state_invalid"
+    8L -> "wake_not_detected"
+    9L -> "speech_not_detected"
+    10L -> "speech_timeout"
+    else -> "turn_failed"
+}
+
+private fun isRecoverableBackgroundTurn(errorCode: String?): Boolean = when (errorCode) {
+    null,
+    "wake_not_detected",
+    "speech_not_detected",
+    "speech_timeout" -> true
+    else -> false
+}
+
+private fun voiceRuntimeAcceptsMicrophoneInput(stats: LongArray): Boolean {
+    if (stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0L } == 0L) return false
+    return when (stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0L }) {
+        1L, 2L -> true
+        else -> false
+    }
+}
+
 /** JNI handle for the bounded Rust-owned PCM ingress queue. */
 private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
     private var handle: Long = nativeCreate(QUEUE_CAPACITY_CHUNKS, MAX_CHUNK_SAMPLES)
@@ -245,11 +280,6 @@ private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
         return nativePushPcm(current, samples, sampleCount, sequence)
     }
 
-    override fun drainOne(): Int {
-        val current = handle
-        return if (current == 0L) 0 else nativeDrainOne(current)
-    }
-
     fun drainPcm(): ShortArray {
         val current = handle
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
@@ -257,7 +287,7 @@ private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
 
     override fun stats(): LongArray {
         val current = handle
-        return if (current == 0L) LongArray(6) { 0 } else nativeStats(current)
+        return if (current == 0L) LongArray(12) { 0 } else nativeStats(current)
     }
 
     override fun close() {
@@ -271,7 +301,6 @@ private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
 
     private external fun nativeCreate(capacityChunks: Int, maxChunkSamples: Int): Long
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
-    private external fun nativeDrainOne(handle: Long): Int
     private external fun nativeDrainPcm(handle: Long): ShortArray
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
@@ -392,6 +421,11 @@ private class AuroraNativeVoiceSessionBridge(
         return nativePushPcm(current, samples, sampleCount, sequence)
     }
 
+    fun clearIngress(): Boolean {
+        val current = handle
+        return current != 0L && nativeClearIngress(current) == 0
+    }
+
     override fun drainPcm(): ShortArray {
         val current = handle
         return if (current == 0L) ShortArray(0) else nativeDrainPcm(current)
@@ -406,8 +440,6 @@ private class AuroraNativeVoiceSessionBridge(
         val current = handle
         return if (current == 0L) LongArray(11) else nativeStats(current)
     }
-
-    override fun drainOne(): Int = drainPcm().size
 
     override fun close() {
         val current = handle
@@ -441,6 +473,7 @@ private class AuroraNativeVoiceSessionBridge(
     private external fun nativeFinish(handle: Long, generation: Long): Int
     private external fun nativeCancel(handle: Long, generation: Long): Int
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
+    private external fun nativeClearIngress(handle: Long): Int
     private external fun nativeDrainPcm(handle: Long): ShortArray
     private external fun nativeAcknowledgeDrained(handle: Long)
     private external fun nativeStats(handle: Long): LongArray
@@ -554,7 +587,7 @@ private class AuroraAudioCapture(
             return false
         }
         return try {
-            val frameCapacity = minOf(MAX_CHUNK_SAMPLES, maxOf(minimumBuffer / 2, SAMPLE_RATE_HZ / 10))
+            val frameCapacity = VOICE_CAPTURE_FRAME_SAMPLES
             val byteCapacity = maxOf(minimumBuffer, frameCapacity * 2)
             recorder = AudioRecord.Builder()
                 .setAudioSource(AUDIO_SOURCE)
@@ -590,11 +623,27 @@ private class AuroraAudioCapture(
                 val read = currentRecorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
                 when {
                     read > 0 -> {
-                        val result = bridge.pushPcm(buffer, read, sequence++)
-                        if (result == 1) bridge.drainOne()
-                        if (result == 2) {
-                            fail("audio_queue_closed")
-                            break
+                        val runtimeStats = bridge.stats()
+                        if (!voiceRuntimeAcceptsMicrophoneInput(runtimeStats)) {
+                            publishSnapshot(runtimeStats)
+                            continue
+                        }
+                        val currentSequence = sequence
+                        val result = bridge.pushPcm(buffer, read, currentSequence)
+                        when (result) {
+                            0 -> sequence = currentSequence + 1L
+                            1 -> {
+                                fail("audio_queue_overloaded")
+                                break
+                            }
+                            2 -> {
+                                fail("audio_queue_closed")
+                                break
+                            }
+                            else -> {
+                                fail("audio_frame_rejected")
+                                break
+                            }
                         }
                         publishSnapshot()
                     }
@@ -622,8 +671,7 @@ private class AuroraAudioCapture(
         publishSnapshot()
     }
 
-    private fun publishSnapshot() {
-        val stats = bridge.stats()
+    private fun publishSnapshot(stats: LongArray = bridge.stats()) {
         onSnapshot(
             AuroraVoiceCaptureSnapshot(
                 captureActive = running.get() && errorCode == null,
@@ -639,7 +687,8 @@ private class AuroraAudioCapture(
                 completedTurns = stats.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX) { 0 },
                 failedTurns = stats.getOrElse(VOICE_STATS_FAILED_TURNS_INDEX) { 0 },
                 queuedOutputChunks = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0 },
-                errorCode = errorCode,
+                errorCode = errorCode
+                    ?: auroraVoiceRuntimeError(stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0 }),
             ),
         )
     }
@@ -664,9 +713,33 @@ class AuroraVoiceForegroundService : Service() {
     private var playback: AuroraAudioPlayback? = null
     private var session: AuroraNativeVoiceSessionBridge? = null
     private var sessionGeneration: Long = 0L
+
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private val finishHandler = Handler(Looper.getMainLooper())
+    private val initializationInFlight = AtomicBoolean(false)
+    private val lastNotificationText = AtomicReference<String?>(null)
+    private val nativeLifecycleExecutor = ThreadPoolExecutor(
+        0,
+        1,
+        5L,
+        TimeUnit.SECONDS,
+        LinkedBlockingQueue<Runnable>(),
+        ThreadFactory { runnable ->
+            Thread(
+                null,
+                runnable,
+                "aurora-voice-runtime-lifecycle",
+                VOICE_RUNTIME_INIT_STACK_SIZE_BYTES,
+            )
+        },
+    )
+
+    @Volatile
+    private var initializationGeneration = 0L
+
+    @Volatile
+    private var destroyed = false
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
@@ -678,9 +751,8 @@ class AuroraVoiceForegroundService : Service() {
                     AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "audio_focus_interrupted"
                     else -> "audio_focus_ducked"
                 }
-                capture?.close()
-                capture = null
-                stopNativeSession()
+                invalidateNativeVoiceInitialization()
+                releaseNativeVoiceResourcesAsync()
                 captureSnapshot = emptySnapshot(captureError)
                 updateNotification(captureSnapshot)
                 if (change == AudioManager.AUDIOFOCUS_LOSS) stopSelf()
@@ -697,6 +769,7 @@ class AuroraVoiceForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        destroyed = false
         running = true
         audioManager = getSystemService(AudioManager::class.java)
         ensureNotificationChannel()
@@ -704,56 +777,46 @@ class AuroraVoiceForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            backgroundSessionActive = false
+            invalidateNativeVoiceInitialization()
             stopSelf()
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_FINISH) {
-            finishNativeSession()
-            return START_NOT_STICKY
-        }
-        val backgroundSession = intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT
-        if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
-            captureError = "background_voice_unavailable"
-            stopSelf()
+            backgroundSessionActive = false
+            if (session == null) {
+                invalidateNativeVoiceInitialization()
+                stopSelfResult(startId)
+            } else {
+                finishNativeSession()
+            }
             return START_NOT_STICKY
         }
         running = true
-        startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification("Starting microphone…"))
+        val startingNotificationText = "Starting microphone…"
+        lastNotificationText.set(startingNotificationText)
+        startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification(startingNotificationText))
+        val backgroundSession = intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT
+        if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
+            captureError = "background_voice_unavailable"
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             captureError = "microphone_permission_missing"
-            stopSelf()
+            stopSelfResult(startId)
             return START_NOT_STICKY
         }
+        if (capture != null || session != null || initializationInFlight.get()) return START_NOT_STICKY
+        backgroundSessionActive = backgroundSession
+        captureError = null
+        captureSnapshot = emptySnapshot(null)
         if (!requestAudioFocus()) {
             captureError = "audio_focus_unavailable"
-            stopSelf()
+            stopSelfResult(startId)
             return START_NOT_STICKY
         }
-        initializeNativeVoiceSession(backgroundSession)
-        if (session == null) {
-            captureError = "voice_runtime_unavailable"
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (capture == null) {
-            captureError = null
-            val nativeSession = session ?: return START_NOT_STICKY
-            sessionGeneration = if (backgroundSession) {
-                nativeSession.startBackground()
-            } else {
-                nativeSession.start()
-            }
-            if (sessionGeneration == 0L) {
-                captureError = "voice_runtime_unavailable"
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            capture = AuroraAudioCapture(this, nativeSession, { snapshot ->
-                captureSnapshot = snapshot
-                updateNotification(snapshot)
-            }, closeBridgeOnClose = false)
-            if (capture?.start() != true) stopSelf()
-        }
+        beginNativeVoiceInitialization(backgroundSession, startId)
         return START_NOT_STICKY
     }
 
@@ -765,11 +828,14 @@ class AuroraVoiceForegroundService : Service() {
             return false
         }
         if (!hasPostNotificationsPermission() || !canPostNotifications()) return false
+        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
+        val installedPackIds = recordedInstalledPackIds()
+        val referenceSelectionReady = ttsReferenceSelection() != null
         return AuroraVoiceNativeConfigStore.isConfigured(this) &&
-            isActivePackReady(AuroraSpeechPackTask.STT) &&
-            isActivePackReady(AuroraSpeechPackTask.TTS) &&
-            isActivePackReady(AuroraSpeechPackTask.VAD) &&
-            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            isActivePackReady(AuroraSpeechPackTask.STT, catalog, installedPackIds, referenceSelectionReady) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS, catalog, installedPackIds, referenceSelectionReady) &&
+            isActivePackReady(AuroraSpeechPackTask.VAD, catalog, installedPackIds, referenceSelectionReady) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS, catalog, installedPackIds, referenceSelectionReady) &&
             wakePhraseSelection() != null
     }
 
@@ -778,26 +844,34 @@ class AuroraVoiceForegroundService : Service() {
 
     private fun canPostNotifications(): Boolean = hasPostNotificationsPermission() && NotificationManagerCompat.from(this).areNotificationsEnabled()
 
-    private fun isActiveCompatiblePackReady(): Boolean {
-        return isActivePackReady(AuroraSpeechPackTask.STT) && isActivePackReady(AuroraSpeechPackTask.TTS)
-    }
-
-    private fun getActivePackId(): String? =
-        getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE).getString(VOICE_PACK_ACTIVE_ID_KEY, null)
-
     private fun getActivePackId(task: AuroraSpeechPackTask): String? =
         getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
             .getString(auroraSpeechPackActiveKey(task), null)
 
-    private fun isActivePackReady(task: AuroraSpeechPackTask): Boolean {
+    /**
+     * Cheap service preflight based on the completed-install record. The native
+     * session constructor remains authoritative and verifies bindings and hashes
+     * before any selected model is used.
+     */
+    private fun isActivePackReady(
+        task: AuroraSpeechPackTask,
+        catalog: List<VoicePackCatalogEntry>,
+        installedPackIds: Set<String>,
+        referenceSelectionReady: Boolean,
+    ): Boolean {
         val active = getActivePackId(task) ?: return false
-        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
         val entry = catalog.firstOrNull { it.packId == active } ?: return false
         return inferAuroraSpeechPackTask(entry.tasks) == task &&
             isPackMetadataRuntimeCompatible(entry) &&
-            isPackInstalled(entry.packId, task) &&
-            (task != AuroraSpeechPackTask.TTS || ttsPackCanStartLocal(entry))
+            entry.packId in installedPackIds &&
+            (task != AuroraSpeechPackTask.TTS ||
+                (!entry.requiresReferenceAudio && entry.modelFamily != "pockettts") ||
+                referenceSelectionReady)
     }
+
+    private fun recordedInstalledPackIds(): Set<String> = runCatching {
+        AuroraNativeSpeechPackBridge.installedPackIds(this)
+    }.getOrDefault(emptySet())
 
     private fun readCatalogEntries(): List<VoicePackCatalogEntry> {
         val raw = readCatalogRaw()
@@ -885,37 +959,6 @@ class AuroraVoiceForegroundService : Service() {
             uri.userInfo == null &&
             uri.fragment == null
     }.getOrDefault(false)
-
-    private fun safePackFileName(packId: String): String =
-        packId.lowercase().filter { it.isLetterOrDigit() || it in "._-" }.ifBlank { "pack.bin" }
-
-    private fun isPackDownloaded(packId: String, expectedSha256: String?): Boolean {
-        if (!voicePackCatalogIdRegex.matches(packId)) return false
-        val file = File(filesDir, "$VOICE_PACK_CACHE_DIR/${safePackFileName(packId)}")
-        if (!file.exists() || !file.isFile) return false
-        val expected = expectedSha256?.trim()?.lowercase().orEmpty()
-        if (expected.isBlank()) return true
-        val actual = try {
-            val digest = java.security.MessageDigest.getInstance("SHA-256")
-            FileInputStream(file).use { fis ->
-                val buffer = ByteArray(256 * 1024)
-                while (true) {
-                    val count = fis.read(buffer)
-                    if (count <= 0) break
-                    digest.update(buffer, 0, count)
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        } catch (_: Exception) {
-            return false
-        }
-        return expected == actual
-    }
-
-    private fun isPackInstalled(packId: String, task: AuroraSpeechPackTask): Boolean {
-        if (!voicePackCatalogIdRegex.matches(packId)) return false
-        return runCatching { AuroraNativeSpeechPackBridge.resolve(this, packId, task) }.getOrDefault(false)
-    }
 
     private fun wakePhraseSelection(): AuroraWakePhraseSelection? {
         val prefs = getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
@@ -1042,83 +1085,167 @@ class AuroraVoiceForegroundService : Service() {
         return samples
     }
 
-    private fun activePackEntry(task: AuroraSpeechPackTask): VoicePackCatalogEntry? {
-        val active = getActivePackId(task) ?: return null
-        return runCatching { readCatalogEntries() }.getOrElse { emptyList() }
-            .firstOrNull { it.packId == active }
+    private fun beginNativeVoiceInitialization(backgroundSession: Boolean, startId: Int) {
+        if (!initializationInFlight.compareAndSet(false, true)) return
+        val generation = ++initializationGeneration
+        val initialization = Runnable {
+            val nativeSession = runCatching {
+                createNativeVoiceSession(backgroundSession)
+            }.getOrNull()
+            if (destroyed || generation != initializationGeneration) {
+                closeNativeResources(null, null, nativeSession, 0L)
+                initializationInFlight.set(false)
+                return@Runnable
+            }
+            val startedGeneration = nativeSession?.let {
+                runCatching {
+                    if (backgroundSession) it.startBackground() else it.start()
+                }.getOrDefault(0L)
+            } ?: 0L
+            val sessionToAttach = nativeSession?.takeIf { startedGeneration != 0L }
+            if (nativeSession != null && sessionToAttach == null) {
+                closeNativeResources(null, null, nativeSession, 0L)
+            }
+            val posted = finishHandler.post {
+                attachNativeVoiceSession(sessionToAttach, startedGeneration, startId, generation)
+            }
+            if (!posted) {
+                closeNativeResources(null, null, sessionToAttach, startedGeneration)
+                initializationInFlight.set(false)
+            }
+        }
+        try {
+            nativeLifecycleExecutor.execute(initialization)
+        } catch (_: RejectedExecutionException) {
+            // Native construction can block and must never fall back to Android's main thread.
+            initializationInFlight.set(false)
+            captureError = "voice_runtime_unavailable"
+            stopSelfResult(startId)
+        }
     }
 
-    private fun ttsPackCanStartLocal(entry: VoicePackCatalogEntry): Boolean {
-        if (!entry.requiresReferenceAudio && entry.modelFamily != "pockettts") return true
-        return ttsReferenceSelection() != null
-    }
-
-    private fun isActivePackUsableForSession(task: AuroraSpeechPackTask): Boolean {
-        val entry = activePackEntry(task) ?: return false
-        if (!isActivePackReady(task)) return false
-        return task != AuroraSpeechPackTask.TTS || ttsPackCanStartLocal(entry)
-    }
-
-    private fun initializeNativeVoiceSession(backgroundSession: Boolean) {
-        if (playback != null) return
-        val nativeConfig = AuroraVoiceNativeConfigStore.load(this)
+    private fun createNativeVoiceSession(backgroundSession: Boolean): AuroraNativeVoiceSessionBridge? {
+        val nativeConfig = AuroraVoiceNativeConfigStore.load(this) ?: return null
         val sttModelId = getActivePackId(AuroraSpeechPackTask.STT)
         val ttsVoiceId = getActivePackId(AuroraSpeechPackTask.TTS)
         val vadModelId = getActivePackId(AuroraSpeechPackTask.VAD)
         val kwsModelId = getActivePackId(AuroraSpeechPackTask.KWS)
         val wakePhrase = wakePhraseSelection()
         val ttsReference = ttsReferenceSelection()
-        session = nativeConfig?.let {
-            if (sttModelId != null && ttsVoiceId != null &&
-                isActivePackUsableForSession(AuroraSpeechPackTask.STT) &&
-                isActivePackUsableForSession(AuroraSpeechPackTask.TTS) &&
-                (!backgroundSession || (
-                    isActivePackUsableForSession(AuroraSpeechPackTask.VAD) &&
-                        isActivePackUsableForSession(AuroraSpeechPackTask.KWS) &&
-                        wakePhrase != null
-                    ))
-            ) {
-                AuroraNativeVoiceSessionBridge(
-                    it.gateway,
-                    it.bearer,
-                    it.remoteAudioConsent,
-                    auroraSpeechPackStoreRoot(this).path,
-                    sttModelId,
-                    ttsVoiceId,
-                    vadModelId,
-                    kwsModelId,
-                    wakePhrase?.id,
-                    wakePhrase?.text,
-                    wakePhrase?.revision,
-                    ttsReference,
-                )
-            } else if (!backgroundSession) {
-                AuroraNativeVoiceSessionBridge(
-                    it.gateway,
-                    it.bearer,
-                    it.remoteAudioConsent,
-                )
-            } else {
-                null
-            }
+        val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
+        val installedPackIds = recordedInstalledPackIds()
+        val referenceSelectionReady = ttsReference != null
+        val sttReady = isActivePackReady(
+            AuroraSpeechPackTask.STT,
+            catalog,
+            installedPackIds,
+            referenceSelectionReady,
+        )
+        val ttsReady = isActivePackReady(
+            AuroraSpeechPackTask.TTS,
+            catalog,
+            installedPackIds,
+            referenceSelectionReady,
+        )
+        val vadReady = isActivePackReady(
+            AuroraSpeechPackTask.VAD,
+            catalog,
+            installedPackIds,
+            referenceSelectionReady,
+        )
+        val kwsReady = isActivePackReady(
+            AuroraSpeechPackTask.KWS,
+            catalog,
+            installedPackIds,
+            referenceSelectionReady,
+        )
+        val backgroundPacksReady = vadReady && kwsReady && wakePhrase != null
+        if (sttModelId != null && ttsVoiceId != null && sttReady && ttsReady &&
+            (!backgroundSession || backgroundPacksReady)
+        ) {
+            return AuroraNativeVoiceSessionBridge(
+                nativeConfig.gateway,
+                nativeConfig.bearer,
+                nativeConfig.remoteAudioConsent,
+                auroraSpeechPackStoreRoot(this).path,
+                sttModelId,
+                ttsVoiceId,
+                vadModelId?.takeIf { backgroundPacksReady },
+                kwsModelId?.takeIf { backgroundPacksReady },
+                wakePhrase?.id?.takeIf { backgroundPacksReady },
+                wakePhrase?.text?.takeIf { backgroundPacksReady },
+                wakePhrase?.revision?.takeIf { backgroundPacksReady },
+                ttsReference,
+            )
         }
-        val nativeSession = session ?: return
-        playback = AuroraAudioPlayback(nativeSession, closeBridgeOnClose = false)
-        playback?.start()
+        if (backgroundSession) return null
+        return AuroraNativeVoiceSessionBridge(
+            nativeConfig.gateway,
+            nativeConfig.bearer,
+            nativeConfig.remoteAudioConsent,
+        )
+    }
+
+    private fun attachNativeVoiceSession(
+        nativeSession: AuroraNativeVoiceSessionBridge?,
+        startedGeneration: Long,
+        startId: Int,
+        generation: Long,
+    ) {
+        if (destroyed || generation != initializationGeneration) {
+            closeOrphanNativeSessionAsync(nativeSession, startedGeneration)
+            initializationInFlight.set(false)
+            return
+        }
+        initializationInFlight.set(false)
+        if (nativeSession == null) {
+            captureError = "voice_runtime_unavailable"
+            stopSelfResult(startId)
+            return
+        }
+        if (startedGeneration == 0L) {
+            closeOrphanNativeSessionAsync(nativeSession, 0L)
+            captureError = "voice_runtime_unavailable"
+            stopSelfResult(startId)
+            return
+        }
+        session = nativeSession
+        sessionGeneration = startedGeneration
+        captureError = null
+        playback = AuroraAudioPlayback(nativeSession, closeBridgeOnClose = false).also { it.start() }
+        lateinit var audioCapture: AuroraAudioCapture
+        audioCapture = AuroraAudioCapture(this, nativeSession, captureCallback@{ snapshot ->
+            if (destroyed || capture !== audioCapture || session !== nativeSession) return@captureCallback
+            captureSnapshot = snapshot
+            updateNotification(snapshot)
+            if (!snapshot.captureActive && snapshot.errorCode != null && !destroyed) {
+                captureError = snapshot.errorCode
+                stopSelf()
+            }
+        }, closeBridgeOnClose = false)
+        capture = audioCapture
+        if (!audioCapture.start()) {
+            stopSelfResult(startId)
+        } else if (backgroundSessionActive) {
+            awaitFinishedSession()
+        }
+    }
+
+    private fun invalidateNativeVoiceInitialization() {
+        initializationGeneration += 1L
     }
 
     override fun onDestroy() {
+        destroyed = true
+        backgroundSessionActive = false
+        invalidateNativeVoiceInitialization()
+        running = false
         finishHandler.removeCallbacksAndMessages(null)
-        capture?.close()
-        capture = null
-        stopNativeSession()
-        playback?.close()
-        playback = null
+        releaseNativeVoiceResourcesAsync()
         abandonAudioFocus()
         audioFocusRequest = null
         audioManager = null
-        running = false
-        captureSnapshot = emptySnapshot(captureError)
+        captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)
         super.onDestroy()
     }
 
@@ -1173,48 +1300,244 @@ class AuroraVoiceForegroundService : Service() {
         }
     }
 
-    private fun stopNativeSession() {
-        val nativeSession = session ?: return
-        if (sessionGeneration != 0L) {
-            nativeSession.cancel(sessionGeneration)
-        }
-        sessionGeneration = 0L
-        nativeSession.close()
+    private fun releaseNativeVoiceResourcesAsync() {
+        backgroundSessionActive = false
+        val captureToClose = capture
+        val playbackToClose = playback
+        val nativeSession = session
+        val generationToCancel = sessionGeneration
+        capture = null
+        playback = null
         session = null
+        sessionGeneration = 0L
+        if (captureToClose == null && playbackToClose == null && nativeSession == null) return
+        try {
+            nativeLifecycleExecutor.execute {
+                closeNativeResources(captureToClose, playbackToClose, nativeSession, generationToCancel)
+            }
+        } catch (_: RejectedExecutionException) {
+            // Teardown may block in AudioRecord/JNI, so failing visibly is safer than a main-thread close.
+            captureError = "voice_runtime_shutdown_failed"
+        }
+    }
+
+    private fun closeOrphanNativeSessionAsync(
+        nativeSession: AuroraNativeVoiceSessionBridge?,
+        generationToCancel: Long,
+    ) {
+        if (nativeSession == null) return
+        try {
+            nativeLifecycleExecutor.execute {
+                closeNativeResources(null, null, nativeSession, generationToCancel)
+            }
+        } catch (_: RejectedExecutionException) {
+            // The service reports the leak risk; it does not block the main thread as a recovery path.
+            captureError = "voice_runtime_shutdown_failed"
+        }
+    }
+
+    private fun closeNativeResources(
+        captureToClose: AuroraAudioCapture?,
+        playbackToClose: AuroraAudioPlayback?,
+        nativeSession: AuroraNativeVoiceSessionBridge?,
+        generationToCancel: Long,
+    ) {
+        var closeFailed = runCatching { captureToClose?.close() }.isFailure
+        if (nativeSession != null && generationToCancel != 0L) {
+            closeFailed = runCatching { nativeSession.cancel(generationToCancel) }
+                .fold(onSuccess = { it != 0 }, onFailure = { true }) || closeFailed
+        }
+        closeFailed = runCatching { playbackToClose?.close() }.isFailure || closeFailed
+        closeFailed = runCatching { nativeSession?.close() }.isFailure || closeFailed
+        if (closeFailed) captureError = "voice_runtime_shutdown_failed"
     }
 
     private fun finishNativeSession() {
         val nativeSession = session ?: return
-        if (sessionGeneration != 0L) {
-            nativeSession.finish(sessionGeneration)
+        backgroundSessionActive = false
+        val captureToClose = capture
+        val generationToFinish = sessionGeneration
+        try {
+            nativeLifecycleExecutor.execute {
+                val captureCloseFailed = runCatching { captureToClose?.close() }.isFailure
+                val finishFailed = generationToFinish == 0L || runCatching {
+                    nativeSession.finish(generationToFinish)
+                }.fold(onSuccess = { it != 0 }, onFailure = { true })
+                if (captureCloseFailed || finishFailed) {
+                    captureError = "voice_runtime_shutdown_failed"
+                }
+                finishHandler.post {
+                    if (finishFailed) stopSelf() else awaitFinishedSession()
+                }
+            }
+            capture = null
+            sessionGeneration = 0L
+        } catch (_: RejectedExecutionException) {
+            // Finish can enter native inference and must never run on Android's main thread.
+            captureError = "voice_runtime_shutdown_failed"
+            stopSelf()
         }
-        capture?.close()
-        capture = null
-        sessionGeneration = 0L
-        awaitFinishedSession()
     }
 
     private fun awaitFinishedSession() {
+        if (destroyed) return
         val nativeSession = session ?: run {
             stopSelf()
             return
         }
-        val stats = nativeSession.stats()
+        try {
+            nativeLifecycleExecutor.execute {
+                val stats = runCatching { nativeSession.stats() }.getOrNull()
+                finishHandler.post { handleFinishedSessionStats(nativeSession, stats) }
+            }
+        } catch (_: RejectedExecutionException) {
+            // JNI status reads share the teardown queue so close/free cannot race them.
+            captureError = "voice_runtime_shutdown_failed"
+            stopSelf()
+        }
+    }
+
+    private fun handleFinishedSessionStats(
+        nativeSession: AuroraNativeVoiceSessionBridge,
+        stats: LongArray?,
+    ) {
+        if (destroyed || session !== nativeSession) return
+        if (stats == null) {
+            captureError = "voice_runtime_shutdown_failed"
+            stopSelf()
+            return
+        }
         val active = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0L } != 0L
         val queuedOutput = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0L }
         if (active || queuedOutput > 0L) {
             finishHandler.postDelayed({ awaitFinishedSession() }, 100L)
             return
         }
+        val errorCode = auroraVoiceRuntimeError(
+            stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0L },
+        )
+        if (backgroundSessionActive && capture != null && isRecoverableBackgroundTurn(errorCode)) {
+            rearmBackgroundSession(nativeSession, stats)
+            return
+        }
+        captureError = captureError ?: errorCode
+        captureSnapshot = terminalSnapshot(captureSnapshot, stats, captureError)
         stopSelf()
     }
 
+    private fun rearmBackgroundSession(
+        nativeSession: AuroraNativeVoiceSessionBridge,
+        stats: LongArray,
+    ) {
+        sessionGeneration = 0L
+        captureSnapshot = captureSnapshot.copy(
+            runtimeActive = false,
+            runtimePhase = auroraVoiceRuntimePhase(
+                stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0L },
+            ),
+            completedTurns = stats.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX) {
+                captureSnapshot.completedTurns
+            },
+            failedTurns = stats.getOrElse(VOICE_STATS_FAILED_TURNS_INDEX) {
+                captureSnapshot.failedTurns
+            },
+            queuedOutputChunks = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0L },
+            errorCode = auroraVoiceRuntimeError(
+                stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0L },
+            ),
+        )
+        updateNotification(captureSnapshot)
+        try {
+            nativeLifecycleExecutor.execute {
+                val restartedGeneration = if (
+                    !destroyed && backgroundSessionActive && session === nativeSession
+                ) {
+                    runCatching {
+                        if (nativeSession.clearIngress()) nativeSession.startBackground() else 0L
+                    }.getOrDefault(0L)
+                } else {
+                    0L
+                }
+                val posted = finishHandler.post {
+                    handleBackgroundSessionRestart(nativeSession, restartedGeneration)
+                }
+                if (!posted && restartedGeneration != 0L) {
+                    runCatching { nativeSession.cancel(restartedGeneration) }
+                    captureError = "voice_runtime_shutdown_failed"
+                    stopSelf()
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            captureError = "voice_runtime_unavailable"
+            stopSelf()
+        }
+    }
+
+    private fun handleBackgroundSessionRestart(
+        nativeSession: AuroraNativeVoiceSessionBridge,
+        restartedGeneration: Long,
+    ) {
+        if (destroyed || !backgroundSessionActive || session !== nativeSession) return
+        if (restartedGeneration == 0L) {
+            captureError = "voice_runtime_unavailable"
+            captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)
+            stopSelf()
+            return
+        }
+        sessionGeneration = restartedGeneration
+        captureError = null
+        captureSnapshot = captureSnapshot.copy(
+            runtimeActive = true,
+            runtimePhase = "starting",
+            sessionGeneration = restartedGeneration,
+            errorCode = null,
+        )
+        updateNotification(captureSnapshot)
+        awaitFinishedSession()
+    }
+
+    private fun terminalSnapshot(
+        current: AuroraVoiceCaptureSnapshot,
+        stats: LongArray?,
+        errorCode: String?,
+    ) = current.copy(
+        captureActive = false,
+        acceptedChunks = stats?.getOrElse(0) { current.acceptedChunks } ?: current.acceptedChunks,
+        acceptedSamples = stats?.getOrElse(1) { current.acceptedSamples } ?: current.acceptedSamples,
+        droppedChunks = stats?.getOrElse(2) { current.droppedChunks } ?: current.droppedChunks,
+        discontinuities = stats?.getOrElse(3) { current.discontinuities } ?: current.discontinuities,
+        queuedChunks = stats?.getOrElse(4) { current.queuedChunks } ?: current.queuedChunks,
+        runtimeActive = false,
+        runtimePhase = stats?.let {
+            auroraVoiceRuntimePhase(it.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0L })
+        } ?: if (errorCode != null) "faulted" else "idle",
+        sessionGeneration = stats?.getOrElse(VOICE_STATS_SESSION_GENERATION_INDEX) {
+            current.sessionGeneration
+        } ?: current.sessionGeneration,
+        completedTurns = stats?.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX) {
+            current.completedTurns
+        } ?: current.completedTurns,
+        failedTurns = stats?.getOrElse(VOICE_STATS_FAILED_TURNS_INDEX) {
+            current.failedTurns
+        } ?: current.failedTurns,
+        queuedOutputChunks = stats?.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) {
+            current.queuedOutputChunks
+        } ?: current.queuedOutputChunks,
+        errorCode = errorCode ?: stats?.let {
+            auroraVoiceRuntimeError(it.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0 })
+        } ?: current.errorCode,
+    )
+
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {
         if (!running) return
+        val text = if (snapshot.captureActive) {
+            "Microphone is active. Tap Stop to end."
+        } else {
+            "Voice controls are unavailable."
+        }
+        if (lastNotificationText.getAndSet(text) == text) return
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification(
-            if (snapshot.captureActive) "Microphone is active. Tap Stop to end." else "Voice controls are unavailable.",
-        ))
+        manager.notify(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification(text))
     }
 
     private fun ensureNotificationChannel() {
@@ -1267,6 +1590,10 @@ class AuroraVoiceForegroundService : Service() {
 
         @Volatile
         var captureSnapshot: AuroraVoiceCaptureSnapshot = emptySnapshot(null)
+            private set
+
+        @Volatile
+        var backgroundSessionActive: Boolean = false
             private set
 
         fun emptySnapshot(errorCode: String?) = AuroraVoiceCaptureSnapshot(

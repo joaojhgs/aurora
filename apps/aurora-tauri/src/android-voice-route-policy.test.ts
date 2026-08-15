@@ -12,6 +12,7 @@ const assistActivityPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraAssistActivity.kt'
 const speechPackPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeSpeechPacks.kt'
+const nativeDownloaderPath = 'rust/crates/aurora-voice-native/src/downloader.rs'
 const permissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
 
@@ -20,6 +21,64 @@ function repoText(path: string): string {
 }
 
 describe('Android native voice route policy', () => {
+  it('runs native pack installation with a bounded dedicated stack and no proxy bypass', () => {
+    const plugin = repoText(kotlinPath)
+    const downloader = repoText(nativeDownloaderPath)
+    const downloadJobBody = plugin.slice(
+      plugin.indexOf('val jobId = "voice_pack_'),
+      plugin.indexOf('fun voicePackDownloadStatus', plugin.indexOf('val jobId = "voice_pack_')),
+    )
+    const activationBody = plugin.slice(
+      plugin.indexOf('fun setActiveVoicePack(invoke: Invoke)'),
+      plugin.indexOf('fun removeVoicePack(invoke: Invoke)'),
+    )
+    const pinnedClientBody = downloader.slice(
+      downloader.indexOf('async fn client_for_pinned_url'),
+      downloader.indexOf('async fn resolve_public_addrs', downloader.indexOf('async fn client_for_pinned_url')),
+    )
+
+    expect(plugin).toContain('private const val VOICE_PACK_INSTALL_STACK_SIZE_BYTES = 16L * 1024L * 1024L')
+    expect(downloadJobBody).toContain('Thread(')
+    expect(downloadJobBody).toContain('"aurora-voice-pack-install"')
+    expect(downloadJobBody).toContain('VOICE_PACK_INSTALL_STACK_SIZE_BYTES')
+    expect(downloadJobBody).not.toContain('kotlin.concurrent.thread')
+    expect(activationBody).toContain('candidate.packId !in recordedInstalledPackIds()')
+    expect(activationBody).toContain('val verifyAndActivate = Runnable')
+    expect(activationBody).toContain('"aurora-voice-pack-activation"')
+    expect(activationBody).toContain('VOICE_PACK_INSTALL_STACK_SIZE_BYTES')
+    expect(activationBody.indexOf('isPackReadyForRuntime(candidate)')).toBeGreaterThan(
+      activationBody.indexOf('val verifyAndActivate = Runnable'),
+    )
+    const failedReadinessBranch = activationBody.slice(
+      activationBody.indexOf('if (!isPackReadyForRuntime(candidate))'),
+      activationBody.indexOf('} else {', activationBody.indexOf('if (!isPackReadyForRuntime(candidate))')),
+    )
+    expect(failedReadinessBranch).not.toContain('setActivePack(candidate, task)')
+    expect(pinnedClientBody).toContain('.no_proxy()')
+    expect(pinnedClientBody.indexOf('.no_proxy()')).toBeLessThan(
+      pinnedClientBody.indexOf('.resolve_to_addrs(host, &pinned)'),
+    )
+  })
+
+  it('reuses one native speech-pack manager while catalog polling overlaps installation', () => {
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const plugin = repoText(kotlinPath)
+    const catalogStatus = plugin.slice(
+      plugin.indexOf('private fun voicePackCatalogStatusObject'),
+      plugin.indexOf('private fun voicePackPrefs', plugin.indexOf('private fun voicePackCatalogStatusObject')),
+    )
+
+    expect(androidAudio).toContain(
+      'static MANAGERS: OnceLock<Mutex<HashMap<PathBuf, Arc<SpeechPackManager>>>>',
+    )
+    expect(androidAudio).toContain('if let Some(manager) = managers.get(&root)')
+    expect(androidAudio).toContain('managers.insert(root, Arc::clone(&manager))')
+    expect(catalogStatus).toContain('val installedPackIds = recordedInstalledPackIds()')
+    expect(catalogStatus).toContain('val installed = entry.packId in installedPackIds')
+    expect(catalogStatus).not.toContain('val installed = isPackInstalledForRuntime(entry)')
+    expect(catalogStatus).not.toContain('isPackReadyForRuntime(entry)')
+  })
+
   it('derives the encrypted voice route from profile and native peer credentials', () => {
     const kotlin = repoText(kotlinPath)
     const voiceStore = repoText(voiceStorePath)
@@ -88,7 +147,7 @@ describe('Android native voice route policy', () => {
     expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
     expect(foregroundService).toContain('intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT')
     expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
-    expect(foregroundService).toContain('nativeSession.startBackground()')
+    expect(foregroundService).toContain('if (backgroundSession) it.startBackground() else it.start()')
     expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
     expect(assistActivity).toContain('if (!isAuroraAssistantRoleHeld())')
@@ -106,10 +165,14 @@ describe('Android native voice route policy', () => {
     expect(backgroundReadinessBody).toContain('Manifest.permission.FOREGROUND_SERVICE_MICROPHONE')
     expect(backgroundReadinessBody).toContain('canPostNotifications()')
     expect(backgroundReadinessBody).toContain('AuroraVoiceNativeConfigStore.isConfigured(this)')
+    expect(backgroundReadinessBody).toContain('val installedPackIds = recordedInstalledPackIds()')
     for (const task of ['STT', 'TTS', 'VAD', 'KWS']) {
-      expect(backgroundReadinessBody).toContain(`isActivePackReady(AuroraSpeechPackTask.${task})`)
+      expect(backgroundReadinessBody).toContain(
+        `isActivePackReady(AuroraSpeechPackTask.${task}, catalog, installedPackIds, referenceSelectionReady)`,
+      )
     }
     expect(backgroundReadinessBody).toContain('wakePhraseSelection() != null')
+    expect(backgroundReadinessBody).not.toContain('AuroraNativeSpeechPackBridge.resolve')
 
     const onCreateBody = foregroundService.slice(
       foregroundService.indexOf('override fun onCreate()'),
@@ -120,11 +183,266 @@ describe('Android native voice route policy', () => {
 
     const onStartBody = foregroundService.slice(
       foregroundService.indexOf('override fun onStartCommand'),
-      foregroundService.indexOf('private fun initializeNativeVoiceSession', foregroundService.indexOf('override fun onStartCommand')),
+      foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable', foregroundService.indexOf('override fun onStartCommand')),
     )
-    expect(onStartBody.indexOf('backgroundSession && !isBackgroundVoiceSessionAvailable()')).toBeGreaterThanOrEqual(0)
-    expect(onStartBody.indexOf('initializeNativeVoiceSession(backgroundSession)')).toBeGreaterThan(
+    expect(onStartBody.indexOf('startForeground(')).toBeLessThan(
       onStartBody.indexOf('backgroundSession && !isBackgroundVoiceSessionAvailable()'),
+    )
+    expect(onStartBody.indexOf('beginNativeVoiceInitialization(backgroundSession, startId)')).toBeGreaterThan(
+      onStartBody.indexOf('backgroundSession && !isBackgroundVoiceSessionAvailable()'),
+    )
+    expect(onStartBody).not.toContain('createNativeVoiceSession(')
+    expect(onStartBody).not.toContain('AuroraNativeVoiceSessionBridge(')
+  })
+
+  it('keeps status polling non-authoritative and initializes verified voice sessions off the main thread', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const statusBodies = [
+      plugin.slice(
+        plugin.indexOf('private fun localLightInferenceStatusObject()'),
+        plugin.indexOf('private fun packageHandlesAssist'),
+      ),
+      plugin.slice(
+        plugin.indexOf('private fun voicePackCatalogStatusObject()'),
+        plugin.indexOf('private fun voicePackPrefs'),
+      ),
+      plugin.slice(
+        plugin.indexOf('private fun voiceForegroundServiceStatusObject'),
+        plugin.indexOf('private fun nativeCapabilitySnapshot'),
+      ),
+    ]
+    for (const body of statusBodies) {
+      expect(body).toContain('recordedInstalledPackIds()')
+      expect(body).not.toContain('isPackInstalledForRuntime(')
+      expect(body).not.toContain('isPackReadyForRuntime(')
+      expect(body).not.toContain('AuroraNativeSpeechPackBridge.resolve')
+    }
+
+    const initializationBody = foregroundService.slice(
+      foregroundService.indexOf('private fun beginNativeVoiceInitialization'),
+      foregroundService.indexOf('private fun createNativeVoiceSession'),
+    )
+    expect(initializationBody).toContain('initializationInFlight.compareAndSet(false, true)')
+    expect(initializationBody).toContain('nativeLifecycleExecutor.execute')
+    expect(initializationBody).not.toContain('Thread(')
+    expect(initializationBody).toContain('finishHandler.post')
+    expect(initializationBody).toContain('closeNativeResources(')
+    expect(initializationBody).toContain('if (backgroundSession) it.startBackground() else it.start()')
+
+    const attachBody = foregroundService.slice(
+      foregroundService.indexOf('private fun attachNativeVoiceSession'),
+      foregroundService.indexOf('private fun invalidateNativeVoiceInitialization'),
+    )
+    expect(attachBody).toContain('destroyed || generation != initializationGeneration')
+    expect(attachBody).toContain('closeOrphanNativeSessionAsync(')
+    expect(attachBody).not.toContain('nativeSession?.close()')
+    expect(attachBody).toContain('AuroraAudioCapture(')
+    expect(attachBody).toContain('captureCallback@{ snapshot ->')
+    expect(attachBody).toContain(
+      'if (destroyed || capture !== audioCapture || session !== nativeSession) return@captureCallback',
+    )
+
+    const onDestroyBody = foregroundService.slice(
+      foregroundService.indexOf('override fun onDestroy()'),
+      foregroundService.indexOf('override fun onBind'),
+    )
+    expect(onDestroyBody).toContain('destroyed = true')
+    expect(onDestroyBody).toContain('invalidateNativeVoiceInitialization()')
+    expect(onDestroyBody).toContain('releaseNativeVoiceResourcesAsync()')
+    expect(onDestroyBody).not.toContain('capture?.close()')
+    expect(onDestroyBody).not.toContain('stopNativeSession()')
+    expect(onDestroyBody).toContain('captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)')
+    expect(onDestroyBody).not.toContain('captureSnapshot = emptySnapshot(captureError)')
+
+    expect(foregroundService).toContain('ThreadPoolExecutor(')
+    expect(foregroundService).toContain('"aurora-voice-runtime-lifecycle"')
+    expect(foregroundService).toContain('LinkedBlockingQueue<Runnable>()')
+
+    const releaseBody = foregroundService.slice(
+      foregroundService.indexOf('private fun releaseNativeVoiceResourcesAsync()'),
+      foregroundService.indexOf('private fun closeOrphanNativeSessionAsync('),
+    )
+    const closeResourcesBody = foregroundService.slice(
+      foregroundService.indexOf('private fun closeNativeResources('),
+      foregroundService.indexOf('private fun finishNativeSession()'),
+    )
+    expect(closeResourcesBody).toContain('captureToClose?.close()')
+    expect(closeResourcesBody).toContain('playbackToClose?.close()')
+    expect(closeResourcesBody).toContain('nativeSession.cancel(generationToCancel)')
+    expect(closeResourcesBody).toContain('nativeSession?.close()')
+    expect(releaseBody).toContain('nativeLifecycleExecutor.execute')
+    expect(releaseBody).not.toContain('Thread(')
+    for (const detach of [
+      'capture = null',
+      'playback = null',
+      'session = null',
+      'sessionGeneration = 0L',
+    ]) {
+      expect(releaseBody.indexOf(detach)).toBeGreaterThanOrEqual(0)
+      expect(releaseBody.indexOf(detach)).toBeLessThan(
+        releaseBody.indexOf('nativeLifecycleExecutor.execute'),
+      )
+    }
+
+    const finishBody = foregroundService.slice(
+      foregroundService.indexOf('private fun finishNativeSession()'),
+      foregroundService.indexOf('private fun awaitFinishedSession()'),
+    )
+    expect(finishBody).toContain('captureToClose?.close()')
+    expect(finishBody).toContain('nativeSession.finish(generationToFinish)')
+    expect(finishBody).toContain('nativeLifecycleExecutor.execute')
+    expect(finishBody).not.toContain('Thread(')
+
+    const awaitFinishedBody = foregroundService.slice(
+      foregroundService.indexOf('private fun awaitFinishedSession()'),
+      foregroundService.indexOf('private fun updateNotification'),
+    )
+    expect(awaitFinishedBody).toContain('nativeLifecycleExecutor.execute')
+    expect(awaitFinishedBody).toContain('handleFinishedSessionStats(')
+    expect(awaitFinishedBody).toContain('session !== nativeSession')
+    expect(awaitFinishedBody).toContain('captureSnapshot = terminalSnapshot(captureSnapshot, stats, captureError)')
+    expect(awaitFinishedBody.indexOf('nativeSession.stats()')).toBeGreaterThan(
+      awaitFinishedBody.indexOf('nativeLifecycleExecutor.execute'),
+    )
+
+    const terminalSnapshotBody = foregroundService.slice(
+      foregroundService.indexOf('private fun terminalSnapshot('),
+      foregroundService.indexOf('private fun updateNotification'),
+    )
+    expect(terminalSnapshotBody).toContain('acceptedChunks = stats?.getOrElse(0)')
+    expect(terminalSnapshotBody).toContain('runtimeActive = false')
+    expect(terminalSnapshotBody).toContain('completedTurns = stats?.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX)')
+    expect(terminalSnapshotBody).toContain('failedTurns = stats?.getOrElse(VOICE_STATS_FAILED_TURNS_INDEX)')
+
+    const notificationBody = foregroundService.slice(
+      foregroundService.indexOf('private fun updateNotification'),
+      foregroundService.indexOf('private fun ensureNotificationChannel'),
+    )
+    expect(foregroundService).toContain('private val lastNotificationText = AtomicReference<String?>(null)')
+    expect(notificationBody).toContain('lastNotificationText.getAndSet(text) == text')
+    expect(notificationBody).toContain('return')
+
+    const nativeCreateBody = androidAudio.slice(
+      androidAudio.indexOf('Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreateWithPackSelection'),
+      androidAudio.indexOf('Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart'),
+    )
+    expect(nativeCreateBody).toContain('AndroidVoiceSessionConfig::with_local_pack_selection')
+    expect(nativeCreateBody).toContain('AndroidVoiceSession::new(config, 8, 4_096, 16)')
+  })
+
+  it('re-arms recoverable background turns on the loaded native session and stops on terminal faults', () => {
+    const foregroundService = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const nativeSession = repoText('rust/crates/aurora-voice-native/src/android_session.rs')
+    const onStartBody = foregroundService.slice(
+      foregroundService.indexOf('override fun onStartCommand'),
+      foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable'),
+    )
+    const attachBody = foregroundService.slice(
+      foregroundService.indexOf('private fun attachNativeVoiceSession'),
+      foregroundService.indexOf('private fun invalidateNativeVoiceInitialization'),
+    )
+    const finishedBody = foregroundService.slice(
+      foregroundService.indexOf('private fun handleFinishedSessionStats'),
+      foregroundService.indexOf('private fun terminalSnapshot'),
+    )
+    const rearmBody = foregroundService.slice(
+      foregroundService.indexOf('private fun rearmBackgroundSession'),
+      foregroundService.indexOf('private fun terminalSnapshot'),
+    )
+
+    expect(foregroundService).toMatch(/var backgroundSessionActive: Boolean = false\s+private set/)
+    expect(onStartBody).toContain('backgroundSessionActive = backgroundSession')
+    expect(attachBody).toMatch(/else if \(backgroundSessionActive\) \{\s*awaitFinishedSession\(\)/)
+    expect(finishedBody).toContain('auroraVoiceRuntimeError(')
+    expect(finishedBody).toContain('isRecoverableBackgroundTurn(errorCode)')
+    expect(finishedBody).toContain('rearmBackgroundSession(nativeSession, stats)')
+    expect(finishedBody).toContain('stopSelf()')
+    expect(rearmBody).toContain('nativeLifecycleExecutor.execute')
+    expect(rearmBody).toContain('nativeSession.clearIngress()')
+    expect(rearmBody).toContain('nativeSession.startBackground()')
+    expect(rearmBody.indexOf('nativeSession.clearIngress()')).toBeLessThan(
+      rearmBody.indexOf('nativeSession.startBackground()'),
+    )
+    expect(rearmBody).toContain('sessionGeneration = restartedGeneration')
+    expect(rearmBody).toContain('awaitFinishedSession()')
+    expect(rearmBody).not.toContain('createNativeVoiceSession(')
+    expect(rearmBody).not.toContain('capture?.close()')
+
+    for (const code of ['wake_not_detected', 'speech_not_detected', 'speech_timeout']) {
+      expect(nativeSession).toContain(`"${code}"`)
+      expect(androidAudio).toContain(`Some("${code}")`)
+      expect(foregroundService).toContain(`"${code}"`)
+    }
+  })
+
+  it('captures Android native voice at the proven KWS cadence and reframes VAD in Rust', () => {
+    const foregroundService = repoText(voiceStorePath)
+    const voiceCore = repoText('rust/crates/aurora-voice-core/src/lib.rs')
+    const captureStartBody = foregroundService.slice(
+      foregroundService.indexOf('fun start(): Boolean'),
+      foregroundService.indexOf('private fun readLoop', foregroundService.indexOf('fun start(): Boolean')),
+    )
+
+    expect(foregroundService).toContain('private const val VOICE_CAPTURE_FRAME_SAMPLES = SAMPLE_RATE_HZ / 10')
+    expect(captureStartBody).toContain('val frameCapacity = VOICE_CAPTURE_FRAME_SAMPLES')
+    expect(captureStartBody).not.toContain('minimumBuffer / 2')
+    expect(voiceCore).toContain('VAD_WINDOW_SIZE_SAMPLES')
+    expect(voiceCore).toContain('StreamingAudioFrame::end_tail')
+  })
+
+  it('keeps Android capture latest-biased without draining playback on input pressure', () => {
+    const foregroundService = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const nativeCapture = repoText('rust/crates/aurora-voice-native/src/android_capture.rs')
+    const readLoopBody = foregroundService.slice(
+      foregroundService.indexOf('private fun readLoop(frameCapacity: Int)'),
+      foregroundService.indexOf('private fun fail(code: String)'),
+    )
+    const sessionBridgeBody = foregroundService.slice(
+      foregroundService.indexOf('private class AuroraNativeVoiceSessionBridge'),
+      foregroundService.indexOf('private class AuroraAudioCapture'),
+    )
+
+    expect(readLoopBody).not.toContain('drainOne()')
+    expect(sessionBridgeBody).not.toContain('override fun drainOne(): Int = drainPcm().size')
+    expect(androidAudio).toContain('session.ingress().push_latest')
+    expect(nativeCapture).toContain('pub fn push_latest(')
+  })
+
+  it('accepts microphone frames only while the runtime is listening and clears ingress before rearm', () => {
+    const foregroundService = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const nativeCapture = repoText('rust/crates/aurora-voice-native/src/android_capture.rs')
+    const nativeSession = repoText('rust/crates/aurora-voice-native/src/android_session.rs')
+    const readLoopBody = foregroundService.slice(
+      foregroundService.indexOf('private fun readLoop(frameCapacity: Int)'),
+      foregroundService.indexOf('private fun fail(code: String)'),
+    )
+    const rearmBody = foregroundService.slice(
+      foregroundService.indexOf('private fun rearmBackgroundSession'),
+      foregroundService.indexOf('private fun terminalSnapshot'),
+    )
+
+    expect(foregroundService).toContain('private fun voiceRuntimeAcceptsMicrophoneInput(stats: LongArray): Boolean')
+    expect(readLoopBody).toContain('val runtimeStats = bridge.stats()')
+    expect(readLoopBody).toContain('if (!voiceRuntimeAcceptsMicrophoneInput(runtimeStats))')
+    expect(readLoopBody).toContain('publishSnapshot(runtimeStats)')
+    expect(readLoopBody.indexOf('voiceRuntimeAcceptsMicrophoneInput(runtimeStats)')).toBeLessThan(
+      readLoopBody.indexOf('bridge.pushPcm(buffer, read, currentSequence)'),
+    )
+    expect(readLoopBody).toContain('0 -> sequence = currentSequence + 1L')
+    expect(readLoopBody).not.toContain('sequence = currentSequence + 1L\n                        when (result)')
+    expect(foregroundService).toContain('fun clearIngress(): Boolean')
+    expect(foregroundService).toContain('private external fun nativeClearIngress(handle: Long): Int')
+    expect(androidAudio).toContain('AuroraNativeVoiceSessionBridge_nativeClearIngress')
+    expect(androidAudio).toContain('session.clear_ingress()')
+    expect(nativeSession).toContain('pub fn clear_ingress(&self) -> bool')
+    expect(nativeCapture).toContain('pub fn clear_pending(&self) -> bool')
+    expect(rearmBody.indexOf('nativeSession.clearIngress()')).toBeLessThan(
+      rearmBody.indexOf('nativeSession.startBackground()'),
     )
   })
 
@@ -174,7 +492,7 @@ describe('Android native voice route policy', () => {
       expect(aclManifest).toContain(command)
     }
 
-    expect(catalogBody).toContain('validateAndParseVoicePackUri(uri)')
+    expect(catalogBody).toContain('parseVoicePackUri(uri)')
     expect(catalogBody).toContain('isValidHexSha256(sha)')
     expect(catalogBody).toContain('engineRuntimeRevision.isBlank()')
     expect(catalogBody).toContain('supportedOperatingSystems.isEmpty()')
@@ -200,8 +518,27 @@ describe('Android native voice route policy', () => {
     expect(localLightBody).toContain('ret.put("activePackReadyForRuntime", activeCacheReady)')
     expect(localLightBody).toContain('ret.put("activePackCacheReady", activeCacheReady)')
     expect(localLightBody).toContain('ret.put("routeConfigured", routeConfigured)')
-    expect(plugin).toContain('item.put("readyForRuntime", installed && task != null && isPackReadyForRuntime(entry))')
+    expect(plugin).toContain('isRecordedPackReadyForRuntime(entry, installedPackIds, referenceSelectionReady)')
     expect(plugin).toContain('item.put("readyForInstall", task != null && isPackDownloadReady(entry))')
+    expect(plugin).toContain('ret.put("available", catalog.isNotEmpty())')
+    expect(plugin).toContain('backgroundSessionAllowed(installedPackIds, referenceSelectionReady)')
+    expect(plugin).not.toContain('ret.put("available", backgroundSessionAllowed())')
+    const downloadReadinessBody = plugin.slice(
+      plugin.indexOf('private fun isPackDownloadReady'),
+      plugin.indexOf('private fun isPackInstalledForRuntime', plugin.indexOf('private fun isPackDownloadReady')),
+    )
+    const offlineUriValidationBody = plugin.slice(
+      plugin.indexOf('private fun parseVoicePackUri'),
+      plugin.indexOf('private fun validateAndParseVoicePackUri', plugin.indexOf('private fun parseVoicePackUri')),
+    )
+    const resolvedUriValidationBody = plugin.slice(
+      plugin.indexOf('private fun validateAndParseVoicePackUri'),
+      plugin.indexOf('private fun isAllowedPackHost', plugin.indexOf('private fun validateAndParseVoicePackUri')),
+    )
+    expect(downloadReadinessBody).toContain('parseVoicePackUri(entry.uri)')
+    expect(downloadReadinessBody).not.toContain('InetAddress.getAllByName')
+    expect(offlineUriValidationBody).not.toContain('InetAddress.getAllByName')
+    expect(resolvedUriValidationBody).toContain('InetAddress.getAllByName(host)')
     expect(plugin).toContain('private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask?')
     expect(plugin).toContain('requested == catalogTask -> requested')
     expect(plugin).toContain('else -> null')
@@ -225,9 +562,12 @@ describe('Android native voice route policy', () => {
 
     expect(foregroundStatusBody).toContain('val localDuplexReady = nativeRouteReady &&')
     expect(foregroundStatusBody).toContain('val backgroundRuntimeReady = localDuplexReady &&')
-    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.VAD)')
-    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.KWS)')
+    expect(foregroundStatusBody).toContain('val installedPackIds = recordedInstalledPackIds()')
+    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.VAD, installedPackIds, referenceSelectionReady)')
+    expect(foregroundStatusBody).toContain('isActivePackReady(AuroraSpeechPackTask.KWS, installedPackIds, referenceSelectionReady)')
     expect(foregroundStatusBody).toContain('wakePhraseSelection() != null')
+    expect(foregroundStatusBody).not.toContain('isPackReadyForRuntime')
+    expect(foregroundStatusBody).not.toContain('AuroraNativeSpeechPackBridge.resolve')
     expect(foregroundStatusBody).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeRouteReady')
     expect(foregroundStatusBody).toContain('val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && backgroundRuntimeReady')
     for (const statusField of [
@@ -246,8 +586,10 @@ describe('Android native voice route policy', () => {
     expect(foregroundService).toContain('private const val VOICE_STATS_COMPLETED_TURNS_INDEX = 8')
     expect(foregroundService).toContain('private const val VOICE_STATS_FAILED_TURNS_INDEX = 9')
     expect(foregroundService).toContain('private const val VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX = 10')
+    expect(foregroundService).toContain('private const val VOICE_STATS_LAST_ERROR_INDEX = 11')
     expect(foregroundService).toContain('runtimeActive = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0 } != 0L')
     expect(foregroundService).toContain('runtimePhase = auroraVoiceRuntimePhase(stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0 })')
+    expect(foregroundService).toContain('auroraVoiceRuntimeError(stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0 })')
     for (const [value, phase] of [
       ['0L', 'idle'],
       ['1L', 'starting'],
@@ -312,6 +654,32 @@ describe('Android native voice route policy', () => {
     expect(descriptorReadinessBody).not.toContain('validateAndParseVoicePackUri')
   })
 
+  it('accepts omitted reference fields for Android packs that do not require them', () => {
+    const plugin = repoText(kotlinPath)
+    const referenceArgsBody = plugin.slice(
+      plugin.indexOf('interface AndroidVoicePackReferenceArgs'),
+      plugin.indexOf('@InvokeArg\nclass AndroidVoicePackOperationStatusArgs'),
+    )
+    const referenceStoreBody = plugin.slice(
+      plugin.indexOf('private fun storeTtsReferenceSelection'),
+      plugin.indexOf('private fun clearTtsReferenceSelection'),
+    )
+
+    for (const declaration of [
+      'var referenceId: String?',
+      'var referenceAudioUri: String?',
+      'var referenceText: String?',
+      'var referenceRevision: String?',
+      'var referenceSampleRateHz: Int?',
+      'var referenceSamples: Array<Double>?',
+    ]) {
+      expect(referenceArgsBody).toContain(declaration)
+    }
+    expect(referenceStoreBody).toContain('args.referenceId?.trim().orEmpty()')
+    expect(referenceStoreBody).toContain('args.referenceSamples.orEmpty()')
+    expect(referenceStoreBody).toContain('args.referenceSampleRateHz ?: 0')
+  })
+
   it('releases foreground microphone access on Android focus or foreground loss', () => {
     const plugin = repoText(kotlinPath)
     const runtime = repoText('apps/aurora-tauri/src/aurora-client.ts')
@@ -340,11 +708,13 @@ describe('Android native voice route policy', () => {
     expect(onStopBody).toContain('focused = false')
     expect(onStopBody).toContain('denyPendingMicRequests()')
     expect(onStopBody).toContain('emitLifecycle("stop")')
-    expect(lifecycleBody).toContain('ret.put("mustReleaseMicrophone", !foreground || !focused)')
-    expect(lifecycleBody).toContain('ret.put("backgroundWakeword", false)')
+    expect(lifecycleBody).toMatch(/AuroraVoiceForegroundService\.running &&\s+AuroraVoiceForegroundService\.backgroundSessionActive/)
+    expect(lifecycleBody).toContain('ret.put("mustReleaseMicrophone", (!foreground || !focused) && !backgroundWakeword)')
+    expect(lifecycleBody).toContain('ret.put("backgroundWakeword", backgroundWakeword)')
     expect(lifecycleBody).toContain('release_mic_until_explicit_resume')
     expect(listenerBody).toContain('payload.mustReleaseMicrophone === true')
     expect(listenerBody).toContain('payload.foreground === false || payload.focused === false')
+    expect(listenerBody).toContain('payload.backgroundWakeword !== true')
     expect(listenerBody).toContain('AURORA_RELEASE_FOCUSED_MEDIA_EVENT')
   })
 

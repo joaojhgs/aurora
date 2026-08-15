@@ -124,8 +124,64 @@ impl AndroidPcmIngress {
         AndroidPcmPushResult::Accepted
     }
 
+    /// Accept the newest microphone chunk while keeping the ingress bounded.
+    ///
+    /// When the queue is full, the oldest pending chunk is discarded atomically
+    /// under the ingress lock. The runtime can then observe the sequence gap and
+    /// reset streaming inference without retaining stale microphone audio.
+    pub fn push_latest(&self, samples: &[i16], sequence: u64) -> AndroidPcmPushResult {
+        if samples.is_empty() || samples.len() > self.max_chunk_samples {
+            return AndroidPcmPushResult::InvalidArgument;
+        }
+        let Ok(mut inner) = self.inner.lock() else {
+            return AndroidPcmPushResult::Closed;
+        };
+        if inner.stats.closed {
+            return AndroidPcmPushResult::Closed;
+        }
+        if inner.queue.len() >= self.capacity_chunks {
+            inner.queue.pop_front();
+            inner.stats.dropped_chunks = inner.stats.dropped_chunks.saturating_add(1);
+            inner.stats.discontinuities = inner.stats.discontinuities.saturating_add(1);
+        }
+        if let Some(last_sequence) = inner.last_sequence {
+            if sequence != last_sequence.saturating_add(1) {
+                inner.stats.discontinuities = inner.stats.discontinuities.saturating_add(1);
+            }
+        }
+        inner.last_sequence = Some(sequence);
+        inner.stats.accepted_chunks = inner.stats.accepted_chunks.saturating_add(1);
+        inner.stats.accepted_samples = inner
+            .stats
+            .accepted_samples
+            .saturating_add(samples.len() as u64);
+        inner.queue.push_back(PcmChunk {
+            samples: samples.to_vec(),
+            sequence,
+        });
+        inner.stats.queued_chunks = inner.queue.len() as u32;
+        AndroidPcmPushResult::Accepted
+    }
+
     pub fn drain_one(&self) -> usize {
         self.drain_chunk().map_or(0, |chunk| chunk.samples.len())
+    }
+
+    /// Discard pending microphone audio before a new runtime generation starts.
+    ///
+    /// Lifetime counters remain intact for diagnostics, while sequence tracking is
+    /// reset so the first chunk of the new generation is not reported as a gap.
+    pub fn clear_pending(&self) -> bool {
+        let Ok(mut inner) = self.inner.lock() else {
+            return false;
+        };
+        if inner.stats.closed {
+            return false;
+        }
+        inner.queue.clear();
+        inner.last_sequence = None;
+        inner.stats.queued_chunks = 0;
+        true
     }
 
     /// Drain one owned PCM chunk for the native voice runtime.
@@ -325,6 +381,19 @@ mod tests {
     }
 
     #[test]
+    fn latest_biased_queue_drops_oldest_and_accepts_newest() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        assert_eq!(ingress.push_latest(&[1], 0), AndroidPcmPushResult::Accepted);
+        assert_eq!(ingress.push_latest(&[2], 1), AndroidPcmPushResult::Accepted);
+        assert_eq!(ingress.push_latest(&[3], 2), AndroidPcmPushResult::Accepted);
+        assert_eq!(ingress.stats().dropped_chunks, 1);
+        assert_eq!(ingress.stats().discontinuities, 1);
+        assert_eq!(ingress.drain_chunk().map(|chunk| chunk.sequence), Some(1));
+        assert_eq!(ingress.drain_chunk().map(|chunk| chunk.sequence), Some(2));
+        assert!(ingress.drain_chunk().is_none());
+    }
+
+    #[test]
     fn sequence_gaps_are_redacted_as_discontinuities() {
         let ingress = AndroidPcmIngress::new(4, 4);
         assert_eq!(ingress.push(&[1], 0), AndroidPcmPushResult::Accepted);
@@ -352,6 +421,32 @@ mod tests {
             })
         );
         assert!(ingress.drain_chunk().is_none());
+    }
+
+    #[test]
+    fn clear_pending_discards_stale_audio_and_resets_sequence_tracking() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        assert_eq!(
+            ingress.push_latest(&[1], 10),
+            AndroidPcmPushResult::Accepted
+        );
+        assert_eq!(
+            ingress.push_latest(&[2], 11),
+            AndroidPcmPushResult::Accepted
+        );
+
+        assert!(ingress.clear_pending());
+        let cleared = ingress.stats();
+        assert_eq!(cleared.queued_chunks, 0);
+        assert_eq!(cleared.accepted_chunks, 2);
+        assert_eq!(cleared.discontinuities, 0);
+
+        assert_eq!(
+            ingress.push_latest(&[3], 42),
+            AndroidPcmPushResult::Accepted
+        );
+        assert_eq!(ingress.stats().discontinuities, 0);
+        assert_eq!(ingress.drain_chunk().map(|chunk| chunk.sequence), Some(42));
     }
 
     #[tokio::test]
@@ -383,5 +478,51 @@ mod tests {
         assert_eq!(frame.samples(), &[0.5, -0.5]);
         input.control().finish(Generation(9));
         assert!(input.next_frame().await.expect("finish frame").is_none());
+    }
+
+    #[tokio::test]
+    async fn latest_biased_input_marks_one_discontinuity_then_recovers() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        let lease = VoiceCaptureLease {
+            owner: aurora_voice_core::CaptureOwnerKind::Native,
+            surface: "android".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: aurora_voice_core::CaptureStartReason::BackgroundSession,
+            generation: Generation(10),
+            created_at: TimestampMicros(200),
+            route_revision: RouteRevision(4),
+            background_eligible: true,
+            consent_revision: 0,
+            heartbeat_at: TimestampMicros(200),
+            stop_deadline: None,
+        };
+        input.start(lease).await.expect("start input");
+
+        assert_eq!(ingress.push_latest(&[1], 0), AndroidPcmPushResult::Accepted);
+        assert!(!input
+            .next_frame()
+            .await
+            .expect("first frame")
+            .expect("first samples")
+            .discontinuity());
+        assert_eq!(ingress.push_latest(&[2], 1), AndroidPcmPushResult::Accepted);
+        assert_eq!(ingress.push_latest(&[3], 2), AndroidPcmPushResult::Accepted);
+        assert_eq!(ingress.push_latest(&[4], 3), AndroidPcmPushResult::Accepted);
+
+        assert!(input
+            .next_frame()
+            .await
+            .expect("discontinuous frame")
+            .expect("discontinuous samples")
+            .discontinuity());
+        assert!(!input
+            .next_frame()
+            .await
+            .expect("recovered frame")
+            .expect("recovered samples")
+            .discontinuity());
+        assert_eq!(ingress.stats().dropped_chunks, 1);
+        assert_eq!(ingress.stats().discontinuities, 1);
     }
 }

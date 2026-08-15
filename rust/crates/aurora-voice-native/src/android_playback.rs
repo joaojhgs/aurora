@@ -105,7 +105,20 @@ impl AudioOutput for AndroidAudioOutput {
         audio: TtsSynthesisResult,
         cancellation: &dyn Fn() -> bool,
     ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
-        let (final_sequence, sample_count) = {
+        let mut sample_count = 0_u64;
+        for chunk in audio.chunks() {
+            if chunk.channels() != 1 || chunk.samples().is_empty() {
+                return Err(VoiceCoreError::Engine(
+                    aurora_voice_core::EngineError::InvalidRequest,
+                ));
+            }
+            sample_count = sample_count.saturating_add(chunk.samples().len() as u64);
+        }
+        let final_sequence = audio.chunks().last().map(|chunk| chunk.sequence());
+        if cancellation() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        {
             let mut inner = self
                 .inner
                 .lock()
@@ -116,43 +129,53 @@ impl AudioOutput for AndroidAudioOutput {
             if inner.active_generation.is_some() {
                 return Err(VoiceCoreError::OwnerAlreadyActive);
             }
-            if audio.chunks().len() > self.capacity_chunks {
-                return Err(VoiceCoreError::Backpressure);
-            }
-            if cancellation() {
-                return Err(VoiceCoreError::Cancelled);
-            }
             inner.queue.clear();
             inner.active_generation = Some(context.generation);
             inner.completed_generation = None;
             inner.last_drained = None;
             inner.final_sequence = None;
-            let mut sample_count = 0_u64;
-            for chunk in audio.chunks() {
+        }
+        for chunk in audio.chunks() {
+            let playback_chunk = AndroidPcmPlaybackChunk {
+                samples: chunk.samples().to_vec(),
+                sample_rate_hz: chunk.sample_rate_hz(),
+                channels: chunk.channels(),
+                sequence: chunk.sequence(),
+                final_chunk: chunk.final_chunk(),
+            };
+            loop {
                 if cancellation() {
-                    inner.queue.clear();
-                    inner.active_generation = None;
+                    self.stop(context.generation, TransitionReason::Cancel)
+                        .await?;
                     return Err(VoiceCoreError::Cancelled);
                 }
-                if chunk.channels() != 1 || chunk.samples().is_empty() {
-                    inner.queue.clear();
-                    inner.active_generation = None;
-                    return Err(VoiceCoreError::Engine(
-                        aurora_voice_core::EngineError::InvalidRequest,
-                    ));
+                let queued = {
+                    let mut inner = self
+                        .inner
+                        .lock()
+                        .map_err(|_| VoiceCoreError::LockPoisoned)?;
+                    if inner.closed {
+                        return Err(VoiceCoreError::BufferClosed);
+                    }
+                    if inner.active_generation != Some(context.generation) {
+                        return Err(VoiceCoreError::OwnerMismatch);
+                    }
+                    if inner.queue.len() >= self.capacity_chunks {
+                        false
+                    } else {
+                        if playback_chunk.final_chunk {
+                            inner.final_sequence = Some(playback_chunk.sequence);
+                        }
+                        inner.queue.push_back(playback_chunk.clone());
+                        true
+                    }
+                };
+                if queued {
+                    break;
                 }
-                sample_count = sample_count.saturating_add(chunk.samples().len() as u64);
-                inner.queue.push_back(AndroidPcmPlaybackChunk {
-                    samples: chunk.samples().to_vec(),
-                    sample_rate_hz: chunk.sample_rate_hz(),
-                    channels: chunk.channels(),
-                    sequence: chunk.sequence(),
-                    final_chunk: chunk.final_chunk(),
-                });
+                sleep(Duration::from_millis(5)).await;
             }
-            inner.final_sequence = inner.queue.back().map(|chunk| chunk.sequence);
-            (inner.final_sequence, sample_count)
-        };
+        }
         loop {
             if cancellation() {
                 self.stop(context.generation, TransitionReason::Cancel)
@@ -219,6 +242,30 @@ mod tests {
     };
     use aurora_voice_engine::TtsAudioChunk;
 
+    fn audio_with_chunks(chunk_count: usize) -> TtsSynthesisResult {
+        let route = RouteTtsBinding::new("gateway", "voice-group", 16_000, 1).expect("route");
+        let request = BoundTtsSynthesisRequest::new_route(
+            RouteTtsSynthesisRequest::new(route, None, 2).expect("request"),
+            "hello",
+            TtsSynthesisConfig::new("default", "voice-group", 16_000, 256, None).expect("config"),
+        )
+        .expect("bound request");
+        let chunks = (0..chunk_count)
+            .map(|index| {
+                TtsAudioChunk::new(
+                    &request,
+                    index as u64 + 1,
+                    16_000,
+                    1,
+                    vec![index as i16 + 1; 256],
+                    index + 1 == chunk_count,
+                )
+                .expect("chunk")
+            })
+            .collect();
+        TtsSynthesisResult::new(&request, chunks, false).expect("result")
+    }
+
     fn audio() -> TtsSynthesisResult {
         let route = RouteTtsBinding::new("gateway", "voice-group", 16_000, 1).expect("route");
         let request = BoundTtsSynthesisRequest::new_route(
@@ -265,5 +312,38 @@ mod tests {
             .expect_err("cancel");
         assert_eq!(error, VoiceCoreError::Cancelled);
         assert!(output.drain_chunk().is_none());
+    }
+
+    #[tokio::test]
+    async fn playback_streams_replies_larger_than_bounded_handoff() {
+        let mut output = AndroidAudioOutput::new(1);
+        let drain = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, audio_with_chunks(3), &|| false));
+
+        for expected_sequence in 1..=3 {
+            let chunk = loop {
+                if let Some(chunk) = drain.drain_chunk() {
+                    break chunk;
+                }
+                tokio::select! {
+                    result = &mut play => {
+                        panic!("play completed before all chunks were acknowledged: {result:?}")
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {}
+                }
+            };
+            assert_eq!(chunk.sequence, expected_sequence);
+            assert!(drain.queued_chunks() <= 1);
+            drain.acknowledge_drained();
+        }
+
+        let receipt = play.await.expect("play");
+        assert_eq!(receipt.chunk_count, 3);
+        assert_eq!(receipt.sample_count, 768);
     }
 }

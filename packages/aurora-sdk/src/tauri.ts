@@ -271,6 +271,7 @@ export interface AndroidVoicePackCatalogEntry {
 export interface AndroidVoicePackCatalogStatus {
   platform: 'android' | string
   available: boolean
+  backgroundRuntimeReady?: boolean
   activeSttPackId?: string | null
   activeTtsPackId?: string | null
   activeVadPackId?: string | null

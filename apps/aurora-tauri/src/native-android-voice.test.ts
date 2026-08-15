@@ -5,7 +5,7 @@ describe("native Android voice port", () => {
   it("routes status and turn controls through the foreground service commands", async () => {
     const invoke = vi.fn(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
       if (command.endsWith("status")) {
-        return { startable: true, backgroundStartable: true, running: true, captureActive: true };
+        return { startable: true, backgroundStartable: true, running: true, captureActive: true, backgroundSessionActive: true };
       }
       return { status: { startable: true, backgroundStartable: true, running: false, captureActive: false } };
     });
@@ -29,5 +29,44 @@ describe("native Android voice port", () => {
     ]);
     expect(invoke.mock.calls[1]?.[1]).toEqual({ request: { remoteAudioConsent: false } });
     expect(invoke.mock.calls[5]?.[1]).toEqual({ request: { remoteAudioConsent: true, backgroundSession: true } });
+  });
+
+  it("does not report foreground push-to-talk as an active background session", async () => {
+    const invoke = vi.fn(async (): Promise<unknown> => ({
+      startable: true,
+      backgroundStartable: true,
+      running: true,
+      captureActive: true,
+      backgroundSessionActive: false,
+    }));
+    const port = createTauriNativeAndroidVoicePort(invoke);
+
+    await expect(port.backgroundStatus?.()).resolves.toMatchObject({
+      available: true,
+      backgroundActive: false,
+    });
+  });
+
+  it("keeps an asynchronous start request available when Android reports an informational reason", async () => {
+    const invoke = vi.fn(async (): Promise<unknown> => ({
+      started: true,
+      reason: "foreground_service_start_requested",
+      status: {
+        startable: true,
+        backgroundStartable: true,
+        running: false,
+        captureActive: false,
+        runtimePhase: "idle",
+        state: "available",
+        reason: "foreground_service_startable",
+      },
+    }));
+    const port = createTauriNativeAndroidVoicePort(invoke);
+
+    await expect(port.start({ remoteAudioConsent: false })).resolves.toMatchObject({
+      available: true,
+      phase: "idle",
+      reasonCode: "foreground_service_startable",
+    });
   });
 });
