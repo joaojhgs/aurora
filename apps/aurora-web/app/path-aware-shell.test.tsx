@@ -18,6 +18,10 @@ const mockedBrowserRuntime = vi.hoisted(() => ({
     client: AuroraClient
     peer: unknown
     mode: 'http-only'
+    surface?: {
+      kind: string
+      nodeMode: 'remote-console' | 'mesh-node'
+    }
     close(): Promise<void>
   },
   profile: undefined as undefined,
@@ -391,6 +395,10 @@ describe('hosted web thin first-run shell', () => {
       client: new AuroraClient({ transport }),
       peer: fakePeer(),
       mode: 'http-only',
+      surface: {
+        kind: 'web',
+        nodeMode: 'mesh-node',
+      },
       close: vi.fn(async () => undefined),
     }
     const container = document.createElement('div')

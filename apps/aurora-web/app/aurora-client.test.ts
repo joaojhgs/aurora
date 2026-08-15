@@ -186,6 +186,56 @@ describe('createAuroraBrowserClient', () => {
     expect(runtime.client.transport.kind).toBe('mock')
   })
 
+  it('persists a dev launch profile before applying its surface simulation', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET', 'desktop-thin-remote')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage()
+
+    const runtime = createAuroraBrowserRuntime()
+    expect(runtime.surface.kind).toBe('desktop-thin')
+    expect(runtime.surface.nodeMode).toBe('remote-console')
+    expect(runtime.surface.isRemoteConsole).toBe(true)
+    expect(auroraBrowserRequiresOnboarding()).toBe(false)
+    expect(auroraBrowserRuntimeProfile()?.nodeMode).toBe('remote-console')
+    expect(auroraBrowserRuntimeProfileDocument()).toMatchObject({
+      activeProfileId: 'ui-launch-desktop-thin-remote',
+      profiles: [
+        expect.objectContaining({
+          id: 'ui-launch-desktop-thin-remote',
+          nodeMode: 'remote-console',
+          homeConnection: expect.objectContaining({
+            mode: 'http-only',
+          }),
+        }),
+      ],
+    })
+
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'aurora-client.ts'), 'utf8')
+    expect(source).not.toContain('VITE_AURORA_RUNTIME_MODE')
+    expect(source).not.toContain('debugLaunch?.nodeMode')
+    expect(source).not.toContain('NEXT_PUBLIC_AURORA_DEBUG_UI_NODE_MODE')
+  })
+
+  it('keeps native debug surfaces out of the hosted browser speech runtime', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET', 'android-node')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage()
+    setAuroraBrowserMeshNodeServicesFactoryForTests(
+      vi.fn(async () => fakeMeshNodeServices(vi.fn(async () => undefined))),
+    )
+
+    const runtime = await createAuroraBrowserRuntimeAsync()
+
+    expect(runtime.surface.kind).toBe('android')
+    expect(runtime.features.usesBrowserVoiceRuntime).toBe(false)
+    expect(runtime.browserSpeechPacks).toMatchObject({ state: 'disabled', packs: [] })
+    await runtime.close()
+  })
+
   it('uses the WebRTC rollout kill switch to keep hosted preferred mode on HTTP', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('NEXT_PUBLIC_AURORA_WEBRTC_THIN_CLIENT', '0')
@@ -252,8 +302,8 @@ describe('createAuroraBrowserClient', () => {
       runtimeTier: 'lightweight-ts',
     })
     expect(runtime.features).toEqual({
-      requestedNodeRole: 'remote-console',
-      activeNodeRole: 'remote-console',
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
       meshNodeRuntimeEnabled: false,
       localToolProviderEnabled: false,
       lightweightOrchestratorEnabled: false,
@@ -733,9 +783,9 @@ describe('createAuroraBrowserClient', () => {
       runtimeTier: 'lightweight-ts',
     })
     expect(runtime.features).toMatchObject({
-      requestedNodeRole: 'remote-console',
-      activeNodeRole: 'remote-console',
-      localToolProviderEnabled: false,
+      requestedNodeRole: 'mesh-node',
+      activeNodeRole: 'mesh-node',
+      localToolProviderEnabled: true,
     })
     expect(runtime.localData).toBeUndefined()
     expect(runtime.localFeatureSharing).toBeUndefined()

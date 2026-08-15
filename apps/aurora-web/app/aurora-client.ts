@@ -68,6 +68,10 @@ import {
   type BrowserMeshNodeCompositionStatus,
   type BrowserMeshNodeServices,
 } from './browser-mesh-node-services'
+import {
+  applyDebugUiLaunchToRuntimeProfile,
+  resolveAuroraDebugUiLaunch,
+} from './debug-ui-launch'
 
 type BrowserRuntimeCache = {
   baseKey: string
@@ -226,8 +230,8 @@ export async function createAuroraBrowserRuntimeAsync({
 } = {}): Promise<AuroraBrowserRuntime> {
   if (browserRuntimeProfileTransition) await browserRuntimeProfileTransition
   const credentialStore = ensureBrowserCredentialStore()
+  const profileDocument = ensureDebugUiLaunchRuntimeProfile(credentialStore)
   const profileRevision = browserRuntimeProfileRevision
-  const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
   const runtimeProfile = activeRuntimeProfile(profileDocument)
   const rolloutFlags = browserWebRtcRolloutFlags()
   const localStablePeerId = runtimeProfile?.localNode.stablePeerId || credentialStore.getOrCreateLocalStablePeerId()
@@ -272,9 +276,12 @@ export async function createAuroraBrowserRuntimeAsync({
 async function resolveBrowserSpeechPacks(
   runtimeProfile: AuroraRuntimeProfileV2 | undefined,
 ): Promise<AuroraBrowserSpeechPacksRuntimeStatus> {
+  const debugLaunch = resolveAuroraDebugUiLaunch()
   const surface = getAuroraSurfaceProfile({
-    runtimeMode: 'web-thin',
+    runtimeMode: debugLaunch?.runtimeMode ?? 'web-thin',
     transportKind: 'http',
+    ...(debugLaunch?.nativePlatform ? { nativePlatform: debugLaunch.nativePlatform } : {}),
+    ...(debugLaunch?.userAgent ? { userAgent: debugLaunch.userAgent } : {}),
     nodeMode: runtimeProfile?.nodeMode,
     runtimeTier: runtimeProfile?.runtimeTier,
     enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
@@ -329,8 +336,9 @@ function createAuroraBrowserRuntimeFromStore(
   browserSpeechPacks: AuroraBrowserSpeechPacksRuntimeStatus = disabledBrowserSpeechPacks(),
 ): AuroraBrowserRuntime {
   const credentialStore = ensureBrowserCredentialStore()
-  const profileDocument = credentialStore.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  const profileDocument = ensureDebugUiLaunchRuntimeProfile(credentialStore)
   const runtimeProfile = activeRuntimeProfile(profileDocument)
+  const debugLaunch = resolveAuroraDebugUiLaunch()
   const thinProfile = thinRuntimeProfileFromRuntimeProfile(runtimeProfile)
   const baseKey = browserClientCacheKey(null)
   const key = browserClientCacheKey(meshNodeServices, browserSpeechPacks.revision)
@@ -355,14 +363,16 @@ function createAuroraBrowserRuntimeFromStore(
   const effectiveMeshNodeServices = runtimeProfile?.nodeMode === 'mesh-node' ? meshNodeServices : null
   const runtime = createBrowserWebThinRuntime({
     mode,
-    nodeRole: effectiveMeshNodeServices?.enabled ? 'mesh-node' : 'remote-console',
+    nodeRole: runtimeProfile?.nodeMode ?? 'remote-console',
     enabledCapabilityPacks: runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
     localSpeechPackState: browserSpeechPacks.state === 'ready' ? 'ready' : runtimeProfile?.localNode.localSpeechPackState,
     localSpeechEngineCapabilities: browserSpeechPacks.state === 'ready' ? browserSpeechPacks.capabilities : null,
     gatewayUrl,
     bearerToken: () => runtime.client.auth.bearerToken(),
     signalingUrl: thinProfile?.signalingUrl,
-    runtimeMode: 'web-thin',
+    runtimeMode: debugLaunch?.runtimeMode ?? 'web-thin',
+    ...(debugLaunch?.nativePlatform ? { nativePlatform: debugLaunch.nativePlatform } : {}),
+    ...(debugLaunch?.userAgent ? { userAgent: debugLaunch.userAgent } : {}),
     demoMode: isBrowserDemoMode(),
     rolloutFlags,
     allowInsecureLoopback: truthy(process.env.NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK),
@@ -498,8 +508,7 @@ export function setAuroraBrowserVoicePackCatalogSourceForTests(
 export const setAuroraBrowserSpeechPackOpenerForTests = setAuroraBrowserVoicePackCatalogSourceForTests
 
 export function auroraBrowserThinProfileDocument(): ThinProfileDocument {
-  const runtimeDocument = ensureBrowserCredentialStore().loadRuntimeProfileDocument()
-  if (!runtimeDocument) return emptyThinProfileDocument()
+  const runtimeDocument = ensureDebugUiLaunchRuntimeProfile(ensureBrowserCredentialStore())
   try {
     return runtimeProfileDocumentToThinDocument(runtimeDocument)
   } catch {
@@ -512,7 +521,7 @@ export function auroraBrowserThinProfile(): ThinConnectionProfile | undefined {
 }
 
 export function auroraBrowserRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 {
-  return ensureBrowserCredentialStore().loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  return ensureDebugUiLaunchRuntimeProfile(ensureBrowserCredentialStore())
 }
 
 export function auroraBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | undefined {
@@ -524,6 +533,31 @@ export function auroraBrowserRequiresOnboarding(): boolean {
   const runtimeProfile = auroraBrowserRuntimeProfile()
   if (runtimeProfile) return !isRuntimeProfileConfigured(runtimeProfile)
   return !isThinConnectionProfileConfigured(auroraBrowserThinProfile())
+}
+
+function ensureDebugUiLaunchRuntimeProfile(
+  store: BrowserPersistentPeerCredentialStore,
+): AuroraRuntimeProfileDocumentV2 {
+  const current = store.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  const launch = resolveAuroraDebugUiLaunch()
+  if (!launch) return current
+
+  const profileId = `ui-launch-${launch.preset}`
+  const existing = current.profiles.find((profile) => profile.id === profileId)
+  const profile = sanitizeRuntimeProfile(applyDebugUiLaunchToRuntimeProfile(launch, existing))
+  const next = sanitizeRuntimeProfileDocument({
+    version: 2,
+    activeProfileId: profile.id,
+    profiles: [
+      ...current.profiles.filter((candidate) => candidate.id !== profile.id),
+      profile,
+    ],
+  })
+  if (JSON.stringify(next) !== JSON.stringify(current)) {
+    store.saveRuntimeProfileDocument(next)
+    browserRuntimeProfileRevision += 1
+  }
+  return next
 }
 
 export async function saveAuroraBrowserThinProfile(
@@ -710,9 +744,18 @@ export function auroraBrowserRuntimeDiagnostics(): string[] {
 
 function browserClientCacheKey(meshNodeServices: BrowserMeshNodeServices | null = null, browserSpeechPacksRevision = 'none'): string {
   const document = browserCredentialStore?.loadRuntimeProfileDocument() ?? emptyRuntimeProfileDocument()
+  const debugLaunch = resolveAuroraDebugUiLaunch()
   return JSON.stringify({
     document,
     demoMode: isBrowserDemoMode(),
+    debugLaunch: debugLaunch
+      ? {
+        preset: debugLaunch.preset,
+        runtimeMode: debugLaunch.runtimeMode,
+        nativePlatform: debugLaunch.nativePlatform,
+        userAgent: debugLaunch.userAgent,
+      }
+      : null,
     rolloutFlags: browserWebRtcRolloutFlags(),
     browserSpeechPacksRevision,
     meshNodeServices: meshNodeServices

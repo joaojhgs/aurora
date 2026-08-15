@@ -6,6 +6,19 @@ import { describe, expect, it } from 'vitest'
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(appRoot, '..', '..')
 
+const UI_LAUNCH_PRESETS = [
+  'web-remote',
+  'web-node',
+  'desktop-local',
+  'desktop-thin-remote',
+  'desktop-node',
+  'android-remote',
+  'android-node',
+  'ios-remote',
+  'ios-node',
+  'mobile-node',
+] as const
+
 function packageScripts(path: string) {
   return (
     JSON.parse(readFileSync(path, 'utf8')) as {
@@ -32,5 +45,24 @@ describe('web neutral dev command aliases', () => {
     ]) {
       expect(scriptValue).not.toMatch(/THIN|WEBRTC_THIN_CLIENT|RUNTIME_MODE/)
     }
+  })
+
+  it('exposes random-port UI launch scripts for every surface/role preset', () => {
+    const rootScripts = packageScripts(resolve(repoRoot, 'package.json'))
+    const webScripts = packageScripts(resolve(appRoot, 'package.json'))
+
+    for (const preset of UI_LAUNCH_PRESETS) {
+      const scriptName = `dev:ui:${preset}`
+      expect(webScripts[scriptName]).toBe(`node ./scripts/dev-ui-launch.mjs ${preset}`)
+      expect(rootScripts[scriptName]).toBe(`pnpm --filter @aurora/web ${scriptName}`)
+    }
+
+    const launcher = readFileSync(resolve(appRoot, 'scripts/dev-ui-launch.mjs'), 'utf8')
+    expect(launcher).toContain("NEXT_PUBLIC_AURORA_DEBUG_UI: '1'")
+    expect(launcher).toContain('--port')
+    expect(launcher).toContain('reserveFreePort')
+    expect(launcher).not.toContain('VITE_AURORA_RUNTIME_MODE')
+    expect(launcher).not.toContain('NEXT_PUBLIC_AURORA_DEBUG_UI_NODE_MODE')
+    expect(launcher).not.toContain('NEXT_PUBLIC_AURORA_DEBUG_UI_SURFACE')
   })
 })

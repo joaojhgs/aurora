@@ -27,6 +27,7 @@ import {
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
 import { createAuroraBrowserLocalAssistantConfig } from './browser-local-assistant'
+import { shellRuntimeModeFromSurfaceKind } from './debug-ui-launch'
 
 type PathAwareShellProps = {
   children: ReactNode
@@ -237,8 +238,8 @@ function ReadyPathAwareShell({
         currentPath={pathname ?? '/'}
         onNavigate={(href) => router.push(href)}
         sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
-        runtimeMode="web-thin"
-        nodeMode={configuredRuntimeProfile?.nodeMode ?? runtimeNodeMode}
+        runtimeMode={shellRuntimeModeFromSurfaceKind(runtime.surface.kind)}
+        nodeMode={configuredRuntimeProfile?.nodeMode ?? runtime.surface.nodeMode ?? runtimeNodeMode}
         localNodeAvailable={runtime.localNodeProviderStatus?.available}
       >
         {children}
