@@ -31,7 +31,6 @@
   - `apps/aurora-tauri/README.md`
   - `docs/FRONTEND_AND_UI_ARCHITECTURE.md`
   - `docs/PRODUCTION_UI_CONTRACTS.md`
-  - `docs/TAURI_DEV_AND_UI_GAP_REPORT.md`
 - Evidence boundaries:
   - Observed: the current nav contract defines 22 production routes; production screens must consume `AuroraClient`/SDK state; mocks are the UX target but not production data truth; Tauri local dev is expected to run via `pnpm --filter @aurora/tauri-ui tauri dev`.
   - Inferred: visual tone and layout principles below are derived from the mock cockpit and existing shared UI components, not from a separate brand system or Figma file.

@@ -21,6 +21,7 @@ import {
   localLightInferenceLabel,
   nativeFeatureLabel,
   peerConnectionStatusLabel,
+  requestTauriNativeAccess,
   runtimeModeLabel,
   savedAccessLabel,
   tauriRouteRegistry,
@@ -38,6 +39,29 @@ function expectProductCopy(...values: string[]) {
 }
 
 describe("Tauri application product copy", () => {
+  it("routes Android device access through native commands only for supported choices", async () => {
+    const requestAssistantRole = vi.fn(async () => null);
+    const requestPermission = vi.fn(async (_permission: string) => null);
+    const port = {
+      requestAndroidAssistantRole: requestAssistantRole,
+      requestAndroidPermission: requestPermission,
+    };
+
+    await requestTauriNativeAccess(port, "android.assistantRole");
+    await requestTauriNativeAccess(port, "aurora.android.microphone");
+    await requestTauriNativeAccess(port, "aurora.android.notifications");
+    await requestTauriNativeAccess(port, "aurora.android.voiceForegroundService");
+
+    expect(requestAssistantRole).toHaveBeenCalledTimes(1);
+    expect(requestPermission.mock.calls.map(([permission]) => permission)).toEqual([
+      "aurora.android.microphone",
+      "aurora.android.notifications",
+      "aurora.android.voiceForegroundService",
+    ]);
+    await expect(requestTauriNativeAccess(port, "android.unsupported"))
+      .rejects.toMatchObject({ code: "unsupported_feature" });
+  });
+
   it("maps hostile internal states through closed user-facing labels", () => {
     const values = [
       runtimeModeLabel("desktop-thin"),

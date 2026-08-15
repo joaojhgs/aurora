@@ -51,6 +51,7 @@ import {
   thinConnectionProfileWithManualAddress,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
+  type AuroraLocalSpeechSelectionProfile,
   type AuroraShellSnapshot,
   type RouteAvailability,
   type WebThinRoomSecret,
@@ -120,6 +121,7 @@ import {
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
 } from "./aurora-client";
+import type { TauriNativeSpeechCatalogReadiness } from "./native-speech-catalog";
 import {
   initMeshDeepLinks,
   isMobileTauriShell,
@@ -453,7 +455,36 @@ export async function rebuildAuroraThinRuntime(
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500;
 const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000;
-const NATIVE_MOBILE_VOICE_STATUS_POLL_MS = 2_000;
+const NATIVE_VOICE_STATUS_POLL_MS = 2_000;
+const ANDROID_RUNTIME_PERMISSION_IDS = new Set([
+  "aurora.android.microphone",
+  "aurora.android.notifications",
+  "aurora.android.voiceForegroundService",
+]);
+
+export async function requestTauriNativeAccess(
+  runtime: Pick<
+    AuroraTauriRuntime,
+    "requestAndroidAssistantRole" | "requestAndroidPermission"
+  >,
+  permissionId: string,
+): Promise<void> {
+  if (permissionId === "android.assistantRole") {
+    if (!runtime.requestAndroidAssistantRole) throw nativeAccessUnavailableError();
+    await runtime.requestAndroidAssistantRole();
+    return;
+  }
+  if (!ANDROID_RUNTIME_PERMISSION_IDS.has(permissionId) || !runtime.requestAndroidPermission) {
+    throw nativeAccessUnavailableError();
+  }
+  await runtime.requestAndroidPermission(permissionId);
+}
+
+function nativeAccessUnavailableError(): Error & { code: string } {
+  return Object.assign(new Error("This device cannot request that access here."), {
+    code: "unsupported_feature",
+  });
+}
 
 export function AuroraTauriApp({
   runtimeOverride,
@@ -500,33 +531,54 @@ export function AuroraTauriApp({
     useState<AndroidForegroundRuntimeStatus | null>(null);
   const [androidMediaPolicy, setAndroidMediaPolicy] =
     useState<AndroidMediaPolicyStatus | null>(null);
-  const [nativeMobileVoiceAvailable, setNativeMobileVoiceAvailable] =
+  const [nativeVoiceAvailable, setNativeVoiceAvailable] =
     useState(false);
+  const [nativeSpeechReadiness, setNativeSpeechReadiness] =
+    useState<TauriNativeSpeechCatalogReadiness | null>(null);
 
   useEffect(() => {
-    const nativeMobileVoice = runtime.nativeMobileVoice;
-    setNativeMobileVoiceAvailable(false);
-    if (!nativeMobileVoice) {
+    const nativeVoice = runtime.nativeMobileVoice ?? runtime.nativeVoice;
+    setNativeVoiceAvailable(false);
+    if (!nativeVoice) {
       return;
     }
     let active = true;
     const refresh = async () => {
       try {
-        const status = await nativeMobileVoice.status();
-        if (active) setNativeMobileVoiceAvailable(status.available);
+        const status = await nativeVoice.status();
+        if (active) setNativeVoiceAvailable(status.available);
       } catch {
-        if (active) setNativeMobileVoiceAvailable(false);
+        if (active) setNativeVoiceAvailable(false);
       }
     };
     void refresh();
     const poll = window.setInterval(() => {
       void refresh();
-    }, NATIVE_MOBILE_VOICE_STATUS_POLL_MS);
+    }, NATIVE_VOICE_STATUS_POLL_MS);
     return () => {
       active = false;
       window.clearInterval(poll);
     };
-  }, [runtime.nativeMobileVoice]);
+  }, [runtime.nativeMobileVoice, runtime.nativeVoice]);
+
+  useEffect(() => {
+    const catalog = runtime.localSpeechCatalog;
+    setNativeSpeechReadiness(null);
+    if (!catalog) return;
+    let active = true;
+    const refresh = async () => {
+      const readiness = await catalog.getReadiness().catch(() => null);
+      if (active) setNativeSpeechReadiness(readiness);
+    };
+    void refresh();
+    const poll = window.setInterval(() => {
+      void refresh();
+    }, NATIVE_VOICE_STATUS_POLL_MS);
+    return () => {
+      active = false;
+      window.clearInterval(poll);
+    };
+  }, [runtime.localSpeechCatalog]);
 
   useEffect(() => {
     if (runtimeOverride || !requiresAsyncAuroraTauriBootstrap()) return;
@@ -591,6 +643,17 @@ export function AuroraTauriApp({
       rebuildThinRuntime((controller) =>
         controller.selectProfile(profileId),
       ),
+    [rebuildThinRuntime],
+  );
+
+  const saveLocalSpeechSelection = useCallback(
+    (selection: AuroraLocalSpeechSelectionProfile) =>
+      rebuildThinRuntime((controller) => {
+        if (!controller.updateActiveLocalSpeechSelection) {
+          return Promise.resolve(controller.document);
+        }
+        return controller.updateActiveLocalSpeechSelection(selection);
+      }),
     [rebuildThinRuntime],
   );
 
@@ -807,6 +870,56 @@ export function AuroraTauriApp({
     };
   }, [runtime, thinPeerReadyRevision]);
 
+  const refreshNativeAccessState = useCallback(async () => {
+    const [nextSnapshot, nextNativePermissions, nextAndroidBaseline] =
+      await Promise.all([
+        buildRuntimeShellSnapshot(
+          runtime.client,
+          false,
+          runtime.nativeCapabilityManifest,
+        ),
+        runtime.nativePermissionStatus().catch(() => null),
+        runtime.androidBaselineStatus().catch(() => null),
+      ]);
+    setSnapshot((current) =>
+      retainThinShellSnapshot(
+        current,
+        nextSnapshot,
+        runtime.thinPeer?.snapshot(),
+      ),
+    );
+    setNativePermissions(nextNativePermissions);
+    setAndroidBaseline(nextAndroidBaseline);
+  }, [runtime]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined"
+      || snapshot.nativePlatform !== "android"
+      || (!runtime.requestAndroidAssistantRole && !runtime.requestAndroidPermission)
+    ) return;
+    const refresh = () => {
+      void refreshNativeAccessState();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshNativeAccessState, runtime, snapshot.nativePlatform]);
+
+  const requestNativeAccess = useCallback(
+    async (permissionId: string) => {
+      await requestTauriNativeAccess(runtime, permissionId);
+      await refreshNativeAccessState();
+    },
+    [refreshNativeAccessState, runtime],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onPopState = () => setCurrentPath(currentBrowserPath());
@@ -860,8 +973,18 @@ export function AuroraTauriApp({
     nativePlatform: snapshot.nativePlatform,
     nodeMode: runtime.nodeMode,
     runtimeTier: runtime.runtimeTier,
-    nativeVoicePresent: runtime.nativeMobileVoice !== undefined,
-    nativeVoiceAvailable: nativeMobileVoiceAvailable,
+    enabledCapabilityPacks:
+      runtime.runtimeProfile?.localNode.enabledCapabilityPacks ?? [],
+    localSpeechPackState:
+      nativeSpeechReadiness?.state
+      ?? runtime.runtimeProfile?.localNode.localSpeechPackState,
+    localSpeechEngineCapabilities: nativeSpeechReadiness?.capabilities,
+    nativeVoicePresent:
+      runtime.nativeMobileVoice !== undefined || runtime.nativeVoice !== undefined,
+    nativeVoiceAvailable,
+    nativeWakewordAvailable:
+      nativeSpeechReadiness?.capabilities.vad === true
+      && nativeSpeechReadiness.capabilities.kws === true,
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
@@ -895,10 +1018,13 @@ export function AuroraTauriApp({
     localData: runtime.localData,
     nativeVoice: runtime.nativeVoice,
     nativeMobileVoice: runtime.nativeMobileVoice,
+    localSpeechCatalog: runtime.localSpeechCatalog,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
     selectThinProfile,
+    saveLocalSpeechSelection,
+    requestNativeAccess,
   };
 
   if (!profileBootstrapReady) {
@@ -1384,6 +1510,7 @@ interface NativeContext {
   localData?: AuroraTauriRuntime["localData"];
   nativeVoice?: AuroraTauriRuntime["nativeVoice"];
   nativeMobileVoice?: AuroraTauriRuntime["nativeMobileVoice"];
+  localSpeechCatalog?: AuroraTauriRuntime["localSpeechCatalog"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
   saveThinProfile: (
@@ -1391,6 +1518,9 @@ interface NativeContext {
     roomSecret?: WebThinRoomSecret,
   ) => Promise<void>;
   selectThinProfile: (profileId: string) => Promise<void>;
+  saveLocalSpeechSelection: (
+    selection: AuroraLocalSpeechSelectionProfile,
+  ) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
   iosInvocationStatus: TauriIosInvocationStatus | null;
@@ -1398,6 +1528,7 @@ interface NativeContext {
   androidBaseline: TauriAndroidBaselineStatus | null;
   androidForeground: AndroidForegroundRuntimeStatus | null;
   androidMediaPolicy: AndroidMediaPolicyStatus | null;
+  requestNativeAccess?: ((permissionId: string) => Promise<void>) | undefined;
 }
 
 function localMeshNodeIdentity(
@@ -1616,6 +1747,7 @@ function TauriNativeSettingsPage({
         snapshot={snapshot}
         surface="native"
         currentPath="/settings/native"
+        onRequestNativeAccess={nativeContext.requestNativeAccess}
       />
       {showDesktopCommands ? (
         <section
@@ -1896,7 +2028,15 @@ function TauriSettingsPage({
         hidden={activeTab !== "voice"}
         className="aui-tab-panel"
       >
-        {activeTab === "voice" ? <VoiceSettingsView client={client} /> : null}
+        {activeTab === "voice" ? (
+          <VoiceSettingsView
+            client={client}
+            runtimeProfile={nativeContext.runtimeProfile ?? null}
+            surfaceProfile={nativeContext.surfaceProfile}
+            localSpeechCatalog={nativeContext.localSpeechCatalog}
+            onLocalSpeechSelectionConfirmed={nativeContext.saveLocalSpeechSelection}
+          />
+        ) : null}
       </section>
       <section
         id="settings-panel-configuration"

@@ -5,21 +5,29 @@ import {
   type AuroraCapturedAudio,
   type AuroraPcmFrame,
   type AuroraPcmFrameEnvelope,
+  type AuroraVoiceTtsAudio,
+  type AuroraVoiceTtsRequest,
+  type AuroraVoiceInferenceOutput,
   type AuroraVoiceLifecycleEligibility,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebEvent,
   type AuroraVoiceWebEventKind,
   type AuroraVoiceWebEventListener,
+  type AuroraVoiceWebModelBindings,
   type AuroraVoiceWebRuntimeOptions,
   type AuroraVoiceWebRuntimeSnapshot,
   type AuroraVoiceWebSession,
   type AuroraVoiceWebState
 } from './types.js'
+import { cloneModelBindingsForWorker } from './sherpa-engine.js'
 
 const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
 const DEFAULT_WORKER_TIMEOUT_MS = 5_000
+const DEFAULT_TTS_TIMEOUT_MS = 120_000
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
+const MAX_TTS_TEXT_CHARS = 1_000
+const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
 
 interface ActiveVoiceLock {
   readonly ownerId: string
@@ -37,14 +45,18 @@ export class AuroraVoiceWebRuntime {
   private readonly maxFrameSamples: number
   private readonly maxQueuedBytes: number
   private readonly workerTimeoutMs: number
+  private readonly ttsTimeoutMs: number
+  private readonly modelBindings: AuroraVoiceWebModelBindings | undefined
   private readonly nowMs: () => number
   private readonly sessionIdFactory: (ownerId: string, generation: number) => string
   private readonly listeners = new Set<AuroraVoiceWebEventListener>()
-  private readonly capabilities: AuroraVoiceWebCapabilities
+  private capabilities: AuroraVoiceWebCapabilities
   private state: AuroraVoiceWebState = 'idle'
   private session: AuroraVoiceWebSession | null = null
   private pendingStoppedSession: AuroraVoiceWebSession | null = null
   private generation = 0
+  private ttsGeneration = 0
+  private activeTtsGeneration: number | null = null
   private nextSequence = 0
   private queuedBytes = 0
   private frameChain: Promise<void> = Promise.resolve()
@@ -57,6 +69,8 @@ export class AuroraVoiceWebRuntime {
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
     this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
+    this.ttsTimeoutMs = boundedIntegerInRange(options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS, 'ttsTimeoutMs', 1_000, DEFAULT_TTS_TIMEOUT_MS)
+    this.modelBindings = options.modelBindings
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId
     this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
@@ -112,21 +126,7 @@ export class AuroraVoiceWebRuntime {
     this.session = nextSession
     let workerStarted = false
     try {
-      const ready = await this.worker.request({
-        type: 'init',
-        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
-        maxFrameSamples: this.maxFrameSamples,
-        maxQueuedBytes: this.maxQueuedBytes
-      }, { timeoutMs: this.workerTimeoutMs })
-      if (
-        ready.type !== 'ready' ||
-        ready.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
-        !capabilitiesAreUnavailable(ready.capabilities) ||
-        ready.maxFrameSamples > this.maxFrameSamples ||
-        ready.maxQueuedBytes > this.maxQueuedBytes
-      ) {
-        throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
-      }
+      await this.initializeWorker(this.hasTtsModelBindings() ? this.ttsTimeoutMs : this.workerTimeoutMs)
       this.assertStartStillCurrent(nextSession)
       const started = await this.worker.request({ type: 'start', session: nextSession, capabilities: this.capabilities }, { timeoutMs: this.workerTimeoutMs })
       this.assertStartStillCurrent(nextSession)
@@ -186,10 +186,47 @@ export class AuroraVoiceWebRuntime {
     await this.finishTurn('abandoned')
   }
 
+  async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
+    const eligibility = this.currentLifecycle()
+    if (!eligibility.eligible || !eligibility.visible || eligibility.frozen) {
+      throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Foreground speech is not available')
+    }
+    const text = validateTtsText(request.text)
+    const generation = boundedTtsGeneration(request.generation ?? this.ttsGeneration + 1)
+    this.ttsGeneration = Math.max(this.ttsGeneration, generation)
+    this.activeTtsGeneration = generation
+    try {
+      await this.initializeWorker(this.ttsTimeoutMs)
+      if (!this.capabilities.tts) throw new AuroraVoiceWebRuntimeError('tts_unavailable', 'Speech is not available')
+      const response = await this.worker.request({
+        type: 'synthesize_tts',
+        generation,
+        text,
+        ...(request.voiceId !== undefined ? { voiceId: safeIdentifier(request.voiceId, 'voiceId') } : {}),
+        ...(request.speakerId !== undefined ? { speakerId: boundedIntegerInRange(request.speakerId, 'speakerId', 0, 10_000) } : {}),
+        ...(request.speed !== undefined ? { speed: boundedFloatInRange(request.speed, 'speed', 0.25, 4.0) } : {})
+      }, { timeoutMs: this.ttsTimeoutMs })
+      if (this.activeTtsGeneration !== generation || generation < this.ttsGeneration) {
+        throw new AuroraVoiceWebRuntimeError('stale_generation', 'Speech was cancelled')
+      }
+      return validateTtsResult(response, generation)
+    } catch (error) {
+      if (error instanceof AuroraVoiceWebRuntimeError) throw error
+      throw new AuroraVoiceWebRuntimeError('tts_failed', 'Speech could not be generated')
+    } finally {
+      if (this.activeTtsGeneration === generation) this.activeTtsGeneration = null
+    }
+  }
+
   async cancel(reason = 'cancelled'): Promise<void> {
     const session = this.session
     const pending = this.pendingStoppedSession
-    if (session === null && pending === null) return
+    const ttsGeneration = this.activeTtsGeneration
+    if (ttsGeneration !== null) {
+      this.ttsGeneration = Math.max(this.ttsGeneration, ttsGeneration + 1)
+      this.activeTtsGeneration = null
+    }
+    if (session === null && pending === null && ttsGeneration === null) return
     const generation = this.generation
     let failed = false
     try {
@@ -202,7 +239,7 @@ export class AuroraVoiceWebRuntime {
         const cancelled = await this.worker.request({
           type: 'cancel',
           sessionId: session?.sessionId ?? pending?.sessionId ?? null,
-          generation: session?.generation ?? pending?.generation ?? generation,
+          generation: session?.generation ?? pending?.generation ?? ttsGeneration ?? generation,
           reason: 'cancelled'
         }, { timeoutMs: this.workerTimeoutMs })
         const owner = session ?? pending
@@ -307,7 +344,7 @@ export class AuroraVoiceWebRuntime {
         timeoutMs: this.workerTimeoutMs,
         transfer: [transferBuffer]
       })
-      validateAck(posted, session.sessionId, session.generation, frame.sequence)
+      const ack = validateAck(posted, session.sessionId, session.generation, frame.sequence)
       if (
         this.session !== session ||
         this.state !== 'active' ||
@@ -318,6 +355,9 @@ export class AuroraVoiceWebRuntime {
       }
       this.nextSequence = frame.sequence + 1
       this.emit('frame_accepted', frame.sequence, frame.generation, sampleCount, byteLength, this.queuedBytes - byteLength, null)
+      if (ack.inference !== undefined) {
+        this.emit('voice_inference', frame.sequence, frame.generation, sampleCount, byteLength, this.queuedBytes - byteLength, null, ack.inference)
+      }
       return true
     } catch {
       await this.failClosed('frame_failed')
@@ -372,6 +412,32 @@ export class AuroraVoiceWebRuntime {
     }
   }
 
+  private async initializeWorker(timeoutMs = this.workerTimeoutMs): Promise<void> {
+    const workerBindings = cloneModelBindingsForWorker(this.modelBindings)
+    const ready = await this.worker.request({
+      type: 'init',
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      maxFrameSamples: this.maxFrameSamples,
+      maxQueuedBytes: this.maxQueuedBytes,
+      ...(workerBindings.bindings !== undefined ? { modelBindings: workerBindings.bindings } : {})
+    }, { timeoutMs, transfer: workerBindings.transfer })
+    if (
+      ready.type !== 'ready' ||
+      ready.protocolVersion !== AURORA_VOICE_WORKER_PROTOCOL_VERSION ||
+      !validReadyCapabilities(ready.capabilities) ||
+      ready.maxFrameSamples > this.maxFrameSamples ||
+      ready.maxQueuedBytes > this.maxQueuedBytes
+    ) {
+      throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker is not available')
+    }
+    this.capabilities = ready.capabilities
+  }
+
+  private hasTtsModelBindings(): boolean {
+    return this.modelBindings?.models.some((model) => model.task === 'tts') === true ||
+      this.modelBindings?.files.some((file) => file.task === 'tts') === true
+  }
+
   private async bestEffortCancelHosts(session: AuroraVoiceWebSession | null, notifyWorker: boolean, reason: string): Promise<void> {
     try {
       await this.pcmSource?.cancel(session?.sessionId ?? '')
@@ -423,7 +489,8 @@ export class AuroraVoiceWebRuntime {
     sampleCount: number,
     byteLength: number,
     queuedBytes: number,
-    reason: string | null
+    reason: string | null,
+    inference?: AuroraVoiceInferenceOutput
   ): void {
     const event: AuroraVoiceWebEvent = Object.freeze({
       kind,
@@ -435,6 +502,7 @@ export class AuroraVoiceWebRuntime {
       byteLength,
       queuedBytes,
       reason,
+      ...(inference !== undefined ? { inference } : {}),
       redacted: true,
       occurredAtMs: this.nowMs()
     })
@@ -464,6 +532,13 @@ export function hiddenLifecycle(reason: Exclude<AuroraVoiceLifecycleEligibility[
 
 function boundedIntegerInRange(value: number, label: string, min: number, max: number): number {
   if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new AuroraVoiceWebRuntimeError('invalid_option', `${label} is out of range`)
+  }
+  return value
+}
+
+function boundedFloatInRange(value: number, label: string, min: number, max: number): number {
+  if (!Number.isFinite(value) || value < min || value > max) {
     throw new AuroraVoiceWebRuntimeError('invalid_option', `${label} is out of range`)
   }
   return value
@@ -512,11 +587,16 @@ function normalizeReason(reason: string): string {
   return 'cancelled'
 }
 
-function capabilitiesAreUnavailable(capabilities: AuroraVoiceWebCapabilities): boolean {
-  return capabilities.vad === false && capabilities.kws === false && capabilities.stt === false && capabilities.tts === false
+function validReadyCapabilities(capabilities: AuroraVoiceWebCapabilities): boolean {
+  return typeof capabilities.vad === 'boolean' &&
+    typeof capabilities.kws === 'boolean' &&
+    typeof capabilities.stt === 'boolean' &&
+    typeof capabilities.tts === 'boolean'
 }
 
-function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): void {
+function validateAck(response: unknown, sessionId: string, generation: number, sequence: number | null): {
+  readonly inference?: AuroraVoiceInferenceOutput
+} {
   if (
     typeof response !== 'object' ||
     response === null ||
@@ -527,6 +607,40 @@ function validateAck(response: unknown, sessionId: string, generation: number, s
   ) {
     throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
   }
+  const inference = (response as { inference?: unknown }).inference
+  if (inference !== undefined && !validInferenceOutput(inference, sequence)) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+  return inference === undefined ? {} : { inference }
+}
+
+function validInferenceOutput(inference: unknown, sequence: number | null): inference is AuroraVoiceInferenceOutput {
+  if (sequence === null || typeof inference !== 'object' || inference === null) return false
+  const candidate = inference as Partial<AuroraVoiceInferenceOutput>
+  if (candidate.redacted !== true || !Array.isArray(candidate.kwsHits) || !Array.isArray(candidate.stt)) return false
+  if (candidate.vad !== undefined && (
+    candidate.vad.redacted !== true ||
+    typeof candidate.vad.active !== 'boolean' ||
+    typeof candidate.vad.speechDetected !== 'boolean' ||
+    candidate.vad.sequence !== sequence
+  )) return false
+  return candidate.kwsHits.every((hit) => (
+    typeof hit === 'object' &&
+    hit !== null &&
+    typeof hit.keyword === 'string' &&
+    hit.keyword.length > 0 &&
+    (hit.score === null || typeof hit.score === 'number') &&
+    hit.sequence === sequence &&
+    hit.redacted === true
+  )) && candidate.stt.every((result) => (
+    typeof result === 'object' &&
+    result !== null &&
+    typeof result.text === 'string' &&
+    result.text.length > 0 &&
+    typeof result.final === 'boolean' &&
+    result.sequence === sequence &&
+    result.redacted === true
+  ))
 }
 
 function validateStopResult(response: unknown, sessionId: string, generation: number): AuroraCapturedAudio {
@@ -571,6 +685,73 @@ function validateStopResult(response: unknown, sessionId: string, generation: nu
     sessionId,
     generation,
     sampleRateHz: 16_000,
+    channels: 1,
+    sampleCount: sampleCount as number,
+    durationMs: durationMs as number,
+    pcm: new Int16Array(pcm),
+    redacted: true
+  })
+}
+
+function validateTtsText(text: string): string {
+  if (typeof text !== 'string') throw new AuroraVoiceWebRuntimeError('invalid_tts_request', 'Speech text is invalid')
+  const normalized = text.trim()
+  if (normalized.length === 0 || normalized.length > MAX_TTS_TEXT_CHARS) {
+    throw new AuroraVoiceWebRuntimeError('invalid_tts_request', 'Speech text is invalid')
+  }
+  return normalized
+}
+
+function boundedTtsGeneration(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new AuroraVoiceWebRuntimeError('invalid_tts_request', 'Speech request is invalid')
+  }
+  return value
+}
+
+function validateTtsResult(response: unknown, generation: number): AuroraVoiceTtsAudio {
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    (response as { type?: unknown }).type !== 'tts_result' ||
+    (response as { generation?: unknown }).generation !== generation
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+  const audio = (response as { audio?: unknown }).audio
+  if (
+    typeof audio !== 'object' ||
+    audio === null ||
+    (audio as { generation?: unknown }).generation !== generation ||
+    (audio as { channels?: unknown }).channels !== 1 ||
+    (audio as { redacted?: unknown }).redacted !== true ||
+    !((audio as { pcm?: unknown }).pcm instanceof Int16Array)
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker returned invalid audio')
+  }
+  const pcm = (audio as AuroraVoiceTtsAudio).pcm
+  const sampleRateHz = (audio as { sampleRateHz?: unknown }).sampleRateHz
+  const sampleCount = (audio as { sampleCount?: unknown }).sampleCount
+  const durationMs = (audio as { durationMs?: unknown }).durationMs
+  if (
+    !Number.isSafeInteger(sampleRateHz) ||
+    typeof sampleRateHz !== 'number' ||
+    sampleRateHz < 8_000 ||
+    sampleRateHz > 48_000 ||
+    !Number.isSafeInteger(sampleCount) ||
+    sampleCount !== pcm.length ||
+    sampleCount <= 0 ||
+    sampleCount > MAX_TTS_AUDIO_SAMPLES ||
+    typeof durationMs !== 'number' ||
+    !Number.isSafeInteger(durationMs) ||
+    durationMs <= 0 ||
+    durationMs > 60_000
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker returned invalid audio')
+  }
+  return Object.freeze({
+    generation,
+    sampleRateHz: sampleRateHz as number,
     channels: 1,
     sampleCount: sampleCount as number,
     durationMs: durationMs as number,

@@ -3,7 +3,7 @@
 **Author:** Planning agent (big-brain pass)
 **Date:** 2026-07-03
 **Status:** Pending approval — controlling instruction set for the frontend-specialist agent
-**Reads with:** [`docs/TAURI_UI_VISUAL_REFINEMENT_HANDOFF.md`](TAURI_UI_VISUAL_REFINEMENT_HANDOFF.md) (source-of-truth constraints, route inventory, reproduction/verification commands)
+**Reads with:** [`../DESIGN.md`](../DESIGN.md) for durable product and interface constraints.
 
 ---
 
@@ -337,9 +337,9 @@ Update `packages/aurora-ui/tests/accessibility-responsive-visual.test.tsx` finge
 
 ```text
 Use docs/TAURI_UI_VISUAL_REFINEMENT_PLAN.md as the controlling plan and
-docs/TAURI_UI_VISUAL_REFINEMENT_HANDOFF.md for constraints, route inventory, and commands.
+DESIGN.md for durable product and interface constraints.
 Source of truth: modules/ui-mock-reference (shadcn cockpit). Target: packages/aurora-ui.
-Evidence: .omx/artifacts/visual-ralph/all-pages-final (mock vs prod, desktop + mobile).
+Generate fresh local desktop and mobile comparisons during rendered review; do not commit them.
 
 1. Build the Phase 1 primitive library (Section 5) and apply the token/consistency locks
    (Section 3) + global rules (Section 4). Land with @aurora/ui tests green.

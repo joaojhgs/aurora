@@ -102,17 +102,9 @@
         },
         "ready_languages": {
           "items": {
-            "enum": [
-              "de",
-              "en",
-              "es",
-              "fr",
-              "it",
-              "ja",
-              "ko",
-              "pt",
-              "zh"
-            ],
+            "maxLength": 255,
+            "minLength": 2,
+            "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
             "type": "string"
           },
           "maxItems": 64,
@@ -230,17 +222,9 @@
         },
         "ready_languages": {
           "items": {
-            "enum": [
-              "de",
-              "en",
-              "es",
-              "fr",
-              "it",
-              "ja",
-              "ko",
-              "pt",
-              "zh"
-            ],
+            "maxLength": 255,
+            "minLength": 2,
+            "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
             "type": "string"
           },
           "maxItems": 64,

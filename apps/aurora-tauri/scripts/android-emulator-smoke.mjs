@@ -4,6 +4,8 @@ import os from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { connectAndroidWebviewCdp } from './android-webview-cdp.mjs'
+
 const NATIVE_PAYLOAD_LOGCAT_ARGS = [
   'logcat',
   '-d',
@@ -207,28 +209,18 @@ async function waitForWebviewMount(appId) {
 }
 
 async function inspectWebview(port, deadline) {
-  const targets = await fetch(`http://127.0.0.1:${port}/json/list`, {
-    signal: AbortSignal.timeout(5000),
-  }).then((response) => {
-    if (!response.ok) {
-      throw new Error(`Android WebView DevTools target lookup returned HTTP ${response.status}.`)
-    }
-    return response.json()
-  })
-  const target = targets.find((entry) => entry.type === 'page' && entry.webSocketDebuggerUrl)
-  if (!target) {
-    throw new Error('Android WebView DevTools did not expose a page target.')
-  }
-
   const errors = []
-  const client = await connectCdp(target.webSocketDebuggerUrl, (message) => {
-    if (message.method === 'Runtime.exceptionThrown') {
-      const details = message.params?.exceptionDetails
-      errors.push(details?.exception?.description ?? details?.text ?? 'Uncaught WebView exception')
-    }
-    if (message.method === 'Log.entryAdded' && message.params?.entry?.level === 'error') {
-      errors.push(message.params.entry.text)
-    }
+  const client = await connectAndroidWebviewCdp({
+    port,
+    onEvent(message) {
+      if (message.method === 'Runtime.exceptionThrown') {
+        const details = message.params?.exceptionDetails
+        errors.push(details?.exception?.description ?? details?.text ?? 'Uncaught WebView exception')
+      }
+      if (message.method === 'Log.entryAdded' && message.params?.entry?.level === 'error') {
+        errors.push(message.params.entry.text)
+      }
+    },
   })
 
   try {
@@ -236,8 +228,8 @@ async function inspectWebview(port, deadline) {
     await client.send('Log.enable')
 
     let state = {
-      url: target.url ?? '',
-      title: target.title ?? '',
+      url: client.target?.url ?? '',
+      title: client.target?.title ?? '',
       readyState: 'loading',
       rootChildren: 0,
       bodyText: '',
@@ -304,52 +296,6 @@ function assertNoWebviewConsoleErrors() {
     .filter((line) => /\sE\s+Tauri\/Console:/.test(line))
   if (errors.length > 0) {
     throw new Error(`Android WebView reported console errors:\n${errors.join('\n')}`)
-  }
-}
-
-async function connectCdp(url, onEvent) {
-  const socket = new WebSocket(url)
-  const pending = new Map()
-  let sequence = 0
-
-  await new Promise((resolvePromise, rejectPromise) => {
-    socket.addEventListener('open', resolvePromise, { once: true })
-    socket.addEventListener('error', rejectPromise, { once: true })
-  })
-
-  socket.addEventListener('message', (event) => {
-    const message = JSON.parse(String(event.data))
-    if (message.id && pending.has(message.id)) {
-      const resolvePromise = pending.get(message.id)
-      pending.delete(message.id)
-      resolvePromise(message)
-      return
-    }
-    onEvent(message)
-  })
-
-  return {
-    send(method, params = {}) {
-      const id = ++sequence
-      socket.send(JSON.stringify({ id, method, params }))
-      return new Promise((resolvePromise, rejectPromise) => {
-        const timer = setTimeout(() => {
-          pending.delete(id)
-          rejectPromise(new Error(`Android WebView CDP command timed out: ${method}`))
-        }, 5000)
-        pending.set(id, (message) => {
-          clearTimeout(timer)
-          if (message.error) {
-            rejectPromise(new Error(`Android WebView CDP ${method} failed: ${message.error.message}`))
-            return
-          }
-          resolvePromise(message)
-        })
-      })
-    },
-    close() {
-      socket.close()
-    },
   }
 }
 

@@ -5,6 +5,9 @@ import type { AuroraClient, ConfigFieldMetadata } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { SettingsPermissionsView } from './settings-permissions-view'
 import { VoiceSettingsView } from './voice-settings-view'
+import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import type { AuroraRuntimeProfileV2 } from './runtime-profile'
+import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 import { ConfigEditorView, parseFieldValue, stringifyValue } from './config-editor-view'
 import { DataPolicyResource } from './data-policy-view'
 import { PageTabs, type PageTabItem } from './shared-components'
@@ -22,10 +25,29 @@ export interface SettingsViewProps {
   configRoute: RouteAvailability
   dataRoute: RouteAvailability
   initialTab?: SettingsViewTab
+  runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
+  surfaceProfile?: AuroraSurfaceProfile | null | undefined
+  localSpeechCatalog?: AuroraLocalSpeechCatalogPort | null | undefined
+  onLocalSpeechSelectionConfirmed?: ((selection: NonNullable<AuroraRuntimeProfileV2['localNode']['localSpeechSelection']>) => void | Promise<void>) | undefined
 }
 
-export function SettingsView({ client, snapshot, configRoute, dataRoute, initialTab = 'general' }: SettingsViewProps) {
+export function SettingsView({
+  client,
+  snapshot,
+  configRoute,
+  dataRoute,
+  initialTab = 'general',
+  runtimeProfile = null,
+  surfaceProfile = null,
+  localSpeechCatalog = null,
+  onLocalSpeechSelectionConfirmed
+}: SettingsViewProps) {
   const [tab, setTab] = useState<SettingsViewTab>(initialTab)
+  const voiceSurfaceProfile = useMemo(() => surfaceProfile ?? getAuroraSurfaceProfile({
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform,
+    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent
+  }), [surfaceProfile, snapshot.nativePlatform, snapshot.transportKind])
 
   const items: PageTabItem[] = [
     {
@@ -36,7 +58,15 @@ export function SettingsView({ client, snapshot, configRoute, dataRoute, initial
     {
       value: 'voice',
       label: 'Voice',
-      content: <VoiceSettingsView client={client} />
+      content: (
+        <VoiceSettingsView
+          client={client}
+          runtimeProfile={runtimeProfile}
+          surfaceProfile={voiceSurfaceProfile}
+          localSpeechCatalog={localSpeechCatalog}
+          onLocalSpeechSelectionConfirmed={onLocalSpeechSelectionConfirmed}
+        />
+      )
     },
     {
       value: 'configuration',

@@ -201,10 +201,64 @@
           "markdownDescription": "Enables the aurora_android_native_plugin_payload command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_android_voice_foreground_service_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-foreground-service-cancel",
+          "markdownDescription": "Enables the aurora_android_voice_foreground_service_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_foreground_service_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-foreground-service-finish",
+          "markdownDescription": "Enables the aurora_android_voice_foreground_service_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_foreground_service_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-foreground-service-start",
+          "markdownDescription": "Enables the aurora_android_voice_foreground_service_start command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_android_voice_foreground_service_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-android-voice-foreground-service-status",
           "markdownDescription": "Enables the aurora_android_voice_foreground_service_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-activate",
+          "markdownDescription": "Enables the aurora_android_voice_pack_activate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_catalog_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-catalog-set",
+          "markdownDescription": "Enables the aurora_android_voice_pack_catalog_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_catalog_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-catalog-status",
+          "markdownDescription": "Enables the aurora_android_voice_pack_catalog_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-download",
+          "markdownDescription": "Enables the aurora_android_voice_pack_download command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_download_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-download-status",
+          "markdownDescription": "Enables the aurora_android_voice_pack_download_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_pack_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-pack-remove",
+          "markdownDescription": "Enables the aurora_android_voice_pack_remove command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_android_webview_microphone_permission_decision command without any pre-configured scope.",
@@ -747,10 +801,64 @@
           "markdownDescription": "Denies the aurora_android_native_plugin_payload command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_android_voice_foreground_service_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-foreground-service-cancel",
+          "markdownDescription": "Denies the aurora_android_voice_foreground_service_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_foreground_service_finish command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-foreground-service-finish",
+          "markdownDescription": "Denies the aurora_android_voice_foreground_service_finish command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_foreground_service_start command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-foreground-service-start",
+          "markdownDescription": "Denies the aurora_android_voice_foreground_service_start command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_android_voice_foreground_service_status command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-android-voice-foreground-service-status",
           "markdownDescription": "Denies the aurora_android_voice_foreground_service_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_activate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-activate",
+          "markdownDescription": "Denies the aurora_android_voice_pack_activate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_catalog_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-catalog-set",
+          "markdownDescription": "Denies the aurora_android_voice_pack_catalog_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_catalog_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-catalog-status",
+          "markdownDescription": "Denies the aurora_android_voice_pack_catalog_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-download",
+          "markdownDescription": "Denies the aurora_android_voice_pack_download command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_download_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-download-status",
+          "markdownDescription": "Denies the aurora_android_voice_pack_download_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_pack_remove command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-pack-remove",
+          "markdownDescription": "Denies the aurora_android_voice_pack_remove command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_android_webview_microphone_permission_decision command without any pre-configured scope.",

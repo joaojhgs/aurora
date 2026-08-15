@@ -26,6 +26,21 @@ const sourceConfigPath = resolve(
     ?? join(srcTauriRoot, 'tauri.android-client.conf.json'),
 )
 const prepareScript = join(packageRoot, 'scripts', 'prepare-android-client-bundle.mjs')
+const androidTargetSpecs = {
+  aarch64: {
+    abi: 'arm64-v8a',
+    libDirEnv: 'AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR',
+  },
+  x86_64: {
+    abi: 'x86_64',
+    libDirEnv: 'AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR',
+  },
+}
+const defaultAndroidTargets = ['aarch64', 'x86_64']
+const requiredNativeSpeechLibraries = [
+  'libonnxruntime.so',
+  'libsherpa-onnx-c-api.so',
+]
 
 const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.includes('--apk') ? 'apk' : 'apk')
@@ -33,6 +48,8 @@ const target = readOption('--target')
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
+const targets = target ? [target] : defaultAndroidTargets
+const nativeSpeechBuild = resolveNativeSpeechBuild(process.env, targets)
 
 const tempDir = mkdtempSync(join(tmpdir(), `aurora-android-client-${kind}-`))
 const tempConfigPath = join(tempDir, 'tauri.android-client.conf.json')
@@ -68,16 +85,16 @@ try {
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
   run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])
-  run('pnpm', ['android:sync-native-plugin'])
+  run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)
   cleanAndroidBuildOutputs()
 
   const buildArgs = ['tauri', 'android', 'build', '--debug']
   if (kind === 'apk') buildArgs.push('--apk')
   else buildArgs.push('--aab')
-  if (target) buildArgs.push('--target', target)
+  buildArgs.push('--target', ...targets)
   buildArgs.push('--config', tempConfigPath)
 
-  run('pnpm', buildArgs, androidBuildEnv())
+  run('pnpm', buildArgs, androidBuildEnv(nativeSpeechBuild.env))
 
   mkdirSync(dirname(buildProvenancePath), { recursive: true })
   writeAtomicJson(buildProvenancePath, {
@@ -85,6 +102,7 @@ try {
     bundleMode: 'android-client',
     kind,
     target: target ?? 'universal',
+    targets,
     configPath: '<temp-android-client-config>',
     sourceConfigPath: redacted(sourceConfigPath),
     sourceConfigWritten: false,
@@ -99,6 +117,11 @@ try {
     artifactRoot: redacted(artifactOutputRoot),
     cleanBuildOutputs: true,
     expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+    nativeSpeechRuntime: {
+      abis: nativeSpeechBuild.records.map((record) => record.abi),
+      libraries: requiredNativeSpeechLibraries,
+      sourceDirectoriesRedacted: true,
+    },
     pythonSidecarStaged: false,
     externalBin: config.bundle?.externalBin ?? [],
     resources: config.bundle?.resources ?? {},
@@ -114,6 +137,42 @@ try {
 function readOption(name) {
   const index = args.indexOf(name)
   return index === -1 ? null : args[index + 1]
+}
+
+function resolveNativeSpeechBuild(env, selectedTargets) {
+  const records = selectedTargets.map((selectedTarget) => {
+    const spec = androidTargetSpecs[selectedTarget]
+    if (!spec) {
+      throw new Error(
+        `Unsupported Android native speech target ${selectedTarget}; expected ${Object.keys(androidTargetSpecs).join(' or ')}`,
+      )
+    }
+    const configured = env[spec.libDirEnv]
+      ?? (selectedTargets.length === 1 ? env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+    if (!configured) {
+      throw new Error(
+        `${spec.libDirEnv} is required to package production native speech for Android ${spec.abi}`,
+      )
+    }
+    const libDir = resolve(configured)
+    if (!existsSync(libDir)) {
+      throw new Error(`${spec.libDirEnv} does not name an existing directory: ${libDir}`)
+    }
+    for (const library of requiredNativeSpeechLibraries) {
+      if (!existsSync(join(libDir, library))) {
+        throw new Error(`${spec.libDirEnv} is missing ${library}: ${libDir}`)
+      }
+    }
+    return { target: selectedTarget, abi: spec.abi, libDirEnv: spec.libDirEnv, libDir }
+  })
+
+  const nativeEnv = {
+    ...env,
+    AURORA_ANDROID_NATIVE_TARGETS: selectedTargets.join(','),
+    AURORA_SHERPA_ONNX_LINK_KIND: 'dynamic',
+  }
+  for (const record of records) nativeEnv[record.libDirEnv] = record.libDir
+  return { env: nativeEnv, records }
 }
 
 function run(command, commandArgs, env = process.env) {

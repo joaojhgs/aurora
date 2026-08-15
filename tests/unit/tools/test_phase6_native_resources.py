@@ -162,7 +162,9 @@ def test_run_one_repetition_times_native_test_executable_directly(tmp_path):
         env={},
         workload_duration_ms=1000.0,
     )
-    completed = subprocess.CompletedProcess(args=["fake"], returncode=0, stdout="", stderr=TIME_OUTPUT)
+    completed = subprocess.CompletedProcess(
+        args=["fake"], returncode=0, stdout="", stderr=TIME_OUTPUT
+    )
 
     with patch.object(metrics, "run_timed_command", return_value=completed) as timed:
         result = metrics.run_one_repetition(

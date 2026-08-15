@@ -63,7 +63,7 @@ async def test_wakeword_ignores_legacy_env_model_path(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_failed_reload_retains_previous_backend_and_paths() -> None:
+async def test_failed_reload_clears_previous_backend_and_paths() -> None:
     old_backend = Mock()
     old_backend.cleanup = AsyncMock()
 
@@ -91,11 +91,17 @@ async def test_failed_reload_retains_previous_backend_and_paths() -> None:
         service._model_paths = ["voice_models/old.onnx"]
         service._wake_words = ["old"]
         service._sensitivity = 0.4
+        service._enabled = True
+        service._readiness_status = "ready"
 
-        with pytest.raises(RuntimeError, match="backend failed"):
-            await service.reload("services.stt")
+        await service.reload("services.stt")
 
-        assert service._backend is old_backend
-        assert service._model_paths == ["voice_models/old.onnx"]
-        assert service._wake_words == ["old"]
-        old_backend.cleanup.assert_not_awaited()
+        assert service._backend is None
+        assert service._enabled is False
+        assert service._model_paths == ["voice_models/new.onnx"]
+        assert service._wake_words == ["new"]
+        old_backend.cleanup.assert_awaited_once()
+        assert service._readiness_status == "unavailable"
+        assert service._readiness_message == "models_missing"
+        await service._process_audio_data(b"audio")
+        old_backend.detect.assert_not_called()

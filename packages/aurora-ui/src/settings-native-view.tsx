@@ -27,8 +27,8 @@ export interface NativePlatformEvidenceArtifact {
   notes: string[]
 }
 
-export function SettingsNativeView({ snapshot }: SettingsNativeViewProps) {
-  return <SettingsPermissionsView snapshot={snapshot} surface="native" currentPath="/settings/native" />
+export function SettingsNativeView({ snapshot, currentPath = '/settings/native', ...props }: SettingsNativeViewProps) {
+  return <SettingsPermissionsView {...props} snapshot={snapshot} surface="native" currentPath={currentPath} />
 }
 
 export function buildNativePlatformEvidenceArtifact(

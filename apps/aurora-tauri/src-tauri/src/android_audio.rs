@@ -1,13 +1,18 @@
 //! Android JNI binding for the shared Rust-native PCM ingress.
 
 use aurora_voice_native::{
-    AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult, AndroidVoiceSession,
-    AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
+    AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult, AndroidTtsReferenceProfile,
+    AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
+    CancellationToken, SpeechCatalogTask, SpeechModelCatalog, SpeechPackManager,
+    SpeechPackManagerConfig, TtsVoiceCatalog,
 };
-use jni::objects::{JClass, JShortArray, JString};
-use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray};
+use jni::objects::{JClass, JFloatArray, JShortArray, JString};
+use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray, jstring};
 use jni::JNIEnv;
+use serde_json::json;
+use std::path::PathBuf;
 use std::ptr;
+use tokio::runtime::Builder as TokioRuntimeBuilder;
 use url::Url;
 
 pub const AUDIO_OK: jint = 0;
@@ -49,6 +54,237 @@ fn session_error_code(error: AndroidVoiceSessionCommandError) -> jint {
 
 fn string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<String> {
     env.get_string(&value).ok().map(|value| value.into())
+}
+
+fn optional_string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<String> {
+    string_from_jni(env, value).and_then(|value| {
+        let trimmed = value.trim().to_owned();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+fn float_vec_from_jni(env: &mut JNIEnv<'_>, value: JFloatArray<'_>) -> Option<Vec<f32>> {
+    let length = env.get_array_length(&value).ok()?;
+    if length <= 0 {
+        return None;
+    }
+    let mut samples = vec![0.0_f32; length as usize];
+    env.get_float_array_region(&value, 0, &mut samples).ok()?;
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return None;
+    }
+    Some(samples)
+}
+
+fn manager_from_root(root: String) -> Option<SpeechPackManager> {
+    SpeechPackManagerConfig::new(PathBuf::from(root), None)
+        .ok()
+        .and_then(|config| SpeechPackManager::open(config).ok())
+}
+
+fn speech_catalog_task(task: &str) -> Option<SpeechCatalogTask> {
+    match task {
+        "stt" | "asr" | "transcription" => Some(SpeechCatalogTask::SpeechToText),
+        "vad" => Some(SpeechCatalogTask::VoiceActivityDetection),
+        "kws" | "wakeword" | "wake-word" => Some(SpeechCatalogTask::KeywordSpotting),
+        _ => None,
+    }
+}
+
+fn android_catalog_task_name(task: SpeechCatalogTask) -> &'static str {
+    match task {
+        SpeechCatalogTask::SpeechToText => "stt",
+        SpeechCatalogTask::VoiceActivityDetection => "vad",
+        SpeechCatalogTask::KeywordSpotting => "kws",
+    }
+}
+
+fn android_embedded_catalog_json() -> Option<String> {
+    let mut entries = Vec::new();
+    let speech_catalog = SpeechModelCatalog::embedded().ok()?;
+    for entry in &speech_catalog.entries {
+        let language = match entry.languages.as_slice() {
+            [] => "und".to_owned(),
+            [language] => language.clone(),
+            _ => "multi".to_owned(),
+        };
+        entries.push(json!({
+            "packId": &entry.model_id,
+            "packName": &entry.display_name,
+            "provider": "k2-fsa/sherpa-onnx",
+            "language": language,
+            "uri": &entry.archive.url,
+            "sha256": &entry.archive.sha256,
+            "sizeBytes": entry.archive.byte_size,
+            "tasks": [android_catalog_task_name(entry.task)],
+            "engineRuntimeRevision": speech_catalog.revision(),
+            "supportedOperatingSystems": ["android"],
+            "supportedAbis": ["all"],
+            "license": &entry.terms.source,
+            "attributionRequired": false,
+            "attributionText": "",
+            "modelFamily": &entry.model_family,
+            "requiresReferenceAudio": false,
+        }));
+    }
+
+    let tts_catalog = TtsVoiceCatalog::embedded().ok()?;
+    for entry in &tts_catalog.entries {
+        entries.push(json!({
+            "packId": &entry.voice_id,
+            "packName": &entry.display_name,
+            "provider": "k2-fsa/sherpa-onnx",
+            "language": &entry.language,
+            "uri": &entry.archive.url,
+            "sha256": &entry.archive.sha256,
+            "sizeBytes": entry.archive.byte_size,
+            "tasks": ["tts"],
+            "engineRuntimeRevision": tts_catalog.revision(),
+            "supportedOperatingSystems": ["android"],
+            "supportedAbis": ["all"],
+            "license": &entry.terms.source,
+            "attributionRequired": false,
+            "attributionText": "",
+            "modelFamily": &entry.model_family,
+            "requiresReferenceAudio": entry.model_family == "pockettts",
+        }));
+    }
+    serde_json::to_string(&entries).ok()
+}
+
+fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
+    let Some(manager) = manager_from_root(root) else {
+        return false;
+    };
+    let Ok(runtime) = TokioRuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+    else {
+        return false;
+    };
+    runtime.block_on(async move {
+        let cancellation = CancellationToken::new();
+        if task == "tts" || task == "text-to-speech" {
+            manager
+                .install_voice(&pack_id, &cancellation, |_| {})
+                .await
+                .is_ok()
+        } else if speech_catalog_task(&task).is_some() {
+            manager
+                .install_model(&pack_id, &cancellation, |_| {})
+                .await
+                .is_ok()
+        } else {
+            false
+        }
+    })
+}
+
+fn resolve_pack_blocking(root: String, pack_id: String, task: String) -> bool {
+    let Some(manager) = manager_from_root(root) else {
+        return false;
+    };
+    if task == "tts" || task == "text-to-speech" {
+        manager.resolve_voice_bindings(&pack_id).is_ok()
+    } else {
+        speech_catalog_task(&task).is_some() && manager.resolve_model_bindings(&pack_id).is_ok()
+    }
+}
+
+fn remove_pack_blocking(root: String, pack_id: String, task: String) -> bool {
+    let Some(manager) = manager_from_root(root) else {
+        return false;
+    };
+    if task == "tts" || task == "text-to-speech" {
+        manager.remove_voice(&pack_id).is_ok()
+    } else {
+        speech_catalog_task(&task).is_some() && manager.remove_model(&pack_id).is_ok()
+    }
+}
+
+fn bool_to_jboolean(value: bool) -> jboolean {
+    if value {
+        1
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeInstall(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    root: JString<'_>,
+    pack_id: JString<'_>,
+    task: JString<'_>,
+) -> jboolean {
+    let Some(root) = string_from_jni(&mut env, root) else {
+        return 0;
+    };
+    let Some(pack_id) = string_from_jni(&mut env, pack_id) else {
+        return 0;
+    };
+    let Some(task) = string_from_jni(&mut env, task) else {
+        return 0;
+    };
+    bool_to_jboolean(install_pack_blocking(root, pack_id, task))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeResolve(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    root: JString<'_>,
+    pack_id: JString<'_>,
+    task: JString<'_>,
+) -> jboolean {
+    let Some(root) = string_from_jni(&mut env, root) else {
+        return 0;
+    };
+    let Some(pack_id) = string_from_jni(&mut env, pack_id) else {
+        return 0;
+    };
+    let Some(task) = string_from_jni(&mut env, task) else {
+        return 0;
+    };
+    bool_to_jboolean(resolve_pack_blocking(root, pack_id, task))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeRemove(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    root: JString<'_>,
+    pack_id: JString<'_>,
+    task: JString<'_>,
+) -> jboolean {
+    let Some(root) = string_from_jni(&mut env, root) else {
+        return 0;
+    };
+    let Some(pack_id) = string_from_jni(&mut env, pack_id) else {
+        return 0;
+    };
+    let Some(task) = string_from_jni(&mut env, task) else {
+        return 0;
+    };
+    bool_to_jboolean(remove_pack_blocking(root, pack_id, task))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPackBridge_nativeEmbeddedCatalogJson(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jstring {
+    let Some(catalog) = android_embedded_catalog_json() else {
+        return ptr::null_mut();
+    };
+    env.new_string(catalog)
+        .map(|value| value.into_raw())
+        .unwrap_or_else(|_| ptr::null_mut())
 }
 
 #[no_mangle]
@@ -296,6 +532,86 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
     let config = AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0);
+    AndroidVoiceSession::new(config, 8, 4_096, 16)
+        .map(|session| Box::into_raw(Box::new(session)) as jlong)
+        .unwrap_or(0)
+}
+
+/// Create a local-pack-backed Android voice executor. Empty optional strings
+/// disable background wake providers but STT and TTS ids are required.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreateWithPackSelection(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    gateway: JString<'_>,
+    bearer: JString<'_>,
+    remote_audio_consent: jboolean,
+    pack_store_root: JString<'_>,
+    stt_model_id: JString<'_>,
+    tts_voice_id: JString<'_>,
+    vad_model_id: JString<'_>,
+    kws_model_id: JString<'_>,
+    wake_phrase_id: JString<'_>,
+    wake_phrase_text: JString<'_>,
+    wake_phrase_revision: JString<'_>,
+    tts_reference_sample_rate_hz: jint,
+    tts_reference_samples: JFloatArray<'_>,
+    tts_reference_text: JString<'_>,
+    tts_reference_revision: JString<'_>,
+) -> jlong {
+    let Some(gateway) = string_from_jni(&mut env, gateway) else {
+        return 0;
+    };
+    let Some(bearer) = string_from_jni(&mut env, bearer) else {
+        return 0;
+    };
+    let Some(pack_store_root) = string_from_jni(&mut env, pack_store_root) else {
+        return 0;
+    };
+    let Some(stt_model_id) = optional_string_from_jni(&mut env, stt_model_id) else {
+        return 0;
+    };
+    let Some(tts_voice_id) = optional_string_from_jni(&mut env, tts_voice_id) else {
+        return 0;
+    };
+    let Ok(gateway) = Url::parse(&gateway) else {
+        return 0;
+    };
+    let auth = if bearer.is_empty() {
+        aurora_voice_native::GatewayAuth::None
+    } else {
+        aurora_voice_native::GatewayAuth::Bearer(bearer)
+    };
+    let mut config = AndroidVoiceSessionConfig::with_local_pack_selection(
+        gateway,
+        auth,
+        remote_audio_consent != 0,
+        pack_store_root,
+        stt_model_id,
+        tts_voice_id,
+        optional_string_from_jni(&mut env, vad_model_id),
+        optional_string_from_jni(&mut env, kws_model_id),
+        optional_string_from_jni(&mut env, wake_phrase_id),
+        optional_string_from_jni(&mut env, wake_phrase_text),
+        optional_string_from_jni(&mut env, wake_phrase_revision),
+    );
+    let reference_text = optional_string_from_jni(&mut env, tts_reference_text);
+    let _reference_revision = optional_string_from_jni(&mut env, tts_reference_revision);
+    if tts_reference_sample_rate_hz > 0 {
+        let Some(reference_samples) = float_vec_from_jni(&mut env, tts_reference_samples) else {
+            return 0;
+        };
+        let Ok(profile) = AndroidTtsReferenceProfile::new(
+            tts_reference_sample_rate_hz,
+            reference_samples,
+            reference_text,
+            _reference_revision,
+        ) else {
+            return 0;
+        };
+        config = config.with_tts_reference_profile(profile);
+    }
     AndroidVoiceSession::new(config, 8, 4_096, 16)
         .map(|session| Box::into_raw(Box::new(session)) as jlong)
         .unwrap_or(0)

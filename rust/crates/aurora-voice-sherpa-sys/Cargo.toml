@@ -11,6 +11,7 @@ default = []
 native-kws = []
 native-vad = []
 native-stt = []
+native-tts = []
 
 [dependencies]
 

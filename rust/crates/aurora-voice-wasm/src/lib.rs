@@ -11,14 +11,18 @@ use aurora_voice_core::{
 };
 use aurora_voice_engine::{
     apply_lifecycle_event, create_lifecycle_snapshot, file_storage_key, lifecycle_storage_key,
-    ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent, InstallState,
-    LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope, SelectedVariant,
-    StoreStatus, StoredFile, VerifiedManifest,
+    select_verified_variant, ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent,
+    InstallState, LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope,
+    PackTask, RuntimeSelection, SelectedVariant, StoreStatus, StoredFile, VerifiedManifest,
 };
+use bzip2::read::BzDecoder;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::{Cursor, Read};
+use std::path::{Component, Path, PathBuf};
+use tar::EntryType;
 use thiserror::Error;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -44,6 +48,7 @@ const WASM_MAX_ID_BYTES: usize = 96;
 const WASM_MAX_SURFACE_BYTES: usize = 64;
 const JS_MAX_SAFE_INTEGER_MICROS: f64 = 9_007_199_254_740_991.0;
 const WASM_DEFAULT_ROUTE_REVISION: RouteRevision = RouteRevision(1);
+const ARCHIVE_COPY_CHUNK_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -194,6 +199,79 @@ pub struct WasmCapabilities {
     pub tts: bool,
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebLoadedModelArtifact {
+    pub file_id: String,
+    pub storage_key: String,
+    pub sha256: String,
+    pub byte_size: u64,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractRequest {
+    pub expected_root: String,
+    #[serde(default)]
+    pub expected_directories: Vec<String>,
+    pub expected_paths: Vec<String>,
+    #[serde(default)]
+    pub allow_unexpected_files: bool,
+    #[serde(default = "default_archive_max_entries")]
+    pub max_entries: usize,
+    #[serde(default = "default_archive_max_file_bytes")]
+    pub max_file_bytes: u64,
+    #[serde(default = "default_archive_max_total_bytes")]
+    pub max_total_bytes: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractedFile {
+    pub path: String,
+    pub byte_size: u64,
+    pub sha256: String,
+    pub bytes: Vec<u8>,
+}
+
+impl std::fmt::Debug for WasmArchiveExtractedFile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WasmArchiveExtractedFile")
+            .field("path", &self.path)
+            .field("byte_size", &self.byte_size)
+            .field("sha256", &"<redacted>")
+            .field("byte_len", &self.bytes.len())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WasmArchiveExtractReceipt {
+    pub files: Vec<WasmArchiveExtractedFile>,
+    pub entry_count: usize,
+    pub total_bytes: u64,
+}
+
+impl std::fmt::Debug for WebLoadedModelArtifact {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WebLoadedModelArtifact")
+            .field("file_id", &self.file_id)
+            .field("storage_key", &self.storage_key)
+            .field("sha256", &"<redacted>")
+            .field("byte_size", &self.byte_size)
+            .field("byte_len", &self.bytes.len())
+            .finish()
+    }
+}
+
+pub trait WasmTaskInitializer {
+    fn initialize_task(
+        &mut self,
+        task: VoiceTask,
+        artifacts: &[WebLoadedModelArtifact],
+    ) -> Result<usize, WasmFacadeError>;
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WasmRuntimeSnapshot {
     pub active: bool,
@@ -259,7 +337,11 @@ impl From<VoiceCoreError> for WasmFacadeError {
             VoiceCoreError::SampleNotFinite | VoiceCoreError::SampleOutOfRange => {
                 Self::new("invalid_audio")
             }
+            VoiceCoreError::SpeechNotDetected => Self::new("speech_not_detected"),
+            VoiceCoreError::SpeechTimeout => Self::new("speech_timeout"),
             VoiceCoreError::StaleGeneration => Self::new("stale_generation"),
+            VoiceCoreError::WakeNotDetected => Self::new("wake_not_detected"),
+            VoiceCoreError::WakeUnavailable => Self::new("wake_unavailable"),
             VoiceCoreError::TransportFault { .. } | VoiceCoreError::Engine(_) => {
                 Self::new("internal")
             }
@@ -276,12 +358,19 @@ struct ActiveWasmSession {
     sample_count: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LoadedWasmTask {
+    task: VoiceTask,
+    memory_bytes: usize,
+}
+
 pub struct AuroraVoiceWasmSessionCore {
     config: WasmRuntimeConfig,
     leases: CaptureLeaseManager,
     state: VoiceStateMachine,
     active: Option<ActiveWasmSession>,
     last_route_revision: RouteRevision,
+    loaded_tasks: Vec<LoadedWasmTask>,
 }
 
 impl std::fmt::Debug for AuroraVoiceWasmSessionCore {
@@ -321,7 +410,49 @@ impl AuroraVoiceWasmSessionCore {
             state,
             active: None,
             last_route_revision: WASM_DEFAULT_ROUTE_REVISION,
+            loaded_tasks: Vec::new(),
         })
+    }
+
+    pub async fn initialize_task_from_store<H, I>(
+        &mut self,
+        store: &WebModelStore<H>,
+        task: VoiceTask,
+        scope: ModelStoreScope,
+        manifest: &VerifiedManifest,
+        runtime: &RuntimeSelection,
+        initializer: &mut I,
+    ) -> Result<(), WasmFacadeError>
+    where
+        H: WebModelStoreHost,
+        I: WasmTaskInitializer,
+    {
+        validate_task_scope(task, scope.task()).map_err(|_| WasmFacadeError::new("task"))?;
+        let selection = select_verified_variant(manifest, runtime)
+            .map_err(|_| WasmFacadeError::new("selection"))?;
+        let artifacts = store
+            .load_active_task_artifacts(scope, manifest, &selection)
+            .await
+            .map_err(|_| WasmFacadeError::new("model_store"))?;
+        if artifacts.is_empty() {
+            return Err(WasmFacadeError::new("missing_file"));
+        }
+        let memory_bytes = initializer.initialize_task(task, &artifacts)?;
+        let artifact_bytes = artifacts.iter().try_fold(0_usize, |total, artifact| {
+            total
+                .checked_add(artifact.bytes.len())
+                .ok_or(WasmFacadeError::new("memory_bounds"))
+        })?;
+        self.unload_task(task);
+        self.loaded_tasks.push(LoadedWasmTask {
+            task,
+            memory_bytes: memory_bytes.max(artifact_bytes),
+        });
+        Ok(())
+    }
+
+    pub fn unload_task(&mut self, task: VoiceTask) {
+        self.loaded_tasks.retain(|loaded| loaded.task != task);
     }
 
     pub fn start_session(
@@ -654,10 +785,10 @@ impl AuroraVoiceWasmSessionCore {
 
     pub fn capabilities(&self) -> WasmCapabilities {
         WasmCapabilities {
-            vad: false,
-            kws: false,
-            stt: false,
-            tts: false,
+            vad: self.task_loaded(VoiceTask::VoiceActivityDetection),
+            kws: self.task_loaded(VoiceTask::KeywordSpotting),
+            stt: self.task_loaded(VoiceTask::SpeechToText),
+            tts: self.task_loaded(VoiceTask::TextToSpeech),
         }
     }
 
@@ -667,9 +798,42 @@ impl AuroraVoiceWasmSessionCore {
             generation: self.state.generation(),
             surface: self.config.surface.clone(),
             route_revision: self.last_route_revision,
-            capability: false_capability_report(),
+            capability: self.capability_report(),
             at: TimestampMicros(at_micros),
         }
+    }
+
+    fn capability_report(&self) -> ResourceReport {
+        let loaded_tasks = [
+            VoiceTask::KeywordSpotting,
+            VoiceTask::VoiceActivityDetection,
+            VoiceTask::SpeechToText,
+            VoiceTask::TextToSpeech,
+        ]
+        .into_iter()
+        .filter(|task| self.task_loaded(*task))
+        .collect::<Vec<_>>();
+        ResourceReport {
+            memory_bytes: self
+                .loaded_tasks
+                .iter()
+                .map(|loaded| loaded.memory_bytes)
+                .try_fold(0_u64, |total, bytes| {
+                    total.checked_add(u64::try_from(bytes).unwrap_or(u64::MAX))
+                })
+                .unwrap_or(u64::MAX),
+            active_streams: u32::from(self.active.is_some()),
+            readiness: if loaded_tasks.is_empty() {
+                TaskReadiness::Unavailable
+            } else {
+                TaskReadiness::Ready
+            },
+            loaded_tasks,
+        }
+    }
+
+    fn task_loaded(&self, task: VoiceTask) -> bool {
+        self.loaded_tasks.iter().any(|loaded| loaded.task == task)
     }
 
     fn cancel_matching_generation(
@@ -809,12 +973,252 @@ impl AuroraVoiceWasmRuntime {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn aurora_extract_tar_bzip2_archive(
+    archive_bytes: &[u8],
+    request: JsValue,
+) -> Result<JsValue, JsValue> {
+    let request: WasmArchiveExtractRequest =
+        serde_wasm_bindgen::from_value(request).map_err(|_| js_error("archive_request"))?;
+    serde_wasm_bindgen::to_value(
+        &extract_tar_bzip2_archive(archive_bytes, request).map_err(js_facade_error)?,
+    )
+    .map_err(|_| js_error("serialize"))
+}
+
 fn default_wasm_max_frames() -> usize {
     WASM_MAX_FRAMES
 }
 
 fn default_wasm_max_samples() -> usize {
     WASM_MAX_SAMPLES
+}
+
+fn default_archive_max_entries() -> usize {
+    2048
+}
+
+fn default_archive_max_file_bytes() -> u64 {
+    256 * 1024 * 1024
+}
+
+fn default_archive_max_total_bytes() -> u64 {
+    1024 * 1024 * 1024
+}
+
+pub fn extract_tar_bzip2_archive(
+    archive_bytes: &[u8],
+    request: WasmArchiveExtractRequest,
+) -> Result<WasmArchiveExtractReceipt, WasmFacadeError> {
+    let expected_root = safe_archive_path_text(&request.expected_root)?;
+    if (request.expected_paths.is_empty() && request.expected_directories.is_empty())
+        || request.expected_paths.len() + request.expected_directories.len() > request.max_entries
+        || request.max_entries == 0
+        || request.max_file_bytes == 0
+        || request.max_total_bytes == 0
+    {
+        return Err(WasmFacadeError::new("archive_bounds"));
+    }
+    let mut expected_paths = BTreeSet::new();
+    let mut expected_directories = BTreeSet::new();
+    let mut expected_case_paths = BTreeSet::new();
+    for path in &request.expected_paths {
+        let normalized = safe_archive_path_text(path)?;
+        if !archive_path_starts_with(&normalized, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        let path_key = pathbuf_to_slash_path(&normalized);
+        if !expected_case_paths.insert(path_key.to_ascii_lowercase())
+            || !expected_paths.insert(path_key)
+        {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+    }
+    for path in &request.expected_directories {
+        let normalized = safe_archive_path_text(path)?;
+        if !archive_path_starts_with(&normalized, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        let path_key = pathbuf_to_slash_path(&normalized);
+        if !expected_case_paths.insert(path_key.to_ascii_lowercase())
+            || !expected_directories.insert(path_key)
+        {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+    }
+
+    let decoder = BzDecoder::new(Cursor::new(archive_bytes));
+    let mut archive = tar::Archive::new(decoder);
+    let mut seen = BTreeSet::new();
+    let mut seen_case_paths = BTreeSet::new();
+    let mut files = BTreeMap::new();
+    let mut entry_count = 0_usize;
+    let mut total_bytes = 0_u64;
+
+    for entry in archive
+        .entries()
+        .map_err(|_| WasmFacadeError::new("archive_invalid"))?
+    {
+        entry_count = entry_count
+            .checked_add(1)
+            .ok_or_else(|| WasmFacadeError::new("archive_bounds"))?;
+        if entry_count > request.max_entries {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        let mut entry = entry.map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        let entry_type = entry.header().entry_type();
+        if !(entry_type == EntryType::Regular || entry_type == EntryType::Directory) {
+            return Err(WasmFacadeError::new("archive_entry"));
+        }
+        let path = safe_archive_path(
+            entry
+                .path()
+                .map_err(|_| WasmFacadeError::new("archive_invalid"))?
+                .as_ref(),
+        )?;
+        if !archive_path_starts_with(&path, &expected_root) {
+            return Err(WasmFacadeError::new("archive_root"));
+        }
+        let path_key = pathbuf_to_slash_path(&path);
+        if !seen_case_paths.insert(path_key.to_ascii_lowercase()) || !seen.insert(path_key.clone())
+        {
+            return Err(WasmFacadeError::new("archive_duplicate"));
+        }
+        if entry_type == EntryType::Directory {
+            continue;
+        }
+        let declared = entry
+            .header()
+            .size()
+            .map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        if declared > request.max_file_bytes {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        total_bytes = total_bytes
+            .checked_add(declared)
+            .ok_or_else(|| WasmFacadeError::new("archive_bounds"))?;
+        if total_bytes > request.max_total_bytes {
+            return Err(WasmFacadeError::new("archive_bounds"));
+        }
+        let expected_file = expected_paths.contains(&path_key);
+        let expected_directory_file = expected_directories
+            .iter()
+            .any(|directory| archive_path_text_starts_with(&path_key, directory));
+        if !expected_file && !expected_directory_file && !request.allow_unexpected_files {
+            return Err(WasmFacadeError::new("archive_unexpected"));
+        }
+        let bytes = read_tar_entry_exact(&mut entry, declared)?;
+        if !expected_file && !expected_directory_file {
+            continue;
+        }
+        let sha256 = encode_hex(&Sha256::digest(&bytes));
+        files.insert(
+            path_key.clone(),
+            WasmArchiveExtractedFile {
+                path: path_key,
+                byte_size: declared,
+                sha256,
+                bytes,
+            },
+        );
+    }
+    if !expected_paths.iter().all(|path| files.contains_key(path))
+        || !expected_directories.iter().all(|directory| {
+            files
+                .keys()
+                .any(|path| archive_path_text_starts_with(path, directory))
+        })
+    {
+        return Err(WasmFacadeError::new("archive_missing"));
+    }
+    Ok(WasmArchiveExtractReceipt {
+        files: files.into_values().collect(),
+        entry_count,
+        total_bytes,
+    })
+}
+
+fn read_tar_entry_exact<R: Read>(
+    reader: &mut R,
+    expected: u64,
+) -> Result<Vec<u8>, WasmFacadeError> {
+    let capacity = usize::try_from(expected).map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    let mut remaining = expected;
+    let mut buffer = [0_u8; ARCHIVE_COPY_CHUNK_BYTES];
+    while remaining > 0 {
+        let max_read = usize::try_from(remaining.min(buffer.len() as u64))
+            .map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+        let read = reader
+            .read(&mut buffer[..max_read])
+            .map_err(|_| WasmFacadeError::new("archive_invalid"))?;
+        if read == 0 {
+            return Err(WasmFacadeError::new("archive_invalid"));
+        }
+        bytes.extend_from_slice(&buffer[..read]);
+        remaining -= u64::try_from(read).map_err(|_| WasmFacadeError::new("archive_bounds"))?;
+    }
+    Ok(bytes)
+}
+
+fn safe_archive_path(path: &Path) -> Result<PathBuf, WasmFacadeError> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(segment) => {
+                let segment = segment.to_string_lossy();
+                if segment.is_empty()
+                    || segment == "."
+                    || segment == ".."
+                    || segment.contains('\\')
+                    || segment.contains(':')
+                    || !segment
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                {
+                    return Err(WasmFacadeError::new("archive_path"));
+                }
+                normalized.push(segment.as_ref());
+            }
+            _ => return Err(WasmFacadeError::new("archive_path")),
+        }
+    }
+    if normalized.components().next().is_none() {
+        return Err(WasmFacadeError::new("archive_path"));
+    }
+    Ok(normalized)
+}
+
+fn safe_archive_path_text(value: &str) -> Result<PathBuf, WasmFacadeError> {
+    if value.trim() != value || value.is_empty() || value.starts_with("//") {
+        return Err(WasmFacadeError::new("archive_path"));
+    }
+    safe_archive_path(Path::new(value))
+}
+
+fn archive_path_starts_with(path: &Path, root: &Path) -> bool {
+    let mut path_components = path.components();
+    for root_component in root.components() {
+        if path_components.next() != Some(root_component) {
+            return false;
+        }
+    }
+    true
+}
+
+fn archive_path_text_starts_with(path: &str, root: &str) -> bool {
+    path.starts_with(&format!("{root}/"))
+}
+
+fn pathbuf_to_slash_path(path: &Path) -> String {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(segment) => Some(segment.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn validate_ascii_id(value: &str, max_bytes: usize) -> Result<(), WasmFacadeError> {
@@ -860,15 +1264,6 @@ fn f32_to_i16(sample: f32) -> i16 {
         i16::MIN
     } else {
         (clamped * f32::from(i16::MAX)).round() as i16
-    }
-}
-
-fn false_capability_report() -> ResourceReport {
-    ResourceReport {
-        loaded_tasks: Vec::<VoiceTask>::new(),
-        memory_bytes: 0,
-        active_streams: 0,
-        readiness: TaskReadiness::Unavailable,
     }
 }
 
@@ -1527,6 +1922,48 @@ impl<H: WebModelStoreHost> WebModelStore<H> {
             });
         }
         Ok(records)
+    }
+
+    pub async fn load_active_task_artifacts(
+        &self,
+        scope: ModelStoreScope,
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+    ) -> Result<Vec<WebLoadedModelArtifact>, ModelPackError> {
+        if !selection.belongs_to(manifest) {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
+        validate_scope_task(&scope, manifest, selection)?;
+        let Some(active) = self.active_record(&scope).await? else {
+            return Err(ModelPackError::Store {
+                code: "missing_active",
+            });
+        };
+        let expected_identity = ActivePackIdentity {
+            scope,
+            pack_id: manifest.manifest().pack_id.clone(),
+            pack_version: manifest.manifest().pack_version.clone(),
+            variant_id: selection.variant_id().to_owned(),
+        };
+        if active.identity != expected_identity {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
+        let records = self.selected_file_records(manifest, selection).await?;
+        if !same_file_record_set(&records, &active.files) {
+            return Err(ModelPackError::Store { code: "selection" });
+        }
+        let mut artifacts = Vec::with_capacity(records.len());
+        for record in records {
+            let bytes = read_promoted_file_bytes(&self.host, &record).await?;
+            artifacts.push(WebLoadedModelArtifact {
+                file_id: record.file_id,
+                storage_key: record.storage_key,
+                sha256: record.sha256,
+                byte_size: record.byte_size,
+                bytes,
+            });
+        }
+        Ok(artifacts)
     }
 
     fn expected_file_records(
@@ -2915,6 +3352,43 @@ async fn hash_promoted_chunks<H: WebModelStoreHost>(
     Ok((count, digest))
 }
 
+async fn read_promoted_file_bytes<H: WebModelStoreHost>(
+    host: &H,
+    record: &ActiveFileRecord,
+) -> Result<Vec<u8>, WebHostError> {
+    let mut bytes = Vec::with_capacity(
+        usize::try_from(record.byte_size).map_err(|_| WebHostError::Integrity { code: "size" })?,
+    );
+    let mut hasher = Sha256::new();
+    let mut offset = 0_u64;
+    while offset < record.byte_size {
+        let remaining = record.byte_size.saturating_sub(offset);
+        let chunk = host
+            .read_promoted_chunk(&record.storage_key, offset, remaining.min(HASH_CHUNK_BYTES))
+            .await?;
+        if chunk.bytes.is_empty() {
+            return Err(WebHostError::Store { code: "chunk" });
+        }
+        let len = u64::try_from(chunk.bytes.len())
+            .map_err(|_| WebHostError::Integrity { code: "size" })?;
+        let next = offset
+            .checked_add(len)
+            .ok_or(WebHostError::Integrity { code: "size" })?;
+        if next > record.byte_size {
+            return Err(WebHostError::Integrity { code: "size" });
+        }
+        hasher.update(&chunk.bytes);
+        bytes.extend_from_slice(&chunk.bytes);
+        offset = next;
+    }
+    let byte_size =
+        u64::try_from(bytes.len()).map_err(|_| WebHostError::Integrity { code: "size" })?;
+    if byte_size != record.byte_size || encode_hex(&hasher.finalize()) != record.sha256 {
+        return Err(WebHostError::Integrity { code: "hash" });
+    }
+    Ok(bytes)
+}
+
 async fn hash_chunks<F, Fut>(
     byte_size: u64,
     max_chunk_bytes: u64,
@@ -3051,6 +3525,18 @@ fn validate_scope_task(
     }
 }
 
+fn validate_task_scope(task: VoiceTask, pack_task: PackTask) -> Result<(), ModelPackError> {
+    match task {
+        VoiceTask::KeywordSpotting if matches!(pack_task, PackTask::Kws | PackTask::Wakeword) => {
+            Ok(())
+        }
+        VoiceTask::VoiceActivityDetection if pack_task == PackTask::Vad => Ok(()),
+        VoiceTask::SpeechToText if pack_task == PackTask::Stt => Ok(()),
+        VoiceTask::TextToSpeech if pack_task == PackTask::Tts => Ok(()),
+        _ => Err(ModelPackError::Store { code: "task" }),
+    }
+}
+
 fn stored_matches(
     stored: &StoredFile,
     manifest: &VerifiedManifest,
@@ -3102,6 +3588,16 @@ fn encode_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod wasm_facade_tests {
     use super::*;
+    use aurora_voice_engine::{
+        verify_manifest, AbiRequirements, CapabilityFlags, Compatibility, CompressionKind,
+        DeviceClass, EngineKind, LanguageSupport, LicenseGrant, LicenseInfo, ManifestSignature,
+        ModelPackManifest, ModelPackVariant, ProcessingMetadata, Provenance, ResourceBudget,
+        RuntimeGates, RuntimeTarget, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs,
+        TrustPolicy,
+    };
+    use bzip2::write::BzEncoder;
+    use bzip2::Compression;
+    use tar::{Builder, Header};
 
     fn runtime() -> AuroraVoiceWasmSessionCore {
         AuroraVoiceWasmSessionCore::new(WasmRuntimeConfig {
@@ -3136,10 +3632,470 @@ mod wasm_facade_tests {
     }
 
     #[test]
+    fn extracts_declared_tar_bzip2_files_with_hashes() {
+        let archive = test_tar_bzip2(&[
+            ("voice-root/", None, EntryType::Directory),
+            (
+                "voice-root/model.onnx",
+                Some(b"model-bytes".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/tokens.txt",
+                Some(b"tokens".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+
+        let receipt = extract_tar_bzip2_archive(
+            &archive,
+            WasmArchiveExtractRequest {
+                expected_root: "voice-root".to_owned(),
+                expected_directories: Vec::new(),
+                expected_paths: vec![
+                    "voice-root/model.onnx".to_owned(),
+                    "voice-root/tokens.txt".to_owned(),
+                ],
+                allow_unexpected_files: false,
+                max_entries: 8,
+                max_file_bytes: 64,
+                max_total_bytes: 128,
+            },
+        )
+        .expect("extract");
+
+        assert_eq!(receipt.entry_count, 3);
+        assert_eq!(receipt.total_bytes, 17);
+        assert_eq!(receipt.files[0].path, "voice-root/model.onnx");
+        assert_eq!(receipt.files[0].bytes, b"model-bytes");
+        assert_eq!(receipt.files[0].sha256, sha256_bytes(b"model-bytes"));
+        assert_eq!(receipt.files[1].path, "voice-root/tokens.txt");
+    }
+
+    #[test]
+    fn rejects_unsafe_archive_entries() {
+        for path in [
+            "../model.onnx",
+            "/voice-root/model.onnx",
+            "voice-root/../model.onnx",
+            "voice-root\\model.onnx",
+            "C:/model.onnx",
+        ] {
+            assert_eq!(
+                safe_archive_path_text(path)
+                    .expect_err("unsafe path")
+                    .code(),
+                "archive_path"
+            );
+        }
+    }
+
+    #[test]
+    fn extracts_declared_directory_prefixes_and_rejects_case_collisions() {
+        let archive = test_tar_bzip2(&[
+            ("voice-root/espeak-ng-data/", None, EntryType::Directory),
+            (
+                "voice-root/model.onnx",
+                Some(b"model".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/lang/en",
+                Some(b"lang".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/voices/en-us",
+                Some(b"voice".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+
+        let receipt = extract_tar_bzip2_archive(
+            &archive,
+            WasmArchiveExtractRequest {
+                expected_root: "voice-root".to_owned(),
+                expected_paths: vec!["voice-root/model.onnx".to_owned()],
+                expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                allow_unexpected_files: false,
+                max_entries: 8,
+                max_file_bytes: 64,
+                max_total_bytes: 128,
+            },
+        )
+        .expect("extract directory");
+
+        assert_eq!(
+            receipt
+                .files
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "voice-root/espeak-ng-data/lang/en",
+                "voice-root/espeak-ng-data/voices/en-us",
+                "voice-root/model.onnx"
+            ]
+        );
+
+        let collision = test_tar_bzip2(&[
+            (
+                "voice-root/espeak-ng-data/lang/en",
+                Some(b"one".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/espeak-ng-data/lang/EN",
+                Some(b"two".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &collision,
+                WasmArchiveExtractRequest {
+                    expected_root: "voice-root".to_owned(),
+                    expected_paths: Vec::new(),
+                    expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                    allow_unexpected_files: false,
+                    max_entries: 8,
+                    max_file_bytes: 64,
+                    max_total_bytes: 128,
+                }
+            )
+            .expect_err("case collision")
+            .code(),
+            "archive_duplicate"
+        );
+
+        let directory_as_file = test_tar_bzip2(&[(
+            "voice-root/espeak-ng-data",
+            Some(b"not a directory child".as_slice()),
+            EntryType::Regular,
+        )]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &directory_as_file,
+                WasmArchiveExtractRequest {
+                    expected_root: "voice-root".to_owned(),
+                    expected_paths: Vec::new(),
+                    expected_directories: vec!["voice-root/espeak-ng-data".to_owned()],
+                    allow_unexpected_files: false,
+                    max_entries: 8,
+                    max_file_bytes: 64,
+                    max_total_bytes: 128,
+                }
+            )
+            .expect_err("directory prefix must contain child files")
+            .code(),
+            "archive_unexpected"
+        );
+    }
+
+    #[test]
+    fn rejects_links_unexpected_paths_and_resource_limits() {
+        let link_archive = test_tar_bzip2(&[("voice-root/model.onnx", None, EntryType::Symlink)]);
+        assert_eq!(
+            extract_tar_bzip2_archive(&link_archive, archive_request())
+                .expect_err("link")
+                .code(),
+            "archive_entry"
+        );
+
+        let unexpected = test_tar_bzip2(&[
+            (
+                "voice-root/model.onnx",
+                Some(b"ok".as_slice()),
+                EntryType::Regular,
+            ),
+            (
+                "voice-root/extra.onnx",
+                Some(b"extra".as_slice()),
+                EntryType::Regular,
+            ),
+        ]);
+        assert_eq!(
+            extract_tar_bzip2_archive(&unexpected, archive_request())
+                .expect_err("unexpected")
+                .code(),
+            "archive_unexpected"
+        );
+        let allowed_extra = extract_tar_bzip2_archive(
+            &unexpected,
+            WasmArchiveExtractRequest {
+                allow_unexpected_files: true,
+                ..archive_request()
+            },
+        )
+        .expect("allowed extra");
+        assert_eq!(allowed_extra.files.len(), 1);
+        assert_eq!(allowed_extra.files[0].path, "voice-root/model.onnx");
+
+        let large = test_tar_bzip2(&[(
+            "voice-root/model.onnx",
+            Some(b"too-large".as_slice()),
+            EntryType::Regular,
+        )]);
+        assert_eq!(
+            extract_tar_bzip2_archive(
+                &large,
+                WasmArchiveExtractRequest {
+                    max_file_bytes: 4,
+                    ..archive_request()
+                }
+            )
+            .expect_err("file limit")
+            .code(),
+            "archive_bounds"
+        );
+    }
+
+    struct AcceptingVerifier;
+
+    impl SignatureVerifier for AcceptingVerifier {
+        fn verify(
+            &self,
+            _canonical_json: &str,
+            signature: &ManifestSignature,
+        ) -> Result<bool, ModelPackError> {
+            Ok(signature.value == "signed")
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingInitializer {
+        loaded: Vec<(VoiceTask, Vec<String>, Vec<Vec<u8>>)>,
+    }
+
+    impl WasmTaskInitializer for RecordingInitializer {
+        fn initialize_task(
+            &mut self,
+            task: VoiceTask,
+            artifacts: &[WebLoadedModelArtifact],
+        ) -> Result<usize, WasmFacadeError> {
+            if artifacts.is_empty() {
+                return Err(WasmFacadeError::new("missing_file"));
+            }
+            self.loaded.push((
+                task,
+                artifacts
+                    .iter()
+                    .map(|artifact| artifact.file_id.clone())
+                    .collect(),
+                artifacts
+                    .iter()
+                    .map(|artifact| artifact.bytes.clone())
+                    .collect(),
+            ));
+            artifacts.iter().try_fold(0_usize, |total, artifact| {
+                total
+                    .checked_add(artifact.bytes.len())
+                    .ok_or(WasmFacadeError::new("memory_bounds"))
+            })
+        }
+    }
+
+    fn test_scope(task: PackTask) -> ModelStoreScope {
+        ModelStoreScope::default_for_task(task)
+    }
+
+    fn web_runtime_selection() -> RuntimeSelection {
+        RuntimeSelection {
+            target: RuntimeTarget::Web,
+            os: TargetOs::Web,
+            arch: TargetArch::Wasm32,
+            browser_features: BTreeSet::new(),
+            device_memory_mb: Some(4096),
+            max_download_bytes: u64::MAX,
+            max_installed_bytes: u64::MAX,
+            max_memory_bytes: u64::MAX,
+            cpu_threads: 4,
+            max_rtf_millis_per_second: 1_000,
+            device_class: DeviceClass::Balanced,
+            require_interoperable: false,
+        }
+    }
+
+    fn test_model_file(file_id: &str, task: PackTask, bytes: &[u8]) -> ModelPackFile {
+        ModelPackFile {
+            file_id: file_id.to_owned(),
+            asset_id: file_id.to_owned(),
+            task,
+            byte_size: u64::try_from(bytes.len()).expect("test bytes fit"),
+            sha256: sha256_hex(bytes),
+            url: format!("/models/{file_id}"),
+            compression: CompressionKind::None,
+            installed_size: u64::try_from(bytes.len()).expect("test bytes fit"),
+            install_order: 0,
+            dependencies: Vec::new(),
+            license: LicenseInfo {
+                identifier: "Apache-2.0".to_owned(),
+                text_url: "https://example.test/license".to_owned(),
+                text_sha256: sha256_hex(b"license"),
+                commercial_use: true,
+                redistribution: LicenseGrant::RedistributionAllowed,
+                attribution: "Aurora".to_owned(),
+            },
+            provenance: Provenance {
+                upstream_source: "https://example.test/source".to_owned(),
+                upstream_revision: "rev1".to_owned(),
+                build_recipe_sha256: sha256_hex(b"recipe"),
+            },
+            processing: ProcessingMetadata {
+                tokenizer_sha256: None,
+                operator_inventory_sha256: sha256_hex(b"ops"),
+                preprocessing_abi: "pre".to_owned(),
+                postprocessing_abi: "post".to_owned(),
+                shapes: ShapeMetadata {
+                    sample_rate_hz: 16_000,
+                    channels: 1,
+                    frame_size: 512,
+                    window_size: 1024,
+                    cache_state: vec!["hidden".to_owned()],
+                },
+            },
+            raven: None,
+            revocation: None,
+        }
+    }
+
+    fn test_variant(file_id: &str, size: u64) -> ModelPackVariant {
+        ModelPackVariant {
+            variant_id: "wasm".to_owned(),
+            target: RuntimeTarget::Web,
+            os: TargetOs::Web,
+            arch: TargetArch::Wasm32,
+            engine: EngineKind::SherpaOnnx,
+            required_browser_features: Vec::new(),
+            min_device_memory_mb: None,
+            runtime_gates: RuntimeGates {
+                min_cpu_threads: 1,
+                max_rtf_millis_per_second: 1_000,
+                min_device_class: DeviceClass::Low,
+            },
+            resource_budget: ResourceBudget {
+                max_download_bytes: size,
+                max_installed_bytes: size,
+                max_memory_bytes: 1024,
+            },
+            compatibility: Compatibility {
+                group_id: "group".to_owned(),
+                voice_state_group_id: "voice-state".to_owned(),
+                preprocessing_abi: "pre".to_owned(),
+                postprocessing_abi: "post".to_owned(),
+                sample_rate_hz: 16_000,
+                channels: 1,
+                frame_size: 512,
+                interoperable: false,
+            },
+            file_ids: vec![file_id.to_owned()],
+            abi: AbiRequirements {
+                min_aurora_version: "1".to_owned(),
+                min_runtime_version: "1".to_owned(),
+                min_engine_version: "1".to_owned(),
+                engine_source_revision: "rev".to_owned(),
+                build_flags: Vec::new(),
+            },
+            revocation: None,
+        }
+    }
+
+    fn test_manifest(task: PackTask, bytes: &[u8]) -> VerifiedManifest {
+        let file = test_model_file("model", task, bytes);
+        let raw = ModelPackManifest {
+            schema_version: 1,
+            pack_id: format!("test-{}", task.as_str()),
+            pack_version: "1".to_owned(),
+            display_name: "Pack".to_owned(),
+            tasks: vec![task],
+            license: file.license.clone(),
+            languages: vec![LanguageSupport {
+                language: "en".to_owned(),
+                locale: Some("en-US".to_owned()),
+                fixed_language: true,
+                auto_detect: false,
+            }],
+            capabilities: CapabilityFlags {
+                streaming: true,
+                cancellation: true,
+            },
+            provenance: file.provenance.clone(),
+            files: vec![file.clone()],
+            variants: vec![test_variant(&file.file_id, file.byte_size)],
+            rollback_from: None,
+            supersedes_pack_id: None,
+            revocation: None,
+            signature: Some(ManifestSignature {
+                key_id: "key".to_owned(),
+                algorithm: "ed25519".to_owned(),
+                value: "signed".to_owned(),
+            }),
+        };
+        verify_manifest(raw, &TrustPolicy::default(), Some(&AcceptingVerifier))
+            .expect("manifest verifies")
+    }
+
+    async fn install_active_pack(
+        store: &mut WebModelStore<InMemoryWebHost>,
+        manifest: &VerifiedManifest,
+        selection: &SelectedVariant,
+        task: PackTask,
+        bytes: &[u8],
+    ) {
+        let file = manifest
+            .manifest()
+            .files
+            .iter()
+            .find(|file| file.file_id == "model")
+            .expect("model file");
+        let download = store
+            .reserve_file(manifest, selection, file)
+            .await
+            .expect("reserve");
+        store
+            .host_mut()
+            .append_staging(&download.storage_key, 0, bytes)
+            .await
+            .expect("stage");
+        store
+            .promote_file(
+                &download.storage_key,
+                &sha256_hex(bytes),
+                u64::try_from(bytes.len()).expect("test bytes fit"),
+            )
+            .await
+            .expect("promote");
+        store
+            .activate_pack(test_scope(task), manifest, selection)
+            .await
+            .expect("activate");
+    }
+
+    #[test]
     fn maps_generation_exhaustion_to_stable_redacted_code() {
         assert_eq!(
             WasmFacadeError::from(VoiceCoreError::GenerationExhausted).code(),
             "generation_exhausted"
+        );
+    }
+
+    #[test]
+    fn maps_wake_and_speech_turn_errors_to_stable_redacted_codes() {
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::WakeUnavailable).code(),
+            "wake_unavailable"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::WakeNotDetected).code(),
+            "wake_not_detected"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::SpeechNotDetected).code(),
+            "speech_not_detected"
+        );
+        assert_eq!(
+            WasmFacadeError::from(VoiceCoreError::SpeechTimeout).code(),
+            "speech_timeout"
         );
     }
 
@@ -3540,6 +4496,53 @@ mod wasm_facade_tests {
         );
     }
 
+    fn archive_request() -> WasmArchiveExtractRequest {
+        WasmArchiveExtractRequest {
+            expected_root: "voice-root".to_owned(),
+            expected_directories: Vec::new(),
+            expected_paths: vec!["voice-root/model.onnx".to_owned()],
+            allow_unexpected_files: false,
+            max_entries: 8,
+            max_file_bytes: 64,
+            max_total_bytes: 128,
+        }
+    }
+
+    fn test_tar_bzip2(entries: &[(&str, Option<&[u8]>, EntryType)]) -> Vec<u8> {
+        let encoder = BzEncoder::new(Vec::new(), Compression::best());
+        let mut builder = Builder::new(encoder);
+        for (path, bytes, entry_type) in entries {
+            let mut header = Header::new_gnu();
+            header.set_entry_type(*entry_type);
+            header.set_mode(0o644);
+            match bytes {
+                Some(bytes) => {
+                    header.set_size(bytes.len() as u64);
+                    header.set_cksum();
+                    builder
+                        .append_data(&mut header, *path, *bytes)
+                        .expect("append file");
+                }
+                None => {
+                    header.set_size(0);
+                    header.set_cksum();
+                    builder
+                        .append_data(&mut header, *path, std::io::empty())
+                        .expect("append entry");
+                }
+            }
+        }
+        builder
+            .into_inner()
+            .expect("finish tar")
+            .finish()
+            .expect("finish bzip2")
+    }
+
+    fn sha256_bytes(bytes: &[u8]) -> String {
+        encode_hex(&Sha256::digest(bytes))
+    }
+
     #[test]
     fn snapshots_reports_errors_and_debug_are_redacted() {
         let mut runtime = runtime();
@@ -3621,7 +4624,7 @@ mod wasm_facade_tests {
     }
 
     #[test]
-    fn capabilities_remain_false_and_resource_report_is_unavailable() {
+    fn capabilities_remain_false_until_task_artifacts_initialize() {
         let runtime = runtime();
         assert_eq!(
             runtime.capabilities(),
@@ -3637,6 +4640,99 @@ mod wasm_facade_tests {
         assert_eq!(report.capability.memory_bytes, 0);
         assert_eq!(report.capability.active_streams, 0);
         assert_eq!(report.capability.readiness, TaskReadiness::Unavailable);
+    }
+
+    #[tokio::test]
+    async fn wasm_task_readiness_requires_loading_selected_active_artifacts() {
+        let bytes = b"stt-model-bytes";
+        let manifest = test_manifest(PackTask::Stt, bytes);
+        let runtime_selection = web_runtime_selection();
+        let selection =
+            select_verified_variant(&manifest, &runtime_selection).expect("selection resolves");
+        let mut store = WebModelStore::new(InMemoryWebHost::new(Some(4096)));
+        install_active_pack(&mut store, &manifest, &selection, PackTask::Stt, bytes).await;
+        let mut runtime = runtime();
+        let mut initializer = RecordingInitializer::default();
+
+        runtime
+            .initialize_task_from_store(
+                &store,
+                VoiceTask::SpeechToText,
+                test_scope(PackTask::Stt),
+                &manifest,
+                &runtime_selection,
+                &mut initializer,
+            )
+            .await
+            .expect("initialize from active artifacts");
+
+        assert_eq!(initializer.loaded.len(), 1);
+        assert_eq!(initializer.loaded[0].0, VoiceTask::SpeechToText);
+        assert_eq!(initializer.loaded[0].1, vec!["model".to_owned()]);
+        assert_eq!(initializer.loaded[0].2, vec![bytes.to_vec()]);
+        assert_eq!(
+            runtime.capabilities(),
+            WasmCapabilities {
+                vad: false,
+                kws: false,
+                stt: true,
+                tts: false
+            }
+        );
+        let report = runtime.resource_report(51);
+        assert_eq!(
+            report.capability.loaded_tasks,
+            vec![VoiceTask::SpeechToText]
+        );
+        assert_eq!(
+            report.capability.memory_bytes,
+            u64::try_from(bytes.len()).expect("test bytes fit")
+        );
+        assert_eq!(report.capability.readiness, TaskReadiness::Ready);
+    }
+
+    #[tokio::test]
+    async fn wasm_task_readiness_fails_closed_for_corrupt_active_artifacts() {
+        let bytes = b"stt-model-bytes";
+        let manifest = test_manifest(PackTask::Stt, bytes);
+        let runtime_selection = web_runtime_selection();
+        let selection =
+            select_verified_variant(&manifest, &runtime_selection).expect("selection resolves");
+        let mut store = WebModelStore::new(InMemoryWebHost::new(Some(4096)));
+        install_active_pack(&mut store, &manifest, &selection, PackTask::Stt, bytes).await;
+        let storage_key = file_storage_key(
+            &manifest.manifest().pack_id,
+            &manifest.manifest().pack_version,
+            selection.variant_id(),
+            "model",
+        );
+        store
+            .host_mut()
+            .insert_promoted(storage_key, b"corrupt".to_vec());
+        let mut runtime = runtime();
+        let mut initializer = RecordingInitializer::default();
+
+        assert_eq!(
+            runtime
+                .initialize_task_from_store(
+                    &store,
+                    VoiceTask::SpeechToText,
+                    test_scope(PackTask::Stt),
+                    &manifest,
+                    &runtime_selection,
+                    &mut initializer,
+                )
+                .await
+                .expect_err("corrupt active artifacts")
+                .code(),
+            "model_store"
+        );
+        assert!(initializer.loaded.is_empty());
+        assert!(!runtime.capabilities().stt);
+        assert_eq!(
+            runtime.resource_report(52).capability.readiness,
+            TaskReadiness::Unavailable
+        );
     }
 
     #[test]

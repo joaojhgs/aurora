@@ -146,6 +146,22 @@ export class TtsClient extends SpeechNamespaceClient {
     return this.request('TTS.DeleteVoiceProfile', input, options)
   }
 
+  /** Export a cloned voice profile as a bounded derived-state bundle. */
+  exportVoiceProfile(
+    input: SpeechInput<'TTS.ExportVoiceProfile'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.ExportVoiceProfile'> {
+    return this.request('TTS.ExportVoiceProfile', input, options)
+  }
+
+  /** Import a bounded derived-state bundle as a cloned voice profile. */
+  importVoiceProfile(
+    input: SpeechInput<'TTS.ImportVoiceProfile'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.ImportVoiceProfile'> {
+    return this.request('TTS.ImportVoiceProfile', input, options)
+  }
+
   /** Request immediate speech playback. */
   requestPlayback(
     input: SpeechInput<'TTS.Request'>,

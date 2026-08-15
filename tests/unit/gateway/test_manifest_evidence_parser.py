@@ -283,7 +283,7 @@ def test_projection_manifest_rejects_malformed_speech_constraints() -> None:
     payload = _projection_manifest()
     method = payload["shared_services"][0]["methods"][0]
     method["speech_constraints"] = {
-        "exact_languages": ["pt-BR"],
+        "exact_languages": ["pt--BR"],
         "resident_model_identity_digest": "2" * 64,
         "speech_capability_revision": 5,
     }

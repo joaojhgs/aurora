@@ -29,6 +29,8 @@ VOICE_IMPORT_MAX_SEQUENCE = VOICE_IMPORT_MAX_CHUNKS - 1
 VOICE_IMPORT_MAX_JSON_BYTES = 128 * 1024
 VOICE_IMPORT_MAX_BASE64_CHARS = 65_536
 VOICE_IMPORT_MAX_DURATION_MS = 15_000
+VOICE_STATE_TRANSFER_MAX_BYTES = 2 * 1024 * 1024
+VOICE_STATE_TRANSFER_MAX_BASE64_CHARS = ((VOICE_STATE_TRANSFER_MAX_BYTES + 2) // 3) * 4
 TTS_MIN_SAMPLE_RATE = 8_000
 TTS_MAX_SAMPLE_RATE = 192_000
 TTS_MAX_CHANNELS = 8
@@ -87,6 +89,7 @@ class TTSMethods:
     SYNTHESIZE = f"{TTSModule.NAME}.Synthesize"  # External: returns audio data
     GET_CAPABILITIES = f"{TTSModule.NAME}.GetCapabilities"
     LIST_VOICES = f"{TTSModule.NAME}.ListVoices"
+    LIST_LANGUAGE_PACKS = f"{TTSModule.NAME}.ListLanguagePacks"
     LIST_VOICE_PROFILES = f"{TTSModule.NAME}.ListVoiceProfiles"
     GET_VOICE_PROFILE = f"{TTSModule.NAME}.GetVoiceProfile"
     UPDATE_VOICE_PROFILE = f"{TTSModule.NAME}.UpdateVoiceProfile"
@@ -99,6 +102,8 @@ class TTSMethods:
     VOICE_IMPORT_ABORT = f"{TTSModule.NAME}.VoiceImportAbort"
     CREATE_VOICE_PROFILE = f"{TTSModule.NAME}.CreateVoiceProfile"
     DELETE_VOICE_PROFILE = f"{TTSModule.NAME}.DeleteVoiceProfile"
+    EXPORT_VOICE_PROFILE = f"{TTSModule.NAME}.ExportVoiceProfile"
+    IMPORT_VOICE_PROFILE = f"{TTSModule.NAME}.ImportVoiceProfile"
     STREAM_START = f"{TTSModule.NAME}.StreamStart"
     STREAM_CHUNK = f"{TTSModule.NAME}.StreamChunk"
     STREAM_END = f"{TTSModule.NAME}.StreamEnd"
@@ -442,6 +447,140 @@ class TTSListVoicesResponse(_StrictTTSIOModel):
         voice_ids = [voice.voice_id for voice in self.voices]
         if len(voice_ids) != len(set(voice_ids)):
             raise ValueError("use-safe voice list cannot contain duplicate voices")
+        return self
+
+
+class TTSLanguagePackVoice(_StrictTTSIOModel):
+    """Redacted voice row available inside a provider-neutral language pack."""
+
+    voice_id: LogicalVoiceId
+    display_name: str = Field(min_length=1, max_length=256)
+    installed: bool = False
+    ready: bool = False
+    default: bool = False
+    active: bool = False
+    revision: str = Field(min_length=1, max_length=256)
+
+    @field_validator("voice_id")
+    @classmethod
+    def _validate_voice_id(cls, value: str) -> str:
+        return validate_logical_voice_id(value)
+
+    @field_validator("display_name", "revision")
+    @classmethod
+    def _validate_nonblank(cls, value: str) -> str:
+        return _non_blank(value, "language pack voice field")
+
+    @model_validator(mode="after")
+    def _validate_voice_state(self) -> TTSLanguagePackVoice:
+        if self.ready and not self.installed:
+            raise ValueError("ready language pack voice must be installed")
+        if (self.default or self.active) and not self.ready:
+            raise ValueError("default or active language pack voice must be ready")
+        return self
+
+
+class TTSLanguagePackDescriptor(_StrictTTSIOModel):
+    """Provider-neutral language pack inventory row."""
+
+    pack_id: str = Field(min_length=1, max_length=256)
+    language: SpeechLanguageTag
+    display_name: str = Field(min_length=1, max_length=256)
+    installed: bool = False
+    ready: bool = False
+    default: bool = False
+    voice_count: int = Field(ge=0, le=256)
+    installed_voice_count: int = Field(default=0, ge=0, le=256)
+    ready_voice_count: int = Field(default=0, ge=0, le=256)
+    voices: list[TTSLanguagePackVoice] = Field(default_factory=list, max_length=256)
+    revision: str = Field(min_length=1, max_length=256)
+
+    @field_validator("pack_id")
+    @classmethod
+    def _validate_pack_id(cls, value: str) -> str:
+        return _non_blank(value, "pack_id")
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_language(cls, value: str) -> str:
+        return normalize_exact_speech_language(value)
+
+    @field_validator("display_name", "revision")
+    @classmethod
+    def _validate_nonblank(cls, value: str) -> str:
+        return _non_blank(value, "language pack descriptor field")
+
+    @model_validator(mode="after")
+    def _validate_pack_state(self) -> TTSLanguagePackDescriptor:
+        voice_ids = [voice.voice_id for voice in self.voices]
+        if len(voice_ids) != len(set(voice_ids)):
+            raise ValueError("language pack cannot contain duplicate voices")
+        installed = sum(1 for voice in self.voices if voice.installed)
+        ready = sum(1 for voice in self.voices if voice.ready)
+        if self.voice_count != len(self.voices):
+            raise ValueError("voice count must match listed voices")
+        if self.installed_voice_count != installed:
+            raise ValueError("installed voice count must match listed voices")
+        if self.ready_voice_count != ready:
+            raise ValueError("ready voice count must match listed voices")
+        if self.installed != (installed > 0):
+            raise ValueError("installed pack state must match installed voices")
+        if self.ready != (ready > 0):
+            raise ValueError("ready pack state must match ready voices")
+        if self.default != any(voice.default for voice in self.voices):
+            raise ValueError("default pack state must match listed voices")
+        return self
+
+
+class TTSListLanguagePacksRequest(_StrictTTSIOModel):
+    """List provider-neutral TTS language packs."""
+
+    include_unavailable: bool = True
+    language: SpeechLanguageTag | None = None
+    mesh_selector: MeshAddressSelector | None = None
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_language(cls, value: str | None) -> str | None:
+        normalized = normalize_speech_language(value, allow_auto=True)
+        if normalized == "auto":
+            raise ValueError("language pack filter must be exact, not auto")
+        return normalized
+
+
+class TTSListLanguagePacksResponse(_StrictTTSIOModel):
+    """Provider-neutral language pack inventory."""
+
+    packs: list[TTSLanguagePackDescriptor] = Field(default_factory=list, max_length=256)
+    catalog_status: Literal["available", "unavailable"] = "available"
+    catalog_error_code: Literal["catalog_unavailable"] | None = None
+    default_voice_id: LogicalVoiceId | None = None
+    stale_default_voice_id: LogicalVoiceId | None = None
+    capability_revision: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @field_validator("default_voice_id", "stale_default_voice_id", mode="before")
+    @classmethod
+    def _validate_default_voice_ids(cls, value: str | None) -> str | None:
+        return _normalize_optional_voice_id(value)
+
+    @model_validator(mode="after")
+    def _validate_unique_packs(self) -> TTSListLanguagePacksResponse:
+        pack_ids = [pack.pack_id for pack in self.packs]
+        if len(pack_ids) != len(set(pack_ids)):
+            raise ValueError("language pack list cannot contain duplicate packs")
+        if self.catalog_status == "available" and self.catalog_error_code is not None:
+            raise ValueError("available language pack catalog cannot include an error code")
+        if self.catalog_status == "unavailable" and self.catalog_error_code is None:
+            raise ValueError("unavailable language pack catalog requires an error code")
+        if self.stale_default_voice_id is not None:
+            for pack in self.packs:
+                for voice in pack.voices:
+                    if voice.voice_id == self.stale_default_voice_id and (
+                        voice.ready or voice.default
+                    ):
+                        raise ValueError("stale default voice cannot be ready or default")
         return self
 
 
@@ -954,6 +1093,120 @@ class TTSDeleteVoiceProfileResponse(_StrictTTSIOModel):
     def _validate_revision(self) -> TTSDeleteVoiceProfileResponse:
         if self.status in {"deleted", "revision_conflict"} and self.revision is None:
             raise ValueError("delete result needs revision")
+        return self
+
+
+class TTSCloneVoiceStateBundle(_StrictTTSIOModel):
+    """Portable cloned voice-state bundle containing derived state only."""
+
+    schema_version: Literal[1] = 1
+    bundle_type: Literal["aurora-cloned-tts-voice-state"] = "aurora-cloned-tts-voice-state"
+    voice_id: LogicalVoiceId
+    display_name: str = Field(min_length=1, max_length=256)
+    runtime_target: str = Field(min_length=1, max_length=96)
+    language_bundle: str = Field(min_length=1, max_length=96)
+    compatibility_group: str = Field(min_length=1, max_length=256)
+    artifact_revision: str = Field(min_length=1, max_length=96)
+    artifact_format: Literal["safetensors"] = "safetensors"
+    artifact_sha256: str
+    artifact_size_bytes: int = Field(gt=0, le=VOICE_STATE_TRANSFER_MAX_BYTES)
+    artifact_data_base64: str = Field(
+        max_length=VOICE_STATE_TRANSFER_MAX_BASE64_CHARS,
+        repr=False,
+    )
+
+    @field_validator("voice_id")
+    @classmethod
+    def _validate_clone_voice_id(cls, value: str) -> str:
+        validated = validate_logical_voice_id(value)
+        if not validated.startswith("clone:"):
+            raise ValueError("bundle voice id must identify a cloned voice")
+        return validated
+
+    @field_validator(
+        "display_name",
+        "runtime_target",
+        "language_bundle",
+        "compatibility_group",
+        "artifact_revision",
+    )
+    @classmethod
+    def _validate_nonblank(cls, value: str) -> str:
+        return _non_blank(value, "voice bundle field")
+
+    @field_validator("artifact_sha256")
+    @classmethod
+    def _validate_artifact_sha256(cls, value: str) -> str:
+        return _normalize_sha256(value, "artifact_sha256")
+
+    @model_validator(mode="after")
+    def _validate_artifact_payload(self) -> TTSCloneVoiceStateBundle:
+        try:
+            decoded = base64.b64decode(self.artifact_data_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("artifact_data_base64 must be valid base64") from exc
+        if len(decoded) != self.artifact_size_bytes:
+            raise ValueError("artifact size does not match payload")
+        if hashlib.sha256(decoded).hexdigest() != self.artifact_sha256:
+            raise ValueError("artifact SHA-256 mismatch")
+        if len(self.model_dump_json().encode("utf-8")) > (
+            VOICE_STATE_TRANSFER_MAX_BASE64_CHARS + VOICE_IMPORT_MAX_JSON_BYTES
+        ):
+            raise ValueError("voice state bundle exceeds JSON limit")
+        return self
+
+
+class TTSExportVoiceProfileRequest(TTSInstallVoiceProfileRequest):
+    """Export a manager-authorized cloned voice state bundle."""
+
+    @model_validator(mode="after")
+    def _validate_clone_id(self) -> TTSExportVoiceProfileRequest:
+        if not self.voice_id.startswith("clone:"):
+            raise ValueError("only cloned voice profiles can be exported")
+        return self
+
+
+class TTSExportVoiceProfileResponse(_StrictTTSIOModel):
+    """Manager-authorized cloned voice state export response."""
+
+    voice_id: LogicalVoiceId
+    status: Literal["exported", "not_found", "rejected", "revision_conflict", "unavailable"]
+    revision: str | None = Field(default=None, min_length=1, max_length=256)
+    bundle: TTSCloneVoiceStateBundle | None = None
+    idempotent: bool = False
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _validate_export_response(self) -> TTSExportVoiceProfileResponse:
+        if self.status == "exported":
+            if self.bundle is None or self.revision is None:
+                raise ValueError("exported response requires revision and bundle")
+            if self.bundle.voice_id != self.voice_id:
+                raise ValueError("exported bundle voice id must match response")
+        elif self.bundle is not None:
+            raise ValueError("non-exported response cannot include a bundle")
+        return self
+
+
+class TTSImportVoiceProfileRequest(_TTSMutationRequest):
+    """Import a manager-authorized cloned voice state bundle."""
+
+    bundle: TTSCloneVoiceStateBundle
+
+
+class TTSImportVoiceProfileResponse(_StrictTTSIOModel):
+    """Manager-authorized cloned voice state import response."""
+
+    voice_id: LogicalVoiceId
+    status: Literal["imported", "unchanged", "rejected", "conflict", "unavailable"]
+    revision: str | None = Field(default=None, min_length=1, max_length=256)
+    idempotent: bool = False
+    correlation_id: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def _validate_import_response(self) -> TTSImportVoiceProfileResponse:
+        if self.status in {"imported", "unchanged", "conflict"} and self.revision is None:
+            raise ValueError("import result needs revision")
         return self
 
 

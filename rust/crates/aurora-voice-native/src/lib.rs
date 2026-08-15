@@ -9,12 +9,15 @@ mod android_session;
 mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod desktop_capture;
+#[cfg(feature = "native-sherpa")]
+mod desktop_engine;
 mod downloader;
 mod gateway_capture_handoff;
 mod gateway_stt;
 mod gateway_tts;
 mod ios_session;
 mod model_store;
+mod speech_pack_manager;
 mod transport;
 mod trust;
 
@@ -23,16 +26,31 @@ pub use android_capture::{
     AndroidPcmIngressStats, AndroidPcmPushResult,
 };
 pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
+#[cfg(feature = "native-sherpa-tts")]
+pub use android_session::AndroidTtsReferenceProfile;
 pub use android_session::{
     AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
     AndroidVoiceSessionPhase, AndroidVoiceSessionStatus,
 };
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
+pub use aurora_voice_core::CancellationToken;
+pub use aurora_voice_engine::{SpeechCatalogTask, SpeechModelCatalog, TtsVoiceCatalog};
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
     NativeInputDevice, NativeInputDeviceId,
+};
+#[cfg(feature = "native-sherpa")]
+pub use desktop_engine::{
+    build_active_kws_provider, build_active_stt_provider, build_active_vad_provider,
+    build_installed_kws_provider, build_installed_kws_provider_from_phrases,
+    build_installed_stt_provider, build_installed_vad_provider, warm_active_kws,
+    warm_installed_kws,
+};
+#[cfg(feature = "native-sherpa-tts")]
+pub use desktop_engine::{
+    build_installed_tts_provider, build_installed_tts_provider_with_reference,
 };
 pub use downloader::{
     AssetIntegrity, DownloadError, DownloadPolicy, DownloadProgress, DownloadReceipt,
@@ -44,10 +62,16 @@ pub use gateway_capture_handoff::{
 pub use gateway_stt::{NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig};
 pub use gateway_tts::{NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer};
 pub use ios_session::{
+    IosTtsReferenceBinding, IosVoicePackBinding, IosVoicePackBindings, IosVoicePackFileBinding,
     IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
-    IosVoiceSessionStatus, IosVoiceStartMode,
+    IosVoiceSessionStatus, IosVoiceStartMode, MAX_IOS_PACK_BINDINGS,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
+pub use speech_pack_manager::{
+    InstalledSpeechModel, InstalledSpeechPack, SpeechModelBindings, SpeechPackBindings,
+    SpeechPackError, SpeechPackInstallPhase, SpeechPackInstallProgress, SpeechPackManager,
+    SpeechPackManagerConfig,
+};
 pub use transport::{
     GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,
     NativeGatewayEndpointClass, NativeGatewayMicrophoneAudioProfile, NativeGatewayTransport,

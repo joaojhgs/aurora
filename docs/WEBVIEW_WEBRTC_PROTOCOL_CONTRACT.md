@@ -94,16 +94,16 @@ pnpm --filter @aurora/tauri-ui android:webrtc:interop
 pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 ```
 
-Current checked reports prove direct, configured-STUN, and forced-TURN
-foreground interop in Chromium, Firefox, and Playwright WebKit. Every lane
-also proves deterministic negotiation direction, manifest exchange,
+The required WebRTC interop workflow proves direct, configured-STUN, and
+forced-TURN foreground interop in Chromium, Firefox, and Playwright WebKit
+when it passes. Every lane also proves deterministic negotiation direction, manifest exchange,
 structured error parity, fragmented 512 KiB request/response transfer,
 stream completion, and cancellation observed by the Python peer.
 The Android and iOS commands apply that same external-Python pairing contract
 to mobile surfaces in their existing platform jobs: packaged Android System
 WebView plus Android Chrome, and iOS MobileSafari plus packaged Tauri
-WKWebView. Those platform reports remain pending until their KVM/macOS jobs
-run; source wiring or a Linux skip is not runtime proof.
+WKWebView. Per-run reports are generated in ignored local paths and retained
+through CI artifacts; source wiring or a Linux skip is not runtime proof.
 `pnpm test:webrtc:browsers` records an explicit skip when an optional
 Playwright engine or its host runtime is unavailable; a skip is not
 compatibility proof. Required CI uses strict browser availability.

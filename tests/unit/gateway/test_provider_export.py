@@ -540,7 +540,7 @@ def test_malformed_speech_constraints_are_rejected_by_normalized_snapshot() -> N
         method(
             "TTS.Synthesize",
             speech_constraints={
-                "exact_languages": ["pt-BR"],
+                "exact_languages": ["pt--BR"],
                 "resident_model_identity_digest": "d" * 64,
                 "speech_capability_revision": 1,
             },

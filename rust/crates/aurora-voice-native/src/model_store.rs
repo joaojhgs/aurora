@@ -3,9 +3,10 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
     apply_lifecycle_event, can_activate, create_lifecycle_snapshot, file_storage_key,
-    scope_matches_manifest, ActivePackIdentity, DownloadTask, ImmutableModelFile, InstallEvent,
-    InstallState, LifecycleSnapshot, ModelPackError, ModelPackFile, ModelStore, ModelStoreScope,
-    SelectedVariant, StoreStatus, StoredFile, VerifiedManifest,
+    scope_matches_manifest, select_verified_variant, ActivePackIdentity, DownloadTask,
+    ImmutableModelFile, InstallEvent, InstallState, LifecycleSnapshot, ModelPackError,
+    ModelPackFile, ModelStore, ModelStoreScope, RuntimeSelection, SelectedVariant, StoreStatus,
+    StoredFile, TaskReadiness, VerifiedManifest,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -138,6 +139,72 @@ impl NativeModelStore {
             return Err(store("corrupt"));
         }
         Ok(NativeImmutableModelFile { metadata, file })
+    }
+
+    /// Return the verified blob path for native engine constructors.
+    ///
+    /// The path is only exposed after the same selection, revocation, hash, and
+    /// byte-size checks used by `open_native_file`, so native adapters never
+    /// bind to stale staging data or unchecked user paths.
+    pub fn native_file_path(
+        &self,
+        selection: &SelectedVariant,
+        file_id: &str,
+    ) -> Result<PathBuf, ModelPackError> {
+        let metadata = self.lookup_immutable(selection, file_id)?;
+        let path = blob_path(&self.config.root, &metadata.sha256);
+        let actual = inspect_file(&path)?;
+        if actual.byte_size != metadata.byte_size || actual.sha256 != metadata.sha256 {
+            return Err(store("corrupt"));
+        }
+        Ok(path)
+    }
+
+    /// Resolve the active installed selection for a catalog manifest on this
+    /// host, if the active scope exactly matches the compatible selection.
+    pub fn active_verified_selection(
+        &self,
+        scope: &ModelStoreScope,
+        manifest: &VerifiedManifest,
+        runtime: &RuntimeSelection,
+    ) -> Result<Option<SelectedVariant>, ModelPackError> {
+        scope_matches_manifest(scope, manifest)?;
+        let selection = select_verified_variant(manifest, runtime)?;
+        let scope_key = scope_map_key(scope);
+        let Some(active) = self.state.active.get(&scope_key) else {
+            return Ok(None);
+        };
+        if active.identity.scope != *scope {
+            return Err(store("scope"));
+        }
+        self.require_pack_available(&active.identity.pack_id)?;
+        if active.identity.pack_id != manifest.manifest().pack_id
+            || active.identity.pack_version != manifest.manifest().pack_version
+            || active.identity.variant_id != selection.variant_id()
+            || active.file_ids != *selection.file_ids()
+        {
+            return Ok(None);
+        }
+        if !pack_has_files(&self.config.root, &self.state, active)? {
+            return Err(store("corrupt"));
+        }
+        Ok(Some(selection))
+    }
+
+    /// Product readiness derived from catalog compatibility plus durable active
+    /// install state. This is intentionally not a static platform constant.
+    pub fn task_readiness(
+        &self,
+        scope: &ModelStoreScope,
+        manifest: &VerifiedManifest,
+        runtime: &RuntimeSelection,
+    ) -> TaskReadiness {
+        match self.active_verified_selection(scope, manifest, runtime) {
+            Ok(Some(_)) => TaskReadiness::Ready,
+            Ok(None) => TaskReadiness::Cold,
+            Err(ModelPackError::NoCompatibleVariant) => TaskReadiness::Unavailable,
+            Err(_) => TaskReadiness::Unavailable,
+        }
     }
 
     #[cfg(test)]
@@ -1434,6 +1501,23 @@ mod tests {
         .expect("selection resolves")
     }
 
+    fn desktop_runtime_selection() -> RuntimeSelection {
+        RuntimeSelection {
+            target: RuntimeTarget::Desktop,
+            os: TargetOs::Linux,
+            arch: TargetArch::X86_64,
+            browser_features: BTreeSet::new(),
+            device_memory_mb: Some(4096),
+            max_download_bytes: u64::MAX,
+            max_installed_bytes: u64::MAX,
+            max_memory_bytes: u64::MAX,
+            cpu_threads: 4,
+            max_rtf_millis_per_second: 1_000,
+            device_class: DeviceClass::Balanced,
+            require_interoperable: false,
+        }
+    }
+
     async fn reserve_and_stage(
         store: &mut NativeModelStore,
         manifest: &VerifiedManifest,
@@ -1475,6 +1559,74 @@ mod tests {
             .activate_pack(scope(PackTask::Stt), manifest, &selection)
             .await
             .expect("activation succeeds");
+    }
+
+    #[tokio::test]
+    async fn active_verified_selection_feeds_reopened_engine_readiness() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bytes = b"ready";
+        let manifest = manifest("speech-pack", "1", model_file("model", bytes));
+        let runtime = desktop_runtime_selection();
+        let scope = scope(PackTask::Stt);
+        let mut store = open_store(temp.path(), 100);
+
+        assert_eq!(
+            store.task_readiness(&scope, &manifest, &runtime),
+            TaskReadiness::Cold
+        );
+        install_ready(&mut store, &manifest, bytes).await;
+        let active = store
+            .active_verified_selection(&scope, &manifest, &runtime)
+            .expect("active lookup succeeds")
+            .expect("active selection exists");
+        assert_eq!(active.pack_id(), "speech-pack");
+        assert_eq!(
+            store.task_readiness(&scope, &manifest, &runtime),
+            TaskReadiness::Ready
+        );
+        let native_path = store
+            .native_file_path(&active, "model")
+            .expect("verified native path");
+        assert!(native_path.is_file());
+
+        let reopened = open_store(temp.path(), 100);
+        assert_eq!(
+            reopened.task_readiness(&scope, &manifest, &runtime),
+            TaskReadiness::Ready
+        );
+    }
+
+    #[tokio::test]
+    async fn engine_readiness_fails_closed_for_wrong_or_corrupt_active_pack() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bytes = b"ready";
+        let replacement_bytes = b"other";
+        let active_manifest = manifest("speech-pack", "1", model_file("model", bytes));
+        let replacement = manifest("speech-pack", "2", model_file("model", replacement_bytes));
+        let runtime = desktop_runtime_selection();
+        let scope = scope(PackTask::Stt);
+        let mut store = open_store(temp.path(), 100);
+
+        install_ready(&mut store, &replacement, replacement_bytes).await;
+        assert_eq!(
+            store.task_readiness(&scope, &active_manifest, &runtime),
+            TaskReadiness::Cold
+        );
+
+        install_ready(&mut store, &active_manifest, bytes).await;
+        let active = store
+            .active_verified_selection(&scope, &active_manifest, &runtime)
+            .expect("active lookup")
+            .expect("active selection");
+        let native_path = store
+            .native_file_path(&active, "model")
+            .expect("verified native path");
+        std::fs::write(native_path, b"corrupt").expect("corrupt active blob");
+        assert_eq!(
+            store.task_readiness(&scope, &active_manifest, &runtime),
+            TaskReadiness::Unavailable
+        );
+        assert!(store.native_file_path(&active, "model").is_err());
     }
 
     async fn install_ready_only(

@@ -196,6 +196,7 @@ describe('runtime profile document', () => {
     'downloading',
     'incompatible',
     'over-budget',
+    'ready',
   ] as const)('sanitizes the persisted %s local speech state', (localSpeechPackState) => {
     const profile: AuroraRuntimeProfileV2 = {
       version: 2,
@@ -227,9 +228,162 @@ describe('runtime profile document', () => {
       ...migrated,
       localNode: {
         ...migrated.localNode,
-        localSpeechPackState: 'ready',
+        localSpeechPackState: 'unknown',
       },
     } as unknown as AuroraRuntimeProfileV2)).toThrow(/local speech state/u)
+  })
+
+  it('round-trips exact local speech selections separately from readiness state', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    const profile: AuroraRuntimeProfileV2 = {
+      ...migrated.profiles[0]!,
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        enabledCapabilityPacks: ['foreground-voice'],
+        localSpeechPackState: 'downloading',
+        localSpeechSelection: {
+          vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
+          kws: {
+            packId: 'wake.en',
+            packRevision: 'wake-rev-2',
+          },
+          stt: { packId: 'stt.en', packRevision: 'stt-rev-3' },
+          tts: {
+            packId: 'piper.en',
+            packRevision: 'pack-rev-4',
+            voiceId: 'standard:piper.en:ava',
+            voiceRevision: 'voice-rev-5',
+          },
+          wakePhrase: {
+            phraseId: 'hey-aurora.en',
+            phrase: 'Hey Aurora',
+            language: 'en',
+            revision: 'wakephrase-v1-abc123',
+          },
+        },
+        meshMembership: {
+          signalingUrl: 'wss://signal.example.test/mqtt',
+          webrtcProfile: {
+            ...webrtcProfile,
+            mode: 'webrtc-only',
+          },
+        },
+      },
+    }
+    const document = {
+      ...migrated,
+      profiles: [profile],
+    }
+
+    const serialized = serializeRuntimeProfileDocument(document)
+    const parsed = parseRuntimeProfileDocument(serialized)
+
+    expect(parsed?.profiles[0]?.localNode.localSpeechPackState).toBe('downloading')
+    expect(parsed?.profiles[0]?.localNode.localSpeechSelection).toEqual(profile.localNode.localSpeechSelection)
+    expect(isRuntimeProfileConfigured(parsed?.profiles[0])).toBe(true)
+  })
+
+  it('rejects malformed local speech selections without rejecting old profile documents', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    expect(parseRuntimeProfileDocument(JSON.stringify(v1Document))?.profiles[0]?.localNode.localSpeechSelection).toBeUndefined()
+    expect(parseRuntimeProfileDocument(JSON.stringify(migrated))?.profiles[0]?.localNode.localSpeechSelection).toBeUndefined()
+
+    expect(parseRuntimeProfileDocument(JSON.stringify({
+      ...migrated,
+      profiles: [{
+        ...migrated.profiles[0]!,
+        localNode: {
+          ...migrated.profiles[0]!.localNode,
+          localSpeechSelection: {
+            tts: {
+              packId: 'piper.en',
+              packRevision: 'pack-rev-1',
+              voiceId: 'standard:piper.en:ava',
+            },
+          },
+        },
+      }],
+    }))).toBeNull()
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          tts: {
+            packId: 'piper.en?token=secret',
+            packRevision: 'pack-rev-1',
+            voiceId: 'standard:piper.en:ava',
+            voiceRevision: 'voice-rev-1',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/local speech pack id/u)
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          batch: {
+            packId: 'piper.en',
+            packRevision: 'pack-rev-1',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/selection task/u)
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          stt: {
+            packId: 'stt.en',
+            packRevision: 'stt-rev-1',
+            phraseId: 'hey-aurora.en',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/asset selection field/u)
+
+    expect(() => sanitizeRuntimeProfile({
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        localSpeechSelection: {
+          wakePhrase: {
+            phraseId: 'hey-aurora.en',
+            phrase: 'Hey Aurora',
+            language: 'en',
+          },
+        },
+      },
+    } as unknown as AuroraRuntimeProfileV2)).toThrow(/wake phrase revision/u)
+  })
+
+  it('keeps exact local speech selections neutral to physical surface capability', () => {
+    const surface = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'unavailable',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+
+    expect(surface.physicalKind).toBe('hosted-web')
+    expect(surface.localSpeechPack).toMatchObject({
+      state: 'unavailable',
+      availabilityState: 'unsupported',
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
   })
 
   it('uses product-safe physical surface labels', () => {

@@ -40,10 +40,6 @@ struct AuroraShowNotificationArgs: Decodable {
 
 @objc(AuroraNativePlugin)
 public final class AuroraNativePlugin: Plugin {
-  // The current iOS bridge owns bounded capture/playback plumbing only. It
-  // must not report a usable voice turn or open the microphone until the
-  // native typed transport/session executor is linked into the app target.
-  private static let nativeTurnTransportAvailable = false
   private static let maxSharedTextLength = 8192
   private static let maxTitleLength = 120
   private static let maxNotificationBodyLength = 512
@@ -60,6 +56,8 @@ public final class AuroraNativePlugin: Plugin {
   private let voiceCapture = AuroraIOSVoiceCapture()
   private var voiceSession: AuroraIOSVoiceSessionHost?
   private var voiceSessionGeneration: UInt64?
+  private var voiceSessionBackground = false
+  private let packManager = AuroraIOSVoicePackManager.self
 
   private let mobileIntegrations: [[String: Any]] = [
     [
@@ -284,6 +282,10 @@ public final class AuroraNativePlugin: Plugin {
         settings.authorizationStatus
       )
       let notificationState = notificationReady ? "available" : "needs_native_permission"
+      let recordPermission = AVAudioSession.sharedInstance().recordPermission
+      let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
+      let voiceReady = transportReady.available && recordPermission == .granted
+      let voiceState = voiceReady ? "available" : "needs_native_permission"
       invoke.resolve([
       "platform": "ios",
       "permissions": [
@@ -306,10 +308,12 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosThinPeerProof": true,
         "aurora.iosThinProfile": true,
         "aurora.iosBiometricUnlock": true,
+        "aurora.iosVoicePackCatalog": true,
+        "aurora.iosVoiceTTSReference": true,
         "aurora.iosVoiceStatus": true,
         "aurora.iosBackgroundStatus": true,
-        "aurora.iosMicrophoneCapture": false,
-        "aurora.iosBackgroundAudio": false,
+        "aurora.iosMicrophoneCapture": true,
+        "aurora.iosBackgroundAudio": true,
         "aurora.iosSiriReplacement": false,
         "aurora.audioCapture": false,
         "aurora.audioPlayback": false
@@ -335,9 +339,11 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinPeerProof": true,
         "ios.thinProfile": true,
         "ios.biometric.adminUnlock": true,
-        "ios.voiceForegroundCapture": false,
+        "ios.voiceForegroundCapture": true,
+        "ios.voicePackCatalog": true,
+        "ios.voiceTTSReference": true,
         "ios.notifications": notificationReady,
-        "ios.backgroundVoice": false,
+        "ios.backgroundVoice": true,
         "ios.appOwnedInvocation": true,
         "ios.siriReplacement": false,
         "native.audioCapture": false,
@@ -363,8 +369,10 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.iosThinPeerProof": "available",
         "aurora.iosThinProfile": "available",
         "aurora.iosBiometricUnlock": "available",
-        "aurora.iosMicrophoneCapture": "needs_native_permission",
-        "aurora.iosBackgroundAudio": "unsupported_platform",
+        "aurora.iosVoicePackCatalog": "available",
+        "aurora.iosVoiceTTSReference": "available",
+        "aurora.iosMicrophoneCapture": voiceState,
+        "aurora.iosBackgroundAudio": voiceState,
         "aurora.iosSiriReplacement": "unsupported_platform"
       ],
       "capabilityStates": [
@@ -388,9 +396,11 @@ public final class AuroraNativePlugin: Plugin {
         "ios.thinPeerProof": "available",
         "ios.thinProfile": "available",
         "ios.biometric.adminUnlock": "available",
-        "ios.voiceForegroundCapture": "needs_native_permission",
+        "ios.voiceForegroundCapture": voiceState,
+        "ios.voicePackCatalog": "available",
+        "ios.voiceTTSReference": "available",
         "ios.notifications": notificationState,
-        "ios.backgroundVoice": "unsupported_platform",
+        "ios.backgroundVoice": voiceState,
         "ios.appOwnedInvocation": "available",
         "ios.siriReplacement": "unsupported_platform"
       ],
@@ -470,14 +480,16 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceStatus(_ invoke: Invoke) throws {
     let permission = AVAudioSession.sharedInstance().recordPermission
+    let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
     let capture = voiceSession?.captureStats() ?? voiceCapture.stats()
-    let reason: Any = !AuroraNativePlugin.nativeTurnTransportAvailable
-      ? "iOS native voice transport is not available on this build."
-      : permission == .granted
-        ? NSNull()
-        : "iOS microphone capture requires foreground microphone permission, audio consent, and a visible stop control."
+    let reason: Any = transportReady.available && permission == .granted
+      ? NSNull()
+      : (
+        transportReady.reason
+          ?? "iOS microphone capture requires microphone permission, a selected speech pack, audio consent, and a visible stop control."
+      )
     invoke.resolve([
-      "available": AuroraNativePlugin.nativeTurnTransportAvailable && permission == .granted,
+      "available": transportReady.available && permission == .granted,
       "permission": "aurora.iosMicrophoneCapture",
       "capability": "ios.voiceForegroundCapture",
       "source": "tauri-ios-native-plugin",
@@ -486,9 +498,16 @@ public final class AuroraNativePlugin: Plugin {
         "platform": "ios",
         "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
         "privacyClass": "raw-audio",
-        "foregroundOnly": true,
+        "foregroundOnly": false,
         "supportsBackgroundListening": false,
-        "nativeTurnTransportAvailable": AuroraNativePlugin.nativeTurnTransportAvailable,
+        "supportsUserStartedBackgroundSession": true,
+        "backgroundSessionEndsWithSystemLimits": true,
+        "alwaysOnWake": false,
+        "nativeTurnTransportAvailable": transportReady.available,
+        "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
+        "activePackId": transportReady.activePackId,
+        "packCatalogCount": transportReady.packCatalogCount,
+        "packCatalogReady": transportReady.packCatalogReady,
         "supportsSiriReplacement": false,
         "consentRequired": true,
         "stopRevokeRequired": true,
@@ -514,7 +533,9 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   private func startVoiceCapture(_ invoke: Invoke, background: Bool) {
-    guard AuroraNativePlugin.nativeTurnTransportAvailable else {
+    let requiredSlots = ["vad", "kws", "stt", "tts"]
+    let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
+    guard transportReady.available else {
       invoke.reject("native_voice_transport_unavailable")
       return
     }
@@ -527,9 +548,11 @@ public final class AuroraNativePlugin: Plugin {
         if let existing = self.voiceSession, existing.status()?.active == false {
           self.voiceSession = nil
           self.voiceSessionGeneration = nil
+          self.voiceSessionBackground = false
         }
         if self.voiceSession == nil {
           self.voiceSession = try AuroraIOSVoiceSessionHost(
+            requiredSlots: requiredSlots,
             storedConfiguration: AVAudioSession.sharedInstance()
           )
         }
@@ -538,9 +561,11 @@ public final class AuroraNativePlugin: Plugin {
         } else {
           self.voiceSessionGeneration = try self.voiceSession?.start()
         }
+        self.voiceSessionBackground = background
         let stats = self.voiceSession?.captureStats() ?? self.voiceCapture.stats()
-        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+        invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: background))
       } catch {
+        self.voiceSessionBackground = false
         invoke.reject("capture_unavailable")
       }
     }
@@ -569,9 +594,10 @@ public final class AuroraNativePlugin: Plugin {
       try? voiceSession?.cancel(generation: generation)
       voiceSessionGeneration = nil
     }
+    voiceSessionBackground = false
     voiceSession = nil
     voiceCapture.stop()
-    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats()))
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(voiceCapture.stats(), background: false))
   }
 
   @objc public func voiceForegroundCaptureFinish(_ invoke: Invoke) {
@@ -581,8 +607,10 @@ public final class AuroraNativePlugin: Plugin {
     }
     do {
       try session.finish(generation: generation)
+      voiceSessionBackground = false
+      voiceSessionGeneration = nil
       let stats = session.captureStats() ?? voiceCapture.stats()
-      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: false))
     } catch {
       invoke.reject("capture_finish_failed")
     }
@@ -590,7 +618,85 @@ public final class AuroraNativePlugin: Plugin {
 
   @objc public func voiceForegroundCaptureStatus(_ invoke: Invoke) {
     let stats = voiceSession?.captureStats() ?? voiceCapture.stats()
-    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats))
+    invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: voiceSessionBackground))
+  }
+
+  @objc public func voicePackCatalogSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoicePackCatalogSetArgs.self)
+      let payload = try packManager.setCatalog(
+        entries: args.entries,
+        replaceExisting: args.replaceExisting,
+        trustedHosts: args.trustedHosts
+      )
+      invoke.resolve(payload)
+    } catch {
+      invoke.reject("voice_pack_catalog_set_failed")
+    }
+  }
+
+  @objc public func voicePackList(_ invoke: Invoke) {
+    do {
+      let packs = try packManager.list()
+      let status = packManager.status()
+      let available = status["available"] as? Bool ?? false
+      invoke.resolve([
+        "available": available,
+        "packs": packs,
+        "count": status["count"] ?? 0,
+        "activeSlots": status["activeSlots"] ?? [:],
+        "permission": "aurora.iosVoicePackCatalog",
+        "capability": "ios.voicePackCatalog",
+        "source": "tauri-ios-native-plugin",
+        "secretsRedacted": true
+      ])
+    } catch {
+      invoke.reject("voice_pack_list_failed")
+    }
+  }
+
+  @objc public func voicePackStatus(_ invoke: Invoke) {
+    invoke.resolve(packManager.status())
+  }
+
+  @objc public func voicePackDownload(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoicePackDownloadArgs.self)
+      let payload = try packManager.download(packId: args.packId)
+      invoke.resolve(payload)
+    } catch {
+      invoke.reject("voice_pack_download_failed")
+    }
+  }
+
+  @objc public func voicePackActivate(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoicePackActivateArgs.self)
+      let slot = args.slot ?? "stt"
+      let payload = try packManager.activate(packId: args.packId, slot: slot)
+      invoke.resolve(payload)
+    } catch {
+      invoke.reject("voice_pack_activate_failed")
+    }
+  }
+
+  @objc public func voiceTTSReferenceSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoiceTTSReferenceSetArgs.self)
+      invoke.resolve(try packManager.setTTSReference(args))
+    } catch {
+      invoke.reject("voice_tts_reference_set_failed")
+    }
+  }
+
+  @objc public func voicePackRemove(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraIOSVoicePackRemoveArgs.self)
+      let payload = try packManager.remove(packId: args.packId)
+      invoke.resolve(payload)
+    } catch {
+      invoke.reject("voice_pack_remove_failed")
+    }
   }
 
   @objc public func notificationStatus(_ invoke: Invoke) throws {
@@ -730,15 +836,38 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   @objc public func backgroundStatus(_ invoke: Invoke) throws {
+    let permission = AVAudioSession.sharedInstance().recordPermission
+    let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
+    let capture = voiceSession?.captureStats() ?? voiceCapture.stats()
+    let ready = transportReady.available && permission == .granted
+    let reason: Any = ready
+      ? NSNull()
+      : (
+        transportReady.reason
+          ?? "iOS background voice requires microphone permission, a selected speech pack, explicit start in Aurora, and a visible stop control."
+      )
     invoke.resolve([
-      "available": false,
+      "available": ready,
       "permission": "aurora.iosBackgroundAudio",
       "capability": "ios.backgroundVoice",
       "source": "tauri-ios-native-plugin",
-      "reason": "iOS does not allow Aurora to run always-on background assistant listening or claim default assistant ownership; use app-owned foreground, notification, Shortcut, App Intent, widget, share, or deep-link entrypoints.",
+      "reason": reason,
       "details": [
         "platform": "ios",
+        "recordPermission": AuroraNativePlugin.recordPermissionLabel(permission),
+        "supportsUserStartedBackgroundSession": true,
+        "backgroundSessionEndsWithSystemLimits": true,
+        "requiresExplicitStartInApp": true,
         "alwaysOnWake": false,
+        "wakeAfterForceTermination": false,
+        "nativeTurnTransportAvailable": transportReady.available,
+        "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
+        "activePackId": transportReady.activePackId,
+        "packCatalogCount": transportReady.packCatalogCount,
+        "packCatalogReady": transportReady.packCatalogReady,
+        "captureRunning": capture.running,
+        "backgroundSessionActive": voiceSessionBackground && capture.running,
+        "stopRevokeRequired": true,
         "supportsSiriReplacement": false,
         "allowedFallbackSurfaces": [
           "foreground microphone permission",
@@ -1133,40 +1262,115 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   private static func localLightInferenceStatusPayload() -> [String: Any] {
+    let voicePackStatus = AuroraIOSVoicePackManager.status()
+    let catalogVisible = localVoiceCatalogVisible(voicePackStatus)
+    let activeModelId = readyLocalVoiceModelId(voicePackStatus)
+    let modelPresent = activeModelId != nil
+    let requestable = modelPresent
+    let available = catalogVisible || requestable
+    let state = requestable ? "available" : (catalogVisible ? "needs_model" : "degraded")
+    let reason = requestable
+      ? "ios_voice_packs_installed_and_active"
+      : (
+        catalogVisible
+          ? "ios_voice_catalog_ready_but_required_packs_missing"
+          : "backend_model_catalog_and_device_model_proof_required"
+      )
     [
       "platform": "ios",
       "providerId": "native:mobile-local-light",
-      "available": false,
-      "requestable": false,
-      "modelRuntimeProvider": false,
+      "available": available,
+      "requestable": requestable,
+      "modelRuntimeProvider": requestable,
       "backendModelCatalogRequired": true,
       "hardwareAcceleration": "unknown",
-      "modelId": NSNull(),
-      "modelPresent": false,
-      "permissionGranted": false,
-      "state": "degraded",
+      "modelId": activeModelId ?? NSNull(),
+      "modelPresent": modelPresent,
+      "permissionGranted": true,
+      "state": state,
       "fallbackAvailable": true,
       "fallbackProviderId": "local:Orchestrator:llama-cpp",
-      "reason": "backend_model_catalog_and_device_model_proof_required",
+      "reason": reason,
       "evidenceSource": "ios-native-local-light-adapter",
       "secretsRedacted": true
     ]
   }
 
-  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats) -> [String: Any] {
+  private static func localVoiceCatalogVisible(_ status: [String: Any]) -> Bool {
+    if let count = status["count"] as? Int, count > 0 {
+      return true
+    }
+    if let count = status["count"] as? NSNumber, count.intValue > 0 {
+      return true
+    }
+    return (status["packs"] as? [[String: Any]])?.isEmpty == false
+  }
+
+  private static func readyLocalVoiceModelId(_ status: [String: Any]) -> String? {
+    guard let activeSlots = status["activeSlots"] as? [String: String],
+          let packs = status["packs"] as? [[String: Any]] else {
+      return nil
+    }
+    var sttPackId: String?
+    for requiredSlot in ["vad", "kws", "stt", "tts"] {
+      guard let packId = activeSlots[requiredSlot], packId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+            let pack = packs.first(where: { ($0["packId"] as? String) == packId }),
+            let installed = pack["installed"] as? Bool,
+            let acknowledged = pack["acknowledged"] as? Bool,
+            installed,
+            acknowledged else {
+        return nil
+      }
+      if requiredSlot == "stt" {
+        sttPackId = packId
+      }
+    }
+    return sttPackId
+  }
+
+  private static func voiceCapturePayload(_ stats: AuroraIOSVoiceCaptureStats, background: Bool) -> [String: Any] {
     [
       "available": true,
-      "foregroundOnly": true,
+      "foregroundOnly": false,
       "running": stats.running,
       "queuedChunks": stats.queuedChunks,
       "acceptedChunks": stats.acceptedChunks,
       "droppedChunks": stats.droppedChunks,
       "discontinuities": stats.discontinuities,
       "rawAudioLogged": false,
-      "backgroundListening": false,
+      "backgroundListening": background,
+      "alwaysOnWake": false,
+      "wakeAfterForceTermination": false,
       "siriReplacement": false,
       "secretsRedacted": true
     ]
+  }
+
+  private static func nativeTurnTransportReady() -> (
+    available: Bool,
+    reason: String?,
+    activePackId: Any,
+    packCatalogCount: Any,
+    packCatalogReady: Bool
+  ) {
+    let requiredSlots = ["vad", "kws", "stt", "tts"]
+    let packStatus = AuroraIOSVoicePackManager.status(forSlot: "stt")
+    let activePack = packStatus["activePack"] ?? NSNull()
+    let slotReady = AuroraIOSVoicePackManager.status(forSlots: requiredSlots)
+    let packReady = requiredSlots.allSatisfy { slotReady[$0] == true }
+    let catalogStatus = AuroraIOSVoicePackManager.status()
+    let catalogCount = catalogStatus["count"] ?? 0
+
+    guard packReady else {
+      return (
+        false,
+        "iOS voice needs a selected speech pack before local capture can start.",
+        activePack,
+        catalogCount,
+        false
+      )
+    }
+    return (true, nil, activePack, catalogCount, true)
   }
 
   private static func biometryLabel(_ type: LABiometryType) -> String {

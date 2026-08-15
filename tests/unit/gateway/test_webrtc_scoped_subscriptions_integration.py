@@ -214,7 +214,11 @@ async def test_rpc_local_consumer_rejects_inbound_service_call_with_405() -> Non
         "type": "error",
         "id": "call-1",
         "correlation_id": "call-1",
-        "error": {"code": 405, "message": "Local peer is consumer-only"},
+        "error": {
+            "code": 405,
+            "message": "Local peer is consumer-only",
+            "reason_code": "consumer_only_peer",
+        },
     }
     bus.request.assert_not_called()
 

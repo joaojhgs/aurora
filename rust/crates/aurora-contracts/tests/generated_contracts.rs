@@ -141,8 +141,8 @@ fn parsed_input_shape(parsed: &Value, input: &Value) -> Value {
 
 #[test]
 fn descriptors_match_the_backend_inventory() {
-    assert_eq!(SCHEMA_DESCRIPTORS.len(), 74);
-    assert_eq!(METHOD_DESCRIPTORS.len(), 35);
+    assert_eq!(SCHEMA_DESCRIPTORS.len(), 80);
+    assert_eq!(METHOD_DESCRIPTORS.len(), 38);
     assert_eq!(EVENT_DESCRIPTORS.len(), 3);
     assert_eq!(ENVELOPE_DESCRIPTORS.len(), 1);
 

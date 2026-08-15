@@ -14,6 +14,7 @@ import tempfile
 import types
 import wave
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -30,7 +31,12 @@ from app.services.tts.providers.base import (
     VoiceSelectionMode,
 )
 from app.services.tts.service import TTSService
-from app.services.tts.voice_registry import VoiceCatalogEntry, VoiceStateArtifactHandle
+from app.services.tts.voice_catalog import VoiceCatalogItem, VoiceCatalogSourceError
+from app.services.tts.voice_registry import (
+    ExportedCloneVoiceState,
+    VoiceCatalogEntry,
+    VoiceStateArtifactHandle,
+)
 from app.shared.config.models import (
     Piper,
     Pockettts,
@@ -42,10 +48,15 @@ from app.shared.config.models import (
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.tts import (
     TTSAudioChunkEvent,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSDeleteVoiceProfileRequest,
+    TTSExportVoiceProfileRequest,
     TTSGetCapabilitiesRequest,
+    TTSGetVoiceProfileRequest,
+    TTSImportVoiceProfileRequest,
     TTSInstallVoiceProfileRequest,
+    TTSListLanguagePacksRequest,
     TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSMethods,
@@ -75,7 +86,14 @@ def mock_bus():
     FakeVoiceRegistry.cancel_resolve_for = None
     FakeVoiceRegistry.installed = []
     FakeVoiceRegistry.deleted = []
+    FakeVoiceRegistry.created = []
+    FakeVoiceRegistry.exported = []
+    FakeVoiceRegistry.imported = []
+    FakeVoiceRegistry.fail_import = None
+    FakeVoiceRegistry.updated = []
     FakeVoiceRegistry.install_calls = 0
+    FakeVoiceCatalogInstaller.items = ()
+    FakeVoiceCatalogInstaller.fail_list = False
     bus = Mock()
     bus.publish = AsyncMock()
     bus.subscribe = Mock()
@@ -272,9 +290,15 @@ class FakeVoiceRegistry:
     cancel_resolve_for: str | None = None
     installed = []
     deleted: list[str] = []
+    created = []
+    exported = []
+    imported = []
+    fail_import: Exception | None = None
+    updated = []
     install_calls = 0
 
-    def __init__(self, root) -> None:
+    def __init__(self, root, **kwargs) -> None:
+        del kwargs
         self.root = root
 
     async def catalog(self, identity, *, include_private: bool = False):
@@ -289,8 +313,94 @@ class FakeVoiceRegistry:
         self.__class__.install_calls += 1
         return tuple(self.installed)
 
+    async def create_clone_profile(self, **kwargs):
+        self.created.append(kwargs)
+        voice_id = "clone:00000000-0000-4000-8000-000000000123"
+        entry = types.SimpleNamespace(
+            profile_key="clone-profile",
+            voice_id=voice_id,
+            display_name=kwargs["display_name"],
+            kind="clone",
+            visibility=kwargs["visibility"],
+            ready_state="ready",
+            runtime_target=kwargs["runtime_target"],
+            language_bundle=kwargs["language_bundle"],
+            compatibility_group=kwargs["compatibility_group"],
+            artifact_revision=kwargs["artifact_revision"],
+            metadata_revision=kwargs["artifact_revision"],
+            artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+        self.installed.append(entry)
+        return entry
+
+    async def update_voice_metadata(self, voice_id: str, **kwargs):
+        self.updated.append((voice_id, kwargs))
+        for index, entry in enumerate(self.installed):
+            if entry.voice_id != voice_id:
+                continue
+            changed = False
+            values = entry.__dict__.copy()
+            for source, target in (
+                ("display_name", "display_name"),
+                ("enabled", "enabled"),
+                ("visibility", "visibility"),
+                ("allowed_peer_ids", "allowed_peer_ids"),
+            ):
+                if kwargs.get(source) is not None and values.get(target) != kwargs[source]:
+                    values[target] = kwargs[source]
+                    changed = True
+            if values.get("visibility") == "private":
+                values["allowed_peer_ids"] = ()
+            if changed:
+                values["metadata_revision"] = kwargs["metadata_revision"]
+            updated = types.SimpleNamespace(**values)
+            self.installed[index] = updated
+            return updated, changed
+        return None
+
     async def delete_voice(self, voice_id: str):
         self.deleted.append(voice_id)
+
+    async def export_clone_voice_state(self, voice_id: str, identity):
+        self.exported.append((voice_id, identity))
+        payload = f"exported-state:{voice_id}".encode()
+        return ExportedCloneVoiceState(
+            voice_id=voice_id,
+            runtime_target=identity.runtime_target,
+            language_bundle=identity.language_bundle,
+            compatibility_group=identity.compatibility_group,
+            artifact_revision="clone-rev-a",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+            format="safetensors",
+            artifact_bytes=payload,
+        )
+
+    async def import_clone_voice_state(self, exported, **kwargs):
+        if self.fail_import is not None:
+            raise self.fail_import
+        self.imported.append((exported, kwargs))
+        entry = types.SimpleNamespace(
+            profile_key="clone-profile",
+            voice_id=exported.voice_id,
+            display_name=kwargs["display_name"],
+            kind="clone",
+            visibility=kwargs["visibility"],
+            ready_state="ready",
+            runtime_target=exported.runtime_target,
+            language_bundle=exported.language_bundle,
+            compatibility_group=exported.compatibility_group,
+            artifact_revision=exported.artifact_revision,
+            metadata_revision=exported.artifact_revision,
+            artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+        return entry, True
 
     async def resolve_voice_state_artifact(self, voice_id: str, identity):
         if voice_id == self.cancel_resolve_for:
@@ -301,6 +411,16 @@ class FakeVoiceRegistry:
         handle = _registry_handle(voice_id, identity)
         self.opened_fds.append(handle.fd)
         return handle
+
+
+class FakeVoiceCatalogInstaller:
+    items: tuple[VoiceCatalogItem, ...] = ()
+    fail_list = False
+
+    async def list_items(self):
+        if self.fail_list:
+            raise VoiceCatalogSourceError("voice catalog is unavailable")
+        return self.items
 
 
 def _catalog_entry(
@@ -318,6 +438,55 @@ def _catalog_entry(
         ready=ready,
         language_bundle=language_bundle,
         runtime_target="pockettts-python",
+    )
+
+
+def _catalog_item(
+    voice_id: str,
+    *,
+    display_name: str = "Voice",
+    language_bundle: str = "EN",
+    revision: str = "rev-1",
+    installed: bool = False,
+    ready: bool = False,
+) -> VoiceCatalogItem:
+    return VoiceCatalogItem(
+        voice_id=voice_id,
+        display_name=display_name,
+        language_bundle=language_bundle,
+        compatibility_group="pockettts-base",
+        runtime_target="pockettts-python",
+        artifact_revision=revision,
+        installed=installed,
+        ready=ready,
+        license_name="Test License",
+        attribution=None,
+        source="local",
+    )
+
+
+def _installed_clone_profile(
+    voice_id: str = "clone:11111111-1111-4111-8111-111111111111",
+    *,
+    display_name: str = "Dina",
+    metadata_revision: str = "voice-rev-a",
+) -> types.SimpleNamespace:
+    return types.SimpleNamespace(
+        profile_key="clone-profile",
+        voice_id=voice_id,
+        display_name=display_name,
+        kind="clone",
+        visibility="private",
+        ready_state="ready",
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        metadata_revision=metadata_revision,
+        artifact_refs=("artifacts/clone-profile/voice-state.safetensors",),
+        enabled=True,
+        source_retained=False,
+        allowed_peer_ids=(),
     )
 
 
@@ -479,6 +648,20 @@ def _assert_outcome_audit(mock_bus, *, method: str, status: str) -> None:
     assert details["method"] == method
     assert details["phase"] == "outcome"
     assert details["status"] == status
+
+
+def _assert_last_two_management_audits(mock_bus, *, method: str, outcome_status: str) -> None:
+    intent_call, outcome_call = mock_bus.request.await_args_list[-2:]
+    assert intent_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    assert outcome_call.args[0] == AuthMethods.STORE_AUDIT_EVENT
+    intent_details = json.loads(intent_call.args[1].details)
+    outcome_details = json.loads(outcome_call.args[1].details)
+    assert intent_details["method"] == method
+    assert intent_details["phase"] == "intent"
+    assert intent_details["status"] == "attempted"
+    assert outcome_details["method"] == method
+    assert outcome_details["phase"] == "outcome"
+    assert outcome_details["status"] == outcome_status
 
 
 @pytest.mark.asyncio
@@ -759,10 +942,22 @@ async def test_pockettts_playback_construction_failure_stops_started_provider(
 
 
 @pytest.mark.asyncio
-async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bus) -> None:
+async def test_piper_remains_default_and_uses_text_playback(
+    monkeypatch, mock_bus, tmp_path: Path
+) -> None:
     playback = FakeTextPlayback()
+    model_path = tmp_path / "voice.onnx"
+    config_path = tmp_path / "voice.onnx.json"
+    model_path.write_bytes(b"model")
+    config_path.write_text('{"audio": {"sample_rate": 22050}}', encoding="utf-8")
     tts_cfg = Tts(
-        providers=Providers(piper=Piper(model_file_path="voice.onnx", executable_path="piper"))
+        providers=Providers(
+            piper=Piper(
+                model_file_path=str(model_path),
+                model_config_file_path=str(config_path),
+                executable_path="piper",
+            )
+        )
     )
     fake_config = await _fake_config_for(tts_cfg, System())
 
@@ -774,7 +969,6 @@ async def test_piper_remains_default_and_uses_text_playback(monkeypatch, mock_bu
         "app.services.tts.service.create_realtime_piper_stream",
         lambda **_kwargs: (object(), playback),
     )
-    monkeypatch.setattr("app.services.tts.service.resolve_path", lambda path: path)
 
     provider, engine, stream = await TTSService()._build_runtime()
 
@@ -789,6 +983,7 @@ def test_tts_voice_registration_contract_metadata() -> None:
         TTSMethods.LIST_VOICES,
     }
     expected_manage = {
+        TTSMethods.LIST_LANGUAGE_PACKS,
         TTSMethods.LIST_VOICE_PROFILES,
         TTSMethods.GET_VOICE_PROFILE,
         TTSMethods.UPDATE_VOICE_PROFILE,
@@ -801,12 +996,15 @@ def test_tts_voice_registration_contract_metadata() -> None:
         TTSMethods.VOICE_IMPORT_ABORT,
         TTSMethods.CREATE_VOICE_PROFILE,
         TTSMethods.DELETE_VOICE_PROFILE,
+        TTSMethods.EXPORT_VOICE_PROFILE,
+        TTSMethods.IMPORT_VOICE_PROFILE,
     }
 
     for method_id in expected_use | expected_manage:
         method_name = {
             TTSMethods.GET_CAPABILITIES: "get_capabilities",
             TTSMethods.LIST_VOICES: "list_voices",
+            TTSMethods.LIST_LANGUAGE_PACKS: "list_language_packs",
             TTSMethods.LIST_VOICE_PROFILES: "list_voice_profiles",
             TTSMethods.GET_VOICE_PROFILE: "get_voice_profile",
             TTSMethods.UPDATE_VOICE_PROFILE: "update_voice_profile",
@@ -819,6 +1017,8 @@ def test_tts_voice_registration_contract_metadata() -> None:
             TTSMethods.VOICE_IMPORT_ABORT: "voice_import_abort",
             TTSMethods.CREATE_VOICE_PROFILE: "create_voice_profile",
             TTSMethods.DELETE_VOICE_PROFILE: "delete_voice_profile",
+            TTSMethods.EXPORT_VOICE_PROFILE: "export_voice_profile",
+            TTSMethods.IMPORT_VOICE_PROFILE: "import_voice_profile",
         }[method_id]
         metadata = getattr(TTSService, method_name)._contract_metadata
         assert metadata["method_id"] == method_id
@@ -831,6 +1031,295 @@ def test_tts_voice_registration_contract_metadata() -> None:
             assert metadata["method_type"] == "manage"
             assert metadata["required_perms"] == ["TTS.manage"]
             assert metadata["callable_feature_ids"] == ["speech_voice_management"]
+
+
+def test_voice_catalog_installer_receives_configured_trust_policy(tmp_path) -> None:
+    service = TTSService()
+    tts_cfg = Tts(
+        provider="pockettts",
+        voice_registry=VoiceRegistryConfig(
+            manifest_path="https://example.test/voices.manifest.json",
+            asset_base_url="https://example.test/assets/",
+            trusted_manifest_sha256="a" * 64,
+            trusted_manifest_public_keys=["b" * 32, "c" * 32],
+            trusted_manifest_signature="d" * 64,
+            cache_dir=str(tmp_path),
+        ),
+        providers=Providers(pockettts=Pockettts()),
+    )
+
+    installer = service._voice_catalog_installer(tts_cfg)
+
+    assert installer.manifest_path == "https://example.test/voices.manifest.json"
+    assert installer.asset_base_url == "https://example.test/assets/"
+    assert installer.trusted_manifest_sha256 == "a" * 64
+    assert installer.trusted_manifest_public_keys == ("b" * 32, "c" * 32)
+    assert installer.trusted_manifest_signature == "d" * 64
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_groups_catalog_voices_without_artifact_details(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item("standard:starter_en:alba", display_name="Alba", language_bundle="EN"),
+        _catalog_item("standard:starter_en:bela", display_name="Bela", language_bundle="en"),
+    )
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            profile_key="profile-a",
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-installed",
+            artifact_refs=("artifacts/private/path/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:alba"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert [pack.pack_id for pack in response.packs] == ["en"]
+    pack = response.packs[0]
+    assert pack.language == "en"
+    assert pack.installed is True
+    assert pack.ready is True
+    assert pack.default is True
+    assert pack.voice_count == 2
+    assert pack.installed_voice_count == 1
+    assert pack.ready_voice_count == 1
+    assert pack.voices[0].default is True
+    assert pack.voices[0].active is False
+    assert response.catalog_status == "available"
+    assert response.catalog_error_code is None
+    assert response.default_voice_id == "standard:starter_en:alba"
+    assert response.stale_default_voice_id is None
+    assert [voice.voice_id for voice in pack.voices] == [
+        "standard:starter_en:alba",
+        "standard:starter_en:bela",
+    ]
+    encoded = response.model_dump_json()
+    assert "voice-state.safetensors" not in encoded
+    assert "artifact_refs" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_reports_catalog_unavailable_without_empty_success(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    FakeVoiceCatalogInstaller.fail_list = True
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-installed",
+            artifact_refs=("artifacts/private/path/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:alba"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert response.catalog_status == "unavailable"
+    assert response.catalog_error_code == "catalog_unavailable"
+    assert [pack.pack_id for pack in response.packs] == ["en"]
+    assert response.packs[0].voices[0].default is True
+    assert "voice catalog is unavailable" not in response.model_dump_json()
+    assert "voice-state.safetensors" not in response.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_language_pack_listing_keeps_default_active_and_stale_default_separate(
+    monkeypatch, mock_bus
+) -> None:
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice="standard:starter_en:alba")
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item("standard:starter_en:alba", display_name="Alba", language_bundle="en"),
+        _catalog_item("standard:starter_en:bela", display_name="Bela", language_bundle="en"),
+    )
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-alba",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        ),
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:bela",
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="pockettts-base",
+            artifact_revision="rev-bela",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+            license_name="Test License",
+            attribution=None,
+        ),
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:bela"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    voices = {voice.voice_id: voice for voice in response.packs[0].voices}
+    assert voices["standard:starter_en:alba"].active is True
+    assert voices["standard:starter_en:alba"].default is False
+    assert voices["standard:starter_en:bela"].active is False
+    assert voices["standard:starter_en:bela"].default is True
+    assert response.packs[0].default is True
+    assert response.default_voice_id == "standard:starter_en:bela"
+    assert response.stale_default_voice_id is None
+
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id="standard:starter_en:missing"),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+
+    stale_response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert stale_response.default_voice_id == "standard:starter_en:missing"
+    assert stale_response.stale_default_voice_id == "standard:starter_en:missing"
+    assert stale_response.packs[0].default is False
+
+
+@pytest.mark.parametrize(
+    ("registry_ready_state", "include_registry_entry", "expected_installed"),
+    [
+        ("installing", True, True),
+        ("failed", True, True),
+        ("deleted", False, False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_language_pack_listing_reports_configured_unusable_defaults_as_stale(
+    registry_ready_state: str,
+    include_registry_entry: bool,
+    expected_installed: bool,
+    monkeypatch,
+    mock_bus,
+) -> None:
+    del mock_bus
+    default_voice_id = "standard:starter_en:bela"
+    service = TTSService()
+    FakeVoiceCatalogInstaller.items = (
+        _catalog_item(
+            default_voice_id,
+            display_name="Bela",
+            language_bundle="en",
+            installed=expected_installed,
+            ready=False,
+        ),
+    )
+    FakeVoiceRegistry.installed = (
+        [
+            types.SimpleNamespace(
+                voice_id=default_voice_id,
+                display_name="Bela",
+                kind="standard",
+                visibility="public",
+                ready_state=registry_ready_state,
+                runtime_target="pockettts-python",
+                language_bundle="en",
+                compatibility_group="pockettts-base",
+                artifact_revision=f"rev-{registry_ready_state}",
+                artifact_refs=("artifacts/bela/voice-state.safetensors",),
+                source_retained=False,
+                license_name="Test License",
+                attribution=None,
+            )
+        ]
+        if include_registry_entry
+        else []
+    )
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", default_voice_id=default_voice_id),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        service,
+        "_voice_catalog_installer",
+        lambda _tts_cfg: FakeVoiceCatalogInstaller(),
+    )
+
+    response = await service.list_language_packs(TTSListLanguagePacksRequest())
+
+    assert response.default_voice_id == default_voice_id
+    assert response.stale_default_voice_id == default_voice_id
+    pack = response.packs[0]
+    assert pack.default is False
+    assert pack.ready is False
+    assert pack.ready_voice_count == 0
+    voice = pack.voices[0]
+    assert voice.voice_id == default_voice_id
+    assert voice.installed is expected_installed
+    assert voice.ready is False
+    assert voice.default is False
+    assert voice.active is False
 
 
 @pytest.mark.asyncio
@@ -1057,11 +1546,23 @@ async def test_voice_import_audit_is_redacted_and_idempotency_is_payload_bound(
 @pytest.mark.asyncio
 async def test_voice_management_replay_is_audited_once_and_payload_bound(
     mock_bus,
+    monkeypatch,
     method_name,
     mutation_request,
     mismatched_request,
 ) -> None:
     mock_bus.request = AsyncMock()
+    FakeVoiceRegistry.installed = []
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id="standard:starter_en:alba",
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
     service = TTSService()
     envelope = Envelope(
         type=getattr(TTSMethods, method_name.upper()),
@@ -1708,7 +2209,7 @@ async def test_voice_import_owner_and_create_profile_require_same_peer(mock_bus)
         ),
         owner,
     )
-    assert reused.status == "rejected"
+    assert reused.status == "unavailable"
 
 
 @pytest.mark.asyncio
@@ -1733,7 +2234,7 @@ async def test_concurrent_create_profile_consumes_sealed_ref_once(mock_bus) -> N
         )
     )
 
-    assert sorted(result.status for result in results) == ["rejected", "unavailable"]
+    assert sorted(result.status for result in results) == ["unavailable", "unavailable"]
 
 
 @pytest.mark.asyncio
@@ -1744,7 +2245,14 @@ async def test_install_voice_profile_prevalidates_configured_manifest(
     manifest = tmp_path / "voices.manifest.json"
     manifest.write_text(
         '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
-        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[]}',
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        '"asset_id":"bela","logical_voice_id":"standard:starter_en:bela",'
+        '"display_name":"Bela","runtime_target":"pockettts-python",'
+        '"language_bundle":"en","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state","size_bytes":0,'
+        f'"sha256":"{hashlib.sha256(b"").hexdigest()}","relative_path":"bela.safetensors",'
+        '"compression":"none","unpacked_size_bytes":0,"license_name":"test",'
+        '"redistribution":"approved"}]}',
         encoding="utf-8",
     )
     fake_config = await _fake_config_for(
@@ -1769,6 +2277,75 @@ async def test_install_voice_profile_prevalidates_configured_manifest(
 
     assert response.status == "not_found"
     assert FakeVoiceRegistry.install_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_raises_when_manifest_is_missing(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    missing_manifest = tmp_path / "missing.manifest.json"
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(missing_manifest), cache_dir=str(tmp_path)
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().install_voice_profile(
+            TTSInstallVoiceProfileRequest(
+                operation_id="install-missing-catalog",
+                voice_id="standard:starter_en:alba",
+            )
+        )
+
+    assert FakeVoiceRegistry.install_calls == 0
+    assert mock_bus.request.await_count == 1
+    _assert_outcome_audit(mock_bus, method="install_voice_profile", status="rejected")
+
+
+@pytest.mark.asyncio
+async def test_install_voice_profile_raises_when_remote_manifest_is_untrusted(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    payload = (
+        b'{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        b'"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[]}'
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path="https://catalog.example/voices.manifest.json",
+                cache_dir=str(tmp_path),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr("app.services.tts.voice_catalog._download_bytes", lambda *_, **__: payload)
+
+    with pytest.raises(VoiceCatalogSourceError, match="trust could not be verified"):
+        await TTSService().install_voice_profile(
+            TTSInstallVoiceProfileRequest(
+                operation_id="install-untrusted-catalog",
+                voice_id="standard:starter_en:alba",
+            )
+        )
+
+    assert FakeVoiceRegistry.install_calls == 0
+    assert mock_bus.request.await_count == 1
+    _assert_outcome_audit(mock_bus, method="install_voice_profile", status="rejected")
 
 
 @pytest.mark.asyncio
@@ -1823,7 +2400,7 @@ async def test_install_voice_profile_rejects_multi_asset_manifest(
 
 
 @pytest.mark.asyncio
-async def test_install_voice_profile_success_audits_intent_not_completed_outcome(
+async def test_install_voice_profile_success_audits_intent_and_committed_outcome(
     tmp_path, monkeypatch, mock_bus
 ) -> None:
     mock_bus.request = AsyncMock()
@@ -1881,7 +2458,242 @@ async def test_install_voice_profile_success_audits_intent_not_completed_outcome
     assert response.status == "installed"
     assert response.revision == "rev1"
     assert InstallingVoiceRegistry.install_calls == 1
-    _assert_intent_attempt_audit(mock_bus, method="install_voice_profile")
+    _assert_last_two_management_audits(
+        mock_bus, method="install_voice_profile", outcome_status="installed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_voice_profiles_includes_uninstalled_catalog_entries(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    data = b"catalog-bytes"
+    manifest = tmp_path / "voices.manifest.json"
+    manifest.write_text(
+        '{"schema_version":1,"pack_id":"starter_en","pack_version":"1",'
+        '"minimum_aurora_version":"1","minimum_runtime_version":"1","assets":[{'
+        '"asset_id":"alba","logical_voice_id":"standard:starter_en:alba",'
+        '"display_name":"Alba","runtime_target":"pockettts-python",'
+        '"language_bundle":"en-us-compact","compatibility_group":"base",'
+        '"artifact_revision":"rev1","feature":"voice-state",'
+        f'"size_bytes":{len(data)},"sha256":"{hashlib.sha256(data).hexdigest()}",'
+        '"relative_path":"alba.safetensors","compression":"none",'
+        f'"unpacked_size_bytes":{len(data)},"license_name":"test",'
+        '"attribution":"fixture","redistribution":"approved"}]}',
+        encoding="utf-8",
+    )
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(manifest), cache_dir=str(tmp_path / "cache")
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().list_voice_profiles(
+        TTSListVoiceProfilesRequest(include_unavailable=True)
+    )
+
+    assert [
+        (profile.voice_id, profile.installed, profile.ready) for profile in response.profiles
+    ] == [("standard:starter_en:alba", False, False)]
+
+
+@pytest.mark.asyncio
+async def test_list_voice_profiles_raises_catalog_failure_when_no_registry_data(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().list_voice_profiles(
+            TTSListVoiceProfilesRequest(include_unavailable=True)
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_voice_profile_raises_catalog_failure_for_unknown_voice(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(VoiceCatalogSourceError, match="voice catalog is unavailable"):
+        await TTSService().get_voice_profile(
+            TTSGetVoiceProfileRequest(voice_id="standard:starter_en:alba")
+        )
+
+
+@pytest.mark.asyncio
+async def test_list_voice_profiles_preserves_installed_data_when_catalog_is_missing(
+    tmp_path, monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            voice_registry=VoiceRegistryConfig(
+                manifest_path=str(tmp_path / "missing.manifest.json"),
+                cache_dir=str(tmp_path / "cache"),
+            ),
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().list_voice_profiles(
+        TTSListVoiceProfilesRequest(include_unavailable=True)
+    )
+
+    assert [(profile.voice_id, profile.installed) for profile in response.profiles] == [
+        ("standard:starter_en:alba", True)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_voice_profiles_keep_default_and_active_independent(monkeypatch, mock_bus) -> None:
+    default_voice = "standard:starter_en:bela"
+    active_voice = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=active_voice,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        ),
+        types.SimpleNamespace(
+            voice_id=default_voice,
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev2",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+        ),
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=default_voice,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=active_voice)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await service.list_voice_profiles(TTSListVoiceProfilesRequest())
+
+    by_id = {profile.voice_id: profile for profile in response.profiles}
+    assert by_id[active_voice].active is True
+    assert by_id[active_voice].default is False
+    assert by_id[default_voice].active is False
+    assert by_id[default_voice].default is True
+
+
+@pytest.mark.asyncio
+async def test_voice_profiles_report_non_ready_persisted_default_as_stale(
+    monkeypatch, mock_bus
+) -> None:
+    del mock_bus
+    stale_default = "standard:starter_en:bela"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=stale_default,
+            display_name="Bela",
+            kind="standard",
+            visibility="public",
+            ready_state="failed",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev2",
+            artifact_refs=("artifacts/bela/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=stale_default,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=stale_default)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await service.list_voice_profiles(TTSListVoiceProfilesRequest())
+
+    assert len(response.profiles) == 1
+    profile = response.profiles[0]
+    assert profile.voice_id == stale_default
+    assert profile.installed is True
+    assert profile.ready is False
+    assert profile.default is False
+    assert profile.active is False
 
 
 @pytest.mark.asyncio
@@ -1932,6 +2744,282 @@ async def test_install_voice_profile_fails_closed_when_audit_fails(
 
 
 @pytest.mark.asyncio
+async def test_tts_startup_stays_available_when_runtime_pack_is_missing(
+    monkeypatch, mock_bus
+) -> None:
+    async def missing_runtime() -> None:
+        raise TTSProviderError("unsupported_voice", "voice unavailable")
+
+    service = TTSService()
+    monkeypatch.setattr(service, "_initialize_engine", missing_runtime)
+
+    await service.on_start()
+
+    assert service._provider is None
+    assert service.engine is None
+    assert service.stream is None
+    assert service._voice_revision == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_standard_voice_profile_deletes_registry_artifacts(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    response = await TTSService().remove_voice_profile(
+        TTSRemoveVoiceProfileRequest(
+            operation_id="remove-standard",
+            voice_id="standard:starter_en:alba",
+            expected_revision="rev1",
+        )
+    )
+
+    assert response.status == "removed"
+    assert FakeVoiceRegistry.deleted == ["standard:starter_en:alba"]
+    _assert_last_two_management_audits(
+        mock_bus, method="remove_voice_profile", outcome_status="removed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_remove_active_voice_does_not_clear_different_persisted_default(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    active_voice = "standard:starter_en:alba"
+    default_voice = "standard:starter_en:bela"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=active_voice,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=default_voice,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    service._provider = FakeVoiceListingProvider((), active_voice=active_voice)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock(return_value=True))
+
+    response = await service.remove_voice_profile(
+        TTSRemoveVoiceProfileRequest(
+            operation_id="remove-active-not-default",
+            voice_id=active_voice,
+            expected_revision="rev1",
+        )
+    )
+
+    assert response.status == "drained"
+    assert updated_paths == []
+    assert FakeVoiceRegistry.deleted == [active_voice]
+    _assert_last_two_management_audits(
+        mock_bus, method="remove_voice_profile", outcome_status="drained"
+    )
+
+
+@pytest.mark.asyncio
+async def test_remove_default_voice_fails_closed_when_intent_audit_fails(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    voice_id = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=voice_id,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.remove_voice_profile(
+            TTSRemoveVoiceProfileRequest(
+                operation_id="remove-default-audit-fail",
+                voice_id=voice_id,
+                expected_revision="rev1",
+            )
+        )
+
+    assert updated_paths == []
+    assert FakeVoiceRegistry.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_set_default_voice_persists_config_and_reloads_runtime(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id="standard:starter_en:alba",
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    reload_runtime = AsyncMock(return_value=True)
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", reload_runtime)
+
+    response = await service.set_default_voice(
+        TTSSetDefaultVoiceRequest(
+            operation_id="default-standard",
+            voice_id="standard:starter_en:alba",
+            expected_revision="rev1",
+        )
+    )
+
+    assert response.status == "activated"
+    assert updated_paths == [("services.tts.default_voice_id", "standard:starter_en:alba")]
+    reload_runtime.assert_awaited_once_with("default voice change")
+    _assert_last_two_management_audits(
+        mock_bus, method="set_default_voice", outcome_status="activated"
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_default_voice_fails_closed_when_intent_audit_fails(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    voice_id = "standard:starter_en:alba"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Alba",
+            kind="standard",
+            visibility="public",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            artifact_refs=("artifacts/alba/voice-state.safetensors",),
+            source_retained=False,
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    updated_paths: list[tuple[str, object]] = []
+
+    async def fake_update(path: str, value: object, *, timeout: float = 15.0) -> bool:
+        del timeout
+        updated_paths.append((path, value))
+        return True
+
+    service = TTSService()
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.config_api.aupdate_config", fake_update)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.set_default_voice(
+            TTSSetDefaultVoiceRequest(
+                operation_id="set-default-audit-fail",
+                voice_id=voice_id,
+                expected_revision="rev1",
+            )
+        )
+
+    assert updated_paths == []
+    assert service._voice_revision == 0
+
+
+@pytest.mark.asyncio
 async def test_delete_voice_profile_rejects_active_clone(monkeypatch, mock_bus) -> None:
     mock_bus.request = AsyncMock()
     clone_id = "clone:00000000-0000-4000-8000-000000000001"
@@ -1968,6 +3056,350 @@ async def test_delete_voice_profile_rejects_active_clone(monkeypatch, mock_bus) 
 
     assert response.status == "rejected"
     assert FakeVoiceRegistry.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_update_voice_profile_persists_registry_metadata(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    voice_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            metadata_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    response = await service.update_voice_profile(
+        TTSUpdateVoiceProfileRequest(
+            operation_id="update-clone",
+            voice_id=voice_id,
+            expected_revision="rev1",
+            display_name="Updated Clone",
+            visibility="allowed_peers",
+            allowed_peer_ids=["peer-b", "peer-a"],
+        )
+    )
+
+    assert response.status == "updated"
+    assert response.revision == "voice-rev-1"
+    assert FakeVoiceRegistry.updated[-1][0] == voice_id
+    assert FakeVoiceRegistry.installed[0].display_name == "Updated Clone"
+    assert FakeVoiceRegistry.installed[0].visibility == "allowed_peers"
+    assert FakeVoiceRegistry.installed[0].allowed_peer_ids == ("peer-a", "peer-b")
+    _assert_outcome_audit(mock_bus, method="update_voice_profile", status="updated")
+
+
+@pytest.mark.asyncio
+async def test_update_voice_profile_rejects_disabling_default_voice(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    voice_id = "clone:00000000-0000-4000-8000-000000000001"
+    FakeVoiceRegistry.installed = [
+        types.SimpleNamespace(
+            voice_id=voice_id,
+            display_name="Clone",
+            kind="clone",
+            visibility="private",
+            ready_state="ready",
+            runtime_target="pockettts-python",
+            language_bundle="en",
+            compatibility_group="base",
+            artifact_revision="rev1",
+            metadata_revision="rev1",
+            artifact_refs=("artifacts/clone/voice-state.safetensors",),
+            enabled=True,
+            source_retained=False,
+            allowed_peer_ids=(),
+        )
+    ]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            default_voice_id=voice_id,
+            providers=Providers(pockettts=Pockettts()),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    response = await service.update_voice_profile(
+        TTSUpdateVoiceProfileRequest(
+            operation_id="disable-default",
+            voice_id=voice_id,
+            expected_revision="rev1",
+            enabled=False,
+        )
+    )
+
+    assert response.status == "rejected"
+    assert FakeVoiceRegistry.updated == []
+
+
+@pytest.mark.asyncio
+async def test_create_voice_profile_derives_and_persists_clone(monkeypatch, mock_bus) -> None:
+    mock_bus.request = AsyncMock()
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    _started, sealed = await _sealed_voice_upload(service, envelope)
+
+    async def fake_derive(config, audio_bytes: bytes, *, audio_suffix: str):
+        del config, audio_suffix
+        assert audio_bytes
+        return (
+            b"\x68\x00\x00\x00\x00\x00\x00\x00"
+            b'{"__metadata__":{"format":"aurora-test"},'
+            b'"speaker.offset":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}'
+            b"\x01",
+            types.SimpleNamespace(
+                runtime_target="pockettts-python",
+                language_bundle="en",
+                compatibility_group="base",
+            ),
+        )
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        "app.services.tts.service.derive_pockettts_voice_state_artifact", fake_derive
+    )
+
+    response = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-clone",
+            display_name="My Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        envelope,
+    )
+
+    assert response.status == "ready"
+    assert response.voice_id == "clone:00000000-0000-4000-8000-000000000123"
+    assert response.accepted_duration_ms is not None
+    assert FakeVoiceRegistry.created[-1]["display_name"] == "My Clone"
+    assert sealed.sealed_audio_ref not in {
+        session.sealed_ref for session in service._voice_import_sessions.values()
+    }
+    _assert_outcome_audit(mock_bus, method="create_voice_profile", status="ready")
+
+
+@pytest.mark.asyncio
+async def test_create_voice_profile_keeps_sealed_upload_when_provider_unavailable(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    service = TTSService()
+    envelope = Envelope(
+        type=TTSMethods.VOICE_IMPORT_START,
+        payload={},
+        principal_id="principal-a",
+        caller_peer_id="peer-a",
+    )
+    _started, sealed = await _sealed_voice_upload(service, envelope)
+
+    async def fail_derive(config, audio_bytes: bytes, *, audio_suffix: str):
+        del config, audio_bytes, audio_suffix
+        raise TTSProviderError("unavailable", "PocketTTS is unavailable")
+
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    monkeypatch.setattr(
+        "app.services.tts.service.derive_pockettts_voice_state_artifact", fail_derive
+    )
+
+    response = await service.create_voice_profile(
+        TTSCreateVoiceProfileRequest(
+            operation_id="create-unavailable",
+            display_name="My Clone",
+            sealed_audio_ref=sealed.sealed_audio_ref,
+            consent=True,
+        ),
+        envelope,
+    )
+
+    assert response.status == "unavailable"
+    assert any(
+        session.sealed_ref == sealed.sealed_audio_ref
+        for session in service._voice_import_sessions.values()
+    )
+    assert FakeVoiceRegistry.created == []
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_export_and_import_preserve_identity_and_audit_redacted(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    exported = await service.export_voice_profile(
+        TTSExportVoiceProfileRequest(
+            operation_id="export-clone",
+            voice_id=profile.voice_id,
+            expected_revision=profile.metadata_revision,
+        )
+    )
+
+    assert exported.status == "exported"
+    assert exported.bundle is not None
+    assert exported.bundle.voice_id == profile.voice_id
+    assert exported.bundle.display_name == profile.display_name
+    assert exported.bundle.artifact_data_base64 not in repr(exported.bundle)
+    assert "artifact" not in json.dumps(
+        [json.loads(call.args[1].details) for call in mock_bus.request.await_args_list]
+    )
+    _assert_last_two_management_audits(
+        mock_bus,
+        method="export_voice_profile",
+        outcome_status="exported",
+    )
+
+    FakeVoiceRegistry.installed = []
+    monkeypatch.setattr(service, "_initialize_engine_fail_soft", AsyncMock())
+    request = TTSImportVoiceProfileRequest(
+        operation_id="import-clone",
+        bundle=exported.bundle,
+    )
+    imported = await service.import_voice_profile(request)
+    replayed = await service.import_voice_profile(request)
+
+    assert imported.status == "imported"
+    assert imported.voice_id == profile.voice_id
+    assert imported.idempotent is False
+    assert replayed.status == "imported"
+    assert replayed.idempotent is True
+    assert len(FakeVoiceRegistry.imported) == 1
+    registry_payload, registry_options = FakeVoiceRegistry.imported[0]
+    assert registry_payload.voice_id == profile.voice_id
+    assert registry_payload.artifact_bytes == base64.b64decode(
+        exported.bundle.artifact_data_base64,
+        validate=True,
+    )
+    assert registry_options == {
+        "display_name": profile.display_name,
+        "visibility": "private",
+    }
+    _assert_last_two_management_audits(
+        mock_bus,
+        method="import_voice_profile",
+        outcome_status="imported",
+    )
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_transfer_honors_configured_wire_limit(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock()
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(
+            provider="pockettts",
+            providers=Providers(pockettts=Pockettts()),
+            voice_registry=VoiceRegistryConfig(clone_max_wire_bytes=8),
+        ),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    exported = await service.export_voice_profile(
+        TTSExportVoiceProfileRequest(
+            operation_id="export-too-large",
+            voice_id=profile.voice_id,
+        )
+    )
+    payload = b"derived-clone-state"
+    bundle = TTSCloneVoiceStateBundle(
+        voice_id=profile.voice_id,
+        display_name=profile.display_name,
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        artifact_sha256=hashlib.sha256(payload).hexdigest(),
+        artifact_size_bytes=len(payload),
+        artifact_data_base64=base64.b64encode(payload).decode("ascii"),
+    )
+    imported = await service.import_voice_profile(
+        TTSImportVoiceProfileRequest(
+            operation_id="import-too-large",
+            bundle=bundle,
+        )
+    )
+
+    assert exported.status == "rejected"
+    assert imported.status == "rejected"
+    assert FakeVoiceRegistry.imported == []
+
+
+@pytest.mark.asyncio
+async def test_clone_voice_state_export_fails_closed_when_audit_is_unavailable(
+    monkeypatch, mock_bus
+) -> None:
+    mock_bus.request = AsyncMock(side_effect=RuntimeError("audit unavailable"))
+    profile = _installed_clone_profile()
+    FakeVoiceRegistry.installed = [profile]
+    fake_config = await _fake_config_for(
+        Tts(provider="pockettts", providers=Providers(pockettts=Pockettts())),
+        System(primary_language="en"),
+    )
+    monkeypatch.setattr("app.services.tts.service.config_api.aget", fake_config)
+    monkeypatch.setattr("app.services.tts.service.VoiceRegistry", FakeVoiceRegistry)
+    service = TTSService()
+
+    with pytest.raises(RuntimeError, match="audit unavailable"):
+        await service.export_voice_profile(
+            TTSExportVoiceProfileRequest(
+                operation_id="export-audit-fail",
+                voice_id=profile.voice_id,
+            )
+        )
+
+    assert FakeVoiceRegistry.exported == []
 
 
 @pytest.mark.asyncio

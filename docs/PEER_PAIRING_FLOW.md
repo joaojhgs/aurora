@@ -703,20 +703,13 @@ Device                           RTCClient
 
 ---
 
-## WebView thin peer current proof
+## WebView peer validation
 
-The browser/WebView peer path is implemented through the shared TypeScript runtime and is live-proven against the Python Gateway in Chromium, Firefox, and WebKit. The retained reports are:
-
-- `reports/webrtc-interop/direct/report.json` — Chromium direct ICE with a truthful selected `host` pair or raw peer-reflexive/host pair, no gathered STUN evidence, and no relay evidence;
-- `reports/webrtc-interop/firefox-direct/report.json` and `reports/webrtc-interop/webkit-direct/report.json` — direct Firefox and Playwright WebKit evidence under the same direct-lane policy;
-- `reports/webrtc-interop/stun/report.json` — STUN lane proof from browser `RTCPeerConnection.getStats()` with raw `selectedCandidatePair.category` preserved; selected `prflx` is accepted only when `candidateProof` shows a configured STUN server gathered a true `srflx` candidate;
-- `reports/webrtc-interop/turn/report.json` — forced TURN relay with `selectedCandidatePair.category=relay` from browser `RTCPeerConnection.getStats()`;
-- `reports/webrtc-interop/firefox-stun/report.json` and `reports/webrtc-interop/firefox-turn/report.json` — the equivalent configured-STUN and forced-TURN lanes in Firefox; Firefox omits the STUN candidate URL from stats, so the STUN scanner accepts the selected reflexive pair only when exactly one configured STUN server makes the source unambiguous;
-- `reports/webrtc-interop/webkit-stun/report.json` and `reports/webrtc-interop/webkit-turn/report.json` — the equivalent configured-STUN and forced-TURN lanes in Playwright WebKit.
+The browser/WebView peer path is implemented through the shared TypeScript runtime. The retained contract is the harness and scanner behavior: direct, configured-STUN, and forced-TURN lanes run in Chromium, Firefox, and WebKit; preserve the raw `selectedCandidatePair.category`; and accept peer-reflexive STUN only when candidate stats prove a configured server gathered a true `srflx` candidate. Per-run lane reports are generated under ignored `reports/webrtc-interop/` paths and retained only when uploaded as CI artifacts.
 
 Those lanes run with the Python HTTP API disabled and use MQTT only for signaling. Authenticated Aurora calls, results, events, and TTS event delivery travel over the `aurora-rpc` `RTCDataChannel`. Scoped authorization uses public production Auth pairing/connect/exchange and Gateway/Auth DataChannel method boundaries, not private service calls.
 
-Security assertions in the passing reports:
+Every passing run asserts:
 
 - bilateral SAS pairing completes before service access;
 - canonical reconnect HMAC proof authorizes a returning peer without a new SAS prompt;

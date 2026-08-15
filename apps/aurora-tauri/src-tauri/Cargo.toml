@@ -43,7 +43,8 @@ url = "2.5"
 async-trait = "0.1"
 aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
-aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["desktop-sherpa-tts"] }
+aurora-voice-sherpa = { path = "../../../rust/crates/aurora-voice-sherpa" }
 keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
@@ -57,8 +58,11 @@ tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
-aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["native-sherpa-tts"] }
 jni = "0.21"
+
+[dev-dependencies]
+aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }

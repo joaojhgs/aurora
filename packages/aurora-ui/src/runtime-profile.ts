@@ -47,12 +47,37 @@ export type AuroraCapabilityPack =
   | 'foreground-voice'
   | 'local-inference'
 
+export type AuroraLocalSpeechTask = 'kws' | 'stt' | 'tts' | 'vad'
+
 export type AuroraLocalSpeechPackState =
   | 'disabled'
   | 'downloading'
   | 'incompatible'
   | 'over-budget'
+  | 'ready'
   | 'unavailable'
+
+export interface AuroraLocalSpeechAssetSelection {
+  packId: string
+  packRevision: string
+  voiceId?: string | undefined
+  voiceRevision?: string | undefined
+  referenceProfileId?: string | undefined
+}
+
+export interface AuroraLocalWakePhraseSelection {
+  phraseId: string
+  phrase: string
+  language: string
+  revision: string
+}
+
+export type AuroraLocalSpeechSelectionProfile = Partial<Record<
+  AuroraLocalSpeechTask,
+  AuroraLocalSpeechAssetSelection
+>> & {
+  wakePhrase?: AuroraLocalWakePhraseSelection | undefined
+}
 
 export interface AuroraHomeConnectionProfile {
   mode: AuroraConnectionMode
@@ -73,6 +98,8 @@ export interface AuroraLocalNodeProfile {
   enabledCapabilityPacks: AuroraCapabilityPack[]
   /** Last known non-ready state; the voice engine remains the execution authority. */
   localSpeechPackState?: AuroraLocalSpeechPackState | undefined
+  /** Exact selected local speech assets; operational readiness remains engine-owned. */
+  localSpeechSelection?: AuroraLocalSpeechSelectionProfile | undefined
   meshMembership?: AuroraMeshMembershipProfile | undefined
 }
 
@@ -352,6 +379,7 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
   const stablePeerId = requiredText(value.stablePeerId, 'stable peer id', 160)
   const enabledCapabilityPacks = sanitizeCapabilityPacks(value.enabledCapabilityPacks)
   const localSpeechPackState = sanitizeLocalSpeechPackState(value.localSpeechPackState)
+  const localSpeechSelection = sanitizeLocalSpeechSelection(value.localSpeechSelection)
   const meshMembership = value.meshMembership === undefined
     ? undefined
     : sanitizeMeshMembership(value.meshMembership)
@@ -366,6 +394,7 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
     stablePeerId,
     enabledCapabilityPacks,
     ...(localSpeechPackState ? { localSpeechPackState } : {}),
+    ...(localSpeechSelection ? { localSpeechSelection } : {}),
     ...(meshMembership ? { meshMembership } : {}),
   }
 }
@@ -407,9 +436,72 @@ function sanitizeLocalSpeechPackState(value: unknown): AuroraLocalSpeechPackStat
     || value === 'downloading'
     || value === 'incompatible'
     || value === 'over-budget'
+    || value === 'ready'
     || value === 'unavailable'
   ) return value
   throw new Error('Runtime profile local speech state is invalid')
+}
+
+function sanitizeLocalSpeechSelection(value: unknown): AuroraLocalSpeechSelectionProfile | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error('Runtime profile local speech selection is invalid')
+  const out: AuroraLocalSpeechSelectionProfile = {}
+  for (const [task, selection] of Object.entries(value)) {
+    if (task === 'wakePhrase') {
+      out.wakePhrase = sanitizeLocalWakePhraseSelection(selection)
+      continue
+    }
+    if (!isLocalSpeechTask(task)) throw new Error('Runtime profile local speech selection task is invalid')
+    out[task] = sanitizeLocalSpeechAssetSelection(selection, task)
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function sanitizeLocalWakePhraseSelection(value: unknown): AuroraLocalWakePhraseSelection {
+  if (!isRecord(value)) throw new Error('Runtime profile local wake phrase selection is invalid')
+  const allowed = new Set(['phraseId', 'phrase', 'language', 'revision'])
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error('Runtime profile local wake phrase selection field is invalid')
+  }
+  return {
+    phraseId: requiredCatalogText(value.phraseId, 'local wake phrase id', 128),
+    phrase: requiredPhraseText(value.phrase, 'local wake phrase text', 64),
+    language: requiredLocaleText(value.language, 'local wake phrase language'),
+    revision: requiredCatalogText(value.revision, 'local wake phrase revision', 128),
+  }
+}
+
+function sanitizeLocalSpeechAssetSelection(
+  value: unknown,
+  task: AuroraLocalSpeechTask,
+): AuroraLocalSpeechAssetSelection {
+  if (!isRecord(value)) throw new Error('Runtime profile local speech asset selection is invalid')
+  const allowed = new Set(['packId', 'packRevision', 'voiceId', 'voiceRevision', 'referenceProfileId'])
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error('Runtime profile local speech asset selection field is invalid')
+  }
+  const packId = requiredCatalogText(value.packId, 'local speech pack id', 256)
+  const packRevision = requiredCatalogText(value.packRevision, 'local speech pack revision', 256)
+  const voiceId = optionalCatalogText(value.voiceId, 'local speech voice id', 256)
+  const voiceRevision = optionalCatalogText(value.voiceRevision, 'local speech voice revision', 256)
+  const referenceProfileId = optionalCatalogText(value.referenceProfileId, 'local speech reference profile id', 256)
+  if ((voiceId === undefined) !== (voiceRevision === undefined)) {
+    throw new Error('Runtime profile local speech voice selection is incomplete')
+  }
+  if (task === 'tts' && (!voiceId || !voiceRevision)) {
+    throw new Error('Runtime profile local speech TTS selection requires a voice')
+  }
+  return {
+    packId,
+    packRevision,
+    ...(voiceId ? { voiceId } : {}),
+    ...(voiceRevision ? { voiceRevision } : {}),
+    ...(referenceProfileId ? { referenceProfileId } : {}),
+  }
+}
+
+function isLocalSpeechTask(value: string): value is AuroraLocalSpeechTask {
+  return value === 'kws' || value === 'stt' || value === 'tts' || value === 'vad'
 }
 
 function isHomeConnectionConfigured(value: AuroraHomeConnectionProfile | undefined): boolean {
@@ -545,6 +637,38 @@ function requiredText(value: unknown, label: string, maxLength: number): string 
 function optionalText(value: unknown, label: string, maxLength: number): string | undefined {
   if (value === undefined) return undefined
   return requiredText(value, label, maxLength)
+}
+
+function requiredCatalogText(value: unknown, label: string, maxLength: number): string {
+  const text = requiredText(value, label, maxLength)
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._:+/@-]*$/u.test(text)) {
+    throw new Error(`Runtime profile ${label} is invalid`)
+  }
+  return text
+}
+
+function optionalCatalogText(value: unknown, label: string, maxLength: number): string | undefined {
+  if (value === undefined) return undefined
+  return requiredCatalogText(value, label, maxLength)
+}
+
+function requiredLocaleText(value: unknown, label: string): string {
+  const text = requiredText(value, label, 32)
+  if (!/^(?:[a-zA-Z]{2,3}|und)(?:-[a-zA-Z0-9]{2,8}){0,6}$/u.test(text)) {
+    throw new Error(`Runtime profile ${label} is invalid`)
+  }
+  return text
+}
+
+function requiredPhraseText(value: unknown, label: string, maxLength: number): string {
+  const text = requiredText(value, label, maxLength)
+  if (
+    !/^[\p{L}\p{N}][\p{L}\p{N}' -]*$/u.test(text)
+    || /(?:https?:|wss?:|token|secret|password|key=)/iu.test(text)
+  ) {
+    throw new Error(`Runtime profile ${label} is invalid`)
+  }
+  return text
 }
 
 function copyOptionalText(

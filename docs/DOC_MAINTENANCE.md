@@ -77,3 +77,11 @@ uv run python scripts/check_docs.py
 ```
 
 The check verifies current markdown links, stale workflow/gate references, generated report artifacts under `docs/`, and task-specific PER/QA docs outside archive/provenance locations.
+
+Run the tracked-artifact check before committing release work:
+
+```bash
+make check-tracked-artifacts
+```
+
+It rejects checked-in build directories, package archives, model weights, databases, reports, screenshots/logs, and local OMX runtime state. CI and local commands may still generate those files in ignored paths.

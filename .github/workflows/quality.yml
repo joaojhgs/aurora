@@ -33,6 +33,9 @@ jobs:
       - name: Check documentation links and hygiene
         run: make check-docs
 
+      - name: Reject tracked build and run artifacts
+        run: make check-tracked-artifacts
+
       - name: Ruff lint
         run: uv run ruff check app tests scripts
 

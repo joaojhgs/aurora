@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+'use client'
+
+import { useState, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Mic, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
 import type {
   AndroidAssistantRoleStatus,
@@ -107,14 +109,28 @@ export interface SettingsPermissionsViewProps {
   surface?: SettingsPermissionsSurface
   currentPath?: string
   hideTabs?: boolean | undefined
+  onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
 }
 
-export function SettingsPermissionsView({ snapshot, surface, currentPath, hideTabs = false }: SettingsPermissionsViewProps) {
+export function SettingsPermissionsView({
+  snapshot,
+  surface,
+  currentPath,
+  hideTabs = false,
+  onRequestNativeAccess
+}: SettingsPermissionsViewProps) {
   const routePath = currentPath ?? browserPathname()
   const activeSurface = surface ?? (routePath === '/settings/native' ? 'native' : 'settings')
   const model = buildSettingsPermissionsModel(snapshot)
   if (activeSurface === 'native') {
-    return <NativeSettingsSurface snapshot={snapshot} model={model} hideTabs={hideTabs} />
+    return (
+      <NativeSettingsSurface
+        snapshot={snapshot}
+        model={model}
+        hideTabs={hideTabs}
+        onRequestNativeAccess={onRequestNativeAccess}
+      />
+    )
   }
   return <RouteSettingsSurface snapshot={snapshot} model={model} hideTabs={hideTabs} />
 }
@@ -249,14 +265,32 @@ function RouteDefaultRow({ label, detail, state, value }: { label: string; detai
 function NativeSettingsSurface({
   snapshot,
   model,
-  hideTabs
+  hideTabs,
+  onRequestNativeAccess
 }: {
   snapshot: AuroraShellSnapshot
   model: SettingsPermissionsModel
   hideTabs: boolean
+  onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
 }) {
-  const grantedCount = model.nativePermissions.filter((permission) => permission.granted).length
-  const manifestNote = platformStatusNote(snapshot)
+  const accessRows = nativeAccessRows(model, snapshot)
+  const grantedCount = accessRows.filter((permission) => permission.granted).length
+  const requestableCount = accessRows.filter((permission) => permission.requestEnabled).length
+  const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null)
+  const [requestError, setRequestError] = useState<string | null>(null)
+
+  async function requestAccess(permissionId: string) {
+    if (!onRequestNativeAccess || requestingPermissionId) return
+    setRequestingPermissionId(permissionId)
+    setRequestError(null)
+    try {
+      await onRequestNativeAccess(permissionId)
+    } catch (error) {
+      setRequestError(safeErrorCopy(error).title)
+    } finally {
+      setRequestingPermissionId(null)
+    }
+  }
 
   const permissionColumns: Array<DataColumn<SettingsNativePermissionCard>> = [
     {
@@ -264,8 +298,8 @@ function NativeSettingsSurface({
       header: 'Capability',
       render: (permission) => (
         <span className="flex flex-col gap-0.5">
-          <strong>{permission.label}</strong>
-          {permission.detail && permission.detail !== manifestNote ? <small className="text-xs text-muted-foreground">{permission.detail}</small> : null}
+          <strong>{nativeAccessLabel(permission.id)}</strong>
+          <small className="text-xs text-muted-foreground">{nativeAccessDetail(permission)}</small>
         </span>
       )
     },
@@ -275,7 +309,13 @@ function NativeSettingsSurface({
       render: (permission) => (
         <span className="flex flex-col gap-1">
           <StatusBadge state={permission.state} />
-          <small className="text-xs text-muted-foreground">{permission.capabilityEnabled ? 'Ready on this device' : 'Needs setup'}; {safeCopy(permission.blockers.length > 0 ? permission.blockers.join(', ') : 'No issue reported', 'Review access and try again.')}</small>
+          <small className="text-xs text-muted-foreground">
+            {permission.granted
+              ? 'Allowed on this device.'
+              : permission.requestEnabled
+                ? 'Your device will ask for confirmation.'
+                : 'Review this device\'s settings.'}
+          </small>
         </span>
       )
     },
@@ -286,7 +326,7 @@ function NativeSettingsSurface({
       render: (permission) => (
         <span className="flex flex-col gap-0.5">
           <span className="text-xs">{permission.granted ? 'Allowed' : permission.requestEnabled ? 'Can request' : 'Needs review'}</span>
-          {permission.evidence.length > 0 ? <small className="text-xs text-muted-foreground">{permission.granted ? 'This device can use it.' : 'Aurora will guide the next step.'}</small> : null}
+          {permission.evidence.length > 0 ? <small className="text-xs text-muted-foreground">{permission.granted ? 'This device can use it.' : 'The next step will be shown here.'}</small> : null}
         </span>
       )
     },
@@ -294,15 +334,26 @@ function NativeSettingsSurface({
       key: 'action',
       header: 'Action',
       align: 'end',
-      render: (permission) => (
-        <Button
-          variant={permission.requestEnabled ? 'primary' : 'ghost'}
-          disabled={!permission.requestEnabled}
-          disabledReason={permission.granted ? 'This access is already allowed.' : 'Aurora cannot request this access from here.'}
-        >
-          {permission.requestEnabled ? 'Request access' : permission.granted ? 'Allowed' : 'Needs setup'}
-        </Button>
-      )
+      render: (permission) => {
+        const requesting = requestingPermissionId === permission.id
+        const canRequest = permission.requestEnabled && Boolean(onRequestNativeAccess) && requestingPermissionId === null
+        return (
+          <Button
+            variant={permission.requestEnabled ? 'primary' : 'ghost'}
+            disabled={!canRequest}
+            disabledReason={
+              permission.granted
+                ? 'This access is already allowed.'
+                : onRequestNativeAccess
+                  ? 'This access must be changed in device settings.'
+                  : 'Open Aurora on this device to change this access.'
+            }
+            onClick={() => void requestAccess(permission.id)}
+          >
+            {requesting ? 'Opening…' : permission.requestEnabled ? 'Request access' : permission.granted ? 'Allowed' : 'Needs setup'}
+          </Button>
+        )
+      }
     }
   ]
 
@@ -323,10 +374,80 @@ function NativeSettingsSurface({
         </div>
       ) : null}
 
+      {accessRows.length > 0 ? (
+        <Card>
+          <PanelTitle
+            icon={<Smartphone size={18} aria-hidden />}
+            title="Device access"
+            description="Choose which device features Aurora may use. Your device always asks before granting new access."
+            id="device-access-title"
+          />
+          <StatStrip
+            ariaLabel="Device access summary"
+            items={[
+              { label: 'Allowed', value: grantedCount, tone: grantedCount > 0 ? 'success' : 'default' },
+              { label: 'Available to request', value: requestableCount, tone: requestableCount > 0 ? 'warning' : 'default' }
+            ]}
+          />
+          {requestError ? (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+              <AlertTriangle size={17} aria-hidden />
+              <span>{requestError}</span>
+            </div>
+          ) : null}
+          <DataTable
+            className="mt-3"
+            columns={permissionColumns}
+            rows={accessRows}
+            getRowKey={(permission) => permission.id}
+            empty="No device access choices are available here."
+          />
+        </Card>
+      ) : null}
+
       <AdvancedSettingsSections model={model} snapshot={snapshot} />
       <SettingsDataBlock />
     </section>
   )
+}
+
+function nativeAccessRows(model: SettingsPermissionsModel, snapshot: AuroraShellSnapshot): SettingsNativePermissionCard[] {
+  if (snapshot.nativePlatform !== 'android') return []
+  const ids = [
+    'android.assistantRole',
+    'aurora.android.microphone',
+    'aurora.android.notifications',
+    'aurora.android.voiceForegroundService'
+  ]
+  return ids
+    .map((id) => model.nativePermissions.find((permission) => permission.id === id))
+    .filter((permission): permission is SettingsNativePermissionCard => Boolean(permission))
+}
+
+function nativeAccessLabel(permissionId: string): string {
+  if (permissionId === 'android.assistantRole') return 'Default assistant'
+  if (permissionId === 'aurora.android.microphone') return 'Microphone'
+  if (permissionId === 'aurora.android.notifications') return 'Notifications'
+  if (permissionId === 'aurora.android.voiceForegroundService') return 'Hands-free listening'
+  return 'Device feature'
+}
+
+function nativeAccessDetail(permission: SettingsNativePermissionCard): string {
+  if (permission.id === 'android.assistantRole') {
+    return permission.granted
+      ? 'Aurora is selected as this device\'s assistant.'
+      : 'Choose Aurora if you want the device assistant action to open it.'
+  }
+  if (permission.id === 'aurora.android.microphone') {
+    return 'Needed to hear push-to-talk and hands-free requests.'
+  }
+  if (permission.id === 'aurora.android.notifications') {
+    return 'Needed for visible hands-free controls while Aurora is not on screen.'
+  }
+  if (permission.id === 'aurora.android.voiceForegroundService') {
+    return 'Keeps a user-started listening session visible and easy to stop.'
+  }
+  return 'Review whether Aurora may use this feature on your device.'
 }
 
 function SettingsTabs({ active }: { active: 'general' | 'configuration' | 'advanced' }) {
@@ -1226,16 +1347,6 @@ function nativeLimitationDetail(id: string, detail: string): string {
   if (id === 'noSiriReplacement') return 'iOS does not allow Aurora to become the default assistant.'
   if (id === 'foregroundConsentRequired') return 'Voice capture needs foreground use, clear consent, and a visible stop control.'
   return safeCopy(detail, 'This device cannot use that feature right now.')
-}
-
-function platformStatusNote(snapshot: AuroraShellSnapshot): string {
-  const profile = getAuroraSurfaceProfile({
-    transportKind: snapshot.transportKind,
-    nativePlatform: snapshot.nativePlatform
-  })
-  if (profile.isAndroid) return 'Android access depends on device support, your approval, and app setup.'
-  if (profile.isIos) return 'iOS access stays inside Aurora, Shortcuts, widgets, sharing, and links.'
-  return 'Desktop access depends on app setup and this device.'
 }
 
 function surfaceConnectionLabel(snapshot: AuroraShellSnapshot): string {

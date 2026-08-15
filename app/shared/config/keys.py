@@ -405,6 +405,7 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionAccurateModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.accurate_model")
@@ -412,6 +413,9 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.accurate_model.device")
         self.enabled = ConfigPath("services.stt.transcription.accurate_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.accurate_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.accurate_model.model_size_or_path"
+        )
         return self
 
 
@@ -484,6 +488,7 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionRealtimeModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.realtime_model")
@@ -491,6 +496,9 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.realtime_model.device")
         self.enabled = ConfigPath("services.stt.transcription.realtime_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.realtime_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.realtime_model.model_size_or_path"
+        )
         return self
 
 
@@ -647,6 +655,7 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
 
 
 class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
+    cache_dir: ConfigPath
     executable_path: ConfigPath
     model_config_file_path: ConfigPath
     model_file_path: ConfigPath
@@ -654,6 +663,7 @@ class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
 
     def __new__(cls) -> _ServicesTtsProvidersPiperConfigPath:
         self = super().__new__(cls, "services.tts.providers.piper")
+        self.cache_dir = ConfigPath("services.tts.providers.piper.cache_dir")
         self.executable_path = ConfigPath("services.tts.providers.piper.executable_path")
         self.model_config_file_path = ConfigPath(
             "services.tts.providers.piper.model_config_file_path"
@@ -1281,6 +1291,9 @@ class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
     manifest_path: ConfigPath
     retain_clone_source: ConfigPath
     standard_pack_enabled: ConfigPath
+    trusted_manifest_public_keys: ConfigPath
+    trusted_manifest_sha256: ConfigPath
+    trusted_manifest_signature: ConfigPath
     verify_sha256: ConfigPath
 
     def __new__(cls) -> _ServicesTtsVoiceRegistryConfigPath:
@@ -1300,6 +1313,15 @@ class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
         self.manifest_path = ConfigPath("services.tts.voice_registry.manifest_path")
         self.retain_clone_source = ConfigPath("services.tts.voice_registry.retain_clone_source")
         self.standard_pack_enabled = ConfigPath("services.tts.voice_registry.standard_pack_enabled")
+        self.trusted_manifest_public_keys = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_public_keys"
+        )
+        self.trusted_manifest_sha256 = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_sha256"
+        )
+        self.trusted_manifest_signature = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_signature"
+        )
         self.verify_sha256 = ConfigPath("services.tts.voice_registry.verify_sha256")
         return self
 

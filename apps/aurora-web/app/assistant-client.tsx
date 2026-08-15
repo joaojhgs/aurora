@@ -50,6 +50,7 @@ export function AssistantClientPage({
       executionHost="connected-device"
       localAssistant={localAssistant}
       surfaceProfile={runtime.surface}
+      browserSpeechPacks={runtime.browserSpeechPacks}
     />
   )
 }

@@ -680,6 +680,7 @@ packages = ["app", "modules"]
 [tool.setuptools.package-data]
 app = [
     "database/migrations/*.sql",
+    "services/tts/resources/*.json",
 ]
 # Model files are now stored at root level and excluded from package builds
 # voice_models/ and chat_models/ directories contain large model files

@@ -4,19 +4,45 @@
 //! owns the platform capture/playback threads, but it never owns voice state,
 //! generations, transport calls, or cancellation semantics.
 
+#[cfg(feature = "native-sherpa")]
+use crate::{
+    build_installed_kws_provider_from_phrases, build_installed_stt_provider,
+    build_installed_vad_provider, SpeechPackManager, SpeechPackManagerConfig,
+};
+#[cfg(feature = "native-sherpa-tts")]
+use crate::{build_installed_tts_provider, build_installed_tts_provider_with_reference};
 use crate::{
     AndroidAudioInput, AndroidAudioOutput, AndroidCaptureControl, AndroidPcmIngress, GatewayAuth,
     MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
     NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
 };
 use async_trait::async_trait;
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
     CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
-    RouteFiniteSttBinding, RouteRevision, RouteTtsBinding, RuntimeEvent, RuntimeEventSink,
-    TimestampMicros, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
+    RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
+    VoiceCoreError, VoiceRuntime, VoiceState,
 };
-use aurora_voice_engine::{FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ};
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+use aurora_voice_engine::{
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio, FiniteSttPort,
+    FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TtsSynthesisPort,
+    TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
+};
+use aurora_voice_engine::{
+    FiniteSttRouteScope, RouteFiniteSttBinding, RouteTtsBinding, MAX_FINITE_STT_SAMPLES,
+    VAD_SAMPLE_RATE_HZ,
+};
+#[cfg(feature = "native-sherpa")]
+use aurora_voice_sherpa::{
+    NativeKwsBackend, NativeSttBackend, NativeVadBackend, SherpaFiniteSttEngine,
+    SherpaKwsPhraseInput, SherpaKwsProvider, SherpaVadProvider,
+};
+#[cfg(feature = "native-sherpa-tts")]
+use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsReferenceAudio, SherpaTtsProvider};
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
@@ -32,6 +58,17 @@ const ANDROID_RUNTIME_ID: &str = "android-native-voice";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+type RuntimeCore = VoiceRuntime<
+    AndroidAudioInput,
+    AndroidFiniteSttProvider,
+    AndroidTtsProvider,
+    NativeGatewayTransport,
+    AndroidAudioOutput,
+    AndroidSessionSink,
+>;
+
+#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
 type RuntimeCore = VoiceRuntime<
     AndroidAudioInput,
     NativeGatewayFiniteStt,
@@ -41,11 +78,172 @@ type RuntimeCore = VoiceRuntime<
     AndroidSessionSink,
 >;
 
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+enum AndroidFiniteSttProvider {
+    Local(Box<SherpaFiniteSttEngine<NativeSttBackend>>),
+    Gateway(Box<NativeGatewayFiniteStt>),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl FiniteSttPort for AndroidFiniteSttProvider {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.finite_stt_binding(),
+            Self::Gateway(provider) => provider.finite_stt_binding(),
+        }
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_finite_stt(binding).await,
+            Self::Gateway(provider) => provider.warm_finite_stt(binding).await,
+        }
+    }
+
+    async fn transcribe_finite(
+        &mut self,
+        request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<FiniteSttResult, EngineError> {
+        match self {
+            Self::Local(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
+            Self::Gateway(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
+        }
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_finite_stt_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_finite_stt_generation(generation).await,
+        }
+    }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+enum AndroidTtsProvider {
+    Local(Box<SherpaTtsProvider<NativeTtsBackend>>),
+    Gateway(Box<NativeGatewayTtsSynthesizer>),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+type AndroidWakeRuntimeParts = (
+    SherpaVadProvider<NativeVadBackend>,
+    SherpaKwsProvider<NativeKwsBackend>,
+    WakeOrchestrationConfig,
+);
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl TtsSynthesisPort for AndroidTtsProvider {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesis_binding(),
+            Self::Gateway(provider) => provider.synthesis_binding(),
+        }
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_synthesis(binding).await,
+            Self::Gateway(provider) => provider.warm_synthesis(binding).await,
+        }
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesize_text(request, cancellation).await,
+            Self::Gateway(provider) => provider.synthesize_text(request, cancellation).await,
+        }
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_synthesis_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_synthesis_generation(generation).await,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
+#[cfg_attr(
+    not(all(feature = "native-sherpa", feature = "native-sherpa-tts")),
+    allow(dead_code)
+)]
 pub struct AndroidVoiceSessionConfig {
     gateway: Url,
     auth: GatewayAuth,
     remote_audio_consent: bool,
+    pack_store_root: Option<PathBuf>,
+    stt_model_id: Option<String>,
+    vad_model_id: Option<String>,
+    kws_model_id: Option<String>,
+    tts_voice_id: Option<String>,
+    wake_phrase_id: Option<String>,
+    wake_phrase_text: Option<String>,
+    wake_phrase_revision: Option<String>,
+    #[cfg(feature = "native-sherpa-tts")]
+    tts_reference_profile: Option<AndroidTtsReferenceProfile>,
+}
+
+#[cfg(feature = "native-sherpa-tts")]
+#[derive(Clone, Debug)]
+pub struct AndroidTtsReferenceProfile {
+    sample_rate_hz: i32,
+    samples: Vec<f32>,
+    reference_text: Option<String>,
+    revision: Option<String>,
+}
+
+#[cfg(feature = "native-sherpa-tts")]
+impl AndroidTtsReferenceProfile {
+    pub fn new(
+        sample_rate_hz: i32,
+        samples: Vec<f32>,
+        reference_text: Option<String>,
+        revision: Option<String>,
+    ) -> Result<Self, AndroidVoiceSessionCommandError> {
+        NativeTtsReferenceAudio::new(sample_rate_hz, samples.clone())
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        Ok(Self {
+            sample_rate_hz,
+            samples,
+            reference_text,
+            revision,
+        })
+    }
+
+    fn to_native(&self) -> Result<NativeTtsReferenceAudio, AndroidVoiceSessionCommandError> {
+        NativeTtsReferenceAudio::new(self.sample_rate_hz, self.samples.clone())
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+    }
+
+    fn reference_text(&self) -> Option<String> {
+        self.reference_text.clone()
+    }
+
+    fn revision(&self) -> Option<String> {
+        self.revision.clone()
+    }
 }
 
 impl AndroidVoiceSessionConfig {
@@ -54,7 +252,59 @@ impl AndroidVoiceSessionConfig {
             gateway,
             auth,
             remote_audio_consent,
+            pack_store_root: None,
+            stt_model_id: None,
+            vad_model_id: None,
+            kws_model_id: None,
+            tts_voice_id: None,
+            wake_phrase_id: None,
+            wake_phrase_text: None,
+            wake_phrase_revision: None,
+            #[cfg(feature = "native-sherpa-tts")]
+            tts_reference_profile: None,
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_local_pack_selection(
+        gateway: Url,
+        auth: GatewayAuth,
+        remote_audio_consent: bool,
+        pack_store_root: impl Into<PathBuf>,
+        stt_model_id: impl Into<String>,
+        tts_voice_id: impl Into<String>,
+        vad_model_id: Option<String>,
+        kws_model_id: Option<String>,
+        wake_phrase_id: Option<String>,
+        wake_phrase_text: Option<String>,
+        wake_phrase_revision: Option<String>,
+    ) -> Self {
+        Self {
+            gateway,
+            auth,
+            remote_audio_consent,
+            pack_store_root: Some(pack_store_root.into()),
+            stt_model_id: Some(stt_model_id.into()),
+            vad_model_id,
+            kws_model_id,
+            tts_voice_id: Some(tts_voice_id.into()),
+            wake_phrase_id,
+            wake_phrase_text,
+            wake_phrase_revision,
+            #[cfg(feature = "native-sherpa-tts")]
+            tts_reference_profile: None,
+        }
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    pub fn with_tts_reference_profile(mut self, profile: AndroidTtsReferenceProfile) -> Self {
+        self.tts_reference_profile = Some(profile);
+        self
+    }
+
+    #[cfg(all(test, feature = "native-sherpa-tts"))]
+    fn tts_reference_profile(&self) -> Option<&AndroidTtsReferenceProfile> {
+        self.tts_reference_profile.as_ref()
     }
 }
 
@@ -152,19 +402,21 @@ impl AndroidVoiceSession {
         let sink = AndroidSessionSink {
             status: Arc::clone(&status),
         };
-        let runtime = build_runtime(&config, input, output.clone(), sink)?;
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
         let thread_status = Arc::clone(&status);
         let thread_control = control.clone();
+        let thread_output = output.clone();
         let join = thread::Builder::new()
             .name("aurora-android-voice".to_owned())
             .spawn(move || {
                 run_session_thread(
-                    runtime,
+                    config,
+                    input,
+                    thread_output,
+                    sink,
                     command_rx,
                     thread_status,
                     thread_control,
-                    config.remote_audio_consent,
                 )
             })
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -267,6 +519,167 @@ fn build_runtime(
     output: AndroidAudioOutput,
     sink: AndroidSessionSink,
 ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    {
+        if has_complete_local_pack_selection(config) {
+            build_local_runtime(config, input, output, sink)
+        } else {
+            build_gateway_runtime(config, input, output, sink)
+        }
+    }
+    #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
+    {
+        build_gateway_runtime(config, input, output, sink)
+    }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn has_complete_local_pack_selection(config: &AndroidVoiceSessionConfig) -> bool {
+    config.pack_store_root.is_some()
+        && config
+            .stt_model_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        && config
+            .tts_voice_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn build_local_runtime(
+    config: &AndroidVoiceSessionConfig,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
+) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    let store_root = config
+        .pack_store_root
+        .clone()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let stt_model_id = config
+        .stt_model_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let tts_voice_id = config
+        .tts_voice_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let manager = SpeechPackManager::open(
+        SpeechPackManagerConfig::new(store_root, None)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let stt = build_installed_stt_provider(&manager, stt_model_id)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let tts = if let Some(reference_profile) = &config.tts_reference_profile {
+        let _reference_revision = reference_profile.revision();
+        build_installed_tts_provider_with_reference(
+            &manager,
+            tts_voice_id,
+            Some(reference_profile.to_native()?),
+            reference_profile.reference_text(),
+        )
+    } else {
+        build_installed_tts_provider(&manager, tts_voice_id)
+    }
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let policy = microphone_policy(config)?;
+    let limits = transport_limits(policy);
+    let transport_for_assistant =
+        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let mut runtime = VoiceRuntime::new(
+        input,
+        AndroidFiniteSttProvider::Local(Box::new(stt)),
+        AndroidTtsProvider::Local(Box::new(tts)),
+        transport_for_assistant,
+        output,
+        sink,
+        ANDROID_SURFACE,
+        ANDROID_RUNTIME_ID,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    if let Some((vad, kws, wake_config)) = build_wake_runtime_parts(&manager, config)? {
+        runtime = runtime
+            .with_wake_providers(Box::new(vad), Box::new(kws), wake_config)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    }
+    Ok(runtime)
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn build_wake_runtime_parts(
+    manager: &SpeechPackManager,
+    config: &AndroidVoiceSessionConfig,
+) -> Result<Option<AndroidWakeRuntimeParts>, AndroidVoiceSessionCommandError> {
+    let Some(vad_model_id) = config
+        .vad_model_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let Some(kws_model_id) = config
+        .kws_model_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let phrase_id = config
+        .wake_phrase_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let phrase_text = config
+        .wake_phrase_text
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let phrase_revision = config
+        .wake_phrase_revision
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let vad_config = VadConfig::default();
+    let vad = build_installed_vad_provider(manager, vad_model_id, &vad_config)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let kws = build_installed_kws_provider_from_phrases(
+        manager,
+        kws_model_id,
+        phrase_revision,
+        [SherpaKwsPhraseInput::new(phrase_id, phrase_text)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?],
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let vad_binding = vad.binding().clone();
+    let kws_binding = kws.binding().clone();
+    let kws_config = KwsConfig::new([phrase_id], phrase_revision, 0.25, 0, 1)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let wake_config =
+        WakeOrchestrationConfig::new(vad_binding, kws_binding, vad_config, kws_config, 800, 1600)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    Ok(Some((vad, kws, wake_config)))
+}
+
+fn build_gateway_runtime(
+    config: &AndroidVoiceSessionConfig,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
+) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
+    if config.pack_store_root.is_some()
+        || config.stt_model_id.is_some()
+        || config.tts_voice_id.is_some()
+        || config.vad_model_id.is_some()
+        || config.kws_model_id.is_some()
+    {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
     let policy = if config.gateway.scheme() == "http" && is_loopback(&config.gateway) {
         MicrophoneAudioPolicy::LoopbackOnly
     } else {
@@ -295,15 +708,7 @@ fn build_runtime(
         ROUTE_REVISION,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    let limits = TransportLimits {
-        max_request_bytes: 2 * 1024 * 1024,
-        max_response_bytes: 8 * 1024 * 1024,
-        max_event_bytes: 2 * 1024 * 1024,
-        request_timeout: REQUEST_TIMEOUT,
-        stream_idle_timeout: STREAM_IDLE_TIMEOUT,
-        allow_loopback_http: matches!(policy, MicrophoneAudioPolicy::LoopbackOnly),
-        microphone_audio_policy: policy,
-    };
+    let limits = transport_limits(policy);
     let transport_for_stt =
         NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -324,6 +729,10 @@ fn build_runtime(
         NativeGatewayTtsConfig::new(tts_route, None, 1.0, 16_000 * 30)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     );
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    let stt = AndroidFiniteSttProvider::Gateway(Box::new(stt));
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    let tts = AndroidTtsProvider::Gateway(Box::new(tts));
     VoiceRuntime::new(
         input,
         stt,
@@ -335,6 +744,31 @@ fn build_runtime(
         ANDROID_RUNTIME_ID,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn microphone_policy(
+    config: &AndroidVoiceSessionConfig,
+) -> Result<MicrophoneAudioPolicy, AndroidVoiceSessionCommandError> {
+    if is_loopback(&config.gateway) {
+        Ok(MicrophoneAudioPolicy::LoopbackOnly)
+    } else if config.remote_audio_consent {
+        Ok(MicrophoneAudioPolicy::ExplicitRemoteConsent)
+    } else {
+        Err(AndroidVoiceSessionCommandError::Unavailable)
+    }
+}
+
+fn transport_limits(policy: MicrophoneAudioPolicy) -> TransportLimits {
+    TransportLimits {
+        max_request_bytes: 2 * 1024 * 1024,
+        max_response_bytes: 8 * 1024 * 1024,
+        max_event_bytes: 2 * 1024 * 1024,
+        request_timeout: REQUEST_TIMEOUT,
+        stream_idle_timeout: STREAM_IDLE_TIMEOUT,
+        allow_loopback_http: matches!(policy, MicrophoneAudioPolicy::LoopbackOnly),
+        microphone_audio_policy: policy,
+    }
 }
 
 fn is_loopback(url: &Url) -> bool {
@@ -356,12 +790,22 @@ fn background_eligible(mode: AndroidVoiceStartMode) -> bool {
 }
 
 fn run_session_thread(
-    mut voice_runtime: RuntimeCore,
+    config: AndroidVoiceSessionConfig,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
     mut commands: tokio_mpsc::UnboundedReceiver<Command>,
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
     control: AndroidCaptureControl,
-    remote_audio_consent: bool,
 ) {
+    let remote_audio_consent = config.remote_audio_consent;
+    let mut voice_runtime = match build_runtime(&config, input, output, sink) {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            set_fault(&status, "runtime_unavailable");
+            return;
+        }
+    };
     let tokio_runtime = match TokioRuntimeBuilder::new_current_thread()
         .enable_all()
         .build()
@@ -652,5 +1096,47 @@ mod tests {
         assert!(!status.active);
         assert_eq!(status.failed_turns, 1);
         assert_eq!(status.last_error.as_deref(), Some("cancelled"));
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
+    fn android_tts_reference_profile_requires_explicit_audio() {
+        let invalid = AndroidTtsReferenceProfile::new(
+            16_000,
+            Vec::new(),
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        );
+        assert!(invalid.is_err());
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
+    fn local_pack_config_carries_explicit_tts_reference_profile() {
+        let profile = AndroidTtsReferenceProfile::new(
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .expect("profile");
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+            "/tmp/aurora-packs",
+            "stt-model",
+            "standard:pockettts:voice",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_tts_reference_profile(profile);
+        let stored = config.tts_reference_profile().expect("reference");
+        assert_eq!(stored.reference_text().as_deref(), Some("reference text"));
+        assert_eq!(stored.revision().as_deref(), Some("rev-1"));
+        assert!(stored.to_native().is_ok());
     }
 }

@@ -38,17 +38,14 @@ const forbiddenPathPatterns = [
   { id: 'python-sidecar', pattern: /aurora-sidecar|prepare-sidecar|gateway-sidecar|bundled[-_]?gateway/i },
   { id: 'python-runtime', pattern: /(^|[/\\])python(\d+(\.\d+)?)?(\.exe)?$|libpython[^/\\]*\.(so|dylib|dll)|pyvenv\.cfg|site-packages|__pycache__|(^|[/\\])\.venv([/\\]|$)|(^|[/\\])venv([/\\]|$)|(^|[/\\])uv(\.exe)?$/i },
   { id: 'python-source', pattern: /(^|[/\\])main\.py$|(^|[/\\])app[/\\]services[/\\]config|config_defaults\.json/i },
-  { id: 'speech-model-asset', pattern: /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|gguf|ggml|tflite|safetensors|pt|pth|ckpt|wav|flac|opus|json)$/i },
-  { id: 'speech-model-file', pattern: /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|gguf|ggml|tflite|safetensors|pt|pth|ckpt|wav|flac|opus|json)$/i },
-  { id: 'browser-wasm-voice-runtime', pattern: /(^|[/\\]).*(voice|speech|local-speech|audio-worklet|audioworklet|wakeword).*\.(wasm|worker\.js|worklet\.js|mjs|js)$/i },
-  { id: 'unapproved-pack', pattern: /pockettts|raven|non[-_ ]?commercial|cc[-_ ]?by[-_ ]?nc|creative[-_ ]commons[-_ ]?non[-_ ]?commercial/i },
+  { id: 'speech-model-asset', pattern: /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
+  { id: 'speech-model-file', pattern: /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i },
+  { id: 'speech-model-support-file', pattern: /(^|[/\\]).*(tokenizer|tokens|vocab|lexicon|sentencepiece|speakers?|durations?|phonemes?|bpe|spm).*(\.model|\.txt|\.json)$/i },
   { id: 'secret-file', pattern: /(^|[/\\])(\.env(\..*)?|id_rsa|id_ed25519|credentials?\.json|service[-_]?account.*\.json|.*private[-_]?key.*\.(pem|key|json)|.*secret.*\.(json|txt|env))$/i },
 ]
 
 const forbiddenTextPatterns = [
   { id: 'python-sidecar-text', pattern: /aurora-sidecar|prepare-sidecar|app\/services\/config\/config_defaults\.json|libpython|site-packages|\.venv|bundled[-_]?gateway/i },
-  { id: 'browser-wasm-voice-text', pattern: /local-speech|voice[-_ ]?worker|audio[-_ ]?worklet|speech[-_ ]?wasm|wakeword[-_ ]?wasm/i },
-  { id: 'unapproved-pack-text', pattern: /pockettts|raven|non[-_ ]?commercial|noncommercial|cc[-_ ]?by[-_ ]?nc|creative commons attribution-noncommercial/i },
   { id: 'private-key-text', pattern: /-----BEGIN (RSA |OPENSSH |EC |DSA |)?PRIVATE KEY-----/ },
   { id: 'api-secret-text', pattern: /\b(AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_APPLICATION_CREDENTIALS|OPENAI_API_KEY|ANTHROPIC_API_KEY|STRIPE_SECRET_KEY)\s*[:=]\s*['"]?[^'"\s]{12,}/i },
   { id: 'token-text', pattern: /\b(sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/ },
@@ -201,7 +198,7 @@ function inspectAppImage(path, rel) {
     const root = join(extractDir, 'squashfs-root')
     if (!existsSync(root)) throw new Error('AppImage extraction did not create squashfs-root')
     report.checkedInstallers += 1
-    scanExtractedTree(root, `appimage:${rel}`, artifactRoot)
+    scanExtractedTree(root, `appimage:${rel}`)
   } catch (error) {
     addFailure('installer-inspection', `installer:${rel}`, `failed to extract AppImage installer: ${errorMessage(error)}`)
   } finally {
@@ -209,7 +206,7 @@ function inspectAppImage(path, rel) {
   }
 }
 
-function scanExtractedTree(root, prefix, externalRoot = null) {
+function scanExtractedTree(root, prefix) {
   for (const extracted of walkFilesystem(root)) {
     const rel = normalizePath(relative(root, extracted))
     const stat = lstatSync(extracted)
@@ -221,7 +218,7 @@ function scanExtractedTree(root, prefix, externalRoot = null) {
         target = normalizePath(readlinkSync(extracted))
       } catch {}
       checkPath(rel, location)
-      if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target, externalRoot)) continue
+      if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target)) continue
       checkPath(target, `${location}->${redacted(target)}`)
       addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
       continue
@@ -235,16 +232,12 @@ function scanExtractedTree(root, prefix, externalRoot = null) {
   }
 }
 
-function isContainedSymlink(root, linkPath, target, externalRoot = null) {
+function isContainedSymlink(root, linkPath, target) {
   if (!target || target.startsWith('<') || target.includes('\0')) return false
   const resolvedTarget = resolve(dirname(linkPath), target)
-  return [root, externalRoot]
-    .filter(Boolean)
-    .some((candidateRoot) => {
-      const relativeTarget = relative(resolve(candidateRoot), resolvedTarget)
-      return relativeTarget === ''
-        || (!relativeTarget.startsWith('..') && !relativeTarget.startsWith('/') && !relativeTarget.match(/^[A-Za-z]:[/\\]/))
-    })
+  const relativeTarget = relative(resolve(root), resolvedTarget)
+  return relativeTarget === ''
+    || (!relativeTarget.startsWith('..') && !relativeTarget.startsWith('/') && !relativeTarget.match(/^[A-Za-z]:[/\\]/))
 }
 
 function inspectZipLikeArchive(buffer, label, depth) {

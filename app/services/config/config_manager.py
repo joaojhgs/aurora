@@ -31,11 +31,10 @@ from app.services.config.mesh_policy_migration import (
     synchronize_legacy_mirrors,
 )
 from app.shared.config.models import Model as AppConfig
+from app.shared.contracts.models.speech import normalize_speech_language
 
 _PREVIEW_TOKEN_TTL_SECONDS = 300
 _MAX_PREVIEW_TOKENS = 128
-_SPEECH_LANGUAGES = {"en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"}
-_VOICE_LANGUAGES = {"auto", *_SPEECH_LANGUAGES}
 _VOICE_IMPORT_FORMATS = {"wav", "mp3", "mp4", "m4a", "webm"}
 _SPEECH_LANGUAGE_RELOAD_SERVICES = [
     "tts",
@@ -354,32 +353,59 @@ class ConfigManager:
         )
         legacy_stt_language = source_stt.get("language") if isinstance(source_stt, dict) else None
         legacy_env_stt_language = self._legacy_stt_language_env_value()
+        normalized_legacy_stt_language = self._normalize_config_speech_language(
+            legacy_stt_language,
+            path="services.stt.language",
+            allow_blank=True,
+        )
+        normalized_legacy_env_stt_language = self._normalize_config_speech_language(
+            legacy_env_stt_language,
+            path="STT_LANGUAGE",
+            allow_blank=True,
+        )
         legacy_sources: set[str] = set()
 
         if "primary_language" not in source_system:
-            if legacy_stt_language in _SPEECH_LANGUAGES:
-                system["primary_language"] = legacy_stt_language
+            if normalized_legacy_stt_language:
+                system["primary_language"] = normalized_legacy_stt_language
                 legacy_sources.add("services.stt.language")
-            elif legacy_env_stt_language in _SPEECH_LANGUAGES:
-                system["primary_language"] = legacy_env_stt_language
+            elif normalized_legacy_env_stt_language:
+                system["primary_language"] = normalized_legacy_env_stt_language
                 legacy_sources.add("STT_LANGUAGE")
             else:
                 system["primary_language"] = self._env_config_value("system.primary_language", "en")
         if "voice_language" not in source_system:
-            if legacy_stt_language in _SPEECH_LANGUAGES:
-                system["voice_language"] = legacy_stt_language
+            if normalized_legacy_stt_language:
+                system["voice_language"] = normalized_legacy_stt_language
                 legacy_sources.add("services.stt.language")
             elif legacy_stt_language == "":
                 system["voice_language"] = "auto"
                 legacy_sources.add("services.stt.language")
-            elif legacy_env_stt_language in _SPEECH_LANGUAGES:
-                system["voice_language"] = legacy_env_stt_language
+            elif normalized_legacy_env_stt_language:
+                system["voice_language"] = normalized_legacy_env_stt_language
                 legacy_sources.add("STT_LANGUAGE")
             elif legacy_env_stt_language == "":
                 system["voice_language"] = "auto"
                 legacy_sources.add("STT_LANGUAGE")
             else:
                 system["voice_language"] = self._env_config_value("system.voice_language", "auto")
+
+        system["primary_language"] = self._normalize_config_speech_language(
+            system.get("primary_language"),
+            path="system.primary_language",
+        )
+        system["voice_language"] = self._normalize_config_speech_language(
+            system.get("voice_language"),
+            path="system.voice_language",
+            allow_auto=True,
+        )
+        stt = services.get("stt")
+        if isinstance(stt, dict):
+            stt["language"] = self._normalize_config_speech_language(
+                stt.get("language"),
+                path="services.stt.language",
+                allow_blank=True,
+            )
 
         tts = self._ensure_dict(services, "tts")
         source_tts = (
@@ -514,6 +540,7 @@ class ConfigManager:
         allowed_objects = {
             "services.tts.providers": {"piper", "pockettts"},
             "services.tts.providers.piper": {
+                "cache_dir",
                 "model_file_path",
                 "model_config_file_path",
                 "model_sample_rate",
@@ -539,6 +566,9 @@ class ConfigManager:
             "services.tts.voice_registry": {
                 "manifest_path",
                 "asset_base_url",
+                "trusted_manifest_sha256",
+                "trusted_manifest_public_keys",
+                "trusted_manifest_signature",
                 "cache_dir",
                 "verify_sha256",
                 "standard_pack_enabled",
@@ -563,17 +593,15 @@ class ConfigManager:
                     f"Unknown configuration field(s) under {object_path}: {', '.join(unknown)}"
                 )
 
-        primary_language = self._lookup_path(config_data, "system.primary_language", "en")
-        voice_language = self._lookup_path(config_data, "system.voice_language", "auto")
-        if primary_language not in _SPEECH_LANGUAGES:
-            raise ValueError(
-                f"system.primary_language must be one of: {', '.join(sorted(_SPEECH_LANGUAGES))}"
-            )
-        if voice_language not in _VOICE_LANGUAGES:
-            raise ValueError(
-                "system.voice_language must be auto or one of: "
-                f"{', '.join(sorted(_SPEECH_LANGUAGES))}"
-            )
+        self._normalize_config_speech_language(
+            self._lookup_path(config_data, "system.primary_language", "en"),
+            path="system.primary_language",
+        )
+        self._normalize_config_speech_language(
+            self._lookup_path(config_data, "system.voice_language", "auto"),
+            path="system.voice_language",
+            allow_auto=True,
+        )
 
         provider = self._lookup_path(config_data, "services.tts.provider", "piper")
         fallback_provider = self._lookup_path(config_data, "services.tts.fallback_provider", None)
@@ -586,6 +614,31 @@ class ConfigManager:
         self._validate_piper_config(config_data)
         self._validate_pockettts_config(config_data)
         self._validate_voice_registry_config(config_data)
+
+    @staticmethod
+    def _normalize_config_speech_language(
+        value: object,
+        *,
+        path: str,
+        allow_auto: bool = False,
+        allow_blank: bool = False,
+    ) -> str:
+        """Normalize one configured speech language while retaining path-aware errors."""
+
+        if value is None and allow_blank:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError(f"{path} must be a string")
+        stripped = value.strip()
+        if allow_blank and not stripped:
+            return ""
+        try:
+            normalized = normalize_speech_language(stripped, allow_auto=allow_auto)
+        except ValueError as exc:
+            raise ValueError(f"{path} must be a valid BCP 47 language tag") from exc
+        if normalized is None:
+            raise ValueError(f"{path} must not be blank")
+        return normalized
 
     def _validate_piper_config(self, config_data: dict[str, Any]) -> None:
         sample_rate = self._lookup_path(

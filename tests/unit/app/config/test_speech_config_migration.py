@@ -43,6 +43,7 @@ def test_flat_piper_config_migrates_in_memory_without_mutating_source() -> None:
 
     assert source == original
     assert normalized["services"]["tts"]["providers"]["piper"] == {
+        "cache_dir": "voice_models/piper",
         "model_file_path": "legacy.onnx",
         "model_config_file_path": "legacy.onnx.json",
         "model_sample_rate": 16000,
@@ -149,9 +150,24 @@ def test_load_config_does_not_rewrite_flat_speech_config_file(tmp_path, monkeypa
         ConfigManager._instance = original_instance
 
 
-def test_speech_config_rejects_unsupported_language() -> None:
+def test_speech_config_accepts_and_normalizes_open_language_tags() -> None:
+    normalized = _normalize(
+        {
+            "system": {
+                "primary_language": "pt_BR",
+                "voice_language": "ZH-Hant-TW",
+            }
+        }
+    )
+
+    assert normalized["system"]["primary_language"] == "pt-br"
+    assert normalized["system"]["voice_language"] == "zh-hant-tw"
+
+
+@pytest.mark.parametrize("tag", ["-en", "en--US", "en US", "x"])
+def test_speech_config_rejects_malformed_language(tag: str) -> None:
     with pytest.raises(ValueError, match="system.primary_language"):
-        _normalize({"system": {"primary_language": "xx"}})
+        _normalize({"system": {"primary_language": tag}})
 
 
 def test_speech_config_rejects_unknown_new_provider_field() -> None:

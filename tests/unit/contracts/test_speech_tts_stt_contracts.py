@@ -27,13 +27,22 @@ from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_DURATION_MS,
     VOICE_IMPORT_MAX_TOTAL_BYTES,
     TTSCapabilities,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSCreateVoiceProfileResponse,
     TTSDeleteVoiceProfileRequest,
     TTSDeleteVoiceProfileResponse,
+    TTSExportVoiceProfileRequest,
+    TTSExportVoiceProfileResponse,
     TTSGetVoiceProfileResponse,
+    TTSImportVoiceProfileRequest,
+    TTSImportVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
+    TTSLanguagePackDescriptor,
+    TTSLanguagePackVoice,
+    TTSListLanguagePacksRequest,
+    TTSListLanguagePacksResponse,
     TTSListVoiceProfilesRequest,
     TTSListVoicesRequest,
     TTSListVoicesResponse,
@@ -66,13 +75,15 @@ STANDARD_ID = "standard:english_2026-04:default"
 
 
 def test_language_requirement_normalizes_and_digests_exact() -> None:
-    requirement = SpeechLanguageRequirement.model_validate({"mode": "exact", "language": "EN"})
+    requirement = SpeechLanguageRequirement.model_validate(
+        {"mode": "exact", "language": "ZH_hant_TW"}
+    )
 
-    assert requirement.language == "en"
+    assert requirement.language == "zh-hant-tw"
     assert requirement.table_revision == SPEECH_LANGUAGE_TABLE_REVISION
     assert requirement.digest == requirement.compute_digest()
 
-    same = SpeechLanguageRequirement(mode="exact", language="en", digest=requirement.digest)
+    same = SpeechLanguageRequirement(mode="exact", language="zh-hant-tw", digest=requirement.digest)
     assert same.digest == requirement.digest
 
 
@@ -95,17 +106,36 @@ def test_create_voice_profile_requires_opaque_sealed_reference() -> None:
 
 def test_language_requirement_normalizes_auto_candidates() -> None:
     requirement = SpeechLanguageRequirement.model_validate(
-        {"mode": "auto", "auto_language_candidates": ["ES", "en", "es"]}
+        {
+            "mode": "auto",
+            "auto_language_candidates": ["PT_br", "es-419", "pt-BR", "zh-Hant"],
+        }
     )
 
     assert requirement.language is None
-    assert requirement.auto_language_candidates == ["en", "es"]
+    assert requirement.auto_language_candidates == ["es-419", "pt-br", "zh-hant"]
 
 
-@pytest.mark.parametrize("tag", ["english", "french", "pt-BR", ""])
-def test_language_requirement_rejects_unsupported_and_blank_exact_tags(tag: str) -> None:
+@pytest.mark.parametrize("tag", ["", "-en", "en--US", "en US", "x"])
+def test_language_requirement_rejects_malformed_and_blank_exact_tags(tag: str) -> None:
     with pytest.raises(ValidationError):
         SpeechLanguageRequirement.model_validate({"mode": "exact", "language": tag})
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [
+        ("pt-BR", "pt-br"),
+        ("zh-Hant-TW", "zh-hant-tw"),
+        ("sr_Latn_RS", "sr-latn-rs"),
+        ("x-Aurora-Custom", "x-aurora-custom"),
+        ("und", "und"),
+    ],
+)
+def test_language_requirement_accepts_open_bcp47_tags(tag: str, expected: str) -> None:
+    requirement = SpeechLanguageRequirement.model_validate({"mode": "exact", "language": tag})
+
+    assert requirement.language == expected
 
 
 def test_language_requirement_rejects_wrong_digest() -> None:
@@ -172,12 +202,14 @@ def test_speech_constraints_require_resident_identity_for_ready_state() -> None:
         SpeechMethodConstraints(exact_languages=["en"], speech_capability_revision=1)
 
 
-def test_locale_fallbacks_require_an_explicit_table_entry() -> None:
-    with pytest.raises(ValidationError, match="unsupported speech language"):
-        SpeechLocaleFallback.model_validate(
-            {"requested_language": "pt-BR", "served_language": "pt"}
-        )
-    with pytest.raises(ValidationError, match="not declared"):
+def test_locale_fallbacks_are_explicit_pack_declarations() -> None:
+    fallback = SpeechLocaleFallback.model_validate(
+        {"requested_language": "pt-BR", "served_language": "pt"}
+    )
+    assert fallback.requested_language == "pt-br"
+    assert fallback.served_language == "pt"
+
+    with pytest.raises(ValidationError, match="must differ"):
         SpeechLocaleFallback(requested_language="fr", served_language="fr")
 
 
@@ -204,6 +236,7 @@ def test_route_binding_is_internal_metadata_not_request_field() -> None:
 def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.GET_CAPABILITIES == "TTS.GetCapabilities"
     assert TTSMethods.LIST_VOICES == "TTS.ListVoices"
+    assert TTSMethods.LIST_LANGUAGE_PACKS == "TTS.ListLanguagePacks"
     assert TTSMethods.LIST_VOICE_PROFILES == "TTS.ListVoiceProfiles"
     assert TTSMethods.GET_VOICE_PROFILE == "TTS.GetVoiceProfile"
     assert TTSMethods.UPDATE_VOICE_PROFILE == "TTS.UpdateVoiceProfile"
@@ -216,6 +249,55 @@ def test_tts_method_constants_cover_voice_lifecycle_surface() -> None:
     assert TTSMethods.VOICE_IMPORT_ABORT == "TTS.VoiceImportAbort"
     assert TTSMethods.CREATE_VOICE_PROFILE == "TTS.CreateVoiceProfile"
     assert TTSMethods.DELETE_VOICE_PROFILE == "TTS.DeleteVoiceProfile"
+    assert TTSMethods.EXPORT_VOICE_PROFILE == "TTS.ExportVoiceProfile"
+    assert TTSMethods.IMPORT_VOICE_PROFILE == "TTS.ImportVoiceProfile"
+
+
+def test_clone_voice_state_transfer_is_integrity_bound_and_repr_redacted() -> None:
+    payload = b"derived-clone-state"
+    encoded = base64.b64encode(payload).decode("ascii")
+    bundle = TTSCloneVoiceStateBundle(
+        voice_id=CLONE_ID,
+        display_name="Private voice",
+        runtime_target="pockettts-python",
+        language_bundle="english_2026-04",
+        compatibility_group="pockettts-base",
+        artifact_revision="clone-rev-a",
+        artifact_sha256=hashlib.sha256(payload).hexdigest(),
+        artifact_size_bytes=len(payload),
+        artifact_data_base64=encoded,
+    )
+
+    request = TTSImportVoiceProfileRequest(operation_id="import-a", bundle=bundle)
+    exported = TTSExportVoiceProfileResponse(
+        voice_id=CLONE_ID,
+        status="exported",
+        revision="voice-rev-a",
+        bundle=bundle,
+    )
+
+    assert request.bundle.voice_id == CLONE_ID
+    assert exported.bundle == bundle
+    assert encoded not in repr(bundle)
+    assert "artifact_data_base64" not in repr(bundle)
+    assert encoded in bundle.model_dump_json()
+
+    with pytest.raises(ValidationError, match="artifact SHA-256 mismatch"):
+        TTSCloneVoiceStateBundle.model_validate(
+            {**bundle.model_dump(), "artifact_sha256": "0" * 64}
+        )
+    with pytest.raises(ValidationError):
+        TTSCloneVoiceStateBundle.model_validate({**bundle.model_dump(), "source_audio": encoded})
+    with pytest.raises(ValidationError, match="only cloned voice profiles"):
+        TTSExportVoiceProfileRequest(
+            operation_id="export-standard",
+            voice_id=STANDARD_ID,
+        )
+    with pytest.raises(ValidationError, match="needs revision"):
+        TTSImportVoiceProfileResponse(
+            voice_id=CLONE_ID,
+            status="imported",
+        )
 
 
 def test_stt_capture_handoff_contracts_keep_lease_tokens_off_status() -> None:
@@ -249,12 +331,14 @@ def test_tts_language_is_backward_compatible_and_exact_only() -> None:
     assert TTSRequest.model_validate({"text": "hello", "language": "EN"}).language == "en"
     assert TTSSynthesizeRequest(text="hello", language="fr").language == "fr"
     assert TTSStreamStartRequest(stream_id="s1", language="de").language == "de"
+    assert TTSRequest(text="olá", language="pt-BR").language == "pt-br"
+    assert TTSSynthesizeRequest(text="你好", language="zh-Hant").language == "zh-hant"
     assert TTSRequest(text="hello", voice=STANDARD_ID).voice == STANDARD_ID
 
     with pytest.raises(ValidationError, match="exact, not auto"):
         TTSRequest.model_validate({"text": "hello", "language": "auto"})
     with pytest.raises(ValidationError):
-        TTSSynthesizeRequest.model_validate({"text": "hello", "language": "english"})
+        TTSSynthesizeRequest.model_validate({"text": "hello", "language": "en--US"})
     with pytest.raises(ValidationError):
         TTSStreamStartRequest(stream_id="s1", voice="raw-provider-id")
 
@@ -328,6 +412,169 @@ def test_tts_descriptors_are_use_safe_and_forbid_internal_extras() -> None:
                 "embedding_tensor": [1, 2, 3],
             }
         )
+
+
+def test_tts_language_pack_contracts_are_redacted_and_exact() -> None:
+    voice = TTSLanguagePackVoice(
+        voice_id=STANDARD_ID,
+        display_name="Default",
+        installed=True,
+        ready=True,
+        default=True,
+        active=False,
+        revision="voice-rev-1",
+    )
+    pack = TTSLanguagePackDescriptor(
+        pack_id="en",
+        language="EN",
+        display_name="English",
+        installed=True,
+        ready=True,
+        default=True,
+        voice_count=1,
+        installed_voice_count=1,
+        ready_voice_count=1,
+        voices=[voice],
+        revision="pack-rev-1",
+    )
+    response = TTSListLanguagePacksResponse(
+        packs=[pack],
+        catalog_status="available",
+        default_voice_id=STANDARD_ID,
+    )
+
+    assert TTSListLanguagePacksRequest.model_validate({"language": "PT_br"}).language == "pt-br"
+    assert response.packs[0].language == "en"
+    assert response.packs[0].voices[0].default is True
+    assert response.packs[0].voices[0].active is False
+    assert "filesystem_path" not in response.model_dump_json()
+    with pytest.raises(ValidationError):
+        TTSListLanguagePacksRequest.model_validate({"language": "auto"})
+    with pytest.raises(ValidationError, match="voice count"):
+        TTSLanguagePackDescriptor(
+            pack_id="en",
+            language="en",
+            display_name="English",
+            installed=True,
+            ready=True,
+            voice_count=2,
+            installed_voice_count=1,
+            ready_voice_count=1,
+            voices=[voice],
+            revision="pack-rev-1",
+        )
+    with pytest.raises(ValidationError, match="ready language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=False,
+            ready=True,
+            revision="voice-rev-1",
+        )
+    with pytest.raises(ValidationError, match="default or active language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=True,
+            ready=False,
+            default=True,
+            revision="voice-rev-1",
+        )
+    with pytest.raises(ValidationError, match="default or active language pack voice"):
+        TTSLanguagePackVoice(
+            voice_id=STANDARD_ID,
+            display_name="Default",
+            installed=True,
+            ready=False,
+            active=True,
+            revision="voice-rev-1",
+        )
+    with pytest.raises(ValidationError):
+        TTSLanguagePackDescriptor.model_validate(
+            {
+                "pack_id": "en",
+                "language": "en",
+                "display_name": "English",
+                "installed": False,
+                "ready": False,
+                "voice_count": 0,
+                "revision": "pack-rev-1",
+                "source_url": "https://example.invalid/pack.json",
+            }
+        )
+    stale = TTSListLanguagePacksResponse(
+        packs=[],
+        catalog_status="unavailable",
+        catalog_error_code="catalog_unavailable",
+        default_voice_id=STANDARD_ID,
+        stale_default_voice_id=STANDARD_ID,
+    )
+    assert stale.stale_default_voice_id == STANDARD_ID
+    stale_unready_voice = TTSLanguagePackVoice(
+        voice_id=STANDARD_ID,
+        display_name="Default",
+        installed=True,
+        ready=False,
+        default=False,
+        active=False,
+        revision="voice-rev-2",
+    )
+    stale_unready_pack = TTSLanguagePackDescriptor(
+        pack_id="en",
+        language="en",
+        display_name="English",
+        installed=True,
+        ready=False,
+        default=False,
+        voice_count=1,
+        installed_voice_count=1,
+        ready_voice_count=0,
+        voices=[stale_unready_voice],
+        revision="pack-rev-2",
+    )
+    listed_stale = TTSListLanguagePacksResponse(
+        packs=[stale_unready_pack],
+        catalog_status="available",
+        default_voice_id=STANDARD_ID,
+        stale_default_voice_id=STANDARD_ID,
+    )
+    assert listed_stale.packs[0].voices[0].ready is False
+    listed_catalog_voice = TTSLanguagePackVoice(
+        voice_id=STANDARD_ID,
+        display_name="Default",
+        installed=False,
+        ready=False,
+        default=False,
+        revision="voice-rev-1",
+    )
+    listed_catalog_pack = TTSLanguagePackDescriptor(
+        pack_id="en",
+        language="en",
+        display_name="English",
+        installed=False,
+        ready=False,
+        default=False,
+        voice_count=1,
+        installed_voice_count=0,
+        ready_voice_count=0,
+        voices=[listed_catalog_voice],
+        revision="pack-rev-1",
+    )
+    listed_catalog_stale = TTSListLanguagePacksResponse(
+        packs=[listed_catalog_pack],
+        default_voice_id=STANDARD_ID,
+        stale_default_voice_id=STANDARD_ID,
+    )
+    assert listed_catalog_stale.packs[0].voices[0].installed is False
+    with pytest.raises(ValidationError, match="stale default voice"):
+        TTSListLanguagePacksResponse(
+            packs=[pack],
+            catalog_status="available",
+            default_voice_id=STANDARD_ID,
+            stale_default_voice_id=STANDARD_ID,
+        )
+    with pytest.raises(ValidationError, match="requires an error code"):
+        TTSListLanguagePacksResponse(catalog_status="unavailable")
 
 
 def test_tts_capabilities_keep_readiness_separate_from_method_constraints() -> None:
@@ -735,7 +982,7 @@ def test_stt_language_auto_and_exact_candidate_rules() -> None:
             audio_data="AA==", language="en", auto_language_candidates=["en", "fr"]
         )
     with pytest.raises(ValidationError):
-        TranscribeAudioRequest.model_validate({"audio_data": "AA==", "language": "french"})
+        TranscribeAudioRequest.model_validate({"audio_data": "AA==", "language": "en--US"})
     with pytest.raises(ValidationError):
         TranscribeAudioRequest(
             audio_data="AA==",

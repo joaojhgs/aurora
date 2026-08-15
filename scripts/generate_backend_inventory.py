@@ -54,13 +54,20 @@ try:
         STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
         TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         TTS_CAPABILITIES_INVARIANT_MARKER,
+        TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
         TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+        TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
         TTS_OPERATION_ID_MARKER,
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -97,13 +104,20 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
         STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
         TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         TTS_CAPABILITIES_INVARIANT_MARKER,
+        TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
         TTS_CREATE_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_REQUEST_INVARIANT_MARKER,
         TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER,
+        TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+        TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_GET_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
         TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
+        TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
         TTS_OPERATION_ID_MARKER,
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -146,6 +160,7 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "Orchestrator.Interrupt",
     "TTS.GetCapabilities",
     "TTS.ListVoices",
+    "TTS.ListLanguagePacks",
     "TTS.ListVoiceProfiles",
     "TTS.GetVoiceProfile",
     "TTS.UpdateVoiceProfile",
@@ -158,6 +173,8 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "TTS.VoiceImportAbort",
     "TTS.CreateVoiceProfile",
     "TTS.DeleteVoiceProfile",
+    "TTS.ExportVoiceProfile",
+    "TTS.ImportVoiceProfile",
     "TTS.Request",
     "TTS.StreamStart",
     "TTS.StreamChunk",
@@ -644,6 +661,8 @@ for _model, _validator in (
     ("TTSSynthesizeRequest", "_normalize_language"),
     ("TTSStreamStartRequest", "_normalize_language"),
     ("TTSListVoicesRequest", "_normalize_language"),
+    ("TTSLanguagePackDescriptor", "_normalize_language"),
+    ("TTSListLanguagePacksRequest", "_normalize_language"),
     ("TTSCreateVoiceProfileRequest", "_normalize_language"),
     ("TranscribeAudioRequest", "_normalize_language"),
 ):
@@ -670,6 +689,7 @@ for _model, _validator in (
     ("TTSSynthesizeRequest", "_validate_voice_id"),
     ("TTSStreamStartRequest", "_validate_voice_id"),
     ("TTSVoiceDescriptor", "_validate_voice_id"),
+    ("TTSLanguagePackVoice", "_validate_voice_id"),
     ("TTSVoiceProfileDescriptor", "_validate_voice_id"),
     ("TTSGetVoiceProfileRequest", "_validate_voice_id"),
     ("TTSUpdateVoiceProfileRequest", "_validate_voice_id"),
@@ -683,6 +703,9 @@ for _model, _validator in (
     ("TTSCreateVoiceProfileResponse", "_validate_voice_id"),
     ("TTSDeleteVoiceProfileRequest", "_validate_voice_id"),
     ("TTSDeleteVoiceProfileResponse", "_validate_voice_id"),
+    ("TTSCloneVoiceStateBundle", "_validate_clone_voice_id"),
+    ("TTSExportVoiceProfileRequest", "_validate_voice_id"),
+    ("TTSListLanguagePacksResponse", "_validate_default_voice_ids"),
 ):
     VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_field_pattern(
         __import__(
@@ -707,7 +730,9 @@ VALIDATOR_EXTENSION_VERIFIERS[("TTSDeleteVoiceProfileResponse", "_validate_voice
 for _model, _validator in (
     ("TTSCreateVoiceProfileRequest", "_validate_expected_revision"),
     ("TTSDeleteVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSExportVoiceProfileRequest", "_validate_expected_revision"),
     ("TTSInstallVoiceProfileRequest", "_validate_expected_revision"),
+    ("TTSImportVoiceProfileRequest", "_validate_expected_revision"),
     ("TTSRemoveVoiceProfileRequest", "_validate_expected_revision"),
     ("TTSSetDefaultVoiceRequest", "_validate_expected_revision"),
     ("TTSUpdateVoiceProfileRequest", "_validate_expected_revision"),
@@ -718,6 +743,9 @@ for _model, _validator in (
     ("TTSCreateVoiceProfileRequest", "_validate_nonblank"),
     ("TTSUpdateVoiceProfileRequest", "_validate_label"),
     ("TTSVoiceDescriptor", "_validate_nonblank"),
+    ("TTSLanguagePackDescriptor", "_validate_nonblank"),
+    ("TTSLanguagePackDescriptor", "_validate_pack_id"),
+    ("TTSLanguagePackVoice", "_validate_nonblank"),
     ("TTSVoiceProfileDescriptor", "_validate_nonblank"),
     ("TTSVoiceImportAbortRequest", "_validate_upload_id"),
     ("TTSVoiceImportChunkRequest", "_validate_upload_id"),
@@ -725,13 +753,16 @@ for _model, _validator in (
     ("TTSVoiceImportEndResponse", "_validate_nonblank"),
     ("TTSVoiceImportStartResponse", "_validate_nonblank"),
     ("TTSResidentLanguagePack", "_validate_pack_id"),
+    ("TTSCloneVoiceStateBundle", "_validate_nonblank"),
 ):
     VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_string_field_non_blank
 
 for _model, _validator in (
     ("TTSCreateVoiceProfileRequest", "_validate_operation_id"),
     ("TTSDeleteVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSExportVoiceProfileRequest", "_validate_operation_id"),
     ("TTSInstallVoiceProfileRequest", "_validate_operation_id"),
+    ("TTSImportVoiceProfileRequest", "_validate_operation_id"),
     ("TTSRemoveVoiceProfileRequest", "_validate_operation_id"),
     ("TTSSetDefaultVoiceRequest", "_validate_operation_id"),
     ("TTSUpdateVoiceProfileRequest", "_validate_operation_id"),
@@ -747,6 +778,7 @@ for _model, _validator in (
     ("TTSVoiceImportChunkRequest", "_validate_chunk_sha256"),
     ("TTSVoiceImportEndRequest", "_validate_final_sha256"),
     ("TTSVoiceImportEndResponse", "_validate_final_sha256"),
+    ("TTSCloneVoiceStateBundle", "_validate_artifact_sha256"),
 ):
     VALIDATOR_EXTENSION_VERIFIERS[(_model, _validator)] = _assert_lowercase_digest
 
@@ -758,6 +790,13 @@ _MODEL_INVARIANT_VERIFIERS = {
     ("TTSCapabilities", "_validate_capabilities"): TTS_CAPABILITIES_INVARIANT_MARKER,
     ("TTSCapabilities", "_validate_sample_rates"): TTS_CAPABILITIES_INVARIANT_MARKER,
     ("TTSVoiceDescriptor", "_validate_ready_voice"): TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+    ("TTSLanguagePackVoice", "_validate_voice_state"): (TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER),
+    ("TTSLanguagePackDescriptor", "_validate_pack_state"): (
+        TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER
+    ),
+    ("TTSListLanguagePacksResponse", "_validate_unique_packs"): (
+        TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER
+    ),
     ("TTSListVoicesResponse", "_validate_use_safe_voices"): TTS_VOICE_LIST_INVARIANT_MARKER,
     ("TTSVoiceProfileDescriptor", "_validate_profile_state"): (
         TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER
@@ -795,6 +834,18 @@ _MODEL_INVARIANT_VERIFIERS = {
     ("TTSVoiceImportChunkRequest", "_validate_chunk"): (TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER),
     ("TTSVoiceImportChunkResponse", "_validate_acknowledgement"): (
         TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSCloneVoiceStateBundle", "_validate_artifact_payload"): (
+        TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER
+    ),
+    ("TTSExportVoiceProfileRequest", "_validate_clone_id"): (
+        TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER
+    ),
+    ("TTSExportVoiceProfileResponse", "_validate_export_response"): (
+        TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER
+    ),
+    ("TTSImportVoiceProfileResponse", "_validate_import_response"): (
+        TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER
     ),
     ("TTSAudioChunkEvent", "_validate_audio_payload"): TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
     ("TranscribeAudioRequest", "_validate_language_shape"): STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
@@ -1412,6 +1463,9 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
     invariant_markers = {
         "TTSCapabilities": TTS_CAPABILITIES_INVARIANT_MARKER,
         "TTSVoiceDescriptor": TTS_VOICE_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSLanguagePackVoice": TTS_LANGUAGE_PACK_VOICE_INVARIANT_MARKER,
+        "TTSLanguagePackDescriptor": TTS_LANGUAGE_PACK_DESCRIPTOR_INVARIANT_MARKER,
+        "TTSListLanguagePacksResponse": TTS_LANGUAGE_PACK_LIST_INVARIANT_MARKER,
         "TTSListVoicesResponse": TTS_VOICE_LIST_INVARIANT_MARKER,
         "TTSVoiceProfileDescriptor": TTS_PROFILE_DESCRIPTOR_INVARIANT_MARKER,
         "TTSListVoiceProfilesResponse": TTS_PROFILE_LIST_INVARIANT_MARKER,
@@ -1426,6 +1480,10 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
         "TTSVoiceImportStartResponse": TTS_IMPORT_START_RESPONSE_INVARIANT_MARKER,
         "TTSVoiceImportChunkRequest": TTS_IMPORT_CHUNK_REQUEST_INVARIANT_MARKER,
         "TTSVoiceImportChunkResponse": TTS_IMPORT_CHUNK_RESPONSE_INVARIANT_MARKER,
+        "TTSCloneVoiceStateBundle": TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+        "TTSExportVoiceProfileRequest": TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+        "TTSExportVoiceProfileResponse": TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+        "TTSImportVoiceProfileResponse": TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
         "TTSAudioChunkEvent": TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
         "TranscribeAudioRequest": STT_TRANSCRIBE_LANGUAGE_SHAPE_MARKER,
     }
@@ -1434,11 +1492,11 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
         schema[marker] = True
     if title == "TTSDeleteVoiceProfileResponse":
         schema[TTS_DELETE_PROFILE_RESPONSE_INVARIANT_MARKER] = True
-    for field_name in ("voice_id", "voice"):
+    for field_name in ("voice_id", "voice", "default_voice_id", "stale_default_voice_id"):
         field_schema = properties.get(field_name)
         if isinstance(field_schema, dict):
             _annotate_optional_string_pattern(field_schema, LOGICAL_VOICE_ID_PATTERN)
-    for field_name in ("sha256", "chunk_sha256", "final_sha256"):
+    for field_name in ("sha256", "chunk_sha256", "final_sha256", "artifact_sha256"):
         field_schema = properties.get(field_name)
         if isinstance(field_schema, dict):
             _annotate_optional_string_pattern(field_schema, "^[0-9a-f]{64}$")
@@ -1451,9 +1509,13 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
     nonblank_fields_by_title = {
         "TTSResidentLanguagePack": ("pack_id",),
         "TTSVoiceDescriptor": ("display_name", "revision"),
+        "TTSLanguagePackDescriptor": ("pack_id", "display_name", "revision"),
+        "TTSLanguagePackVoice": ("display_name", "revision"),
         "TTSVoiceProfileDescriptor": ("display_name", "revision"),
         "TTSUpdateVoiceProfileRequest": ("expected_revision", "display_name"),
         "TTSInstallVoiceProfileRequest": ("expected_revision",),
+        "TTSExportVoiceProfileRequest": ("expected_revision",),
+        "TTSImportVoiceProfileRequest": ("operation_id", "expected_revision"),
         "TTSRemoveVoiceProfileRequest": ("expected_revision",),
         "TTSSetDefaultVoiceRequest": ("expected_revision",),
         "TTSVoiceImportStartRequest": ("expected_revision",),
@@ -1469,6 +1531,13 @@ def _annotate_tts_validator_fields(title: str, schema: dict[str, Any]) -> None:
         "TTSDeleteVoiceProfileRequest": ("expected_revision",),
         "TTSVoiceImportStartResponse": ("upload_id", "expires_at"),
         "TTSVoiceImportEndResponse": ("sealed_audio_ref", "expires_at"),
+        "TTSCloneVoiceStateBundle": (
+            "display_name",
+            "runtime_target",
+            "language_bundle",
+            "compatibility_group",
+            "artifact_revision",
+        ),
     }
     for field_name in nonblank_fields_by_title.get(title, ()):
         field_schema = properties.get(field_name)
@@ -1767,6 +1836,94 @@ def _positive_fixture(model_name: str) -> Any | None:
             "reason": None,
             "correlation_id": "corr-tts-1",
         },
+        "TTSListLanguagePacksResponse": {
+            "packs": [
+                {
+                    "pack_id": "en",
+                    "language": " EN ",
+                    "display_name": "English",
+                    "installed": True,
+                    "ready": True,
+                    "default": True,
+                    "voice_count": 1,
+                    "installed_voice_count": 1,
+                    "ready_voice_count": 1,
+                    "voices": [
+                        {
+                            "voice_id": "standard:starter_en:alba",
+                            "display_name": "Voice",
+                            "installed": True,
+                            "ready": True,
+                            "default": True,
+                            "active": False,
+                            "revision": "rev-1",
+                        }
+                    ],
+                    "revision": "pack-rev-1",
+                }
+            ],
+            "catalog_status": "available",
+            "default_voice_id": "standard:starter_en:alba",
+        },
+        "TTSCloneVoiceStateBundle": {
+            "schema_version": 1,
+            "bundle_type": "aurora-cloned-tts-voice-state",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+            "display_name": "Private voice",
+            "runtime_target": "pockettts-python",
+            "language_bundle": "english_2026-04",
+            "compatibility_group": "pockettts-base",
+            "artifact_revision": "clone-rev-a",
+            "artifact_format": "safetensors",
+            "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+            "artifact_size_bytes": 19,
+            "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+        },
+        "TTSExportVoiceProfileRequest": {
+            "operation_id": " export-1 ",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+        },
+        "TTSExportVoiceProfileResponse": {
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+            "status": "exported",
+            "revision": "voice-rev-a",
+            "bundle": {
+                "schema_version": 1,
+                "bundle_type": "aurora-cloned-tts-voice-state",
+                "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+                "display_name": "Private voice",
+                "runtime_target": "pockettts-python",
+                "language_bundle": "english_2026-04",
+                "compatibility_group": "pockettts-base",
+                "artifact_revision": "clone-rev-a",
+                "artifact_format": "safetensors",
+                "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+                "artifact_size_bytes": 19,
+                "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+            },
+        },
+        "TTSImportVoiceProfileRequest": {
+            "operation_id": " import-1 ",
+            "bundle": {
+                "schema_version": 1,
+                "bundle_type": "aurora-cloned-tts-voice-state",
+                "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+                "display_name": "Private voice",
+                "runtime_target": "pockettts-python",
+                "language_bundle": "english_2026-04",
+                "compatibility_group": "pockettts-base",
+                "artifact_revision": "clone-rev-a",
+                "artifact_format": "safetensors",
+                "artifact_sha256": "04cb73b79b6138093e91ec66abecf6c4d489054df11da06cabb020aa7c46f29e",
+                "artifact_size_bytes": 19,
+                "artifact_data_base64": "ZGVyaXZlZC1jbG9uZS1zdGF0ZQ==",
+            },
+        },
+        "TTSImportVoiceProfileResponse": {
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+            "status": "imported",
+            "revision": "voice-rev-a",
+        },
     }
     return fixtures.get(model_name)
 
@@ -1879,6 +2036,29 @@ def _negative_fixture(model_name: str) -> Any | None:
             "channels": 1,
             "duration_ms": 12.5,
         },
+        "TTSCloneVoiceStateBundle": {
+            **_positive_fixture("TTSCloneVoiceStateBundle"),
+            "artifact_sha256": "0" * 64,
+        },
+        "TTSExportVoiceProfileRequest": {
+            "operation_id": "export-standard",
+            "voice_id": "standard:starter_en:alba",
+        },
+        "TTSExportVoiceProfileResponse": {
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+            "status": "exported",
+            "revision": None,
+            "bundle": None,
+        },
+        "TTSImportVoiceProfileRequest": {
+            **_positive_fixture("TTSImportVoiceProfileRequest"),
+            "operation_id": " bad id ",
+        },
+        "TTSImportVoiceProfileResponse": {
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000",
+            "status": "imported",
+            "revision": None,
+        },
     }
     return fixtures.get(model_name)
 
@@ -1971,6 +2151,35 @@ def _negative_fixtures(model_name: str) -> list[Any]:
                     {**base, "channels": 0},
                 ]
             )
+    if model_name == "TTSListLanguagePacksResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            pack = dict(base["packs"][0])
+            voice = {
+                **pack["voices"][0],
+                "ready": False,
+                "default": True,
+                "active": False,
+            }
+            cases.append(
+                {
+                    **base,
+                    "packs": [
+                        {
+                            **pack,
+                            "ready": False,
+                            "ready_voice_count": 0,
+                            "voices": [voice],
+                        }
+                    ],
+                }
+            )
+            cases.append(
+                {
+                    **base,
+                    "stale_default_voice_id": base["default_voice_id"],
+                }
+            )
     if model_name == "AssistantStreamEvent":
         base = _positive_fixture(model_name)
         if isinstance(base, dict):
@@ -2039,6 +2248,31 @@ def _positive_fixtures(model_name: str) -> list[Any]:
                             "legacy_global_tool_ids": ["legacy-a"] * 20 + ["legacy-b"] * 20,
                         }
                     ],
+                }
+            )
+    if model_name == "TTSListLanguagePacksResponse":
+        base = _positive_fixture(model_name)
+        if isinstance(base, dict):
+            pack = dict(base["packs"][0])
+            voice = {
+                **pack["voices"][0],
+                "ready": False,
+                "default": False,
+                "active": False,
+            }
+            cases.append(
+                {
+                    **base,
+                    "packs": [
+                        {
+                            **pack,
+                            "ready": False,
+                            "default": False,
+                            "ready_voice_count": 0,
+                            "voices": [voice],
+                        }
+                    ],
+                    "stale_default_voice_id": base["default_voice_id"],
                 }
             )
     return cases

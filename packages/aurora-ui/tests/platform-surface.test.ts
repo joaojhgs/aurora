@@ -174,6 +174,7 @@ describe('Aurora surface profile regression coverage', () => {
     ['downloading', ['foreground-voice'], 'pending'],
     ['incompatible', ['foreground-voice'], 'unsupported'],
     ['over-budget', ['foreground-voice'], 'degraded'],
+    ['ready', ['foreground-voice'], 'ready'],
   ] as const)('models %s local speech without enabling unapproved local engines', (
     localSpeechPackState,
     enabledCapabilityPacks,
@@ -199,7 +200,60 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(profile.localSpeechPack.detail)).toEqual([])
   })
 
-  it('derives disabled, incompatible, and unavailable defaults from the persisted capability selection', () => {
+  it('enables local speech engines only with a ready selected download and engine evidence', () => {
+    const ready = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+    const missingEngine = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, stt: true, tts: false },
+    })
+    const absentDownload = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mesh',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      enabledCapabilityPacks: ['foreground-voice'],
+      localSpeechPackState: 'unavailable',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+
+    expect(ready.localSpeechPack).toMatchObject({
+      state: 'ready',
+      availabilityState: 'ready',
+      canRunLocalVad: true,
+      canRunLocalKws: true,
+      canRunLocalStt: true,
+      canRunLocalTts: true,
+    })
+    expect(missingEngine.localSpeechPack).toMatchObject({
+      state: 'ready',
+      canRunLocalVad: true,
+      canRunLocalKws: false,
+      canRunLocalStt: true,
+      canRunLocalTts: false,
+    })
+    expect(absentDownload.localSpeechPack).toMatchObject({
+      state: 'unavailable',
+      canRunLocalVad: false,
+      canRunLocalKws: false,
+      canRunLocalStt: false,
+      canRunLocalTts: false,
+    })
+  })
+
+  it('preserves requested speech state while withholding engines without capability evidence', () => {
     const disabled = getAuroraSurfaceProfile({
       nodeMode: 'mesh-node',
       runtimeTier: 'lightweight-ts',
@@ -217,9 +271,107 @@ describe('Aurora surface profile regression coverage', () => {
       enabledCapabilityPacks: ['foreground-voice'],
     })
 
-    expect(disabled.localSpeechPack.state).toBe('disabled')
-    expect(incompatible.localSpeechPack.state).toBe('incompatible')
+    expect(disabled.localSpeechPack.state).toBe('downloading')
+    expect(disabled.localSpeechPack.canRunLocalTts).toBe(false)
+    expect(incompatible.localSpeechPack.state).toBe('unavailable')
     expect(unavailable.localSpeechPack.state).toBe('unavailable')
+  })
+
+  it('keeps local speech engine readiness independent from node role and transport', () => {
+    const desktopRemoteConsole = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'webrtc-only',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+    const androidRemoteConsole = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'native-mobile',
+      nativePlatform: 'android',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
+      nativeVoiceAvailable: true,
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+
+    expect(desktopRemoteConsole.isRemoteConsole).toBe(true)
+    expect(desktopRemoteConsole.localSpeechPack).toMatchObject({
+      state: 'ready',
+      availabilityState: 'ready',
+      canRunLocalVad: true,
+      canRunLocalKws: true,
+      canRunLocalStt: true,
+      canRunLocalTts: true,
+    })
+    expect(androidRemoteConsole.isRemoteConsole).toBe(true)
+    expect(androidRemoteConsole.localSpeechPack.canRunLocalVad).toBe(true)
+    expect(androidRemoteConsole.localSpeechPack.canRunLocalKws).toBe(true)
+    expect(androidRemoteConsole.localSpeechPack.canRunLocalStt).toBe(true)
+    expect(androidRemoteConsole.localSpeechPack.canRunLocalTts).toBe(true)
+  })
+
+  it('uses native wake ownership only when native wake and local VAD/KWS are ready', () => {
+    const desktop = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'webrtc-only',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
+      nativeVoiceAvailable: true,
+      nativeWakewordAvailable: true,
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+    const android = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'native-mobile',
+      nativePlatform: 'android',
+      nodeMode: 'remote-console',
+      runtimeTier: 'none',
+      nativeVoiceAvailable: true,
+      nativeWakewordAvailable: true,
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+    const missingKws = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'native-mobile',
+      nativePlatform: 'android',
+      nativeVoiceAvailable: true,
+      nativeWakewordAvailable: true,
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: false, stt: true, tts: true },
+    })
+    const ios = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'native-mobile',
+      nativePlatform: 'ios',
+      nativeVoicePresent: true,
+      nativeVoiceAvailable: true,
+      nativeWakewordAvailable: true,
+      localSpeechPackState: 'ready',
+      localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    })
+
+    expect(desktop.voiceCapture).toMatchObject({
+      wakewordOwner: 'native-desktop',
+      wakewordRequiresFocus: false,
+    })
+    expect(android.voiceCapture).toMatchObject({
+      wakewordOwner: 'mobile-native',
+      wakewordRequiresFocus: false,
+    })
+    expect(missingKws.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(ios.voiceCapture).toMatchObject({
+      focusedPushToTalkOwner: 'mobile-native',
+      wakewordOwner: 'mobile-native',
+      wakewordRequiresFocus: false,
+    })
+    expect(findForbiddenProductionCopyTerms(desktop.voiceCapture.detail)).toEqual([])
+    expect(findForbiddenProductionCopyTerms(android.voiceCapture.detail)).toEqual([])
+    expect(findForbiddenProductionCopyTerms(ios.voiceCapture.detail)).toEqual([])
   })
 
   it('keeps mobile browsers on the hosted web runtime when web mode is explicit', () => {

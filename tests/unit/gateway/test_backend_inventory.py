@@ -39,7 +39,7 @@ EXPECTED_CALLABLE_METHOD_COUNTS_BY_MODULE = {
     "Orchestrator": 13,
     "Scheduler": 6,
     "STTCoordinator": 5,
-    "TTS": 19,
+    "TTS": 22,
     "Tooling": 39,
     "Transcription": 2,
     "WakeWord": 2,
@@ -76,7 +76,7 @@ def test_backend_inventory_callable_surface_matches_canonical_taxonomy():
     }
 
     assert inventory["import_errors"] == []
-    assert len(callable_methods) == 97
+    assert len(callable_methods) == 100
     assert {method["module"] for method in callable_methods} == set(MESH_CAPABLE_MODULES)
     assert Counter(method["module"] for method in callable_methods) == Counter(
         EXPECTED_CALLABLE_METHOD_COUNTS_BY_MODULE

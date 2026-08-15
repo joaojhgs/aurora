@@ -50,6 +50,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('./aurora-client', () => ({
+  AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT: 'aurora-browser-voice-packs-changed',
   auroraBrowserRequiresOnboarding: () =>
     mockedBrowserRuntime.requiresOnboarding,
   auroraBrowserRuntimeProfile: () =>

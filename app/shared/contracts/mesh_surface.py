@@ -115,6 +115,7 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
         label="Voice Profile Management",
         summary="Administer local TTS voice profiles and bounded voice imports.",
         method_ids=(
+            "TTS.ListLanguagePacks",
             "TTS.ListVoiceProfiles",
             "TTS.GetVoiceProfile",
             "TTS.UpdateVoiceProfile",
@@ -127,6 +128,8 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
             "TTS.VoiceImportAbort",
             "TTS.CreateVoiceProfile",
             "TTS.DeleteVoiceProfile",
+            "TTS.ExportVoiceProfile",
+            "TTS.ImportVoiceProfile",
         ),
     ),
     CallableFeatureContract(
@@ -314,7 +317,7 @@ _FEATURES_BY_TOPIC: dict[str, tuple[CallableFeatureContract, ...]] = {
 _FEATURE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _EXPECTED_MODULE_COUNT = 8
 _EXPECTED_FEATURE_GROUP_COUNT = 28
-_EXPECTED_CALLABLE_METHOD_COUNT = 97
+_EXPECTED_CALLABLE_METHOD_COUNT = 100
 
 
 def feature_contracts_for_module(module: str) -> tuple[CallableFeatureContract, ...]:

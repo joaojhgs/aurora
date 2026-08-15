@@ -20,6 +20,7 @@ const reportPath = resolve(readOption('--report') ?? join(packageRoot, 'reports'
 const actualHead = readGit(['rev-parse', 'HEAD'])
 const sourceCommit = readOption('--source-commit') ?? actualHead
 const blockers = []
+const reviewFindings = []
 const inputs = []
 const allowedLicenseIds = new Map([
   ['0bsd', '0BSD'],
@@ -111,17 +112,22 @@ try {
 
   const dispositionCounts = countBy(inventory, (item) => item.disposition)
   const unknownLicenses = inventory.filter((item) => ['UNKNOWN', 'UNREVIEWED'].includes(item.license.id))
-  const blockedLicenses = inventory.filter((item) => item.disposition !== 'allowed')
+  const licensesRequiringReview = inventory.filter((item) => item.disposition === 'review-required')
+  const blockedEntries = inventory.filter((item) => item.disposition === 'blocked')
   if (unknownLicenses.length > 0) {
-    blockers.push(blocker('unknown-license-metadata', `${unknownLicenses.length} inventory entries have unresolved license metadata.`, {
-      severity: 'high',
+    reviewFindings.push(reviewFinding('unknown-license-metadata', `${unknownLicenses.length} inventory entries have unresolved license metadata.`, {
       count: unknownLicenses.length,
     }))
   }
-  if (blockedLicenses.length > 0) {
-    blockers.push(blocker('blocked-license-disposition', `${blockedLicenses.length} inventory entries are blocked by static metadata.`, {
+  if (licensesRequiringReview.length > 0) {
+    reviewFindings.push(reviewFinding('license-review-required', `${licensesRequiringReview.length} inventory entries require review before public distribution.`, {
+      count: licensesRequiringReview.length,
+    }))
+  }
+  if (blockedEntries.length > 0) {
+    blockers.push(blocker('blocked-inventory-disposition', `${blockedEntries.length} inventory entries are blocked by package integrity or source failures.`, {
       severity: 'high',
-      count: blockedLicenses.length,
+      count: blockedEntries.length,
     }))
   }
 
@@ -153,6 +159,7 @@ try {
       ecosystems: countBy(inventory, (item) => item.ecosystem),
       dispositions: dispositionCounts,
     },
+    reviewFindings,
     blockers,
     inventory,
   })
@@ -205,6 +212,7 @@ try {
       ecosystems: {},
       dispositions: {},
     },
+    reviewFindings: [],
     blockers: [blocker('inventory-generation-error', message, { severity: 'critical' })],
     inventory: [],
   })
@@ -240,7 +248,7 @@ function collectPnpmDependencies() {
           sourceRef,
           hash: packageIntegrity ?? `missing-pnpm-integrity:${packageKey}`,
           license: licenseEvidence(licenseId, sourceRef, sha256(Buffer.from(raw, 'utf8'))),
-          disposition: packageIntegrity && licenseDisposition === 'allowed' ? 'allowed' : 'blocked',
+          disposition: packageIntegrity ? licenseDisposition : 'blocked',
         }))
       }
     }
@@ -371,7 +379,9 @@ function collectCargoDependencies() {
           sourceRef: safeCargoManifestPath(pkg.manifest_path),
           hash: packageChecksum ?? metadataRawHash,
           license: licenseEvidence(licenseId, 'cargo metadata package.license', metadataRawHash),
-          disposition: dispositionForLicense(licenseId),
+          disposition: source === 'cargo-registry' && !packageChecksum
+            ? 'blocked'
+            : dispositionForLicense(licenseId),
         })
       })
   }
@@ -414,7 +424,9 @@ function collectPhase4Artifacts() {
         String(license.evidence ?? 'tools/voice-runtime/phase4_manifest.json'),
         String(license.evidence_sha256 ?? inputHash(paths.phase4Manifest)),
       ),
-      disposition: license.disposition === 'allowed' && staticLicenseDisposition === 'allowed' ? 'allowed' : 'blocked',
+      disposition: license.disposition === 'allowed' && staticLicenseDisposition === 'allowed'
+        ? 'allowed'
+        : 'review-required',
       role: artifact.role ? String(artifact.role) : undefined,
     })
   })
@@ -644,7 +656,9 @@ function inventoryItem({
     sourceRef: redactPath(sourceRef),
     hash: normalizeHash(hash),
     license,
-    disposition: disposition === 'allowed' ? 'allowed' : 'blocked',
+    disposition: ['allowed', 'review-required', 'blocked'].includes(disposition)
+      ? disposition
+      : 'blocked',
   }
   if (role) base.role = role
   return base
@@ -660,7 +674,7 @@ function licenseEvidence(id, evidence, evidenceHash) {
 
 function dispositionForLicense(id) {
   const normalized = normalizeLicense(id)
-  return parseLicenseExpression(normalized)?.allowed === true ? 'allowed' : 'blocked'
+  return parseLicenseExpression(normalized)?.allowed === true ? 'allowed' : 'review-required'
 }
 
 function validateSourceCommit() {
@@ -884,6 +898,15 @@ function blocker(id, detail, extra = {}) {
     detail,
     severity: extra.severity ?? 'medium',
     ...Object.fromEntries(Object.entries(extra).filter(([key]) => key !== 'severity')),
+  }
+}
+
+function reviewFinding(id, detail, extra = {}) {
+  return {
+    id,
+    detail,
+    severity: 'review-required',
+    ...extra,
   }
 }
 

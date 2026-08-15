@@ -52,11 +52,26 @@ function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerRe
       return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
     case 'finish_turn':
       return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
+    case 'synthesize_tts':
+      return { type: 'tts_result', generation: command.generation, audio: synthesizedAudio(command.generation, [0, 1024, -1024]) }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':
       return { type: 'ack', sessionId: '', generation: command.generation, sequence: null }
   }
+}
+
+export function synthesizedAudio(generation: number, samples: readonly number[]) {
+  const pcm = Int16Array.from(samples)
+  return Object.freeze({
+    generation,
+    sampleRateHz: 16_000,
+    channels: 1 as const,
+    sampleCount: pcm.length,
+    durationMs: Math.ceil((pcm.length / 16_000) * 1_000),
+    pcm,
+    redacted: true as const
+  })
 }
 
 export function capturedAudio(sessionId: string, generation: number, samples: readonly number[]): AuroraCapturedAudio {

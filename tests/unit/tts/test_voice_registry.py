@@ -460,6 +460,74 @@ async def test_clone_profiles_are_private_by_default_and_do_not_retain_source(
 
 
 @pytest.mark.asyncio
+async def test_clone_metadata_update_persists_after_restart(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Original",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+
+    updated = await registry.update_voice_metadata(
+        clone.voice_id,
+        display_name="Renamed",
+        visibility="allowed_peers",
+        allowed_peer_ids=("peer-b", "peer-a"),
+        metadata_revision="voice-rev-2",
+    )
+
+    assert updated is not None
+    entry, changed = updated
+    assert changed is True
+    assert entry.display_name == "Renamed"
+    assert entry.metadata_revision == "voice-rev-2"
+    assert entry.visibility == "allowed_peers"
+    assert entry.allowed_peer_ids == ("peer-a", "peer-b")
+
+    restarted = VoiceRegistry(registry_root)
+    inventory = await restarted.inventory()
+    assert inventory[0].display_name == "Renamed"
+    assert inventory[0].metadata_revision == "voice-rev-2"
+    assert inventory[0].allowed_peer_ids == ("peer-a", "peer-b")
+    state_json = (registry_root / "voice_registry.json").read_text(encoding="utf-8")
+    assert "speaker.embedding" not in state_json
+
+
+@pytest.mark.asyncio
+async def test_disabled_clone_is_listed_but_not_selectable(tmp_path: Path) -> None:
+    registry_root = tmp_path / "registry"
+    registry = VoiceRegistry(registry_root)
+    clone = await registry.create_clone_profile(
+        display_name="Disabled",
+        runtime_target="pockettts-python",
+        language_bundle="en-us-compact",
+        compatibility_group="pockettts-en-compact-v1",
+        artifact_revision="clone-rev-a",
+        artifact_bytes=_safetensors_bytes(),
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+
+    updated = await registry.update_voice_metadata(
+        clone.voice_id,
+        enabled=False,
+        metadata_revision="voice-rev-2",
+    )
+
+    assert updated is not None
+    assert updated[0].enabled is False
+    assert (await registry.inventory())[0].enabled is False
+    assert await registry.catalog(identity, include_private=True) == ()
+    with pytest.raises(VoiceSelectionError):
+        await registry.select_voice(clone.voice_id, identity)
+
+
+@pytest.mark.asyncio
 async def test_clone_source_retention_is_rejected_until_encrypted_storage_exists(
     tmp_path: Path,
 ) -> None:
@@ -615,6 +683,101 @@ async def test_clone_export_rejects_tamper_symlink_and_deleted_profiles(
     with pytest.raises(VoiceSelectionError):
         await VoiceRegistry(registry_root / "deleted").export_clone_voice_state(
             deleted.voice_id, identity
+        )
+
+
+@pytest.mark.asyncio
+async def test_clone_import_preserves_id_is_idempotent_and_exports_no_paths(
+    tmp_path: Path,
+) -> None:
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    source_registry = VoiceRegistry(tmp_path / "source")
+    data = _multi_tensor_safetensors_bytes()
+    clone = await source_registry.create_clone_profile(
+        display_name="Transferable",
+        runtime_target=identity.runtime_target,
+        language_bundle=identity.language_bundle,
+        compatibility_group=identity.compatibility_group,
+        artifact_revision="clone-rev-transfer",
+        artifact_bytes=data,
+        clone_uuid=uuid.UUID("12345678-1234-4234-9234-123456789abc"),
+    )
+
+    exported = await source_registry.export_clone_voice_state(clone.voice_id, identity)
+
+    assert not hasattr(exported, "relative_ref")
+    assert not hasattr(exported, "source_audio")
+    assert exported.artifact_bytes == data
+
+    target_registry = VoiceRegistry(tmp_path / "target")
+    imported, created = await target_registry.import_clone_voice_state(
+        exported,
+        display_name="Transferable",
+    )
+    repeated, repeated_created = await target_registry.import_clone_voice_state(
+        exported,
+        display_name="Changed label is ignored for existing state",
+    )
+
+    assert created is True
+    assert imported.voice_id == clone.voice_id
+    assert imported.display_name == "Transferable"
+    assert imported.artifact_revision == "clone-rev-transfer"
+    assert repeated_created is False
+    assert repeated.voice_id == clone.voice_id
+    assert repeated.display_name == "Transferable"
+    selected = await target_registry.export_clone_voice_state(clone.voice_id, identity)
+    assert selected.artifact_bytes == data
+
+
+@pytest.mark.asyncio
+async def test_clone_import_rejects_tamper_oversize_cross_compat_and_conflict(
+    tmp_path: Path,
+) -> None:
+    identity = VoiceBaseIdentity("pockettts-python", "en-us-compact", "pockettts-en-compact-v1")
+    data = _safetensors_bytes()
+    exported = ExportedCloneVoiceState(
+        voice_id="clone:12345678-1234-4234-9234-123456789abc",
+        runtime_target=identity.runtime_target,
+        language_bundle=identity.language_bundle,
+        compatibility_group=identity.compatibility_group,
+        artifact_revision="clone-rev-a",
+        sha256=_sha256(data),
+        size_bytes=len(data),
+        format="safetensors",
+        artifact_bytes=data,
+    )
+
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(tmp_path / "bad-hash").import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "sha256": "0" * 64},
+            ),
+            display_name="Bad",
+        )
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(
+            tmp_path / "bad-size", max_clone_artifact_bytes=8
+        ).import_clone_voice_state(
+            exported,
+            display_name="Large",
+        )
+    with pytest.raises(VoiceArtifactError):
+        await VoiceRegistry(tmp_path / "bad-compat").import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "compatibility_group": "../escape"},
+            ),
+            display_name="Bad",
+        )
+
+    conflict_registry = VoiceRegistry(tmp_path / "conflict")
+    await conflict_registry.import_clone_voice_state(exported, display_name="First")
+    with pytest.raises(VoiceArtifactError, match="conflicts"):
+        await conflict_registry.import_clone_voice_state(
+            ExportedCloneVoiceState(
+                **{**exported.__dict__, "artifact_revision": "clone-rev-b"},
+            ),
+            display_name="Second",
         )
 
 

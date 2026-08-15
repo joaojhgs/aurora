@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover - platform dependent
 
 LogicalVoiceKind = Literal["standard", "clone"]
 ProfileKind = Literal["standard", "clone"]
-ProfileVisibility = Literal["public", "private"]
+ProfileVisibility = Literal["public", "private", "allowed_peers"]
 ReadyState = Literal["ready", "installing", "failed", "deleted"]
 LicenseRedistribution = Literal["approved"]
 VoiceStateArtifactFormat = Literal["safetensors"]
@@ -130,10 +130,13 @@ class VoiceProfileInventoryEntry:
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
+    metadata_revision: str
     artifact_refs: tuple[str, ...]
+    enabled: bool
     source_retained: bool
     license_name: str | None
     attribution: str | None
+    allowed_peer_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -293,10 +296,13 @@ class _PersistedProfile(BaseModel):
     language_bundle: str
     compatibility_group: str
     artifact_revision: str
+    metadata_revision: str | None = None
     artifacts: tuple[_PersistedArtifact, ...]
+    enabled: bool = True
     source_retained: bool = False
     license_name: str | None = None
     attribution: str | None = None
+    allowed_peer_ids: tuple[str, ...] = ()
 
     @property
     def artifact_refs(self) -> tuple[str, ...]:
@@ -461,6 +467,29 @@ class VoiceRegistry:
         async with self._lock:
             return await asyncio.to_thread(self._with_fs_lock, self._inventory_locked)
 
+    async def update_voice_metadata(
+        self,
+        voice_id: str,
+        *,
+        display_name: str | None = None,
+        enabled: bool | None = None,
+        visibility: ProfileVisibility | None = None,
+        allowed_peer_ids: tuple[str, ...] | None = None,
+        metadata_revision: str,
+    ) -> tuple[VoiceProfileInventoryEntry, bool] | None:
+        """Atomically update durable redacted profile metadata for a logical voice."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._with_fs_lock,
+                self._update_voice_metadata_locked,
+                voice_id,
+                display_name,
+                enabled,
+                visibility,
+                allowed_peer_ids,
+                metadata_revision,
+            )
+
     async def select_voice(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
     ) -> VoiceProfileInventoryEntry:
@@ -495,6 +524,23 @@ class VoiceRegistry:
                 self._export_clone_voice_state_locked,
                 voice_id,
                 resident_base_identity,
+            )
+
+    async def import_clone_voice_state(
+        self,
+        exported: ExportedCloneVoiceState,
+        *,
+        display_name: str,
+        visibility: ProfileVisibility = "private",
+    ) -> tuple[VoiceProfileInventoryEntry, bool]:
+        """Atomically import a verified clone-state payload without overwriting profiles."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._with_fs_lock,
+                self._import_clone_voice_state_locked,
+                exported,
+                display_name,
+                visibility,
             )
 
     async def delete_voice(self, voice_id: str) -> None:
@@ -715,7 +761,11 @@ class VoiceRegistry:
         state = self._read_state()
         entries: list[VoiceCatalogEntry] = []
         for profile in state.profiles.values():
+            if not profile.enabled:
+                continue
             if profile.visibility == "private" and not include_private:
+                continue
+            if profile.visibility == "allowed_peers" and not include_private:
                 continue
             if resident_base_identity is not None and not _profile_matches(
                 profile, resident_base_identity
@@ -741,6 +791,66 @@ class VoiceRegistry:
             )
         )
 
+    def _update_voice_metadata_locked(
+        self,
+        voice_id: str,
+        display_name: str | None,
+        enabled: bool | None,
+        visibility: ProfileVisibility | None,
+        allowed_peer_ids: tuple[str, ...] | None,
+        metadata_revision: str,
+    ) -> tuple[VoiceProfileInventoryEntry, bool] | None:
+        validate_logical_voice_id(voice_id)
+        if display_name is not None and (len(display_name.strip()) < 1 or len(display_name) > 96):
+            raise VoiceArtifactError("invalid voice display name")
+        if visibility is not None and visibility not in ("public", "private", "allowed_peers"):
+            raise VoiceArtifactError("invalid voice visibility")
+        if visibility == "private" and allowed_peer_ids:
+            raise VoiceArtifactError("private voice cannot expose allowed peers")
+        for peer_id in allowed_peer_ids or ():
+            if not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 256:
+                raise VoiceArtifactError("invalid voice peer id")
+        if not _COMPONENT_RE.fullmatch(metadata_revision):
+            raise VoiceArtifactError("invalid voice metadata revision")
+
+        state = self._read_state()
+        updated_profiles = dict(state.profiles)
+        touched: list[_PersistedProfile] = []
+        changed = False
+        for key, profile in state.profiles.items():
+            if profile.voice_id != voice_id:
+                continue
+            next_visibility = visibility or profile.visibility
+            next_allowed_peer_ids = (
+                tuple(sorted(set(allowed_peer_ids)))
+                if allowed_peer_ids is not None
+                else profile.allowed_peer_ids
+            )
+            if next_visibility == "private":
+                next_allowed_peer_ids = ()
+            patch: dict[str, object] = {
+                "display_name": display_name.strip()
+                if display_name is not None
+                else profile.display_name,
+                "enabled": enabled if enabled is not None else profile.enabled,
+                "visibility": next_visibility,
+                "allowed_peer_ids": next_allowed_peer_ids,
+            }
+            profile_changed = any(getattr(profile, name) != value for name, value in patch.items())
+            if profile_changed:
+                patch["metadata_revision"] = metadata_revision
+                changed = True
+            updated = profile.model_copy(update=patch)
+            updated_profiles[key] = updated
+            touched.append(updated)
+
+        if not touched:
+            return None
+        if changed:
+            self._write_state(state.model_copy(update={"profiles": updated_profiles}))
+        selected = sorted(touched, key=lambda profile: profile.profile_key)[0]
+        return _inventory_entry(selected), changed
+
     def _select_voice_locked(
         self, voice_id: str, resident_base_identity: VoiceBaseIdentity
     ) -> VoiceProfileInventoryEntry:
@@ -750,6 +860,7 @@ class VoiceRegistry:
             for profile in self._read_state().profiles.values()
             if profile.voice_id == voice_id
             and profile.ready_state == "ready"
+            and profile.enabled
             and _profile_matches(profile, resident_base_identity)
         ]
         if not matches:
@@ -787,6 +898,85 @@ class VoiceRegistry:
             artifact_bytes=payload,
         )
 
+    def _import_clone_voice_state_locked(
+        self,
+        exported: ExportedCloneVoiceState,
+        display_name: str,
+        visibility: ProfileVisibility,
+    ) -> tuple[VoiceProfileInventoryEntry, bool]:
+        validate_logical_voice_id(exported.voice_id)
+        if not exported.voice_id.startswith("clone:"):
+            raise VoiceArtifactError("imported voice state must be cloned")
+        if exported.format != "safetensors":
+            raise VoiceArtifactError("imported voice state format is invalid")
+        if not exported.artifact_bytes:
+            raise VoiceArtifactError("imported voice state is empty")
+        if len(exported.artifact_bytes) > self._max_clone_artifact_bytes:
+            raise VoiceArtifactError("imported voice state exceeds configured size limit")
+        if len(exported.artifact_bytes) != exported.size_bytes:
+            raise VoiceArtifactError("imported voice state size mismatch")
+        if hashlib.sha256(exported.artifact_bytes).hexdigest() != exported.sha256:
+            raise VoiceArtifactError("imported voice state hash mismatch")
+        _validate_supported_voice_state_runtime(exported.runtime_target)
+        for value in (
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+        ):
+            if not _COMPONENT_RE.fullmatch(value):
+                raise VoiceArtifactError("invalid imported voice compatibility component")
+        if visibility not in ("private", "allowed_peers"):
+            raise VoiceArtifactError("invalid imported voice visibility")
+
+        clone_uuid = uuid.UUID(exported.voice_id.removeprefix("clone:"))
+        profile_key = _profile_key(
+            exported.voice_id,
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+        )
+        state = self._read_state()
+        existing = state.profiles.get(profile_key)
+        if existing is not None:
+            if (
+                existing.kind != "clone"
+                or existing.voice_id != exported.voice_id
+                or existing.runtime_target != exported.runtime_target
+                or existing.language_bundle != exported.language_bundle
+                or existing.compatibility_group != exported.compatibility_group
+                or existing.artifact_revision != exported.artifact_revision
+                or len(existing.artifacts) != 1
+                or existing.artifacts[0].format != exported.format
+                or existing.artifacts[0].size_bytes != exported.size_bytes
+                or existing.artifacts[0].sha256 != exported.sha256
+            ):
+                raise VoiceArtifactError("imported voice conflicts with existing profile")
+            handle = self._open_profile_voice_state_artifact(existing)
+            os.close(handle.fd)
+            return _inventory_entry(existing), False
+        if profile_key in state.deletions:
+            raise VoiceArtifactError("imported voice is pending deletion")
+        if any(
+            profile.voice_id == exported.voice_id
+            for key, profile in state.profiles.items()
+            if key != profile_key
+        ):
+            raise VoiceArtifactError("imported voice id conflicts with existing profile")
+        created = self._create_clone_profile_locked(
+            display_name,
+            exported.runtime_target,
+            exported.language_bundle,
+            exported.compatibility_group,
+            exported.artifact_revision,
+            exported.artifact_bytes,
+            False,
+            visibility,
+            clone_uuid,
+        )
+        return created, True
+
     def _verified_voice_state_artifact_locked(
         self,
         voice_id: str,
@@ -808,6 +998,7 @@ class VoiceRegistry:
             for profile in self._read_state().profiles.values()
             if profile.voice_id == voice_id
             and profile.ready_state == "ready"
+            and profile.enabled
             and _profile_matches(profile, resident_base_identity)
         ]
         if not matches:
@@ -943,6 +1134,17 @@ class VoiceRegistry:
             ):
                 if not _COMPONENT_RE.fullmatch(value):
                     raise VoiceArtifactError("registry state profile component is invalid")
+            if profile.metadata_revision is not None and not _COMPONENT_RE.fullmatch(
+                profile.metadata_revision
+            ):
+                raise VoiceArtifactError("registry state metadata revision is invalid")
+            if not isinstance(profile.enabled, bool):
+                raise VoiceArtifactError("registry state profile enabled flag is invalid")
+            if profile.visibility == "private" and profile.allowed_peer_ids:
+                raise VoiceArtifactError("private registry profile cannot expose peers")
+            for peer_id in profile.allowed_peer_ids:
+                if not isinstance(peer_id, str) or not peer_id.strip() or len(peer_id) > 256:
+                    raise VoiceArtifactError("registry state peer id is invalid")
             _validate_supported_voice_state_runtime(profile.runtime_target)
             if not profile.artifacts:
                 raise VoiceArtifactError("registry state profile has no artifacts")
@@ -1503,10 +1705,13 @@ def _inventory_entry(profile: _PersistedProfile) -> VoiceProfileInventoryEntry:
         language_bundle=profile.language_bundle,
         compatibility_group=profile.compatibility_group,
         artifact_revision=profile.artifact_revision,
+        metadata_revision=profile.metadata_revision or profile.artifact_revision,
         artifact_refs=profile.artifact_refs,
+        enabled=profile.enabled,
         source_retained=profile.source_retained,
         license_name=profile.license_name,
         attribution=profile.attribution,
+        allowed_peer_ids=profile.allowed_peer_ids,
     )
 
 

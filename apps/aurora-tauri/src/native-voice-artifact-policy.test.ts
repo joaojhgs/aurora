@@ -2,7 +2,15 @@
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import { crc32, deflateRawSync } from 'node:zlib'
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const script = join(packageRoot, 'scripts', 'assert-native-voice-artifact-policy.mjs')
+const appImageNormalizer = join(packageRoot, 'scripts', 'normalize-appimage-bundle.mjs')
 const wrapper = join(packageRoot, 'scripts', 'verify-desktop-client-bundle.mjs')
 const prepareClient = join(packageRoot, 'scripts', 'prepare-client-bundle.mjs')
 
@@ -95,6 +104,21 @@ describe('native voice desktop artifact policy', () => {
     expect(report.forbiddenMatches).toEqual([])
   })
 
+  it('allows browser speech engine code while keeping model weights out of release artifacts', () => {
+    const context = createContext()
+    writeArtifact(context, 'assets/sherpa-onnx-wasm-main-vad-asr.js', 'export const createRuntime = () => ({})\n')
+    writeArtifact(context, 'assets/sherpa-onnx-wasm-main-vad-asr.wasm', 'wasm engine bytes\n')
+    writeArtifact(context, 'assets/aurora-speech-worker.js', 'self.onmessage = () => undefined\n')
+    writeArtifact(context, 'assets/aurora-audio-worklet.js', 'registerProcessor("aurora-audio", class {})\n')
+    writeArtifact(context, 'assets/speech-model-catalog.json', '{"entries":[]}\n')
+
+    const result = runPolicy(context)
+
+    expect(result.status, result.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.forbiddenMatches).toEqual([])
+  })
+
   it('rejects bundled Python runtimes and sidecar resources', () => {
     const context = createContext()
     writeArtifact(context, 'usr/bin/aurora-sidecar-x86_64-unknown-linux-gnu', '#!/bin/sh\n')
@@ -110,37 +134,39 @@ describe('native voice desktop artifact policy', () => {
     expect(result.stderr).toContain('python-source')
   })
 
-  it('rejects bundled speech model assets and browser WASM voice runtimes', () => {
+  it('rejects bundled speech model and voice assets', () => {
     const context = createContext()
     writeArtifact(context, 'usr/lib/libaurora_native_voice.so', 'rust native voice library\n')
     writeArtifact(context, 'resources/models/stt/english.onnx', 'model bytes\n')
-    writeArtifact(context, 'resources/voice-worker.wasm', 'wasm bytes\n')
-    writeArtifact(context, 'resources/assets/voice.worker.js', 'const label = "voice-worker"\n')
+    writeArtifact(context, 'resources/models/tts/english-voice.wav', 'voice sample bytes\n')
+    writeArtifact(context, 'resources/models/stt/english-model.data', 'packed model bytes\n')
+    writeArtifact(context, 'resources/models/stt/english-tokens.txt', 'token list\n')
 
     const result = runPolicy(context)
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('speech-model-asset')
-    expect(result.stderr).toContain('browser-wasm-voice-runtime')
-    expect(result.stderr).toContain('browser-wasm-voice-text')
+    expect(result.stderr).toContain('speech-model-support-file')
   })
 
-  it('rejects secrets and unapproved non-commercial voice packs', () => {
+  it('allows license/catalog metadata while still rejecting secrets', () => {
     const context = createContext()
-    writeArtifact(context, '.env', 'OPENAI_API_KEY=sk-123456789012345678901234\n')
     writeArtifact(
       context,
-      'resources/packs/pockettts/LICENSE.txt',
-      'PocketTTS Raven pack. Creative Commons Attribution-NonCommercial.\n',
+      'assets/voice-catalog.json',
+      '{"id":"pockettts-example","license":"CC-BY-NC","download":"https://upstream.invalid/voice"}\n',
     )
 
-    const result = runPolicy(context)
+    const allowed = runPolicy(context)
 
-    expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('secret-file')
-    expect(result.stderr).toContain('api-secret-text')
-    expect(result.stderr).toContain('unapproved-pack')
-    expect(result.stderr).toContain('unapproved-pack-text')
+    expect(allowed.status, allowed.stderr).toBe(0)
+
+    writeArtifact(context, '.env', 'OPENAI_API_KEY=sk-123456789012345678901234\n')
+    const rejected = runPolicy(context)
+
+    expect(rejected.status).not.toBe(0)
+    expect(rejected.stderr).toContain('secret-file')
+    expect(rejected.stderr).toContain('api-secret-text')
   })
 
   it('scans zip-style app archives deterministically', () => {
@@ -159,7 +185,6 @@ describe('native voice desktop artifact policy', () => {
     expect(first.status).not.toBe(0)
     expect(second.status).not.toBe(0)
     expect(first.stderr).toContain('speech-model-asset')
-    expect(first.stderr).toContain('unapproved-pack')
     expect(firstReport).toBe(secondReport)
     const report = JSON.parse(firstReport)
     expect(report.checkedArchives).toBe(1)
@@ -196,6 +221,49 @@ describe('native voice desktop artifact policy', () => {
     const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
     expect(report.checkedSymlinks).toBe(1)
     expect(report.forbiddenMatches).toEqual([])
+  })
+
+  it('rejects AppImage symlinks that only resolve through the original build directory', () => {
+    const context = createContext()
+    const externalIcon = join(context.artifactRoot, 'Aurora.png')
+    const image = join(context.artifactRoot, 'Aurora.AppImage')
+    writeArtifact(context, 'Aurora.png', 'icon bytes\n')
+    writeArtifact(
+      context,
+      'Aurora.AppImage',
+      `#!/usr/bin/env node
+const { mkdirSync, symlinkSync, writeFileSync } = require('node:fs')
+const { join } = require('node:path')
+const root = join(process.cwd(), 'squashfs-root')
+mkdirSync(root, { recursive: true })
+writeFileSync(join(root, 'Aurora.png'), 'packaged icon\\n')
+symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
+`,
+    )
+    chmodSync(image, 0o755)
+
+    const result = runPolicy(context)
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('symlink-unsupported')
+    expect(result.stderr).toContain('appimage:Aurora.AppImage:.DirIcon')
+  })
+
+  it('normalizes an absolute AppImage directory icon to a packaged relative link', () => {
+    const context = createContext()
+    const appDir = join(context.root, 'Aurora.AppDir')
+    const icon = join(appDir, 'Aurora.png')
+    mkdirSync(appDir, { recursive: true })
+    writeFileSync(icon, 'icon bytes\n')
+    symlinkSync(icon, join(appDir, '.DirIcon'))
+
+    const result = spawnSync(process.execPath, [appImageNormalizer, '--appdir', appDir], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(readlinkSync(join(appDir, '.DirIcon'))).toBe('Aurora.png')
   })
 
   it('rejects secrets inside zip entry content', () => {
@@ -344,9 +412,30 @@ describe('native voice desktop artifact policy', () => {
     expect(packageJson.scripts['verify:bundle:desktop-client']).toBe(
       'node ./scripts/verify-desktop-client-bundle.mjs',
     )
+    expect(packageJson.scripts['normalize:bundle:appimage']).toBe(
+      'node ./scripts/normalize-appimage-bundle.mjs',
+    )
+    expect(packageJson.scripts['build:bundle:desktop-client']).toContain(
+      'pnpm normalize:bundle:appimage',
+    )
     expect(packageJson.scripts['build:bundle:desktop-client']).toContain(
       'pnpm verify:bundle:desktop-client',
     )
+    for (const script of [
+      'build:bundle:desktop-local-minimal',
+      'build:bundle:local-cpu',
+      'build:bundle:local-cuda',
+      'build:bundle:local-rocm',
+      'build:bundle:local-metal',
+      'build:bundle:local-vulkan',
+      'build:bundle:local-sycl',
+      'build:bundle:local-rpc',
+      'build:bundle:full',
+    ]) {
+      expect(packageJson.scripts[script], script).toContain(
+        'pnpm normalize:bundle:appimage',
+      )
+    }
     expect(packageJson.scripts['build:bundle:linux-rpm:desktop-client']).toContain(
       'pnpm verify:bundle:desktop-client',
     )

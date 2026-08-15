@@ -20,11 +20,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.FileInputStream
 import android.graphics.Bitmap
-import java.net.HttpURLConnection
-import java.net.InetAddress
-import java.net.URI
-import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.InetAddress
+import java.net.UnknownHostException
 import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.JsPromptResult
@@ -56,9 +56,9 @@ import app.tauri.plugin.PluginManager
 import org.json.JSONArray
 import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONObject
+import java.util.Locale
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.Mac
@@ -84,13 +84,14 @@ private const val VOICE_PACK_CATALOG_KEY = "catalog"
 private const val VOICE_PACK_ACTIVE_ID_KEY = "active_voice_pack_id"
 private const val VOICE_PACK_INSTALLED_PREFIX = "installed."
 private const val VOICE_PACK_CACHE_DIR = "aurora_voice_packs"
-private const val VOICE_PACK_SHA256_HEX_REGEX = "[0-9a-f]{64}"
-private const val VOICE_PACK_SHA256_HEX_LENGTH = 64
-private const val VOICE_PACK_MIN_BYTES = 1L
-private const val VOICE_PACK_MAX_BYTES = 4L * 1024 * 1024 * 1024
-private const val VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT = 5
-private const val VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS = 12_000
+private const val VOICE_PACK_SHA256_BYTES = 32
+private const val VOICE_PACK_SHA256_HEX_LENGTH = VOICE_PACK_SHA256_BYTES * 2
+private const val VOICE_PACK_SHA256_HEX_REGEX = "^[0-9a-f]{${VOICE_PACK_SHA256_HEX_LENGTH}}$"
+private const val VOICE_PACK_MIN_BYTES = 4L * 1024L
+private const val VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS = 8_000
 private const val VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS = 20_000
+private const val VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT = 3
+private const val VOICE_PACK_LOCK_STALE_AGE_MS = 10L * 60L * 1000L
 private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
 private const val INBOUND_VERIFIER_KEY_PREFIX = "aurora.peer-host.inbound-verifier.v1"
 private const val INBOUND_VERIFIER_STORAGE_PREFIX = "aurora.mesh.inbound-verifier."
@@ -113,18 +114,24 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private val pendingMicRequests = mutableSetOf<PermissionRequest>()
     private var microphonePermissionRequestInFlight: Boolean = false
     private val voicePackDownloadJobs: ConcurrentHashMap<String, VoicePackDownloadState> = ConcurrentHashMap()
-    private val voicePackOperationLocks: ConcurrentHashMap<String, Any> = ConcurrentHashMap()
-    private val packCatalogFileNameRegex = Regex("[A-Za-z0-9._-]+")
-    private val voicePackTaskTokens = setOf("tts")
-
+    private val voicePackJobsByPack: ConcurrentHashMap<String, String> = ConcurrentHashMap()
+    private val voicePackLocks: ConcurrentHashMap<String, Any> = ConcurrentHashMap()
+    private val packCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
     private data class VoicePackDownloadState(
-        var status: String = "queued",
-        var packId: String = "",
-        var totalBytes: Long = -1L,
-        var downloadedBytes: Long = 0L,
-        var error: String? = null,
-        var completedAtMs: Long = 0L,
+        val status: String = "queued",
+        val packId: String = "",
+        val totalBytes: Long = -1L,
+        val downloadedBytes: Long = 0L,
+        val error: String? = null,
+        val completedAtMs: Long = 0L,
     )
+
+    private fun updateVoicePackDownloadState(
+        jobId: String,
+        update: (VoicePackDownloadState) -> VoicePackDownloadState,
+    ) {
+        voicePackDownloadJobs.computeIfPresent(jobId) { _, current -> update(current) }
+    }
 
     private data class VoicePackCatalogEntry(
         val packId: String,
@@ -132,6 +139,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val uri: String,
         val provider: String,
         val language: String,
+        val sha256: String,
+        val sizeBytes: Long,
         val tasks: List<String>,
         val engineRuntimeRevision: String,
         val supportedOperatingSystems: List<String>,
@@ -139,16 +148,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val license: String,
         val attributionRequired: Boolean,
         val attributionText: String,
-        val sha256: String,
-        val sizeBytes: Long,
+        val modelFamily: String,
+        val requiresReferenceAudio: Boolean,
     )
 
     private enum class VoicePackDownloadResult {
         SUCCESS,
         BAD_HASH,
         INVALID_INPUT,
-        REDIRECT_DENIED,
         SIZE_MISMATCH,
+        REDIRECT_DENIED,
         CONNECT_TIMEOUT,
         READ_TIMEOUT,
         WRITE_FAILED,
@@ -535,19 +544,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun startVoiceForegroundService(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
+        AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
         val status = voiceForegroundServiceStatusObject()
-        if (args.backgroundSession) {
-            val backgroundAvailable = status.getBoolean("backgroundRuntimeReady")
-            if (!backgroundAvailable) {
-                val ret = JSObject()
-                ret.put("started", false)
-                ret.put("status", status)
-                ret.put("reason", "background_voice_unavailable")
-                invoke.resolve(ret)
-                return
-            }
-        }
-        if (args.backgroundSession && !backgroundSessionAllowed()) {
+        if (args.backgroundSession && !status.getBoolean("backgroundStartable")) {
             val ret = JSObject()
             ret.put("started", false)
             ret.put("status", status)
@@ -563,8 +562,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.resolve(ret)
             return
         }
-
-        AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
 
         val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
             if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND
@@ -626,14 +623,21 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("pack_not_found")
             return
         }
-        if (!isPackDownloadReady(entry)) {
-            invoke.reject("pack_not_ready")
+        val task = requestedPackTask(entry, args.task)
+        if (task == null) {
+            invoke.reject("pack_not_supported")
             return
         }
         val packId = entry.packId
-        val existing = isPackDownloaded(packId, entry.sha256)
+        val existing = isPackInstalledForRuntime(entry)
         if (existing && !args.forceDownload) {
-            if (args.activate) setActivePack(packId)
+            if (args.activate) {
+                if (task == AuroraSpeechPackTask.TTS && ttsReferenceRequired(entry) && !storeTtsReferenceSelection(args)) {
+                    invoke.reject("tts_reference_required")
+                    return
+                }
+                setActivePack(entry, task)
+            }
             val ret = JSObject()
             ret.put("started", false)
             ret.put("packId", packId)
@@ -644,71 +648,112 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
 
-        val jobId = "voice_pack_${System.currentTimeMillis()}_${packId}"
-        val state = VoicePackDownloadState(status = "queued", packId = packId)
-        voicePackDownloadJobs[jobId] = state
+        if (!isPackDownloadReady(entry)) {
+            invoke.reject("pack_not_supported")
+            return
+        }
 
-        val lock = voicePackLock(packId)
+        val previous = voicePackJobsByPack[packId]
+        if (previous != null) {
+            val previousState = voicePackDownloadJobs[previous]
+            if (previousState != null && (previousState.status == "queued" || previousState.status == "started")) {
+                val ret = JSObject()
+                ret.put("started", false)
+                ret.put("packId", packId)
+                ret.put("jobId", previous)
+                ret.put("status", voicePackCatalogStatusObject())
+                ret.put("reason", "pack_operation_in_progress")
+                ret.put("installed", isPackInstalledForRuntime(entry))
+                invoke.resolve(ret)
+                return
+            }
+        }
+
+        val jobId = "voice_pack_${System.currentTimeMillis()}_${packId}"
+        voicePackDownloadJobs[jobId] = VoicePackDownloadState(
+            status = "queued",
+            packId = packId,
+        )
+        voicePackJobsByPack[packId] = jobId
+
         kotlin.concurrent.thread(start = true) {
-            synchronized(lock) {
-                cleanStalePackArtifacts(packId)
-                state.status = "started"
-                try {
-                    val result = downloadPackToCache(entry.uri, packId, entry.sha256, entry.sizeBytes)
-                    when (result.first) {
+            try {
+                val lock = voicePackLock(packId)
+                synchronized(lock) {
+                    updateVoicePackDownloadState(jobId) { current -> current.copy(status = "started") }
+                    val result = installPackForRuntime(entry, task)
+                    val terminalState = when (result) {
                         VoicePackDownloadResult.SUCCESS -> {
-                            state.status = "completed"
-                            state.downloadedBytes = result.second
-                            state.totalBytes = result.second
-                            state.error = null
-                            if (args.activate) setActivePack(packId)
-                        }
-                        VoicePackDownloadResult.BAD_HASH -> {
-                            state.status = "failed"
-                            state.error = "sha256_mismatch"
-                        }
-                        VoicePackDownloadResult.WRITE_FAILED -> {
-                            state.status = "failed"
-                            state.error = "download_failed"
-                        }
-                        VoicePackDownloadResult.INVALID_INPUT -> {
-                            state.status = "failed"
-                            state.error = "invalid_catalog"
-                        }
-                        VoicePackDownloadResult.REDIRECT_DENIED -> {
-                            state.status = "failed"
-                            state.error = "redirect_denied"
-                        }
-                        VoicePackDownloadResult.SIZE_MISMATCH -> {
-                            state.status = "failed"
-                            state.error = "size_mismatch"
-                        }
-                        VoicePackDownloadResult.CONNECT_TIMEOUT -> {
-                            state.status = "failed"
-                            state.error = "connect_timeout"
-                        }
-                        VoicePackDownloadResult.READ_TIMEOUT -> {
-                            state.status = "failed"
-                            state.error = "read_timeout"
-                        }
-                    }
-                } catch (_: Exception) {
-                    state.status = "failed"
-                    state.error = "download_failed"
-                } finally {
-                    if (state.status == "failed" && state.totalBytes <= 0) {
-                        state.totalBytes = entry.sizeBytes
-                    }
-                    state.completedAtMs = currentUnixMs()
-                    if (state.status == "completed" && !args.activate) {
-                        val active = activePackId()
-                        if (active == null || !isPackDownloaded(active, null)) {
-                            if (isPackCompatibleAndReady(packId = packId, activeRouteRequired = false)) {
-                                setActivePack(packId)
+                            if (args.activate) {
+                                if (task == AuroraSpeechPackTask.TTS && ttsReferenceRequired(entry) && !storeTtsReferenceSelection(args)) {
+                                    VoicePackDownloadState(
+                                        status = "failed",
+                                        packId = packId,
+                                        totalBytes = entry.sizeBytes,
+                                        error = "tts_reference_required",
+                                    )
+                                } else {
+                                    setActivePack(entry, task)
+                                    VoicePackDownloadState(
+                                        status = "completed",
+                                        packId = packId,
+                                        downloadedBytes = entry.sizeBytes,
+                                        totalBytes = entry.sizeBytes,
+                                    )
+                                }
+                            } else {
+                                VoicePackDownloadState(
+                                    status = "completed",
+                                    packId = packId,
+                                    downloadedBytes = entry.sizeBytes,
+                                    totalBytes = entry.sizeBytes,
+                                )
                             }
                         }
+                        VoicePackDownloadResult.BAD_HASH -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "sha256_mismatch",
+                        )
+                        VoicePackDownloadResult.WRITE_FAILED -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "download_failed",
+                        )
+                        VoicePackDownloadResult.INVALID_INPUT -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "invalid_catalog",
+                        )
+                        VoicePackDownloadResult.SIZE_MISMATCH -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "size_mismatch",
+                        )
+                        VoicePackDownloadResult.REDIRECT_DENIED -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "redirect_denied",
+                        )
+                        VoicePackDownloadResult.CONNECT_TIMEOUT -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "connect_timeout",
+                        )
+                        VoicePackDownloadResult.READ_TIMEOUT -> VoicePackDownloadState(
+                            status = "failed", packId = packId, totalBytes = entry.sizeBytes, error = "read_timeout",
+                        )
                     }
+                    updateVoicePackDownloadState(jobId) { terminalState }
                 }
+            } catch (_: Exception) {
+                updateVoicePackDownloadState(jobId) { current ->
+                    current.copy(
+                        status = "failed",
+                        totalBytes = entry.sizeBytes,
+                        error = "download_failed",
+                    )
+                }
+            } finally {
+                updateVoicePackDownloadState(jobId) { current ->
+                    current.copy(
+                        totalBytes = if (current.status == "failed" && current.totalBytes <= 0) {
+                            entry.sizeBytes
+                        } else {
+                            current.totalBytes
+                        },
+                        completedAtMs = currentUnixMs(),
+                    )
+                }
+                voicePackJobsByPack.remove(packId, jobId)
             }
         }
 
@@ -751,20 +796,44 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("pack_not_found")
             return
         }
-        if (!isPackDownloaded(candidate.packId, candidate.sha256)) {
+        val task = requestedPackTask(candidate, args.task)
+        if (task == null) {
+            invoke.reject("pack_not_supported")
+            return
+        }
+        if (!isPackInstalledForRuntime(candidate)) {
             invoke.reject("pack_not_downloaded")
             return
         }
-        if (!isPackCompatibleAndReady(candidate.packId, activeRouteRequired = true)) {
-            invoke.reject("pack_incompatible_or_unavailable")
+        if (task == AuroraSpeechPackTask.TTS && ttsReferenceRequired(candidate) && !storeTtsReferenceSelection(args)) {
+            invoke.reject("tts_reference_required")
             return
         }
-        synchronized(voicePackLock(candidate.packId)) {
-            setActivePack(candidate.packId)
+        if (!isPackReadyForRuntime(candidate)) {
+            val referenceReason = if (task == AuroraSpeechPackTask.TTS && ttsReferenceRequired(candidate)) {
+                "tts_reference_jni_unavailable"
+            } else {
+                "pack_not_supported"
+            }
+            synchronized(voicePackLock(args.packId)) {
+                setActivePack(candidate, task)
+            }
+            val ret = JSObject()
+            ret.put("activated", false)
+            ret.put("packId", args.packId)
+            ret.put("task", task.nativeName)
+            ret.put("status", voicePackCatalogStatusObject())
+            ret.put("reason", referenceReason)
+            invoke.resolve(ret)
+            return
+        }
+        synchronized(voicePackLock(args.packId)) {
+            setActivePack(candidate, task)
         }
         val ret = JSObject()
         ret.put("activated", true)
-        ret.put("packId", candidate.packId)
+        ret.put("packId", args.packId)
+        ret.put("task", task.nativeName)
         ret.put("status", voicePackCatalogStatusObject())
         invoke.resolve(ret)
     }
@@ -777,17 +846,27 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("pack_not_found")
             return
         }
-        val lock = voicePackLock(entry.packId)
-        val removed = synchronized(lock) {
-            val result = removePackFiles(entry.packId)
-            if (activePackId() == entry.packId) {
-                clearActivePack()
+        val removed = synchronized(voicePackLock(args.packId)) {
+            val task = requestedPackTask(entry, args.task)
+            val removedNow = if (task != null) {
+                runCatching { AuroraNativeSpeechPackBridge.remove(activity, entry.packId, task) }.getOrDefault(false)
+            } else {
+                removePackForRuntime(entry)
             }
-            result
+            if (task != null && activePackId(task) == args.packId) {
+                clearActivePack(task)
+            }
+            if (removedNow && task == AuroraSpeechPackTask.TTS) {
+                clearTtsReferenceSelection()
+            }
+            if (legacyActivePackId() == args.packId) {
+                clearLegacyActivePack()
+            }
+            removedNow
         }
         val ret = JSObject()
         ret.put("removed", removed)
-        ret.put("packId", entry.packId)
+        ret.put("packId", args.packId)
         ret.put("status", voicePackCatalogStatusObject())
         invoke.resolve(ret)
     }
@@ -1485,41 +1564,44 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun localLightInferenceStatusObject(): JSObject {
         val installed = voicePackCatalogEntries()
-        val activePackId = activePackId()
+        val activePackId = activePackId(AuroraSpeechPackTask.STT)
         val activePack = activePackId?.let { active -> installed.firstOrNull { it.packId == active } }
         val catalogCount = installed.size
-        val installedCount = installed.count { isPackDownloaded(it.packId, it.sha256) }
-        val activeReady = activePackId != null && isPackCompatibleAndReady(activePackId, activeRouteRequired = true)
+        val installedCount = installed.count { isPackInstalledForRuntime(it) }
+        val activeCacheReady = activePack != null && isPackReadyForRuntime(activePack)
+        val routeConfigured = AuroraVoiceNativeConfigStore.isConfigured(activity)
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("providerId", "native:mobile-local-light")
-        ret.put("available", activeReady)
+        ret.put("available", activeCacheReady && routeConfigured)
         ret.put("requestable", catalogCount > 0)
-        ret.put("modelRuntimeProvider", installedCount > 0)
+        ret.put("modelRuntimeProvider", true)
         ret.put("backendModelCatalogRequired", catalogCount == 0)
+        ret.put("engineReady", activeCacheReady)
+        ret.put("rustCatalogBridgeReady", true)
+        ret.put("routeConfigured", routeConfigured)
         ret.put("hardwareAcceleration", "unknown")
         ret.put("catalogCount", catalogCount)
         ret.put("installedCount", installedCount)
         ret.put("modelId", if (activePackId == null) JSONObject.NULL else activePackId)
-        ret.put("modelPresent", activeReady)
+        ret.put("modelPresent", activeCacheReady)
         ret.put("permissionGranted", true)
-        ret.put("state", if (activeReady) "available" else if (catalogCount > 0) "needs_native_permission" else "degraded")
-        ret.put("fallbackAvailable", true)
+        ret.put("state", if (activeCacheReady && routeConfigured) "ready" else "degraded")
+        ret.put("fallbackAvailable", !activeCacheReady)
         ret.put("fallbackProviderId", "local:Orchestrator:llama-cpp")
         ret.put(
             "reason",
-            if (activeReady) {
-                "local_pack_ready"
-            } else if (!AuroraVoiceNativeConfigStore.isConfigured(activity)) {
-                "native_voice_route_missing"
-            } else if (catalogCount > 0) {
-                "download_selected_pack"
-            } else {
-                "backend_model_catalog_required"
+            when {
+                !activeCacheReady && catalogCount > 0 -> "compatible_pack_not_available"
+                !routeConfigured -> "voice_route_unconfigured"
+                catalogCount == 0 -> "backend_model_catalog_required"
+                else -> "ready"
             },
         )
         ret.put("evidenceSource", "android-native-local-light-adapter")
         ret.put("activePack", activePack?.let(::voicePackRuntimeSummary) ?: JSONObject())
+        ret.put("activePackReadyForRuntime", activeCacheReady)
+        ret.put("activePackCacheReady", activeCacheReady)
         ret.put("secretsRedacted", true)
         return ret
     }
@@ -1549,16 +1631,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun hasPackagePermission(permission: String): Boolean =
         activity.packageManager.checkPermission(permission, activity.packageName) == PackageManager.PERMISSION_GRANTED
 
-    private fun backgroundSessionAllowed(): Boolean {
-        if (!hasForegroundServiceMicrophonePermission() || !hasRuntimePermission(Manifest.permission.RECORD_AUDIO) || !canPostNotifications()) {
-            return false
-        }
-        if (!AuroraVoiceNativeConfigStore.isConfigured(activity)) return false
-        return isActiveCompatiblePackReady()
-    }
+    private fun backgroundSessionAllowed(): Boolean =
+        AuroraVoiceNativeConfigStore.isConfigured(activity) &&
+            isActivePackReady(AuroraSpeechPackTask.STT) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS) &&
+            isActivePackReady(AuroraSpeechPackTask.VAD) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            wakePhraseSelection() != null
 
-    internal fun voicePackCatalogEntries(): List<VoicePackCatalogEntry> {
-        val raw = voicePackPrefs().getString(VOICE_PACK_CATALOG_KEY, "[]") ?: "[]"
+    private fun voicePackCatalogEntries(): List<VoicePackCatalogEntry> {
+        val raw = voicePackCatalogRaw()
         val parsed = runCatching { JSONArray(raw) }.getOrElse { JSONArray() }
         val out = ArrayList<VoicePackCatalogEntry>(parsed.length())
         for (i in 0 until parsed.length()) {
@@ -1566,14 +1648,33 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             val packId = entryObj.optString("packId", "").trim()
             val packName = entryObj.optString("packName", packId)
             val uri = entryObj.optString("uri", "").trim()
-            val tasks = stringListFromJSONArray(entryObj.optJSONArray("tasks"))
-            val oses = stringListFromJSONArray(entryObj.optJSONArray("supportedOperatingSystems"))
-            val abis = stringListFromJSONArray(entryObj.optJSONArray("supportedAbis"))
+            val sha = entryObj.optString("sha256", "").trim().lowercase(Locale.getDefault())
+            val sizeBytes = entryObj.optLong("sizeBytes", -1L)
+            val tasks = stringListFromJSONArray(entryObj, "tasks")
             val engineRuntimeRevision = entryObj.optString("engineRuntimeRevision", "").trim()
+            val supportedOperatingSystems = stringListFromJSONArray(entryObj, "supportedOperatingSystems")
+            val supportedAbis = stringListFromJSONArray(entryObj, "supportedAbis")
             val license = entryObj.optString("license", "").trim()
             val attributionRequired = entryObj.optBoolean("attributionRequired", false)
             val attributionText = entryObj.optString("attributionText", "").trim()
-            if (packId.isBlank() || uri.isBlank() || !packCatalogFileNameRegex.matches(packId)) {
+            val modelFamily = entryObj.optString("modelFamily", entryObj.optString("model_family", "")).trim().lowercase(Locale.getDefault())
+            val requiresReferenceAudio = entryObj.optBoolean(
+                "requiresReferenceAudio",
+                entryObj.optBoolean("referenceAudioRequired", entryObj.optBoolean("requiresReference", false)),
+            )
+            if (
+                packId.isBlank() ||
+                uri.isBlank() ||
+                !packCatalogIdRegex.matches(packId) ||
+                !isValidHexSha256(sha) ||
+                !isPositiveAndBoundedSize(sizeBytes) ||
+                tasks.isEmpty() ||
+                engineRuntimeRevision.isBlank() ||
+                supportedOperatingSystems.isEmpty() ||
+                supportedAbis.isEmpty() ||
+                license.isBlank() ||
+                attributionText.isBlank() && attributionRequired
+            ) {
                 continue
             }
             out.add(
@@ -1583,64 +1684,99 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                     uri = uri,
                     provider = entryObj.optString("provider", "unknown"),
                     language = entryObj.optString("language", "und"),
+                    sha256 = entryObj.optString("sha256", "").lowercase(),
+                    sizeBytes = entryObj.optLong("sizeBytes", -1),
                     tasks = tasks,
                     engineRuntimeRevision = engineRuntimeRevision,
-                    supportedOperatingSystems = oses,
-                    supportedAbis = abis,
+                    supportedOperatingSystems = supportedOperatingSystems,
+                    supportedAbis = supportedAbis,
                     license = license,
                     attributionRequired = attributionRequired,
                     attributionText = attributionText,
-                    sha256 = entryObj.optString("sha256", "").lowercase(),
-                    sizeBytes = entryObj.optLong("sizeBytes", -1),
+                    modelFamily = modelFamily,
+                    requiresReferenceAudio = requiresReferenceAudio,
                 ),
             )
         }
         return out
     }
 
+    private fun voicePackCatalogRaw(): String {
+        val stored = voicePackPrefs().getString(VOICE_PACK_CATALOG_KEY, null)?.trim()
+        if (!stored.isNullOrBlank() && stored != "[]") return stored
+        return runCatching { AuroraNativeSpeechPackBridge.embeddedCatalogJson() }.getOrDefault("[]")
+    }
+
     private fun voicePackCatalogStatusObject(): JSObject {
         val catalog = voicePackCatalogEntries()
-        val active = activePackId()
-        val cacheDir = File(activity.filesDir, VOICE_PACK_CACHE_DIR)
+        val active = legacyActivePackId()
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("available", backgroundSessionAllowed())
-        ret.put("activePackId", active ?: JSONObject.NULL)
+        ret.put("activePackId", JSONObject.NULL)
+        ret.put("legacyActivePackId", active ?: JSONObject.NULL)
+        ret.put("activeSttPackId", activePackId(AuroraSpeechPackTask.STT) ?: JSONObject.NULL)
+        ret.put("activeTtsPackId", activePackId(AuroraSpeechPackTask.TTS) ?: JSONObject.NULL)
+        ret.put("activeVadPackId", activePackId(AuroraSpeechPackTask.VAD) ?: JSONObject.NULL)
+        ret.put("activeKwsPackId", activePackId(AuroraSpeechPackTask.KWS) ?: JSONObject.NULL)
         val entries = JSArray()
         catalog.forEach { entry ->
-            val installed = isPackDownloaded(entry.packId, entry.sha256)
-            val compatible = isPackMetadataRuntimeCompatible(entry)
+            val task = inferAuroraSpeechPackTask(entry.tasks)
+            val installed = isPackInstalledForRuntime(entry)
             val item = JSObject()
             item.put("packId", entry.packId)
             item.put("packName", entry.packName)
             item.put("provider", entry.provider)
             item.put("language", entry.language)
-            item.put("tasks", JSArray().apply { entry.tasks.forEach(::put) })
-            item.put("engineRuntimeRevision", entry.engineRuntimeRevision)
-            item.put("supportedOperatingSystems", JSArray().apply { entry.supportedOperatingSystems.forEach(::put) })
-            item.put("supportedAbis", JSArray().apply { entry.supportedAbis.forEach(::put) })
-            item.put("license", entry.license)
-            item.put("attributionRequired", entry.attributionRequired)
-            item.put("attributionText", entry.attributionText)
             item.put("uri", entry.uri)
             item.put("sha256", entry.sha256)
             item.put("sizeBytes", entry.sizeBytes)
             item.put("installed", installed)
-            item.put("active", entry.packId == active)
-            item.put("runtimeCompatible", compatible)
-            item.put("readyForRuntime", installed && compatible)
-            item.put("cachePath", if (installed) File(cacheDir, safePackFileName(entry.packId)).path else JSONObject.NULL)
-            item.put("evidenceSource", "android-voice-pack-cache")
+            item.put("active", task != null && entry.packId == activePackId(task))
+            item.put("runtimeTask", task?.nativeName ?: JSONObject.NULL)
+            item.put("tasks", JSArray().also { jsonArray ->
+                entry.tasks.forEach { jsonArray.put(it) }
+            })
+            item.put("engineRuntimeRevision", entry.engineRuntimeRevision)
+            item.put("supportedOperatingSystems", JSArray().also { jsonArray ->
+                entry.supportedOperatingSystems.forEach { jsonArray.put(it) }
+            })
+            item.put("supportedAbis", JSArray().also { jsonArray ->
+                entry.supportedAbis.forEach { jsonArray.put(it) }
+            })
+            item.put("license", entry.license)
+            item.put("attributionRequired", entry.attributionRequired)
+            item.put("attributionText", entry.attributionText)
+            item.put("modelFamily", entry.modelFamily)
+            item.put("requiresReferenceAudio", entry.requiresReferenceAudio)
+            item.put("referenceSelectionRequired", ttsReferenceRequired(entry))
+            item.put("referenceSelectionPresent", !ttsReferenceRequired(entry) || ttsReferenceSelection() != null)
+            item.put("referenceRuntimeReady", !ttsReferenceRequired(entry) || ttsReferenceSelection() != null)
+            item.put(
+                "referenceRuntimeReason",
+                when {
+                    !ttsReferenceRequired(entry) -> "not_required"
+                    ttsReferenceSelection() == null -> "reference_selection_missing"
+                    else -> "ready"
+                },
+            )
+            item.put("readyForRuntime", installed && task != null && isPackReadyForRuntime(entry))
+            item.put("readyForInstall", task != null && isPackDownloadReady(entry))
+            item.put("cachePath", JSONObject.NULL)
+            item.put("evidenceSource", "android-native-speech-pack-manager")
             entries.put(item)
         }
         ret.put("entries", entries)
-        ret.put("evidenceSource", "android-voice-pack-cache")
+        ret.put("evidenceSource", "android-native-speech-pack-manager")
         ret.put("secretsRedacted", true)
         return ret
     }
 
     private fun voicePackPrefs() =
         activity.getSharedPreferences(VOICE_PACK_PREFS, Context.MODE_PRIVATE)
+
+    private fun voicePackLock(packId: String): Any =
+        voicePackLocks.computeIfAbsent(packId) { Any() }
 
     private fun normalizeVoicePackCatalog(raw: String): JSObject {
         val parsed = JSONArray(raw)
@@ -1650,37 +1786,62 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             val packId = item.optString("packId", "").trim()
             val packName = item.optString("name", item.optString("packName", "")).trim()
             val uri = item.optString("uri", "").trim()
-            val sha = item.optString("sha256", "").trim().lowercase()
+            val normalizedUri = validateAndParseVoicePackUri(uri)
+            val sha = item.optString("sha256", "").trim().lowercase(Locale.getDefault())
             val provider = item.optString("provider", "unknown").trim()
             val language = item.optString("language", "und").trim()
-            val tasks = stringListFromJSONArray(item.optJSONArray("tasks")).map { it.lowercase() }
+            val size = item.optLong("sizeBytes", -1)
+            val tasks = stringListFromJSONArray(item, "tasks")
             val engineRuntimeRevision = item.optString("engineRuntimeRevision", "").trim()
-            val supportedOperatingSystems = stringListFromJSONArray(item.optJSONArray("supportedOperatingSystems")).map { it.lowercase() }
-            val supportedAbis = stringListFromJSONArray(item.optJSONArray("supportedAbis")).map { it.lowercase() }
+            val supportedOperatingSystems = stringListFromJSONArray(item, "supportedOperatingSystems")
+            val supportedAbis = stringListFromJSONArray(item, "supportedAbis")
             val license = item.optString("license", "").trim()
             val attributionRequired = item.optBoolean("attributionRequired", false)
             val attributionText = item.optString("attributionText", "").trim()
-            val size = item.optLong("sizeBytes", -1)
-            if (packId.isBlank() || !packCatalogFileNameRegex.matches(packId)) continue
+            val modelFamily = item.optString("modelFamily", item.optString("model_family", "")).trim().lowercase(Locale.getDefault())
+            val requiresReferenceAudio = item.optBoolean(
+                "requiresReferenceAudio",
+                item.optBoolean("referenceAudioRequired", item.optBoolean("requiresReference", false)),
+            )
+            if (packId.isBlank() || !packCatalogIdRegex.matches(packId)) continue
+            if (uri.isBlank()) continue
             if (packName.isBlank()) continue
-            val normalizedUri = item.optString("uri", "").trim()
-            if (!isPackDownloadReadyUri(normalizedUri)) continue
-            if (!isValidPackMetadata(packId, normalizedUri, sha, size, tasks, engineRuntimeRevision, supportedOperatingSystems, supportedAbis, license)) continue
+            if (!isValidHexSha256(sha)) continue
+            if (!isPositiveAndBoundedSize(size)) continue
+            if (tasks.isEmpty() ||
+                engineRuntimeRevision.isBlank() ||
+                supportedOperatingSystems.isEmpty() ||
+                supportedAbis.isEmpty() ||
+                license.isBlank() ||
+                attributionText.isBlank() && attributionRequired
+            ) {
+                continue
+            }
             val normalizedItem = JSONObject()
             normalizedItem.put("packId", packId)
             normalizedItem.put("packName", packName)
             normalizedItem.put("provider", provider)
             normalizedItem.put("language", language)
-            normalizedItem.put("uri", normalizedUri)
-            normalizedItem.put("tasks", JSONArray(tasks))
+            normalizedItem.put("uri", normalizedUri.toString())
+            normalizedItem.put("sha256", sha)
+            normalizedItem.put("sizeBytes", size)
+            normalizedItem.put("tasks", JSArray().also { jsonArray ->
+                tasks.forEach { task ->
+                    jsonArray.put(task)
+                }
+            })
             normalizedItem.put("engineRuntimeRevision", engineRuntimeRevision)
-            normalizedItem.put("supportedOperatingSystems", JSONArray(supportedOperatingSystems))
-            normalizedItem.put("supportedAbis", JSONArray(supportedAbis))
+            normalizedItem.put("supportedOperatingSystems", JSArray().also { jsonArray ->
+                supportedOperatingSystems.forEach { jsonArray.put(it) }
+            })
+            normalizedItem.put("supportedAbis", JSArray().also { jsonArray ->
+                supportedAbis.forEach { jsonArray.put(it) }
+            })
             normalizedItem.put("license", license)
             normalizedItem.put("attributionRequired", attributionRequired)
             normalizedItem.put("attributionText", attributionText)
-            normalizedItem.put("sha256", sha)
-            normalizedItem.put("sizeBytes", size)
+            normalizedItem.put("modelFamily", modelFamily)
+            normalizedItem.put("requiresReferenceAudio", requiresReferenceAudio)
             normalized.put(normalizedItem)
         }
         return JSObject().put("entries", normalized)
@@ -1689,170 +1850,22 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun findCatalogEntry(packId: String): VoicePackCatalogEntry? =
         voicePackCatalogEntries().firstOrNull { it.packId == packId }
 
-    private fun activePackId(): String? = voicePackPrefs().getString(VOICE_PACK_ACTIVE_ID_KEY, null)
+    private fun legacyActivePackId(): String? = voicePackPrefs().getString(VOICE_PACK_ACTIVE_ID_KEY, null)
 
-    private fun isActiveCompatiblePackReady(): Boolean {
-        val active = activePackId() ?: return false
-        return isPackCompatibleAndReady(active)
+    private fun activePackId(task: AuroraSpeechPackTask): String? =
+        voicePackPrefs().getString(auroraSpeechPackActiveKey(task), null)
+
+    private fun setActivePack(entry: VoicePackCatalogEntry, task: AuroraSpeechPackTask) {
+        voicePackPrefs().edit()
+            .putString(auroraSpeechPackActiveKey(task), entry.packId)
+            .apply()
     }
 
-    private fun isPackCompatibleAndReady(packId: String, activeRouteRequired: Boolean = true): Boolean {
-        val entry = findCatalogEntry(packId) ?: return false
-        if (!isPackDownloadReady(entry)) return false
-        if (activeRouteRequired && !AuroraVoiceNativeConfigStore.isConfigured(activity)) return false
-        return isPackMetadataRuntimeCompatible(entry) && isPackDownloaded(packId, entry.sha256)
+    private fun clearActivePack(task: AuroraSpeechPackTask) {
+        voicePackPrefs().edit().remove(auroraSpeechPackActiveKey(task)).apply()
     }
 
-    private fun isPackDownloadReady(entry: VoicePackCatalogEntry): Boolean =
-        isValidPackMetadata(
-            entry.packId,
-            entry.uri,
-            entry.sha256,
-            entry.sizeBytes,
-            entry.tasks,
-            entry.engineRuntimeRevision,
-            entry.supportedOperatingSystems,
-            entry.supportedAbis,
-            entry.license,
-        ) && isPackDownloadReadyUri(entry.uri)
-
-    private fun voicePackLock(packId: String): Any = voicePackOperationLocks.getOrPut(packId.lowercase()) { Any() }
-
-    private fun cleanStalePackArtifacts(packId: String) {
-        val safe = safePackFileName(packId)
-        val cacheDir = File(activity.filesDir, VOICE_PACK_CACHE_DIR)
-        if (!cacheDir.exists()) return
-        cacheDir.listFiles()?.forEach { file ->
-            if (!file.isFile) return@forEach
-            val name = file.name
-            if (name == safe || name.startsWith("$safe.") && name.endsWith(".part")) {
-                file.delete()
-            }
-        }
-    }
-
-    private fun stringListFromJSONArray(values: org.json.JSONArray?): List<String> {
-        if (values == null) return emptyList()
-        val out = ArrayList<String>(values.length())
-        for (i in 0 until values.length()) {
-            val raw = values.optString(i, "").trim()
-            if (raw.isNotBlank()) out.add(raw)
-        }
-        return out
-    }
-
-    private fun isValidHexSha256(value: String): Boolean {
-        return value.length == VOICE_PACK_SHA256_HEX_LENGTH &&
-            value.matches(Regex("(?i)^$VOICE_PACK_SHA256_HEX_REGEX$"))
-    }
-
-    private fun validateAndParseVoicePackUri(uri: String): URI? =
-        runCatching {
-            val parsed = URI(uri.trim())
-            if (parsed.scheme?.lowercase() != "https") return@runCatching null
-            if (parsed.userInfo?.isNotBlank() == true) return@runCatching null
-            if (parsed.host.isNullOrBlank()) return@runCatching null
-            if (!parsed.fragment.isNullOrBlank()) return@runCatching null
-            if (!parsed.host.isNullOrBlank() && !isPublicHostAllowed(parsed.host)) return@runCatching null
-            if (!isHostIpSafe(parsed.host!!)) return@runCatching null
-            parsed
-        }.getOrNull()
-
-    private fun isPublicHostAllowed(host: String): Boolean {
-        val normalized = host.lowercase()
-        if (normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1") return false
-        return true
-    }
-
-    private fun isHostIpSafe(host: String): Boolean {
-        val addrs = runCatching { InetAddress.getAllByName(host) }.getOrNull() ?: return false
-        return addrs.none {
-            it.isLoopbackAddress ||
-                it.isSiteLocalAddress ||
-                it.isLinkLocalAddress ||
-                it.isAnyLocalAddress ||
-                it.isMulticastAddress
-        }
-    }
-
-    private fun resolvePackDownloadUri(source: String, remainingRedirects: Int): URL {
-        val target = validateAndParseVoicePackUri(source) ?: throw IllegalArgumentException("invalid_uri")
-        var current = target
-        var hopsLeft = remainingRedirects
-        while (true) {
-            val connection = (current.toURL().openConnection() as HttpURLConnection).apply {
-                connectTimeout = VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS
-                readTimeout = VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS
-                instanceFollowRedirects = false
-                requestMethod = "GET"
-            }
-            try {
-                connection.connect()
-                val code = connection.responseCode
-                if (code in 200..299) return current.toURL()
-                if (code in 300..399) {
-                    val location = connection.getHeaderField("Location")
-                    if (hopsLeft <= 0 || location.isNullOrBlank()) {
-                        throw IllegalStateException("redirect_denied")
-                    }
-                    current = current.resolve(location)
-                    if (validateAndParseVoicePackUri(current.toString()) == null) {
-                        throw IllegalStateException("invalid_uri")
-                    }
-                    hopsLeft--
-                    continue
-                }
-                throw IllegalStateException("download_unavailable")
-            } catch (error: SocketTimeoutException) {
-                throw error
-            } finally {
-                connection.disconnect()
-            }
-        }
-    }
-
-    private fun isPackDownloadReadyUri(uri: String): Boolean =
-        validateAndParseVoicePackUri(uri) != null
-
-    private fun isValidPackMetadata(
-        packId: String,
-        uri: String,
-        sha: String,
-        sizeBytes: Long,
-        tasks: List<String>,
-        engineRuntimeRevision: String,
-        supportedOperatingSystems: List<String>,
-        supportedAbis: List<String>,
-        license: String,
-    ): Boolean {
-        if (!packCatalogFileNameRegex.matches(packId)) return false
-        if (packId.isBlank() || uri.isBlank()) return false
-        if (!validateAndParseVoicePackUri(uri).let { it != null && it.scheme.equals("https", true) }) return false
-        if (!isValidHexSha256(sha)) return false
-        if (sizeBytes < VOICE_PACK_MIN_BYTES || sizeBytes > VOICE_PACK_MAX_BYTES) return false
-        if (engineRuntimeRevision.isBlank()) return false
-        if (tasks.none { voicePackTaskTokens.contains(it.lowercase()) }) return false
-        if (!supportedOperatingSystems.any { it.isNotBlank() }) return false
-        if (!supportedAbis.any { it.isNotBlank() }) return false
-        if (license.isBlank()) return false
-        return true
-    }
-
-    private fun isPackMetadataRuntimeCompatible(entry: VoicePackCatalogEntry): Boolean {
-        val osMatch = entry.supportedOperatingSystems.any {
-            it.equals("android", ignoreCase = true) || it.startsWith("android:", ignoreCase = true)
-        }
-        if (!osMatch) return false
-        val abis = entry.supportedAbis.map { it.lowercase(Locale.ROOT).trim() }.filter { it.isNotBlank() }.toSet()
-        val runtimeSupported = Build.SUPPORTED_ABIS.any { abi -> abis.contains(abi.lowercase(Locale.ROOT)) }
-        return runtimeSupported
-    }
-
-    private fun setActivePack(packId: String) {
-        voicePackPrefs().edit().putString(VOICE_PACK_ACTIVE_ID_KEY, packId).apply()
-    }
-
-    private fun clearActivePack() {
+    private fun clearLegacyActivePack() {
         voicePackPrefs().edit().remove(VOICE_PACK_ACTIVE_ID_KEY).apply()
     }
 
@@ -1863,107 +1876,363 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("provider", entry.provider)
         ret.put("language", entry.language)
         ret.put("sizeBytes", entry.sizeBytes)
-        ret.put("installed", isPackDownloaded(entry.packId, entry.sha256))
-        ret.put("cachePath", File(activity.filesDir, "${VOICE_PACK_CACHE_DIR}/${safePackFileName(entry.packId)}").path)
+        ret.put("installed", isPackInstalledForRuntime(entry))
+        ret.put("cachePath", JSONObject.NULL)
         return ret
     }
 
-    private fun isAnyPackDownloaded(): Boolean = voicePackCatalogEntries().any { isPackDownloaded(it.packId, it.sha256) }
+    private fun isAnyPackDownloaded(): Boolean = voicePackCatalogEntries().any { isPackInstalledForRuntime(it) }
 
-    private fun downloadPackToCache(source: String, packId: String, sha256: String, expectedSize: Long): Pair<VoicePackDownloadResult, Long> {
-        if (!packCatalogFileNameRegex.matches(packId)) {
+    private fun isPackReadyForRuntime(entry: VoicePackCatalogEntry): Boolean =
+        isPackInstalledForRuntime(entry) &&
+            isPackDescriptorRuntimeReady(entry) &&
+            (!ttsReferenceRequired(entry) || ttsReferenceSelection() != null)
+
+    private fun ttsReferenceRequired(entry: VoicePackCatalogEntry): Boolean {
+        val task = inferAuroraSpeechPackTask(entry.tasks)
+        return task == AuroraSpeechPackTask.TTS &&
+            (entry.requiresReferenceAudio || entry.modelFamily == "pockettts")
+    }
+
+    private fun activeRuntimeProfileSelection(): JSONObject? {
+        val raw = activity
+            .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val activeProfileId = root.optString("activeProfileId", "").takeIf { it.isNotBlank() }
+        val profile = if (activeProfileId != null) {
+            val profileMap = root.optJSONObject("profiles")
+            val profileArray = root.optJSONArray("profiles")
+            profileMap?.optJSONObject(activeProfileId)
+                ?: profileArray?.let { profiles ->
+                    (0 until profiles.length())
+                        .mapNotNull { index -> profiles.optJSONObject(index) }
+                        .firstOrNull { item -> item.optString("id") == activeProfileId }
+                }
+        } else {
+            null
+        } ?: root.optJSONObject("activeProfile")
+            ?: root.optJSONObject("profile")
+            ?: return null
+        return profile
+            .optJSONObject("localNode")
+            ?.optJSONObject("localSpeechSelection")
+            ?: profile.optJSONObject("localSpeechSelection")
+    }
+
+    private fun ttsReferenceSelection(): AuroraTtsReferenceSelection? {
+        val prefs = ttsReferencePrefs()
+        val id = prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty()
+        val audioUri = prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty()
+        val text = prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty()
+        val revision = prefs.getString(AURORA_TTS_REFERENCE_REVISION_KEY, null)?.trim().orEmpty()
+        val sampleRateHz = prefs.getInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, 0)
+        val samples = parseReferenceSamples(prefs.getString(AURORA_TTS_REFERENCE_SAMPLES_KEY, "[]"))
+        if (id.isNotBlank() && text.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()) {
+            return AuroraTtsReferenceSelection(id, audioUri, text, revision, sampleRateHz, samples)
+        }
+        val reference = activeRuntimeProfileSelection()
+            ?.let { selection ->
+                selection.optJSONObject("ttsReference")
+                    ?: selection.optJSONObject("referenceVoice")
+                    ?: selection.optJSONObject("voiceSample")
+            }
+            ?: return null
+        val profileId = reference.optString("id", reference.optString("referenceId", reference.optString("sampleId", ""))).trim()
+        val profileAudioUri = reference.optString("audioUri", reference.optString("uri", "")).trim()
+        val profileText = reference.optString("text", reference.optString("referenceText", "")).trim()
+        val profileRevision = reference.optString("revision", reference.optString("sampleRevision", "")).trim()
+        val profileSampleRateHz = reference.optInt("sampleRateHz", reference.optInt("sample_rate_hz", 0))
+        val profileSamples = parseReferenceSamples(reference.optJSONArray("samples") ?: reference.optJSONArray("referenceSamples"))
+        return if (profileId.isNotBlank() && profileText.isNotBlank() && profileSampleRateHz > 0 && profileSamples.isNotEmpty()) {
+            AuroraTtsReferenceSelection(
+                profileId,
+                profileAudioUri,
+                profileText,
+                profileRevision,
+                profileSampleRateHz,
+                profileSamples,
+            )
+        } else {
+            null
+        }
+    }
+
+    private fun storeTtsReferenceSelection(args: AndroidVoicePackReferenceArgs): Boolean {
+        val id = args.referenceId.trim()
+        val audioUri = args.referenceAudioUri.trim()
+        val text = args.referenceText.trim()
+        val revision = args.referenceRevision.trim()
+        val samples = args.referenceSamples.map { it.toFloat() }.toFloatArray()
+        val sampleRateHz = args.referenceSampleRateHz
+        if (
+            id.isBlank() &&
+            audioUri.isBlank() &&
+            text.isBlank() &&
+            revision.isBlank() &&
+            sampleRateHz <= 0 &&
+            samples.isEmpty()
+        ) return ttsReferenceSelection() != null
+        if (id.isBlank() || text.isBlank() || sampleRateHz <= 0 || samples.isEmpty()) return false
+        if (samples.size > AURORA_TTS_REFERENCE_MAX_SAMPLES) return false
+        if (samples.any { !it.isFinite() || it < -1.0f || it > 1.0f }) return false
+        val encodedSamples = org.json.JSONArray().also { array ->
+            samples.forEach { sample -> array.put(sample.toDouble()) }
+        }.toString()
+        clearLegacyTtsReferenceSelection()
+        ttsReferencePrefs().edit()
+            .putString(AURORA_TTS_REFERENCE_ID_KEY, id)
+            .putString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, audioUri)
+            .putString(AURORA_TTS_REFERENCE_TEXT_KEY, text)
+            .putString(AURORA_TTS_REFERENCE_REVISION_KEY, revision)
+            .putInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, sampleRateHz)
+            .putString(AURORA_TTS_REFERENCE_SAMPLES_KEY, encodedSamples)
+            .apply()
+        return true
+    }
+
+    private fun clearTtsReferenceSelection() {
+        clearLegacyTtsReferenceSelection()
+        ttsReferencePrefs().edit()
+            .remove(AURORA_TTS_REFERENCE_ID_KEY)
+            .remove(AURORA_TTS_REFERENCE_AUDIO_URI_KEY)
+            .remove(AURORA_TTS_REFERENCE_TEXT_KEY)
+            .remove(AURORA_TTS_REFERENCE_REVISION_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLES_KEY)
+            .apply()
+    }
+
+    private fun clearLegacyTtsReferenceSelection() {
+        voicePackPrefs().edit()
+            .remove(AURORA_TTS_REFERENCE_ID_KEY)
+            .remove(AURORA_TTS_REFERENCE_AUDIO_URI_KEY)
+            .remove(AURORA_TTS_REFERENCE_TEXT_KEY)
+            .remove(AURORA_TTS_REFERENCE_REVISION_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY)
+            .remove(AURORA_TTS_REFERENCE_SAMPLES_KEY)
+            .apply()
+    }
+
+    private fun ttsReferencePrefs() =
+        activity.getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)
+
+    private fun parseReferenceSamples(raw: String?): FloatArray =
+        parseReferenceSamples(runCatching { JSONArray(raw ?: "[]") }.getOrNull())
+
+    private fun parseReferenceSamples(array: JSONArray?): FloatArray {
+        if (array == null || array.length() == 0) return FloatArray(0)
+        val samples = FloatArray(array.length())
+        for (index in 0 until array.length()) {
+            val value = array.optDouble(index, Double.NaN)
+            if (!value.isFinite() || value < -1.0 || value > 1.0) return FloatArray(0)
+            samples[index] = value.toFloat()
+        }
+        return samples
+    }
+
+    private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask? {
+        val catalogTask = inferAuroraSpeechPackTask(entry.tasks) ?: return null
+        val requested = requestedTask.trim().takeIf { it.isNotBlank() }?.let(::auroraSpeechPackTaskFromName)
+        return when {
+            requestedTask.isBlank() -> catalogTask
+            requested == catalogTask -> requested
+            else -> null
+        }
+    }
+
+    private fun isActiveCompatiblePackReady(): Boolean {
+        val active = activePackId(AuroraSpeechPackTask.STT) ?: return false
+        val entry = findCatalogEntry(active) ?: return false
+        return isPackReadyForRuntime(entry)
+    }
+
+    private fun isActivePackReady(task: AuroraSpeechPackTask): Boolean {
+        val active = activePackId(task) ?: return false
+        val entry = findCatalogEntry(active) ?: return false
+        return inferAuroraSpeechPackTask(entry.tasks) == task && isPackReadyForRuntime(entry)
+    }
+
+    private fun isPackMetadataRuntimeCompatible(entry: VoicePackCatalogEntry): Boolean {
+        val osOk = entry.supportedOperatingSystems.any {
+            it.lowercase(Locale.getDefault()).let { os -> os == "android" || os == "android-native" || os == Build.VERSION.SDK_INT.toString() }
+        }
+        if (!osOk) return false
+        val abiOk = entry.supportedAbis.any { abi ->
+            abi.trim().lowercase(Locale.getDefault()).let { supported ->
+                supported in setOf("*", "all") || Build.SUPPORTED_ABIS.any { deviceAbi -> deviceAbi.lowercase(Locale.getDefault()) == supported }
+            }
+        }
+        if (!abiOk) return false
+        return inferAuroraSpeechPackTask(entry.tasks) != null
+    }
+
+    private fun isPackDescriptorRuntimeReady(entry: VoicePackCatalogEntry): Boolean =
+        isPackMetadataRuntimeCompatible(entry) &&
+            isValidHexSha256(entry.sha256) &&
+            isPositiveAndBoundedSize(entry.sizeBytes)
+
+    private fun isPackDownloadReady(entry: VoicePackCatalogEntry): Boolean = runCatching {
+        validateAndParseVoicePackUri(entry.uri).toString()
+        isPackDescriptorRuntimeReady(entry)
+    }.getOrDefault(false)
+
+    private fun isPackInstalledForRuntime(entry: VoicePackCatalogEntry): Boolean {
+        val task = inferAuroraSpeechPackTask(entry.tasks) ?: return false
+        if (!packCatalogIdRegex.matches(entry.packId)) return false
+        return runCatching {
+            AuroraNativeSpeechPackBridge.resolve(activity, entry.packId, task)
+        }.getOrDefault(false)
+    }
+
+    private fun installPackForRuntime(
+        entry: VoicePackCatalogEntry,
+        task: AuroraSpeechPackTask,
+    ): VoicePackDownloadResult {
+        if (!isPackDownloadReady(entry)) return VoicePackDownloadResult.INVALID_INPUT
+        return if (
+            runCatching {
+                AuroraNativeSpeechPackBridge.install(activity, entry.packId, task)
+            }.getOrDefault(false)
+        ) {
+            VoicePackDownloadResult.SUCCESS
+        } else {
+            VoicePackDownloadResult.WRITE_FAILED
+        }
+    }
+
+    private fun removePackForRuntime(entry: VoicePackCatalogEntry): Boolean {
+        val task = inferAuroraSpeechPackTask(entry.tasks) ?: return false
+        return runCatching {
+            AuroraNativeSpeechPackBridge.remove(activity, entry.packId, task)
+        }.getOrDefault(false)
+    }
+
+    private fun wakePhraseSelection(): AuroraWakePhraseSelection? {
+        val prefs = voicePackPrefs()
+        val id = prefs.getString(AURORA_WAKE_PHRASE_ID_KEY, null)?.trim().orEmpty()
+        val text = prefs.getString(AURORA_WAKE_PHRASE_TEXT_KEY, null)?.trim().orEmpty()
+        val revision = prefs.getString(AURORA_WAKE_PHRASE_REVISION_KEY, null)?.trim().orEmpty()
+        if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            return AuroraWakePhraseSelection(id, text, revision)
+        }
+        return wakePhraseSelectionFromRuntimeProfile()
+    }
+
+    private fun wakePhraseSelectionFromRuntimeProfile(): AuroraWakePhraseSelection? {
+        val raw = activity
+            .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val activeProfileId = root.optString("activeProfileId", "").takeIf { it.isNotBlank() }
+        val profile = if (activeProfileId != null) {
+            val profileMap = root.optJSONObject("profiles")
+            val profileArray = root.optJSONArray("profiles")
+            profileMap?.optJSONObject(activeProfileId)
+                ?: profileArray?.let { profiles ->
+                    (0 until profiles.length())
+                        .mapNotNull { index -> profiles.optJSONObject(index) }
+                        .firstOrNull { item -> item.optString("id") == activeProfileId }
+                }
+        } else {
+            null
+        } ?: root.optJSONObject("activeProfile")
+            ?: root.optJSONObject("profile")
+            ?: return null
+        val selection = profile
+            .optJSONObject("localNode")
+            ?.optJSONObject("localSpeechSelection")
+            ?: profile.optJSONObject("localSpeechSelection")
+            ?: return null
+        val phrase = selection.optJSONObject("wakePhrase") ?: selection
+        val id = phrase.optString("id", phrase.optString("phraseId", "")).trim()
+        val text = phrase.optString("text", phrase.optString("phrase", "")).trim()
+        val revision = phrase.optString("revision", phrase.optString("phraseRevision", "")).trim()
+        return if (id.isNotBlank() && text.isNotBlank() && revision.isNotBlank()) {
+            AuroraWakePhraseSelection(id, text, revision)
+        } else {
+            null
+        }
+    }
+
+    private fun downloadPackToCache(
+        source: String,
+        packId: String,
+        sha256: String,
+        expectedSize: Long,
+    ): Pair<VoicePackDownloadResult, Long> {
+        if (!packCatalogIdRegex.matches(packId)) {
             return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
         }
+        val safePackId = safePackFileName(packId)
         if (!isValidHexSha256(sha256)) return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
-        if (expectedSize !in VOICE_PACK_MIN_BYTES..VOICE_PACK_MAX_BYTES) return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
-
-        val file = File(activity.filesDir, VOICE_PACK_CACHE_DIR).apply { mkdirs() }
-        val destination = File(file, safePackFileName(packId))
-        val temp = File(file, "${safePackFileName(packId)}.${System.currentTimeMillis()}.part")
-
+        if (!isPositiveAndBoundedSize(expectedSize)) return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
+        val root = File(activity.filesDir, VOICE_PACK_CACHE_DIR).apply { mkdirs() }
+        val destination = File(root, safePackId)
+        val temp = File(root, "${safePackId}.${System.currentTimeMillis()}.part")
         val digest = MessageDigest.getInstance("SHA-256")
-        val target = try {
-            resolvePackDownloadUri(source, VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT)
-        } catch (error: IllegalStateException) {
-            return when (error.message) {
-                "redirect_denied" -> Pair(VoicePackDownloadResult.REDIRECT_DENIED, 0L)
-                else -> Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
-            }
-        } catch (_: SocketTimeoutException) {
-            return Pair(VoicePackDownloadResult.CONNECT_TIMEOUT, 0L)
-        }
+        var total = 0L
 
         try {
-            val connection = (target.openConnection() as HttpURLConnection).apply {
-                connectTimeout = VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS
-                readTimeout = VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS
-                instanceFollowRedirects = false
-                requestMethod = "GET"
-            }
-            try {
-                try {
-                    connection.connect()
-                } catch (_: SocketTimeoutException) {
-                    return Pair(VoicePackDownloadResult.CONNECT_TIMEOUT, 0L)
-                }
-                val expectedLength = connection.contentLengthLong
-                if (expectedLength > 0 && expectedLength != expectedSize) {
-                    return Pair(VoicePackDownloadResult.SIZE_MISMATCH, 0L)
-                }
-                val responseCode = connection.responseCode
-                if (responseCode !in 200..299) {
-                    return Pair(VoicePackDownloadResult.WRITE_FAILED, 0L)
-                }
-                try {
-                    BufferedInputStream(connection.inputStream).use { input ->
-                        FileOutputStream(temp).use { output ->
-                            val buffer = ByteArray(256 * 1024)
-                            var total = 0L
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read <= 0) break
-                                total += read.toLong()
-                                if (total > expectedSize || total > VOICE_PACK_MAX_BYTES) {
-                                    return Pair(VoicePackDownloadResult.SIZE_MISMATCH, total)
-                                }
-                                output.write(buffer, 0, read)
-                                digest.update(buffer, 0, read)
+            val uri = validateAndParseVoicePackUri(source)
+            val resolvedUri = resolvePackDownloadUri(uri, expectedSize) ?: return Pair(
+                VoicePackDownloadResult.REDIRECT_DENIED,
+                0L,
+            )
+            val response = downloadInputStream(resolvedUri) ?: return Pair(VoicePackDownloadResult.WRITE_FAILED, 0L)
+            response.use { responseStream ->
+                BufferedInputStream(responseStream.input).use { input ->
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(256 * 1024)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            total += read.toLong()
+                            if (total > expectedSize || total > AURORA_SPEECH_PACK_MAX_ARCHIVE_BYTES) {
+                                return Pair(VoicePackDownloadResult.SIZE_MISMATCH, 0L)
                             }
-                            output.flush()
-                            output.fd.sync()
-                            if (total != expectedSize) {
-                                return Pair(VoicePackDownloadResult.SIZE_MISMATCH, total)
-                            }
+                            output.write(buffer, 0, read)
+                            digest.update(buffer, 0, read)
                         }
+                        output.flush()
+                        output.fd.sync()
                     }
-                } catch (_: SocketTimeoutException) {
-                    return Pair(VoicePackDownloadResult.READ_TIMEOUT, 0L)
                 }
-            } finally {
-                connection.disconnect()
             }
+            if (total != expectedSize || temp.length() != expectedSize || total < VOICE_PACK_MIN_BYTES) {
+                return Pair(VoicePackDownloadResult.SIZE_MISMATCH, 0L)
+            }
+            val actualHash = hex(digest.digest())
+            if (sha256 != actualHash) {
+                return Pair(VoicePackDownloadResult.BAD_HASH, 0L)
+            }
+            if (!replaceFileAtomically(temp, destination)) {
+                return Pair(VoicePackDownloadResult.WRITE_FAILED, 0L)
+            }
+            voicePackPrefs().edit().putString("${VOICE_PACK_INSTALLED_PREFIX}${packId}", "{\"sha256\":\"${actualHash}\"}").apply()
+            return Pair(VoicePackDownloadResult.SUCCESS, destination.length().toLong())
+        } catch (_: IllegalArgumentException) {
+            return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
+        } catch (error: java.net.SocketTimeoutException) {
+            return Pair(VoicePackDownloadResult.READ_TIMEOUT, 0L)
+        } catch (error: java.net.UnknownHostException) {
+            return Pair(VoicePackDownloadResult.INVALID_INPUT, 0L)
+        } catch (_: java.net.ConnectException) {
+            return Pair(VoicePackDownloadResult.CONNECT_TIMEOUT, 0L)
         } catch (_: Exception) {
-            temp.delete()
             return Pair(VoicePackDownloadResult.WRITE_FAILED, 0L)
+        } finally {
+            if (temp.exists()) {
+                temp.delete()
+            }
+            cleanStalePackArtifacts(packId)
         }
-        val actualHash = hex(digest.digest())
-        if (!sha256.equals(actualHash, true)) {
-            temp.delete()
-            return Pair(VoicePackDownloadResult.BAD_HASH, 0L)
-        }
-        if (destination.exists()) {
-            destination.delete()
-        }
-        if (!temp.renameTo(destination)) {
-            temp.delete()
-            return Pair(VoicePackDownloadResult.WRITE_FAILED, 0L)
-        }
-        voicePackPrefs().edit().putString("${VOICE_PACK_INSTALLED_PREFIX}${packId}", "{\"sha256\":\"${actualHash}\"}").apply()
-        return Pair(VoicePackDownloadResult.SUCCESS, destination.length().toLong())
     }
 
     private fun isPackDownloaded(packId: String, expectedSha256: String?): Boolean {
-        if (!packCatalogFileNameRegex.matches(packId)) return false
+        if (!packCatalogIdRegex.matches(packId)) return false
         val file = File(activity.filesDir, "${VOICE_PACK_CACHE_DIR}/${safePackFileName(packId)}")
         if (!file.exists() || !file.isFile) return false
         val expected = expectedSha256?.trim()?.lowercase().orEmpty()
@@ -1981,13 +2250,172 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return expected == actual
     }
 
+    private fun validateAndParseVoicePackUri(source: String): URI {
+        val trimmed = source.trim()
+        val uri = runCatching { URI(trimmed) }.getOrElse { throw IllegalArgumentException("voice_pack_invalid_uri") }
+        if (uri.scheme?.lowercase(Locale.getDefault()) != "https") {
+            throw IllegalArgumentException("voice_pack_non_https")
+        }
+        if (uri.userInfo != null || uri.fragment != null) {
+            throw IllegalArgumentException("voice_pack_unsafe_uri")
+        }
+        val host = uri.host?.lowercase(Locale.getDefault()) ?: throw IllegalArgumentException("voice_pack_missing_host")
+        if (!isAllowedPackHost(host)) {
+            throw IllegalArgumentException("voice_pack_disallowed_host")
+        }
+        val addresses = runCatching { InetAddress.getAllByName(host) }.getOrElse { throw UnknownHostException(uri.host) }
+        if (addresses.any { isPrivateOrLocalHostAddress(it) }) {
+            throw IllegalArgumentException("voice_pack_local_network_host")
+        }
+        return uri
+    }
+
+    private fun isAllowedPackHost(host: String): Boolean {
+        val normalized = host.trim().lowercase(Locale.getDefault())
+        if (normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1" || normalized == "0.0.0.0") {
+            return false
+        }
+        if (normalized.startsWith("10.") || normalized.startsWith("192.168.") || normalized.startsWith("169.254.")) return false
+        if (normalized.startsWith("172.")) {
+            val second = normalized.split('.').getOrNull(1)?.toIntOrNull() ?: return false
+            if (second in 16..31) return false
+        }
+        return true
+    }
+
+    private fun isPrivateOrLocalHostAddress(address: InetAddress): Boolean =
+        address.isLoopbackAddress ||
+            address.isAnyLocalAddress ||
+            address.isLinkLocalAddress ||
+            address.isSiteLocalAddress ||
+            address.isMulticastAddress
+
+    private fun resolvePackDownloadUri(uri: URI, expectedBytes: Long): URI? {
+        var redirectsLeft = VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT
+        var current = uri
+        while (redirectsLeft >= 0) {
+            val connection = runCatching { current.toURL().openConnection() as HttpURLConnection }.getOrElse { null } ?: return null
+            try {
+                connection.instanceFollowRedirects = false
+                connection.requestMethod = "GET"
+                connection.connectTimeout = VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS
+                connection.readTimeout = VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS
+                connection.connect()
+                when (connection.responseCode) {
+                    in 300..399 -> {
+                        val location = connection.getHeaderField("Location")
+                        val next = resolveRedirectUri(current, location) ?: return null
+                        redirectsLeft -= 1
+                        current = next
+                    }
+                    in 200..299 -> {
+                        val contentLength = connection.contentLengthLong
+                        if (contentLength >= 0 && contentLength > expectedBytes) {
+                            return null
+                        }
+                        return current
+                    }
+                    else -> return null
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+        return null
+    }
+
+    private fun resolveRedirectUri(base: URI, location: String?): URI? {
+        if (location.isNullOrBlank()) return null
+        val resolved = runCatching { URI(location) }.getOrElse { runCatching { base.resolve(location) }.getOrNull() } ?: return null
+        if (!isAllowedPackUri(resolved)) return null
+        return resolved
+    }
+
+    private fun isAllowedPackUri(uri: URI): Boolean = runCatching {
+        val scheme = uri.scheme?.lowercase(Locale.getDefault()) ?: return false
+        if (scheme != "https") return false
+        if (uri.userInfo != null || uri.fragment != null) return false
+        val host = uri.host?.lowercase(Locale.getDefault()) ?: return false
+        if (!isAllowedPackHost(host)) return false
+        val addresses = InetAddress.getAllByName(host)
+        if (addresses.any { isPrivateOrLocalHostAddress(it) }) return false
+        true
+    }.getOrElse { false }
+
+    private data class VoicePackDownloadStream(val input: java.io.InputStream, val connection: HttpURLConnection) : AutoCloseable {
+        override fun close() {
+            input.close()
+            connection.disconnect()
+        }
+    }
+
+    private fun downloadInputStream(uri: URI): VoicePackDownloadStream? {
+        val connection = runCatching { uri.toURL().openConnection() as HttpURLConnection }.getOrElse { null } ?: return null
+        connection.instanceFollowRedirects = false
+        connection.requestMethod = "GET"
+        connection.connectTimeout = VOICE_PACK_DOWNLOAD_CONNECT_TIMEOUT_MS
+        connection.readTimeout = VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS
+        connection.setRequestProperty("Accept", "application/octet-stream,application/*")
+        return try {
+            connection.connect()
+            if (connection.responseCode !in 200..299) {
+                connection.disconnect()
+                null
+            } else {
+                VoicePackDownloadStream(connection.inputStream, connection)
+            }
+        } catch (_: Exception) {
+            connection.disconnect()
+            null
+        }
+    }
+
+    private fun replaceFileAtomically(temp: File, destination: File): Boolean {
+        if (destination.exists() && !destination.delete()) {
+            return false
+        }
+        val renamed = temp.renameTo(destination)
+        if (!renamed) {
+            try {
+                FileOutputStream(destination).use { output ->
+                    FileInputStream(temp).use { input ->
+                        input.copyTo(output)
+                    }
+                }
+                if (!temp.delete()) {
+                    return false
+                }
+            } catch (_: Exception) {
+                return false
+            }
+        }
+        return destination.exists()
+    }
+
+    private fun cleanStalePackArtifacts(packId: String) {
+        if (!packCatalogIdRegex.matches(packId)) return
+        val safePackId = safePackFileName(packId)
+        val cacheDir = File(activity.filesDir, VOICE_PACK_CACHE_DIR)
+        val partSuffix = "${safePackId}."
+        cacheDir.listFiles()?.forEach { file ->
+            if (file.isFile && (file.name == safePackId || file.name.startsWith(partSuffix))) {
+                if (file.name.endsWith(".part")) {
+                    file.delete()
+                } else if (file.lastModified() < currentUnixMs() - VOICE_PACK_LOCK_STALE_AGE_MS && file.length() == 0L) {
+                    file.delete()
+                }
+            }
+        }
+    }
+
     private fun removePackFiles(packId: String): Boolean {
-        if (!packCatalogFileNameRegex.matches(packId)) return false
+        if (!packCatalogIdRegex.matches(packId)) return false
         val file = File(activity.filesDir, VOICE_PACK_CACHE_DIR).resolve(safePackFileName(packId))
         if (file.exists()) {
             file.delete()
         }
         if (!file.exists()) {
+            cleanStalePackArtifacts(packId)
             voicePackPrefs().edit().remove("${VOICE_PACK_INSTALLED_PREFIX}${packId}").apply()
             return true
         }
@@ -1996,6 +2424,22 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun safePackFileName(packId: String): String {
         return packId.lowercase().filter { it.isLetterOrDigit() || it in "._-" }.ifBlank { "pack.bin" }
+    }
+
+    private fun isValidHexSha256(value: String): Boolean =
+        VOICE_PACK_SHA256_HEX_REGEX.toRegex().matches(value.trim().lowercase(Locale.getDefault()))
+
+    private fun isPositiveAndBoundedSize(size: Long): Boolean =
+        size in VOICE_PACK_MIN_BYTES..AURORA_SPEECH_PACK_MAX_ARCHIVE_BYTES
+
+    private fun stringListFromJSONArray(entry: JSONObject, key: String): List<String> {
+        val array = entry.optJSONArray(key) ?: return emptyList()
+        val out = ArrayList<String>(array.length())
+        for (index in 0 until array.length()) {
+            val value = array.optString(index, "").trim().lowercase(Locale.getDefault())
+            if (value.isNotBlank()) out.add(value)
+        }
+        return out
     }
 
     private fun roleManagerOrNull(): RoleManager? =
@@ -2021,10 +2465,17 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     ): JSObject {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
-        val nativeSessionReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
-        val backgroundRuntimeReady = backgroundSessionAllowed()
+        val nativeRouteReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
+        val localDuplexReady = nativeRouteReady &&
+            isActivePackReady(AuroraSpeechPackTask.STT) &&
+            isActivePackReady(AuroraSpeechPackTask.TTS)
+        val backgroundRuntimeReady = localDuplexReady &&
+            isActivePackReady(AuroraSpeechPackTask.VAD) &&
+            isActivePackReady(AuroraSpeechPackTask.KWS) &&
+            wakePhraseSelection() != null
         val notificationReady = canPostNotifications()
-        val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeSessionReady
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeRouteReady
+        val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && backgroundRuntimeReady
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("running", AuroraVoiceForegroundService.running)
@@ -2044,11 +2495,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("notificationReady", notificationReady)
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
-        ret.put("nativeSessionReady", nativeSessionReady)
+        ret.put("nativeSessionReady", nativeRouteReady)
+        ret.put("localDuplexReady", localDuplexReady)
         ret.put("backgroundRuntimeReady", backgroundRuntimeReady)
-        ret.put("backgroundStartable", backgroundRuntimeReady)
-        ret.put("state", voiceForegroundState(startable, backgroundRuntimeReady, manifestReady, microphoneGranted, notificationReady, nativeSessionReady))
-        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationReady, nativeSessionReady, backgroundRuntimeReady))
+        ret.put("backgroundStartable", backgroundStartable)
+        ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationReady, nativeRouteReady))
+        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationReady, nativeRouteReady))
         ret.put("privacyClass", "raw-audio")
         ret.put("backendAudioEvidenceRequired", !capture.captureActive)
         ret.put("evidenceSource", "android-permission-foreground-service")
@@ -2058,7 +2510,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun voiceForegroundState(
         startable: Boolean,
-        backgroundRuntimeReady: Boolean,
         manifestReady: Boolean,
         microphoneGranted: Boolean,
         notificationReady: Boolean,
@@ -2068,7 +2519,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         if (!microphoneGranted) return "needs_native_permission"
         if (!notificationReady) return "degraded"
         if (!nativeSessionReady) return "degraded"
-        if (!backgroundRuntimeReady) return "degraded"
         if (startable) return "available"
         return "degraded"
     }
@@ -2079,13 +2529,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         microphoneGranted: Boolean,
         notificationReady: Boolean,
         nativeSessionReady: Boolean,
-        backgroundRuntimeReady: Boolean,
     ): String {
         if (!manifestReady) return "foreground_service_manifest_missing"
         if (!microphoneGranted) return "microphone_permission_missing"
         if (!notificationReady) return "notification_delivery_unavailable"
-        if (!nativeSessionReady) return "native_voice_route_missing"
-        if (!backgroundRuntimeReady) return "background_pack_runtime_unavailable"
+        if (!nativeSessionReady) return "native_voice_runtime_missing"
         if (startable) return "foreground_service_startable"
         return "foreground_service_degraded"
     }
@@ -3014,7 +3462,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val originAllowed = isTrustedMicOrigin(args.origin, args.configuredHttpsOrigins.ifEmpty { configuredMicOrigins })
         val runtimeGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
         val active = args.foreground && args.focused && foreground && focused
-        val granted = resourceAllowed && originAllowed && runtimeGranted && active
+        val nativeServiceOwnsMic = AuroraVoiceForegroundService.running || AuroraVoiceForegroundService.captureSnapshot.captureActive
+        val granted = resourceAllowed && originAllowed && runtimeGranted && active && !nativeServiceOwnsMic
         val ret = JSObject()
         ret.put("grant", granted)
         val grantResources = JSArray()
@@ -3025,11 +3474,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             !originAllowed -> "untrusted_origin"
             !runtimeGranted -> "record_audio_permission_missing"
             !active -> "webview_not_foreground_focused"
+            nativeServiceOwnsMic -> "native_voice_session_active"
             else -> "trusted_foreground_audio_capture"
         })
         ret.put("origin", args.origin)
         ret.put("foreground", foreground)
         ret.put("focused", focused)
+        ret.put("nativeVoiceActive", nativeServiceOwnsMic)
         ret.put("secretsRedacted", true)
         return ret
     }
@@ -3390,11 +3841,27 @@ class AndroidVoicePackCatalogArgs {
     var catalogJson: String = "[]"
 }
 
+interface AndroidVoicePackReferenceArgs {
+    var referenceId: String
+    var referenceAudioUri: String
+    var referenceText: String
+    var referenceRevision: String
+    var referenceSampleRateHz: Int
+    var referenceSamples: Array<Double>
+}
+
 @InvokeArg
-class AndroidVoicePackDownloadArgs {
+class AndroidVoicePackDownloadArgs : AndroidVoicePackReferenceArgs {
     var packId: String = ""
+    var task: String = ""
     var activate: Boolean = false
     var forceDownload: Boolean = false
+    override var referenceId: String = ""
+    override var referenceAudioUri: String = ""
+    override var referenceText: String = ""
+    override var referenceRevision: String = ""
+    override var referenceSampleRateHz: Int = 0
+    override var referenceSamples: Array<Double> = emptyArray()
 }
 
 @InvokeArg
@@ -3403,13 +3870,21 @@ class AndroidVoicePackOperationStatusArgs {
 }
 
 @InvokeArg
-class AndroidVoicePackActivateArgs {
+class AndroidVoicePackActivateArgs : AndroidVoicePackReferenceArgs {
     var packId: String = ""
+    var task: String = ""
+    override var referenceId: String = ""
+    override var referenceAudioUri: String = ""
+    override var referenceText: String = ""
+    override var referenceRevision: String = ""
+    override var referenceSampleRateHz: Int = 0
+    override var referenceSamples: Array<Double> = emptyArray()
 }
 
 @InvokeArg
 class AndroidVoicePackRemoveArgs {
     var packId: String = ""
+    var task: String = ""
 }
 
 private data class VoiceRouteCandidate(

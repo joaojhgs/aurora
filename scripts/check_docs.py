@@ -48,12 +48,6 @@ ALLOWED_DOCS_JSON_ARTIFACTS = {
     Path("docs/security/mesh-security-surface-inventory.schema.json"),
 }
 
-ALLOWED_TASK_DOCS = {
-    # PER-269 is a human-requested PR 156 recovery report. Keep the exception
-    # exact so one-off task docs do not re-enter current docs by pattern.
-    Path("docs/PER-269-tauri-ui-production-readiness-report.md"),
-}
-
 
 def is_skipped(path: Path) -> bool:
     return any(part in SKIP_PARTS for part in path.parts)
@@ -147,8 +141,6 @@ def check_task_docs() -> list[str]:
     for path in (ROOT / "docs").rglob("*.md"):
         rel = path.relative_to(ROOT)
         if is_archive_or_provenance(rel):
-            continue
-        if rel in ALLOWED_TASK_DOCS:
             continue
         if TASK_DOC_RE.search(rel.as_posix()):
             errors.append(f"{rel}: task-specific PER/QA doc outside archive")

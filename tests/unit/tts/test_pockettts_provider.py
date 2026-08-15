@@ -555,8 +555,8 @@ async def test_pockettts_start_loads_model_and_multiple_voice_states() -> None:
     assert [
         (voice.voice_id, voice.display_name, voice.ready, voice.language) for voice in voices
     ] == [
-        ("standard:starter_de:anna", "Anna", True, "german"),
-        ("clone:00000000-0000-4000-8000-000000000001", "Local", True, "german"),
+        ("standard:starter_de:anna", "Anna", True, "de"),
+        ("clone:00000000-0000-4000-8000-000000000001", "Local", True, "de"),
     ]
     await provider.stop()
     assert _pockettts_worker_threads() == []

@@ -25,6 +25,21 @@ const canonicalPluginResourceDir = resolve('src-tauri/android/aurora-native-plug
 const canonicalAndroidIconDir = resolve('src-tauri/icons/android')
 const generatedAndroidResourceDir = resolve(genAndroidDir, 'app/src/main/res')
 const generatedBaseStringsPath = join(generatedAndroidResourceDir, 'values', 'strings.xml')
+const generatedAndroidJniLibsDir = resolve(genAndroidDir, 'app/src/main/jniLibs')
+const androidNativeSpeechTargets = {
+  aarch64: {
+    abi: 'arm64-v8a',
+    libDirEnv: 'AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR',
+  },
+  x86_64: {
+    abi: 'x86_64',
+    libDirEnv: 'AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR',
+  },
+}
+const requiredNativeSpeechLibraries = [
+  'libonnxruntime.so',
+  'libsherpa-onnx-c-api.so',
+]
 
 if (!existsSync(appManifestPath)) {
   throw new Error('Tauri Android project is missing. Run android:init before installing the Aurora native plugin.')
@@ -35,6 +50,7 @@ cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
 syncAuroraAndroidNativeResources()
 syncCanonicalAndroidLauncherIcons()
 verifyVendorBarcodeScannerSource()
+syncNativeSpeechLibraries()
 
 patchFile(appManifestPath, (content) => mergePluginManifest(content))
 if (existsSync(mainActivityPath)) {
@@ -164,6 +180,52 @@ function verifyVendorBarcodeScannerSource() {
 
   console.log(
     'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source through the Tauri mobile build output.',
+  )
+}
+
+function syncNativeSpeechLibraries() {
+  const targets = (process.env.AURORA_ANDROID_NATIVE_TARGETS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (targets.length === 0) return
+
+  for (const spec of Object.values(androidNativeSpeechTargets)) {
+    for (const library of requiredNativeSpeechLibraries) {
+      rmSync(join(generatedAndroidJniLibsDir, spec.abi, library), { force: true })
+    }
+  }
+
+  const staged = []
+  for (const target of targets) {
+    const spec = androidNativeSpeechTargets[target]
+    if (!spec) {
+      throw new Error(
+        `Unsupported Android native speech target ${target}; expected ${Object.keys(androidNativeSpeechTargets).join(' or ')}`,
+      )
+    }
+    const configured = process.env[spec.libDirEnv]
+      ?? (targets.length === 1 ? process.env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+    if (!configured) {
+      throw new Error(
+        `${spec.libDirEnv} is required to stage Android native speech libraries for ${spec.abi}`,
+      )
+    }
+    const sourceDir = resolve(configured)
+    const destinationDir = join(generatedAndroidJniLibsDir, spec.abi)
+    mkdirSync(destinationDir, { recursive: true })
+    for (const library of requiredNativeSpeechLibraries) {
+      const source = join(sourceDir, library)
+      if (!existsSync(source)) {
+        throw new Error(`${spec.libDirEnv} is missing ${library}: ${sourceDir}`)
+      }
+      cpSync(source, join(destinationDir, library), { force: true })
+    }
+    staged.push(spec.abi)
+  }
+
+  console.log(
+    `Staged Android native speech runtime libraries for ${staged.join(', ')}.`,
   )
 }
 

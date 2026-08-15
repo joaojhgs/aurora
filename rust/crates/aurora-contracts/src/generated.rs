@@ -15,6 +15,7 @@ pub mod ids {
     pub const ORCHESTRATOR_INTERRUPT: &str = "Orchestrator.Interrupt";
     pub const TTS_GET_CAPABILITIES: &str = "TTS.GetCapabilities";
     pub const TTS_LIST_VOICES: &str = "TTS.ListVoices";
+    pub const TTS_LIST_LANGUAGE_PACKS: &str = "TTS.ListLanguagePacks";
     pub const TTS_LIST_VOICE_PROFILES: &str = "TTS.ListVoiceProfiles";
     pub const TTS_GET_VOICE_PROFILE: &str = "TTS.GetVoiceProfile";
     pub const TTS_UPDATE_VOICE_PROFILE: &str = "TTS.UpdateVoiceProfile";
@@ -27,6 +28,8 @@ pub mod ids {
     pub const TTS_VOICE_IMPORT_ABORT: &str = "TTS.VoiceImportAbort";
     pub const TTS_CREATE_VOICE_PROFILE: &str = "TTS.CreateVoiceProfile";
     pub const TTS_DELETE_VOICE_PROFILE: &str = "TTS.DeleteVoiceProfile";
+    pub const TTS_EXPORT_VOICE_PROFILE: &str = "TTS.ExportVoiceProfile";
+    pub const TTS_IMPORT_VOICE_PROFILE: &str = "TTS.ImportVoiceProfile";
     pub const TTS_REQUEST: &str = "TTS.Request";
     pub const TTS_STREAM_START: &str = "TTS.StreamStart";
     pub const TTS_STREAM_CHUNK: &str = "TTS.StreamChunk";
@@ -148,6 +151,14 @@ pub mod models {
         typify::import_types!(schema = "schema/tts_delete_voice_profile_response.json");
     }
     pub use tts_delete_voice_profile_response::TtsDeleteVoiceProfileResponse;
+    pub mod tts_export_voice_profile_request {
+        typify::import_types!(schema = "schema/tts_export_voice_profile_request.json");
+    }
+    pub use tts_export_voice_profile_request::TtsExportVoiceProfileRequest;
+    pub mod tts_export_voice_profile_response {
+        typify::import_types!(schema = "schema/tts_export_voice_profile_response.json");
+    }
+    pub use tts_export_voice_profile_response::TtsExportVoiceProfileResponse;
     pub mod tts_get_capabilities_request {
         typify::import_types!(schema = "schema/tts_get_capabilities_request.json");
     }
@@ -164,6 +175,14 @@ pub mod models {
         typify::import_types!(schema = "schema/tts_get_voice_profile_response.json");
     }
     pub use tts_get_voice_profile_response::TtsGetVoiceProfileResponse;
+    pub mod tts_import_voice_profile_request {
+        typify::import_types!(schema = "schema/tts_import_voice_profile_request.json");
+    }
+    pub use tts_import_voice_profile_request::TtsImportVoiceProfileRequest;
+    pub mod tts_import_voice_profile_response {
+        typify::import_types!(schema = "schema/tts_import_voice_profile_response.json");
+    }
+    pub use tts_import_voice_profile_response::TtsImportVoiceProfileResponse;
     pub mod tts_install_voice_profile_request {
         typify::import_types!(schema = "schema/tts_install_voice_profile_request.json");
     }
@@ -172,6 +191,14 @@ pub mod models {
         typify::import_types!(schema = "schema/tts_install_voice_profile_response.json");
     }
     pub use tts_install_voice_profile_response::TtsInstallVoiceProfileResponse;
+    pub mod tts_list_language_packs_request {
+        typify::import_types!(schema = "schema/tts_list_language_packs_request.json");
+    }
+    pub use tts_list_language_packs_request::TtsListLanguagePacksRequest;
+    pub mod tts_list_language_packs_response {
+        typify::import_types!(schema = "schema/tts_list_language_packs_response.json");
+    }
+    pub use tts_list_language_packs_response::TtsListLanguagePacksResponse;
     pub mod tts_list_voice_profiles_request {
         typify::import_types!(schema = "schema/tts_list_voice_profiles_request.json");
     }
@@ -332,7 +359,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Gateway.ExplainRoute",
         direction: "input",
         model_name: "RouteExplainRequest",
-        schema_hash: "d05010e28be60b0dd3ae969cef25872b43158512976806b473fe430dbe756561",
+        schema_hash: "8016d24300f51a4ffcacd85f07d3764e5f373276bbb36a8081b99650e357d77d",
         schema_json: include_str!("../schema/route_explain_request.json"),
     },
     SchemaDescriptor {
@@ -484,7 +511,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.CreateVoiceProfile",
         direction: "input",
         model_name: "TTSCreateVoiceProfileRequest",
-        schema_hash: "11fc8f0c64f33e9d874885cf8a0b21917fb0f22f37709191b411158d92ee5203",
+        schema_hash: "71864d04c37f9d3891344d90eb1c694da70e06c9b1ad131e174276d13b861d15",
         schema_json: include_str!("../schema/tts_create_voice_profile_request.json"),
     },
     SchemaDescriptor {
@@ -512,6 +539,22 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         schema_json: include_str!("../schema/tts_delete_voice_profile_response.json"),
     },
     SchemaDescriptor {
+        schema_id: "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest",
+        method_id: "TTS.ExportVoiceProfile",
+        direction: "input",
+        model_name: "TTSExportVoiceProfileRequest",
+        schema_hash: "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c",
+        schema_json: include_str!("../schema/tts_export_voice_profile_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse",
+        method_id: "TTS.ExportVoiceProfile",
+        direction: "output",
+        model_name: "TTSExportVoiceProfileResponse",
+        schema_hash: "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549",
+        schema_json: include_str!("../schema/tts_export_voice_profile_response.json"),
+    },
+    SchemaDescriptor {
         schema_id: "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest",
         method_id: "TTS.GetCapabilities",
         direction: "input",
@@ -524,7 +567,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.GetCapabilities",
         direction: "output",
         model_name: "TTSGetCapabilitiesResponse",
-        schema_hash: "038cb33a1ca8eafea60a326169eb770b91032226281ade8613427e706ed8fb29",
+        schema_hash: "01b05a49afa867e44fa37e1801bc85a2757f4055001dbee0afe71a741f58c155",
         schema_json: include_str!("../schema/tts_get_capabilities_response.json"),
     },
     SchemaDescriptor {
@@ -544,6 +587,22 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         schema_json: include_str!("../schema/tts_get_voice_profile_response.json"),
     },
     SchemaDescriptor {
+        schema_id: "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest",
+        method_id: "TTS.ImportVoiceProfile",
+        direction: "input",
+        model_name: "TTSImportVoiceProfileRequest",
+        schema_hash: "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3",
+        schema_json: include_str!("../schema/tts_import_voice_profile_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse",
+        method_id: "TTS.ImportVoiceProfile",
+        direction: "output",
+        model_name: "TTSImportVoiceProfileResponse",
+        schema_hash: "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc",
+        schema_json: include_str!("../schema/tts_import_voice_profile_response.json"),
+    },
+    SchemaDescriptor {
         schema_id: "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest",
         method_id: "TTS.InstallVoiceProfile",
         direction: "input",
@@ -558,6 +617,22 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "TTSInstallVoiceProfileResponse",
         schema_hash: "8fd498e8964ed05bb825d436cec455d78b1e012679e068eef51c6064f53d8448",
         schema_json: include_str!("../schema/tts_install_voice_profile_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest",
+        method_id: "TTS.ListLanguagePacks",
+        direction: "input",
+        model_name: "TTSListLanguagePacksRequest",
+        schema_hash: "97b96c151445cffd98d2f890e89d0c15659bd81d31a4bab75b18099dd3aed442",
+        schema_json: include_str!("../schema/tts_list_language_packs_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse",
+        method_id: "TTS.ListLanguagePacks",
+        direction: "output",
+        model_name: "TTSListLanguagePacksResponse",
+        schema_hash: "cd89499d6404308b9ed42b763bd6e82b5d1e3a1e30168c0e12c984b485bd591c",
+        schema_json: include_str!("../schema/tts_list_language_packs_response.json"),
     },
     SchemaDescriptor {
         schema_id: "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest",
@@ -580,7 +655,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.ListVoices",
         direction: "input",
         model_name: "TTSListVoicesRequest",
-        schema_hash: "52a2cd8c57d91f1c49accf6ee916d477970ccef16c06fc381b7926f01300f9aa",
+        schema_hash: "5a67735133d22419018f9e3f35063734fc61d78a182d0011b4a691d5db384d1e",
         schema_json: include_str!("../schema/tts_list_voices_request.json"),
     },
     SchemaDescriptor {
@@ -612,7 +687,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.Request",
         direction: "input",
         model_name: "TTSRequest",
-        schema_hash: "efaf5f938c5119a8569cbd8dfe941543adfb31bff29efcc470430420e1d2c467",
+        schema_hash: "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a",
         schema_json: include_str!("../schema/tts_request.json"),
     },
     SchemaDescriptor {
@@ -676,7 +751,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.StreamStart",
         direction: "input",
         model_name: "TTSStreamStartRequest",
-        schema_hash: "b4d6db1532cd3519475101c2b6bf28cb6a6d144eb4b42293680f51a1768f31e6",
+        schema_hash: "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498",
         schema_json: include_str!("../schema/tts_stream_start_request.json"),
     },
     SchemaDescriptor {
@@ -692,7 +767,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.Synthesize",
         direction: "input",
         model_name: "TTSSynthesizeRequest",
-        schema_hash: "d5408ff48dccb96b3ee7c1c578ce9c27b10f7a33e37fbb97430e2d8222ab8bb6",
+        schema_hash: "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
         schema_json: include_str!("../schema/tts_synthesize_request.json"),
     },
     SchemaDescriptor {
@@ -868,7 +943,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Transcription.Transcribe",
         direction: "input",
         model_name: "TranscribeAudioRequest",
-        schema_hash: "00a0d251f18c3afec3b2593dfe57999a7fdaae76d3b937b3bdec90bbd3a7f56f",
+        schema_hash: "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa",
         schema_json: include_str!("../schema/transcribe_audio_request.json"),
     },
     SchemaDescriptor {
@@ -1095,6 +1170,27 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         callable_feature_ids: &["speech_voice_discovery"],
         input_schema_id: "TTS.ListVoices.input.TTSListVoicesRequest",
         output_schema_id: "TTS.ListVoices.output.TTSListVoicesResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.ListLanguagePacks",
+        bus_topic: "TTS.ListLanguagePacks",
+        module: "TTS",
+        name: "ListLanguagePacks",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/TTS/ListLanguagePacks",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.manage"],
+        callable_feature_ids: &["speech_voice_management"],
+        input_schema_id: "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest",
+        output_schema_id: "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse",
         streaming: StreamingDescriptor {
             rpc_kind: "unary",
             request_stream: false,
@@ -1347,6 +1443,48 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         callable_feature_ids: &["speech_voice_management"],
         input_schema_id: "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest",
         output_schema_id: "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.ExportVoiceProfile",
+        bus_topic: "TTS.ExportVoiceProfile",
+        module: "TTS",
+        name: "ExportVoiceProfile",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/TTS/ExportVoiceProfile",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.manage"],
+        callable_feature_ids: &["speech_voice_management"],
+        input_schema_id: "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest",
+        output_schema_id: "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.ImportVoiceProfile",
+        bus_topic: "TTS.ImportVoiceProfile",
+        module: "TTS",
+        name: "ImportVoiceProfile",
+        method_type: "manage",
+        exposure: "both",
+        route_path: "/api/TTS/ImportVoiceProfile",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.manage"],
+        callable_feature_ids: &["speech_voice_management"],
+        input_schema_id: "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest",
+        output_schema_id: "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse",
         streaming: StreamingDescriptor {
             rpc_kind: "unary",
             request_stream: false,
@@ -1763,12 +1901,18 @@ pub fn normalize_generated_contract(
         "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse" => serde_json::from_value::<models::tts_create_voice_profile_response::TtsCreateVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest" => serde_json::from_value::<models::tts_delete_voice_profile_request::TtsDeleteVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse" => serde_json::from_value::<models::tts_delete_voice_profile_response::TtsDeleteVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest" => serde_json::from_value::<models::tts_export_voice_profile_request::TtsExportVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse" => serde_json::from_value::<models::tts_export_voice_profile_response::TtsExportVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.GetCapabilities.input.TTSGetCapabilitiesRequest" => serde_json::from_value::<models::tts_get_capabilities_request::TtsGetCapabilitiesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse" => serde_json::from_value::<models::tts_get_capabilities_response::TtsGetCapabilitiesResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.GetVoiceProfile.input.TTSGetVoiceProfileRequest" => serde_json::from_value::<models::tts_get_voice_profile_request::TtsGetVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse" => serde_json::from_value::<models::tts_get_voice_profile_response::TtsGetVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest" => serde_json::from_value::<models::tts_import_voice_profile_request::TtsImportVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse" => serde_json::from_value::<models::tts_import_voice_profile_response::TtsImportVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.InstallVoiceProfile.input.TTSInstallVoiceProfileRequest" => serde_json::from_value::<models::tts_install_voice_profile_request::TtsInstallVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse" => serde_json::from_value::<models::tts_install_voice_profile_response::TtsInstallVoiceProfileResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListLanguagePacks.input.TTSListLanguagePacksRequest" => serde_json::from_value::<models::tts_list_language_packs_request::TtsListLanguagePacksRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse" => serde_json::from_value::<models::tts_list_language_packs_response::TtsListLanguagePacksResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.ListVoiceProfiles.input.TTSListVoiceProfilesRequest" => serde_json::from_value::<models::tts_list_voice_profiles_request::TtsListVoiceProfilesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse" => serde_json::from_value::<models::tts_list_voice_profiles_response::TtsListVoiceProfilesResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.ListVoices.input.TTSListVoicesRequest" => serde_json::from_value::<models::tts_list_voices_request::TtsListVoicesRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),

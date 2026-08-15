@@ -12,7 +12,7 @@ describe("createTauriNativeIosVoicePort", () => {
     );
     const port = createTauriNativeIosVoicePort(callNative);
 
-    await expect(port.status()).resolves.toEqual({
+    await expect(port.status()).resolves.toMatchObject({
       available: false,
       phase: "unavailable",
       running: true,
@@ -49,6 +49,55 @@ describe("createTauriNativeIosVoicePort", () => {
       request: { remoteAudioConsent: true },
     });
     expect(callNative.mock.calls[2]?.[1]).toBeUndefined();
+  });
+
+  it("routes user-started background capture through the iOS background command and status gate", async () => {
+    const callNative = vi.fn<NativeCommand>(async (command) => {
+      if (command === "aurora_ios_voice_status") {
+        return { available: true };
+      }
+      if (command === "aurora_ios_background_status") {
+        return {
+          available: true,
+          details: { backgroundSessionActive: command === "aurora_ios_background_status" },
+        };
+      }
+      if (command === "aurora_ios_voice_foreground_capture_status") {
+        return { available: true, running: true, backgroundListening: true };
+      }
+      return { available: true, running: true, backgroundListening: true };
+    });
+    const port = createTauriNativeIosVoicePort(callNative);
+
+    await expect(port.backgroundStatus?.()).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+      backgroundActive: true,
+    });
+    await expect(port.startBackground?.({ remoteAudioConsent: false })).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+      backgroundActive: true,
+    });
+    await expect(port.stopBackground?.()).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+    });
+
+    expect(callNative.mock.calls.map(([command]) => command)).toEqual([
+      "aurora_ios_voice_status",
+      "aurora_ios_background_status",
+      "aurora_ios_voice_foreground_capture_status",
+      "aurora_ios_voice_background_capture_start",
+      "aurora_ios_voice_foreground_capture_status",
+      "aurora_ios_background_status",
+      "aurora_ios_voice_foreground_capture_stop",
+      "aurora_ios_voice_foreground_capture_status",
+      "aurora_ios_background_status",
+    ]);
+    expect(callNative.mock.calls[3]?.[1]).toEqual({
+      request: { remoteAudioConsent: false },
+    });
   });
 
   it("rejects malformed start requests before crossing the native boundary", async () => {

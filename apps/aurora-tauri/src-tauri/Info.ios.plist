@@ -5,11 +5,15 @@
     <key>NSCameraUsageDescription</key>
     <string>Aurora uses the camera only when you scan a mesh invite QR code.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Aurora uses the microphone for focused voice capture and WebRTC audio when you choose to speak.</string>
+    <string>Aurora uses the microphone for voice capture when you choose to speak or start listening in the app.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>Aurora connects to mesh peers and user-configured Aurora services on your local network.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Aurora uses Face ID or Touch ID to confirm admin unlocks and protect local credentials.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>audio</string>
+    </array>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>

@@ -598,21 +598,16 @@ The following endpoints bypass authentication:
 
 The Gateway WebRTC stack is now interoperable with the TypeScript browser/WebView runtime used by hosted web thin, desktop Tauri thin, and Android thin. The shared runtime supports `http-only`, `webrtc-only`, and `webrtc-preferred`; WebRTC modes use MQTT signaling and the `aurora-rpc` `RTCDataChannel` for Aurora RPC/events.
 
-Current live proof covers direct, configured-STUN, and forced-TURN Chromium, Firefox, and Playwright-WebKit browser ↔ Python Gateway sessions:
+The required browser matrix covers direct, configured-STUN, and forced-TURN Chromium, Firefox, and Playwright-WebKit browser ↔ Python Gateway sessions:
 
-| Lane | Report | Proof boundary |
-| --- | --- | --- |
-| Chromium direct ICE | `reports/webrtc-interop/direct/report.json` | Selected direct `host`, or raw `prflx`/`host` with no gathered STUN or relay evidence, from browser `RTCPeerConnection.getStats()`; Python HTTP API disabled, RPC/events over DataChannel. |
-| STUN server-reflexive ICE | `reports/webrtc-interop/stun/report.json` | `laneIntent=stun`; raw selected pair category is preserved (`srflx` or `prflx`). A selected `prflx` pair is accepted only with `candidateProof` showing browser `getStats()` gathered a true configured-STUN `srflx` candidate; Python HTTP API disabled, RPC/events over DataChannel. |
-| Forced TURN relay | `reports/webrtc-interop/turn/report.json` | `selectedCandidatePair.category=relay` from browser `RTCPeerConnection.getStats()`, Python HTTP API disabled, RPC/events over DataChannel. |
-| Firefox direct | `reports/webrtc-interop/firefox-direct/report.json` | Selected direct host pair from Firefox `getStats()`, with the same HTTP-disabled, auth, reconnect, mutation, event-scope, and redaction assertions. |
-| Firefox STUN | `reports/webrtc-interop/firefox-stun/report.json` | Selected raw `prflx`/host pair plus a gathered `srflx` candidate. Firefox omits the candidate URL from stats, so proof requires exactly one configured STUN server and records that bounded evidence mode explicitly. |
-| Firefox forced TURN | `reports/webrtc-interop/firefox-turn/report.json` | Firefox selected a `relay` pair under relay-only policy, with the same application/security assertions. |
-| WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Selected direct pair from WebKit `getStats()`, with the same assertions. The scanner preserves a raw `prflx` category when WebKit reports a peer-reflexive/host pair and accepts it only when the direct lane has no gathered STUN or relay evidence. |
-| WebKit STUN | `reports/webrtc-interop/webkit-stun/report.json` | Playwright WebKit selected an `srflx` pair with configured-STUN URL-match evidence from `getStats()`, with the same application/security assertions. |
-| WebKit forced TURN | `reports/webrtc-interop/webkit-turn/report.json` | Playwright WebKit selected a `relay` pair from `getStats()`, with the same application/security assertions. |
+| Lane | Required proof boundary |
+| --- | --- |
+| Direct ICE | Selected `host`, or raw `prflx`/`host` with no gathered STUN or relay evidence, from browser `RTCPeerConnection.getStats()`; Python HTTP API disabled; RPC/events over DataChannel. |
+| STUN server-reflexive ICE | Raw selected category preserved as `srflx` or `prflx`; selected `prflx` accepted only when candidate stats prove a configured STUN server gathered a true `srflx` candidate. |
+| Forced TURN relay | `selectedCandidatePair.category=relay` under relay-only policy. |
+| Firefox and WebKit variants | The same HTTP-disabled, auth, reconnect, mutation, event-scope, and redaction assertions, with engine-specific candidate-stat handling kept explicit. |
 
-The passing reports assert bilateral SAS pairing, reconnect proof without another SAS prompt, credential revocation fail-closed, scoped event/correlation isolation, redacted secret scanning, and an uncertain-loss mutation proof where `G009Interop.Mutate` starts, `G009Interop.MutationStarted` is observed, disconnect happens before the response settles, and Python records execution count 1. Scoped authorization uses public production Auth/Gateway/DataChannel boundaries, not private service calls.
+Each passing run asserts bilateral SAS pairing, reconnect proof without another SAS prompt, credential revocation fail-closed, scoped event/correlation isolation, redacted secret scanning, and the uncertain-loss mutation boundary. Scoped authorization uses public production Auth/Gateway/DataChannel boundaries, not private service calls. Per-run reports are ignored locally; the latest CI artifacts are the fresh evidence.
 
 Run:
 
@@ -622,7 +617,7 @@ pnpm test:webrtc:turn
 pnpm test:webrtc:browsers
 ```
 
-`pnpm test:webrtc:browsers` is a best-effort matrix. Current checked reports pass all three direct engines, but any skip produced on a host without an optional Playwright runtime must still be treated as unproven. See [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
+`pnpm test:webrtc:browsers` is a best-effort local matrix. Any skip produced on a host without an optional Playwright runtime is unproven; required CI fails when a browser lane is unavailable. See [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
 
 ## WebRTC Authentication & Pairing
 

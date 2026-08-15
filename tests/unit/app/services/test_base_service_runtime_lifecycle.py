@@ -95,6 +95,37 @@ class CallableFeatureAnnouncementService(BaseService):
         return RuntimeTestResponse()
 
 
+class ExplicitEmptyCapabilitiesAnnouncementService(BaseService):
+    def __init__(self) -> None:
+        super().__init__(
+            module="Auth",
+            summary="Explicit empty capability test",
+            capabilities=["registered_capability"],
+        )
+
+    async def _is_runtime_enabled(self) -> bool:
+        return True
+
+    async def on_start(self) -> None:
+        self._capabilities = []
+
+    async def on_stop(self) -> None:
+        return None
+
+    async def reload(self, config_section: str | None = None) -> None:
+        return None
+
+    @method_contract(
+        method_id="Auth.EmptyCapabilitiesTest",
+        summary="Explicit empty capability method",
+        input_model=EmptyInput,
+        output_model=RuntimeTestResponse,
+        exposure="internal",
+    )
+    async def handle_empty_capability_test(self, _data: EmptyInput) -> RuntimeTestResponse:
+        return RuntimeTestResponse()
+
+
 class InvalidPermissionlessCallableService(BaseService):
     def __init__(self) -> None:
         super().__init__(module="TTS", summary="Invalid callable test")
@@ -226,6 +257,36 @@ async def test_service_announcement_carries_callable_feature_metadata(local_bus)
         assert method.speech_constraints is not None
         assert method.speech_constraints.exact_languages == ["en"]
         assert method.speech_constraints.speech_capability_revision == 11
+        await service.stop()
+    finally:
+        local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+        clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_service_announcement_preserves_explicit_empty_capabilities(local_bus) -> None:
+    from app.shared.contracts.models.gateway import GatewayMethods, ServiceAnnouncement
+
+    clear_registry()
+    announcements: list[ServiceAnnouncement] = []
+    announcement_received = asyncio.Event()
+
+    async def capture(envelope) -> None:
+        announcements.append(envelope.payload)
+        announcement_received.set()
+
+    local_bus.subscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+    try:
+        service = ExplicitEmptyCapabilitiesAnnouncementService()
+        await service.start()
+
+        await asyncio.wait_for(announcement_received.wait(), timeout=1)
+        announcement = announcements[-1]
+        assert announcement.module == "Auth"
+        assert announcement.capabilities == []
+        assert [method.bus_topic for method in announcement.methods] == [
+            "Auth.EmptyCapabilitiesTest"
+        ]
         await service.stop()
     finally:
         local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)

@@ -43,7 +43,7 @@ Normalize the repository branch state before implementing any mesh-gap tasks. Du
   - Tooling stable metadata and remote execution policy.
   - scheduler remote namespace/owner policy.
   - tracing/correlation helpers and chaos tests.
-- Produce `.omx/reports/mesh-gap-branch-baseline.md` with commit SHAs, branch relation, tests run, and primitive availability matrix.
+- Produce an ignored local baseline or CI artifact with commit SHAs, branch relation, tests run, and the primitive availability matrix.
 
 ## Code references
 - `app/messaging/mesh_bus.py`

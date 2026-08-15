@@ -8,15 +8,22 @@
 use async_trait::async_trait;
 use aurora_voice_engine::{
     check_engine_cancellation, BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession,
-    BoundTaskRequest, BoundVadRequest, EngineError, EngineFaultCode, FiniteSttAudio, FiniteSttPort,
-    FiniteSttProviderBinding, FiniteSttResult, KeywordMatch, KwsConfig, KwsCooldownState,
-    KwsFrameResult, ResourceReport, SpeechSegment, StreamResetReason, StreamSessionId,
-    StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness,
-    VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ,
-    VAD_WINDOW_SIZE_SAMPLES,
+    BoundTaskRequest, BoundTtsSynthesisRequest, BoundVadRequest, EngineError, EngineFaultCode,
+    FiniteSttAudio, FiniteSttPort, FiniteSttProviderBinding, FiniteSttResult, KeywordMatch,
+    KwsConfig, KwsCooldownState, KwsFrameResult, ResourceReport, SpeechSegment, StreamResetReason,
+    StreamSessionId, StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider,
+    TaskReadiness, TtsAudioChunk, TtsSynthesisPort, TtsSynthesisProviderBinding,
+    TtsSynthesisResult, VadAcceptResult, VadConfig, VadStreamProvider, VoiceTask, MONO_CHANNELS,
+    TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use thiserror::Error;
 
 const MAX_DRAINED_SEGMENTS: usize = 512;
@@ -25,7 +32,25 @@ const MAX_LOGICAL_PHRASE_ID_BYTES: usize = 128;
 const MAX_NATIVE_KEYWORD_BYTES: usize = 512;
 const MAX_KEYWORD_BUFFER_BYTES: usize = 4096;
 const MAX_PHRASE_REVISION_BYTES: usize = 128;
+const MAX_KWS_PHRASE_TEXT_BYTES: usize = 128;
+#[cfg(feature = "kws-sentencepiece")]
+const MAX_KWS_SENTENCEPIECE_MODEL_BYTES: u64 = 2 * 1024 * 1024;
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
+const MAX_COMPILED_KWS_TOKENS: usize = 64;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_TOKEN_TABLE_BYTES: u64 = 1024 * 1024;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_TOKEN_TABLE_ENTRIES: usize = 16_384;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_LEXICON_BYTES: u64 = 8 * 1024 * 1024;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_LEXICON_ENTRIES: usize = 200_000;
+#[cfg(feature = "kws-pinyin")]
+const MAX_KWS_METADATA_LINE_BYTES: usize = 512;
 const SHERPA_FINITE_STT_MAX_SECONDS: usize = 60;
+const SHERPA_TTS_MAX_SECONDS: usize = 60;
+const SHERPA_TTS_MIN_SPEED: f32 = 0.5;
+const SHERPA_TTS_MAX_SPEED: f32 = 2.0;
 
 /// Product-safe backend fault classes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +91,8 @@ pub enum SherpaAdapterError {
     InvalidConfig,
     #[error("invalid audio frame")]
     InvalidFrame,
+    #[error("invalid synthesized audio")]
+    InvalidAudio,
     #[error("invalid speech segment")]
     InvalidSegment,
     #[error("invalid phrase map")]
@@ -89,6 +116,7 @@ impl SherpaAdapterError {
         match self {
             Self::InvalidConfig
             | Self::InvalidFrame
+            | Self::InvalidAudio
             | Self::InvalidSegment
             | Self::InvalidPhraseMap
             | Self::InvalidTranscript => EngineError::InvalidRequest,
@@ -97,6 +125,66 @@ impl SherpaAdapterError {
                 code: code.as_engine_fault(),
             },
         }
+    }
+}
+
+/// Product-safe keyword phrase compilation failures.
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
+pub enum SherpaKwsPhraseCompileError {
+    #[error("unsupported keyword tokenizer family")]
+    UnsupportedFamily,
+    #[error("invalid keyword phrase")]
+    InvalidPhrase,
+    #[error("invalid keyword tokenizer model")]
+    InvalidTokenizer,
+    #[error("invalid keyword lexicon")]
+    InvalidLexicon,
+    #[error("keyword phrase output exceeds limits")]
+    ResourceLimit,
+}
+
+impl SherpaKwsPhraseCompileError {
+    pub fn into_engine_error(self) -> EngineError {
+        match self {
+            Self::UnsupportedFamily => EngineError::TaskUnavailable,
+            Self::InvalidPhrase | Self::InvalidTokenizer | Self::InvalidLexicon => {
+                EngineError::InvalidRequest
+            }
+            Self::ResourceLimit => EngineError::ResourceLimit,
+        }
+    }
+}
+
+/// User-selected KWS phrase text before backend-family tokenization.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SherpaKwsPhraseInput {
+    logical_id: String,
+    phrase_text: String,
+}
+
+impl SherpaKwsPhraseInput {
+    pub fn new(
+        logical_id: impl Into<String>,
+        phrase_text: impl Into<String>,
+    ) -> Result<Self, SherpaKwsPhraseCompileError> {
+        let input = Self {
+            logical_id: logical_id.into(),
+            phrase_text: phrase_text.into(),
+        };
+        if !valid_logical_phrase_id(&input.logical_id)
+            || !valid_kws_phrase_text_input(&input.phrase_text)
+        {
+            return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+        }
+        Ok(input)
+    }
+
+    pub fn logical_id(&self) -> &str {
+        &self.logical_id
+    }
+
+    pub fn phrase_text(&self) -> &str {
+        &self.phrase_text
     }
 }
 
@@ -252,6 +340,97 @@ impl fmt::Debug for SherpaKwsPhrase {
     }
 }
 
+#[cfg(feature = "kws-sentencepiece")]
+pub fn compile_gigaspeech_sentencepiece_phrase_set(
+    revision: impl Into<String>,
+    bpe_model_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(bpe_model_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    if metadata.len() > MAX_KWS_SENTENCEPIECE_MODEL_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let processor = sentencepiece_rust::SentencePieceProcessor::open(bpe_model_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let normalized = normalize_gigaspeech_phrase(phrase.phrase_text())?;
+        let pieces = processor
+            .encode_pieces(&normalized)
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?;
+        if pieces.is_empty()
+            || pieces.len() > MAX_COMPILED_KWS_TOKENS
+            || pieces.iter().any(|piece| !valid_compiled_kws_piece(piece))
+        {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+        let keyword_spec_line = pieces.join(" ");
+        compiled.push(
+            SherpaKwsPhrase::new(phrase.logical_id(), normalized, keyword_spec_line)
+                .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
+}
+
+#[cfg(feature = "kws-pinyin")]
+pub fn compile_wenetspeech_pinyin_phrase_set(
+    revision: impl Into<String>,
+    tokens_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let token_table = load_kws_token_table(tokens_path)?;
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let native_label = normalize_chinese_kws_phrase(phrase.phrase_text())?;
+        let pieces = compile_partial_pinyin_tokens(&native_label)?;
+        validate_compiled_token_sequence(&pieces, &token_table)?;
+        compiled.push(
+            SherpaKwsPhrase::new(
+                phrase.logical_id(),
+                native_label.clone(),
+                keyword_spec_with_label(&pieces, &native_label),
+            )
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
+}
+
+#[cfg(feature = "kws-pinyin")]
+pub fn compile_zh_en_2025_phrase_set(
+    revision: impl Into<String>,
+    tokens_path: impl AsRef<Path>,
+    lexicon_path: impl AsRef<Path>,
+    phrases: impl IntoIterator<Item = SherpaKwsPhraseInput>,
+) -> Result<SherpaKwsPhraseSet, SherpaKwsPhraseCompileError> {
+    let token_table = load_kws_token_table(tokens_path)?;
+    let lexicon = load_kws_phone_lexicon(lexicon_path)?;
+    let mut compiled = Vec::new();
+    for phrase in phrases {
+        let (pieces, native_label) =
+            compile_zh_en_phone_pinyin_tokens(phrase.phrase_text(), &lexicon)?;
+        validate_compiled_token_sequence(&pieces, &token_table)?;
+        compiled.push(
+            SherpaKwsPhrase::new(
+                phrase.logical_id(),
+                native_label.clone(),
+                keyword_spec_with_label(&pieces, &native_label),
+            )
+            .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)?,
+        );
+    }
+    SherpaKwsPhraseSet::new(revision, compiled)
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidPhrase)
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct SherpaKeywordDetection {
     native_label: String,
@@ -304,7 +483,64 @@ pub trait SherpaSttBackend {
         &mut self,
         sample_rate_hz: u32,
         pcm: &[f32],
+        language: Option<&str>,
     ) -> Result<String, SherpaAdapterError>;
+}
+
+pub trait SherpaTtsBackend {
+    fn synthesize(
+        &mut self,
+        text: &str,
+        speaker_id: i32,
+        speed: f32,
+        cancellation: &dyn Fn() -> bool,
+        cancellation_token: &SherpaTtsCancellationToken,
+    ) -> Result<SherpaTtsAudio, SherpaAdapterError>;
+
+    fn cancel(&mut self) -> Result<(), SherpaAdapterError>;
+}
+
+#[derive(Clone, PartialEq)]
+pub struct SherpaTtsAudio {
+    sample_rate_hz: u32,
+    samples: Vec<f32>,
+}
+
+impl SherpaTtsAudio {
+    pub fn new(sample_rate_hz: u32, samples: Vec<f32>) -> Result<Self, SherpaAdapterError> {
+        if !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
+            || samples.is_empty()
+            || samples.len() > sample_rate_hz as usize * SHERPA_TTS_MAX_SECONDS
+            || samples
+                .iter()
+                .any(|sample| !sample.is_finite() || !(-1.0..=1.0).contains(sample))
+        {
+            return Err(SherpaAdapterError::InvalidAudio);
+        }
+        Ok(Self {
+            sample_rate_hz,
+            samples,
+        })
+    }
+
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+}
+
+impl fmt::Debug for SherpaTtsAudio {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsAudio")
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .finish()
+    }
 }
 
 /// Safe host/backend boundary. Implementations may own native FFI or browser
@@ -810,11 +1046,172 @@ where
     }
 }
 
+#[derive(Clone)]
+pub struct SherpaTtsCancellationToken {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl SherpaTtsCancellationToken {
+    fn new() -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    fn reset(&self) {
+        self.cancelled.store(false, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+
+    #[cfg(feature = "native-tts")]
+    pub(crate) fn as_atomic(&self) -> &AtomicBool {
+        &self.cancelled
+    }
+}
+
+impl fmt::Debug for SherpaTtsCancellationToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsCancellationToken")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
+    }
+}
+
 pub struct SherpaFiniteSttEngine<B> {
     installed_binding: TaskPackBinding,
     backend: B,
     readiness: TaskReadiness,
     last_backend_fault: Option<BackendFaultCode>,
+}
+
+pub struct SherpaTtsProvider<B> {
+    installed_binding: TaskPackBinding,
+    backend: B,
+    readiness: TaskReadiness,
+    active_generation: Option<u64>,
+    cancellation_token: SherpaTtsCancellationToken,
+    speaker_id: i32,
+    speed: f32,
+    last_backend_fault: Option<BackendFaultCode>,
+}
+
+impl<B> fmt::Debug for SherpaTtsProvider<B> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SherpaTtsProvider")
+            .field("installed_binding", &self.installed_binding)
+            .field("readiness", &self.readiness)
+            .field("active_generation", &self.active_generation)
+            .field(
+                "cancellation_requested",
+                &self.cancellation_token.is_cancelled(),
+            )
+            .field("speaker_id", &self.speaker_id)
+            .field("speed", &self.speed)
+            .field("last_backend_fault", &self.last_backend_fault)
+            .finish()
+    }
+}
+
+impl<B> SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    pub fn new(installed_binding: TaskPackBinding, backend: B) -> Result<Self, EngineError> {
+        Self::with_voice_options(installed_binding, backend, 0, 1.0)
+    }
+
+    pub fn with_voice_options(
+        installed_binding: TaskPackBinding,
+        backend: B,
+        speaker_id: i32,
+        speed: f32,
+    ) -> Result<Self, EngineError> {
+        validate_tts_binding(&installed_binding)?;
+        validate_tts_voice_options(speaker_id, speed)?;
+        Ok(Self {
+            installed_binding,
+            backend,
+            readiness: TaskReadiness::Ready,
+            active_generation: None,
+            cancellation_token: SherpaTtsCancellationToken::new(),
+            speaker_id,
+            speed,
+            last_backend_fault: None,
+        })
+    }
+
+    pub fn binding(&self) -> &TaskPackBinding {
+        &self.installed_binding
+    }
+
+    pub fn last_backend_fault(&self) -> Option<BackendFaultCode> {
+        self.last_backend_fault
+    }
+
+    pub fn cancellation_token(&self) -> SherpaTtsCancellationToken {
+        self.cancellation_token.clone()
+    }
+
+    pub fn into_backend(self) -> B {
+        self.backend
+    }
+
+    fn ensure_binding(&self, binding: &TaskPackBinding) -> Result<(), EngineError> {
+        if binding == &self.installed_binding {
+            Ok(())
+        } else {
+            Err(EngineError::InvalidRequest)
+        }
+    }
+
+    fn ensure_request(&self, request: &BoundTaskRequest) -> Result<(), EngineError> {
+        self.ensure_binding(request.binding())?;
+        if request.request().task != VoiceTask::TextToSpeech {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn validate_synthesis_request(
+        &self,
+        request: &BoundTtsSynthesisRequest,
+    ) -> Result<(), EngineError> {
+        let local = request.local_request().ok_or(EngineError::InvalidRequest)?;
+        self.ensure_request(local)?;
+        request.config().validate_binding(&self.installed_binding)?;
+        self.installed_binding
+            .validate_language(request.binding().language())?;
+        if request.config().seed().is_some() {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn capture_backend<T>(
+        &mut self,
+        result: Result<T, SherpaAdapterError>,
+    ) -> Result<T, SherpaAdapterError> {
+        match result {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                if let SherpaAdapterError::BackendFault { code } = error {
+                    self.last_backend_fault = Some(code);
+                    Err(SherpaAdapterError::BackendFault { code })
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
 }
 
 impl<B> fmt::Debug for SherpaFiniteSttEngine<B> {
@@ -825,6 +1222,120 @@ impl<B> fmt::Debug for SherpaFiniteSttEngine<B> {
             .field("readiness", &self.readiness)
             .field("last_backend_fault", &self.last_backend_fault)
             .finish()
+    }
+}
+
+#[async_trait(?Send)]
+impl<B> TaskProvider for SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        vec![TaskCapability::new(self.installed_binding.clone()).streaming(false)]
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        ResourceReport {
+            loaded_tasks: vec![VoiceTask::TextToSpeech],
+            memory_bytes: self.installed_binding.resource_budget().max_memory_bytes,
+            active_streams: u32::from(self.active_generation.is_some()),
+            readiness: self.readiness,
+        }
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.ensure_request(&request)
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.ensure_binding(&binding)?;
+        self.active_generation = None;
+        self.cancellation_token.cancel();
+        let result = self.backend.cancel();
+        let output = self
+            .capture_backend(result)
+            .map_err(SherpaAdapterError::into_engine_error);
+        self.cancellation_token.reset();
+        output
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.cancel_synthesis_generation(generation).await
+    }
+}
+
+#[async_trait(?Send)]
+impl<B> TtsSynthesisPort for SherpaTtsProvider<B>
+where
+    B: SherpaTtsBackend,
+{
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        Ok(TtsSynthesisProviderBinding::LocalTask(Box::new(
+            self.installed_binding.clone(),
+        )))
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        match binding {
+            TtsSynthesisProviderBinding::LocalTask(binding) => self.ensure_binding(&binding),
+            TtsSynthesisProviderBinding::Route(_) => Err(EngineError::InvalidRequest),
+        }
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        if self.active_generation.is_some() {
+            return Err(EngineError::ResourceLimit);
+        }
+        self.validate_synthesis_request(&request)?;
+        check_engine_cancellation(cancellation)?;
+        let generation = request.generation();
+        self.active_generation = Some(generation);
+        self.cancellation_token.reset();
+        let cancellation_token = self.cancellation_token.clone();
+        let result = self.backend.synthesize(
+            request.text(),
+            self.speaker_id,
+            self.speed,
+            &|| cancellation() || cancellation_token.is_cancelled(),
+            &cancellation_token,
+        );
+        let audio = match self.capture_backend(result) {
+            Ok(audio) => audio,
+            Err(SherpaAdapterError::Cancelled) => {
+                self.active_generation = None;
+                return Err(EngineError::Cancelled);
+            }
+            Err(error) => {
+                self.active_generation = None;
+                return Err(error.into_engine_error());
+            }
+        };
+        if cancellation() || self.cancellation_token.is_cancelled() {
+            self.active_generation = None;
+            return Err(EngineError::Cancelled);
+        }
+        let chunks = chunk_tts_audio(&request, &audio)?;
+        self.active_generation = None;
+        TtsSynthesisResult::new(&request, chunks, false)
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        if self.active_generation == Some(generation) {
+            self.cancellation_token.cancel();
+            let result = self.backend.cancel();
+            self.capture_backend(result)
+                .map_err(SherpaAdapterError::into_engine_error)?;
+            self.active_generation = None;
+            self.cancellation_token.reset();
+        }
+        Ok(())
     }
 }
 
@@ -961,9 +1472,11 @@ where
             return Err(EngineError::ResourceLimit);
         }
         check_engine_cancellation(cancellation)?;
-        let result = self
-            .backend
-            .transcribe(audio.sample_rate_hz(), audio.samples());
+        let result = self.backend.transcribe(
+            audio.sample_rate_hz(),
+            audio.samples(),
+            local_request.request().language.as_deref(),
+        );
         let transcript = self
             .capture_backend(result)
             .map_err(SherpaAdapterError::into_engine_error)?;
@@ -1137,6 +1650,97 @@ fn validate_stt_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
     Ok(())
 }
 
+#[cfg(any(
+    feature = "native-kws",
+    feature = "native-stt",
+    feature = "native-tts",
+    feature = "native-vad"
+))]
+fn require_speech_catalog_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
+    match binding.source() {
+        aurora_voice_engine::TaskBindingSource::SpeechCatalog { .. } => Ok(()),
+        aurora_voice_engine::TaskBindingSource::ModelPackManifest { .. } => {
+            Err(EngineError::InvalidRequest)
+        }
+    }
+}
+
+#[cfg(any(
+    feature = "native-kws",
+    feature = "native-stt",
+    feature = "native-tts",
+    feature = "native-vad"
+))]
+fn require_catalog_selected_file(
+    binding: &TaskPackBinding,
+    actual_file_id: &str,
+    required_file_id: &str,
+) -> Result<(), EngineError> {
+    if actual_file_id != required_file_id
+        || !binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == required_file_id)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn validate_tts_binding(binding: &TaskPackBinding) -> Result<(), EngineError> {
+    if binding.task() != VoiceTask::TextToSpeech
+        || !(TTS_MIN_SAMPLE_RATE_HZ..=TTS_MAX_SAMPLE_RATE_HZ).contains(&binding.sample_rate_hz())
+        || binding.channels() != MONO_CHANNELS
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn validate_tts_voice_options(speaker_id: i32, speed: f32) -> Result<(), EngineError> {
+    if speaker_id < 0
+        || !speed.is_finite()
+        || !(SHERPA_TTS_MIN_SPEED..=SHERPA_TTS_MAX_SPEED).contains(&speed)
+    {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(())
+}
+
+fn chunk_tts_audio(
+    request: &BoundTtsSynthesisRequest,
+    audio: &SherpaTtsAudio,
+) -> Result<Vec<TtsAudioChunk>, EngineError> {
+    if audio.sample_rate_hz() != request.config().sample_rate_hz() {
+        return Err(EngineError::InvalidRequest);
+    }
+    let mut chunks = Vec::new();
+    let chunk_samples = request.config().chunk_samples();
+    for (index, samples) in audio.samples().chunks(chunk_samples).enumerate() {
+        let final_chunk = (index + 1) * chunk_samples >= audio.samples().len();
+        chunks.push(TtsAudioChunk::new(
+            request,
+            u64::try_from(index)
+                .map_err(|_| EngineError::ResourceLimit)?
+                .saturating_add(1),
+            audio.sample_rate_hz(),
+            MONO_CHANNELS,
+            samples.iter().map(|sample| float_to_i16(*sample)).collect(),
+            final_chunk,
+        )?);
+    }
+    Ok(chunks)
+}
+
+fn float_to_i16(sample: f32) -> i16 {
+    let clamped = sample.clamp(-1.0, 1.0);
+    if clamped <= -1.0 {
+        i16::MIN
+    } else {
+        (clamped * f32::from(i16::MAX)).round() as i16
+    }
+}
+
 fn validate_frame(config: &VadConfig, frame: &StreamingAudioFrame<'_>) -> Result<(), EngineError> {
     if frame.is_end_tail() {
         config.validate_end_tail_samples(frame.samples())
@@ -1191,6 +1795,299 @@ fn valid_plain_field(value: &str, min_bytes: usize, max_bytes: usize) -> bool {
     len >= min_bytes && len <= max_bytes && !value.chars().any(|ch| ch == '\0' || ch.is_control())
 }
 
+fn valid_kws_phrase_text_input(value: &str) -> bool {
+    valid_plain_field(value, 1, MAX_KWS_PHRASE_TEXT_BYTES)
+        && value.chars().any(|ch| !ch.is_whitespace())
+}
+
+#[cfg(any(feature = "kws-sentencepiece", test))]
+fn normalize_gigaspeech_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
+    if value.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || value
+            .chars()
+            .any(|ch| !(ch == ' ' || ch.is_ascii_graphic()))
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    let normalized = value
+        .split_ascii_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    if normalized.is_empty() || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(normalized)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn normalize_chinese_kws_phrase(value: &str) -> Result<String, SherpaKwsPhraseCompileError> {
+    let normalized = value.trim();
+    if normalized.is_empty()
+        || normalized.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || normalized
+            .chars()
+            .any(|ch| !is_cjk_unified(ch) || pinyin::ToPinyin::to_pinyin(&ch).is_none())
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(normalized.to_owned())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn compile_zh_en_phone_pinyin_tokens(
+    value: &str,
+    lexicon: &BTreeMap<String, Vec<String>>,
+) -> Result<(Vec<String>, String), SherpaKwsPhraseCompileError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > MAX_KWS_PHRASE_TEXT_BYTES {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    let mut pieces = Vec::new();
+    let mut native_label = String::new();
+    let mut word = String::new();
+    let mut pending_separator = false;
+
+    for ch in trimmed.chars() {
+        if ch.is_ascii_whitespace() {
+            flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+            if !native_label.is_empty() {
+                pending_separator = true;
+            }
+            continue;
+        }
+        if is_cjk_unified(ch) {
+            flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+            push_label_separator(&mut native_label, &mut pending_separator);
+            push_partial_pinyin_tokens(ch, &mut pieces)?;
+            native_label.push(ch);
+            continue;
+        }
+        if ch == '\'' || ch.is_ascii_alphabetic() {
+            push_label_separator(&mut native_label, &mut pending_separator);
+            word.extend(ch.to_uppercase());
+            continue;
+        }
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    flush_phone_word(&mut word, &mut pieces, &mut native_label, lexicon)?;
+    if pieces.is_empty() || native_label.is_empty() || pending_separator {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok((pieces, native_label))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn flush_phone_word(
+    word: &mut String,
+    pieces: &mut Vec<String>,
+    native_label: &mut String,
+    lexicon: &BTreeMap<String, Vec<String>>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    if word.is_empty() {
+        return Ok(());
+    }
+    let phones = lexicon
+        .get(word.as_str())
+        .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?;
+    pieces.extend(phones.iter().cloned());
+    native_label.push_str(word);
+    word.clear();
+    Ok(())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn push_label_separator(native_label: &mut String, pending_separator: &mut bool) {
+    if *pending_separator && !native_label.is_empty() {
+        native_label.push('_');
+    }
+    *pending_separator = false;
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn is_cjk_unified(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x3400..=0x4DBF
+            | 0x4E00..=0x9FFF
+            | 0x20000..=0x2A6DF
+            | 0x2A700..=0x2B73F
+            | 0x2B740..=0x2B81F
+            | 0x2B820..=0x2CEAF
+            | 0x2CEB0..=0x2EBEF
+            | 0x30000..=0x3134F
+    )
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn compile_partial_pinyin_tokens(value: &str) -> Result<Vec<String>, SherpaKwsPhraseCompileError> {
+    let mut pieces = Vec::new();
+    for ch in value.chars() {
+        push_partial_pinyin_tokens(ch, &mut pieces)?;
+    }
+    Ok(pieces)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn push_partial_pinyin_tokens(
+    ch: char,
+    pieces: &mut Vec<String>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    let pinyin = pinyin::ToPinyin::to_pinyin(&ch)
+        .ok_or(SherpaKwsPhraseCompileError::InvalidPhrase)?
+        .with_tone();
+    let (initial, final_part) = split_partial_pinyin(pinyin)?;
+    if let Some(initial) = initial {
+        pieces.push(initial.to_owned());
+    }
+    pieces.push(final_part.to_owned());
+    Ok(())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn split_partial_pinyin(value: &str) -> Result<(Option<&str>, &str), SherpaKwsPhraseCompileError> {
+    const INITIALS: &[&str] = &[
+        "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x",
+        "r", "z", "c", "s", "y", "w",
+    ];
+    for initial in INITIALS {
+        if let Some(final_part) = value.strip_prefix(initial) {
+            if final_part.is_empty() {
+                return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+            }
+            return Ok((Some(initial), final_part));
+        }
+    }
+    if value.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok((None, value))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn keyword_spec_with_label(pieces: &[String], native_label: &str) -> String {
+    format!("{} @{native_label}", pieces.join(" "))
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn validate_compiled_token_sequence(
+    pieces: &[String],
+    token_table: &BTreeSet<String>,
+) -> Result<(), SherpaKwsPhraseCompileError> {
+    if pieces.is_empty()
+        || pieces.len() > MAX_COMPILED_KWS_TOKENS
+        || pieces
+            .iter()
+            .any(|piece| !valid_compiled_kws_piece(piece) || !token_table.contains(piece.as_str()))
+    {
+        return Err(SherpaKwsPhraseCompileError::InvalidPhrase);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn load_kws_token_table(
+    tokens_path: impl AsRef<Path>,
+) -> Result<BTreeSet<String>, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(tokens_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    if metadata.len() > MAX_KWS_TOKEN_TABLE_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let content = std::fs::read_to_string(tokens_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidTokenizer)?;
+    let mut tokens = BTreeSet::new();
+    for line in content.lines() {
+        if line.len() > MAX_KWS_METADATA_LINE_BYTES {
+            return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+        }
+        let Some(token) = line.split_ascii_whitespace().next() else {
+            continue;
+        };
+        if !valid_compiled_kws_piece(token) || !tokens.insert(token.to_owned()) {
+            return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+        }
+        if tokens.len() > MAX_KWS_TOKEN_TABLE_ENTRIES {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+    }
+    if tokens.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidTokenizer);
+    }
+    Ok(tokens)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn load_kws_phone_lexicon(
+    lexicon_path: impl AsRef<Path>,
+) -> Result<BTreeMap<String, Vec<String>>, SherpaKwsPhraseCompileError> {
+    let metadata = std::fs::metadata(lexicon_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidLexicon)?;
+    if !metadata.is_file() {
+        return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+    }
+    if metadata.len() > MAX_KWS_LEXICON_BYTES {
+        return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+    }
+    let content = std::fs::read_to_string(lexicon_path.as_ref())
+        .map_err(|_| SherpaKwsPhraseCompileError::InvalidLexicon)?;
+    let mut lexicon = BTreeMap::new();
+    for line in content.lines() {
+        if line.len() > MAX_KWS_METADATA_LINE_BYTES {
+            return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+        }
+        let mut parts = line.split_ascii_whitespace();
+        let Some(raw_word) = parts.next() else {
+            continue;
+        };
+        let phones = parts.map(str::to_owned).collect::<Vec<_>>();
+        if phones.is_empty()
+            || phones.len() > MAX_COMPILED_KWS_TOKENS
+            || phones.iter().any(|phone| !valid_compiled_kws_piece(phone))
+        {
+            return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+        }
+        let Some(word) = canonical_lexicon_word(raw_word) else {
+            continue;
+        };
+        lexicon.entry(word).or_insert(phones);
+        if lexicon.len() > MAX_KWS_LEXICON_ENTRIES {
+            return Err(SherpaKwsPhraseCompileError::ResourceLimit);
+        }
+    }
+    if lexicon.is_empty() {
+        return Err(SherpaKwsPhraseCompileError::InvalidLexicon);
+    }
+    Ok(lexicon)
+}
+
+#[cfg(feature = "kws-pinyin")]
+fn canonical_lexicon_word(value: &str) -> Option<String> {
+    let without_variant = value
+        .strip_suffix(')')
+        .and_then(|prefix| prefix.rsplit_once('(').map(|(word, _)| word))
+        .unwrap_or(value);
+    if without_variant.is_empty()
+        || without_variant.len() > MAX_KWS_PHRASE_TEXT_BYTES
+        || without_variant
+            .chars()
+            .any(|ch| !(ch == '\'' || ch.is_ascii_alphabetic()))
+    {
+        return None;
+    }
+    Some(without_variant.to_ascii_uppercase())
+}
+
+#[cfg(any(feature = "kws-sentencepiece", feature = "kws-pinyin"))]
+fn valid_compiled_kws_piece(value: &str) -> bool {
+    valid_plain_field(value, 1, MAX_NATIVE_KEYWORD_BYTES)
+        && value.len() <= MAX_NATIVE_KEYWORD_BYTES
+        && !value.chars().any(char::is_whitespace)
+}
+
 #[cfg(feature = "native-vad")]
 mod native_backend {
     use super::*;
@@ -1223,6 +2120,19 @@ mod native_backend {
             {
                 return Err(EngineError::InvalidRequest);
             }
+            Self::from_path(model_path.into(), config)
+        }
+
+        pub fn from_catalog_model(
+            binding: &TaskPackBinding,
+            selected_file_id: &str,
+            model_path: impl Into<PathBuf>,
+            config: &VadConfig,
+        ) -> Result<Self, EngineError> {
+            validate_vad_binding(binding)?;
+            config.validate_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, selected_file_id, "model")?;
             Self::from_path(model_path.into(), config)
         }
 
@@ -1447,6 +2357,25 @@ mod native_kws_backend {
                 session: None,
             })
         }
+
+        pub fn from_catalog_model_files(
+            binding: &TaskPackBinding,
+            files: NativeKwsModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_kws_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, "encoder")?;
+            require_catalog_selected_file(binding, &files.decoder_file_id, "decoder")?;
+            require_catalog_selected_file(binding, &files.joiner_file_id, "joiner")?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, "tokens")?;
+            Ok(Self {
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                joiner_path: files.joiner_path,
+                tokens_path: files.tokens_path,
+                session: None,
+            })
+        }
     }
 
     impl SherpaKwsBackend for NativeKwsBackend {
@@ -1556,16 +2485,53 @@ mod native_kws_backend {
 mod native_stt_backend {
     use super::*;
     use aurora_voice_sherpa_sys::{
-        OfflineSttConfig, OfflineSttRecognizer, SttError as NativeSttError,
+        OfflineSttConfig, OfflineSttModelKind, OfflineSttRecognizer, SttError as NativeSttError,
     };
     use std::path::PathBuf;
 
     const STT_ENCODER_FILE_ID: &str = "encoder";
-    const STT_DECODER_FILE_ID: &str = "decoder-merged";
+    const STT_WHISPER_DECODER_FILE_ID: &str = "decoder";
+    const STT_MOONSHINE_DECODER_FILE_ID: &str = "decoder-merged";
     const STT_TOKENS_FILE_ID: &str = "tokens";
+
+    pub struct NativeSttModelFiles {
+        pub encoder_file_id: String,
+        pub encoder_path: PathBuf,
+        pub decoder_file_id: String,
+        pub decoder_path: PathBuf,
+        pub tokens_file_id: String,
+        pub tokens_path: PathBuf,
+        pub language: Option<String>,
+    }
+
+    impl fmt::Debug for NativeSttModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeSttModelFiles")
+                .field("encoder_file_id_bytes", &self.encoder_file_id.len())
+                .field("encoder_path", &"<redacted>")
+                .field("decoder_file_id_bytes", &self.decoder_file_id.len())
+                .field("decoder_path", &"<redacted>")
+                .field("tokens_file_id_bytes", &self.tokens_file_id.len())
+                .field("tokens_path", &"<redacted>")
+                .field("language", &"<redacted>")
+                .finish()
+        }
+    }
 
     pub struct NativeSttBackend {
         recognizer: OfflineSttRecognizer,
+        config: NativeSttRecognizerConfig,
+        active_language: Option<String>,
+    }
+
+    #[derive(Clone)]
+    struct NativeSttRecognizerConfig {
+        model_kind: OfflineSttModelKind,
+        encoder_path: PathBuf,
+        decoder_path: PathBuf,
+        tokens_path: PathBuf,
+        default_language: Option<String>,
     }
 
     impl fmt::Debug for NativeSttBackend {
@@ -1587,14 +2553,73 @@ mod native_stt_backend {
             tokens_file_id: &str,
             tokens_path: impl Into<PathBuf>,
         ) -> Result<Self, EngineError> {
+            Self::from_selected_model_files(
+                binding,
+                NativeSttModelFiles {
+                    encoder_file_id: encoder_file_id.to_owned(),
+                    encoder_path: encoder_path.into(),
+                    decoder_file_id: decoder_file_id.to_owned(),
+                    decoder_path: decoder_path.into(),
+                    tokens_file_id: tokens_file_id.to_owned(),
+                    tokens_path: tokens_path.into(),
+                    language: None,
+                },
+            )
+        }
+
+        pub fn from_selected_model_files(
+            binding: &TaskPackBinding,
+            files: NativeSttModelFiles,
+        ) -> Result<Self, EngineError> {
             validate_stt_binding(binding)?;
-            require_selected_file(binding, encoder_file_id, STT_ENCODER_FILE_ID)?;
-            require_selected_file(binding, decoder_file_id, STT_DECODER_FILE_ID)?;
-            require_selected_file(binding, tokens_file_id, STT_TOKENS_FILE_ID)?;
-            let config = OfflineSttConfig::moonshine_v2(encoder_path, decoder_path, tokens_path)
-                .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
-            let recognizer = OfflineSttRecognizer::new(&config).map_err(native_stt_error)?;
-            Ok(Self { recognizer })
+            require_selected_file(binding, &files.encoder_file_id, STT_ENCODER_FILE_ID)?;
+            require_selected_file(binding, &files.tokens_file_id, STT_TOKENS_FILE_ID)?;
+            let model_kind = selected_stt_model_kind(binding, &files.decoder_file_id)?;
+            let config = NativeSttRecognizerConfig {
+                model_kind,
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                tokens_path: files.tokens_path,
+                default_language: files.language,
+            };
+            let active_language = config.language_for_request(None);
+            let recognizer =
+                build_recognizer(&config, active_language.as_deref()).map_err(native_stt_error)?;
+            Ok(Self {
+                recognizer,
+                config,
+                active_language,
+            })
+        }
+
+        pub fn from_catalog_model_files(
+            binding: &TaskPackBinding,
+            files: NativeSttModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_stt_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, STT_ENCODER_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.decoder_file_id,
+                STT_WHISPER_DECODER_FILE_ID,
+            )?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, STT_TOKENS_FILE_ID)?;
+            let config = NativeSttRecognizerConfig {
+                model_kind: OfflineSttModelKind::Whisper,
+                encoder_path: files.encoder_path,
+                decoder_path: files.decoder_path,
+                tokens_path: files.tokens_path,
+                default_language: files.language,
+            };
+            let active_language = config.language_for_request(None);
+            let recognizer =
+                build_recognizer(&config, active_language.as_deref()).map_err(native_stt_error)?;
+            Ok(Self {
+                recognizer,
+                config,
+                active_language,
+            })
         }
     }
 
@@ -1603,7 +2628,10 @@ mod native_stt_backend {
             &mut self,
             sample_rate_hz: u32,
             pcm: &[f32],
+            language: Option<&str>,
         ) -> Result<String, SherpaAdapterError> {
+            self.ensure_language(language)
+                .map_err(native_stt_adapter_error)?;
             let sample_rate =
                 i32::try_from(sample_rate_hz).map_err(|_| SherpaAdapterError::InvalidConfig)?;
             let result = self
@@ -1611,6 +2639,81 @@ mod native_stt_backend {
                 .transcribe(sample_rate, pcm)
                 .map_err(native_stt_adapter_error)?;
             Ok(result.text().to_owned())
+        }
+    }
+
+    impl NativeSttBackend {
+        fn ensure_language(&mut self, language: Option<&str>) -> Result<(), NativeSttError> {
+            let next_language = self.config.language_for_request(language);
+            if self.config.model_kind != OfflineSttModelKind::Whisper
+                || self.active_language == next_language
+            {
+                return Ok(());
+            }
+            self.recognizer = build_recognizer(&self.config, next_language.as_deref())?;
+            self.active_language = next_language;
+            Ok(())
+        }
+    }
+
+    impl NativeSttRecognizerConfig {
+        fn language_for_request(&self, language: Option<&str>) -> Option<String> {
+            if self.model_kind != OfflineSttModelKind::Whisper {
+                return None;
+            }
+            language
+                .map(ToOwned::to_owned)
+                .or_else(|| self.default_language.clone())
+                .filter(|value| !value.is_empty())
+        }
+    }
+
+    fn build_recognizer(
+        config: &NativeSttRecognizerConfig,
+        language: Option<&str>,
+    ) -> Result<OfflineSttRecognizer, NativeSttError> {
+        let config = match config.model_kind {
+            OfflineSttModelKind::Moonshine => OfflineSttConfig::moonshine_v2(
+                &config.encoder_path,
+                &config.decoder_path,
+                &config.tokens_path,
+            ),
+            OfflineSttModelKind::Whisper => {
+                let mut stt_config = OfflineSttConfig::whisper(
+                    &config.encoder_path,
+                    &config.decoder_path,
+                    &config.tokens_path,
+                );
+                if let Some(language) = language {
+                    stt_config = stt_config.with_language(language);
+                }
+                stt_config
+            }
+        }
+        .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
+        OfflineSttRecognizer::new(&config)
+    }
+
+    fn selected_stt_model_kind(
+        binding: &TaskPackBinding,
+        actual_decoder_file_id: &str,
+    ) -> Result<OfflineSttModelKind, EngineError> {
+        let has_moonshine_decoder = binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == STT_MOONSHINE_DECODER_FILE_ID);
+        let has_whisper_decoder = binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == STT_WHISPER_DECODER_FILE_ID);
+        match (
+            has_moonshine_decoder,
+            has_whisper_decoder,
+            actual_decoder_file_id,
+        ) {
+            (true, false, STT_MOONSHINE_DECODER_FILE_ID) => Ok(OfflineSttModelKind::Moonshine),
+            (false, true, STT_WHISPER_DECODER_FILE_ID) => Ok(OfflineSttModelKind::Whisper),
+            _ => Err(EngineError::InvalidRequest),
         }
     }
 
@@ -1679,11 +2782,419 @@ mod native_stt_backend {
     }
 }
 
+#[cfg(feature = "native-tts")]
+mod native_tts_backend {
+    use super::*;
+    use aurora_voice_sherpa_sys::{
+        OfflineTtsConfig, OfflineTtsGenerationConfig, OfflineTtsPocketModelFiles,
+        OfflineTtsSynthesizer, TtsError as NativeTtsError, TtsReferenceAudio,
+    };
+    use std::path::PathBuf;
+
+    const TTS_MODEL_FILE_ID: &str = "model";
+    const TTS_TOKENS_FILE_ID: &str = "tokens";
+    const TTS_ESPEAK_DATA_FILE_ID: &str = "espeak-ng-data";
+    const TTS_LEXICON_FILE_ID: &str = "lexicon";
+    const POCKET_LM_FLOW_FILE_ID: &str = "lm-flow";
+    const POCKET_LM_MAIN_FILE_ID: &str = "lm-main";
+    const POCKET_ENCODER_FILE_ID: &str = "encoder";
+    const POCKET_DECODER_FILE_ID: &str = "decoder";
+    const POCKET_TEXT_CONDITIONER_FILE_ID: &str = "text-conditioner";
+    const POCKET_VOCAB_FILE_ID: &str = "vocab";
+    const POCKET_TOKEN_SCORES_FILE_ID: &str = "token-scores";
+    const POCKET_NUM_STEPS: i32 = 5;
+    const POCKET_EXTRA: &str = r#"{"max_reference_audio_len":10.0,"seed":42}"#;
+
+    pub struct NativeTtsBackend {
+        synthesizer: OfflineTtsSynthesizer,
+        family: NativeTtsFamily,
+    }
+
+    enum NativeTtsFamily {
+        VitsPiper,
+        Pocket {
+            reference_audio: Option<TtsReferenceAudio>,
+            reference_text: Option<String>,
+        },
+    }
+
+    impl fmt::Debug for NativeTtsBackend {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsBackend")
+                .field("synthesizer", &"<redacted>")
+                .field("family", &self.family_name())
+                .finish()
+        }
+    }
+
+    impl NativeTtsBackend {
+        fn family_name(&self) -> &'static str {
+            match self.family {
+                NativeTtsFamily::VitsPiper => "vits_piper",
+                NativeTtsFamily::Pocket { .. } => "pockettts",
+            }
+        }
+
+        pub fn from_selected_vits_piper_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsVitsPiperModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_selected_file(binding, &files.model_file_id, TTS_MODEL_FILE_ID)?;
+            require_selected_file(binding, &files.tokens_file_id, TTS_TOKENS_FILE_ID)?;
+            require_selected_file(binding, &files.espeak_data_file_id, TTS_ESPEAK_DATA_FILE_ID)?;
+            match (&files.lexicon_file_id, &files.lexicon_path) {
+                (Some(lexicon_file_id), Some(_)) => {
+                    require_selected_file(binding, lexicon_file_id, TTS_LEXICON_FILE_ID)?;
+                }
+                (None, None) => {}
+                _ => return Err(EngineError::InvalidRequest),
+            }
+            let mut config = OfflineTtsConfig::vits_piper(
+                files.model_path,
+                files.tokens_path,
+                files.espeak_data_dir,
+            )
+            .with_num_threads(1);
+            if let Some(lexicon_path) = files.lexicon_path {
+                config = config.with_lexicon_path(lexicon_path);
+            }
+            let synthesizer = OfflineTtsSynthesizer::new(&config).map_err(native_tts_error)?;
+            let sample_rate = u32::try_from(synthesizer.sample_rate())
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if sample_rate != binding.sample_rate_hz() {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(Self {
+                synthesizer,
+                family: NativeTtsFamily::VitsPiper,
+            })
+        }
+
+        pub fn from_catalog_vits_piper_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsVitsPiperModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            if binding.catalog_model_family() != Some("vits_piper") {
+                return Err(EngineError::InvalidRequest);
+            }
+            require_catalog_selected_file(binding, &files.model_file_id, TTS_MODEL_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.tokens_file_id, TTS_TOKENS_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.espeak_data_file_id,
+                TTS_ESPEAK_DATA_FILE_ID,
+            )?;
+            match (&files.lexicon_file_id, &files.lexicon_path) {
+                (Some(lexicon_file_id), Some(_)) => {
+                    require_catalog_selected_file(binding, lexicon_file_id, TTS_LEXICON_FILE_ID)?;
+                }
+                (None, None) => {}
+                _ => return Err(EngineError::InvalidRequest),
+            }
+            Self::from_selected_vits_piper_model(binding, files)
+        }
+
+        pub fn from_selected_pockettts_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsPocketModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_selected_file(binding, &files.lm_flow_file_id, POCKET_LM_FLOW_FILE_ID)?;
+            require_selected_file(binding, &files.lm_main_file_id, POCKET_LM_MAIN_FILE_ID)?;
+            require_selected_file(binding, &files.encoder_file_id, POCKET_ENCODER_FILE_ID)?;
+            require_selected_file(binding, &files.decoder_file_id, POCKET_DECODER_FILE_ID)?;
+            require_selected_file(
+                binding,
+                &files.text_conditioner_file_id,
+                POCKET_TEXT_CONDITIONER_FILE_ID,
+            )?;
+            require_selected_file(binding, &files.vocab_file_id, POCKET_VOCAB_FILE_ID)?;
+            require_selected_file(
+                binding,
+                &files.token_scores_file_id,
+                POCKET_TOKEN_SCORES_FILE_ID,
+            )?;
+            let config = OfflineTtsConfig::pocket(OfflineTtsPocketModelFiles::new(
+                files.lm_flow_path,
+                files.lm_main_path,
+                files.encoder_path,
+                files.decoder_path,
+                files.text_conditioner_path,
+                files.vocab_path,
+                files.token_scores_path,
+            ))
+            .with_num_threads(1);
+            let synthesizer = OfflineTtsSynthesizer::new(&config).map_err(native_tts_error)?;
+            let sample_rate = u32::try_from(synthesizer.sample_rate())
+                .map_err(|_| EngineError::InvalidRequest)?;
+            if sample_rate != binding.sample_rate_hz() {
+                return Err(EngineError::InvalidRequest);
+            }
+            Ok(Self {
+                synthesizer,
+                family: NativeTtsFamily::Pocket {
+                    reference_audio: files.reference_audio.map(|reference| reference.audio),
+                    reference_text: files.reference_text,
+                },
+            })
+        }
+
+        pub fn from_catalog_pockettts_model(
+            binding: &TaskPackBinding,
+            files: NativeTtsPocketModelFiles,
+        ) -> Result<Self, EngineError> {
+            validate_tts_binding(binding)?;
+            require_speech_catalog_binding(binding)?;
+            if binding.catalog_model_family() != Some("pockettts") {
+                return Err(EngineError::InvalidRequest);
+            }
+            require_catalog_selected_file(binding, &files.lm_flow_file_id, POCKET_LM_FLOW_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.lm_main_file_id, POCKET_LM_MAIN_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.encoder_file_id, POCKET_ENCODER_FILE_ID)?;
+            require_catalog_selected_file(binding, &files.decoder_file_id, POCKET_DECODER_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.text_conditioner_file_id,
+                POCKET_TEXT_CONDITIONER_FILE_ID,
+            )?;
+            require_catalog_selected_file(binding, &files.vocab_file_id, POCKET_VOCAB_FILE_ID)?;
+            require_catalog_selected_file(
+                binding,
+                &files.token_scores_file_id,
+                POCKET_TOKEN_SCORES_FILE_ID,
+            )?;
+            Self::from_selected_pockettts_model(binding, files)
+        }
+    }
+
+    pub struct NativeTtsVitsPiperModelFiles {
+        pub model_file_id: String,
+        pub model_path: PathBuf,
+        pub tokens_file_id: String,
+        pub tokens_path: PathBuf,
+        pub espeak_data_file_id: String,
+        pub espeak_data_dir: PathBuf,
+        pub lexicon_file_id: Option<String>,
+        pub lexicon_path: Option<PathBuf>,
+    }
+
+    impl fmt::Debug for NativeTtsVitsPiperModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsVitsPiperModelFiles")
+                .field("model_file_id_bytes", &self.model_file_id.len())
+                .field("model_path", &"<redacted>")
+                .field("tokens_file_id_bytes", &self.tokens_file_id.len())
+                .field("tokens_path", &"<redacted>")
+                .field("espeak_data_file_id_bytes", &self.espeak_data_file_id.len())
+                .field("espeak_data_dir", &"<redacted>")
+                .field(
+                    "lexicon_file_id_bytes",
+                    &self.lexicon_file_id.as_ref().map(String::len),
+                )
+                .field("lexicon_path_present", &self.lexicon_path.is_some())
+                .finish()
+        }
+    }
+
+    pub struct NativeTtsReferenceAudio {
+        audio: TtsReferenceAudio,
+    }
+
+    impl NativeTtsReferenceAudio {
+        pub fn new(sample_rate: i32, samples: Vec<f32>) -> Result<Self, EngineError> {
+            Ok(Self {
+                audio: TtsReferenceAudio::new(sample_rate, samples)
+                    .map_err(|_| EngineError::InvalidRequest)?,
+            })
+        }
+    }
+
+    impl fmt::Debug for NativeTtsReferenceAudio {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsReferenceAudio")
+                .field("sample_rate", &self.audio.sample_rate())
+                .field("sample_count", &self.audio.samples().len())
+                .field("samples", &"<redacted>")
+                .finish()
+        }
+    }
+
+    pub struct NativeTtsPocketModelFiles {
+        pub lm_flow_file_id: String,
+        pub lm_flow_path: PathBuf,
+        pub lm_main_file_id: String,
+        pub lm_main_path: PathBuf,
+        pub encoder_file_id: String,
+        pub encoder_path: PathBuf,
+        pub decoder_file_id: String,
+        pub decoder_path: PathBuf,
+        pub text_conditioner_file_id: String,
+        pub text_conditioner_path: PathBuf,
+        pub vocab_file_id: String,
+        pub vocab_path: PathBuf,
+        pub token_scores_file_id: String,
+        pub token_scores_path: PathBuf,
+        pub reference_audio: Option<NativeTtsReferenceAudio>,
+        pub reference_text: Option<String>,
+    }
+
+    impl fmt::Debug for NativeTtsPocketModelFiles {
+        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter
+                .debug_struct("NativeTtsPocketModelFiles")
+                .field("lm_flow_file_id_bytes", &self.lm_flow_file_id.len())
+                .field("lm_flow_path", &"<redacted>")
+                .field("lm_main_file_id_bytes", &self.lm_main_file_id.len())
+                .field("lm_main_path", &"<redacted>")
+                .field("encoder_file_id_bytes", &self.encoder_file_id.len())
+                .field("encoder_path", &"<redacted>")
+                .field("decoder_file_id_bytes", &self.decoder_file_id.len())
+                .field("decoder_path", &"<redacted>")
+                .field(
+                    "text_conditioner_file_id_bytes",
+                    &self.text_conditioner_file_id.len(),
+                )
+                .field("text_conditioner_path", &"<redacted>")
+                .field("vocab_file_id_bytes", &self.vocab_file_id.len())
+                .field("vocab_path", &"<redacted>")
+                .field(
+                    "token_scores_file_id_bytes",
+                    &self.token_scores_file_id.len(),
+                )
+                .field("token_scores_path", &"<redacted>")
+                .field("reference_audio_present", &self.reference_audio.is_some())
+                .field(
+                    "reference_text_bytes",
+                    &self.reference_text.as_ref().map(String::len),
+                )
+                .finish()
+        }
+    }
+
+    impl SherpaTtsBackend for NativeTtsBackend {
+        fn synthesize(
+            &mut self,
+            text: &str,
+            speaker_id: i32,
+            speed: f32,
+            cancellation: &dyn Fn() -> bool,
+            cancellation_token: &SherpaTtsCancellationToken,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
+            let mut config = OfflineTtsGenerationConfig::new(speaker_id, speed);
+            match &self.family {
+                NativeTtsFamily::VitsPiper => {}
+                NativeTtsFamily::Pocket {
+                    reference_audio,
+                    reference_text,
+                } => {
+                    let Some(reference_audio) = reference_audio.clone() else {
+                        return Err(SherpaAdapterError::InvalidConfig);
+                    };
+                    config = config
+                        .with_reference_audio(reference_audio)
+                        .with_num_steps(POCKET_NUM_STEPS)
+                        .with_extra(POCKET_EXTRA);
+                    if let Some(reference_text) = reference_text {
+                        config = config.with_reference_text(reference_text.clone());
+                    }
+                }
+            }
+            let audio = self
+                .synthesizer
+                .generate_with_cancel_flag(text, &config, cancellation_token.as_atomic())
+                .map_err(native_tts_adapter_error)?;
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
+            let sample_rate =
+                u32::try_from(audio.sample_rate()).map_err(|_| SherpaAdapterError::InvalidAudio)?;
+            SherpaTtsAudio::new(sample_rate, audio.samples().to_vec())
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            Ok(())
+        }
+    }
+
+    fn require_selected_file(
+        binding: &TaskPackBinding,
+        actual_file_id: &str,
+        required_file_id: &str,
+    ) -> Result<(), EngineError> {
+        if actual_file_id != required_file_id
+            || !binding
+                .selected_file_ids()
+                .iter()
+                .any(|file_id| file_id == required_file_id)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(())
+    }
+
+    fn native_tts_error(error: NativeTtsError) -> EngineError {
+        match error {
+            aurora_voice_sherpa_sys::TtsError::NativeUnavailable => EngineError::ProviderFault {
+                code: EngineFaultCode::HostUnavailable,
+            },
+            aurora_voice_sherpa_sys::TtsError::InvalidConfig { .. }
+            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. }
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
+            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
+                EngineError::InvalidRequest
+            }
+            aurora_voice_sherpa_sys::TtsError::Cancelled => EngineError::Cancelled,
+            _ => EngineError::ProviderFault {
+                code: EngineFaultCode::Native,
+            },
+        }
+    }
+
+    fn native_tts_adapter_error(error: NativeTtsError) -> SherpaAdapterError {
+        match error {
+            aurora_voice_sherpa_sys::TtsError::NativeUnavailable => {
+                SherpaAdapterError::BackendFault {
+                    code: BackendFaultCode::HostUnavailable,
+                }
+            }
+            aurora_voice_sherpa_sys::TtsError::InvalidConfig { .. }
+            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. } => {
+                SherpaAdapterError::InvalidConfig
+            }
+            aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
+            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
+            | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
+                SherpaAdapterError::InvalidAudio
+            }
+            aurora_voice_sherpa_sys::TtsError::Cancelled => SherpaAdapterError::Cancelled,
+            _ => SherpaAdapterError::BackendFault {
+                code: BackendFaultCode::NativeFault,
+            },
+        }
+    }
+}
+
 #[cfg(feature = "native-kws")]
 pub use native_kws_backend::{NativeKwsBackend, NativeKwsModelFiles};
 
 #[cfg(feature = "native-stt")]
-pub use native_stt_backend::NativeSttBackend;
+pub use native_stt_backend::{NativeSttBackend, NativeSttModelFiles};
+
+#[cfg(feature = "native-tts")]
+pub use native_tts_backend::{
+    NativeTtsBackend, NativeTtsPocketModelFiles, NativeTtsReferenceAudio,
+    NativeTtsVitsPiperModelFiles,
+};
 
 #[cfg(feature = "native-vad")]
 pub use native_backend::NativeVadBackend;
@@ -1697,8 +3208,8 @@ mod tests {
         CompressionKind, DeviceClass, EngineKind, LanguageSupport, LicenseGrant, LicenseInfo,
         ManifestSignature, ModelPackError, ModelPackFile, ModelPackManifest, PackTask,
         ProcessingMetadata, Provenance, ResourceBudget, RuntimeGates, RuntimeSelection,
-        RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier, TargetArch, TargetOs,
-        TaskRequest, TrustPolicy, VerifiedManifest,
+        RuntimeTarget, SelectedVariant, ShapeMetadata, SignatureVerifier, SpeechModelCatalog,
+        TargetArch, TargetOs, TaskRequest, TrustPolicy, TtsSynthesisConfig, VerifiedManifest,
     };
     use std::cell::Cell;
     use std::collections::{BTreeSet, VecDeque};
@@ -1710,10 +3221,53 @@ mod tests {
     #[allow(dead_code)]
     const STT_MODEL: &str = "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27";
     #[allow(dead_code)]
-    const LIGHT_UP_SPEC: &str = "▁ L IGHT ▁UP";
+    const TTS_MODEL: &str = "models/extracted/vits-piper-en_US-ljspeech-medium";
     #[allow(dead_code)]
     const EXPECTED_STT_TEXT: &str =
         "Ask not what your country can do for you. Ask what you can do for your country.";
+
+    #[cfg(feature = "kws-pinyin")]
+    fn write_temp_kws_file(name: &str, content: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("aurora-{name}-{}-{nonce}.txt", std::process::id()));
+        std::fs::write(&path, content).expect("write KWS temp file");
+        path
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    fn read_keyword_fixture_pairs(raw_path: &Path, expected_path: &Path) -> Vec<(String, String)> {
+        let raw = std::fs::read_to_string(raw_path).expect("read raw keyword fixture");
+        let expected =
+            std::fs::read_to_string(expected_path).expect("read compiled keyword fixture");
+        let raw_lines = raw
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        let expected_lines = expected
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        assert_eq!(raw_lines.len(), expected_lines.len());
+        raw_lines
+            .into_iter()
+            .zip(expected_lines)
+            .map(|(raw, expected)| (raw.to_owned(), expected.to_owned()))
+            .collect()
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    fn raw_phrase_text(raw_line: &str) -> &str {
+        raw_line
+            .split_once(" @")
+            .map(|(phrase, _)| phrase.trim())
+            .unwrap_or(raw_line.trim())
+    }
 
     #[derive(Debug, Default)]
     struct FakeBackend {
@@ -1791,6 +3345,7 @@ mod tests {
         calls: Vec<&'static str>,
         last_rate: Option<u32>,
         last_samples: Vec<f32>,
+        last_language: Option<String>,
         transcript: String,
         fail: bool,
     }
@@ -1801,6 +3356,7 @@ mod tests {
                 calls: Vec::new(),
                 last_rate: None,
                 last_samples: Vec::new(),
+                last_language: None,
                 transcript: "hello aurora".to_owned(),
                 fail: false,
             }
@@ -1812,10 +3368,12 @@ mod tests {
             &mut self,
             sample_rate_hz: u32,
             pcm: &[f32],
+            language: Option<&str>,
         ) -> Result<String, SherpaAdapterError> {
             self.calls.push("transcribe");
             self.last_rate = Some(sample_rate_hz);
             self.last_samples.extend_from_slice(pcm);
+            self.last_language = language.map(ToOwned::to_owned);
             if self.fail {
                 Err(SherpaAdapterError::from_host_fault(
                     "path=/secret/moonshine transcript=private",
@@ -1823,6 +3381,89 @@ mod tests {
             } else {
                 Ok(self.transcript.clone())
             }
+        }
+    }
+
+    #[derive(Debug)]
+    struct FakeTtsBackend {
+        calls: Vec<&'static str>,
+        last_text_bytes: Option<usize>,
+        last_speaker_id: Option<i32>,
+        last_speed: Option<f32>,
+        audio: SherpaTtsAudio,
+        fail: bool,
+    }
+
+    impl Default for FakeTtsBackend {
+        fn default() -> Self {
+            let mut samples = vec![0.0, 1.0, -1.0, 0.5];
+            samples.resize(64, 0.0);
+            samples.push(0.25);
+            Self {
+                calls: Vec::new(),
+                last_text_bytes: None,
+                last_speaker_id: None,
+                last_speed: None,
+                audio: SherpaTtsAudio::new(VAD_SAMPLE_RATE_HZ, samples).expect("audio"),
+                fail: false,
+            }
+        }
+    }
+
+    impl SherpaTtsBackend for FakeTtsBackend {
+        fn synthesize(
+            &mut self,
+            text: &str,
+            speaker_id: i32,
+            speed: f32,
+            cancellation: &dyn Fn() -> bool,
+            _cancellation_token: &SherpaTtsCancellationToken,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            self.calls.push("synthesize");
+            self.last_text_bytes = Some(text.len());
+            self.last_speaker_id = Some(speaker_id);
+            self.last_speed = Some(speed);
+            if cancellation() {
+                return Err(SherpaAdapterError::Cancelled);
+            }
+            if self.fail {
+                Err(SherpaAdapterError::from_host_fault(
+                    "path=/secret/vits.onnx text=private ptr=0xfeed",
+                ))
+            } else {
+                Ok(self.audio.clone())
+            }
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            self.calls.push("cancel");
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    struct BlockingTtsBackend {
+        started: std::sync::mpsc::Sender<()>,
+    }
+
+    impl SherpaTtsBackend for BlockingTtsBackend {
+        fn synthesize(
+            &mut self,
+            _text: &str,
+            _speaker_id: i32,
+            _speed: f32,
+            cancellation: &dyn Fn() -> bool,
+            _cancellation_token: &SherpaTtsCancellationToken,
+        ) -> Result<SherpaTtsAudio, SherpaAdapterError> {
+            self.started.send(()).expect("started signal");
+            while !cancellation() {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(SherpaAdapterError::Cancelled)
+        }
+
+        fn cancel(&mut self) -> Result<(), SherpaAdapterError> {
+            Ok(())
         }
     }
 
@@ -1917,6 +3558,13 @@ mod tests {
         SherpaFiniteSttEngine::new(stt_binding(), backend).expect("valid stt engine")
     }
 
+    fn tts_provider<B>(backend: B) -> SherpaTtsProvider<B>
+    where
+        B: SherpaTtsBackend,
+    {
+        SherpaTtsProvider::new(tts_binding(), backend).expect("valid tts provider")
+    }
+
     fn binding() -> TaskPackBinding {
         let (manifest, selection) = selected();
         TaskPackBinding::from_selection(VoiceTask::VoiceActivityDetection, &manifest, &selection)
@@ -1933,6 +3581,25 @@ mod tests {
         let (manifest, selection) = selected_for("stt-pack", PackTask::Stt);
         TaskPackBinding::from_selection(VoiceTask::SpeechToText, &manifest, &selection)
             .expect("stt binding")
+    }
+
+    fn tts_binding() -> TaskPackBinding {
+        let (manifest, selection) = selected_for("tts-pack", PackTask::Tts);
+        TaskPackBinding::from_selection(VoiceTask::TextToSpeech, &manifest, &selection)
+            .expect("tts binding")
+    }
+
+    fn catalog_binding(model_id: &str) -> TaskPackBinding {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let entry = catalog.model(model_id).expect("catalog model");
+        TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+        )
+        .expect("catalog binding")
     }
 
     fn request(binding: TaskPackBinding, generation: u64) -> BoundTaskRequest {
@@ -1952,10 +3619,19 @@ mod tests {
         task: VoiceTask,
         generation: u64,
     ) -> BoundTaskRequest {
+        task_request_with_language(binding, task, generation, None)
+    }
+
+    fn task_request_with_language(
+        binding: TaskPackBinding,
+        task: VoiceTask,
+        generation: u64,
+        language: Option<&str>,
+    ) -> BoundTaskRequest {
         BoundTaskRequest::new(
             TaskRequest {
                 task,
-                language: None,
+                language: language.map(ToOwned::to_owned),
                 generation,
             },
             binding,
@@ -2006,6 +3682,40 @@ mod tests {
         .expect("finite stt audio")
     }
 
+    fn tts_request(
+        binding: TaskPackBinding,
+        generation: u64,
+        chunk_samples: usize,
+    ) -> BoundTtsSynthesisRequest {
+        let config = TtsSynthesisConfig::new(
+            "default",
+            binding.voice_state_compatibility_group_id(),
+            binding.sample_rate_hz(),
+            chunk_samples,
+            None,
+        )
+        .expect("tts config");
+        BoundTtsSynthesisRequest::new(
+            task_request(binding, VoiceTask::TextToSpeech, generation),
+            "hello aurora",
+            config,
+        )
+        .expect("tts request")
+    }
+
+    fn finite_stt_with_language(
+        binding: TaskPackBinding,
+        generation: u64,
+        language: Option<&str>,
+        frames: Vec<Vec<f32>>,
+    ) -> (BoundFiniteSttRequest, FiniteSttAudio) {
+        FiniteSttAudio::from_frames(
+            task_request_with_language(binding, VoiceTask::SpeechToText, generation, language),
+            frames,
+        )
+        .expect("finite stt audio")
+    }
+
     fn frame(samples: &[f32]) -> StreamingAudioFrame<'_> {
         StreamingAudioFrame::new(1, VAD_SAMPLE_RATE_HZ, MONO_CHANNELS, samples, false)
             .expect("valid frame")
@@ -2048,6 +3758,55 @@ mod tests {
         assert_eq!(capabilities[0].task(), VoiceTask::VoiceActivityDetection);
         assert_eq!(capabilities[0].binding(), provider.binding());
         assert!(capabilities[0].streaming_enabled());
+    }
+
+    #[test]
+    fn providers_accept_catalog_backed_vad_kws_and_stt_bindings() {
+        let vad_binding = catalog_binding("vad:silero:current");
+        let vad = SherpaVadProvider::new(vad_binding.clone(), FakeBackend::default())
+            .expect("catalog vad provider");
+        assert!(matches!(
+            vad.binding().source(),
+            aurora_voice_engine::TaskBindingSource::SpeechCatalog { .. }
+        ));
+        assert_eq!(vad.binding().selected_file_ids(), &["model".to_owned()]);
+
+        let kws_binding = catalog_binding("kws:zipformer:gigaspeech");
+        let kws =
+            SherpaKwsProvider::new(kws_binding.clone(), phrase_set(), FakeKwsBackend::default())
+                .expect("catalog kws provider");
+        assert_eq!(
+            kws.binding().selected_file_ids(),
+            &[
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "joiner".to_owned(),
+                "tokenizer".to_owned(),
+                "tokens".to_owned()
+            ]
+        );
+
+        let stt_binding = catalog_binding("stt:whisper:tiny.en");
+        let stt = SherpaFiniteSttEngine::new(stt_binding, FakeSttBackend::default())
+            .expect("catalog stt provider");
+        assert_eq!(stt.binding().task(), VoiceTask::SpeechToText);
+    }
+
+    #[test]
+    fn catalog_backed_provider_construction_rejects_wrong_task() {
+        let stt_binding = catalog_binding("stt:whisper:tiny.en");
+        assert!(SherpaVadProvider::new(stt_binding.clone(), FakeBackend::default()).is_err());
+        assert!(SherpaKwsProvider::new(
+            stt_binding.clone(),
+            phrase_set(),
+            FakeKwsBackend::default(),
+        )
+        .is_err());
+        assert!(SherpaFiniteSttEngine::new(
+            catalog_binding("vad:silero:current"),
+            FakeSttBackend::default()
+        )
+        .is_err());
     }
 
     #[test]
@@ -2320,6 +4079,249 @@ mod tests {
     }
 
     #[test]
+    fn phrase_input_is_bounded_and_gigaspeech_normalization_is_english_only() {
+        let input = SherpaKwsPhraseInput::new("wake.main", " hey   aurora ").expect("phrase input");
+        assert_eq!(input.logical_id(), "wake.main");
+        assert_eq!(input.phrase_text(), " hey   aurora ");
+        assert_eq!(
+            normalize_gigaspeech_phrase(input.phrase_text()),
+            Ok("HEY AURORA".to_owned())
+        );
+        assert!(SherpaKwsPhraseInput::new("wake*", "hey aurora").is_err());
+        assert!(SherpaKwsPhraseInput::new("wake.main", "   ").is_err());
+        assert!(SherpaKwsPhraseInput::new("wake.main", "hey\naurora").is_err());
+        assert_eq!(
+            normalize_gigaspeech_phrase("你好"),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            normalize_gigaspeech_phrase(&"A".repeat(MAX_KWS_PHRASE_TEXT_BYTES + 1)),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+    }
+
+    #[cfg(feature = "kws-sentencepiece")]
+    #[test]
+    fn gigaspeech_sentencepiece_compiler_rejects_missing_or_oversized_model() {
+        let input = SherpaKwsPhraseInput::new("wake.main", "hey aurora").expect("phrase input");
+        assert_eq!(
+            compile_gigaspeech_sentencepiece_phrase_set(
+                "rev-a",
+                std::env::temp_dir().join("aurora-missing-bpe.model"),
+                [input.clone()],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidTokenizer)
+        );
+
+        let oversized_path =
+            std::env::temp_dir().join(format!("aurora-oversized-bpe-{}.model", std::process::id()));
+        std::fs::write(
+            &oversized_path,
+            vec![0_u8; MAX_KWS_SENTENCEPIECE_MODEL_BYTES as usize + 1],
+        )
+        .expect("write oversized model fixture");
+        assert_eq!(
+            compile_gigaspeech_sentencepiece_phrase_set("rev-a", &oversized_path, [input]),
+            Err(SherpaKwsPhraseCompileError::ResourceLimit)
+        );
+        let _ = std::fs::remove_file(oversized_path);
+    }
+
+    #[cfg(feature = "kws-sentencepiece")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_KWS_BPE_MODEL to point at the pinned GigaSpeech bpe.model"]
+    fn live_gigaspeech_sentencepiece_compiler_matches_pinned_mobile_archive() {
+        let model_path = std::env::var_os("AURORA_SHERPA_ONNX_KWS_BPE_MODEL")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_KWS_BPE_MODEL");
+        let phrases = compile_gigaspeech_sentencepiece_phrase_set(
+            "rev-live",
+            model_path,
+            [SherpaKwsPhraseInput::new("wake.main", "HEY AURORA").expect("phrase input")],
+        )
+        .expect("compile phrase");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.main"),
+            Some("▁HE Y ▁A UR OR A")
+        );
+        assert_eq!(
+            phrases.logical_id_for_native("HEY AURORA"),
+            Some("wake.main")
+        );
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    fn wenetspeech_pinyin_compiler_matches_official_partial_pinyin_shape() {
+        let tokens_path = write_temp_kws_file(
+            "wenetspeech-tokens",
+            "<blk> 0\n<sos/eos> 1\n<unk> 2\nn 3\nǐ 4\nh 5\nǎo 6\nj 7\nūn 8\ng 9\nē 10\n",
+        );
+        let phrases = compile_wenetspeech_pinyin_phrase_set(
+            "rev-zh",
+            &tokens_path,
+            [SherpaKwsPhraseInput::new("wake.zh", "你好军哥").expect("phrase input")],
+        )
+        .expect("compile phrase");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.zh"),
+            Some("n ǐ h ǎo j ūn g ē @你好军哥")
+        );
+        assert_eq!(phrases.logical_id_for_native("你好军哥"), Some("wake.zh"));
+        assert_eq!(
+            compile_wenetspeech_pinyin_phrase_set(
+                "rev-zh",
+                &tokens_path,
+                [SherpaKwsPhraseInput::new("wake.en", "LIGHT UP").expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        let _ = std::fs::remove_file(tokens_path);
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    fn zh_en_phone_pinyin_compiler_uses_verified_tokens_and_lexicon() {
+        let tokens_path = write_temp_kws_file(
+            "zh-en-tokens",
+            "<blk> 0\n<sos/eos> 1\n<unk> 2\nL 3\nAY1 4\nT 5\nAH1 6\nP 7\nl 8\nuò 9\nsh 10\ní 11\nn 12\nǐ 13\nh 14\nǎo 15\n",
+        );
+        let lexicon_path = write_temp_kws_file("zh-en-lexicon", "LIGHT L AY1 T\nUP AH1 P\n");
+        let phrases = compile_zh_en_2025_phrase_set(
+            "rev-bilingual",
+            &tokens_path,
+            &lexicon_path,
+            [
+                SherpaKwsPhraseInput::new("wake.en", "light up").expect("phrase input"),
+                SherpaKwsPhraseInput::new("wake.zh", "落实").expect("phrase input"),
+                SherpaKwsPhraseInput::new("wake.mixed", "light 你好 up").expect("phrase input"),
+            ],
+        )
+        .expect("compile phrases");
+        assert_eq!(
+            phrases.keyword_spec_for("wake.en"),
+            Some("L AY1 T AH1 P @LIGHT_UP")
+        );
+        assert_eq!(phrases.logical_id_for_native("LIGHT_UP"), Some("wake.en"));
+        assert_eq!(phrases.keyword_spec_for("wake.zh"), Some("l uò sh í @落实"));
+        assert_eq!(phrases.logical_id_for_native("落实"), Some("wake.zh"));
+        assert_eq!(
+            phrases.keyword_spec_for("wake.mixed"),
+            Some("L AY1 T n ǐ h ǎo AH1 P @LIGHT_你好_UP")
+        );
+        assert_eq!(
+            phrases.logical_id_for_native("LIGHT_你好_UP"),
+            Some("wake.mixed")
+        );
+        let adjacent = compile_zh_en_2025_phrase_set(
+            "rev-adjacent",
+            &tokens_path,
+            &lexicon_path,
+            [SherpaKwsPhraseInput::new("wake.adjacent", "light你好up").expect("phrase input")],
+        )
+        .expect("compile adjacent mixed phrase");
+        assert_eq!(
+            adjacent.keyword_spec_for("wake.adjacent"),
+            Some("L AY1 T n ǐ h ǎo AH1 P @LIGHT你好UP")
+        );
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [SherpaKwsPhraseInput::new("wake.unknown", "unknown").expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [SherpaKwsPhraseInput::new("wake.punctuation", "light, 你好")
+                    .expect("phrase input")],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        assert_eq!(
+            compile_zh_en_2025_phrase_set(
+                "rev-bilingual",
+                &tokens_path,
+                &lexicon_path,
+                [
+                    SherpaKwsPhraseInput::new("wake.mixed_unknown", "light hello 你好")
+                        .expect("phrase input")
+                ],
+            ),
+            Err(SherpaKwsPhraseCompileError::InvalidPhrase)
+        );
+        let _ = std::fs::remove_file(tokens_path);
+        let _ = std::fs::remove_file(lexicon_path);
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_WENETSPEECH_DIR to point at the pinned WenetSpeech KWS archive root"]
+    fn live_wenetspeech_pinyin_compiler_matches_pinned_archive_examples() {
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_WENETSPEECH_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WENETSPEECH_DIR");
+        let pairs =
+            read_keyword_fixture_pairs(&dir.join("keywords_raw.txt"), &dir.join("keywords.txt"));
+        let inputs = pairs
+            .iter()
+            .enumerate()
+            .map(|(index, (raw, _))| {
+                SherpaKwsPhraseInput::new(format!("wake.{index}"), raw_phrase_text(raw))
+                    .expect("phrase input")
+            })
+            .collect::<Vec<_>>();
+        let phrase_set =
+            compile_wenetspeech_pinyin_phrase_set("rev-live", dir.join("tokens.txt"), inputs)
+                .expect("compile phrases");
+        for (index, (_, expected)) in pairs.iter().enumerate() {
+            assert_eq!(
+                phrase_set.keyword_spec_for(&format!("wake.{index}")),
+                Some(expected.as_str())
+            );
+        }
+    }
+
+    #[cfg(feature = "kws-pinyin")]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR to point at the pinned zh-en KWS archive root"]
+    fn live_zh_en_2025_compiler_matches_pinned_archive_examples() {
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_ZH_EN_KWS_DIR");
+        let pairs = read_keyword_fixture_pairs(
+            &dir.join("test_wavs").join("keywords_raw.txt"),
+            &dir.join("test_wavs").join("keywords.txt"),
+        );
+        let inputs = pairs
+            .iter()
+            .enumerate()
+            .map(|(index, (raw, _))| {
+                SherpaKwsPhraseInput::new(format!("wake.{index}"), raw_phrase_text(raw))
+                    .expect("phrase input")
+            })
+            .collect::<Vec<_>>();
+        let phrase_set = compile_zh_en_2025_phrase_set(
+            "rev-live",
+            dir.join("tokens.txt"),
+            dir.join("en.phone"),
+            inputs,
+        )
+        .expect("compile phrases");
+        for (index, (_, expected)) in pairs.iter().enumerate() {
+            assert_eq!(
+                phrase_set.keyword_spec_for(&format!("wake.{index}")),
+                Some(expected.as_str())
+            );
+        }
+    }
+
+    #[test]
     fn kws_detects_logical_phrase_and_suppresses_cooldown_before_result_validation() {
         let mut backend = FakeKwsBackend::default();
         backend.detections.push_back(vec![
@@ -2497,6 +4499,16 @@ mod tests {
     }
 
     #[test]
+    fn finite_stt_passes_requested_language_to_backend() {
+        let mut engine = stt_engine(FakeSttBackend::default());
+        let (request, audio) =
+            finite_stt_with_language(engine.binding().clone(), 6, Some("en"), vec![vec![0.25]]);
+        futures_lite((), |_| engine.transcribe_finite(request, audio, &|| false))
+            .expect("stt result");
+        assert_eq!(engine.into_backend().last_language.as_deref(), Some("en"));
+    }
+
+    #[test]
     fn finite_stt_cancellation_and_duration_bound_happen_before_backend() {
         let mut engine = stt_engine(FakeSttBackend::default());
         let (request, audio) = finite_stt(engine.binding().clone(), 5, vec![vec![0.25]]);
@@ -2570,6 +4582,145 @@ mod tests {
             .any(|capability| capability.task() == VoiceTask::TextToSpeech));
     }
 
+    #[test]
+    fn tts_advertises_local_binding_readiness_and_chunks_pcm16() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        let capabilities = provider.capabilities();
+        assert_eq!(capabilities.len(), 1);
+        assert_eq!(capabilities[0].task(), VoiceTask::TextToSpeech);
+        assert!(!capabilities[0].streaming_enabled());
+        assert_eq!(provider.resource_report().readiness, TaskReadiness::Ready);
+        assert_eq!(
+            provider.synthesis_binding().expect("binding"),
+            TtsSynthesisProviderBinding::LocalTask(Box::new(provider.binding().clone()))
+        );
+
+        let request = tts_request(provider.binding().clone(), 9, 64);
+        let result =
+            futures_lite((), |_| provider.synthesize_text(request, &|| false)).expect("tts result");
+        assert_eq!(result.chunk_count(), 2);
+        assert!(!result.cancelled());
+        assert_eq!(
+            &result.chunks()[0].samples()[..4],
+            &[0, i16::MAX, i16::MIN, 16384]
+        );
+        assert!(!result.chunks()[0].final_chunk());
+        assert_eq!(result.chunks()[1].samples(), &[8192]);
+        assert!(result.chunks()[1].final_chunk());
+
+        let backend = provider.into_backend();
+        assert_eq!(backend.calls, vec!["synthesize"]);
+        assert_eq!(backend.last_text_bytes, Some("hello aurora".len()));
+        assert_eq!(backend.last_speaker_id, Some(0));
+        assert_eq!(backend.last_speed, Some(1.0));
+    }
+
+    #[test]
+    fn tts_rejects_wrong_binding_seed_and_concurrent_generation() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        let wrong = stt_binding();
+        assert_eq!(
+            futures_lite(
+                task_request(wrong.clone(), VoiceTask::SpeechToText, 1),
+                |request| provider.warm_task(request)
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+        assert_eq!(
+            futures_lite(
+                TtsSynthesisProviderBinding::LocalTask(Box::new(wrong)),
+                |binding| provider.warm_synthesis(binding)
+            ),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let seeded_config = TtsSynthesisConfig::new(
+            "default",
+            provider.binding().voice_state_compatibility_group_id(),
+            provider.binding().sample_rate_hz(),
+            64,
+            Some(7),
+        )
+        .expect("seed config");
+        let seeded = BoundTtsSynthesisRequest::new(
+            task_request(provider.binding().clone(), VoiceTask::TextToSpeech, 1),
+            "hello aurora",
+            seeded_config,
+        )
+        .expect("seeded request");
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(seeded, &|| false)),
+            Err(EngineError::InvalidRequest)
+        );
+
+        provider.active_generation = Some(77);
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(
+                tts_request(provider.binding().clone(), 78, 64),
+                &|| false
+            )),
+            Err(EngineError::ResourceLimit)
+        );
+        assert_eq!(
+            futures_lite((), |_| provider.cancel_synthesis_generation(77)),
+            Ok(())
+        );
+        assert!(provider.active_generation.is_none());
+    }
+
+    #[test]
+    fn tts_cancellation_and_backend_faults_are_fail_closed_and_redacted() {
+        let mut provider = tts_provider(FakeTtsBackend::default());
+        assert_eq!(
+            futures_lite((), |_| provider.synthesize_text(
+                tts_request(provider.binding().clone(), 11, 64),
+                &|| true
+            )),
+            Err(EngineError::Cancelled)
+        );
+        assert!(provider.into_backend().calls.is_empty());
+
+        let mut provider = tts_provider(FakeTtsBackend {
+            fail: true,
+            ..FakeTtsBackend::default()
+        });
+        let error = futures_lite((), |_| {
+            provider.synthesize_text(tts_request(provider.binding().clone(), 12, 64), &|| false)
+        })
+        .expect_err("provider fault");
+        let rendered = format!("{error:?} {error} {provider:?}");
+        assert!(rendered.contains("provider"));
+        assert!(!rendered.contains("/secret"));
+        assert!(!rendered.contains("private"));
+        assert_eq!(
+            provider.last_backend_fault(),
+            Some(BackendFaultCode::BackendFault)
+        );
+    }
+
+    #[test]
+    fn tts_shared_cancellation_token_stops_blocking_backend_without_mut_provider() {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let mut provider = tts_provider(BlockingTtsBackend {
+            started: started_tx,
+        });
+        let token = provider.cancellation_token();
+        let request = tts_request(provider.binding().clone(), 13, 64);
+        let handle = std::thread::spawn(move || {
+            futures_lite((), |_| provider.synthesize_text(request, &|| false))
+        });
+
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("blocking backend should start");
+        token.cancel();
+        let result = handle.join().expect("synthesis thread should finish");
+        assert_eq!(result, Err(EngineError::Cancelled));
+        assert!(token.is_cancelled());
+        token.reset();
+        assert!(!token.is_cancelled());
+    }
+
     #[cfg(all(feature = "native-kws", not(target_arch = "wasm32")))]
     #[test]
     fn native_kws_adapter_detects_light_up_with_manifest_int8_encoder() {
@@ -2594,9 +4745,10 @@ mod tests {
             },
         )
         .expect("native kws backend");
-        let phrase_set = SherpaKwsPhraseSet::new(
+        let phrase_set = compile_gigaspeech_sentencepiece_phrase_set(
             "phase4",
-            [SherpaKwsPhrase::new("wake.main", "LIGHT UP", LIGHT_UP_SPEC).expect("phrase")],
+            dir.join("bpe.model"),
+            [SherpaKwsPhraseInput::new("wake.main", "LIGHT UP").expect("phrase")],
         )
         .expect("phrase set");
         let mut provider = SherpaKwsProvider::new(binding, phrase_set, backend).expect("provider");
@@ -2636,7 +4788,6 @@ mod tests {
         assert!(detected, "LIGHT UP should be detected");
         let rendered = format!("{provider:?}");
         assert!(!rendered.contains("LIGHT UP"));
-        assert!(!rendered.contains(LIGHT_UP_SPEC));
         assert!(!rendered.contains("encoder-epoch"));
     }
 
@@ -2679,6 +4830,61 @@ mod tests {
         let rendered = format!("{engine:?} {result:?}");
         assert!(!rendered.contains(EXPECTED_STT_TEXT));
         assert!(!rendered.contains("moonshine"));
+    }
+
+    #[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
+    #[test]
+    #[ignore = "requires AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR and AURORA_SHERPA_ONNX_WHISPER_TEST_WAV"]
+    fn native_stt_adapter_transcribes_selected_whisper_model() {
+        let binding = binding_with_files(
+            "native-whisper-stt",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "tokens"],
+        );
+        let dir = std::env::var_os("AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WHISPER_MODEL_DIR");
+        let wav_path = std::env::var_os("AURORA_SHERPA_ONNX_WHISPER_TEST_WAV")
+            .map(PathBuf::from)
+            .expect("AURORA_SHERPA_ONNX_WHISPER_TEST_WAV");
+        let backend = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: dir.join("tiny-encoder.int8.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: dir.join("tiny-decoder.int8.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: dir.join("tiny-tokens.txt"),
+                language: None,
+            },
+        )
+        .expect("native whisper stt backend");
+        let mut engine = SherpaFiniteSttEngine::new(binding, backend).expect("engine");
+        let source = read_pcm16_mono_wav(&wav_path);
+        let source = if source.sample_rate == VAD_SAMPLE_RATE_HZ {
+            source
+        } else {
+            source.resample_to_16khz()
+        };
+        let frames = source
+            .pcm
+            .chunks(16_000)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>();
+        let (request, audio) = finite_stt(engine.binding().clone(), 89, frames);
+        let result = futures_lite((), |_| engine.transcribe_finite(request, audio, &|| false))
+            .expect("stt result");
+        println!("whisper transcript: {}", result.transcript());
+        assert!(!result.transcript().trim().is_empty());
+        assert!(result
+            .transcript()
+            .to_ascii_lowercase()
+            .contains("after early nightfall"));
+        let rendered = format!("{engine:?} {result:?}");
+        assert!(!rendered.contains(result.transcript()));
+        assert!(!rendered.contains("whisper"));
     }
 
     #[cfg(feature = "native-kws")]
@@ -2725,6 +4931,178 @@ mod tests {
             "tokens.txt",
         );
         assert!(matches!(result, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(feature = "native-stt")]
+    #[test]
+    fn native_stt_constructor_accepts_only_selected_whisper_file_ids() {
+        let binding = binding_with_files(
+            "native-whisper-stt-ids",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "tokens"],
+        );
+        let moonshine_decoder = NativeSttBackend::from_selected_model(
+            &binding,
+            "encoder",
+            "encoder.onnx",
+            "decoder-merged",
+            "decoder.onnx",
+            "tokens",
+            "tokens.txt",
+        );
+        assert!(matches!(
+            moonshine_decoder,
+            Err(EngineError::InvalidRequest)
+        ));
+
+        let missing_token = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("decoder.onnx"),
+                tokens_file_id: "tokens-extra".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                language: Some("en".to_owned()),
+            },
+        );
+        assert!(matches!(missing_token, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(feature = "native-stt")]
+    #[test]
+    fn native_stt_constructor_rejects_ambiguous_decoder_selection() {
+        let binding = binding_with_files(
+            "native-ambiguous-stt-ids",
+            PackTask::Stt,
+            VoiceTask::SpeechToText,
+            &["encoder", "decoder", "decoder-merged", "tokens"],
+        );
+        let result = NativeSttBackend::from_selected_model_files(
+            &binding,
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("decoder.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                language: None,
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+
+        let rendered = format!(
+            "{:?}",
+            NativeSttModelFiles {
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: PathBuf::from("/private/model/encoder.onnx"),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: PathBuf::from("/private/model/decoder.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("/private/model/tokens.txt"),
+                language: Some("zz-private-language".to_owned()),
+            }
+        );
+        assert!(!rendered.contains("/private"));
+        assert!(!rendered.contains("zz-private-language"));
+    }
+
+    #[cfg(feature = "native-tts")]
+    #[test]
+    fn native_tts_constructor_requires_exact_dependency_closed_file_ids() {
+        let binding = binding_with_files(
+            "native-tts-ids",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data"],
+        );
+        let result = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "voice-model".to_owned(),
+                model_path: PathBuf::from("model.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: PathBuf::from("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: None,
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+
+        let binding = binding_with_files(
+            "native-tts-lexicon-ids",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data", "lexicon"],
+        );
+        let result = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: PathBuf::from("model.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: PathBuf::from("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: PathBuf::from("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: Some(PathBuf::from("lexicon.txt")),
+            },
+        );
+        assert!(matches!(result, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
+    #[test]
+    fn native_tts_adapter_generates_vits_piper_chunks_when_available() {
+        if !live_tts_smoke_enabled() {
+            eprintln!("skipping live native TTS smoke; set AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS=1");
+            return;
+        }
+        let binding = binding_with_files_and_sample_rate(
+            "native-tts",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["model", "tokens", "espeak-ng-data"],
+            22_050,
+        );
+        let dir = phase4_path("AURORA_SHERPA_ONNX_TTS_MODEL_DIR", TTS_MODEL);
+        let backend = NativeTtsBackend::from_selected_vits_piper_model(
+            &binding,
+            NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: dir.join("en_US-ljspeech-medium.onnx"),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: dir.join("tokens.txt"),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: dir.join("espeak-ng-data"),
+                lexicon_file_id: None,
+                lexicon_path: None,
+            },
+        )
+        .expect("native tts backend");
+        let mut provider = SherpaTtsProvider::new(binding, backend).expect("provider");
+        let request = tts_request(provider.binding().clone(), 99, 1600);
+        let result = futures_lite((), |_| provider.synthesize_text(request, &|| false))
+            .expect("native tts result");
+        assert!(!result.cancelled());
+        assert!(result.chunk_count() > 0);
+        assert!(result.chunks().iter().all(|chunk| {
+            chunk.sample_rate_hz() == 22_050
+                && chunk.channels() == MONO_CHANNELS
+                && !chunk.samples().is_empty()
+        }));
+        assert!(result
+            .chunks()
+            .last()
+            .is_some_and(TtsAudioChunk::final_chunk));
+        let rendered = format!("{provider:?} {result:?}");
+        assert!(!rendered.contains("en_US-ljspeech"));
+        assert!(!rendered.contains("hello aurora"));
     }
 
     #[cfg(feature = "native-vad")]
@@ -2795,7 +5173,25 @@ mod tests {
         voice_task: VoiceTask,
         file_ids: &[&str],
     ) -> TaskPackBinding {
+        binding_with_files_and_sample_rate(
+            pack_id,
+            pack_task,
+            voice_task,
+            file_ids,
+            VAD_SAMPLE_RATE_HZ,
+        )
+    }
+
+    #[allow(dead_code)]
+    fn binding_with_files_and_sample_rate(
+        pack_id: &str,
+        pack_task: PackTask,
+        voice_task: VoiceTask,
+        file_ids: &[&str],
+        sample_rate_hz: u32,
+    ) -> TaskPackBinding {
         let mut raw = manifest(pack_id, pack_task);
+        raw.variants[0].compatibility.sample_rate_hz = sample_rate_hz;
         raw.files = file_ids
             .iter()
             .enumerate()
@@ -2866,6 +5262,11 @@ mod tests {
             "{env_name} should point at the expected test wav"
         );
         path
+    }
+
+    #[allow(dead_code)]
+    fn live_tts_smoke_enabled() -> bool {
+        std::env::var("AURORA_SHERPA_ONNX_ENABLE_LIVE_TTS").as_deref() == Ok("1")
     }
 
     #[allow(dead_code)]

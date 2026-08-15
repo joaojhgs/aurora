@@ -15,7 +15,9 @@ Tests cover:
 # ruff: noqa: E402
 
 import asyncio
+import base64
 import sys
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import numpy as np
@@ -36,8 +38,9 @@ from app.messaging import (
     TranscriptionType,
 )
 from app.services.stt_transcription.service import TranscriptionService, VADMode
-from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
-from app.shared.contracts.models.stt import TranscriptionMethods
+from app.shared.config.keys import ConfigKeys
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
+from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
 
 
 @pytest.fixture
@@ -67,7 +70,7 @@ def mock_config():
         stt.transcription.accurate_model.compute_type = "int8"
 
         async def mock_aget(key, default_or_model=None, *args, **kwargs):
-            if default_or_model is Stt:
+            if key == ConfigKeys.services.stt or default_or_model is Stt:
                 return Stt(
                     language="en",
                     transcription=Transcription(
@@ -249,6 +252,54 @@ class TestLifecycle:
         await service.stop()  # Should not raise
         await service.stop()  # Should not raise
 
+    @pytest.mark.asyncio
+    async def test_process_entrypoint_starts_and_stops_transcription_service(
+        self, monkeypatch
+    ) -> None:
+        """Starts and stops the transcription service through the process-mode entrypoint."""
+        from app.services.stt_transcription import __main__ as transcription_main
+
+        events: list[str] = []
+        bus = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+        service = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+
+        class ShutdownSignalWaiter:
+            def __init__(self, service_name: str) -> None:
+                events.append(f"install:{service_name}")
+
+            async def wait(self) -> None:
+                events.append("wait")
+
+            def close(self) -> None:
+                events.append("close")
+
+        monkeypatch.setattr(
+            transcription_main,
+            "register_all_service_topics",
+            lambda: events.append("topics"),
+        )
+        monkeypatch.setattr(
+            transcription_main,
+            "initialize_bus_for_service",
+            lambda service_name: events.append(service_name) or bus,
+        )
+        monkeypatch.setattr(transcription_main, "TranscriptionService", lambda: service)
+        monkeypatch.setattr(transcription_main, "ShutdownSignalWaiter", ShutdownSignalWaiter)
+
+        await transcription_main.main()
+
+        assert events == [
+            "install:TranscriptionService",
+            "topics",
+            "TranscriptionService",
+            "wait",
+            "close",
+        ]
+        bus.start.assert_awaited_once_with()
+        service.start.assert_awaited_once_with()
+        service.stop.assert_awaited_once_with()
+        bus.stop.assert_awaited_once_with()
+
 
 # ============================================================================
 # 3. MODEL LOADING TESTS
@@ -289,12 +340,198 @@ class TestModelLoading:
         await service.stop()
 
     @pytest.mark.asyncio
-    async def test_model_loading_error_propagates(self, service, mock_whisper_model, mock_vad):
-        """Test model loading error is propagated."""
+    async def test_model_loading_error_marks_unavailable(
+        self, service, mock_whisper_model, mock_vad
+    ):
+        """Model loading failures keep the service active but unavailable."""
         mock_whisper_model.side_effect = Exception("Model load failed")
 
-        with pytest.raises(Exception, match="Model load failed"):
-            await service.start()
+        await service.start()
+
+        assert service._running is True
+        assert service._realtime_model is None
+        assert service._accurate_model is None
+        assert service._model_status["realtime"] == "unavailable"
+        assert service._model_status["accurate"] == "unavailable"
+        assert service._model_status_message["realtime"] == "Exception"
+        assert service._model_status_message["accurate"] == "Exception"
+
+        await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_cached_model_load_records_ready_status(
+        self, service, mock_whisper_model, mock_vad
+    ):
+        """Successful provider construction records cache-backed readiness."""
+        await service.start()
+
+        assert service._model_ready("realtime") is True
+        assert service._model_ready("accurate") is True
+        assert service._model_status_message["realtime"] == "model_ready"
+        assert service._model_status_message["accurate"] == "model_ready"
+        assert service._model_cache_dir
+        mock_whisper_model.assert_any_call(
+            "tiny",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+
+        await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_model_size_or_path_accepts_hf_id_and_local_path(
+        self, service, mock_whisper_model, tmp_path
+    ):
+        """Faster Whisper identifiers pass through without preset enum filtering."""
+        local_model = tmp_path / "whisper-local"
+        cfg = Mock()
+        cfg.realtime_model = {
+            "enabled": True,
+            "model_size_or_path": "Systran/faster-whisper-large-v3",
+            "device": "cpu",
+            "compute_type": "int8",
+        }
+        cfg.accurate_model = {
+            "enabled": True,
+            "model_size_or_path": str(local_model),
+            "device": "cpu",
+            "compute_type": "int8",
+        }
+
+        await service._create_models(cfg, realtime_enabled=True, accurate_enabled=True)
+
+        mock_whisper_model.assert_any_call(
+            "Systran/faster-whisper-large-v3",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+        mock_whisper_model.assert_any_call(
+            str(local_model),
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+        assert service._model_status_message["realtime"] == "model_ready"
+        assert service._model_status_message["accurate"] == "model_ready"
+        assert "Systran" not in str(service._model_status_message)
+        assert str(local_model) not in str(service._model_status_message)
+
+    @pytest.mark.asyncio
+    async def test_runtime_config_preserves_raw_model_size_or_path(
+        self, service, mock_whisper_model, monkeypatch
+    ):
+        """Raw STT config avoids generated enum fallback for Faster Whisper IDs."""
+
+        async def fake_aget(key, *args, **kwargs):
+            del args, kwargs
+            if key == ConfigKeys.services.stt:
+                return {
+                    "transcription": {
+                        "realtime_model": {
+                            "enabled": True,
+                            "model_size_or_path": "Systran/faster-whisper-large-v3",
+                            "device": "cpu",
+                            "compute_type": "int8",
+                        },
+                        "accurate_model": {"enabled": False},
+                    }
+                }
+            if key == ConfigKeys.system:
+                return System(primary_language="en", voice_language="auto")
+            return {}
+
+        monkeypatch.setattr(
+            "app.services.stt_transcription.service.config_api.aget",
+            fake_aget,
+        )
+
+        (
+            _,
+            _,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        ) = await service._read_runtime_config()
+        await service._create_models(
+            transcription_cfg,
+            realtime_enabled=realtime_enabled,
+            accurate_enabled=accurate_enabled,
+        )
+
+        mock_whisper_model.assert_any_call(
+            "Systran/faster-whisper-large-v3",
+            device="cpu",
+            compute_type="int8",
+            download_root=ANY,
+        )
+
+    @pytest.mark.asyncio
+    async def test_cold_start_without_selected_models_does_not_download_or_advertise_stt(
+        self, service, mock_whisper_model
+    ):
+        """Default config keeps local STT dormant until a model is selected."""
+        realtime, accurate = await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True),
+                accurate_model=AccurateModel(enabled=True),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._realtime_model = realtime
+        service._accurate_model = accurate
+        service._refresh_callable_capabilities()
+
+        mock_whisper_model.assert_not_called()
+        assert realtime is None
+        assert accurate is None
+        assert service._model_status_message["realtime"] == "not_selected"
+        assert service._model_status_message["accurate"] == "not_selected"
+        assert "vad" in service._capabilities
+        assert "audio_transcription" not in service._capabilities
+
+    @pytest.mark.asyncio
+    async def test_unavailable_models_remove_transcription_capability(
+        self, service, mock_whisper_model
+    ):
+        """Liveness remains while model-dependent callability is withdrawn."""
+        mock_whisper_model.side_effect = Exception("offline")
+
+        await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True, model_size="tiny"),
+                accurate_model=AccurateModel(enabled=True, model_size="base"),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._refresh_callable_capabilities()
+
+        assert "vad" in service._capabilities
+        assert "audio_transcription" not in service._capabilities
+
+    @pytest.mark.asyncio
+    async def test_readiness_is_republished_when_model_recovers(self, service, mock_whisper_model):
+        """Recovered models refresh advertised capabilities for Gateway discovery."""
+        service._runtime_state = "active"
+        service._publish_service_announcement = AsyncMock()
+
+        new_realtime, new_accurate = await service._create_models(
+            Transcription(
+                realtime_model=RealtimeModel(enabled=True, model_size="tiny"),
+                accurate_model=AccurateModel(enabled=True, model_size="base"),
+            ),
+            realtime_enabled=True,
+            accurate_enabled=True,
+        )
+        service._realtime_model = new_realtime
+        service._accurate_model = new_accurate
+        await service._republish_readiness()
+
+        assert "audio_transcription" in service._capabilities
+        service._publish_service_announcement.assert_awaited_once()
 
 
 # ============================================================================
@@ -683,6 +920,62 @@ class TestErrorHandling:
         assert service.bus.publish.call_count >= 1
 
         await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_transcription_error_event_redacts_model_identifiers(
+        self, service, mock_whisper_model, mock_vad, tmp_path
+    ):
+        """Internal error events do not expose local paths or HF model IDs."""
+        await service.start()
+        service.bus.publish.reset_mock()
+        local_path = tmp_path / "Systran" / "faster-whisper-large-v3"
+        service._realtime_model.transcribe.side_effect = RuntimeError(f"cannot open {local_path}")
+
+        service._transcribe_with_model(
+            np.zeros(16000, dtype=np.float32),
+            service._realtime_model,
+            TranscriptionType.REALTIME,
+            1000.0,
+        )
+        await asyncio.sleep(0.1)
+
+        error_events = [
+            call.args[1]
+            for call in service.bus.publish.call_args_list
+            if call.args and call.args[0] == TranscriptionMethods.ERROR
+        ]
+        assert error_events
+        assert error_events[-1].error_message == "Transcription failed"
+        assert "Systran" not in error_events[-1].error_message
+        assert str(local_path) not in error_events[-1].error_message
+
+        await service.stop()
+
+    @pytest.mark.asyncio
+    async def test_transcribe_audio_external_error_redacts_model_identifiers(
+        self, service, tmp_path
+    ):
+        """Synchronous external transcription errors use a generic product-safe message."""
+        local_path = tmp_path / "models" / "faster-whisper-local"
+        service._realtime_enabled = True
+        service._realtime_model = MagicMock()
+        service._realtime_model.transcribe.side_effect = RuntimeError(
+            f"cannot load Systran/faster-whisper-large-v3 from {local_path}"
+        )
+        request = TranscribeAudioRequest(
+            audio_data=base64.b64encode(b"\x00\x00" * 16000).decode("ascii"),
+            format="raw",
+            sample_rate=16000,
+            channels=1,
+            model="realtime",
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            await service.transcribe_audio(request)
+
+        assert str(exc_info.value) == "Transcription failed"
+        assert "Systran" not in str(exc_info.value)
+        assert str(local_path) not in str(exc_info.value)
 
     def test_emit_result_handles_no_event_loop(self, service):
         """Test result emission handles missing event loop gracefully."""

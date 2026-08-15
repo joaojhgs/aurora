@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildAuroraVoiceWorkerUrl, resolveSameOriginWasmUrl } from '../src/worker-assets.js'
+import { buildAuroraVoiceWorkerUrl, resolveSameOriginSherpaAssetUrls, resolveSameOriginWasmUrl } from '../src/worker-assets.js'
 
 const packageDir = new URL('..', import.meta.url).pathname
 const distDir = join(packageDir, 'dist')
@@ -56,6 +56,32 @@ describe('voice worker production assets', () => {
       .toBe('https://voice.example/dist/wasm/aurora_voice_wasm_bg.wasm')
     expect(() => resolveSameOriginWasmUrl({ href: 'https://voice.example/dist/voice-worker.js?wasm=https%3A%2F%2Fother.example%2Faurora_voice_wasm_bg.wasm' }))
       .toThrow('Voice worker is not available')
+  })
+
+  it('accepts only same-origin allowlisted Sherpa engine assets in the worker URL', () => {
+    const url = buildAuroraVoiceWorkerUrl(
+      new URL('https://voice.example/dist/voice-worker.js'),
+      new URL('https://voice.example/dist/wasm/aurora_voice_wasm_bg.wasm'),
+      undefined,
+      {
+        vadAsrModuleUrl: new URL('https://voice.example/dist/sherpa-onnx-wasm-main-vad-asr.js'),
+        asrHelperUrl: new URL('https://voice.example/dist/sherpa-onnx-asr.js')
+      }
+    )
+
+    expect(resolveSameOriginSherpaAssetUrls({ href: url.href })).toEqual({
+      vadAsrModuleUrl: 'https://voice.example/dist/sherpa-onnx-wasm-main-vad-asr.js',
+      asrHelperUrl: 'https://voice.example/dist/sherpa-onnx-asr.js'
+    })
+    expect(() => buildAuroraVoiceWorkerUrl(
+      new URL('https://voice.example/dist/voice-worker.js'),
+      new URL('https://voice.example/dist/wasm/aurora_voice_wasm_bg.wasm'),
+      undefined,
+      { vadAsrModuleUrl: new URL('https://voice.example/dist/sherpa-onnx-wasm-main-vad-asr.data') }
+    )).toThrow('Voice worker is not available')
+    expect(() => resolveSameOriginSherpaAssetUrls({
+      href: 'https://voice.example/dist/voice-worker.js?sherpa_vad_asr=https%3A%2F%2Fother.example%2Fsherpa-onnx-wasm-main-vad-asr.js'
+    })).toThrow('Voice worker is not available')
   })
 
   it('emits a bundled module Worker and separate generated WASM core after build', () => {

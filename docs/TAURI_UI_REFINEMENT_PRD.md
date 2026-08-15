@@ -3,7 +3,7 @@
 Durable story ledger for implementing `docs/TAURI_UI_VISUAL_REFINEMENT_PLAN.md`.
 Status keys: `[ ]` pending, `[~]` in progress, `[x]` done + verified.
 
-**Controlling docs:** `docs/TAURI_UI_VISUAL_REFINEMENT_PLAN.md` (prescriptions), `docs/TAURI_UI_VISUAL_REFINEMENT_HANDOFF.md` (constraints).
+**Controlling docs:** `docs/TAURI_UI_VISUAL_REFINEMENT_PLAN.md` (prescriptions) and `DESIGN.md` (durable design constraints).
 **Target package:** `packages/aurora-ui`. **Verify gate per story:** `pnpm --filter @aurora/ui test` green + `typecheck` green; recompute visual fingerprints for shared shells (assistant/admin/mobile-settings) only after rendered review.
 
 ## Non-negotiable rules (every story)

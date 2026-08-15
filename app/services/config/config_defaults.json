@@ -82,7 +82,7 @@
       "audit_retention_days": 90
     },
     "tts": {
-      "enabled": false,
+      "enabled": true,
       "provider": "piper",
       "fallback_provider": null,
       "default_voice_id": null,
@@ -110,10 +110,11 @@
       "hardware_acceleration": false,
       "providers": {
         "piper": {
-          "model_file_path": "voice_models/en_US-lessac-medium.onnx",
-          "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+          "model_file_path": null,
+          "model_config_file_path": null,
           "model_sample_rate": 22050,
-          "executable_path": ""
+          "executable_path": "",
+          "cache_dir": "voice_models/piper"
         },
         "pockettts": {
           "quality_tier": "compact",
@@ -124,7 +125,7 @@
           "initialization_timeout_s": 120.0,
           "request_timeout_s": 120.0,
           "max_concurrent_requests": 1,
-          "preload_model": true,
+          "preload_model": false,
           "preload_voice_ids": [],
           "temperature": null,
           "lsd_decode_steps": 1,
@@ -136,6 +137,9 @@
       "voice_registry": {
         "manifest_path": "voice_models/voices.manifest.json",
         "asset_base_url": null,
+        "trusted_manifest_sha256": null,
+        "trusted_manifest_public_keys": [],
+        "trusted_manifest_signature": null,
         "cache_dir": "voice_models/voice-pack",
         "verify_sha256": true,
         "standard_pack_enabled": true,
@@ -153,15 +157,15 @@
           "webm"
         ]
       },
-      "model_file_path": "voice_models/en_US-lessac-medium.onnx",
-      "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+      "model_file_path": null,
+      "model_config_file_path": null,
       "model_sample_rate": 22050,
       "piper_path": ""
     },
     "stt": {
-      "language": "en",
+      "language": "",
       "coordinator": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -202,7 +206,7 @@
         }
       },
       "wakeword": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -230,7 +234,7 @@
         "inference_framework": "onnx"
       },
       "transcription": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -258,13 +262,15 @@
         "max_speech_duration_s": 30,
         "realtime_model": {
           "enabled": true,
-          "model_size": "tiny",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         },
         "accurate_model": {
           "enabled": true,
-          "model_size": "base",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         }

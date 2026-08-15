@@ -564,7 +564,7 @@ async def test_commit_change_set_serializes_reload_consistently_across_process_b
     ("key_path", "invalid_value", "healthy_section", "healthy_value"),
     [
         ("services.tts.provider", "not-a-provider", "services.tts", "piper"),
-        ("system.primary_language", "xx", "system", "en"),
+        ("system.primary_language", "en--US", "system", "en"),
     ],
     ids=["invalid-provider", "invalid-language"],
 )

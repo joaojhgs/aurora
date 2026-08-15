@@ -2,13 +2,19 @@ import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
+  type AuroraVoiceTtsAudio,
+  type AuroraVoiceTtsRequest,
+  type AuroraVoiceInferenceOutput,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
+  type AuroraVoiceWebModelBindings,
   type AuroraVoiceWebSession
 } from './types.js'
+import { AuroraSherpaWasmVoiceEngine, type AuroraSherpaVoiceEngine } from './sherpa-engine.js'
 import type { AuroraVoiceWasmBridge } from './worker-dispatcher.js'
 import type * as AuroraVoiceWasmModule from './wasm/aurora_voice_wasm.js'
+import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
 
 const DEFAULT_WASM_MAX_FRAMES = 4_096
 const DEFAULT_WASM_MAX_SAMPLES = 16_000 * 60
@@ -25,6 +31,8 @@ type AuroraVoiceWasmBindingsLoader = (wasmUrl?: AuroraVoiceWasmUrl) => Promise<A
 interface AuroraWasmVoiceBridgeOptions {
   readonly bindings?: AuroraVoiceWasmBindingsLoader
   readonly wasmUrl?: AuroraVoiceWasmUrl
+  readonly sherpaEngine?: AuroraSherpaVoiceEngine
+  readonly sherpaAssets?: AuroraVoiceWorkerSherpaAssets
   readonly surface?: string
   readonly maxFrames?: number
   readonly maxSamples?: number
@@ -45,10 +53,12 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
   private readonly maxSamples: number
   private readonly nowMs: () => number
   private readonly wasmUrl: AuroraVoiceWasmUrl | undefined
+  private readonly sherpaEngine: AuroraSherpaVoiceEngine
   private bindingsPromise: Promise<AuroraVoiceWasmBindings> | null = null
   private runtime: AuroraVoiceWasmRuntime | null = null
   private active: GenerationOwnership | null = null
   private pendingStopped: GenerationOwnership | null = null
+  private capabilities: AuroraVoiceWebCapabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
 
   constructor(options: AuroraWasmVoiceBridgeOptions = {}) {
     this.bindingsLoader = options.bindings ?? loadAuroraVoiceWasmBindings
@@ -57,6 +67,15 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     this.maxFrames = boundedInteger(options.maxFrames ?? DEFAULT_WASM_MAX_FRAMES, 'maxFrames', 1, DEFAULT_WASM_MAX_FRAMES)
     this.maxSamples = boundedInteger(options.maxSamples ?? DEFAULT_WASM_MAX_SAMPLES, 'maxSamples', 1, DEFAULT_WASM_MAX_SAMPLES)
     this.nowMs = options.nowMs ?? Date.now
+    this.sherpaEngine = options.sherpaEngine ?? new AuroraSherpaWasmVoiceEngine(
+      options.sherpaAssets === undefined ? {} : { engineAssets: options.sherpaAssets }
+    )
+  }
+
+  async initialize(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }> {
+    await this.ensureRuntime()
+    this.capabilities = await this.sherpaEngine.initialize(modelBindings)
+    return { capabilities: this.capabilities }
   }
 
   async startSession(session: AuroraVoiceWebSession): Promise<void> {
@@ -75,9 +94,10 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
       rustGeneration: started.generation,
       stopped: false
     }
+    await this.sherpaEngine.startSession()
   }
 
-  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<void> {
+  async pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined> {
     const ownership = this.requireActive(frame.sessionId, frame.generation)
     if (!(pcm instanceof Int16Array) || pcm.length !== frame.sampleCount || pcm.byteLength !== frame.byteLength) {
       throw sanitizedError('audio_shape')
@@ -97,6 +117,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
         samples: Array.from(pcm)
       })
     })
+    return this.sherpaEngine.pushPcmI16(frame, pcm)
   }
 
   async stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio> {
@@ -107,6 +128,7 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
       at_micros: this.nowMicros()
     })))
     const pcm = toBoundedPcm(stopped.pcm_i16, stopped.sample_count)
+    await this.sherpaEngine.stopSession()
     ownership.stopped = true
     this.active = null
     this.pendingStopped = ownership
@@ -135,8 +157,21 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     this.pendingStopped = null
   }
 
+  async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
+    await this.ensureRuntime()
+    try {
+      return await this.sherpaEngine.synthesizeSpeech(request)
+    } catch {
+      throw sanitizedError('tts_failed')
+    }
+  }
+
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {
     const normalizedReason = /^[A-Za-z0-9_.-]{1,48}$/.test(reason) ? reason : 'cancelled'
+    if (sessionId === null && normalizedReason === 'cancelled') {
+      this.sherpaEngine.cancelTtsGeneration?.(generation)
+      return
+    }
     if (this.active !== null && this.matches(this.active, sessionId, generation)) {
       const ownership = this.active
       await this.withRuntime((runtime) => {
@@ -169,11 +204,11 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     const runtime = await this.ensureRuntime()
     try {
       runtime.snapshot()
-      readCapabilities(runtime.capabilities())
+      readCoreCapabilities(runtime.capabilities())
     } catch {
       throw sanitizedError('snapshot_failed')
     }
-    return { capabilities: AURORA_VOICE_WEB_DEFAULT_CAPABILITIES }
+    return { capabilities: this.capabilities }
   }
 
   private async withRuntime<T>(operation: (runtime: AuroraVoiceWasmRuntime) => T): Promise<T> {
@@ -229,6 +264,8 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
       this.bindingsPromise = null
       this.active = null
       this.pendingStopped = null
+      this.sherpaEngine.dispose()
+      this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
     }
   }
 }
@@ -264,7 +301,7 @@ function readStoppedSession(operation: () => unknown): { readonly sample_count: 
   }
 }
 
-function readCapabilities(value: unknown): void {
+function readCoreCapabilities(value: unknown): void {
   if (
     typeof value !== 'object' ||
     value === null ||

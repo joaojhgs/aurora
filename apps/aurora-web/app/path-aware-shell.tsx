@@ -17,6 +17,7 @@ import {
   type AuroraShellSnapshot,
 } from '@aurora/ui'
 import {
+  AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT,
   auroraBrowserRequiresOnboarding,
   auroraBrowserRuntimeProfile,
   auroraBrowserRuntimeProfileDocument,
@@ -74,6 +75,12 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
       active = false
     }
   }, [refreshKey])
+
+  useEffect(() => {
+    const refreshRuntime = () => setRefreshKey((value) => value + 1)
+    window.addEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
+    return () => window.removeEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
+  }, [])
 
   if (startFailed) {
     return (

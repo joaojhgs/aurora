@@ -17,15 +17,23 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import sys
 import uuid
 import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.messaging import Envelope
+from app.services.tts.piper_catalog import (
+    CATALOG_REVISION as PIPER_CATALOG_REVISION,
+    PiperCatalogManager,
+    piper_cache_dir_from_config,
+)
 from app.services.tts.playback import create_pcm_playback, create_realtime_piper_stream
 from app.services.tts.providers.base import (
     TTSProvider,
@@ -38,9 +46,19 @@ from app.services.tts.providers.pockettts import (
     PocketTTSProvider,
     PocketTTSProviderConfig,
     PocketTTSVoiceStateConfig,
+    derive_pockettts_voice_state_artifact,
     resolve_pockettts_base_identity_spec,
 )
-from app.services.tts.voice_registry import VoicePackManifest, VoiceRegistry, VoiceRegistryError
+from app.services.tts.voice_catalog import (
+    VoiceCatalogError,
+    VoiceCatalogInstaller,
+    VoiceCatalogSourceError,
+)
+from app.services.tts.voice_registry import (
+    ExportedCloneVoiceState,
+    VoiceRegistry,
+    VoiceRegistryError,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import System, Tts
@@ -53,18 +71,28 @@ from app.shared.contracts.models.speech import (
 )
 from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_DURATION_MS,
+    VOICE_STATE_TRANSFER_MAX_BYTES,
     TTSAudioChunkEvent,
     TTSCapabilities,
+    TTSCloneVoiceStateBundle,
     TTSCreateVoiceProfileRequest,
     TTSCreateVoiceProfileResponse,
     TTSDeleteVoiceProfileRequest,
     TTSDeleteVoiceProfileResponse,
+    TTSExportVoiceProfileRequest,
+    TTSExportVoiceProfileResponse,
     TTSGetCapabilitiesRequest,
     TTSGetCapabilitiesResponse,
     TTSGetVoiceProfileRequest,
     TTSGetVoiceProfileResponse,
+    TTSImportVoiceProfileRequest,
+    TTSImportVoiceProfileResponse,
     TTSInstallVoiceProfileRequest,
     TTSInstallVoiceProfileResponse,
+    TTSLanguagePackDescriptor,
+    TTSLanguagePackVoice,
+    TTSListLanguagePacksRequest,
+    TTSListLanguagePacksResponse,
     TTSListVoiceProfilesRequest,
     TTSListVoiceProfilesResponse,
     TTSListVoicesRequest,
@@ -119,6 +147,36 @@ def _text_log_metadata(text: str) -> str:
     return f"text_chars={len(text)}"
 
 
+def _safe_tts_error(exc: Exception) -> str:
+    """Return a stable non-sensitive error code for logs and events."""
+    if isinstance(exc, TTSProviderError):
+        return f"tts_provider_{exc.code}"
+    if isinstance(exc, (VoiceCatalogError, VoiceRegistryError)):
+        return "tts_voice_management_failed"
+    return f"tts_{type(exc).__name__.lower()}"
+
+
+def _safe_tts_event_error(exc: Exception) -> str:
+    """Return a product-safe TTS error event message."""
+    if isinstance(exc, TTSProviderError) and exc.code in {
+        "unsupported_voice",
+        "unavailable",
+        "capability_changed",
+    }:
+        return "TTS voice is unavailable"
+    if isinstance(exc, TTSProviderError) and exc.code == "cancelled":
+        return "TTS request was cancelled"
+    return "TTS request failed"
+
+
+def _trusted_manifest_keys(registry_cfg: object | None) -> tuple[str, ...]:
+    """Normalize generated config root models into raw public-key strings."""
+    keys = getattr(registry_cfg, "trusted_manifest_public_keys", None)
+    if not keys:
+        return ()
+    return tuple(str(getattr(key, "root", key)) for key in keys if str(getattr(key, "root", key)))
+
+
 @dataclass
 class _TTSStreamState:
     """Internal ordered state for a text-to-audio stream."""
@@ -157,6 +215,15 @@ class _VoiceImportSession:
     expires_at: datetime
     chunks: dict[int, bytes] = field(default_factory=dict)
     sealed_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class _LanguagePackInventory:
+    packs: list[TTSLanguagePackDescriptor]
+    catalog_status: Literal["available", "unavailable"]
+    catalog_error_code: Literal["catalog_unavailable"] | None
+    default_voice_id: str | None
+    stale_default_voice_id: str | None
 
 
 def _clean_envelope_string(value: object) -> str | None:
@@ -254,6 +321,10 @@ def _duration_ms_from_frames(frames: int, sample_rate: int) -> int:
 
 
 def _validate_import_audio_payload(payload: bytes, session: _VoiceImportSession) -> None:
+    _voice_import_duration_ms(payload, session)
+
+
+def _voice_import_duration_ms(payload: bytes, session: _VoiceImportSession) -> int:
     frame_size = session.channels * session.sample_width_bytes
     if frame_size <= 0:
         raise ValueError("voice import audio metadata is invalid")
@@ -287,17 +358,111 @@ def _validate_import_audio_payload(payload: bytes, session: _VoiceImportSession)
         raise ValueError("voice import duration exceeds limit")
     if session.duration_ms is not None and duration_ms != session.duration_ms:
         raise ValueError("voice import duration mismatch")
+    return duration_ms
 
 
-# TODO: Implement volume control functions
-def reduce_volume_except_current():
-    """Placeholder for reducing system volume during TTS."""
-    pass
+_DUCKED_SINK_INPUTS: dict[str, int] = {}
+_DUCKING_UNAVAILABLE_LOGGED = False
 
 
-def restore_volume_except_current():
-    """Placeholder for restoring system volume after TTS."""
-    pass
+def _run_pactl(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - executable is resolved with shutil.which.
+        args,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=1.0,
+    )
+
+
+def _sink_input_volume_percent(sink_input: dict[str, Any]) -> int | None:
+    volume = sink_input.get("volume")
+    if not isinstance(volume, dict) or not volume:
+        return None
+    values: list[int] = []
+    for channel in volume.values():
+        if isinstance(channel, dict) and isinstance(channel.get("value_percent"), str):
+            with contextlib.suppress(ValueError):
+                values.append(int(channel["value_percent"].rstrip("%")))
+        elif isinstance(channel, dict) and isinstance(channel.get("value"), int):
+            values.append(round(channel["value"] * 100 / 65536))
+    if not values:
+        return None
+    return max(0, min(150, round(sum(values) / len(values))))
+
+
+def _log_ducking_unavailable(reason: str) -> None:
+    global _DUCKING_UNAVAILABLE_LOGGED
+    if _DUCKING_UNAVAILABLE_LOGGED:
+        return
+    _DUCKING_UNAVAILABLE_LOGGED = True
+    log_debug(f"TTS audio ducking unavailable: {reason}")
+
+
+def reduce_volume_except_current() -> None:
+    """Lower other PulseAudio/PipeWire streams while Aurora is speaking."""
+    if _DUCKED_SINK_INPUTS:
+        return
+    if not sys.platform.startswith("linux"):
+        _log_ducking_unavailable("unsupported platform")
+        return
+    pactl = shutil.which("pactl")
+    if pactl is None:
+        _log_ducking_unavailable("pactl not found")
+        return
+
+    try:
+        result = _run_pactl([pactl, "--format=json", "list", "sink-inputs"])
+        sink_inputs = json.loads(result.stdout or "[]")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        _log_ducking_unavailable(_safe_tts_error(exc))
+        return
+    if not isinstance(sink_inputs, list):
+        _log_ducking_unavailable("unexpected pactl response")
+        return
+
+    own_pid = str(os.getpid())
+    for sink_input in sink_inputs:
+        if not isinstance(sink_input, dict):
+            continue
+        index = sink_input.get("index")
+        properties = sink_input.get("properties")
+        if index is None or not isinstance(properties, dict):
+            continue
+        if str(properties.get("application.process.id")) == own_pid:
+            continue
+        previous_volume = _sink_input_volume_percent(sink_input)
+        if previous_volume is None:
+            continue
+        sink_input_id = str(index)
+        try:
+            _run_pactl([pactl, "set-sink-input-volume", sink_input_id, "35%"])
+        except (OSError, subprocess.SubprocessError) as exc:
+            log_debug(
+                f"TTS audio ducking skipped for stream {sink_input_id}: {_safe_tts_error(exc)}"
+            )
+            continue
+        _DUCKED_SINK_INPUTS[sink_input_id] = previous_volume
+
+
+def restore_volume_except_current() -> None:
+    """Restore streams lowered by reduce_volume_except_current."""
+    if not _DUCKED_SINK_INPUTS:
+        return
+    pactl = shutil.which("pactl")
+    if pactl is None:
+        _DUCKED_SINK_INPUTS.clear()
+        _log_ducking_unavailable("pactl not found during restore")
+        return
+    restored = dict(_DUCKED_SINK_INPUTS)
+    _DUCKED_SINK_INPUTS.clear()
+    for sink_input_id, volume_percent in restored.items():
+        try:
+            _run_pactl([pactl, "set-sink-input-volume", sink_input_id, f"{volume_percent}%"])
+        except (OSError, subprocess.SubprocessError) as exc:
+            log_debug(
+                f"TTS audio ducking restore skipped for stream {sink_input_id}: {_safe_tts_error(exc)}"
+            )
 
 
 # Service implementation
@@ -330,6 +495,7 @@ class TTSService(BaseService):
         self._voice_operation_results: dict[tuple[str, str, str], tuple[str, Any]] = {}
         self._voice_import_sessions: dict[str, _VoiceImportSession] = {}
         self._provider: TTSProvider | None = None
+        self.engine = None
         self._playback_generation = 0
         self._current_playback_generation: int | None = None
         self._playback_started = False
@@ -342,7 +508,8 @@ class TTSService(BaseService):
             await provider.stop()
         except Exception as cleanup_error:
             log_error(
-                f"Failed to stop TTS provider after {context}: {cleanup_error}", exc_info=True
+                f"Failed to stop TTS provider after {context}: "
+                f"error={_safe_tts_error(cleanup_error)}"
             )
 
     async def _stop_playback_stream(self, stream: object | None) -> None:
@@ -357,22 +524,28 @@ class TTSService(BaseService):
             await asyncio.to_thread(close)
 
     async def _get_model_paths(self, tts_cfg: Tts | None = None) -> tuple[str, str | None]:
-        """Get Piper model paths from canonical config with flat-key compatibility."""
+        """Get legacy Piper model paths from canonical config with flat-key compatibility."""
         tts_cfg = tts_cfg or await config_api.aget(ConfigKeys.services.tts, Tts)
         piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
         model_path = (
             piper_cfg.model_file_path
             if piper_cfg and piper_cfg.model_file_path
-            else tts_cfg.model_file_path or "voice_models/en_US-lessac-medium.onnx"
+            else tts_cfg.model_file_path
         )
         config_path = (
             piper_cfg.model_config_file_path
             if piper_cfg and piper_cfg.model_config_file_path
-            else tts_cfg.model_config_file_path or "voice_models/en_US-lessac-medium.onnx.txt"
+            else tts_cfg.model_config_file_path
         )
+        if not model_path:
+            raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
         model_file = resolve_path(model_path)
         config_file = resolve_path(config_path) if config_path else None
         return str(model_file), str(config_file) if config_file else None
+
+    def _piper_catalog_manager(self, tts_cfg: Tts) -> PiperCatalogManager:
+        """Return the pinned Piper catalog manager for this TTS config."""
+        return PiperCatalogManager(cache_dir=piper_cache_dir_from_config(tts_cfg))
 
     def _resolve_piper_executable(self, tts_cfg: Tts) -> str:
         """Resolve the Piper executable from canonical config and local PATH."""
@@ -490,12 +663,12 @@ class TTSService(BaseService):
             _close_voice_config_handles(resolved)
             raise TTSProviderError("unsupported_voice", "PocketTTS voice is unavailable") from exc
 
-    async def _build_pockettts_runtime(self, tts_cfg: Tts) -> tuple[TTSProvider, object, object]:
-        """Build PocketTTS provider plus provider-neutral PCM playback."""
+    async def _pockettts_provider_config(self, tts_cfg: Tts) -> PocketTTSProviderConfig:
+        """Resolve PocketTTS config shared by runtime load and clone derivation."""
         pocket_cfg = tts_cfg.providers.pockettts if tts_cfg.providers else None
         if pocket_cfg is not None and pocket_cfg.custom_config_path:
             raise TTSProviderError("unsupported_voice", "PocketTTS custom config is unavailable")
-        provider_config = PocketTTSProviderConfig(
+        return PocketTTSProviderConfig(
             effective_language=await self._effective_tts_language(),
             quality_tier=(
                 pocket_cfg.quality_tier if pocket_cfg and pocket_cfg.quality_tier else "compact"
@@ -503,7 +676,7 @@ class TTSService(BaseService):
             preload=(
                 pocket_cfg.preload_model
                 if pocket_cfg and pocket_cfg.preload_model is not None
-                else True
+                else False
             ),
             quantize=bool(pocket_cfg.quantize) if pocket_cfg else False,
             device=(pocket_cfg.device if pocket_cfg and pocket_cfg.device else "cpu"),
@@ -522,6 +695,10 @@ class TTSService(BaseService):
                 else 120.0
             ),
         )
+
+    async def _build_pockettts_runtime(self, tts_cfg: Tts) -> tuple[TTSProvider, object, object]:
+        """Build PocketTTS provider plus provider-neutral PCM playback."""
+        provider_config = await self._pockettts_provider_config(tts_cfg)
         provider_config = replace(
             provider_config,
             voices=await self._pockettts_voice_configs(tts_cfg, provider_config),
@@ -547,31 +724,47 @@ class TTSService(BaseService):
         if tts_cfg.provider not in (None, "piper"):
             raise TTSProviderError("unavailable", "Configured TTS provider is unavailable")
 
-        model_file, config_file = await self._get_model_paths(tts_cfg)
         piper_path = self._resolve_piper_executable(tts_cfg)
-        piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
-        sample_rate = (
-            piper_cfg.model_sample_rate
-            if piper_cfg and piper_cfg.model_sample_rate is not None
-            else tts_cfg.model_sample_rate
-            if tts_cfg.model_sample_rate is not None
-            else 22050
-        )
-        effective_language = _voice_language_pack(await self._effective_tts_language())
-        if effective_language is None:
-            raise TTSProviderError("unsupported_voice", "TTS language is unavailable")
         configured_voice_id = tts_cfg.default_voice_id
-        if configured_voice_id in {None, "default"}:
-            voice_id = f"standard:piper:{effective_language}"
-        elif ":" not in configured_voice_id:
-            voice_id = f"standard:piper:{_piper_voice_slug(configured_voice_id)}"
+        if configured_voice_id and configured_voice_id != "default" and ":" in configured_voice_id:
+            selected_voice = await self._piper_catalog_manager(tts_cfg).resolve_voice(
+                validate_logical_voice_id(configured_voice_id)
+            )
+            model_file = str(selected_voice.model_file)
+            config_file = str(selected_voice.config_file)
+            sample_rate = selected_voice.sample_rate
+            voice_id = selected_voice.voice_id
+            display_name = selected_voice.display_name
+            effective_language = selected_voice.language
         else:
-            voice_id = validate_logical_voice_id(configured_voice_id)
+            model_file, config_file = await self._get_model_paths(tts_cfg)
+            if not Path(model_file).is_file() or not (config_file and Path(config_file).is_file()):
+                raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
+            piper_cfg = tts_cfg.providers.piper if tts_cfg.providers else None
+            sample_rate = (
+                piper_cfg.model_sample_rate
+                if piper_cfg and piper_cfg.model_sample_rate is not None
+                else tts_cfg.model_sample_rate
+                if tts_cfg.model_sample_rate is not None
+                else 22050
+            )
+            effective_language = _voice_language_pack(await self._effective_tts_language())
+            if effective_language is None:
+                raise TTSProviderError("unsupported_voice", "TTS language is unavailable")
+            if (
+                configured_voice_id
+                and configured_voice_id != "default"
+                and ":" not in configured_voice_id
+            ):
+                voice_id = f"standard:piper:{_piper_voice_slug(configured_voice_id)}"
+            else:
+                voice_id = f"standard:piper:{effective_language}"
+            display_name = "Piper"
         voice_config = PiperVoiceConfig(
             voice_id=voice_id,
             model_file=model_file,
             config_file=config_file,
-            display_name="Piper",
+            display_name=display_name,
             expected_sample_rate=sample_rate,
             language=effective_language,
         )
@@ -609,8 +802,22 @@ class TTSService(BaseService):
             log_info("TTS engine initialized successfully")
 
         except Exception as e:
-            log_error(f"Failed to initialize TTS engine: {e}", exc_info=True)
+            log_error(f"Failed to initialize TTS engine: error={_safe_tts_error(e)}")
             raise
+
+    async def _initialize_engine_fail_soft(self, context: str) -> bool:
+        """Try to initialize runtime while keeping voice management available."""
+        try:
+            await self._initialize_engine()
+            return True
+        except Exception as exc:
+            self._provider = None
+            self.engine = None
+            self.stream = None
+            log_error(
+                f"TTS runtime unavailable during {context}: error={_safe_tts_error(exc)}",
+            )
+            return False
 
     def _on_audio_start(self):
         """Called when audio stream starts playing."""
@@ -704,8 +911,8 @@ class TTSService(BaseService):
         # Store event loop for callbacks
         self._loop = asyncio.get_event_loop()
 
-        # Initialize TTS engine (needs async config access)
-        await self._initialize_engine()
+        # Runtime may need a user-selected voice pack first; management APIs stay available.
+        await self._initialize_engine_fail_soft("startup")
         self._voice_revision += 1
 
     async def on_stop(self) -> None:
@@ -767,7 +974,9 @@ class TTSService(BaseService):
             except Exception as e:
                 if new_provider is not None and not new_runtime_installed:
                     await self._stop_provider_safely(new_provider, "reload pre-swap failure")
-                log_error(f"Failed to reinitialize TTS engine: {e}", exc_info=True)
+                log_error(
+                    f"Failed to reinitialize TTS engine: error={_safe_tts_error(e)}",
+                )
         else:
             log_debug(f"TTS service reloaded for section: {config_section}")
 
@@ -854,7 +1063,8 @@ class TTSService(BaseService):
         fingerprint, response = cached
         if fingerprint != self._mutation_fingerprint(request):
             raise ValueError("operation_id payload mismatch")
-        if hasattr(response, "model_fields") and "idempotent" in response.model_fields:
+        response_fields = getattr(type(response), "model_fields", {})
+        if "idempotent" in response_fields:
             return response.model_copy(update={"idempotent": True})
         return response
 
@@ -876,14 +1086,47 @@ class TTSService(BaseService):
             if registry_cfg and registry_cfg.cache_dir
             else "voice_models/voice-pack"
         )
-        return VoiceRegistry(resolve_path(registry_cache_dir))
+        max_clone_artifact_bytes = (
+            registry_cfg.clone_max_wire_bytes
+            if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+            else VOICE_STATE_TRANSFER_MAX_BYTES
+        )
+        return VoiceRegistry(
+            resolve_path(registry_cache_dir),
+            max_clone_artifact_bytes=max_clone_artifact_bytes,
+        )
 
-    async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
+    def _voice_catalog_installer(self, tts_cfg: Tts) -> VoiceCatalogInstaller:
+        registry_cfg = tts_cfg.voice_registry
+        cache_dir = (
+            registry_cfg.cache_dir
+            if registry_cfg and registry_cfg.cache_dir
+            else "voice_models/voice-pack"
+        )
+        return VoiceCatalogInstaller(
+            manifest_path=registry_cfg.manifest_path if registry_cfg else None,
+            asset_base_url=registry_cfg.asset_base_url if registry_cfg else None,
+            cache_dir=resolve_path(cache_dir),
+            registry=self._voice_registry(tts_cfg),
+            trusted_manifest_sha256=(
+                registry_cfg.trusted_manifest_sha256 if registry_cfg else None
+            ),
+            trusted_manifest_public_keys=_trusted_manifest_keys(registry_cfg),
+            trusted_manifest_signature=(
+                registry_cfg.trusted_manifest_signature if registry_cfg else None
+            ),
+        )
+
+    async def _current_voice_profiles_with_catalog_status(
+        self, *, include_catalog: bool = True
+    ) -> tuple[list[TTSVoiceProfileDescriptor], VoiceCatalogSourceError | None]:
         tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        default_voice_id = tts_cfg.default_voice_id
         registry_entries = []
         if tts_cfg.provider == "pockettts":
             with contextlib.suppress(Exception):
                 registry_entries = list(await self._voice_registry(tts_cfg).inventory())
+        default_voice_id = tts_cfg.default_voice_id
         active_voice_id: str | None = None
         provider_ready = False
         if self._provider is not None:
@@ -892,36 +1135,105 @@ class TTSService(BaseService):
                 provider_ready = health.ready
                 active_voice_id = health.active_voice
         profiles: list[TTSVoiceProfileDescriptor] = []
+        catalog_error: VoiceCatalogSourceError | None = None
+        if tts_cfg.provider == "piper":
+            try:
+                for item in await self._piper_catalog_manager(tts_cfg).list_voices():
+                    if not item.installed:
+                        continue
+                    is_active = item.ready and provider_ready and item.voice_id == active_voice_id
+                    is_default = item.ready and item.voice_id == default_voice_id
+                    profiles.append(
+                        TTSVoiceProfileDescriptor(
+                            voice_id=item.voice_id,
+                            display_name=item.display_name,
+                            kind="standard",
+                            installed=True,
+                            ready=item.ready,
+                            default=is_default,
+                            active=is_active,
+                            enabled=True,
+                            compatible_language_pack_ids=[item.language],
+                            compatible_selection_group="piper-sherpa-onnx-v1",
+                            revision=item.revision,
+                            retained_source=False,
+                            storage=SpeechStorageSummary(artifact_count=3),
+                            visibility="private",
+                            allowed_peer_ids=[],
+                        )
+                    )
+                    if len(profiles) >= 256:
+                        break
+            except VoiceCatalogSourceError as exc:
+                catalog_error = exc
+            except (VoiceCatalogError, OSError) as exc:
+                catalog_error = VoiceCatalogSourceError("voice catalog is unavailable")
+                catalog_error.__cause__ = exc
+            if profiles or self._provider is None:
+                return profiles, catalog_error
         for entry in registry_entries:
-            is_active = provider_ready and entry.voice_id == active_voice_id
+            is_ready = entry.ready_state == "ready"
+            is_active = is_ready and provider_ready and entry.voice_id == active_voice_id
+            is_default = is_ready and entry.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=entry.voice_id,
                     display_name=entry.display_name,
                     kind=_profile_kind(entry.kind),  # type: ignore[arg-type]
                     installed=True,
-                    ready=entry.ready_state == "ready",
-                    default=is_active,
+                    ready=is_ready,
+                    default=is_default,
                     active=is_active,
-                    enabled=True,
+                    enabled=getattr(entry, "enabled", True),
                     compatible_language_pack_ids=[entry.language_bundle],
                     compatible_selection_group=entry.compatibility_group,
-                    revision=entry.artifact_revision,
+                    revision=getattr(entry, "metadata_revision", entry.artifact_revision),
                     retained_source=entry.source_retained,
                     storage=SpeechStorageSummary(artifact_count=len(entry.artifact_refs)),
                     visibility="allowed_peers"
                     if entry.visibility == "allowed_peers"
                     else "private",
-                    allowed_peer_ids=[],
+                    allowed_peer_ids=list(getattr(entry, "allowed_peer_ids", ())),
                 )
             )
+        known_voice_ids = {profile.voice_id for profile in profiles}
+        if include_catalog and tts_cfg.provider == "pockettts":
+            try:
+                for item in await self._voice_catalog_installer(tts_cfg).list_items():
+                    if item.voice_id in known_voice_ids:
+                        continue
+                    profiles.append(
+                        TTSVoiceProfileDescriptor(
+                            voice_id=item.voice_id,
+                            display_name=item.display_name,
+                            kind="standard",
+                            installed=False,
+                            ready=False,
+                            default=False,
+                            active=False,
+                            enabled=True,
+                            compatible_language_pack_ids=[item.language_bundle],
+                            compatible_selection_group=item.compatibility_group,
+                            revision=item.artifact_revision,
+                            retained_source=False,
+                            storage=SpeechStorageSummary(),
+                            visibility="private",
+                            allowed_peer_ids=[],
+                        )
+                    )
+            except VoiceCatalogSourceError as exc:
+                catalog_error = exc
+            except (VoiceCatalogError, VoiceRegistryError, OSError) as exc:
+                catalog_error = VoiceCatalogSourceError("voice catalog is unavailable")
+                catalog_error.__cause__ = exc
         if profiles or self._provider is None:
-            return profiles
+            return profiles, catalog_error
         for voice in await self._provider.list_voices():
             language = _voice_language_pack(voice.language)
             if language is None:
                 continue
-            is_active = provider_ready and voice.voice_id == active_voice_id
+            is_active = voice.ready and provider_ready and voice.voice_id == active_voice_id
+            is_default = voice.ready and voice.voice_id == default_voice_id
             profiles.append(
                 TTSVoiceProfileDescriptor(
                     voice_id=voice.voice_id,
@@ -929,20 +1241,160 @@ class TTSService(BaseService):
                     kind="cloned" if voice.voice_id.startswith("clone:") else "standard",
                     installed=True,
                     ready=voice.ready,
-                    default=is_active,
+                    default=is_default,
                     active=is_active,
                     enabled=True,
                     compatible_language_pack_ids=[language],
                     revision=self._voice_revision_token(),
                 )
             )
+        return profiles, catalog_error
+
+    async def _current_voice_profiles(self) -> list[TTSVoiceProfileDescriptor]:
+        profiles, _catalog_error = await self._current_voice_profiles_with_catalog_status()
         return profiles
+
+    def _language_pack_revision(
+        self,
+        voices: list[TTSLanguagePackVoice],
+        *,
+        catalog_revision: str | None = None,
+    ) -> str:
+        if catalog_revision is not None:
+            return catalog_revision
+        parts = [":".join((voice.voice_id, voice.revision)) for voice in voices]
+        digest = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()[:16]
+        return f"language-pack-rev-{digest}"
+
+    async def _current_language_pack_inventory(self) -> _LanguagePackInventory:
+        tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+        catalog_rows = []
+        catalog_status = "available"
+        catalog_error_code: str | None = None
+        if tts_cfg.provider == "piper":
+            try:
+                catalog_rows = list(
+                    await self._piper_catalog_manager(tts_cfg).list_catalog_voices()
+                )
+            except (VoiceCatalogError, OSError):
+                catalog_status = "unavailable"
+                catalog_error_code = "catalog_unavailable"
+        elif tts_cfg.provider == "pockettts":
+            try:
+                catalog_rows = list(await self._voice_catalog_installer(tts_cfg).list_items())
+            except (VoiceCatalogError, VoiceRegistryError, OSError):
+                catalog_status = "unavailable"
+                catalog_error_code = "catalog_unavailable"
+        profiles = await self._current_voice_profiles()
+        profile_by_voice_id = {profile.voice_id: profile for profile in profiles}
+        grouped: dict[str, dict[str, Any]] = {}
+        for item in catalog_rows:
+            pack_id = _voice_language_pack(
+                item.language if tts_cfg.provider == "piper" else item.language_bundle
+            )
+            if pack_id is None:
+                continue
+            row = grouped.setdefault(
+                pack_id,
+                {
+                    "language": pack_id,
+                    "display_name": pack_id,
+                    "voices": {},
+                },
+            )
+            profile = profile_by_voice_id.get(item.voice_id)
+            installed = bool(profile.installed) if profile is not None else item.installed
+            ready = bool(profile.ready) if profile is not None else item.ready
+            revision = (
+                profile.revision
+                if profile is not None
+                else item.revision
+                if tts_cfg.provider == "piper"
+                else item.artifact_revision
+            )
+            row["voices"][item.voice_id] = TTSLanguagePackVoice(
+                voice_id=item.voice_id,
+                display_name=item.display_name,
+                installed=installed,
+                ready=ready,
+                default=bool(profile.default) if profile is not None else False,
+                active=bool(profile.active) if profile is not None else False,
+                revision=revision,
+            )
+        for profile in profiles:
+            if profile.kind != "standard":
+                continue
+            for raw_pack_id in profile.compatible_language_pack_ids:
+                pack_id = _voice_language_pack(raw_pack_id)
+                if pack_id is None:
+                    continue
+                row = grouped.setdefault(
+                    pack_id,
+                    {
+                        "language": pack_id,
+                        "display_name": pack_id,
+                        "voices": {},
+                    },
+                )
+                row["voices"].setdefault(
+                    profile.voice_id,
+                    TTSLanguagePackVoice(
+                        voice_id=profile.voice_id,
+                        display_name=profile.display_name,
+                        installed=profile.installed,
+                        ready=profile.ready,
+                        default=profile.default,
+                        active=profile.active,
+                        revision=profile.revision,
+                    ),
+                )
+        default_voice_id = tts_cfg.default_voice_id
+        default_found = False
+        packs: list[TTSLanguagePackDescriptor] = []
+        for pack_id, row in grouped.items():
+            voices = sorted(row["voices"].values(), key=lambda voice: voice.voice_id)
+            installed_count = sum(1 for voice in voices if voice.installed)
+            ready_count = sum(1 for voice in voices if voice.ready)
+            pack_default = any(voice.default for voice in voices)
+            default_found = default_found or pack_default
+            packs.append(
+                TTSLanguagePackDescriptor(
+                    pack_id=pack_id,
+                    language=row["language"],
+                    display_name=row["display_name"],
+                    installed=installed_count > 0,
+                    ready=ready_count > 0,
+                    default=pack_default,
+                    voice_count=len(voices),
+                    installed_voice_count=installed_count,
+                    ready_voice_count=ready_count,
+                    voices=voices,
+                    revision=self._language_pack_revision(
+                        voices,
+                        catalog_revision=PIPER_CATALOG_REVISION
+                        if tts_cfg.provider == "piper"
+                        else None,
+                    ),
+                )
+            )
+        return _LanguagePackInventory(
+            packs=sorted(packs, key=lambda pack: pack.pack_id),
+            catalog_status=catalog_status,
+            catalog_error_code=catalog_error_code,
+            default_voice_id=default_voice_id,
+            stale_default_voice_id=default_voice_id
+            if default_voice_id is not None and not default_found
+            else None,
+        )
 
     async def _list_voice_descriptors(
         self, envelope: Envelope | None = None
     ) -> list[TTSVoiceDescriptor]:
         voices = await self._provider.list_voices() if self._provider is not None else ()
         provider_caps = self._provider.capabilities if self._provider is not None else None
+        effective_language = _voice_language_pack(await self._effective_tts_language())
+        if effective_language is None:
+            return []
         remote_caller = envelope is not None and (
             envelope.origin == "external" or _envelope_caller_peer_id(envelope) is not None
         )
@@ -954,7 +1406,7 @@ class TTSService(BaseService):
             if remote_caller and is_clone:
                 continue
             language = _voice_language_pack(voice.language)
-            if language is None:
+            if language is None or language != effective_language:
                 continue
             descriptors.append(
                 TTSVoiceDescriptor(
@@ -1085,6 +1537,36 @@ class TTSService(BaseService):
         )
 
     @method_contract(
+        method_id=TTSMethods.LIST_LANGUAGE_PACKS,
+        summary="List managed TTS language packs",
+        input_model=TTSListLanguagePacksRequest,
+        output_model=TTSListLanguagePacksResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def list_language_packs(
+        self, request: TTSListLanguagePacksRequest
+    ) -> TTSListLanguagePacksResponse:
+        """Return administrative language pack metadata without artifact locations."""
+        inventory = await self._current_language_pack_inventory()
+        packs = inventory.packs
+        if request.language is not None:
+            packs = [pack for pack in packs if pack.language == request.language]
+        if not request.include_unavailable:
+            packs = [pack for pack in packs if pack.installed]
+        return TTSListLanguagePacksResponse(
+            packs=packs,
+            catalog_status=inventory.catalog_status,
+            catalog_error_code=inventory.catalog_error_code,
+            default_voice_id=inventory.default_voice_id,
+            stale_default_voice_id=inventory.stale_default_voice_id,
+            capability_revision=self._voice_revision,
+            correlation_id=request.correlation_id,
+        )
+
+    @method_contract(
         method_id=TTSMethods.LIST_VOICE_PROFILES,
         summary="List managed TTS voice profiles",
         input_model=TTSListVoiceProfilesRequest,
@@ -1098,7 +1580,11 @@ class TTSService(BaseService):
         self, request: TTSListVoiceProfilesRequest
     ) -> TTSListVoiceProfilesResponse:
         """Return administrative voice profile metadata."""
-        profiles = await self._current_voice_profiles()
+        profiles, catalog_error = await self._current_voice_profiles_with_catalog_status(
+            include_catalog=request.include_unavailable
+        )
+        if catalog_error is not None and request.include_unavailable and not profiles:
+            raise catalog_error
         if not request.include_unavailable:
             profiles = [profile for profile in profiles if profile.installed]
         return TTSListVoiceProfilesResponse(
@@ -1121,13 +1607,16 @@ class TTSService(BaseService):
         self, request: TTSGetVoiceProfileRequest
     ) -> TTSGetVoiceProfileResponse:
         """Return one administrative voice profile."""
-        for profile in await self._current_voice_profiles():
+        profiles, catalog_error = await self._current_voice_profiles_with_catalog_status()
+        for profile in profiles:
             if profile.voice_id == request.voice_id:
                 return TTSGetVoiceProfileResponse(
                     found=True,
                     profile=profile,
                     correlation_id=request.correlation_id,
                 )
+        if catalog_error is not None:
+            raise catalog_error
         return TTSGetVoiceProfileResponse(found=False, correlation_id=request.correlation_id)
 
     @method_contract(
@@ -1143,16 +1632,122 @@ class TTSService(BaseService):
     async def update_voice_profile(
         self, request: TTSUpdateVoiceProfileRequest, envelope: Envelope | None = None
     ) -> TTSUpdateVoiceProfileResponse:
-        """Reject metadata updates until durable profile metadata is available."""
+        """Persist provider-neutral profile metadata for registry-backed voices."""
         async with self._voice_management_lock:
             cached = self._cached_mutation("update_voice_profile", request, envelope)
             if cached is not None:
                 return cached
-            response = TTSUpdateVoiceProfileResponse(
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id and item.installed
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSUpdateVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "update_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("update_voice_profile", request, response, envelope)
+                return response
+            if (
+                request.expected_revision is not None
+                and request.expected_revision != profile.revision
+            ):
+                response = TTSUpdateVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "update_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("update_voice_profile", request, response, envelope)
+                return response
+            if request.enabled is False and (profile.default or profile.active):
+                response = TTSUpdateVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "update_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("update_voice_profile", request, response, envelope)
+                return response
+            next_revision = f"voice-rev-{self._voice_revision + 1}"
+            planned_response = TTSUpdateVoiceProfileResponse(
                 voice_id=request.voice_id,
-                status="rejected",
+                status="updated",
+                revision=next_revision,
                 correlation_id=request.correlation_id,
             )
+            await self._audit_voice_management(
+                "update_voice_profile",
+                request,
+                planned_response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            try:
+                updated = await self._voice_registry(tts_cfg).update_voice_metadata(
+                    request.voice_id,
+                    display_name=request.display_name,
+                    enabled=request.enabled,
+                    visibility=request.visibility,
+                    allowed_peer_ids=tuple(request.allowed_peer_ids)
+                    if request.allowed_peer_ids is not None
+                    else None,
+                    metadata_revision=next_revision,
+                )
+            except VoiceRegistryError as exc:
+                log_error(f"TTS voice metadata update failed: error={_safe_tts_error(exc)}")
+                response = TTSUpdateVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "update_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("update_voice_profile", request, response, envelope)
+                return response
+            if updated is None:
+                response = TTSUpdateVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                updated_profile, changed = updated
+                if changed:
+                    self._voice_revision += 1
+                    if profile.active and self._provider is not None:
+                        await self._initialize_engine_fail_soft("voice metadata update")
+                    response = TTSUpdateVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="updated",
+                        revision=updated_profile.metadata_revision,
+                        correlation_id=request.correlation_id,
+                    )
+                else:
+                    response = TTSUpdateVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="unchanged",
+                        revision=updated_profile.metadata_revision,
+                        correlation_id=request.correlation_id,
+                    )
             await self._audit_voice_management("update_voice_profile", request, response, envelope)
             self._cache_mutation("update_voice_profile", request, response, envelope)
         return response
@@ -1170,48 +1765,31 @@ class TTSService(BaseService):
     async def install_voice_profile(
         self, request: TTSInstallVoiceProfileRequest, envelope: Envelope | None = None
     ) -> TTSInstallVoiceProfileResponse:
-        """Install only the configured local voice-pack manifest."""
+        """Install a catalog-listed standard voice pack on demand."""
         async with self._voice_management_lock:
             cached = self._cached_mutation("install_voice_profile", request, envelope)
             if cached is not None:
                 return cached
             tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
-            registry_cfg = tts_cfg.voice_registry
-            manifest_path = resolve_path(
-                registry_cfg.manifest_path
-                if registry_cfg and registry_cfg.manifest_path
-                else "voice_models/voices.manifest.json"
-            )
-            if not manifest_path.is_file():
-                response = TTSInstallVoiceProfileResponse(
-                    voice_id=request.voice_id,
-                    status="not_found",
-                    correlation_id=request.correlation_id,
-                )
-                await self._audit_voice_management(
-                    "install_voice_profile", request, response, envelope
-                )
-            else:
-                registry = self._voice_registry(tts_cfg)
+            if tts_cfg.provider == "piper":
+                manager = self._piper_catalog_manager(tts_cfg)
                 try:
-                    manifest = VoicePackManifest.model_validate_json(
-                        manifest_path.read_text(encoding="utf-8")
-                    )
-                    target_assets = [
-                        asset
-                        for asset in manifest.assets
-                        if asset.logical_voice_id == request.voice_id
-                    ]
-                except (OSError, ValueError, TypeError):
-                    target_assets = []
-                if not target_assets or len(manifest.assets) != 1:
-                    target_asset = None
-                else:
-                    target_asset = target_assets[0]
-                if target_asset is None:
+                    catalog_items = {item.voice_id: item for item in await manager.list_voices()}
+                except VoiceCatalogSourceError as exc:
                     response = TTSInstallVoiceProfileResponse(
                         voice_id=request.voice_id,
-                        status="not_found" if not target_assets else "rejected",
+                        status="rejected",
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
+                    raise VoiceCatalogSourceError("voice catalog is unavailable") from exc
+                target_item = catalog_items.get(request.voice_id)
+                if target_item is None:
+                    response = TTSInstallVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="not_found",
                         correlation_id=request.correlation_id,
                     )
                     await self._audit_voice_management(
@@ -1219,23 +1797,14 @@ class TTSService(BaseService):
                     )
                     self._cache_mutation("install_voice_profile", request, response, envelope)
                     return response
-                current = next(
-                    (
-                        item
-                        for item in await registry.inventory()
-                        if item.voice_id == request.voice_id
-                    ),
-                    None,
-                )
                 if (
-                    current is not None
-                    and request.expected_revision is not None
-                    and request.expected_revision != current.artifact_revision
+                    request.expected_revision is not None
+                    and request.expected_revision != target_item.revision
                 ):
                     response = TTSInstallVoiceProfileResponse(
                         voice_id=request.voice_id,
                         status="revision_conflict",
-                        revision=current.artifact_revision,
+                        revision=target_item.revision,
                         correlation_id=request.correlation_id,
                     )
                     await self._audit_voice_management(
@@ -1243,14 +1812,11 @@ class TTSService(BaseService):
                     )
                     self._cache_mutation("install_voice_profile", request, response, envelope)
                     return response
-                if (
-                    current is not None
-                    and current.artifact_revision == target_asset.artifact_revision
-                ):
+                if target_item.installed and target_item.ready:
                     response = TTSInstallVoiceProfileResponse(
                         voice_id=request.voice_id,
                         status="unchanged",
-                        revision=current.artifact_revision,
+                        revision=target_item.revision,
                         correlation_id=request.correlation_id,
                     )
                     await self._audit_voice_management(
@@ -1261,7 +1827,7 @@ class TTSService(BaseService):
                 planned_response = TTSInstallVoiceProfileResponse(
                     voice_id=request.voice_id,
                     status="installed",
-                    revision=target_asset.artifact_revision,
+                    revision=target_item.revision,
                     correlation_id=request.correlation_id,
                 )
                 await self._audit_voice_management(
@@ -1273,45 +1839,132 @@ class TTSService(BaseService):
                     audit_status="attempted",
                 )
                 try:
-                    installed = await registry.install_standard_pack(
-                        manifest_path, manifest_path.parent
-                    )
-                except VoiceRegistryError:
-                    log_error("TTS voice install failed: error=VoiceRegistryError")
+                    result = await manager.install_voice(request.voice_id)
+                except VoiceCatalogError as exc:
+                    log_error(f"TTS voice install failed: error={_safe_tts_error(exc)}")
                     response = TTSInstallVoiceProfileResponse(
                         voice_id=request.voice_id,
                         status="rejected",
                         correlation_id=request.correlation_id,
                     )
+                    await self._audit_voice_management(
+                        "install_voice_profile", request, response, envelope
+                    )
                     self._cache_mutation("install_voice_profile", request, response, envelope)
                     return response
-                entry = next(
-                    (item for item in installed if item.voice_id == request.voice_id),
-                    None,
+                self._voice_revision += 1
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="installed",
+                    revision=result.voice.revision,
+                    correlation_id=request.correlation_id,
                 )
-                if entry is None:
-                    entry = next(
-                        (
-                            item
-                            for item in await registry.inventory()
-                            if item.voice_id == request.voice_id
-                        ),
-                        None,
-                    )
-                if entry is None:
-                    response = TTSInstallVoiceProfileResponse(
-                        voice_id=request.voice_id,
-                        status="not_found",
-                        correlation_id=request.correlation_id,
-                    )
-                else:
-                    self._voice_revision += 1
-                    response = TTSInstallVoiceProfileResponse(
-                        voice_id=request.voice_id,
-                        status="installed",
-                        revision=entry.artifact_revision,
-                        correlation_id=request.correlation_id,
-                    )
+                await self._initialize_engine_fail_soft("voice install")
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
+            registry = self._voice_registry(tts_cfg)
+            installer = self._voice_catalog_installer(tts_cfg)
+            try:
+                catalog_items = {item.voice_id: item for item in await installer.list_items()}
+            except VoiceCatalogSourceError as exc:
+                catalog_message = (
+                    exc.args[0]
+                    if exc.args and isinstance(exc.args[0], str)
+                    else "voice catalog is unavailable"
+                )
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                raise VoiceCatalogSourceError(catalog_message) from exc
+            target_item = catalog_items.get(request.voice_id)
+            if target_item is None:
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
+            current = next(
+                (item for item in await registry.inventory() if item.voice_id == request.voice_id),
+                None,
+            )
+            if (
+                current is not None
+                and request.expected_revision is not None
+                and request.expected_revision != current.artifact_revision
+            ):
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=current.artifact_revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
+            if current is not None and current.artifact_revision == target_item.artifact_revision:
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="unchanged",
+                    revision=current.artifact_revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
+            planned_response = TTSInstallVoiceProfileResponse(
+                voice_id=request.voice_id,
+                status="installed",
+                revision=target_item.artifact_revision,
+                correlation_id=request.correlation_id,
+            )
+            await self._audit_voice_management(
+                "install_voice_profile",
+                request,
+                planned_response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            try:
+                result = await installer.install_voice(request.voice_id)
+            except (VoiceCatalogError, VoiceRegistryError) as exc:
+                log_error(f"TTS voice install failed: error={_safe_tts_error(exc)}")
+                response = TTSInstallVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "install_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("install_voice_profile", request, response, envelope)
+                return response
+            self._voice_revision += 1
+            response = TTSInstallVoiceProfileResponse(
+                voice_id=request.voice_id,
+                status="installed",
+                revision=result.entry.artifact_revision,
+                correlation_id=request.correlation_id,
+            )
+            await self._initialize_engine_fail_soft("voice install")
+            await self._audit_voice_management("install_voice_profile", request, response, envelope)
             self._cache_mutation("install_voice_profile", request, response, envelope)
         return response
 
@@ -1328,16 +1981,109 @@ class TTSService(BaseService):
     async def remove_voice_profile(
         self, request: TTSRemoveVoiceProfileRequest, envelope: Envelope | None = None
     ) -> TTSRemoveVoiceProfileResponse:
-        """Reject standard artifact removal until safe drain/eviction support exists."""
+        """Remove installed standard or cloned voice artifacts."""
         async with self._voice_management_lock:
             cached = self._cached_mutation("remove_voice_profile", request, envelope)
             if cached is not None:
                 return cached
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id and item.installed
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSRemoveVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "remove_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("remove_voice_profile", request, response, envelope)
+                return response
+            if (
+                request.expected_revision is not None
+                and request.expected_revision != profile.revision
+            ):
+                response = TTSRemoveVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "remove_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("remove_voice_profile", request, response, envelope)
+                return response
+            removing_default = tts_cfg.default_voice_id == request.voice_id
+            status = "drained" if profile.active or removing_default else "removed"
             response = TTSRemoveVoiceProfileResponse(
                 voice_id=request.voice_id,
-                status="rejected",
+                status=status,
+                revision=f"voice-rev-{self._voice_revision + 1}",
                 correlation_id=request.correlation_id,
             )
+            await self._audit_voice_management(
+                "remove_voice_profile",
+                request,
+                response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            if removing_default:
+                updated = await config_api.aupdate_config(
+                    "services.tts.default_voice_id", None, timeout=15.0
+                )
+                if not updated:
+                    response = TTSRemoveVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="rejected",
+                        revision=profile.revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    await self._audit_voice_management(
+                        "remove_voice_profile", request, response, envelope
+                    )
+                    self._cache_mutation("remove_voice_profile", request, response, envelope)
+                    return response
+            if profile.active and self._provider is not None:
+                await self._stop_playback("voice_removed")
+                await self._provider.stop()
+                self._provider = None
+                self.engine = None
+                self.stream = None
+            try:
+                if tts_cfg.provider == "piper":
+                    removed = await self._piper_catalog_manager(tts_cfg).remove_voice(
+                        request.voice_id
+                    )
+                    if not removed:
+                        raise VoiceCatalogSourceError("Piper voice is unavailable")
+                else:
+                    await self._voice_registry(tts_cfg).delete_voice(request.voice_id)
+            except (VoiceCatalogError, VoiceRegistryError) as exc:
+                log_error(f"TTS voice removal failed: error={_safe_tts_error(exc)}")
+                response = TTSRemoveVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "remove_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("remove_voice_profile", request, response, envelope)
+                return response
+            self._voice_revision += 1
+            if status == "drained":
+                await self._initialize_engine_fail_soft("voice removal")
             await self._audit_voice_management("remove_voice_profile", request, response, envelope)
             self._cache_mutation("remove_voice_profile", request, response, envelope)
         return response
@@ -1355,17 +2101,88 @@ class TTSService(BaseService):
     async def set_default_voice(
         self, request: TTSSetDefaultVoiceRequest, envelope: Envelope | None = None
     ) -> TTSSetDefaultVoiceResponse:
-        """Reject default changes until config-backed profile updates land."""
+        """Persist and activate the node-wide default voice."""
         async with self._voice_management_lock:
             cached = self._cached_mutation("set_default_voice", request, envelope)
             if cached is not None:
                 return cached
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id and item.installed
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    revision=self._voice_revision_token(),
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
+            if request.expected_revision != profile.revision:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
+            if profile.default:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="activated",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
+            if not profile.ready:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
             response = TTSSetDefaultVoiceResponse(
                 voice_id=request.voice_id,
-                status="rejected",
-                revision=self._voice_revision_token(),
+                status="activated",
+                revision=profile.revision,
                 correlation_id=request.correlation_id,
             )
+            await self._audit_voice_management(
+                "set_default_voice",
+                request,
+                response,
+                envelope,
+                phase="intent",
+                audit_status="attempted",
+            )
+            updated = await config_api.aupdate_config(
+                "services.tts.default_voice_id", request.voice_id, timeout=15.0
+            )
+            if not updated:
+                response = TTSSetDefaultVoiceResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management("set_default_voice", request, response, envelope)
+                self._cache_mutation("set_default_voice", request, response, envelope)
+                return response
+            self._voice_revision += 1
+            await self._initialize_engine_fail_soft("default voice change")
             await self._audit_voice_management("set_default_voice", request, response, envelope)
             self._cache_mutation("set_default_voice", request, response, envelope)
         return response
@@ -1638,7 +2455,7 @@ class TTSService(BaseService):
     async def create_voice_profile(
         self, request: TTSCreateVoiceProfileRequest, envelope: Envelope | None = None
     ) -> TTSCreateVoiceProfileResponse:
-        """Reject clone creation until provider clone derivation is implemented."""
+        """Create a local cloned voice profile from a sealed owner-scoped prompt."""
         async with self._voice_management_lock:
             cached = self._cached_mutation("create_voice_profile", request, envelope)
             if cached is not None:
@@ -1657,27 +2474,102 @@ class TTSService(BaseService):
                     status="rejected",
                     correlation_id=request.correlation_id,
                 )
-                consume_upload_id = None
-            else:
-                consume_upload_id = session.upload_id
+                await self._audit_voice_management(
+                    "create_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("create_voice_profile", request, response, envelope)
+                return response
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            registry_cfg = tts_cfg.voice_registry
+            cloning_enabled = (
+                registry_cfg.cloning_enabled
+                if registry_cfg and registry_cfg.cloning_enabled is not None
+                else True
+            )
+            if tts_cfg.provider != "pockettts" or not cloning_enabled or request.retain_source:
                 response = TTSCreateVoiceProfileResponse(
-                    status="unavailable",
+                    status="unavailable"
+                    if tts_cfg.provider != "pockettts" or not cloning_enabled
+                    else "rejected",
                     correlation_id=request.correlation_id,
                 )
+                await self._audit_voice_management(
+                    "create_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("create_voice_profile", request, response, envelope)
+                return response
+            payload = b"".join(session.chunks[index] for index in sorted(session.chunks))
+            try:
+                accepted_duration_ms = _voice_import_duration_ms(payload, session)
+            except ValueError:
+                response = TTSCreateVoiceProfileResponse(
+                    status="rejected",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "create_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("create_voice_profile", request, response, envelope)
+                return response
+            planned_response = TTSCreateVoiceProfileResponse(
+                voice_id="clone:00000000-0000-4000-8000-000000000000",
+                status="ready",
+                accepted_duration_ms=accepted_duration_ms,
+                revision=f"clone-rev-{hashlib.sha256(payload).hexdigest()[:16]}",
+                correlation_id=request.correlation_id,
+            )
             await self._audit_voice_management(
                 "create_voice_profile",
                 request,
-                response,
+                planned_response,
                 envelope,
-                phase="intent" if consume_upload_id is not None else "outcome",
-                audit_status="attempted" if consume_upload_id is not None else None,
+                phase="intent",
+                audit_status="attempted",
             )
-            if consume_upload_id is not None:
-                self._voice_import_sessions.pop(consume_upload_id, None)
-            response = TTSCreateVoiceProfileResponse(
-                status=response.status,
-                correlation_id=request.correlation_id,
-            )
+            try:
+                provider_config = await self._pockettts_provider_config(tts_cfg)
+                artifact_bytes, identity = await derive_pockettts_voice_state_artifact(
+                    provider_config,
+                    payload,
+                    audio_suffix=".wav" if session.audio_format == "wav" else ".pcm",
+                )
+                artifact_revision = f"clone-rev-{hashlib.sha256(artifact_bytes).hexdigest()[:16]}"
+                created = await self._voice_registry(tts_cfg).create_clone_profile(
+                    display_name=request.display_name,
+                    runtime_target=identity.runtime_target,
+                    language_bundle=identity.language_bundle,
+                    compatibility_group=identity.compatibility_group,
+                    artifact_revision=artifact_revision,
+                    artifact_bytes=artifact_bytes,
+                    source_audio=None,
+                    source_retention=False,
+                    visibility="private",
+                )
+            except (TTSProviderError, VoiceRegistryError) as exc:
+                log_error(f"TTS clone creation failed: error={_safe_tts_error(exc)}")
+                response = TTSCreateVoiceProfileResponse(
+                    status="unavailable"
+                    if isinstance(exc, TTSProviderError) and exc.code == "unavailable"
+                    else "rejected",
+                    correlation_id=request.correlation_id,
+                )
+                await self._audit_voice_management(
+                    "create_voice_profile", request, response, envelope
+                )
+                self._cache_mutation("create_voice_profile", request, response, envelope)
+                return response
+            else:
+                response = TTSCreateVoiceProfileResponse(
+                    voice_id=created.voice_id,
+                    status="ready",
+                    accepted_duration_ms=accepted_duration_ms,
+                    revision=created.metadata_revision,
+                    correlation_id=request.correlation_id,
+                )
+                self._voice_revision += 1
+                self._voice_import_sessions.pop(session.upload_id, None)
+                await self._initialize_engine_fail_soft("voice profile creation")
+            await self._audit_voice_management("create_voice_profile", request, response, envelope)
             self._cache_mutation("create_voice_profile", request, response, envelope)
         return response
 
@@ -1757,6 +2649,258 @@ class TTSService(BaseService):
         return response
 
     @method_contract(
+        method_id=TTSMethods.EXPORT_VOICE_PROFILE,
+        summary="Export a managed cloned TTS voice profile",
+        input_model=TTSExportVoiceProfileRequest,
+        output_model=TTSExportVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def export_voice_profile(
+        self, request: TTSExportVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSExportVoiceProfileResponse:
+        """Export a derived cloned voice-state bundle for authorized managers."""
+        async with self._voice_management_lock:
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            profile = next(
+                (
+                    item
+                    for item in await self._current_voice_profiles()
+                    if item.voice_id == request.voice_id
+                ),
+                None,
+            )
+            if profile is None:
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="not_found",
+                    correlation_id=request.correlation_id,
+                )
+            elif (
+                request.expected_revision is not None
+                and request.expected_revision != profile.revision
+            ):
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="revision_conflict",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            elif profile.kind != "cloned" or not profile.ready:
+                response = TTSExportVoiceProfileResponse(
+                    voice_id=request.voice_id,
+                    status="rejected",
+                    revision=profile.revision,
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                registry_cfg = tts_cfg.voice_registry
+                cloning_enabled = (
+                    registry_cfg.cloning_enabled
+                    if registry_cfg and registry_cfg.cloning_enabled is not None
+                    else True
+                )
+                max_wire_bytes = (
+                    registry_cfg.clone_max_wire_bytes
+                    if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+                    else VOICE_STATE_TRANSFER_MAX_BYTES
+                )
+                if tts_cfg.provider != "pockettts" or not cloning_enabled:
+                    response = TTSExportVoiceProfileResponse(
+                        voice_id=request.voice_id,
+                        status="unavailable",
+                        revision=profile.revision,
+                        correlation_id=request.correlation_id,
+                    )
+                else:
+                    planned_response = type(
+                        "PlannedVoiceProfileExport",
+                        (),
+                        {"status": "exported"},
+                    )()
+                    await self._audit_voice_management(
+                        "export_voice_profile",
+                        request,
+                        planned_response,
+                        envelope,
+                        phase="intent",
+                        audit_status="attempted",
+                    )
+                    try:
+                        provider_config = await self._pockettts_provider_config(tts_cfg)
+                        identity = resolve_pockettts_base_identity_spec(
+                            provider_config
+                        ).voice_base_identity
+                        exported = await self._voice_registry(tts_cfg).export_clone_voice_state(
+                            request.voice_id, identity
+                        )
+                        if exported.size_bytes > max_wire_bytes:
+                            raise VoiceRegistryError(
+                                "exported voice state exceeds configured limit"
+                            )
+                        bundle = TTSCloneVoiceStateBundle(
+                            voice_id=exported.voice_id,
+                            display_name=profile.display_name,
+                            runtime_target=exported.runtime_target,
+                            language_bundle=exported.language_bundle,
+                            compatibility_group=exported.compatibility_group,
+                            artifact_revision=exported.artifact_revision,
+                            artifact_format=exported.format,
+                            artifact_sha256=exported.sha256,
+                            artifact_size_bytes=exported.size_bytes,
+                            artifact_data_base64=base64.b64encode(exported.artifact_bytes).decode(
+                                "ascii"
+                            ),
+                        )
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="exported",
+                            revision=profile.revision,
+                            bundle=bundle,
+                            correlation_id=request.correlation_id,
+                        )
+                    except TTSProviderError as exc:
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="unavailable",
+                            revision=profile.revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        log_error(f"TTS clone export unavailable: error={_safe_tts_error(exc)}")
+                    except VoiceRegistryError as exc:
+                        response = TTSExportVoiceProfileResponse(
+                            voice_id=request.voice_id,
+                            status="rejected",
+                            revision=profile.revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        log_error(f"TTS clone export rejected: error={_safe_tts_error(exc)}")
+            await self._audit_voice_management("export_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
+        method_id=TTSMethods.IMPORT_VOICE_PROFILE,
+        summary="Import a managed cloned TTS voice profile",
+        input_model=TTSImportVoiceProfileRequest,
+        output_model=TTSImportVoiceProfileResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["TTS.manage"],
+        callable_feature_ids=["speech_voice_management"],
+    )
+    async def import_voice_profile(
+        self, request: TTSImportVoiceProfileRequest, envelope: Envelope | None = None
+    ) -> TTSImportVoiceProfileResponse:
+        """Import a derived cloned voice-state bundle for authorized managers."""
+        async with self._voice_management_lock:
+            cached = self._cached_mutation("import_voice_profile", request, envelope)
+            if cached is not None:
+                return cached
+            tts_cfg = await config_api.aget(ConfigKeys.services.tts, Tts)
+            registry_cfg = tts_cfg.voice_registry
+            cloning_enabled = (
+                registry_cfg.cloning_enabled
+                if registry_cfg and registry_cfg.cloning_enabled is not None
+                else True
+            )
+            max_wire_bytes = (
+                registry_cfg.clone_max_wire_bytes
+                if registry_cfg and registry_cfg.clone_max_wire_bytes is not None
+                else VOICE_STATE_TRANSFER_MAX_BYTES
+            )
+            bundle = request.bundle
+            voice_id = bundle.voice_id
+            if tts_cfg.provider != "pockettts" or not cloning_enabled:
+                response = TTSImportVoiceProfileResponse(
+                    voice_id=voice_id,
+                    status="unavailable",
+                    correlation_id=request.correlation_id,
+                )
+            else:
+                try:
+                    artifact_bytes = base64.b64decode(bundle.artifact_data_base64, validate=True)
+                    if len(artifact_bytes) > max_wire_bytes:
+                        raise VoiceRegistryError("imported voice state exceeds configured limit")
+                    provider_config = await self._pockettts_provider_config(tts_cfg)
+                    identity = resolve_pockettts_base_identity_spec(
+                        provider_config
+                    ).voice_base_identity
+                    if (
+                        bundle.runtime_target,
+                        bundle.language_bundle,
+                        bundle.compatibility_group,
+                    ) != identity.as_tuple():
+                        response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="rejected",
+                            revision=bundle.artifact_revision,
+                            correlation_id=request.correlation_id,
+                        )
+                    else:
+                        planned_response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="imported",
+                            revision=bundle.artifact_revision,
+                            correlation_id=request.correlation_id,
+                        )
+                        await self._audit_voice_management(
+                            "import_voice_profile",
+                            request,
+                            planned_response,
+                            envelope,
+                            phase="intent",
+                            audit_status="attempted",
+                        )
+                        entry, created = await self._voice_registry(
+                            tts_cfg
+                        ).import_clone_voice_state(
+                            ExportedCloneVoiceState(
+                                voice_id=voice_id,
+                                runtime_target=bundle.runtime_target,
+                                language_bundle=bundle.language_bundle,
+                                compatibility_group=bundle.compatibility_group,
+                                artifact_revision=bundle.artifact_revision,
+                                sha256=bundle.artifact_sha256,
+                                size_bytes=bundle.artifact_size_bytes,
+                                format=bundle.artifact_format,
+                                artifact_bytes=artifact_bytes,
+                            ),
+                            display_name=bundle.display_name,
+                            visibility="private",
+                        )
+                        if created:
+                            self._voice_revision += 1
+                            await self._initialize_engine_fail_soft("voice profile import")
+                        response = TTSImportVoiceProfileResponse(
+                            voice_id=voice_id,
+                            status="imported" if created else "unchanged",
+                            revision=entry.metadata_revision,
+                            idempotent=not created,
+                            correlation_id=request.correlation_id,
+                        )
+                except TTSProviderError as exc:
+                    response = TTSImportVoiceProfileResponse(
+                        voice_id=voice_id,
+                        status="unavailable",
+                        correlation_id=request.correlation_id,
+                    )
+                    log_error(f"TTS clone import unavailable: error={_safe_tts_error(exc)}")
+                except VoiceRegistryError as exc:
+                    status = "conflict" if "conflict" in str(exc) else "rejected"
+                    response = TTSImportVoiceProfileResponse(
+                        voice_id=voice_id,
+                        status=status,  # type: ignore[arg-type]
+                        revision=bundle.artifact_revision,
+                        correlation_id=request.correlation_id,
+                    )
+                    log_error(f"TTS clone import rejected: error={_safe_tts_error(exc)}")
+            await self._audit_voice_management("import_voice_profile", request, response, envelope)
+            self._cache_mutation("import_voice_profile", request, response, envelope)
+        return response
+
+    @method_contract(
         method_id=TTSMethods.REQUEST,
         summary="Process text-to-speech request (plays on server)",
         input_model=TTSRequest,
@@ -1798,13 +2942,13 @@ class TTSService(BaseService):
             return EmptyOutput()
 
         except Exception as e:
-            log_error(f"Error handling TTS request: {e}", exc_info=True)
+            log_error(f"Error handling TTS request: error={_safe_tts_error(e)}")
             import uuid
 
             request_id = str(uuid.uuid4())
             await self.bus.publish(
                 TTSMethods.ERROR,
-                TTSErrorEvent(request_id=request_id, error=str(e)),
+                TTSErrorEvent(request_id=request_id, error=_safe_tts_event_error(e)),
                 event=True,
                 mesh=False,
                 origin="internal",
@@ -1869,10 +3013,10 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error starting TTS stream: {e}", exc_info=True)
+            log_error(f"Error starting TTS stream: error={_safe_tts_error(e)}")
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -1917,10 +3061,12 @@ class TTSService(BaseService):
             await self._drain_stream(request.stream_id)
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error processing TTS stream chunk: {e}", exc_info=True)
+            log_error(
+                f"Error processing TTS stream chunk: error={_safe_tts_error(e)}",
+            )
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -1961,10 +3107,10 @@ class TTSService(BaseService):
             await self._drain_stream(request.stream_id)
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error ending TTS stream: {e}", exc_info=True)
+            log_error(f"Error ending TTS stream: error={_safe_tts_error(e)}")
             await self._publish_stream_error(
                 request.stream_id,
-                str(e),
+                _safe_tts_event_error(e),
                 request.correlation_id or _envelope_correlation_id(envelope),
                 caller_peer_id=_envelope_caller_peer_id(envelope),
                 principal_id=_envelope_principal_id(envelope),
@@ -2018,7 +3164,7 @@ class TTSService(BaseService):
             )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error stopping TTS: {e}", exc_info=True)
+            log_error(f"Error stopping TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     @method_contract(
@@ -2053,7 +3199,7 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error pausing TTS: {e}", exc_info=True)
+            log_error(f"Error pausing TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     @method_contract(
@@ -2088,7 +3234,7 @@ class TTSService(BaseService):
                 )
             return EmptyOutput()
         except Exception as e:
-            log_error(f"Error resuming TTS: {e}", exc_info=True)
+            log_error(f"Error resuming TTS: error={_safe_tts_error(e)}")
             return EmptyOutput()
 
     async def _ensure_voice_available(self, voice: str | None) -> None:
@@ -2096,10 +3242,10 @@ class TTSService(BaseService):
         if voice is None:
             return
         if self._provider is None:
-            raise RuntimeError("TTS provider not initialized")
+            raise TTSProviderError("unavailable", "TTS voice is unavailable")
         voices = await self._provider.list_voices()
         if not any(item.voice_id == voice and item.ready for item in voices):
-            raise RuntimeError("Requested voice is unavailable")
+            raise TTSProviderError("unsupported_voice", "TTS voice is unavailable")
 
     def _begin_playback_request(self, request_id: str, text: str) -> int:
         """Register a provider-backed playback request before synthesis starts."""
@@ -2198,7 +3344,7 @@ class TTSService(BaseService):
             # when the audio stream actually finishes playing
 
         except Exception as e:
-            log_error(f"Error playing TTS: {e}", exc_info=True)
+            log_error(f"Error playing TTS: error={_safe_tts_error(e)}")
             self._playing = False
             self._current_text = None
             self._current_request_id = None
@@ -2335,7 +3481,7 @@ class TTSService(BaseService):
             Tuple of (audio_bytes, sample_rate)
         """
         if self._provider is None:
-            raise RuntimeError("TTS provider not initialized")
+            raise TTSProviderError("unavailable", "TTS voice is unavailable")
         try:
             result = await self._provider.synthesize(
                 ProviderSynthesisRequest(
@@ -2348,7 +3494,7 @@ class TTSService(BaseService):
                 )
             )
         except TTSProviderError as exc:
-            raise RuntimeError(str(exc)) from exc
+            raise RuntimeError(_safe_tts_event_error(exc)) from exc
         return result.audio, result.sample_rate
 
     @method_contract(
@@ -2420,7 +3566,7 @@ class TTSService(BaseService):
             )
 
         except Exception as e:
-            log_error(f"Error in TTS synthesis: {e}", exc_info=True)
+            log_error(f"Error in TTS synthesis: error={_safe_tts_error(e)}")
             raise
 
     async def _drain_stream(self, stream_id: str) -> None:
@@ -2539,7 +3685,7 @@ class TTSService(BaseService):
                         stream_id, stream_epoch
                     ):
                         return
-                    raise RuntimeError(str(exc)) from exc
+                    raise RuntimeError(_safe_tts_event_error(exc)) from exc
                 finally:
                     async with self._stream_state_lock:
                         state = self._stream_states.get(stream_id)

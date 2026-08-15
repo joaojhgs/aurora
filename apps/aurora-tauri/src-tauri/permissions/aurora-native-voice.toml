@@ -6,4 +6,9 @@ commands.allow = [
   "aurora_native_voice_start",
   "aurora_native_voice_finish",
   "aurora_native_voice_cancel",
+  "aurora_native_speech_pack_catalog",
+  "aurora_native_speech_pack_status",
+  "aurora_native_speech_pack_install",
+  "aurora_native_speech_pack_activate",
+  "aurora_native_speech_pack_remove",
 ]

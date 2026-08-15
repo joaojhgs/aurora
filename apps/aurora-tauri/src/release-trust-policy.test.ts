@@ -147,7 +147,11 @@ function writeArtifact(path: string, content: string) {
 describe('release trust static policy guard', () => {
   it('reports the current repo as statically blocked without claiming signature or store proof', () => {
     const fixture = createFixture()
-    const result = spawnSync(process.execPath, [script, '--report', fixture.report], {
+    const result = spawnSync(process.execPath, [
+      script,
+      '--dependency-inventory-report', fixture.dependencyInventoryReport,
+      '--report', fixture.report,
+    ], {
       cwd: packageRoot,
       encoding: 'utf8',
     })
@@ -172,8 +176,15 @@ describe('release trust static policy guard', () => {
     expect(report.unsupportedChecks).toContainEqual(
       expect.objectContaining({
         id: 'sbom-license-tooling',
-        status: 'blocked',
+        status: 'passed',
         releaseBlocking: true,
+        evidence: expect.objectContaining({
+          dispositions: expect.objectContaining({
+            reviewRequired: expect.any(Number),
+            blocked: 0,
+          }),
+          legalApproval: false,
+        }),
       }),
     )
   })
@@ -302,6 +313,7 @@ describe('release trust static policy guard', () => {
       evidence: expect.objectContaining({
         dispositions: {
           allowed: inventoryReport.inventory.length,
+          reviewRequired: 0,
           blocked: 0,
         },
       }),
@@ -366,6 +378,60 @@ describe('release trust static policy guard', () => {
     const serialized = JSON.stringify(report)
     expect(serialized).not.toContain(fixture.root)
     expect(serialized).not.toContain(tmpdir())
+  })
+
+  it('accepts review-required licenses for unsigned package readiness without claiming legal approval', () => {
+    const fixture = createFixture()
+    const inventoryReport = validDependencyInventoryReport()
+    inventoryReport.inventory[0].license.id = 'UNKNOWN'
+    inventoryReport.inventory[0].disposition = 'review-required'
+    inventoryReport.summary.dispositions = {
+      allowed: inventoryReport.inventory.length - 1,
+      'review-required': 1,
+    }
+    inventoryReport.reviewFindings = [
+      {
+        id: 'unknown-license-metadata',
+        detail: 'One fixture entry requires later review.',
+        severity: 'review-required',
+        count: 1,
+      },
+      {
+        id: 'license-review-required',
+        detail: 'One fixture entry requires review before public distribution.',
+        severity: 'review-required',
+        count: 1,
+      },
+    ]
+    writeJson(fixture.dependencyInventoryReport, inventoryReport)
+    const androidArtifact = join(fixture.root, 'aurora-unsigned-release.aab')
+    const iosArtifact = join(fixture.root, 'aurora-unsigned-release.ipa')
+    const androidSha = writeArtifact(androidArtifact, 'android unsigned package bytes')
+    const iosSha = writeArtifact(iosArtifact, 'ios unsigned package bytes')
+
+    const result = runPolicy(fixture, [
+      '--android-artifact', androidArtifact,
+      '--android-artifact-sha256', androidSha,
+      '--ios-artifact', iosArtifact,
+      '--ios-artifact-sha256', iosSha,
+    ])
+
+    expect(result.status).toBe(0)
+    const report = readReport(fixture)
+    expect(report.status).toBe('passed')
+    expect(report.releaseBlocked).toBe(false)
+    expect(report.unsupportedChecks).toContainEqual(expect.objectContaining({
+      id: 'sbom-license-tooling',
+      status: 'passed',
+      evidence: expect.objectContaining({
+        dispositions: {
+          allowed: inventoryReport.inventory.length - 1,
+          reviewRequired: 1,
+          blocked: 0,
+        },
+        legalApproval: false,
+      }),
+    }))
   })
 
   it('redacts external sibling-prefix artifact paths without parent directory names', () => {
@@ -2919,6 +2985,7 @@ function validDependencyInventoryReport(): any {
       ecosystems: Object.fromEntries(ecosystems.map((ecosystem) => [ecosystem, 1])),
       dispositions: { allowed: inventory.length },
     },
+    reviewFindings: [],
     blockers: [],
     inventory,
   }

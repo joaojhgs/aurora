@@ -51,12 +51,11 @@ def test_env_alias_wins_over_generated_default_when_config_omits_value(monkeypat
     normalized = _normalize({"services": {"tts": {}}})
     piper = normalized["services"]["tts"]["providers"]["piper"]
 
-    assert piper == {
-        "model_file_path": "env.onnx",
-        "model_config_file_path": "env.onnx.json",
-        "model_sample_rate": 24000,
-        "executable_path": "/opt/env-piper",
-    }
+    assert piper["model_file_path"] == "env.onnx"
+    assert piper["model_config_file_path"] == "env.onnx.json"
+    assert piper["model_sample_rate"] == 24000
+    assert piper["executable_path"] == "/opt/env-piper"
+    assert piper["cache_dir"] == "voice_models/piper"
 
 
 def test_generated_defaults_apply_when_no_nested_flat_or_env(monkeypatch) -> None:
@@ -68,8 +67,8 @@ def test_generated_defaults_apply_when_no_nested_flat_or_env(monkeypatch) -> Non
     normalized = _normalize({"services": {"tts": {}}})
     piper = normalized["services"]["tts"]["providers"]["piper"]
 
-    assert piper["model_file_path"] == "voice_models/en_US-lessac-medium.onnx"
-    assert piper["model_config_file_path"] == "voice_models/en_US-lessac-medium.onnx.txt"
+    assert piper["model_file_path"] is None
+    assert piper["model_config_file_path"] is None
     assert piper["model_sample_rate"] == 22050
     assert piper["executable_path"] == ""
 

@@ -8,22 +8,39 @@ use {
     aurora_voice_core::{
         CancellationToken, CaptureStartReason, Generation, RedactedSnapshot, RouteRevision,
         RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease, VoiceCoreError,
-        VoiceRuntime, VoiceState,
+        VoiceRuntime, VoiceState, WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
     },
     aurora_voice_engine::{
-        FiniteSttRouteScope, RouteFiniteSttBinding, RouteTtsBinding, MAX_FINITE_STT_SAMPLES,
-        VAD_SAMPLE_RATE_HZ,
+        BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
+        BoundTtsSynthesisRequest, BoundVadRequest, EngineError, FiniteSttAudio, FiniteSttPort,
+        FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope, KwsConfig, KwsFrameResult,
+        KwsStreamProvider, ResourceReport, RouteFiniteSttBinding, RouteTtsBinding,
+        SpeechCatalogTask, SpeechModelCatalog, SpeechSegment, StreamResetReason,
+        StreamingAudioFrame, TaskCapability, TaskPackBinding, TaskProvider, TtsSynthesisPort,
+        TtsSynthesisProviderBinding, TtsSynthesisResult, TtsVoiceCatalog, VadAcceptResult,
+        VadConfig, VadStreamProvider, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
     },
     aurora_voice_native::{
-        CpalAudioInput, CpalAudioOutput, GatewayAuth, MicrophoneAudioPolicy, NativeAudioConfig,
-        NativeCaptureConfig, NativeCaptureControl, NativeGatewayCaptureGrant,
-        NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig, NativeGatewayFiniteStt,
-        NativeGatewayFiniteSttConfig, NativeGatewayTransport, NativeGatewayTtsConfig,
-        NativeGatewayTtsSynthesizer, TransportLimits,
+        build_installed_kws_provider_from_phrases, build_installed_stt_provider,
+        build_installed_tts_provider, build_installed_tts_provider_with_reference,
+        build_installed_vad_provider, CpalAudioInput, CpalAudioOutput, GatewayAuth,
+        MicrophoneAudioPolicy, NativeAudioConfig, NativeCaptureConfig, NativeCaptureControl,
+        NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
+        NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
+        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
+        SpeechPackManagerConfig, TransportLimits,
+    },
+    aurora_voice_sherpa::{
+        NativeKwsBackend, NativeTtsReferenceAudio, NativeVadBackend, SherpaKwsPhraseInput,
+        SherpaKwsProvider, SherpaVadProvider,
     },
     serde_json::Value,
+    sha2::{Digest, Sha256},
     std::cell::Cell,
     std::cell::RefCell,
+    std::fs,
+    std::io::Write,
+    std::path::{Path, PathBuf},
     std::rc::Rc,
     std::thread,
     std::time::Duration,
@@ -55,6 +72,12 @@ const ROUTE_REVISION: u64 = 1;
 #[cfg(desktop)]
 const TTS_MAX_AUDIO_SAMPLES: usize = 16_000 * 30;
 #[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_VERSION: u8 = 1;
+#[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_MAX_JSON_BYTES: u64 = 16 * 1024 * 1024;
+#[cfg(desktop)]
+const TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES: usize = 4096;
+#[cfg(desktop)]
 const HANDOFF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 #[cfg(desktop)]
 const HANDOFF_OPERATION_TIMEOUT: Duration = Duration::from_secs(4);
@@ -64,6 +87,12 @@ const HANDOFF_RECOVERY_TIMEOUT: Duration = Duration::from_secs(9);
 const SHUTDOWN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(desktop)]
 const HOST_STOP_WAIT_TIMEOUT: Duration = Duration::from_secs(75);
+#[cfg(all(desktop, test))]
+const DEFAULT_WAKE_PHRASE_ID: &str = "wake.aurora";
+#[cfg(all(desktop, test))]
+const DEFAULT_WAKE_PHRASE_TEXT: &str = "HEY AURORA";
+#[cfg(all(desktop, test))]
+const DEFAULT_WAKE_PHRASE_REVISION: &str = "phrases:aurora-default:v1";
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -83,6 +112,8 @@ pub enum NativeVoicePhase {
 pub enum NativeVoiceTrigger {
     FocusedPushToTalk,
     TrayPushToTalk,
+    WakeWord,
+    BackgroundWake,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -609,7 +640,7 @@ impl NativeVoiceActor {
 
     fn refresh_idle_status(&mut self) {
         match self.resolve_profile(false) {
-            Ok(profile) => self.status = idle_status(profile.connection()),
+            Ok(profile) => self.status = idle_status(&self.app, &profile),
             Err(reason) => self.status = NativeVoiceStatus::unavailable(reason),
         }
     }
@@ -624,27 +655,24 @@ impl NativeVoiceActor {
         let profile = self
             .resolve_profile(request.remote_audio_consent)
             .map_err(NativeVoiceCommandError::unavailable)?;
-        install_profile_connection(&mut self.status, profile.connection());
-        if profile.connection() == NativeVoiceConnection::ConnectedDevice
-            && !request.remote_audio_consent
-        {
-            return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
-        }
+        install_profile(&mut self.status, &profile);
 
         let profile_key = profile.reusable_key();
         if !runtime_cache_matches(self.runtime_profile.as_ref(), profile_key.as_ref()) {
             *self.runtime.borrow_mut() = None;
             self.runtime_profile = profile_key.clone();
         }
+        let app = self.app.clone();
         let mut runtime = match self.runtime.borrow_mut().take() {
             Some(runtime)
                 if runtime_cache_matches(self.runtime_profile.as_ref(), profile_key.as_ref()) =>
             {
                 runtime
             }
-            None => build_runtime(&profile, self.tx.clone())?,
-            Some(_) => build_runtime(&profile, self.tx.clone())?,
+            None => build_runtime(&app, &profile, self.tx.clone())?,
+            Some(_) => build_runtime(&app, &profile, self.tx.clone())?,
         };
+        self.status.background_eligible = runtime.core.wake_background_ready();
 
         let core_generation = runtime
             .core
@@ -656,6 +684,8 @@ impl NativeVoiceActor {
         let start_reason = match request.trigger {
             NativeVoiceTrigger::FocusedPushToTalk => CaptureStartReason::PushToTalk,
             NativeVoiceTrigger::TrayPushToTalk => CaptureStartReason::AssistantRole,
+            NativeVoiceTrigger::WakeWord => CaptureStartReason::ForegroundWake,
+            NativeVoiceTrigger::BackgroundWake => CaptureStartReason::BackgroundSession,
         };
         let handoff = if let RuntimeProfile::Local { .. } = profile {
             let mut adapter = build_handoff(&profile, start_reason.clone())?;
@@ -701,7 +731,7 @@ impl NativeVoiceActor {
                 generation: core_generation,
                 created_at: now_micros(),
                 route_revision: RouteRevision(ROUTE_REVISION),
-                background_eligible: false,
+                background_eligible: profile.background_voice_eligible(),
                 consent_revision: if request.remote_audio_consent { 1 } else { 0 },
                 heartbeat_at: now_micros(),
                 stop_deadline: None,
@@ -713,6 +743,7 @@ impl NativeVoiceActor {
         self.active = Some(ActiveTurn {
             ui_generation,
             core_generation,
+            continuous: matches!(request.trigger, NativeVoiceTrigger::BackgroundWake),
             _handoff_generation: handoff_slot
                 .borrow()
                 .as_ref()
@@ -727,10 +758,23 @@ impl NativeVoiceActor {
         let tx = self.tx.clone();
         let runtime_slot = Rc::clone(&self.runtime);
         tokio::task::spawn_local(async move {
-            let result = runtime
-                .core
-                .run_push_to_talk_turn(lease, now_micros(), cancellation.clone())
-                .await;
+            let result = match request.trigger {
+                NativeVoiceTrigger::FocusedPushToTalk | NativeVoiceTrigger::TrayPushToTalk => {
+                    runtime
+                        .core
+                        .run_push_to_talk_turn(lease, now_micros(), cancellation.clone())
+                        .await
+                }
+                NativeVoiceTrigger::WakeWord => {
+                    runtime
+                        .core
+                        .run_wake_turn(lease, now_micros(), cancellation.clone())
+                        .await
+                }
+                NativeVoiceTrigger::BackgroundWake => {
+                    run_background_session(&mut runtime.core, lease, cancellation.clone()).await
+                }
+            };
             let reason_code = result.err().map(|error| reason_from_core_error(&error));
             let cleanup_reason = release_handoff_slot(&handoff_slot, true).await;
             runtime.ui_generation.set(None);
@@ -754,7 +798,7 @@ impl NativeVoiceActor {
         if request.generation != active.ui_generation {
             return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
         }
-        if control_requires_terminal_suppression(cancel) {
+        if control_requires_terminal_suppression(cancel || active.continuous) {
             active.expected_terminal = true;
             active.cancellation.cancel();
             active.control.interrupt(active.core_generation);
@@ -810,7 +854,7 @@ impl NativeVoiceActor {
             available: !matches!(phase, NativeVoicePhase::Unavailable),
             phase,
             generation,
-            background_eligible: background_voice_eligible(connection),
+            background_eligible: self.status.background_eligible,
             connection,
             reason_code: reason_code.map(str::to_owned),
             redacted: true,
@@ -832,6 +876,7 @@ impl NativeVoiceActor {
 struct ActiveTurn {
     ui_generation: u64,
     core_generation: Generation,
+    continuous: bool,
     _handoff_generation: Option<Generation>,
     control: NativeCaptureControl,
     cancellation: CancellationToken,
@@ -843,10 +888,85 @@ struct ActiveTurn {
 type HandoffSlot = Rc<RefCell<Option<(NativeGatewayCaptureHandoff, NativeGatewayCaptureGrant)>>>;
 
 #[cfg(desktop)]
+struct DesktopFiniteStt(Box<dyn FiniteSttPort>);
+
+#[cfg(desktop)]
+impl DesktopFiniteStt {
+    fn new(provider: impl FiniteSttPort + 'static) -> Self {
+        Self(Box::new(provider))
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl FiniteSttPort for DesktopFiniteStt {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        self.0.finite_stt_binding()
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        self.0.warm_finite_stt(binding).await
+    }
+
+    async fn transcribe_finite(
+        &mut self,
+        request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<FiniteSttResult, EngineError> {
+        self.0.transcribe_finite(request, audio, cancellation).await
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_finite_stt_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
+struct DesktopTts(Box<dyn TtsSynthesisPort>);
+
+#[cfg(desktop)]
+impl DesktopTts {
+    fn new(provider: impl TtsSynthesisPort + 'static) -> Self {
+        Self(Box::new(provider))
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl TtsSynthesisPort for DesktopTts {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        self.0.synthesis_binding()
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        self.0.warm_synthesis(binding).await
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        self.0.synthesize_text(request, cancellation).await
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_synthesis_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
 type RuntimeCore = VoiceRuntime<
     CpalAudioInput,
-    NativeGatewayFiniteStt,
-    NativeGatewayTtsSynthesizer,
+    DesktopFiniteStt,
+    DesktopTts,
     NativeGatewayTransport,
     CpalAudioOutput,
     StatusOnlySink,
@@ -868,22 +988,41 @@ struct RuntimeProfileKey {
 
 #[cfg(desktop)]
 enum RuntimeProfile {
-    Local { gateway: Url },
-    Remote { gateway: Url, bearer: String },
+    Local {
+        gateway: Url,
+        local_speech: LocalSpeechSelection,
+    },
+    Remote {
+        gateway: Url,
+        bearer: String,
+        remote_audio_consent: bool,
+        local_speech: LocalSpeechSelection,
+    },
 }
 
 #[cfg(desktop)]
 impl RuntimeProfile {
-    fn local() -> Result<Self, &'static str> {
+    fn local_with_speech(local_speech: LocalSpeechSelection) -> Result<Self, &'static str> {
         let gateway = super::gateway_url().map_err(|_| PROFILE_REASON)?;
-        Self::local_from_gateway(gateway)
+        Self::local_from_gateway_with_speech(gateway, local_speech)
     }
 
+    #[cfg(test)]
     fn local_from_gateway(gateway: Url) -> Result<Self, &'static str> {
+        Self::local_from_gateway_with_speech(gateway, LocalSpeechSelection::default())
+    }
+
+    fn local_from_gateway_with_speech(
+        gateway: Url,
+        local_speech: LocalSpeechSelection,
+    ) -> Result<Self, &'static str> {
         if !super::is_loopback_http_origin(&gateway) {
             return Err(PROFILE_REASON);
         }
-        Ok(Self::Local { gateway })
+        Ok(Self::Local {
+            gateway,
+            local_speech,
+        })
     }
 
     fn connection(&self) -> NativeVoiceConnection {
@@ -895,37 +1034,68 @@ impl RuntimeProfile {
 
     fn reusable_key(&self) -> Option<RuntimeProfileKey> {
         match self {
-            Self::Local { gateway } => Some(RuntimeProfileKey {
+            Self::Local {
+                gateway,
+                local_speech,
+            } => Some(RuntimeProfileKey {
                 connection: NativeVoiceConnection::ThisDevice,
-                identity: gateway.origin().ascii_serialization(),
+                identity: format!(
+                    "{}|{}",
+                    gateway.origin().ascii_serialization(),
+                    local_speech.cache_identity()
+                ),
             }),
             Self::Remote { .. } => None,
         }
     }
+
+    fn local_speech(&self) -> &LocalSpeechSelection {
+        match self {
+            Self::Local { local_speech, .. } | Self::Remote { local_speech, .. } => local_speech,
+        }
+    }
+
+    fn permits_remote_audio(&self) -> bool {
+        match self {
+            Self::Local { .. } => true,
+            Self::Remote { local_speech, .. } if local_speech.stt.is_some() => false,
+            Self::Remote {
+                remote_audio_consent,
+                ..
+            } => *remote_audio_consent,
+        }
+    }
+
+    fn requires_remote_audio_consent(&self) -> bool {
+        self.connection() == NativeVoiceConnection::ConnectedDevice
+            && self.local_speech().stt.is_none()
+            && !self.permits_remote_audio()
+    }
+
+    fn background_voice_eligible(&self) -> bool {
+        self.local_speech().vad.is_some()
+            && self.local_speech().kws.is_some()
+            && self.local_speech().wake_phrase.is_some()
+    }
 }
 
 #[cfg(desktop)]
-fn idle_status(connection: NativeVoiceConnection) -> NativeVoiceStatus {
+fn idle_status(app: &AppHandle, profile: &RuntimeProfile) -> NativeVoiceStatus {
     NativeVoiceStatus {
         available: true,
         phase: NativeVoicePhase::Idle,
         generation: None,
-        background_eligible: background_voice_eligible(connection),
-        connection,
+        background_eligible: installed_wake_bindings_ready(app, profile),
+        connection: profile.connection(),
         reason_code: None,
         redacted: true,
     }
 }
 
 #[cfg(desktop)]
-fn install_profile_connection(status: &mut NativeVoiceStatus, connection: NativeVoiceConnection) {
-    status.connection = connection;
-    status.background_eligible = background_voice_eligible(connection);
-}
-
-#[cfg(any(desktop, test))]
-fn background_voice_eligible(_connection: NativeVoiceConnection) -> bool {
-    false
+fn install_profile(status: &mut NativeVoiceStatus, profile: &RuntimeProfile) {
+    status.connection = profile.connection();
+    status.background_eligible = profile.background_voice_eligible();
 }
 
 #[cfg(desktop)]
@@ -946,45 +1116,161 @@ fn runtime_cache_matches(
 }
 
 #[cfg(desktop)]
+async fn run_background_session(
+    core: &mut RuntimeCore,
+    lease: VoiceCaptureLease,
+    cancellation: CancellationToken,
+) -> Result<String, VoiceCoreError> {
+    loop {
+        cancellation.check()?;
+        match core
+            .run_background_turn(lease.clone(), now_micros(), cancellation.clone())
+            .await
+        {
+            Ok(_) => {
+                if cancellation.is_cancelled() {
+                    return Err(VoiceCoreError::Cancelled);
+                }
+            }
+            Err(VoiceCoreError::WakeNotDetected)
+            | Err(VoiceCoreError::SpeechNotDetected)
+            | Err(VoiceCoreError::SpeechTimeout)
+                if !cancellation.is_cancelled() => {}
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn installed_wake_bindings_ready(app: &AppHandle, profile: &RuntimeProfile) -> bool {
+    if !profile.background_voice_eligible() {
+        return false;
+    }
+    let local_speech = profile.local_speech();
+    let (Some(vad), Some(kws), Some(phrase)) = (
+        local_speech.vad.as_ref(),
+        local_speech.kws.as_ref(),
+        local_speech.wake_phrase.as_ref(),
+    ) else {
+        return false;
+    };
+    let Ok(manager) = speech_pack_manager(app) else {
+        return false;
+    };
+    manager.resolve_model_bindings(&vad.pack_id).is_ok()
+        && build_selected_wake_kws_provider(&manager, kws, phrase).is_ok()
+}
+
+#[cfg(desktop)]
 fn build_runtime(
+    app: &AppHandle,
     profile: &RuntimeProfile,
     tx: mpsc::UnboundedSender<ActorCommand>,
 ) -> Result<RuntimeBundle, NativeVoiceCommandError> {
     let ui_generation = Rc::new(Cell::new(None));
-    let policy = match profile {
-        RuntimeProfile::Local { .. } => MicrophoneAudioPolicy::LoopbackOnly,
-        RuntimeProfile::Remote { .. } => MicrophoneAudioPolicy::ExplicitRemoteConsent,
+    let local_speech = profile.local_speech();
+    let manager = if local_speech.vad.is_some()
+        || local_speech.kws.is_some()
+        || local_speech.stt.is_some()
+        || local_speech.tts.is_some()
+    {
+        Some(speech_pack_manager(app)?)
+    } else {
+        None
     };
-    let scope = match profile {
-        RuntimeProfile::Local { .. } => FiniteSttRouteScope::LoopbackSidecar,
-        RuntimeProfile::Remote { .. } => FiniteSttRouteScope::RemoteGateway,
+    let stt = match profile.local_speech().stt.as_ref() {
+        Some(selection) => DesktopFiniteStt::new(
+            build_installed_stt_provider(
+                manager.as_ref().ok_or_else(|| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?,
+                &selection.pack_id,
+            )
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?,
+        ),
+        None => {
+            if profile.requires_remote_audio_consent() {
+                return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
+            }
+            let policy = match profile {
+                RuntimeProfile::Local { .. } => MicrophoneAudioPolicy::LoopbackOnly,
+                RuntimeProfile::Remote { .. } => MicrophoneAudioPolicy::ExplicitRemoteConsent,
+            };
+            let scope = match profile {
+                RuntimeProfile::Local { .. } => FiniteSttRouteScope::LoopbackSidecar,
+                RuntimeProfile::Remote { .. } => FiniteSttRouteScope::RemoteGateway,
+            };
+            let stt_route = RouteFiniteSttBinding::new(
+                "gateway.default",
+                scope,
+                VAD_SAMPLE_RATE_HZ,
+                MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+                ROUTE_REVISION,
+            )
+            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
+            DesktopFiniteStt::new(
+                NativeGatewayFiniteStt::new(
+                    transport_for_profile(profile)?,
+                    NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
+                        .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+                )
+                .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+            )
+        }
     };
-    let stt_route = RouteFiniteSttBinding::new(
-        "gateway.default",
-        scope,
-        VAD_SAMPLE_RATE_HZ,
-        MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
-        ROUTE_REVISION,
-    )
-    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
-    let tts_route = RouteTtsBinding::new(
-        "gateway.default",
-        "voice.default",
-        VAD_SAMPLE_RATE_HZ,
-        ROUTE_REVISION,
-    )
-    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
-    let stt = NativeGatewayFiniteStt::new(
-        transport_for_profile(profile)?,
-        NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
-            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
-    )
-    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
-    let tts = NativeGatewayTtsSynthesizer::new(
-        transport_for_profile(profile)?,
-        NativeGatewayTtsConfig::new(tts_route, None, 1.0, TTS_MAX_AUDIO_SAMPLES)
-            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
-    );
+    let tts = match profile.local_speech().tts.as_ref() {
+        Some(selection) => {
+            let voice_id = selection
+                .voice_id
+                .as_deref()
+                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let voice_catalog = TtsVoiceCatalog::embedded()
+                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let voice = voice_catalog
+                .voice(voice_id)
+                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let manager = manager
+                .as_ref()
+                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+            let provider = match voice.model_family.as_str() {
+                "vits_piper" => build_installed_tts_provider(manager, voice_id),
+                "pockettts" => {
+                    let reference_profile_id =
+                        selection.reference_profile_id.as_deref().ok_or_else(|| {
+                            NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                        })?;
+                    let reference_profile =
+                        load_desktop_tts_reference_profile(app, reference_profile_id, voice_id)?;
+                    build_installed_tts_provider_with_reference(
+                        manager,
+                        voice_id,
+                        Some(reference_profile.to_native()?),
+                        reference_profile.reference_text.clone(),
+                    )
+                }
+                _ => Err(EngineError::InvalidRequest),
+            };
+            DesktopTts::new(
+                provider.map_err(|_| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?,
+            )
+        }
+        None => {
+            let tts_route = RouteTtsBinding::new(
+                "gateway.default",
+                "voice.default",
+                VAD_SAMPLE_RATE_HZ,
+                ROUTE_REVISION,
+            )
+            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
+            DesktopTts::new(NativeGatewayTtsSynthesizer::new(
+                transport_for_profile(profile)?,
+                NativeGatewayTtsConfig::new(tts_route, None, 1.0, TTS_MAX_AUDIO_SAMPLES)
+                    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+            ))
+        }
+    };
     let transport = transport_for_profile(profile)?;
     let audio = CpalAudioInput::new(NativeCaptureConfig::default());
     let control = audio.control();
@@ -993,7 +1279,7 @@ fn build_runtime(
         tx,
         ui_generation: Rc::clone(&ui_generation),
     };
-    let core = VoiceRuntime::new(
+    let mut core = VoiceRuntime::new(
         audio,
         stt,
         tts,
@@ -1004,11 +1290,436 @@ fn build_runtime(
         "tauri-native-voice",
     )
     .map_err(|_| NativeVoiceCommandError::unavailable("runtime_unavailable"))?;
+    if let Some((vad, kws, wake_config)) = build_wake_runtime(profile, manager.as_ref())? {
+        core = core
+            .with_wake_providers(vad, kws, wake_config)
+            .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    }
     Ok(RuntimeBundle {
         core,
         control,
         ui_generation,
     })
+}
+
+#[cfg(desktop)]
+fn build_wake_runtime(
+    profile: &RuntimeProfile,
+    manager: Option<&SpeechPackManager>,
+) -> Result<
+    Option<(WakeVadProvider, WakeKwsProvider, WakeOrchestrationConfig)>,
+    NativeVoiceCommandError,
+> {
+    let local_speech = profile.local_speech();
+    let (Some(vad_selection), Some(kws_selection), Some(wake_phrase)) = (
+        local_speech.vad.as_ref(),
+        local_speech.kws.as_ref(),
+        local_speech.wake_phrase.as_ref(),
+    ) else {
+        return Ok(None);
+    };
+    let manager =
+        manager.ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let vad_config = VadConfig::default();
+    let vad = build_installed_vad_provider(manager, &vad_selection.pack_id, &vad_config)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let kws = build_selected_wake_kws_provider(manager, kws_selection, wake_phrase)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let kws_config = KwsConfig::new([&wake_phrase.phrase_id], &wake_phrase.revision, 0.25, 30, 1)
+        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let wake_config = WakeOrchestrationConfig::new(
+        vad.binding().clone(),
+        kws.binding().clone(),
+        vad_config,
+        kws_config,
+        1_000,
+        500,
+    )
+    .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    Ok(Some((
+        Box::new(DesktopWakeVad(vad)),
+        Box::new(DesktopWakeKws(kws)),
+        wake_config,
+    )))
+}
+
+#[cfg(desktop)]
+struct DesktopWakeVad(SherpaVadProvider<NativeVadBackend>);
+
+#[cfg(desktop)]
+struct DesktopWakeKws(SherpaKwsProvider<NativeKwsBackend>);
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl TaskProvider for DesktopWakeVad {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        self.0.capabilities()
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        self.0.resource_report()
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.0.warm_task(request).await
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.0.unload_task(binding).await
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl VadStreamProvider for DesktopWakeVad {
+    async fn start_vad_session(
+        &mut self,
+        request: BoundVadRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        self.0.start_vad_session(request).await
+    }
+
+    async fn push_vad_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<VadAcceptResult, EngineError> {
+        self.0.push_vad_frame(session, frame, cancellation).await
+    }
+
+    async fn flush_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<Vec<SpeechSegment>, EngineError> {
+        self.0.flush_vad_session(session, cancellation).await
+    }
+
+    async fn reset_vad_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        self.0.reset_vad_session(session, reason).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl TaskProvider for DesktopWakeKws {
+    fn capabilities(&self) -> Vec<TaskCapability> {
+        self.0.capabilities()
+    }
+
+    fn resource_report(&self) -> ResourceReport {
+        self.0.resource_report()
+    }
+
+    async fn warm_task(&mut self, request: BoundTaskRequest) -> Result<(), EngineError> {
+        self.0.warm_task(request).await
+    }
+
+    async fn unload_task(&mut self, binding: TaskPackBinding) -> Result<(), EngineError> {
+        self.0.unload_task(binding).await
+    }
+
+    async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        self.0.cancel_generation(generation).await
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl KwsStreamProvider for DesktopWakeKws {
+    async fn start_kws_session(
+        &mut self,
+        request: BoundKwsRequest,
+    ) -> Result<BoundStreamSession, EngineError> {
+        self.0.start_kws_session(request).await
+    }
+
+    async fn push_kws_frame(
+        &mut self,
+        session: &BoundStreamSession,
+        frame: StreamingAudioFrame<'_>,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<KwsFrameResult, EngineError> {
+        self.0.push_kws_frame(session, frame, cancellation).await
+    }
+
+    async fn reset_kws_session(
+        &mut self,
+        session: &BoundStreamSession,
+        reason: StreamResetReason,
+    ) -> Result<(), EngineError> {
+        self.0.reset_kws_session(session, reason).await
+    }
+}
+
+#[cfg(desktop)]
+fn build_selected_wake_kws_provider(
+    manager: &SpeechPackManager,
+    kws_selection: &LocalSpeechAssetSelection,
+    phrase: &LocalWakePhraseSelection,
+) -> Result<SherpaKwsProvider<NativeKwsBackend>, EngineError> {
+    let phrase_input = SherpaKwsPhraseInput::new(&phrase.phrase_id, &phrase.phrase)
+        .map_err(|_| EngineError::InvalidRequest)?;
+    build_installed_kws_provider_from_phrases(
+        manager,
+        &kws_selection.pack_id,
+        &phrase.revision,
+        [phrase_input],
+    )
+}
+
+#[cfg(desktop)]
+fn speech_pack_manager(app: &AppHandle) -> Result<SpeechPackManager, NativeVoiceCommandError> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?
+        .join("speech-packs");
+    speech_pack_manager_at(root)
+}
+
+#[cfg(desktop)]
+fn speech_pack_manager_at(root: PathBuf) -> Result<SpeechPackManager, NativeVoiceCommandError> {
+    let config = SpeechPackManagerConfig::new(root, None)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    SpeechPackManager::open(config)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DesktopTtsReferenceProfile {
+    version: u8,
+    id: String,
+    #[serde(default)]
+    voice_id: Option<String>,
+    sample_rate_hz: i32,
+    samples: Vec<f32>,
+    #[serde(default)]
+    reference_text: Option<String>,
+    #[serde(default)]
+    revision: Option<String>,
+}
+
+#[cfg(desktop)]
+impl DesktopTtsReferenceProfile {
+    fn new(
+        id: String,
+        voice_id: Option<String>,
+        sample_rate_hz: i32,
+        samples: Vec<f32>,
+        reference_text: Option<String>,
+        revision: Option<String>,
+    ) -> Self {
+        Self {
+            version: TTS_REFERENCE_PROFILE_VERSION,
+            id,
+            voice_id,
+            sample_rate_hz,
+            samples,
+            reference_text,
+            revision,
+        }
+    }
+
+    fn to_native(&self) -> Result<NativeTtsReferenceAudio, NativeVoiceCommandError> {
+        NativeTtsReferenceAudio::new(self.sample_rate_hz, self.samples.clone())
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))
+    }
+}
+
+#[cfg(desktop)]
+impl std::fmt::Debug for DesktopTtsReferenceProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DesktopTtsReferenceProfile")
+            .field("version", &self.version)
+            .field("id", &self.id)
+            .field("voice_id", &self.voice_id)
+            .field("sample_rate_hz", &self.sample_rate_hz)
+            .field("sample_count", &self.samples.len())
+            .field("samples", &"<redacted>")
+            .field(
+                "reference_text_bytes",
+                &self.reference_text.as_ref().map(String::len),
+            )
+            .field("revision", &self.revision)
+            .finish()
+    }
+}
+
+#[cfg(desktop)]
+fn desktop_tts_reference_profile_dir_at(root: &Path) -> PathBuf {
+    root.join("speech-packs").join("reference-profiles")
+}
+
+#[cfg(desktop)]
+fn desktop_tts_reference_profile_path_at(root: &Path, profile_id: &str) -> PathBuf {
+    let mut hasher = Sha256::new();
+    hasher.update(profile_id.as_bytes());
+    let digest = hasher.finalize();
+    let mut file_name = String::with_capacity(69);
+    for byte in digest {
+        file_name.push_str(&format!("{byte:02x}"));
+    }
+    file_name.push_str(".json");
+    desktop_tts_reference_profile_dir_at(root).join(file_name)
+}
+
+#[cfg(desktop)]
+fn validate_desktop_tts_reference_profile(
+    profile: &DesktopTtsReferenceProfile,
+    expected_id: &str,
+    expected_voice_id: &str,
+) -> Result<(), NativeVoiceCommandError> {
+    if profile.version != TTS_REFERENCE_PROFILE_VERSION
+        || profile.id != expected_id
+        || !valid_reference_profile_id(&profile.id)
+        || profile
+            .voice_id
+            .as_deref()
+            .is_some_and(|voice_id| voice_id != expected_voice_id)
+    {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    if let Some(reference_text) = &profile.reference_text {
+        if reference_text.trim().is_empty()
+            || reference_text.len() > TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES
+            || reference_text.as_bytes().contains(&0)
+        {
+            return Err(NativeVoiceCommandError::unavailable(
+                "local_speech_unavailable",
+            ));
+        }
+    }
+    if profile
+        .revision
+        .as_deref()
+        .is_some_and(|revision| !valid_reference_profile_id(revision))
+    {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let _ = profile.to_native()?;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn load_desktop_tts_reference_profile_at(
+    root: &Path,
+    profile_id: &str,
+    expected_voice_id: &str,
+) -> Result<DesktopTtsReferenceProfile, NativeVoiceCommandError> {
+    if !valid_reference_profile_id(profile_id) {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let path = desktop_tts_reference_profile_path_at(root, profile_id);
+    let metadata = fs::metadata(&path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    if !metadata.is_file() || metadata.len() > TTS_REFERENCE_PROFILE_MAX_JSON_BYTES {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    let payload = fs::read_to_string(&path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let profile: DesktopTtsReferenceProfile = serde_json::from_str(&payload)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    validate_desktop_tts_reference_profile(&profile, profile_id, expected_voice_id)?;
+    Ok(profile)
+}
+
+#[cfg(desktop)]
+fn load_desktop_tts_reference_profile(
+    app: &AppHandle,
+    profile_id: &str,
+    expected_voice_id: &str,
+) -> Result<DesktopTtsReferenceProfile, NativeVoiceCommandError> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    load_desktop_tts_reference_profile_at(&root, profile_id, expected_voice_id)
+}
+
+#[cfg(desktop)]
+#[allow(dead_code)]
+pub(super) fn store_desktop_tts_reference_profile(
+    app: &AppHandle,
+    profile_id: String,
+    voice_id: String,
+    sample_rate_hz: i32,
+    samples: Vec<f32>,
+    reference_text: Option<String>,
+    revision: Option<String>,
+) -> Result<(), NativeVoiceCommandError> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let profile = DesktopTtsReferenceProfile::new(
+        profile_id,
+        Some(voice_id.clone()),
+        sample_rate_hz,
+        samples,
+        reference_text,
+        revision,
+    );
+    store_desktop_tts_reference_profile_at(&root, &profile, &voice_id)
+}
+
+#[cfg(desktop)]
+fn store_desktop_tts_reference_profile_at(
+    root: &Path,
+    profile: &DesktopTtsReferenceProfile,
+    expected_voice_id: &str,
+) -> Result<(), NativeVoiceCommandError> {
+    validate_desktop_tts_reference_profile(profile, &profile.id, expected_voice_id)?;
+    let dir = desktop_tts_reference_profile_dir_at(root);
+    fs::create_dir_all(&dir)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    let path = desktop_tts_reference_profile_path_at(root, &profile.id);
+    let temp = path.with_extension("json.tmp");
+    let payload = serde_json::to_vec(profile)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    if payload.len() as u64 > TTS_REFERENCE_PROFILE_MAX_JSON_BYTES {
+        return Err(NativeVoiceCommandError::unavailable(
+            "local_speech_unavailable",
+        ));
+    }
+    {
+        let mut file = fs::File::create(&temp)
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let permissions = fs::Permissions::from_mode(0o600);
+            file.set_permissions(permissions)
+                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        }
+        file.write_all(&payload)
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+        file.sync_all()
+            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    }
+    fs::rename(temp, path)
+        .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -1022,7 +1733,7 @@ fn build_handoff(
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))?
         .with_start_reason(start_reason)
         .with_route_revision(RouteRevision(ROUTE_REVISION))
-        .with_background_eligible(background_voice_eligible(profile.connection()))
+        .with_background_eligible(profile.background_voice_eligible())
         .with_consent_revision(1);
     NativeGatewayCaptureHandoff::new(transport_for_handoff(profile)?, config)
         .map_err(|_| NativeVoiceCommandError::unavailable("handoff_unavailable"))
@@ -1093,7 +1804,7 @@ fn transport_for_profile_with_timeout(
     request_timeout: Duration,
 ) -> Result<NativeGatewayTransport, NativeVoiceCommandError> {
     let (gateway, auth, policy, allow_loopback_http) = match profile {
-        RuntimeProfile::Local { gateway } => (
+        RuntimeProfile::Local { gateway, .. } => (
             gateway.clone(),
             GatewayAuth::None,
             MicrophoneAudioPolicy::LoopbackOnly,
@@ -1156,10 +1867,10 @@ impl RuntimeEventSink for StatusOnlySink {
 #[cfg(desktop)]
 fn phase_from_state(state: VoiceState) -> NativeVoicePhase {
     match state {
-        VoiceState::Arming | VoiceState::ListeningForWake | VoiceState::WakeDetected => {
-            NativeVoicePhase::Starting
-        }
-        VoiceState::CapturingUtterance => NativeVoicePhase::Listening,
+        VoiceState::Arming => NativeVoicePhase::Starting,
+        VoiceState::ListeningForWake
+        | VoiceState::WakeDetected
+        | VoiceState::CapturingUtterance => NativeVoicePhase::Listening,
         VoiceState::Transcribing | VoiceState::Dispatching | VoiceState::AwaitingResponse => {
             NativeVoicePhase::Processing
         }
@@ -1241,8 +1952,7 @@ struct RuntimeProfileV2 {
     runtime_tier: String,
     #[serde(default)]
     home_connection: Option<HomeConnectionProfile>,
-    #[serde(rename = "localNode")]
-    _local_node: LocalNodeProfile,
+    local_node: LocalNodeProfile,
 }
 
 #[cfg(desktop)]
@@ -1262,6 +1972,53 @@ struct HomeConnectionProfile {
 }
 
 #[cfg(desktop)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalSpeechSelection {
+    #[serde(default)]
+    vad: Option<LocalSpeechAssetSelection>,
+    #[serde(default)]
+    kws: Option<LocalSpeechAssetSelection>,
+    #[serde(default)]
+    stt: Option<LocalSpeechAssetSelection>,
+    #[serde(default)]
+    tts: Option<LocalSpeechAssetSelection>,
+    #[serde(default)]
+    wake_phrase: Option<LocalWakePhraseSelection>,
+}
+
+#[cfg(desktop)]
+impl LocalSpeechSelection {
+    fn cache_identity(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| "{}".to_owned())
+    }
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalSpeechAssetSelection {
+    pack_id: String,
+    pack_revision: String,
+    #[serde(default)]
+    voice_id: Option<String>,
+    #[serde(default)]
+    voice_revision: Option<String>,
+    #[serde(default)]
+    reference_profile_id: Option<String>,
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LocalWakePhraseSelection {
+    phrase_id: String,
+    phrase: String,
+    language: String,
+    revision: String,
+}
+
+#[cfg(desktop)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct LocalNodeProfile {
@@ -1271,6 +2028,11 @@ struct LocalNodeProfile {
     _stable_peer_id: String,
     #[serde(rename = "enabledCapabilityPacks")]
     _enabled_capability_packs: Vec<String>,
+    #[serde(default)]
+    #[serde(rename = "localSpeechPackState")]
+    _local_speech_pack_state: Option<Value>,
+    #[serde(default)]
+    local_speech_selection: Option<LocalSpeechSelection>,
     #[serde(default)]
     #[serde(rename = "meshMembership")]
     _mesh_membership: Option<Value>,
@@ -1328,9 +2090,7 @@ fn resolve_remote_profile(
     let Some(candidate) = remote_profile_candidate(document)? else {
         return Err(PROFILE_REASON);
     };
-    if !remote_audio_consent {
-        return Err(REMOTE_CONSENT_REASON);
-    }
+    let local_speech = local_speech_selection(document)?;
     let credential = credential_loader(&candidate.peer_id).ok_or(CREDENTIAL_REASON)?;
     if credential
         .expires_at_ms
@@ -1344,6 +2104,8 @@ fn resolve_remote_profile(
     Ok(RuntimeProfile::Remote {
         gateway: candidate.gateway,
         bearer: credential.raw_bearer_token,
+        remote_audio_consent,
+        local_speech,
     })
 }
 
@@ -1362,11 +2124,135 @@ fn resolve_profile_from_document(
         PersistedRuntimeRole::RemoteConsole => {
             resolve_remote_profile(document, remote_audio_consent, credential_loader, now_ms)
         }
-        PersistedRuntimeRole::PythonFullMeshNode if sidecar_available => RuntimeProfile::local(),
+        PersistedRuntimeRole::PythonFullMeshNode if sidecar_available => {
+            RuntimeProfile::local_with_speech(local_speech_selection(document)?)
+        }
         PersistedRuntimeRole::PythonFullMeshNode | PersistedRuntimeRole::NonLocalMeshNode => {
             Err(PROFILE_REASON)
         }
     }
+}
+
+#[cfg(desktop)]
+fn local_speech_selection(
+    document: &ThinProfileDocument,
+) -> Result<LocalSpeechSelection, &'static str> {
+    let selection = match document {
+        ThinProfileDocument::V1(_) => LocalSpeechSelection::default(),
+        ThinProfileDocument::V2(document) => {
+            if document.version != 2 {
+                return Err(PROFILE_REASON);
+            }
+            let active_id = document
+                .active_profile_id
+                .as_deref()
+                .ok_or(PROFILE_REASON)?;
+            let profile = document
+                .profiles
+                .iter()
+                .find(|profile| profile.id == active_id)
+                .ok_or(PROFILE_REASON)?;
+            profile
+                .local_node
+                .local_speech_selection
+                .clone()
+                .unwrap_or_default()
+        }
+    };
+    validate_local_speech_selection(&selection)?;
+    Ok(selection)
+}
+
+#[cfg(desktop)]
+fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(), &'static str> {
+    let speech_catalog = SpeechModelCatalog::embedded().map_err(|_| PROFILE_REASON)?;
+    for (selected, expected_task) in [
+        (
+            selection.vad.as_ref(),
+            SpeechCatalogTask::VoiceActivityDetection,
+        ),
+        (selection.kws.as_ref(), SpeechCatalogTask::KeywordSpotting),
+        (selection.stt.as_ref(), SpeechCatalogTask::SpeechToText),
+    ] {
+        let Some(selected) = selected else {
+            continue;
+        };
+        if selected.pack_revision != speech_catalog.revision()
+            || selected.voice_id.is_some()
+            || selected.voice_revision.is_some()
+            || selected.reference_profile_id.is_some()
+            || speech_catalog
+                .model(&selected.pack_id)
+                .is_none_or(|entry| entry.task != expected_task)
+        {
+            return Err(PROFILE_REASON);
+        }
+    }
+    match (&selection.kws, &selection.wake_phrase) {
+        (None, Some(_)) => return Err(PROFILE_REASON),
+        (Some(kws), Some(phrase)) => {
+            let entry = speech_catalog.model(&kws.pack_id).ok_or(PROFILE_REASON)?;
+            if !entry
+                .languages
+                .iter()
+                .any(|language| language == &phrase.language)
+                || !valid_wake_phrase_selection(phrase)
+            {
+                return Err(PROFILE_REASON);
+            }
+        }
+        (None, None) | (Some(_), None) => {}
+    }
+    if let Some(selected) = &selection.tts {
+        let catalog = TtsVoiceCatalog::embedded().map_err(|_| PROFILE_REASON)?;
+        let voice_id = selected.voice_id.as_deref().ok_or(PROFILE_REASON)?;
+        let voice = catalog.voice(voice_id).ok_or(PROFILE_REASON)?;
+        if selected.pack_revision != catalog.revision()
+            || selected.voice_revision.as_deref() != Some(catalog.revision())
+            || voice.language != selected.pack_id
+        {
+            return Err(PROFILE_REASON);
+        }
+        match (
+            voice.model_family.as_str(),
+            selected.reference_profile_id.as_deref(),
+        ) {
+            ("pockettts", Some(reference_profile_id))
+                if valid_reference_profile_id(reference_profile_id) => {}
+            ("pockettts", _) => return Err(PROFILE_REASON),
+            (_, Some(_)) => return Err(PROFILE_REASON),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn valid_reference_profile_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':'))
+}
+
+#[cfg(desktop)]
+fn valid_wake_phrase_selection(selection: &LocalWakePhraseSelection) -> bool {
+    fn valid_id(value: &str) -> bool {
+        !value.is_empty()
+            && value.len() <= 128
+            && value.as_bytes()[0].is_ascii_alphanumeric()
+            && value.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b':')
+            })
+    }
+
+    valid_id(&selection.phrase_id)
+        && valid_id(&selection.revision)
+        && !selection.phrase.trim().is_empty()
+        && selection.phrase.len() <= 256
+        && !selection.phrase.chars().any(char::is_control)
 }
 
 #[cfg(desktop)]
@@ -1570,6 +2456,10 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
         VoiceCoreError::StaleGeneration | VoiceCoreError::OwnerMismatch => STALE_CONTROL_REASON,
         VoiceCoreError::Cancelled => "cancelled",
         VoiceCoreError::GenerationExhausted => "generation_exhausted",
+        VoiceCoreError::WakeUnavailable => "wake_unavailable",
+        VoiceCoreError::WakeNotDetected => "wake_not_detected",
+        VoiceCoreError::SpeechNotDetected => "speech_not_detected",
+        VoiceCoreError::SpeechTimeout => "speech_timeout",
         VoiceCoreError::TransportFault { .. } => "gateway_unavailable",
         VoiceCoreError::Engine(_) => "engine_unavailable",
         VoiceCoreError::InvalidIdentifier | VoiceCoreError::InvalidTransition => "invalid_state",
@@ -1588,6 +2478,36 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(desktop)]
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        std::env::temp_dir().join(format!("aurora-{name}-{}-{suffix}", std::process::id()))
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn wake_failures_map_to_stable_redacted_reason_codes() {
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::WakeUnavailable),
+            "wake_unavailable"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::WakeNotDetected),
+            "wake_not_detected"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::SpeechNotDetected),
+            "speech_not_detected"
+        );
+        assert_eq!(
+            reason_from_core_error(&VoiceCoreError::SpeechTimeout),
+            "speech_timeout"
+        );
+    }
 
     #[test]
     fn start_request_rejects_unknown_fields() {
@@ -1688,7 +2608,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_profile_requires_https_http_capability_consent_and_credential() {
+    fn remote_profile_requires_https_http_capability_and_credential() {
         let document = ThinProfileDocument::V1(ThinProfileDocumentV1 {
             version: 1,
             active_profile_id: Some("p1".to_owned()),
@@ -1722,18 +2642,19 @@ mod tests {
                 webrtc_profile: Some(test_webrtc_profile("home-peer")),
             }],
         });
-        assert!(matches!(
-            resolve_remote_profile(
-                &document,
-                false,
-                |_| Some(ThinBearerCredential {
+        let without_audio_consent = resolve_remote_profile(
+            &document,
+            false,
+            |_| {
+                Some(ThinBearerCredential {
                     raw_bearer_token: "secret".to_owned(),
                     expires_at_ms: Some(20),
-                }),
-                || 10
-            ),
-            Err(REMOTE_CONSENT_REASON)
-        ));
+                })
+            },
+            || 10,
+        )
+        .expect("profile resolution does not imply microphone upload");
+        assert!(without_audio_consent.requires_remote_audio_consent());
         assert!(matches!(
             resolve_remote_profile(
                 &document,
@@ -1901,7 +2822,7 @@ mod tests {
     fn local_profile_uses_configured_loopback_gateway_origin() {
         let gateway = Url::parse("http://127.0.0.1:9123").expect("loopback gateway");
         let profile = RuntimeProfile::local_from_gateway(gateway).expect("local profile");
-        let RuntimeProfile::Local { gateway } = profile else {
+        let RuntimeProfile::Local { gateway, .. } = profile else {
             panic!("expected local profile");
         };
         assert_eq!(gateway.as_str(), "http://127.0.0.1:9123/");
@@ -1915,24 +2836,54 @@ mod tests {
 
     #[test]
     fn remote_runtime_profiles_are_never_reused_across_starts() {
+        let catalog = SpeechModelCatalog::embedded().expect("catalog");
+        let stt_model_id = catalog
+            .models_for_task(SpeechCatalogTask::SpeechToText)
+            .first()
+            .expect("stt model")
+            .model_id
+            .clone();
         let local_a = RuntimeProfile::Local {
             gateway: Url::parse("http://127.0.0.1:8000").expect("local a"),
+            local_speech: LocalSpeechSelection::default(),
         };
         let local_b = RuntimeProfile::Local {
             gateway: Url::parse("http://127.0.0.1:8000").expect("local b"),
+            local_speech: LocalSpeechSelection::default(),
         };
         assert!(runtime_cache_matches(
             local_a.reusable_key().as_ref(),
             local_b.reusable_key().as_ref()
         ));
+        let local_exact_stt = RuntimeProfile::Local {
+            gateway: Url::parse("http://127.0.0.1:8000").expect("local exact"),
+            local_speech: LocalSpeechSelection {
+                stt: Some(LocalSpeechAssetSelection {
+                    pack_id: stt_model_id,
+                    pack_revision: catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
+        assert!(!runtime_cache_matches(
+            local_a.reusable_key().as_ref(),
+            local_exact_stt.reusable_key().as_ref()
+        ));
 
         let remote_original = RuntimeProfile::Remote {
             gateway: Url::parse("https://gateway.example.test").expect("remote original"),
             bearer: "old-secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: LocalSpeechSelection::default(),
         };
         let remote_rotated = RuntimeProfile::Remote {
             gateway: Url::parse("https://rotated.example.test").expect("remote rotated"),
             bearer: "new-secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: LocalSpeechSelection::default(),
         };
         assert!(remote_original.reusable_key().is_none());
         assert!(remote_rotated.reusable_key().is_none());
@@ -1940,6 +2891,413 @@ mod tests {
             remote_original.reusable_key().as_ref(),
             remote_rotated.reusable_key().as_ref()
         ));
+    }
+
+    #[test]
+    fn remote_gateway_stt_requires_remote_audio_consent_but_local_stt_does_not() {
+        let catalog = SpeechModelCatalog::embedded().expect("catalog");
+        let stt_model_id = catalog
+            .models_for_task(SpeechCatalogTask::SpeechToText)
+            .first()
+            .expect("stt model")
+            .model_id
+            .clone();
+        let mut document = test_runtime_profile_document("http-only", Some("home-peer"));
+        let profile = match &mut document {
+            ThinProfileDocument::V2(document) => document.profiles.first_mut().expect("profile"),
+            ThinProfileDocument::V1(_) => panic!("expected v2"),
+        };
+        profile.local_node.local_speech_selection = Some(LocalSpeechSelection {
+            stt: Some(LocalSpeechAssetSelection {
+                pack_id: stt_model_id,
+                pack_revision: catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        });
+
+        let resolved = resolve_profile_from_document(
+            &document,
+            false,
+            false,
+            |_| {
+                Some(ThinBearerCredential {
+                    raw_bearer_token: "secret".to_owned(),
+                    expires_at_ms: None,
+                })
+            },
+            || 10,
+        )
+        .expect("local STT remote console");
+        assert!(!resolved.permits_remote_audio());
+        assert!(!resolved.requires_remote_audio_consent());
+
+        let gateway_stt = RuntimeProfile::Remote {
+            gateway: Url::parse("https://gateway.example.test").expect("remote"),
+            bearer: "secret".to_owned(),
+            remote_audio_consent: false,
+            local_speech: LocalSpeechSelection::default(),
+        };
+        assert!(!gateway_stt.permits_remote_audio());
+        assert!(gateway_stt.requires_remote_audio_consent());
+    }
+
+    #[test]
+    fn runtime_v2_exact_local_speech_selection_validates_catalog_pins() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
+        let vad_models = speech_catalog.models_for_task(SpeechCatalogTask::VoiceActivityDetection);
+        let kws_models = speech_catalog.models_for_task(SpeechCatalogTask::KeywordSpotting);
+        let stt_models = speech_catalog.models_for_task(SpeechCatalogTask::SpeechToText);
+        let vad = vad_models.first().expect("vad model");
+        let kws = kws_models.first().expect("kws model");
+        let stt = stt_models.first().expect("stt model");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper tts voice");
+        let selection = LocalSpeechSelection {
+            vad: Some(LocalSpeechAssetSelection {
+                pack_id: vad.model_id.clone(),
+                pack_revision: speech_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            kws: Some(LocalSpeechAssetSelection {
+                pack_id: kws.model_id.clone(),
+                pack_revision: speech_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            stt: Some(LocalSpeechAssetSelection {
+                pack_id: stt.model_id.clone(),
+                pack_revision: speech_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
+            }),
+            wake_phrase: None,
+        };
+        validate_local_speech_selection(&selection).expect("exact catalog selection");
+
+        let mut document = test_runtime_profile_document("http-only", Some("home-peer"));
+        if let ThinProfileDocument::V2(inner) = &mut document {
+            inner.profiles[0].local_node._local_speech_pack_state = Some(serde_json::json!({
+                "status": "installed"
+            }));
+            inner.profiles[0].local_node.local_speech_selection = Some(selection);
+        }
+        let resolved = resolve_profile_from_document(
+            &document,
+            false,
+            false,
+            |_| {
+                Some(ThinBearerCredential {
+                    raw_bearer_token: "secret".to_owned(),
+                    expires_at_ms: None,
+                })
+            },
+            || 10,
+        )
+        .expect("v2 exact local speech profile");
+        assert!(!resolved.requires_remote_audio_consent());
+    }
+
+    #[test]
+    fn local_speech_selection_rejects_stale_or_cross_task_entries() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let vad_models = speech_catalog.models_for_task(SpeechCatalogTask::VoiceActivityDetection);
+        let stt_models = speech_catalog.models_for_task(SpeechCatalogTask::SpeechToText);
+        let vad = vad_models.first().expect("vad model");
+        let stt = stt_models.first().expect("stt model");
+
+        let stale_revision = LocalSpeechSelection {
+            stt: Some(LocalSpeechAssetSelection {
+                pack_id: stt.model_id.clone(),
+                pack_revision: "stale".to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&stale_revision),
+            Err(PROFILE_REASON)
+        );
+
+        let cross_task = LocalSpeechSelection {
+            stt: Some(LocalSpeechAssetSelection {
+                pack_id: vad.model_id.clone(),
+                pack_revision: speech_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&cross_task),
+            Err(PROFILE_REASON)
+        );
+
+        let voice_fields_on_stt = LocalSpeechSelection {
+            stt: Some(LocalSpeechAssetSelection {
+                pack_id: stt.model_id.clone(),
+                pack_revision: speech_catalog.revision().to_owned(),
+                voice_id: Some("standard:piper:en_us-ljspeech-medium".to_owned()),
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&voice_fields_on_stt),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
+    fn wake_phrase_is_bound_to_the_selected_kws_language() {
+        let catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let kws = catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .into_iter()
+            .find(|entry| entry.model_id == "kws:zipformer:gigaspeech-mobile")
+            .expect("English KWS model");
+        let phrase = LocalWakePhraseSelection {
+            phrase_id: "hey-aurora.en".to_owned(),
+            phrase: "Hey Aurora".to_owned(),
+            language: "en".to_owned(),
+            revision: "wakephrase-v1-en".to_owned(),
+        };
+        let selection = LocalSpeechSelection {
+            kws: Some(LocalSpeechAssetSelection {
+                pack_id: kws.model_id.clone(),
+                pack_revision: catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            wake_phrase: Some(phrase.clone()),
+            ..LocalSpeechSelection::default()
+        };
+        validate_local_speech_selection(&selection).expect("exact English wake phrase");
+
+        let without_kws = LocalSpeechSelection {
+            wake_phrase: Some(phrase.clone()),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&without_kws),
+            Err(PROFILE_REASON)
+        );
+
+        let wrong_language = LocalSpeechSelection {
+            wake_phrase: Some(LocalWakePhraseSelection {
+                language: "zh".to_owned(),
+                ..phrase
+            }),
+            ..selection
+        };
+        assert_eq!(
+            validate_local_speech_selection(&wrong_language),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
+    fn local_speech_selection_rejects_invalid_tts_voice_binding() {
+        let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper tts voice");
+
+        let wrong_language = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: "not-the-voice-language".to_owned(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&wrong_language),
+            Err(PROFILE_REASON)
+        );
+
+        let stale_voice_catalog = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some("stale".to_owned()),
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&stale_voice_catalog),
+            Err(PROFILE_REASON)
+        );
+
+        let stale_language_pack = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: "stale".to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&stale_language_pack),
+            Err(PROFILE_REASON)
+        );
+
+        let model_without_selected_voice = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: None,
+                voice_revision: None,
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&model_without_selected_voice),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
+    fn pocket_tts_selection_requires_explicit_reference_profile() {
+        let voice_catalog = TtsVoiceCatalog::embedded().expect("voice catalog");
+        let voice = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "pockettts")
+            .expect("pockettts voice");
+
+        let missing_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: None,
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&missing_reference),
+            Err(PROFILE_REASON)
+        );
+
+        let explicit_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: voice.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(voice.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: Some("speaker:voice-1".to_owned()),
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        validate_local_speech_selection(&explicit_reference).expect("pocket reference profile");
+
+        let piper = voice_catalog
+            .entries
+            .iter()
+            .find(|entry| entry.model_family == "vits_piper")
+            .expect("piper voice");
+        let piper_with_reference = LocalSpeechSelection {
+            tts: Some(LocalSpeechAssetSelection {
+                pack_id: piper.language.clone(),
+                pack_revision: voice_catalog.revision().to_owned(),
+                voice_id: Some(piper.voice_id.clone()),
+                voice_revision: Some(voice_catalog.revision().to_owned()),
+                reference_profile_id: Some("speaker:voice-1".to_owned()),
+            }),
+            ..LocalSpeechSelection::default()
+        };
+        assert_eq!(
+            validate_local_speech_selection(&piper_with_reference),
+            Err(PROFILE_REASON)
+        );
+    }
+
+    #[test]
+    fn desktop_tts_reference_profiles_are_private_bounded_and_redacted() {
+        let root = unique_test_dir("desktop-tts-reference");
+        let voice_id = "standard:pockettts:en-us-test";
+        let profile = DesktopTtsReferenceProfile::new(
+            "speaker:voice-1".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("reference text".to_owned()),
+            Some("rev-1".to_owned()),
+        );
+        store_desktop_tts_reference_profile_at(&root, &profile, voice_id).expect("store profile");
+        let path = desktop_tts_reference_profile_path_at(&root, "speaker:voice-1");
+        assert!(path.exists());
+        assert!(!path.to_string_lossy().contains("speaker:voice-1"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+
+        let loaded = load_desktop_tts_reference_profile_at(&root, "speaker:voice-1", voice_id)
+            .expect("load profile");
+        assert_eq!(loaded.reference_text.as_deref(), Some("reference text"));
+        let debug = format!("{loaded:?}");
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("0.1"));
+
+        let empty = DesktopTtsReferenceProfile::new(
+            "speaker:empty".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            Vec::new(),
+            None,
+            None,
+        );
+        assert!(store_desktop_tts_reference_profile_at(&root, &empty, voice_id).is_err());
+
+        let unknown = serde_json::json!({
+            "version": TTS_REFERENCE_PROFILE_VERSION,
+            "id": "speaker:unknown",
+            "voiceId": voice_id,
+            "sampleRateHz": 16000,
+            "samples": [0.0, 0.1],
+            "rawAudioPath": "/private/path.wav"
+        });
+        let unknown_path = desktop_tts_reference_profile_path_at(&root, "speaker:unknown");
+        fs::write(&unknown_path, unknown.to_string()).expect("write unknown profile");
+        assert!(load_desktop_tts_reference_profile_at(&root, "speaker:unknown", voice_id).is_err());
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -1968,18 +3326,148 @@ mod tests {
 
     #[test]
     fn active_status_uses_resolved_profile_connection_without_endpoints() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let vad_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::VoiceActivityDetection)
+            .first()
+            .expect("vad model")
+            .model_id
+            .clone();
+        let kws_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .first()
+            .expect("kws model")
+            .model_id
+            .clone();
+        let local_profile = RuntimeProfile::Local {
+            gateway: Url::parse("http://127.0.0.1:8000").expect("local gateway"),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                kws: Some(LocalSpeechAssetSelection {
+                    pack_id: kws_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                wake_phrase: Some(LocalWakePhraseSelection {
+                    phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
+                    phrase: DEFAULT_WAKE_PHRASE_TEXT.to_owned(),
+                    language: "en".to_owned(),
+                    revision: DEFAULT_WAKE_PHRASE_REVISION.to_owned(),
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
         let mut local = NativeVoiceStatus::unavailable(PROFILE_REASON);
-        install_profile_connection(&mut local, NativeVoiceConnection::ThisDevice);
+        install_profile(&mut local, &local_profile);
         assert_eq!(local.connection, NativeVoiceConnection::ThisDevice);
-        assert!(!local.background_eligible);
+        assert!(local.background_eligible);
 
+        let remote_profile = RuntimeProfile::Remote {
+            gateway: Url::parse("https://gateway.example.test").expect("remote gateway"),
+            bearer: "secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: local_profile.local_speech().clone(),
+        };
         let mut remote = NativeVoiceStatus::unavailable(PROFILE_REASON);
-        install_profile_connection(&mut remote, NativeVoiceConnection::ConnectedDevice);
+        install_profile(&mut remote, &remote_profile);
         assert_eq!(remote.connection, NativeVoiceConnection::ConnectedDevice);
-        assert!(!remote.background_eligible);
+        assert!(remote.background_eligible);
         let rendered = serde_json::to_string(&remote).expect("remote status");
         assert!(!rendered.contains("gateway.example"));
         assert!(!rendered.contains("https://"));
+    }
+
+    #[test]
+    fn wake_background_requires_both_local_vad_and_kws() {
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let vad_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::VoiceActivityDetection)
+            .first()
+            .expect("vad model")
+            .model_id
+            .clone();
+        let kws_model_id = speech_catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .first()
+            .expect("kws model")
+            .model_id
+            .clone();
+        let gateway = Url::parse("http://127.0.0.1:8000").expect("local gateway");
+
+        let no_wake = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection::default(),
+        };
+        assert!(!no_wake.background_voice_eligible());
+
+        let vad_only = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id.clone(),
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
+        assert!(!vad_only.background_voice_eligible());
+
+        let local_wake = RuntimeProfile::Local {
+            gateway: gateway.clone(),
+            local_speech: LocalSpeechSelection {
+                vad: Some(LocalSpeechAssetSelection {
+                    pack_id: vad_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                kws: Some(LocalSpeechAssetSelection {
+                    pack_id: kws_model_id,
+                    pack_revision: speech_catalog.revision().to_owned(),
+                    voice_id: None,
+                    voice_revision: None,
+                    reference_profile_id: None,
+                }),
+                wake_phrase: Some(LocalWakePhraseSelection {
+                    phrase_id: DEFAULT_WAKE_PHRASE_ID.to_owned(),
+                    phrase: DEFAULT_WAKE_PHRASE_TEXT.to_owned(),
+                    language: "en".to_owned(),
+                    revision: DEFAULT_WAKE_PHRASE_REVISION.to_owned(),
+                }),
+                ..LocalSpeechSelection::default()
+            },
+        };
+        assert!(local_wake.background_voice_eligible());
+
+        let remote_wake = RuntimeProfile::Remote {
+            gateway: Url::parse("https://gateway.example.test").expect("remote gateway"),
+            bearer: "secret".to_owned(),
+            remote_audio_consent: true,
+            local_speech: local_wake.local_speech().clone(),
+        };
+        assert!(remote_wake.background_voice_eligible());
+        assert!(SherpaKwsPhraseInput::new(
+            DEFAULT_WAKE_PHRASE_ID,
+            &local_wake
+                .local_speech()
+                .wake_phrase
+                .as_ref()
+                .expect("wake phrase")
+                .phrase,
+        )
+        .is_ok());
     }
 
     #[test]
@@ -2152,10 +3640,12 @@ fn test_runtime_profile_document(mode: &str, home_peer_id: Option<&str>) -> Thin
                 home_peer_id: home_peer_id.map(str::to_owned),
                 webrtc_profile: home_peer_id.map(test_webrtc_profile),
             }),
-            _local_node: LocalNodeProfile {
+            local_node: LocalNodeProfile {
                 _node_name: "Thin".to_owned(),
                 _stable_peer_id: "local-thin-peer".to_owned(),
                 _enabled_capability_packs: Vec::new(),
+                _local_speech_pack_state: None,
+                local_speech_selection: None,
                 _mesh_membership: None,
             },
         }],
@@ -2201,7 +3691,7 @@ fn accepted_start_status(
         available: true,
         phase: NativeVoicePhase::Starting,
         generation: Some(ui_generation),
-        background_eligible: background_voice_eligible(connection),
+        background_eligible: false,
         connection,
         reason_code: None,
         redacted: true,

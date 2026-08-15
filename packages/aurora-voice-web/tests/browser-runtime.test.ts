@@ -160,6 +160,54 @@ describe('createAuroraBrowserVoiceRuntime', () => {
     await runtime.dispose()
   })
 
+  it('transfers cloned selected model bytes to the worker and keeps the runtime copy reusable', async () => {
+    const worker = new LoopbackWorker({
+      capabilities: { vad: true, kws: false, stt: true, tts: false }
+    })
+    const selectedBytes = Uint8Array.from([1, 2, 3])
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser',
+      worker,
+      pcmSource: new FakePcmSource(),
+      modelBindings: {
+        files: [{
+          task: 'stt',
+          fileId: 'tokens',
+          virtualPath: '/tokens.txt',
+          sha256: 'b'.repeat(64),
+          byteLength: selectedBytes.byteLength,
+          bytes: selectedBytes
+        }],
+        models: [{
+          task: 'stt',
+          family: 'moonshine',
+          kind: 'offline-asr',
+          files: [
+            { role: 'tokens', fileId: 'tokens', virtualPath: '/tokens.txt' },
+            { role: 'encoder', fileId: 'tokens', virtualPath: '/tokens.txt' },
+            { role: 'mergedDecoder', fileId: 'tokens', virtualPath: '/tokens.txt' }
+          ]
+        }]
+      },
+      sessionIdFactory: (ownerId, generation) => `${ownerId}:${generation}`
+    })
+
+    await runtime.start()
+
+    expect(runtime.snapshot().capabilities).toEqual({ vad: true, kws: false, stt: true, tts: false })
+    expect(selectedBytes.byteLength).toBe(3)
+    expect(worker.transfers[0]).toHaveLength(1)
+    expect(worker.commands[0]).toMatchObject({
+      type: 'init',
+      modelBindings: {
+        files: [expect.objectContaining({ fileId: 'tokens', byteLength: 3 })],
+        models: [expect.objectContaining({ family: 'moonshine', kind: 'offline-asr' })]
+      }
+    })
+
+    await runtime.cancel()
+  })
+
   it('does not let a lifecycle event with no owner cancel a later session', async () => {
     const worker = new LoopbackWorker()
     const pageLifecycle = new ControllablePageLifecycle(visibleLifecycle())
@@ -203,11 +251,15 @@ describe('createAuroraBrowserVoiceRuntime', () => {
 
 class LoopbackWorker implements AuroraBrowserWorkerPort {
   readonly commands: AuroraVoiceWorkerRequestEnvelope['command'][] = []
+  readonly transfers: Transferable[][] = []
   private messageListener: ((event: MessageEvent<unknown>) => void) | null = null
 
-  postMessage(message: AuroraVoiceWorkerRequestEnvelope): void {
+  constructor(private readonly options: { readonly capabilities?: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } } = {}) {}
+
+  postMessage(message: AuroraVoiceWorkerRequestEnvelope, transfer: readonly Transferable[] = []): void {
+    this.transfers.push([...transfer])
     this.commands.push(message.command)
-    const response = responseFor(message)
+    const response = responseFor(message, this.options.capabilities)
     queueMicrotask(() => this.messageListener?.({ data: response } as MessageEvent<unknown>))
   }
 
@@ -220,7 +272,10 @@ class LoopbackWorker implements AuroraBrowserWorkerPort {
   }
 }
 
-function responseFor(message: AuroraVoiceWorkerRequestEnvelope): AuroraVoiceWorkerResponseEnvelope {
+function responseFor(
+  message: AuroraVoiceWorkerRequestEnvelope,
+  capabilities: { readonly vad: boolean; readonly kws: boolean; readonly stt: boolean; readonly tts: false } = { vad: false, kws: false, stt: false, tts: false }
+): AuroraVoiceWorkerResponseEnvelope {
   const command = message.command
   const envelopeBase: Pick<AuroraVoiceWorkerResponseEnvelope, 'protocolVersion' | 'requestId'> = {
     protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
@@ -232,7 +287,7 @@ function responseFor(message: AuroraVoiceWorkerRequestEnvelope): AuroraVoiceWork
       response: {
         type: 'ready',
         protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
-        capabilities: { vad: false, kws: false, stt: false, tts: false },
+        capabilities,
         maxFrameSamples: command.maxFrameSamples,
         maxQueuedBytes: command.maxQueuedBytes
       }

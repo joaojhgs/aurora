@@ -14,6 +14,10 @@ from scripts.sdk_zod_codegen import (
     STRING_NON_BLANK_MARKER,
     STRING_TRIMMED_MARKER,
     TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER,
+    TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER,
+    TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
+    TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER,
     UNIQUE_STRING_ARRAY_NORMALIZE_MARKER,
     CompileContext,
     UnsupportedSchemaError,
@@ -391,9 +395,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 35
-    assert len(schema["schemas"]) == 74
-    assert len(schema["method_descriptors"]) == 35
+    assert len(schema["allowlist"]) == 38
+    assert len(schema["schemas"]) == 80
+    assert len(schema["method_descriptors"]) == 38
     assert len(schema["event_descriptors"]) == 3
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
@@ -412,6 +416,10 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert all(not method_id.startswith("AudioSession.") for method_id in descriptor_ids)
     assert descriptors["TTS.CreateVoiceProfile"]["method_type"] == "manage"
     assert descriptors["TTS.CreateVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    assert descriptors["TTS.ExportVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.ExportVoiceProfile"]["required_perms"] == ["TTS.manage"]
+    assert descriptors["TTS.ImportVoiceProfile"]["method_type"] == "manage"
+    assert descriptors["TTS.ImportVoiceProfile"]["required_perms"] == ["TTS.manage"]
     event_descriptors = {item["event_topic"]: item for item in schema["event_descriptors"]}
     assert set(event_descriptors) == {
         "TTS.AudioChunk",
@@ -460,6 +468,30 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
         if item["schema_id"] == "TTS.AudioChunk.event.TTSAudioChunkEvent"
     )
     assert event_schema["schema"][TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER] is True
+    schema_by_id = {item["schema_id"]: item["schema"] for item in schema["schemas"]}
+    assert (
+        schema_by_id["TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"][
+            TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER
+        ]
+        is True
+    )
+    assert (
+        schema_by_id["TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"][
+            TTS_EXPORT_PROFILE_RESPONSE_INVARIANT_MARKER
+        ]
+        is True
+    )
+    export_bundle = schema_by_id["TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse"][
+        "$defs"
+    ]["TTSCloneVoiceStateBundle"]
+    assert export_bundle[TTS_CLONE_STATE_BUNDLE_INVARIANT_MARKER] is True
+    assert export_bundle["properties"]["artifact_sha256"]["pattern"] == "^[0-9a-f]{64}$"
+    assert (
+        schema_by_id["TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse"][
+            TTS_IMPORT_PROFILE_RESPONSE_INVARIANT_MARKER
+        ]
+        is True
+    )
     assert any(
         vector["issue_path"] == "$"
         and vector["input"]["audio_data"] == ""
@@ -766,6 +798,30 @@ def test_generated_vectors_capture_strip_and_reject_semantics() -> None:
     execute_negative = by_model["ToolingExecuteToolRequest"]["vectors"]["negative"]
     assert execute_negative["accepted"] is False
     assert execute_negative["issue_path"] == "$.tool_name"
+
+    language_packs_negative_cases = by_model["TTSListLanguagePacksResponse"]["vectors"][
+        "negative_cases"
+    ]
+    assert any(
+        case["issue_path"] == "$.packs.0.voices.0"
+        and case["input"]["packs"][0]["voices"][0]["default"] is True
+        and case["input"]["packs"][0]["voices"][0]["ready"] is False
+        for case in language_packs_negative_cases
+    )
+    assert any(
+        case["issue_path"] == "$"
+        and case["input"]["stale_default_voice_id"]
+        == case["input"]["packs"][0]["voices"][0]["voice_id"]
+        and case["input"]["packs"][0]["voices"][0]["ready"] is True
+        for case in language_packs_negative_cases
+    )
+    assert any(
+        case["normalized"]["stale_default_voice_id"]
+        == case["normalized"]["packs"][0]["voices"][0]["voice_id"]
+        and case["normalized"]["packs"][0]["voices"][0]["ready"] is False
+        and case["normalized"]["packs"][0]["voices"][0]["default"] is False
+        for case in by_model["TTSListLanguagePacksResponse"]["vectors"]["positive_cases"]
+    )
 
     disallowed_methods = {"Tooling.GetStats", "Tooling.GetMCPStatus"}
     assert disallowed_methods.isdisjoint({item["method_id"] for item in schema["schemas"]})

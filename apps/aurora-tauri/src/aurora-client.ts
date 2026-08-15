@@ -3,6 +3,9 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type AndroidAssistantRoleRequestResult,
+  type NativeSpeechPackTask,
+  type AndroidNativePermissionRequestResult,
   type TauriAndroidBaselineStatus,
   type AndroidLocalLightInferenceStatus,
   type NativeCapabilityManifest,
@@ -38,6 +41,7 @@ import {
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
   surfaceSupportsRuntimeTier,
   type AuroraNodeMode,
+  type AuroraLocalSpeechSelectionProfile,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraRuntimeTier,
@@ -50,6 +54,7 @@ import {
   type BrowserWebThinRuntime,
   type NativeDesktopVoicePort,
   type NativeMobileVoicePort,
+  type AuroraBrowserSpeechPackCatalogSelection,
 } from "@aurora/ui";
 import {
   NativePeerCredentialStore,
@@ -82,6 +87,10 @@ import {
 import { createTauriNativeDesktopVoicePort } from "./native-voice";
 import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
 import { createTauriNativeIosVoicePort } from "./native-ios-voice";
+import {
+  createTauriNativeSpeechCatalogPort,
+  type TauriNativeSpeechCatalogPort,
+} from "./native-speech-catalog";
 
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
@@ -106,6 +115,7 @@ export interface AuroraTauriRuntime {
   localData?: AuroraTauriLocalDataRuntime | undefined;
   nativeVoice?: NativeDesktopVoicePort | undefined;
   nativeMobileVoice?: NativeMobileVoicePort | undefined;
+  localSpeechCatalog?: TauriNativeSpeechCatalogPort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -116,6 +126,8 @@ export interface AuroraTauriRuntime {
   stopSidecar: () => Promise<TauriSidecarStatus | null>;
   nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>;
   nativeCapabilityManifest?: () => Promise<NativeCapabilityManifest>;
+  requestAndroidAssistantRole?: () => Promise<AndroidAssistantRoleRequestResult | null>;
+  requestAndroidPermission?: (permission: string) => Promise<AndroidNativePermissionRequestResult | null>;
   trayStatus: () => Promise<TauriNativeFeatureStatus | null>;
   notificationStatus: () => Promise<TauriNativeFeatureStatus | null>;
   iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>;
@@ -233,10 +245,65 @@ export interface AuroraThinProfileController {
     },
   ) => Promise<AuroraThinProfileDocument>;
   selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
+  updateActiveLocalSpeechSelection?: (
+    selection: AuroraLocalSpeechSelectionProfile,
+  ) => Promise<AuroraThinProfileDocument>;
   recreateRuntime?: () => Promise<AuroraTauriRuntime>;
   createRuntime: (
     document: AuroraThinProfileDocument,
   ) => Promise<AuroraTauriRuntime>;
+}
+
+type AuroraLocalSpeechPackActivator = (
+  selection: AuroraLocalSpeechSelectionProfile,
+) => Promise<void>;
+
+function createTauriLocalSpeechPackActivator(
+  catalog: TauriNativeSpeechCatalogPort,
+): AuroraLocalSpeechPackActivator {
+  return async (selection) => {
+    const available = await catalog.listCatalog();
+    if (available.state !== "ready") throw new Error("voice_download_unavailable");
+    for (const task of ["vad", "kws", "stt", "tts"] as const) {
+      const selected = selection[task];
+      if (!selected) continue;
+      const catalogSelection = findRuntimeSpeechCatalogSelection(
+        available.items,
+        task,
+        selected,
+      );
+      if (!catalogSelection) throw new Error("voice_download_unavailable");
+      await catalog.select({
+        selection: {
+          ...catalogSelection,
+          ...(selected.referenceProfileId
+            ? {
+                referenceProfileId: selected.referenceProfileId,
+                referenceProfileSelected: true,
+              }
+            : {}),
+        },
+      });
+    }
+  };
+}
+
+function findRuntimeSpeechCatalogSelection(
+  catalog: readonly AuroraBrowserSpeechPackCatalogSelection[],
+  task: NativeSpeechPackTask,
+  selected: NonNullable<AuroraLocalSpeechSelectionProfile[NativeSpeechPackTask]>,
+): AuroraBrowserSpeechPackCatalogSelection | undefined {
+  return catalog.find((item) => {
+    if (item.task !== task) return false;
+    if (task !== "tts") {
+      return item.packId === selected.packId
+        && item.packVersion === selected.packRevision;
+    }
+    return item.voiceId === selected.voiceId
+      && item.voiceRevision === selected.voiceRevision
+      && (item.profilePackId ?? item.packId) === selected.packId
+      && (item.profilePackRevision ?? item.packVersion) === selected.packRevision;
+  });
 }
 
 export function isThinProfileConfigured(
@@ -451,6 +518,7 @@ export function createAuroraTauriRuntime({
   localAssistant = null,
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
+  localSpeechPackActivator,
 }: {
   thinProfileStore?: AuroraThinProfileStore;
   thinProfileDocument?: AuroraThinProfileDocument;
@@ -461,6 +529,7 @@ export function createAuroraTauriRuntime({
   localAssistant?: AuroraTauriLightweightAssistantConfig | null | undefined;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
+  localSpeechPackActivator?: AuroraLocalSpeechPackActivator;
 } = {}): AuroraTauriRuntime {
   const runtimeDocument = runtimeProfileDocument
     ? sanitizeRuntimeProfileDocument(runtimeProfileDocument, {
@@ -486,6 +555,24 @@ export function createAuroraTauriRuntime({
   const thinInviteText =
     explicitThinInviteText ??
     (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
+  const nativeTransport = isTauriRuntime()
+    ? new TauriLocalTransport({ invoke, listen })
+    : undefined;
+  const localSpeechCatalog = nativeTransport
+    ? createTauriNativeSpeechCatalogPort({
+        platform: isAndroidTauriRuntime()
+          ? "android"
+          : isIosTauriRuntime()
+            ? "ios"
+            : "desktop",
+        transport: nativeTransport,
+      })
+    : undefined;
+  const resolvedLocalSpeechPackActivator =
+    localSpeechPackActivator ??
+    (localSpeechCatalog
+      ? createTauriLocalSpeechPackActivator(localSpeechCatalog)
+      : undefined);
   const thinProfileController =
     runtimeProfileStore
       ? createRuntimeBackedThinProfileController(
@@ -493,6 +580,7 @@ export function createAuroraTauriRuntime({
         runtimeDocument,
         packageCapabilities,
         runtimeModePreferenceStore,
+        resolvedLocalSpeechPackActivator,
       )
       : thinProfileStore && thinProfileDocument
         ? createThinProfileController(thinProfileStore, thinProfileDocument)
@@ -505,7 +593,9 @@ export function createAuroraTauriRuntime({
   const runtimeTier = configuredRuntimeProfile?.runtimeTier ?? "none";
 
   if (isTauriRuntime()) {
-    const nativeTransport = new TauriLocalTransport({ invoke, listen });
+    if (!nativeTransport || !localSpeechCatalog) {
+      throw new Error("Native speech transport is unavailable");
+    }
     const nativeVoice = isDesktopTauriRuntime()
       ? createTauriNativeDesktopVoicePort({ invoke, listen })
       : undefined;
@@ -576,6 +666,7 @@ export function createAuroraTauriRuntime({
             : undefined,
           localData: localDataRuntime(meshNodeServices),
           nativeMobileVoice,
+          localSpeechCatalog,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -588,6 +679,10 @@ export function createAuroraTauriRuntime({
             nativeTransport.getNativePermissionStatus(),
           nativeCapabilityManifest: () =>
             nativeTransport.getNativeCapabilityManifest(),
+          requestAndroidAssistantRole: () =>
+            nativeTransport.requestAndroidAssistantRole(),
+          requestAndroidPermission: (permission) =>
+            nativeTransport.requestAndroidPermission(permission),
           trayStatus: async () => null,
           notificationStatus: () => nativeTransport.getNotificationStatus(),
           iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -630,6 +725,7 @@ export function createAuroraTauriRuntime({
           nativeTransport,
           "Tauri secure storage for mobile native mode preference",
         ),
+        localSpeechCatalog,
         sidecarStatus: async () => null,
         startSidecar: async () => null,
         stopSidecar: async () => null,
@@ -637,6 +733,10 @@ export function createAuroraTauriRuntime({
           nativeTransport.getNativePermissionStatus(),
         nativeCapabilityManifest: () =>
           nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
         trayStatus: async () => null,
         notificationStatus: () => nativeTransport.getNotificationStatus(),
         iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -721,6 +821,7 @@ export function createAuroraTauriRuntime({
           : undefined,
         localData: localDataRuntime(meshNodeServices),
         nativeVoice,
+        localSpeechCatalog,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -733,6 +834,10 @@ export function createAuroraTauriRuntime({
           nativeTransport.getNativePermissionStatus(),
         nativeCapabilityManifest: () =>
           nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
         trayStatus: () => nativeTransport.getTrayStatus(),
         notificationStatus: () => nativeTransport.getNotificationStatus(),
         iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -770,6 +875,8 @@ export function createAuroraTauriRuntime({
       nodeMode: runtimeNodeMode,
       runtimeTier,
       nativeVoice,
+      localSpeechCatalog,
+      thinProfileController,
       requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: null,
       modePreferenceStore: secureModePreferenceStore(
@@ -782,6 +889,10 @@ export function createAuroraTauriRuntime({
       nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
       nativeCapabilityManifest: () =>
         nativeTransport.getNativeCapabilityManifest(),
+      requestAndroidAssistantRole: () =>
+        nativeTransport.requestAndroidAssistantRole(),
+      requestAndroidPermission: (permission) =>
+        nativeTransport.requestAndroidPermission(permission),
       trayStatus: () => nativeTransport.getTrayStatus(),
       notificationStatus: () => nativeTransport.getNotificationStatus(),
       iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
@@ -1537,6 +1648,7 @@ function createRuntimeBackedThinProfileController(
   runtimeDocument: AuroraRuntimeProfileDocument,
   packageCapabilities: AuroraTauriPackageCapabilities,
   modePreferenceStore: AuroraModePreferenceStore | undefined,
+  localSpeechPackActivator: AuroraLocalSpeechPackActivator | undefined,
 ): AuroraThinProfileController {
   let currentRuntimeDocument = runtimeDocument;
   let currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
@@ -1603,6 +1715,47 @@ function createRuntimeBackedThinProfileController(
       if (!currentRuntimeDocument.profiles.some((profile) => profile.id === profileId))
         throw new Error("Runtime profile does not exist");
       const next = { ...currentRuntimeDocument, activeProfileId: profileId };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    updateActiveLocalSpeechSelection: async (selection) => {
+      if (!currentRuntimeDocument.activeProfileId) {
+        throw new Error("Runtime profile does not exist");
+      }
+      let found = false;
+      let activationSelection: AuroraLocalSpeechSelectionProfile | null = null;
+      const profiles = currentRuntimeDocument.profiles.map((profile) => {
+        if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
+        found = true;
+        const localSpeechSelection = {
+          ...(profile.localNode.localSpeechSelection ?? {}),
+          ...selection,
+        };
+        if (profile.nodeMode === "mesh-node") {
+          activationSelection = localSpeechSelection;
+        }
+        return sanitizeRuntimeProfile({
+          ...profile,
+          localNode: {
+            ...profile.localNode,
+            localSpeechSelection,
+          },
+        }, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        });
+      });
+      if (!found) throw new Error("Runtime profile does not exist");
+      if (activationSelection) {
+        await localSpeechPackActivator?.(activationSelection);
+      }
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles,
+      };
       await store.save(next);
       currentRuntimeDocument = next;
       currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
@@ -1678,7 +1831,22 @@ function runtimeProfileFromThinProfile({
   const nodeMode = selectedMode === "mesh-node" || selectedMode === "remote-console"
     ? selectedMode
     : existingProfile?.nodeMode ?? "remote-console";
-  if (nodeMode === "remote-console") return remoteProfile;
+  const localSpeechFields = preservedLocalSpeechFields(
+    existingProfile,
+    packageCapabilities,
+  );
+  if (nodeMode === "remote-console") {
+    return sanitizeRuntimeProfile({
+      ...remoteProfile,
+      localNode: {
+        ...remoteProfile.localNode,
+        enabledCapabilityPacks: [],
+        ...localSpeechFields,
+      },
+    }, {
+      allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+    });
+  }
 
   const runtimeTier = selectedRuntimeTier === "python-full"
     || selectedRuntimeTier === "lightweight-ts"
@@ -1712,6 +1880,7 @@ function runtimeProfileFromThinProfile({
         existingProfile?.nodeMode === "mesh-node"
           ? existingProfile.localNode.enabledCapabilityPacks
           : ["native-actions"],
+      ...localSpeechFields,
       meshMembership: {
         signalingUrl,
         webrtcProfile,
@@ -1720,6 +1889,24 @@ function runtimeProfileFromThinProfile({
   }, {
     allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
   });
+}
+
+function preservedLocalSpeechFields(
+  existingProfile: AuroraRuntimeProfileV2 | undefined,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): Pick<AuroraRuntimeProfileV2["localNode"], "localSpeechPackState" | "localSpeechSelection"> {
+  if (!existingProfile) return {};
+  const sanitized = sanitizeRuntimeProfile(existingProfile, {
+    allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+  });
+  return {
+    ...(sanitized.localNode.localSpeechPackState
+      ? { localSpeechPackState: sanitized.localNode.localSpeechPackState }
+      : {}),
+    ...(sanitized.localNode.localSpeechSelection
+      ? { localSpeechSelection: sanitized.localNode.localSpeechSelection }
+      : {}),
+  };
 }
 
 export function serializeThinProfileDocument(

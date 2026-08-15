@@ -96,29 +96,10 @@
         "primary_language": {
           "type": "string",
           "title": "Primary language",
-          "description": "Language Aurora uses whenever one device language is required.",
-          "enum": [
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
-          "ui_choices": [
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
+          "description": "BCP 47 language tag Aurora uses whenever one device language is required. Available choices come from the installed speech-pack catalog.",
+          "pattern": "^(?:[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+          "minLength": 2,
+          "maxLength": 255,
           "default": "en",
           "reload_impact": {
             "reload_required": true,
@@ -135,31 +116,10 @@
         "voice_language": {
           "type": "string",
           "title": "Voice language",
-          "description": "Automatic detects speech while spoken replies and wake listening use the primary language.",
-          "enum": [
-            "auto",
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
-          "ui_choices": [
-            "auto",
-            "en",
-            "pt",
-            "es",
-            "fr",
-            "de",
-            "it",
-            "ja",
-            "ko",
-            "zh"
-          ],
+          "description": "Automatic detection or a BCP 47 speech language tag from the installed speech-pack catalog.",
+          "pattern": "^(?:[Aa][Uu][Tt][Oo]|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+          "minLength": 2,
+          "maxLength": 255,
           "default": "auto",
           "reload_impact": {
             "reload_required": true,
@@ -478,7 +438,7 @@
             "enabled": {
               "type": "boolean",
               "description": "Enable TTS service",
-              "default": false
+              "default": true
             },
             "provider": {
               "type": "string",
@@ -532,18 +492,24 @@
                   "additionalProperties": false,
                   "properties": {
                     "model_file_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Path to the Piper model file",
                       "ui_type": "file",
                       "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
-                      "default": "voice_models/en_US-lessac-medium.onnx"
+                      "default": null
                     },
                     "model_config_file_path": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Path to the Piper model configuration file",
                       "ui_type": "file",
                       "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-                      "default": "voice_models/en_US-lessac-medium.onnx.txt"
+                      "default": null
                     },
                     "model_sample_rate": {
                       "type": "integer",
@@ -558,6 +524,11 @@
                       "ui_type": "file",
                       "ui_file_filter": "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
                       "default": ""
+                    },
+                    "cache_dir": {
+                      "type": "string",
+                      "description": "Directory for selected Piper voice downloads and installed models",
+                      "default": "voice_models/piper"
                     }
                   },
                   "default": {}
@@ -615,7 +586,7 @@
                     },
                     "preload_model": {
                       "type": "boolean",
-                      "default": true
+                      "default": false
                     },
                     "preload_voice_ids": {
                       "type": "array",
@@ -671,6 +642,32 @@
                     "string",
                     "null"
                   ],
+                  "default": null
+                },
+                "trusted_manifest_sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{64}$",
+                  "default": null
+                },
+                "trusted_manifest_public_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 128
+                  },
+                  "default": []
+                },
+                "trusted_manifest_signature": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "minLength": 64,
+                  "maxLength": 256,
                   "default": null
                 },
                 "cache_dir": {
@@ -737,18 +734,24 @@
               "default": {}
             },
             "model_file_path": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Path to the TTS model file",
               "ui_type": "file",
               "ui_file_filter": "ONNX files (*.onnx)|*.onnx|All files (*.*)|*.*",
-              "default": "voice_models/en_US-lessac-medium.onnx"
+              "default": null
             },
             "model_config_file_path": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Path to the TTS model configuration file",
               "ui_type": "file",
               "ui_file_filter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
-              "default": "voice_models/en_US-lessac-medium.onnx.txt"
+              "default": null
             },
             "model_sample_rate": {
               "type": "integer",
@@ -773,19 +776,7 @@
           "properties": {
             "language": {
               "type": "string",
-              "enum": [
-                "",
-                "en",
-                "pt",
-                "es",
-                "fr",
-                "de",
-                "it",
-                "ja",
-                "ko",
-                "zh"
-              ],
-              "description": "Language for speech recognition (empty for auto-detect)",
+              "ui_type": "choice",
               "ui_choices": [
                 "",
                 "en",
@@ -798,7 +789,10 @@
                 "ko",
                 "zh"
               ],
-              "default": "en"
+              "pattern": "^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+              "maxLength": 255,
+              "description": "BCP 47 language tag for speech recognition (empty for auto-detect)",
+              "default": ""
             },
             "coordinator": {
               "type": "object",
@@ -808,7 +802,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable STT coordinator",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
@@ -929,7 +923,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable wake word detection",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
@@ -980,7 +974,7 @@
                 "enabled": {
                   "type": "boolean",
                   "description": "Enable transcription service",
-                  "default": false
+                  "default": true
                 },
                 "mesh_sharing": {
                   "$ref": "#/$defs/mesh_sharing"
@@ -1025,16 +1019,28 @@
                       "default": true
                     },
                     "model_size": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "enum": [
                         "tiny",
                         "base",
                         "small",
                         "medium",
-                        "large"
+                        "large",
+                        null
                       ],
                       "description": "Whisper model size for realtime transcription",
-                      "default": "tiny"
+                      "default": null
+                    },
+                    "model_size_or_path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription",
+                      "default": null
                     },
                     "device": {
                       "type": "string",
@@ -1070,16 +1076,28 @@
                       "default": true
                     },
                     "model_size": {
-                      "type": "string",
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "enum": [
                         "tiny",
                         "base",
                         "small",
                         "medium",
-                        "large"
+                        "large",
+                        null
                       ],
                       "description": "Whisper model size for accurate transcription",
-                      "default": "base"
+                      "default": null
+                    },
+                    "model_size_or_path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription",
+                      "default": null
                     },
                     "device": {
                       "type": "string",

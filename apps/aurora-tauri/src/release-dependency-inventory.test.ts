@@ -322,16 +322,16 @@ function readReport(fixture: Fixture) {
 }
 
 describe('release dependency inventory gate', () => {
-  it('produces a redacted static metadata report and blocks unknown or blocked license dispositions', () => {
+  it('produces a redacted static metadata report while keeping license review separate from unsigned package readiness', () => {
     const fixture = createFixture()
     const result = runInventory(fixture)
 
-    expect(result.status).not.toBe(0)
+    expect(result.status).toBe(0)
     const report = readReport(fixture)
     expect(report).toMatchObject({
       schema: 'aurora.release-dependency-inventory.v1',
-      status: 'blocked',
-      releaseBlocked: true,
+      status: 'passed',
+      releaseBlocked: false,
       secretsRedacted: true,
       claimBoundary: {
         kind: 'static-metadata-only',
@@ -345,9 +345,10 @@ describe('release dependency inventory gate', () => {
       },
     })
     expect(report.source.commit).toBe(currentHead())
-    expect(report.blockers.map((item: { id: string }) => item.id)).toEqual(expect.arrayContaining([
+    expect(report.blockers).toEqual([])
+    expect(report.reviewFindings.map((item: { id: string }) => item.id)).toEqual(expect.arrayContaining([
       'unknown-license-metadata',
-      'blocked-license-disposition',
+      'license-review-required',
     ]))
     expect(report.inventory).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -369,19 +370,19 @@ describe('release dependency inventory gate', () => {
         ecosystem: 'npm',
         name: 'blocked-npm-package',
         license: expect.objectContaining({ id: 'GPL-3.0-only' }),
-        disposition: 'blocked',
+        disposition: 'review-required',
       }),
       expect.objectContaining({
         ecosystem: 'npm',
         name: 'blocked-gplv2-package',
         license: expect.objectContaining({ id: 'GPLv2' }),
-        disposition: 'blocked',
+        disposition: 'review-required',
       }),
       expect.objectContaining({
         ecosystem: 'npm',
         name: 'unreviewed-license-package',
         license: expect.objectContaining({ id: 'UNREVIEWED' }),
-        disposition: 'blocked',
+        disposition: 'review-required',
       }),
       expect.objectContaining({
         ecosystem: 'python',
@@ -394,7 +395,7 @@ describe('release dependency inventory gate', () => {
         ecosystem: 'python',
         name: 'unknown-python',
         license: expect.objectContaining({ id: 'UNKNOWN' }),
-        disposition: 'blocked',
+        disposition: 'review-required',
       }),
       expect.objectContaining({
         ecosystem: 'cargo',
@@ -406,7 +407,7 @@ describe('release dependency inventory gate', () => {
       expect.objectContaining({
         ecosystem: 'phase4-native-voice',
         name: 'phase4-blocked-voice',
-        disposition: 'blocked',
+        disposition: 'review-required',
       }),
     ]))
     const npmHashes = report.inventory
@@ -494,7 +495,7 @@ describe('release dependency inventory gate', () => {
     const dashArtifact = join(repoRoot, '-')
     const result = runInventory(fixture, ['--source-commit', currentHead().slice(0, 8)])
 
-    expect(result.status).not.toBe(0)
+    expect(result.status).toBe(0)
     expect(readReport(fixture).source.commit).toBe(currentHead())
     expect(existsSync(dashArtifact)).toBe(false)
   })

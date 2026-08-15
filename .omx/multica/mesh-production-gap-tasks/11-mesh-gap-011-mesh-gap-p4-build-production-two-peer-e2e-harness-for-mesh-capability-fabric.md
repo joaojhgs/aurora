@@ -82,4 +82,4 @@ Scenarios to prove
 ## Verification
 - Full harness command documented in `docs/`.
 - Targeted test suites plus harness pass.
-- Artifacts saved under `.omx/reports/mesh-gap-e2e/` or CI artifacts.
+- Artifacts are generated in ignored local report paths or uploaded by CI.

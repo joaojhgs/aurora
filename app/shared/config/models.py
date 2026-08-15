@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import AnyUrl, Field, SecretStr, constr
+from pydantic import AnyUrl, Field, RootModel, SecretStr, constr
 
 from app.shared.config.models_base import BaseConfigModel
 
@@ -76,17 +76,25 @@ class System(BaseConfigModel):
     """
     Base directory for voice/model files
     """
-    primary_language: Literal["en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = Field(
-        "en", title="Primary language"
+    primary_language: str | None = Field(
+        "en",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Primary language",
     )
     """
-    Language Aurora uses whenever one device language is required.
+    BCP 47 language tag Aurora uses whenever one device language is required. Available choices come from the installed speech-pack catalog.
     """
-    voice_language: Literal["auto", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = (
-        Field("auto", title="Voice language")
+    voice_language: str | None = Field(
+        "auto",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[Aa][Uu][Tt][Oo]|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Voice language",
     )
     """
-    Automatic detects speech while spoken replies and wake listening use the primary language.
+    Automatic detection or a BCP 47 speech language tag from the installed speech-pack catalog.
     """
 
 
@@ -287,11 +295,11 @@ class Auth(BaseConfigModel):
 
 
 class Piper(BaseConfigModel):
-    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    model_file_path: str | None = None
     """
     Path to the Piper model file
     """
-    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    model_config_file_path: str | None = None
     """
     Path to the Piper model configuration file
     """
@@ -302,6 +310,10 @@ class Piper(BaseConfigModel):
     executable_path: str | None = ""
     """
     Path to Piper executable
+    """
+    cache_dir: str | None = "voice_models/piper"
+    """
+    Directory for selected Piper voice downloads and installed models
     """
 
 
@@ -314,7 +326,7 @@ class Pockettts(BaseConfigModel):
     initialization_timeout_s: float | None = Field(120.0, ge=1.0)
     request_timeout_s: float | None = Field(120.0, ge=1.0)
     max_concurrent_requests: int | None = Field(1, ge=1, le=1)
-    preload_model: bool | None = True
+    preload_model: bool | None = False
     preload_voice_ids: list[str] | None = []
     temperature: float | None = None
     lsd_decode_steps: int | None = Field(1, ge=1)
@@ -334,9 +346,18 @@ class Providers(BaseConfigModel):
     """
 
 
+class TrustedManifestPublicKey(RootModel[str]):
+    root: str = Field(..., max_length=128, min_length=32)
+
+
 class VoiceRegistry(BaseConfigModel):
     manifest_path: str | None = "voice_models/voices.manifest.json"
     asset_base_url: str | None = None
+    trusted_manifest_sha256: str | None = Field(None, pattern="^[0-9a-f]{64}$")
+    trusted_manifest_public_keys: list[TrustedManifestPublicKey] | None = Field(
+        [], validate_default=True
+    )
+    trusted_manifest_signature: str | None = Field(None, max_length=256, min_length=64)
     cache_dir: str | None = "voice_models/voice-pack"
     verify_sha256: bool | None = True
     standard_pack_enabled: bool | None = True
@@ -406,9 +427,13 @@ class RealtimeModel(BaseConfigModel):
     """
     Enable realtime transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "tiny"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for realtime transcription
+    """
+    model_size_or_path: str | None = None
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription
     """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """
@@ -425,9 +450,13 @@ class AccurateModel(BaseConfigModel):
     """
     Enable accurate transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "base"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for accurate transcription
+    """
+    model_size_or_path: str | None = None
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription
     """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """
@@ -972,7 +1001,7 @@ class ToolingApprovalPolicyRule(BaseConfigModel):
 
 
 class Tts(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable TTS service
     """
@@ -1002,11 +1031,11 @@ class Tts(BaseConfigModel):
     """
     Logical voice registry settings
     """
-    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    model_file_path: str | None = None
     """
     Path to the TTS model file
     """
-    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    model_config_file_path: str | None = None
     """
     Path to the TTS model configuration file
     """
@@ -1021,7 +1050,7 @@ class Tts(BaseConfigModel):
 
 
 class Coordinator(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable STT coordinator
     """
@@ -1050,7 +1079,7 @@ class Coordinator(BaseConfigModel):
 
 
 class Wakeword(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable wake word detection
     """
@@ -1075,7 +1104,7 @@ class Wakeword(BaseConfigModel):
 
 
 class Transcription(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable transcription service
     """
@@ -1108,9 +1137,13 @@ class Transcription(BaseConfigModel):
 
 
 class Stt(BaseConfigModel):
-    language: Literal["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = "en"
+    language: str | None = Field(
+        "",
+        max_length=255,
+        pattern="^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+    )
     """
-    Language for speech recognition (empty for auto-detect)
+    BCP 47 language tag for speech recognition (empty for auto-detect)
     """
     coordinator: Coordinator | None = None
     """

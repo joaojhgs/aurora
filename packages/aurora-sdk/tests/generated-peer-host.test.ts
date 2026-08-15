@@ -15,6 +15,7 @@ import {
 } from '../src/webrtc/index.js'
 
 const TTS_MANAGEMENT_METHOD_IDS = [
+  'TTS.ListLanguagePacks',
   'TTS.ListVoiceProfiles',
   'TTS.GetVoiceProfile',
   'TTS.UpdateVoiceProfile',
@@ -26,7 +27,9 @@ const TTS_MANAGEMENT_METHOD_IDS = [
   'TTS.VoiceImportEnd',
   'TTS.VoiceImportAbort',
   'TTS.CreateVoiceProfile',
-  'TTS.DeleteVoiceProfile'
+  'TTS.DeleteVoiceProfile',
+  'TTS.ExportVoiceProfile',
+  'TTS.ImportVoiceProfile'
 ] as const
 
 function peerGrant(allowedMethodIds: readonly string[]): LocalPeerGrantV1 {

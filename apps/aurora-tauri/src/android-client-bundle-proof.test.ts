@@ -21,6 +21,28 @@ const vendorBarcodeScanner = join(packageRoot, 'src-tauri', 'vendor', 'tauri-plu
 const vendorBarcodeScannerSource = join(vendorBarcodeScanner, 'android', 'src', 'main', 'java', 'BarcodeScannerPlugin.kt')
 
 type AndroidClientKind = 'apk' | 'aab'
+const requiredNativeSpeechLibraries = [
+  'libaurora_tauri_lib.so',
+  'libonnxruntime.so',
+  'libsherpa-onnx-c-api.so',
+]
+
+function androidNativeLibraryEntries(
+  kind: AndroidClientKind,
+  abis = kind === 'aab' ? ['arm64-v8a', 'x86_64'] : ['x86_64'],
+) {
+  const prefix = kind === 'aab' ? 'base/lib' : 'lib'
+  return abis.flatMap((abi) =>
+    requiredNativeSpeechLibraries.map((library) => `${prefix}/${abi}/${library}`),
+  )
+}
+
+function writeNativeSpeechRuntime(directory: string) {
+  mkdirSync(directory, { recursive: true })
+  for (const library of requiredNativeSpeechLibraries.slice(1)) {
+    writeFileSync(join(directory, library), `${library} test fixture\n`)
+  }
+}
 
 interface AndroidClientProofContext {
   root: string
@@ -205,8 +227,8 @@ describeIfNode('Android client bundle artifact proof', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-thin-clean-'))
     const apk = join(root, 'app-x86_64-debug.apk')
     const aab = join(root, 'app-debug.aab')
-    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', 'lib/x86_64/libaurora_tauri.so'])
-    writeZip(aab, ['base/manifest/AndroidManifest.xml', 'base/dex/classes.dex', 'base/lib/x86_64/libaurora_tauri.so'])
+    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', ...androidNativeLibraryEntries('apk')])
+    writeZip(aab, ['base/manifest/AndroidManifest.xml', 'base/dex/classes.dex', ...androidNativeLibraryEntries('aab')])
 
     const apkResult = runProof(context, 'apk', apk)
     const aabResult = runProof(context, 'aab', aab)
@@ -237,7 +259,7 @@ describeIfNode('Android client bundle artifact proof', () => {
 
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-thin-provenance-artifact-'))
     const apk = join(root, 'app-x86_64-debug.apk')
-    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', 'lib/x86_64/libaurora_tauri.so'])
+    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', ...androidNativeLibraryEntries('apk')])
 
     const result = runProof(context, 'apk', apk)
 
@@ -251,12 +273,16 @@ describeIfNode('Android client bundle artifact proof', () => {
   it('builds Android client bundles through a temp config and records reusable provenance', () => {
     const context = createAndroidClientProofContext()
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-build-pnpm-'))
+    const arm64NativeLibDir = join(stubDir, 'native', 'arm64-v8a')
+    const x86_64NativeLibDir = join(stubDir, 'native', 'x86_64')
     const jdkHome = join(stubDir, 'jdk', 'temurin-17.0.20+8')
     const jdkBin = join(jdkHome, 'bin')
     const callsPath = join(stubDir, 'calls.jsonl')
     const pnpmStub = join(stubDir, 'pnpm')
     const javaStub = join(stubDir, 'java')
     const asdfStub = join(stubDir, 'asdf')
+    writeNativeSpeechRuntime(arm64NativeLibDir)
+    writeNativeSpeechRuntime(x86_64NativeLibDir)
     mkdirSync(jdkBin, { recursive: true })
     writeFileSync(join(jdkBin, 'java'), '#!/usr/bin/env sh\nexit 0\n')
     chmodSync(join(jdkBin, 'java'), 0o755)
@@ -287,6 +313,9 @@ fs.appendFileSync(callsPath, JSON.stringify({
   javaHome: process.env.JAVA_HOME,
   asdfJavaVersion: process.env.ASDF_JAVA_VERSION,
   pathHead: (process.env.PATH || '').split(${JSON.stringify(delimiter)}).slice(0, 2),
+  androidNativeTargets: process.env.AURORA_ANDROID_NATIVE_TARGETS,
+  arm64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR,
+  x86_64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR,
 }) + '\\n')
 if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   const configPath = argv[argv.indexOf('--config') + 1]
@@ -319,6 +348,8 @@ if (argv[0] === 'build:frontend:android-client') {
         PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
         ASDF_JAVA_VERSION: undefined,
         JAVA_HOME: undefined,
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
         AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid wss://signaling.example.invalid',
       }),
     })
@@ -329,12 +360,20 @@ if (argv[0] === 'build:frontend:android-client') {
       'build:frontend:android-client',
       'tauri android init --ci --skip-targets-install',
       'android:sync-native-plugin',
-      'tauri android build --debug --aab --config ' + calls[3].argv.at(-1),
+      'tauri android build --debug --aab --target aarch64 x86_64 --config ' + calls[3].argv.at(-1),
     ])
     expect(calls[3].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
     expect(calls[3]).toMatchObject({
       javaHome: jdkHome,
       asdfJavaVersion: 'temurin-17.0.20+8',
+      androidNativeTargets: 'aarch64,x86_64',
+      arm64NativeLibDir,
+      x86_64NativeLibDir,
+    })
+    expect(calls[2]).toMatchObject({
+      androidNativeTargets: 'aarch64,x86_64',
+      arm64NativeLibDir,
+      x86_64NativeLibDir,
     })
     expect(calls[3].pathHead).toEqual([jdkBin, stubDir])
     expect(existsSync(calls[3].argv.at(-1))).toBe(false)
@@ -344,8 +383,14 @@ if (argv[0] === 'build:frontend:android-client') {
       bundleMode: 'android-client',
       kind: 'aab',
       target: 'universal',
+      targets: ['aarch64', 'x86_64'],
       sourceConfigWritten: false,
       expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+      nativeSpeechRuntime: {
+        abis: ['arm64-v8a', 'x86_64'],
+        libraries: requiredNativeSpeechLibraries.slice(1),
+        sourceDirectoriesRedacted: true,
+      },
     })
     expect(provenance.artifactRoot).toBe(context.buildOutputRoot)
     expect(provenance.config.app.security.capabilities).toEqual([
@@ -361,8 +406,8 @@ if (argv[0] === 'build:frontend:android-client') {
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-thin-generated-'))
     const apk = join(root, 'apk', 'universal', 'debug', 'app-universal-debug.apk')
     const aab = join(root, 'bundle', 'universalDebug', 'app-universal-debug.aab')
-    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', 'lib/x86_64/libaurora_tauri.so'])
-    writeZip(aab, ['base/manifest/AndroidManifest.xml', 'base/dex/classes.dex', 'base/lib/x86_64/libaurora_tauri.so'])
+    writeZip(apk, ['AndroidManifest.xml', 'classes.dex', ...androidNativeLibraryEntries('apk')])
+    writeZip(aab, ['base/manifest/AndroidManifest.xml', 'base/dex/classes.dex', ...androidNativeLibraryEntries('aab')])
 
     const apkResult = runProofAuto(context, 'apk', root)
     const aabResult = runProofAuto(context, 'aab', root)
@@ -410,6 +455,34 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(forbiddenResult.stderr).toContain('aurora-sidecar')
   })
 
+  it('fails closed when Android native speech libraries or supported AAB ABIs are missing', () => {
+    const context = createAndroidClientProofContext()
+    prepareAndroidClient(context)
+    const root = mkdtempSync(join(tmpdir(), 'aurora-android-native-speech-missing-'))
+    const apk = join(root, 'missing-onnxruntime.apk')
+    const aab = join(root, 'missing-arm64.aab')
+    writeZip(apk, [
+      'AndroidManifest.xml',
+      'classes.dex',
+      'lib/x86_64/libaurora_tauri_lib.so',
+      'lib/x86_64/libsherpa-onnx-c-api.so',
+    ])
+    writeZip(aab, [
+      'base/manifest/AndroidManifest.xml',
+      'base/dex/classes.dex',
+      ...androidNativeLibraryEntries('aab', ['x86_64']),
+    ])
+
+    const apkResult = runProof(context, 'apk', apk)
+    const aabResult = runProof(context, 'aab', aab)
+
+    expect(apkResult.status).not.toBe(0)
+    expect(apkResult.stderr).toContain('lib/x86_64/libonnxruntime.so')
+    expect(aabResult.status).not.toBe(0)
+    expect(aabResult.stderr).toContain('base/lib/arm64-v8a/libaurora_tauri_lib.so')
+    expect(aabResult.stderr).toContain('base/lib/arm64-v8a/libsherpa-onnx-c-api.so')
+  })
+
   it('syncs canonical native plugin before every Android Tauri build script', () => {
     const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
     const directAndroidBuildScripts = Object.entries(packageJson.scripts)
@@ -430,7 +503,9 @@ if (argv[0] === 'build:frontend:android-client') {
       ['android:build:thin:apk', 'pnpm android:build:client:apk'],
       ['android:build:thin:aab', 'pnpm android:build:client:aab'],
     ])
-    expect(readFileSync(buildClient, 'utf8')).toContain("run('pnpm', ['android:sync-native-plugin'])")
+    expect(readFileSync(buildClient, 'utf8')).toContain(
+      "run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)",
+    )
     const syncSource = readFileSync(syncNativePlugin, 'utf8')
     expect(syncSource).toContain("resolve('src-tauri/icons/android')")
     expect(syncSource).toContain("resolve('src-tauri/android/aurora-native-plugin/src/main/res')")
@@ -495,6 +570,8 @@ if (argv[0] === 'build:frontend:android-client') {
 
   it('syncs init-time Android projects before Tauri writes mobile Gradle plugin files', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-init-sync-'))
+    const arm64NativeLibDir = join(root, 'native-source', 'arm64-v8a')
+    const x86_64NativeLibDir = join(root, 'native-source', 'x86_64')
     const manifestPath = join(root, 'app', 'src', 'main', 'AndroidManifest.xml')
     const mainActivityPath = join(
       root,
@@ -508,6 +585,8 @@ if (argv[0] === 'build:frontend:android-client') {
       'MainActivity.kt',
     )
     const reportPath = join(root, 'android-preflight.json')
+    writeNativeSpeechRuntime(arm64NativeLibDir)
+    writeNativeSpeechRuntime(x86_64NativeLibDir)
     mkdirSync(dirname(manifestPath), { recursive: true })
     mkdirSync(dirname(mainActivityPath), { recursive: true })
     writeFileSync(
@@ -545,6 +624,9 @@ if (argv[0] === 'build:frontend:android-client') {
       env: {
         ...process.env,
         AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64,x86_64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
       },
     })
 
@@ -552,6 +634,19 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(syncResult.stdout).toContain(
       'Verified Android barcode scanner uses Aurora’s cancellation-safe vendored source',
     )
+    expect(syncResult.stdout).toContain(
+      'Staged Android native speech runtime libraries for arm64-v8a, x86_64',
+    )
+    for (const [abi, sourceDir] of [
+      ['arm64-v8a', arm64NativeLibDir],
+      ['x86_64', x86_64NativeLibDir],
+    ]) {
+      for (const library of requiredNativeSpeechLibraries.slice(1)) {
+        expect(
+          readFileSync(join(root, 'app', 'src', 'main', 'jniLibs', abi, library), 'utf8'),
+        ).toBe(readFileSync(join(sourceDir, library), 'utf8'))
+      }
+    }
     expect(readFileSync(manifestPath, 'utf8')).toMatch(
       /<activity\b(?=[^>]*android:name="\.MainActivity")(?=[^>]*android:windowSoftInputMode="adjustResize")[^>]*>/,
     )
@@ -654,7 +749,10 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(buildSource).toContain("run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])")
     expect(buildSource).toContain("const target = readOption('--target')")
     expect(buildSource).toContain("target: target ?? 'universal'")
-    expect(buildSource).toContain("if (target) buildArgs.push('--target', target)")
+    expect(buildSource).toContain("const defaultAndroidTargets = ['aarch64', 'x86_64']")
+    expect(buildSource).toContain("buildArgs.push('--target', ...targets)")
+    expect(buildSource).toContain('AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR')
+    expect(buildSource).toContain('AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR')
     expect(packageJson.scripts['android:verify:client:apk']).toContain('assert-android-client-artifact-clean.mjs --kind apk')
     expect(packageJson.scripts['android:verify:thin:apk']).toBe('pnpm android:verify:client:apk')
     expect(packageJson.scripts['android:verify:client:aab']).toContain('assert-android-client-artifact-clean.mjs --kind aab')

@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_PATH = ROOT / "docs/security/mesh-security-surface-inventory.json"
 SCHEMA_PATH = ROOT / "docs/security/mesh-security-surface-inventory.schema.json"
 
-EXPECTED_METHOD_COUNT = 97
+EXPECTED_METHOD_COUNT = 100
 EXPECTED_PERMISSIONLESS_METHOD_COUNT = 0
 EXPECTED_MESH_PUBLISHER_COUNT = 0
 EXPECTED_PERMISSIONLESS_TOPICS: set[str] = set()
@@ -34,7 +34,7 @@ EXPECTED_METHOD_COUNTS_BY_MODULE = {
     "Orchestrator": 13,
     "Scheduler": 6,
     "STTCoordinator": 5,
-    "TTS": 19,
+    "TTS": 22,
     "Tooling": 39,
     "Transcription": 2,
     "WakeWord": 2,

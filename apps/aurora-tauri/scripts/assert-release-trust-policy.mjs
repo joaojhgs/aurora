@@ -393,7 +393,7 @@ function validateDependencyInventory() {
   let raw = ''
   let report = null
   let fileStat = null
-  let dispositionEvidence = { allowed: 0, blocked: 0 }
+  let dispositionEvidence = { allowed: 0, reviewRequired: 0, blocked: 0 }
 
   try {
     fileStat = lstatSync(paths.dependencyInventoryReport)
@@ -422,6 +422,7 @@ function validateDependencyInventory() {
 
   const inventory = Array.isArray(report?.inventory) ? report.inventory : []
   const reportBlockers = Array.isArray(report?.blockers) ? report.blockers : []
+  const reportReviewFindings = Array.isArray(report?.reviewFindings) ? report.reviewFindings : []
   const reportInputs = Array.isArray(report?.inputs) ? report.inputs : []
   const reportTools = Array.isArray(report?.tools) ? report.tools : []
   const requiredEcosystems = ['cargo', 'npm', 'phase4-native-voice', 'python']
@@ -453,6 +454,13 @@ function validateDependencyInventory() {
     if (report.secretsRedacted !== true) {
       failures.push('Release dependency inventory must confirm redacted output.')
     }
+    if (!Array.isArray(report.reviewFindings) || reportReviewFindings.some((item) =>
+      !item ||
+      typeof item.id !== 'string' ||
+      typeof item.detail !== 'string' ||
+      item.severity !== 'review-required')) {
+      failures.push('Release dependency inventory review findings must be a bounded structured array.')
+    }
     if (inventory.length === 0) {
       failures.push('Release dependency inventory must contain at least one entry.')
     }
@@ -478,7 +486,7 @@ function validateDependencyInventory() {
       typeof item.version !== 'string' ||
       typeof item.sourceRef !== 'string' ||
       !/^(?:sha256:[a-f0-9]{64}|sha512:[a-f0-9]{128})$/u.test(String(item.hash)) ||
-      !['allowed', 'blocked'].includes(item.disposition) ||
+      !['allowed', 'review-required', 'blocked'].includes(item.disposition) ||
       typeof item.license?.id !== 'string' ||
       item.license.id.length === 0 ||
       item.license.id.length > 256 ||
@@ -491,6 +499,7 @@ function validateDependencyInventory() {
     const expectedDispositions = countInventoryValues(inventory, 'disposition')
     dispositionEvidence = {
       allowed: expectedDispositions.allowed ?? 0,
+      reviewRequired: expectedDispositions['review-required'] ?? 0,
       blocked: expectedDispositions.blocked ?? 0,
     }
     if (report.summary?.totalEntries !== inventory.length ||
@@ -500,6 +509,12 @@ function validateDependencyInventory() {
     }
     if (!exactKeySet(Object.keys(expectedEcosystems), requiredEcosystems)) {
       failures.push('Release dependency inventory must cover npm, Python, Cargo, and Phase 4 native voice artifacts.')
+    }
+    if (inventory.some((item) => ['UNKNOWN', 'UNREVIEWED'].includes(item.license?.id) && item.disposition !== 'review-required')) {
+      failures.push('Unknown or unreviewed licenses must remain explicitly marked review-required.')
+    }
+    if (inventory.some((item) => item.disposition === 'review-required') && reportReviewFindings.length === 0) {
+      failures.push('Review-required inventory entries must have structured review findings.')
     }
     const serializedInventory = JSON.stringify(report)
     if (/(?:ghp_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xoxb-[A-Za-z0-9-]{20,}|AKIA[A-Z0-9]{16})/u.test(serializedInventory) ||
@@ -513,9 +528,9 @@ function validateDependencyInventory() {
       failures.push('Release dependency inventory status and releaseBlocked fields must be consistent.')
     }
     if (claimsPassed && (reportBlockers.length > 0 ||
-      inventory.some((item) => item.disposition !== 'allowed' || ['UNKNOWN', 'UNREVIEWED'].includes(item.license?.id)) ||
+      inventory.some((item) => item.disposition === 'blocked') ||
       reportTools.some((item) => item.available !== true))) {
-      failures.push('A passing release dependency inventory must have no blockers, unresolved licenses, unavailable tools, or blocked entries.')
+      failures.push('A passing release dependency inventory must have no blockers, unavailable tools, or blocked integrity/source entries.')
     }
     if (claimsBlocked && reportBlockers.length === 0) {
       failures.push('A blocked release dependency inventory must explain at least one blocker.')
@@ -529,7 +544,7 @@ function validateDependencyInventory() {
     status: passed ? 'passed' : 'blocked',
     releaseBlocking: true,
     detail: passed
-      ? 'Static dependency and license inventory is complete and contains only allowed dispositions.'
+      ? 'Static dependency integrity and source inventory is complete; later license review remains explicit without claiming approval.'
       : failures.length > 0
         ? `${failures.join(' ')}${reportBlockers.length > 0
           ? ` Inventory also reports ${reportBlockers.length} release-blocking issue(s).`

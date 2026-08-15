@@ -81,27 +81,27 @@ macOS run, and physical-device direct/STUN/TURN evidence remains separate.
 
 The STUN lane uses the same local coturn server in STUN mode and applies harness-only ICE policies that suppress outbound `typ host` candidates in both the browser and Python signaling SDP/trickle path. The Python filter is a default-off `RTCClient` injection seam; production behavior is unchanged. This prevents same-host shortcut nomination from satisfying the STUN proof while preserving truthful `RTCPeerConnection.getStats()` evidence. Peer-reflexive (`prflx`) is reported as `prflx`, not normalized to `srflx`; a `prflx` selected pair passes STUN only when candidate stats also prove a configured STUN server gathered a true `srflx` candidate. Firefox requires the locally published non-loopback coturn address and omits the candidate URL from stats, so its scanner proof additionally requires exactly one configured STUN server; a reported URL mismatch or multiple ambiguous configured servers still fails.
 
-## Current report locations
+## Generated report locations
 
-| Lane | Report | Current status | ICE proof |
+| Lane | Ignored local report | Required gate | ICE proof |
 | --- | --- | --- | --- |
-| Chromium direct | `reports/webrtc-interop/direct/report.json` | Passed | Current selected category is `host`, with a selected host/host pair and no gathered STUN or relay evidence |
-| Chromium STUN/reflexive | `reports/webrtc-interop/stun/report.json` | Passed | Current selected category is `srflx`, with a configured-STUN URL match from `getStats()` |
-| TURN relay | `reports/webrtc-interop/turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
-| Firefox direct | `reports/webrtc-interop/firefox-direct/report.json` | Passed | `selectedCandidatePair.category=host` |
-| Firefox STUN/reflexive | `reports/webrtc-interop/firefox-stun/report.json` | Passed | Selected raw `prflx` plus a gathered `srflx`; one configured STUN server makes the source unambiguous when Firefox omits the candidate URL |
-| Firefox TURN relay | `reports/webrtc-interop/firefox-turn/report.json` | Passed | `selectedCandidatePair.category=relay` under relay-only policy |
-| WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Passed | Current selected category is `host`, with a selected host/host pair and no gathered STUN or relay evidence |
-| WebKit STUN/reflexive | `reports/webrtc-interop/webkit-stun/report.json` | Passed | Current selected category is `srflx`, with configured-STUN URL-match evidence from `getStats()` |
-| WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Passed | `selectedCandidatePair.category=relay` |
+| Chromium direct | `reports/webrtc-interop/direct/report.json` | Required in CI | Selected `host` pair with no gathered STUN or relay evidence |
+| Chromium STUN/reflexive | `reports/webrtc-interop/stun/report.json` | Required in CI | Selected `srflx` pair with a configured-STUN URL match from `getStats()` |
+| TURN relay | `reports/webrtc-interop/turn/report.json` | Required in CI | `selectedCandidatePair.category=relay` |
+| Firefox direct | `reports/webrtc-interop/firefox-direct/report.json` | Required in CI | `selectedCandidatePair.category=host` |
+| Firefox STUN/reflexive | `reports/webrtc-interop/firefox-stun/report.json` | Required in CI | Selected raw `prflx` plus a gathered `srflx`; one configured STUN server makes the source unambiguous when Firefox omits the candidate URL |
+| Firefox TURN relay | `reports/webrtc-interop/firefox-turn/report.json` | Required in CI | `selectedCandidatePair.category=relay` under relay-only policy |
+| WebKit direct | `reports/webrtc-interop/webkit-direct/report.json` | Required in CI | Selected `host` pair with no gathered STUN or relay evidence |
+| WebKit STUN/reflexive | `reports/webrtc-interop/webkit-stun/report.json` | Required in CI | Selected `srflx` pair with configured-STUN URL-match evidence from `getStats()` |
+| WebKit TURN relay | `reports/webrtc-interop/webkit-turn/report.json` | Required in CI | `selectedCandidatePair.category=relay` |
 | Android System WebView TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-webview/report.json` | Fresh passing CI evidence pending | The existing Android API 35 job owns the packaged WebView ↔ Python peer test and requires a selected relay pair |
 | Android Chrome TURN relay | `apps/aurora-tauri/reports/webrtc-interop/android-mobile-browser/report.json` | Pending first CI run | The same API 35 job launches the standalone mobile browser without CDP and requires a selected relay pair plus the complete shared interop assertion set |
 | iOS MobileSafari simulator direct | `apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/report.json` | Pending first CI run | The existing macOS iOS job launches MobileSafari without CDP/Web Inspector and requires a direct selected pair plus the complete shared external-Python interop assertion set |
 | iOS packaged Tauri WKWebView simulator direct | `apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/report.json` | Pending first CI run | The same macOS job builds, scans, installs, and launches a dedicated Python-free Tauri WKWebView app and requires the same direct selected pair, pairing/RPC/reconnect/revocation, HTTP-disabled, and redaction evidence |
 
-The current checked reports prove direct, configured-STUN, and forced-TURN
-lanes in Chromium, Firefox, and Playwright WebKit. On another host, the default
-developer matrix preserves an explicit optional-engine skip; CI sets
+These commands write ignored local reports; CI-uploaded artifacts from the
+latest required workflow are the fresh evidence. The default developer matrix
+preserves an explicit optional-engine skip; CI sets
 `WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS=1`, so an unavailable required engine or
 lane fails rather than counting as compatibility proof.
 

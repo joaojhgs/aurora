@@ -19,6 +19,11 @@ const mobileMeshCapabilityPath = join(
   'aurora-mobile-mesh.json',
 )
 const expectedCapabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
+const expectedAndroidAbis = ['arm64-v8a', 'x86_64']
+const requiredNativeSpeechLibraries = [
+  'libonnxruntime.so',
+  'libsherpa-onnx-c-api.so',
+]
 
 const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? 'apk'
@@ -56,7 +61,9 @@ const forbiddenPathPatterns = [
   /site-packages/i,
   /__pycache__/i,
   /(^|[/\\])main\.py$/i,
-  /(^|[/\\])uv(\.exe)?$/i
+  /(^|[/\\])uv(\.exe)?$/i,
+  /(^|[/\\])(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens|voices?|models?|packs?)([/\\]|$).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i,
+  /(^|[/\\]).*(kws|vad|stt|tts|speech|voice|pockettts|sherpa|whisper|tokenizer|tokens).*\.(onnx|ort|bin|data|gguf|ggml|tflite|safetensors|pt|pth|ckpt|npy|npz|ark|wav|flac|opus)$/i
 ]
 
 const forbiddenTextPatterns = [
@@ -256,6 +263,37 @@ function checkArtifact() {
   }
   if (kind === 'aab' && !entries.some((entry) => entry === 'base/manifest/AndroidManifest.xml')) {
     failures.push('AAB archive is missing base/manifest/AndroidManifest.xml')
+  }
+  checkNativeSpeechRuntime(entries)
+}
+
+function checkNativeSpeechRuntime(entries) {
+  const prefix = kind === 'apk' ? 'lib' : 'base/lib'
+  const auroraLibraryPattern = new RegExp(`^${prefix}/([^/]+)/libaurora_tauri_lib\\.so$`)
+  const packagedAbis = [...new Set(entries
+    .map((entry) => entry.match(auroraLibraryPattern)?.[1])
+    .filter(Boolean))]
+    .sort()
+  const requiredAbis = kind === 'aab' ? expectedAndroidAbis : packagedAbis
+  const missing = []
+
+  if (packagedAbis.length === 0) {
+    missing.push(`${prefix}/<abi>/libaurora_tauri_lib.so`)
+  }
+  for (const abi of requiredAbis) {
+    for (const library of ['libaurora_tauri_lib.so', ...requiredNativeSpeechLibraries]) {
+      const entry = `${prefix}/${abi}/${library}`
+      if (!entries.includes(entry)) missing.push(entry)
+    }
+  }
+  for (const entry of missing) {
+    failures.push(`${kind.toUpperCase()} archive is missing required native speech library ${entry}`)
+  }
+  proof.nativeSpeechRuntime = {
+    packagedAbis,
+    requiredAbis,
+    requiredLibraries: requiredNativeSpeechLibraries,
+    missing,
   }
 }
 

@@ -15,7 +15,7 @@ import {
   type AuroraVoiceWorkerRequestOptions,
   type AuroraVoiceWorkerResponse
 } from '../src/index.js'
-import { capturedAudio, RecordingVoiceWorkerHost } from '../src/test-doubles/worker-host.js'
+import { capturedAudio, RecordingVoiceWorkerHost, synthesizedAudio } from '../src/test-doubles/worker-host.js'
 
 describe('AuroraVoiceWebRuntime', () => {
   it('starts foreground-only sessions with unavailable capabilities until promoted by the host', async () => {
@@ -39,6 +39,94 @@ describe('AuroraVoiceWebRuntime', () => {
 
     await expect(runtime.stop()).resolves.toMatchObject({ sampleRateHz: 16_000, channels: 1, sampleCount: 0 })
     await runtime.completeTurn()
+  })
+
+  it('synthesizes bounded local TTS only after the worker advertises TTS capability', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'init') {
+        return {
+          type: 'ready',
+          protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+          capabilities: { vad: false, kws: false, stt: false, tts: true },
+          maxFrameSamples: command.maxFrameSamples,
+          maxQueuedBytes: command.maxQueuedBytes
+        }
+      }
+      if (command.type === 'synthesize_tts') return { type: 'tts_result', generation: command.generation, audio: synthesizedAudio(command.generation, [0, 1024, -1024]) }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-tts', worker })
+
+    await expect(runtime.synthesizeSpeech({ text: ' Hello Aurora ', voiceId: 'voice.en', speakerId: 1, speed: 1.2 }))
+      .resolves.toMatchObject({ generation: 1, sampleRateHz: 16_000, channels: 1, sampleCount: 3, redacted: true })
+
+    expect(worker.commandsOf('synthesize_tts')).toEqual([{
+      type: 'synthesize_tts',
+      generation: 1,
+      text: 'Hello Aurora',
+      voiceId: 'voice.en',
+      speakerId: 1,
+      speed: 1.2
+    }])
+    expect(runtime.snapshot().capabilities.tts).toBe(true)
+  })
+
+  it('uses a separate bounded TTS timeout without changing capture command timeouts', async () => {
+    const worker = new TimeoutRecordingWorkerHost()
+    worker.responseOverride = (command) => {
+      if (command.type === 'init') {
+        return {
+          type: 'ready',
+          protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+          capabilities: { vad: false, kws: false, stt: false, tts: true },
+          maxFrameSamples: command.maxFrameSamples,
+          maxQueuedBytes: command.maxQueuedBytes
+        }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({
+      ownerId: 'owner-tts-timeout',
+      worker,
+      workerTimeoutMs: 5_000,
+      ttsTimeoutMs: 120_000
+    })
+
+    await runtime.synthesizeSpeech({ text: 'hello' })
+
+    expect(worker.timeoutByType('init')).toEqual([120_000])
+    expect(worker.timeoutByType('synthesize_tts')).toEqual([120_000])
+
+    await runtime.start()
+    expect(worker.timeoutByType('start')).toEqual([5_000])
+    await runtime.cancel()
+
+    const captureWorker = new TimeoutRecordingWorkerHost()
+    const captureRuntime = new AuroraVoiceWebRuntime({ ownerId: 'owner-capture-timeout', worker: captureWorker, workerTimeoutMs: 5_000 })
+    await captureRuntime.start()
+    expect(captureWorker.timeoutByType('init')).toEqual([5_000])
+    expect(captureWorker.timeoutByType('start')).toEqual([5_000])
+    await captureRuntime.cancel()
+  })
+
+  it('keeps TTS unavailable when selected bindings do not initialize a TTS engine', async () => {
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-no-tts', worker: new RecordingVoiceWorkerHost() })
+
+    await expect(runtime.synthesizeSpeech({ text: 'hello' })).rejects.toMatchObject({ code: 'tts_unavailable' })
+  })
+
+  it('discards stale TTS audio after cancellation', async () => {
+    const worker = new DeferredTtsWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-stale-tts', worker })
+
+    const synthesis = runtime.synthesizeSpeech({ text: 'hello' })
+    await worker.waitForTtsPost()
+    await runtime.cancel('user_cancelled')
+    worker.releaseTts()
+
+    await expect(synthesis).rejects.toMatchObject({ code: 'stale_generation' })
+    expect(worker.commandsOf('cancel')).toEqual([{ type: 'cancel', sessionId: null, generation: 1, reason: 'cancelled' }])
   })
 
   it('enforces one active owner', async () => {
@@ -480,6 +568,46 @@ describe('AuroraVoiceWebRuntime', () => {
     expect(serializedEvents).not.toMatch(/42|secret|transcript|pcm|path|credential|pointer|native/i)
     expect(worker.serializedCommands()).not.toMatch(/secret|transcript|path|credential|pointer|native/i)
   })
+
+  it('delivers typed VAD KWS and STT outputs from frame acknowledgements to runtime callers', async () => {
+    const worker = new RecordingVoiceWorkerHost()
+    const events: AuroraVoiceWebEvent[] = []
+    worker.responseOverride = (command) => {
+      if (command.type === 'audio_frame') {
+        return {
+          type: 'ack',
+          sessionId: command.frame.sessionId,
+          generation: command.frame.generation,
+          sequence: command.frame.sequence,
+          inference: {
+            vad: { active: true, speechDetected: true, sequence: command.frame.sequence, redacted: true },
+            kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: command.frame.sequence, redacted: true }],
+            stt: [{ text: 'hello', final: false, sequence: command.frame.sequence, redacted: true }],
+            redacted: true
+          }
+        }
+      }
+      return defaultResponseFor(command)
+    }
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-a', worker, nowMs: () => 10 })
+    runtime.onEvent((event) => events.push(event))
+    const session = await runtime.start()
+
+    await expect(runtime.pushFrame(frame(session.sessionId, session.generation, 0, [1, 2]))).resolves.toBe(true)
+
+    expect(events).toContainEqual(expect.objectContaining({
+      kind: 'voice_inference',
+      sequence: 0,
+      inference: {
+        vad: { active: true, speechDetected: true, sequence: 0, redacted: true },
+        kwsHits: [{ keyword: 'aurora', score: 0.5, sequence: 0, redacted: true }],
+        stt: [{ text: 'hello', final: false, sequence: 0, redacted: true }],
+        redacted: true
+      },
+      redacted: true
+    }))
+    await runtime.cancel()
+  })
 })
 
 class FailingWorkerHost extends RecordingVoiceWorkerHost {
@@ -534,6 +662,63 @@ class DeferredAudioWorkerHost extends RecordingVoiceWorkerHost {
   }
 }
 
+class DeferredTtsWorkerHost extends RecordingVoiceWorkerHost {
+  private ttsSeen: (() => void) | null = null
+  private release: (() => void) | null = null
+  private readonly ttsSeenPromise = new Promise<void>((resolve) => {
+    this.ttsSeen = resolve
+  })
+  private readonly releasePromise = new Promise<void>((resolve) => {
+    this.release = resolve
+  })
+
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
+    if (command.type === 'init') {
+      this.transfers.push([...(options?.transfer ?? [])])
+      this.commands.push(command)
+      return {
+        type: 'ready',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        capabilities: { vad: false, kws: false, stt: false, tts: true },
+        maxFrameSamples: command.maxFrameSamples,
+        maxQueuedBytes: command.maxQueuedBytes
+      }
+    }
+    if (command.type === 'synthesize_tts') {
+      this.transfers.push([...(options?.transfer ?? [])])
+      this.commands.push(command)
+      this.ttsSeen?.()
+      await this.releasePromise
+      return { type: 'tts_result', generation: command.generation, audio: synthesizedAudio(command.generation, [0, 1, -1]) }
+    }
+    return super.request(command, options)
+  }
+
+  waitForTtsPost(): Promise<void> {
+    return this.ttsSeenPromise
+  }
+
+  releaseTts(): void {
+    this.release?.()
+  }
+}
+
+class TimeoutRecordingWorkerHost extends RecordingVoiceWorkerHost {
+  readonly timeouts: { readonly type: AuroraVoiceWorkerCommand['type']; readonly timeoutMs?: number }[] = []
+
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
+    this.timeouts.push({
+      type: command.type,
+      ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {})
+    })
+    return super.request(command, options)
+  }
+
+  timeoutByType(type: AuroraVoiceWorkerCommand['type']): (number | undefined)[] {
+    return this.timeouts.filter((entry) => entry.type === type).map((entry) => entry.timeoutMs)
+  }
+}
+
 function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerResponse {
   switch (command.type) {
     case 'init':
@@ -552,6 +737,20 @@ function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorke
       return { type: 'stop_result', sessionId: command.sessionId, generation: command.generation, capturedAudio: capturedAudio(command.sessionId, command.generation, []) }
     case 'finish_turn':
       return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
+    case 'synthesize_tts':
+      return {
+        type: 'tts_result',
+        generation: command.generation,
+        audio: {
+          generation: command.generation,
+          sampleRateHz: 16_000,
+          channels: 1,
+          sampleCount: 3,
+          durationMs: 1,
+          pcm: new Int16Array([0, 1024, -1024]),
+          redacted: true
+        }
+      }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':
