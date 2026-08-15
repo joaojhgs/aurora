@@ -168,8 +168,13 @@ def _catalog_entry(asset: dict[str, Any], checksum: str) -> dict[str, Any]:
     name = archive["filename"]
     archive_root = archive["root"]
     language, voice_token, quality, precision = _parse_voice_name(name)
-    model_stem = archive_root.removeprefix("vits-piper-")
-    voice_slug = model_stem.lower()
+    archive_model_stem = archive_root.removeprefix("vits-piper-")
+    model_stem = (
+        archive_model_stem.removesuffix(f"-{precision}")
+        if precision is not None
+        else archive_model_stem
+    )
+    voice_slug = archive_model_stem.lower()
     if len(voice_slug) > 64 or not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", voice_slug):
         raise CatalogGenerationError(f"invalid Aurora voice id component for {name}")
     display_voice = " ".join(part for part in voice_token.replace("_", " ").split("-") if part)

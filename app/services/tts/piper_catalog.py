@@ -34,7 +34,7 @@ from app.shared.path_utils import resolve_path
 CATALOG_RESOURCE = "sherpa_onnx_tts_catalog.json"
 CATALOG_ID = "sherpa-onnx-tts-models-v1"
 CATALOG_REVISION = "github-release-130612623-30d65b392bba8dfb"
-ENTRIES_SHA256 = "ec1aec3887e058c23f4a18894b25ffe5aac4ba8bcb146a2e48eda7f8e4fa380e"
+ENTRIES_SHA256 = "64ed347bb69deb695ea50d363bdcad99779a2ffa0ecfea790af368056504e4fa"
 SOURCE_CHECKSUM_SHA256 = "30d65b392bba8dfbdbc3479928d3f80adff2c71d4f518ce893d572b8aff021ee"
 EXPECTED_ENTRY_COUNT = 537
 EXPECTED_LANGUAGE_COUNT = 50

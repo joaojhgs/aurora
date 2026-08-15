@@ -470,6 +470,32 @@ impl SpeechPackManager {
         Ok(installed)
     }
 
+    /// Return catalog pack ids recorded by completed installs without hashing
+    /// their model files. Callers may use this for non-authoritative UI status;
+    /// runtime creation must still resolve and verify the selected bindings.
+    pub fn recorded_pack_ids(&self) -> Result<Vec<String>, SpeechPackError> {
+        let voice_catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let model_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let state = read_state(&self.config.root)?;
+        let mut pack_ids = state
+            .installed
+            .keys()
+            .filter(|voice_id| voice_catalog.voice(voice_id).is_some())
+            .cloned()
+            .collect::<Vec<_>>();
+        pack_ids.extend(
+            state
+                .speech_models
+                .keys()
+                .filter(|model_id| model_catalog.model(model_id).is_some())
+                .cloned(),
+        );
+        pack_ids.sort();
+        pack_ids.dedup();
+        Ok(pack_ids)
+    }
+
     /// Resolve verified local bindings for an installed selected voice.
     pub fn resolve_voice_bindings(
         &self,
@@ -1733,10 +1759,12 @@ fn safe_archive_path(path: &Path) -> Result<PathBuf, SpeechPackError> {
                 if segment.is_empty()
                     || segment == "."
                     || segment == ".."
+                    || segment.starts_with(' ')
+                    || segment.ends_with(' ')
                     || segment.contains('\\')
                     || !segment
                         .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"._-! ".contains(&byte))
                 {
                     return Err(SpeechPackError::InvalidArchive);
                 }
@@ -2314,7 +2342,12 @@ mod tests {
     async fn installs_only_the_exact_selected_voice_and_resolves_bindings() {
         let directory = tempfile::tempdir().expect("tempdir");
         let root = "vits-piper-en_US-ljspeech-medium";
-        let archive = make_archive(root, "en_US-ljspeech-medium");
+        let espeak_voice = format!("{root}/espeak-ng-data/voices/!v/Mr serious");
+        let archive = make_archive_with(
+            root,
+            "en_US-ljspeech-medium",
+            &[(espeak_voice.as_str(), b"voice")],
+        );
         let server = OneShotServer::new(archive.clone());
         let entry = test_entry(server.url.to_string(), &archive);
         let manager = test_manager(directory.path(), archive.len() as u64 + 100);
@@ -2329,6 +2362,7 @@ mod tests {
 
         assert_eq!(bindings.voice_id, VOICE_ID);
         assert!(bindings.model.ends_with("en_US-ljspeech-medium.onnx"));
+        assert!(bindings.data_dir.join("voices/!v/Mr serious").is_file());
         assert_eq!(
             bindings.task_binding.task(),
             aurora_voice_engine::VoiceTask::TextToSpeech
@@ -2405,6 +2439,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn recorded_pack_ids_are_a_fast_non_authoritative_install_snapshot() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 1024);
+        write_embedded_disk_install(directory.path());
+
+        assert_eq!(
+            manager.recorded_pack_ids().expect("recorded ids"),
+            vec![VOICE_ID.to_owned()]
+        );
+
+        manager.remove_voice(VOICE_ID).expect("remove");
+        assert!(manager
+            .recorded_pack_ids()
+            .expect("recorded ids after remove")
+            .is_empty());
+    }
+
     #[tokio::test]
     async fn rejects_path_traversal_entries() {
         assert_eq!(
@@ -2414,6 +2466,18 @@ mod tests {
         assert_eq!(
             safe_archive_path(Path::new("/absolute")),
             Err(SpeechPackError::InvalidArchive)
+        );
+        assert_eq!(
+            safe_archive_path(Path::new("voice/ trailing ")),
+            Err(SpeechPackError::InvalidArchive)
+        );
+        assert_eq!(
+            safe_archive_path(Path::new("voice/line\nbreak")),
+            Err(SpeechPackError::InvalidArchive)
+        );
+        assert_eq!(
+            safe_archive_path(Path::new("espeak-ng-data/voices/!v/Mr serious")),
+            Ok(PathBuf::from("espeak-ng-data/voices/!v/Mr serious"))
         );
     }
 

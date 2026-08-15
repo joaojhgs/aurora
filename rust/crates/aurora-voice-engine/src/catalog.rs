@@ -18,7 +18,7 @@ const SOURCE_RELEASE_TAG: &str = "tts-models";
 const SOURCE_CHECKSUM_ASSET_ID: u64 = 424_712_825;
 const SOURCE_CHECKSUM_SHA256: &str =
     "30d65b392bba8dfbdbc3479928d3f80adff2c71d4f518ce893d572b8aff021ee";
-const ENTRIES_SHA256: &str = "ec1aec3887e058c23f4a18894b25ffe5aac4ba8bcb146a2e48eda7f8e4fa380e";
+const ENTRIES_SHA256: &str = "64ed347bb69deb695ea50d363bdcad99779a2ffa0ecfea790af368056504e4fa";
 const EXPECTED_ENTRY_COUNT: usize = 537;
 const EXPECTED_LANGUAGE_COUNT: usize = 50;
 const MAX_CATALOG_BYTES: usize = 1_500_000;
@@ -205,9 +205,25 @@ impl TtsCatalogEntry {
         {
             return Err(TtsCatalogError::Invalid);
         }
-        let model_stem = self
-            .archive
-            .validate(&self.model_family, voice_prefix, voice_slug)?;
+        let archive_model_stem =
+            self.archive
+                .validate(&self.model_family, voice_prefix, voice_slug)?;
+        let model_stem = match (self.model_family.as_str(), self.precision.as_deref()) {
+            ("vits_piper", Some("fp16")) => archive_model_stem.strip_suffix("-fp16"),
+            ("vits_piper", Some("fp32")) => archive_model_stem.strip_suffix("-fp32"),
+            ("vits_piper", Some("int8")) => archive_model_stem.strip_suffix("-int8"),
+            ("vits_piper", None)
+                if !["-fp16", "-fp32", "-int8"]
+                    .iter()
+                    .any(|suffix| archive_model_stem.ends_with(suffix)) =>
+            {
+                Some(archive_model_stem)
+            }
+            ("pockettts", _) => Some(archive_model_stem),
+            _ => None,
+        }
+        .filter(|stem| !stem.is_empty())
+        .ok_or(TtsCatalogError::Invalid)?;
         self.bindings
             .validate(&self.model_family, &self.archive.root, model_stem)?;
         validate_reference_samples(
@@ -526,6 +542,23 @@ mod tests {
             "3dfb4b759d8be032a4903a9538d128b0fda2a06ab1de6cbc2d93a97e2dd83dba"
         );
         assert!(catalog.voices_for_language("en-us").len() > 1);
+    }
+
+    #[test]
+    fn quantized_piper_archives_bind_the_unsuffixed_upstream_model_files() {
+        let catalog = TtsVoiceCatalog::embedded().expect("embedded catalog validates");
+        let voice = catalog
+            .voice("standard:piper:en_gb-cori-medium-int8")
+            .expect("known quantized voice exists");
+
+        assert_eq!(
+            voice.bindings.model,
+            "vits-piper-en_GB-cori-medium-int8/en_GB-cori-medium.onnx"
+        );
+        assert_eq!(
+            voice.bindings.config,
+            "vits-piper-en_GB-cori-medium-int8/en_GB-cori-medium.onnx.json"
+        );
     }
 
     #[test]
