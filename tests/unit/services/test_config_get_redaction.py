@@ -59,3 +59,13 @@ async def test_internal_config_get_preserves_service_credentials() -> None:
 
     assert response.config == raw
     service.config_manager.redact_external_config.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_config_get_propagates_manager_failures() -> None:
+    service = ConfigService()
+    service.config_manager = MagicMock()
+    service.config_manager.get.side_effect = RuntimeError("config read failed")
+
+    with pytest.raises(RuntimeError, match="config read failed"):
+        await service._handle_get_config(GetConfigQuery(section="system"))

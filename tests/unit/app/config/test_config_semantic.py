@@ -24,3 +24,13 @@ class TestConfigGetUnsetFallback:
     def test_missing_key_returns_default(self) -> None:
         cm = _minimal_manager_orchestrator_llm({})
         assert cm.get("services.orchestrator.llm.provider", default="x") == "x"
+
+    def test_section_env_fallback_replaces_null_intermediate_object(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cm = _minimal_manager_orchestrator_llm({"third_party": None})
+        cm._config["system"] = {"primary_language": "en"}
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+        assert cm.get("system") == {"primary_language": "en"}
+        assert cm._config["services"]["orchestrator"]["llm"]["third_party"] is None
