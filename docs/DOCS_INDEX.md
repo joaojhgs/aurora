@@ -80,10 +80,9 @@ This index separates current documentation from historical/provenance material. 
 
 ## Archive and provenance
 
-Historical plans, handoffs, task reports, and generated investigation artifacts live outside the current docs surface:
+Historical plans, handoffs, task reports, and generated investigation artifacts are not part of the working tree. Git history remains the provenance record.
 
-- [`docs/archive/`](archive/) stores human-readable provenance that is not current guidance.
-- [`.omx/plans/docs-plans/`](../.omx/plans/docs-plans/) stores moved plan documents from the former `docs/plans/` tree.
-- [`.omx/plans/dependency-analysis-archive/`](../.omx/plans/dependency-analysis-archive/) stores generated dependency-analysis artifacts and phase journals.
+- [`docs/archive/`](archive/) contains the limited human-readable history that is still useful to maintainers.
+- [`.omx/ROADMAP.md`](../.omx/ROADMAP.md), direct plan files under `.omx/plans/`, and task specifications under `.omx/specs/` retain current objectives without generated run output.
 
-Do not add new generated reports, one-off task checklists, or agent handoffs to `docs/`. See [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).
+Do not add generated reports, publishing receipts, one-off task checklists, or agent handoffs to `docs/` or tracked OMX directories. See [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).

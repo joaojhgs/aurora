@@ -19,7 +19,20 @@ def test_artifact_policy_allows_source_contracts_and_preserved_plans():
 
 def test_artifact_policy_rejects_reports_caches_packages_models_and_runtime_state():
     forbidden = {
+        ".omx/archive/old-goal/ledger.jsonl",
+        ".omx/multica/release-tasks/created-issues.json",
+        ".omx/multica/release-tasks/generate_and_push.py",
+        ".omx/multica/release-tasks/resume_push.py",
+        ".omx/multica/release-tasks/task-index.json",
+        ".omx/multica/release-tasks/update_multica_descriptions.py",
+        ".omx/plans/dependency-analysis-archive/dependency-tree.txt",
+        ".omx/plans/docs-plans/OLD_PLAN.md",
         ".omx/project-memory.json",
+        ".omx/research/team-lanes/feasibility.md",
+        ".omx/specs/release/ai-slop-cleanup-report.md",
+        ".omx/specs/release/created-issues.json",
+        ".omx/specs/release/full-coverage-review.md",
+        ".omx/specs/release/push_to_multica.py",
         ".omx/state/current-goal.md",
         "apps/aurora-web/.next.stalled-20260812/server/chunk.js",
         "apps/aurora-web/reports/playwright/run.json",

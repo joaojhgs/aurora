@@ -70,12 +70,26 @@ FORBIDDEN_FILE_SUFFIXES = (
 )
 
 FORBIDDEN_OMX_PREFIXES = (
+    ".omx/archive/",
     ".omx/cache/",
     ".omx/logs/",
+    ".omx/plans/dependency-analysis-archive/",
+    ".omx/plans/docs-plans/",
     ".omx/reports/",
+    ".omx/research/",
     ".omx/state/",
     ".omx/tmp/",
 )
+
+FORBIDDEN_OMX_GENERATED_NAMES = {
+    "created-issues.json",
+    "full-coverage-review.md",
+    "generate_and_push.py",
+    "push_to_multica.py",
+    "resume_push.py",
+    "task-index.json",
+    "update_multica_descriptions.py",
+}
 
 FORBIDDEN_EXACT_PATHS = {
     ".omx/notepad.md",
@@ -102,7 +116,12 @@ def artifact_reason(path: str) -> str | None:
     if normalized in FORBIDDEN_EXACT_PATHS:
         return "local runtime state"
     if any(normalized.startswith(prefix) for prefix in FORBIDDEN_OMX_PREFIXES):
-        return "local OMX runtime state"
+        return "generated, archived, or local OMX state"
+    if pure_path.parts[0] == ".omx":
+        if pure_path.name in FORBIDDEN_OMX_GENERATED_NAMES:
+            return "generated OMX receipt or publishing helper"
+        if "report" in pure_path.stem.lower():
+            return "generated OMX report"
     if pure_path.parts[0] == "docs" and "archive" not in pure_path.parts:
         stem = pure_path.stem.lower()
         if "report" in stem or "handoff" in stem:
