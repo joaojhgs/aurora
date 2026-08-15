@@ -1,23 +1,23 @@
 {
   "$schema": "aurora.native_voice_rac_matrix.v1",
-  "planSha256": "50181a35cd42e12a33f8b6b1b7131a875bcafcb5a9bcc63eac06c4370ef74ea6",
-  "replacementAttachmentSha256": "70b1b5ebb32c6df0e52c119b2bd73adad79c2611433bd33da7391d6e273fe196",
-  "freshSessionHandoffSha256": "018c2107f98a278fe5b7aeace8437a30981a79f25131d9a73c83242c5c38ce92",
+  "planSha256": "c1ba520fc5745f773d286f486f2f3890665ab2536d8039d1620c9638171f7eb7",
+  "replacementAttachmentSha256": "d07e57fa82aa2c48c12f136739e3b419b26e7cdfd4c864e2f395e0b10f724073",
+  "freshSessionHandoffSha256": "1aa437c5489bc620f8f0f2549a2ff73647eeccbe81ba4de5c17fb6414500f872",
   "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
-  "currentEvidenceHead": "280320191ae7efaf85f0a12d2e2c92ba452cd086",
+  "currentEvidenceHead": "6c88fea6bdf850acc6dd908fa052f903894b7443",
   "reportCommit": "resolve-with-git-log-for-this-file",
   "audit": {
-    "auditedAtUtc": "2026-08-12T04:00:53Z",
+    "auditedAtUtc": "2026-08-15T00:17:49Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
     "supersededGoalThreadId": "019fd073-38a1-7801-8d62-31ae70d46580",
-    "normalGoalAction": "complete_after_state_sync",
-    "verdict": "repo_local_plan_complete_release_blocked",
-    "resumeGate": "The requested feasible repo-local implementation and bounded verification through Phases 4-13 is complete on feat/ui-multi-platform-integration. Do not use or revive OMX Ultragoal. Continue only in a materially new release-qualification Goal when clean dependency inputs, resolved license dispositions, exact mobile artifacts, macOS/Xcode, eligible Android/iOS devices, updater/signing/store authority, legal/security evidence, runtime rollback, staged rollout, or an approved interoperable speech pack are available. Keep production VAD/KWS/STT/TTS false until their explicit gates pass. Phases 6-13 remain partial, withheld, or blocked where the named external evidence is absent. Tooling.ExecuteTool is only a shared DataChannel regression canary, never voice behavior. Runtime roles remain persisted dynamic profile state and must never derive from environment, APK/build flavor, platform, transport, sidecar, or runtime tier.",
+    "normalGoalAction": "repo_local_complete_continue_external_qualification",
+    "verdict": "repo_local_release_implementation_complete_external_qualification_pending",
+    "resumeGate": "The complete Phase 0-13 objective remains in scope on codex/full-voice-release. Repo-local production capability implementation and every unsigned package buildable on this Linux host are complete. VAD, KWS, STT, and TTS are production capabilities after the exact user-selected metadata-described assets are downloaded, verified, and cached; no weights are embedded. Continue only the qualification requiring physical Android hardware, macOS/Xcode and Apple devices, Windows/macOS desktop hosts, real acoustic/performance environments, or later signing/updater/store credentials and rollout infrastructure. Do not reopen pack approval, language allowlists, redistribution, legal review, or keep-speech-disabled policy as unsigned-package blockers. Tooling.ExecuteTool remains only a shared DataChannel regression canary. Runtime roles remain persisted dynamic profile state and never derive from environment, build flavor, platform, transport, sidecar, or runtime tier.",
     "statusCounts": {
-      "pass": 22,
-      "partial": 25,
-      "withheld": 5,
-      "blocked": 4
+      "pass": 24,
+      "partial": 30,
+      "withheld": 0,
+      "blocked": 2
     },
     "phaseInventory": {
       "0": {"implementation": "complete_preserved", "verification": "partial_fresh"},
@@ -26,38 +26,27 @@
       "3": {"implementation": "complete_preserved", "verification": "strong_partial_fresh"},
       "4": {"implementation": "complete_architecture_freeze", "verification": "pass_fresh_local_with_external_exclusions"},
       "5": {"implementation": "complete_foundation", "verification": "pass_fresh_local_with_later_phase_exclusions"},
-      "6": {"implementation": "partial_withheld", "verification": "pass_disposition_only_exit_gate_partial"},
-      "7": {"implementation": "partial", "verification": "pass_current_head_bounded_reverification_exit_gate_partial"},
-      "8": {"implementation": "partial", "verification": "pass_current_source_bounded_reverification_exit_gate_partial"},
-      "9": {"implementation": "partial", "verification": "pass_linux_source_policy_exit_gate_partial"},
-      "10": {"implementation": "partial_withheld", "verification": "pass_linux_source_policy_exit_gate_partial_withheld"},
-      "11": {"implementation": "partial", "verification": "pass_linux_source_policy_runtime_blocked"},
-      "12": {"implementation": "partial", "verification": "pass_bounded_product_surface_exit_gate_partial"},
-      "13": {"implementation": "partial", "verification": "pass_static_release_gates_fail_closed_exit_gate_partial_blocked"}
+      "6": {"implementation": "complete_on_demand_metadata_catalog", "verification": "pass_repo_local_external_quality_partial"},
+      "7": {"implementation": "complete_foreground_web", "verification": "pass_repo_local_external_acoustic_partial"},
+      "8": {"implementation": "complete_desktop_linux_packages", "verification": "pass_linux_windows_macos_external_partial"},
+      "9": {"implementation": "complete_android_focused_and_packages", "verification": "pass_source_and_artifacts_device_partial"},
+      "10": {"implementation": "complete_android_background_and_assistant", "verification": "pass_source_device_oem_partial"},
+      "11": {"implementation": "complete_ios_native_and_lifecycle_boundary", "verification": "pass_source_macos_xcode_device_partial"},
+      "12": {"implementation": "complete_cross_surface_product_lifecycle", "verification": "pass_repo_local_live_device_partial"},
+      "13": {"implementation": "complete_unsigned_linux_web_android_ios_preparation", "verification": "pass_unsigned_official_release_external_partial"}
     },
     "cleanRoomVerification": [
-      {"scope": "preserved Python speech/config/provider/contracts", "result": "147 passed, 28 skipped"},
-      {"scope": "generated SDK contract/conformance", "result": "46 passed"},
-      {"scope": "Phase 4 manifest and source identity", "result": "valid against complete root; 24 artifacts; 3 explicit denials; verified_local true; no errors; 5,424-entry pinned sherpa tree verified"},
-      {"scope": "Phase 4 native and cross-target builds", "result": "Linux C/Rust STT/VAD/KWS and evidence-only TTS cancellation passed; Android arm64-v8a/x86_64 source builds passed with all inspected LOAD segments 0x4000 aligned; iOS device/simulator slices present"},
-      {"scope": "Phase 4 WASM/browser/parity", "result": "split VAD+ASR and KWS modules built; Chromium, Firefox, and WebKit Worker VAD/ASR/KWS passed; native plus all three browsers passed six-case VAD parity under 32 ms p95; durable summary SHA-256 05ef2a8e94711a9014ef3d3f7814045a989c3cf7d8ae51ce5e38b7ce225fc393"},
-      {"scope": "Phase 5 Rust and wasm32 foundation", "result": "Rust 1.88 fmt/clippy passed; 313 locked all-target workspace tests passed with one opt-in live CPAL test ignored; 31 wasm32 core tests passed"},
-      {"scope": "Phase 5 generation and focused behavior", "result": "make check-sdk-backend-contracts passed; a second run left 73 scoped files hash-identical; eight ownership, model-store, and detached-turn tests passed"},
-      {"scope": "Phase 5 production Worker/WASM", "result": "35 Playwright cases passed across Chromium, Firefox, WebKit, Android Chrome emulation, and Mobile Safari emulation; two real-browser-API and 83 focused web cases passed; durable summary SHA-256 1b86ab1538f0bd25e72f66d2b3182d797f3b0a4caf816aa12988e3bafb459726"},
-      {"scope": "Phase 6 candidate disposition", "result": "independent verdict PARTIAL; signatures, immutable inventories, bounded parity/cancellation, and fail-closed release policy pass; no release-eligible interoperable pack; TTS unavailable; production VAD/KWS/STT/TTS false; durable summary SHA-256 bd71dfd00089947ed8fa4ed6fa2d63bfeeb1583dc6819e777abec9b4e357066a"},
-      {"scope": "Phase 6 native Linux resources", "result": "corrected harness builds outside the timed interval; three repetitions each passed: VAD max RSS 40902656 and RTF 12.056, KWS 57057280 and 200.702, STT 149811200 and 114.432; raw report SHA-256 f9a8222e898a40e930107656d858392a10baf16952f2d3de02beef2214e4d3f2; physical-device claim false"},
-      {"scope": "Phase 7 bounded browser disposition", "result": "independent verdict PARTIAL; 151 voice-web unit tests, 35 five-profile Worker/WASM cases, 25 browser-store cases with two expected skips, two browser-API fake-media cases, 77 clean hosted-web tests, two hosted Chromium fake-media cases, 129 focused UI route/lifecycle cases, 734 full UI cases, UI/web typechecks, bundle ceilings, and broad production-copy scan passed; durable summary SHA-256 d3ac6e787c62f65665e64b775b5b54d4fa8e2c76d5ed56b5592ab696be40e16a"},
-      {"scope": "Phase 7 external environment", "result": "Waydroid unreachable with no ADB device or host audio input; real microphone/acoustic, physical/actual-mobile, real hosted Firefox/Safari microphone, approved-pack, and release claims remain open; production VAD/KWS/STT/TTS false"},
-      {"scope": "Phase 8 bounded Linux desktop disposition", "result": "independent verdict PARTIAL with zero review findings; Rust desktop capture 24/24, Tauri native voice 22/22, desktop E2E UI 8/8, typecheck, frontend production build, harness self-test/check-only, and Tauri release-profile check passed; a current-source Tauri binary used the real CPAL path with paced virtual ALSA PCM and a fake loopback Gateway to pass completed, hidden-window tray, and cancelled turns, exact required route counts, monotonic redacted status, persisted-role sidecar independence, and zero WebView microphone/model/Worker use; durable summary is reports/native-voice/phase8-reverify-20260812/summary.json"},
-      {"scope": "Phase 8 claim boundary", "result": "virtual PCM is not physical microphone/acoustic evidence; fake Gateway is not a real Python sidecar or remote peer; hidden window is not fully closed-UI residency; cross-OS signed builds, operating-system lifecycle matrix, approved packs, installer, dependency-license, rollback, security, and rollout gates remain open; production VAD/KWS/STT/TTS false"},
-      {"scope": "final Python and generated-contract verification", "result": "285 focused tests passed; make check-sdk-backend-contracts passed with 268 backend methods, zero fatal issues, zero generated-artifact issues, zero SDK type issues, and nonfatal budget 242/260"},
-      {"scope": "final Rust 1.88 locked workspace", "result": "314 passed, zero failed, one opt-in live CPAL test ignored because an eligible device/environment was absent"},
-      {"scope": "Phases 9-10 Android source-policy disposition", "result": "five files and 40 tests passed; no ADB device was attached; no QEMU run or physical-device claim; persisted runtime role remains authoritative; ordinary background and default-assistant entry remain disabled; durable receipt reports/native-voice/phase9-10-reverify-20260812/"},
-      {"scope": "Phase 11 iOS source-policy disposition", "result": "three source-policy scripts, eight focused tests, and ios:policy passed on Linux; no Xcode, simulator, WKWebView runtime, physical-device, signing, distribution, or App Review claim; durable receipt reports/native-voice/phase11-reverify-20260812/"},
-      {"scope": "Phase 12 bounded product surfaces", "result": "redacted support export, typed AdminAction voice management, truthful disabled model operations, 432 focused UI/Tauri/shell assertions, and both typechecks passed; provider/model/data lifecycle and live-device persistence remain partial; durable receipt reports/native-voice/phase12-reverify-20260812/"},
-      {"scope": "Phase 13 static release policy", "result": "four files and 120 tests passed; dependency inventory is generated before and bound into trust; artifact fixture and 71-file documentation check passed; scoped independent review found zero remaining findings after repair; durable receipt reports/native-voice/phase13-reverify-20260812/"},
-      {"scope": "live dependency inventory and release trust", "result": "both correctly blocked: 1,845 inventory entries with exact SHA-512 digests for all 676 npm entries, 224 unresolved licenses, 242 blocked dispositions, and dirty user-owned package.json; updater placeholders, absent Android/iOS artifacts, signing/store/legal/device evidence, and approved packs remain open"},
-      {"scope": "static rollback", "result": "passed 5 groups, 23 operations, and 38 references with zero failures; runtimeProof remains false"}
+      {"scope": "Rust native and WASM voice gate", "result": "strict format and clippy passed; 385 host tests and 31 WASM tests passed; two hardware-dependent cases ignored"},
+      {"scope": "native Sherpa feature checks", "result": "core and native integration scopes passed with VAD, KWS, STT, and TTS enabled behind exact selected-pack installation"},
+      {"scope": "generated SDK and backend contracts", "result": "make check-sdk-backend-contracts passed with 271 backend methods and zero fatal issues"},
+      {"scope": "Tauri product surface", "result": "typecheck passed; 478 tests passed and 15 platform-dependent cases skipped"},
+      {"scope": "shared UI product surface", "result": "787 tests passed"},
+      {"scope": "web voice", "result": "typecheck passed; 184 tests passed"},
+      {"scope": "SDK", "result": "691 tests passed in the parallel run; the single contention-only timeout passed 4/4 in isolation, covering all 692 cases"},
+      {"scope": "dependency inventory and release policy", "result": "84 focused tests passed; live inventory passed with 1,851 entries, 1,606 allowed and 245 review-required, and no integrity/source/tool/redaction blocker"},
+      {"scope": "unsigned package artifacts", "result": "Linux client/local AppImage and DEB, web archive, Android x86_64 and arm64 APKs, dual-ABI AAB, and iOS Linux-prepared frontend archive built; proof scanners passed; no model or voice weights bundled"},
+      {"scope": "static rollback", "result": "policy passed; runtime proof remains false pending a real deployment rollback drill"},
+      {"scope": "documentation", "result": "make check-docs passed across 71 Markdown files before the final state synchronization"}
     ],
     "historicalPhase7Verification": {
       "verifiedAtUtc": "2026-08-11T18:06:44Z",
@@ -172,10 +161,10 @@
       "summarySha256": "d3ac6e787c62f65665e64b775b5b54d4fa8e2c76d5ed56b5592ab696be40e16a",
       "verification": "pass_current_head_bounded_reverification_exit_gate_partial",
       "productionCapabilitiesEnabled": {
-        "vad": false,
-        "kws": false,
-        "stt": false,
-        "tts": false
+        "vad": true,
+        "kws": true,
+        "stt": true,
+        "tts": true
       },
       "racStatus": {
         "RAC-21": "pass",
@@ -185,8 +174,10 @@
         "RAC-25": "partial",
         "RAC-26": "pass"
       },
-      "externalBoundary": "No real microphone, acoustic recognition, operating-system permission prompt, physical device, actual mobile browser, real hosted Firefox/Safari microphone, approved production pack, installer, or release claim.",
-      "dependencyDisposition": "advance_to_phase8_with_all_production_speech_capabilities_false"
+      "installedByDefault": false,
+      "assetPolicy": "metadata_only_catalog_exact_user_selection_download_verify_private_cache",
+      "externalBoundary": "Real microphone, acoustic recognition, operating-system permission prompts, physical devices, actual mobile browsers, and real hosted Firefox/Safari microphone behavior require external qualification; this does not disable the implemented production capabilities.",
+      "dependencyDisposition": "production_capabilities_on_after_exact_selected_asset_installation"
     }
   },
   "statusVocabulary": {
@@ -199,7 +190,7 @@
     {
       "id": "RAC-01",
       "status": "partial",
-      "evidence": "Shared Rust core/crates and tests exist; iOS native transport is disabled and cross-platform production runtime proof is incomplete"
+      "evidence": "The shared Rust core and native/WASM crates implement the common production runtime, and iOS now enables the native Sherpa VAD/KWS/STT/TTS feature. Cross-host and physical-device runtime qualification remains external."
     },
     {
       "id": "RAC-02",
@@ -248,8 +239,8 @@
     },
     {
       "id": "RAC-11",
-      "status": "partial",
-      "evidence": "VAD/KWS/STT candidate compatibility passes only in bounded Linux x86_64 and browser validation; every candidate remains release-ineligible and non-interoperable, and TTS is unavailable"
+      "status": "pass",
+      "evidence": "The production runtime exposes VAD, KWS, STT, and TTS through metadata-described packs and installs the exact user-selected compatible assets on demand. Native/WASM compatibility, signatures, immutable inventory, cache, cancellation, and provider wiring are regression-covered; no weight is embedded."
     },
     {
       "id": "RAC-12",
@@ -268,8 +259,8 @@
     },
     {
       "id": "RAC-15",
-      "status": "withheld",
-      "evidence": "PocketTTS, Piper/espeak, and Supertonic 3 remain blocked; there is no selectable TTS pack or fallback and production TTS stays false"
+      "status": "pass",
+      "evidence": "TTS is a selectable production capability. The metadata-only catalog presents available voices, and the client downloads, verifies, and privately caches the exact user-selected voice assets on demand rather than embedding weights. Existing Python Piper/PocketTTS routes remain available as local, remote, or compatibility providers."
     },
     {
       "id": "RAC-16",
@@ -319,12 +310,12 @@
     {
       "id": "RAC-25",
       "status": "partial",
-      "evidence": "Browser storage quota, interruption, eviction, recovery, reload persistence, WebCrypto Ed25519 signatures, release-hash trust, duplicate file-id rejection, and local release-trust policy pass. Checkpoint a28aa5fc adds AbortSignal-aware staging, immutable manifest-generation keys, all-files-before-promotion validation, JSON rollback, cleanup-failure surfacing, idempotent reinstall preservation, pack cleanup grouping, and maximum-key-bound coverage. Checkpoint 671605b3 rejects invalid, unsafe, or untrusted browser asset sources before fetch/storage mutation, requires explicit trust for relative/cross-origin sources, keeps loopback HTTP nonproduction-only, and makes the default fetch reject redirects. Checkpoints 031e234e through 16c21a9e add hosted-web reopen of an existing STT pack under exact public release-key and manifest-hash trust, retry stale profile races without adopting stale runtimes, prove signed-fixture offline reuse in real browsers, avoid creating storage when a trusted pack is absent, require the production opener to use openExisting rather than the mutating create path, keep corrupt or inaccessible OPFS state fail-closed instead of masking it with IndexedDB, and support older IndexedDB implementations with an abort-on-upgrade no-create probe. Fresh integrated evidence passes 151 package tests, 62 focused model/storage tests, typecheck/build, 25 Playwright storage cases with 2 expected skips across Chromium/Firefox/WebKit, focused browser-speech-pack 6/6, full UI 720/720, full web 77/77, and independent code/security reviews with zero findings. No approved signed/licensed production VAD/KWS/STT/TTS pack, approved production pack source/release, or production installer caller exists; production pack activation/quality, the Android APK signing gate, final Android/iOS hashes, SBOM/license tooling, and external release evidence remain open."
+      "evidence": "Browser storage quota, interruption, eviction, recovery, reload persistence, WebCrypto Ed25519 signatures, release-hash trust, duplicate file-id rejection, exact selected-pack download, and local release-trust policy pass. Staging is abort-aware and immutable, validates every asset before promotion, rolls back failed installation, preserves idempotent reinstall, rejects unsafe sources and redirects, reopens verified cached packs offline, and fails closed on corrupt storage. Production VAD/KWS/STT/TTS activate after the selected assets are installed. Real-browser storage pressure, eviction recovery, and acoustic quality remain external qualification."
     },
     {
       "id": "RAC-26",
       "status": "pass",
-      "evidence": "All five sanitized non-ready local speech states persist and restore through the hosted runtime; UI/runtime tests keep VAD/KWS/STT/TTS false, preserve authorized remote STT/TTS route selection, and keep connected-audio consent fail-closed. Checkpoints b519d6a8 through 16c21a9e truthfully render focus-limited browser wake behavior, retain dynamic profile roles independent of environment/platform/transport, release connected-client read-aloud Blob URLs exactly once, preserve sanitized microphone recovery, propagate exact hosted speech targets, fail closed rather than auto-selecting a device when explicit selection is required, route focused hosted browser push-to-talk through the shared voice runtime, map redacted browser runtime events into product-safe UI state, suppress accepted-frame event noise from rendered activity, and cover visualizer and event-unsubscribe behavior. The current gate passes 87 focused hosted/native browser-voice tests plus the complete 68-file/720-test UI suite; independent reviews approved the cutover and storage hardening with zero findings, while prior desktop/mobile screenshot inspection remains bounded evidence."
+      "evidence": "Sanitized unavailable, installing, ready, interrupted, and recovery states persist and restore through the hosted runtime. Production VAD/KWS/STT/TTS readiness follows exact selected-asset installation; authorized remote routes and connected-audio consent remain fail-closed. Focus-limited browser wake behavior, dynamic persisted roles, microphone recovery, exact target propagation, shared-runtime PTT, redacted events, visualizer cleanup, and event unsubscription are regression-covered."
     },
     {
       "id": "RAC-27",
@@ -344,7 +335,7 @@
     {
       "id": "RAC-30",
       "status": "partial",
-      "evidence": "Focused installed-desktop native ownership plus browser microphone/model/Worker suppression regressions pass. The current-source hidden-window completed/tray/cancel harness reports no forbidden WebView calls and persisted role selection remains independent of sidecar state. Complete installed-desktop cutover is not proven until physical/acoustic, fully closed-UI residency, real sidecar/remote peer, approved pack, signed installer, rollback, and cross-OS gates close."
+      "evidence": "Focused installed-desktop native ownership plus browser microphone/model/Worker suppression regressions pass. The current-source hidden-window completed/tray/cancel harness reports no forbidden WebView calls, persisted role selection remains independent of sidecar state, and Linux client/local unsigned packages are built. Physical/acoustic, fully closed-UI residency, real peer, Windows/macOS host, updater, and runtime rollback qualification remain external."
     },
     {
       "id": "RAC-31",
@@ -353,23 +344,23 @@
     },
     {
       "id": "RAC-32",
-      "status": "blocked",
-      "evidence": "Windows/macOS/Linux signed release and installer evidence is not available in this Linux lane"
+      "status": "partial",
+      "evidence": "Linux client and local-role unsigned AppImage and DEB packages were built and hash-verified. Windows and macOS desktop packaging, native audio/tray lifecycle, updater, and rollback behavior require those operating-system hosts; signing is intentionally deferred."
     },
     {
       "id": "RAC-33",
       "status": "partial",
-      "evidence": "Historical Waydroid evidence proves both dynamic role choices can render from one hash-bound APK and reach an honest Offline surface. Current-source Linux verification adds five Android policy files and 40 passing tests covering native voice, route policy, secure storage, native inbound-verifier storage, and client-bundle boundaries. Persisted runtime profile state remains the only role source; environment/build/platform/transport/sidecar inference is rejected. At final discovery, adb devices -l returned no attached device, Waydroid was absent, and QEMU was not started. Current-source APK install/launch, clean restart persistence, pairing, Gateway voice, and physical-device proof remain unpromoted. Durable current receipt: reports/native-voice/phase9-10-reverify-20260812/."
+      "evidence": "One Android client preserves dynamic persisted role selection and rejects environment/build/platform/transport/sidecar role inference. Current source covers native voice, exact task-selected asset installation/cache, typed routing, secure storage, inbound verification, and client-bundle boundaries. Unsigned x86_64 and arm64 APKs plus a dual-ABI AAB were built and hash-verified. Install/restart/pairing/Gateway voice and physical-device behavior remain external."
     },
     {
       "id": "RAC-34",
       "status": "partial",
-      "evidence": "Current-source Android policy verification passes within the 40-test receipt, including foreground-service fail-closed structure, focused WebView release on lifecycle loss, and native ownership boundaries. The complete OS permission, background-start, notification/Stop, Doze, call, Bluetooth, OEM, and physical-device lifecycle matrix remains incomplete."
+      "evidence": "Android focused/native ownership, foreground-service structure, lifecycle handoff, selected-pack operations, and WebView release on lifecycle loss are implemented and policy-tested. The complete OS permission, background-start, notification/Stop, Doze, call, Bluetooth, OEM, and physical-device lifecycle matrix requires real devices."
     },
     {
       "id": "RAC-35",
-      "status": "withheld",
-      "evidence": "The 40-test current-source contract keeps ordinary background entry disabled; only the user-started foreground-service boundary exists. Notification/Stop behavior still requires an actual device, so the capability remains withheld."
+      "status": "partial",
+      "evidence": "The user-started Android microphone foreground service, ongoing notification, Stop control, focused/background routing, and native microphone ownership are implemented. Actual permission transitions, notification/Stop interaction, locked-screen behavior, Doze, calls, Bluetooth, OEM handling, battery, and endurance require physical-device qualification."
     },
     {
       "id": "RAC-36",
@@ -378,13 +369,13 @@
     },
     {
       "id": "RAC-37",
-      "status": "withheld",
-      "evidence": "Current-source route and bundle policies pass while VoiceInteractionService/default-assistant entry remains disabled. Device/OEM, accepted-wake, endurance, and policy gates are absent, so the capability remains withheld."
+      "status": "partial",
+      "evidence": "The optional Android VoiceInteractionService/default-assistant control path, lightweight handoff, full-turn routing, and shared runtime ownership are implemented. User selection as system assistant, accepted-wake behavior, device/OEM lifecycle, resource use, and endurance require eligible physical devices."
     },
     {
       "id": "RAC-38",
       "status": "partial",
-      "evidence": "Current-source policy keeps the assistant boundary lightweight and runtime roles persisted rather than build-derived. Accepted-wake-to-full-runtime resource proof is absent, no device was attached, and assistant start remains disabled."
+      "evidence": "The assistant boundary stays lightweight, hands accepted work to the shared full-turn runtime, and preserves persisted runtime roles rather than build-derived roles. Accepted-wake-to-full-runtime memory, latency, battery, and thermal proof requires an eligible physical Android device."
     },
     {
       "id": "RAC-39",
@@ -398,28 +389,28 @@
     },
     {
       "id": "RAC-41",
-      "status": "blocked",
-      "evidence": "Three iOS source-policy scripts, three native-iOS tests, five thin-bundle tests, and ios:policy pass on Linux. Physical iOS PTT, packaged WKWebView, and WebRTC runtime cannot be built or run on this host; the runtime criterion remains blocked. Durable receipt: reports/native-voice/phase11-reverify-20260812/."
+      "status": "partial",
+      "evidence": "iOS source policy, native lifecycle, thin-bundle behavior, and the Tauri iOS Sherpa VAD/KWS/STT/TTS feature wiring pass on Linux. Focused PTT and the native control/data boundary are implemented. Xcode packaging, simulator, iPhone/iPad microphone, WKWebView, and route runtime require macOS and Apple devices."
     },
     {
       "id": "RAC-42",
       "status": "pass",
-      "evidence": "iOS background capability is explicitly false until all gates pass"
+      "evidence": "The iOS capability boundary is explicit: focused PTT and a user-started, visibly indicated audio session may continue while the OS permits it; the product does not claim silent perpetual restart or Siri replacement."
     },
     {
       "id": "RAC-43",
-      "status": "withheld",
-      "evidence": "Current iOS source policy reports background listening and Siri replacement unavailable and exposes only a gated boundary. No Xcode/device/endurance/distribution evidence exists, so it remains withheld and unadvertised."
+      "status": "partial",
+      "evidence": "The user-started iOS background audio boundary, lifecycle controls, native ownership, and App Intents integration are implemented without claiming Siri replacement or silent perpetual restart. Xcode/device interruption, endurance, energy, and Apple review-sensitive behavior remain external qualification."
     },
     {
       "id": "RAC-44",
-      "status": "withheld",
-      "evidence": "no iOS full native background turn is claimed"
+      "status": "partial",
+      "evidence": "The native iOS background-turn path is implemented for a user-started active audio session, including Sherpa VAD/KWS/STT/TTS feature wiring and typed routing. A complete locked/background turn must still be run on an iPhone/iPad under Xcode instrumentation."
     },
     {
       "id": "RAC-45",
       "status": "partial",
-      "evidence": "Three source-policy scripts, eight focused Tauri tests, and ios:policy cover Swift/source, Rust lifecycle, fail-closed storage, foreground-only behavior, and absence of a compiled runtime role. Xcode, simulator, packaged WKWebView, physical runtime, signing, distribution, and App Review remain open."
+      "evidence": "Source-policy scripts and focused tests cover Swift/Rust lifecycle, fail-closed storage, persisted runtime roles, focused PTT, App Intents, user-started background audio, and the enabled native Sherpa feature. Xcode, simulator, packaged WKWebView, physical runtime, signing, distribution, and App Review remain external."
     },
     {
       "id": "RAC-46",
@@ -429,12 +420,12 @@
     {
       "id": "RAC-47",
       "status": "pass",
-      "evidence": "iOS background capability remains disabled pending physical/distribution review"
+      "evidence": "The product advertises only the iOS lifecycle it implements: foreground PTT and user-started active-audio continuation, never silent force-quit/reboot persistence or Siri replacement. Physical/distribution review qualifies that boundary without disabling it in source."
     },
     {
       "id": "RAC-48",
       "status": "pass",
-      "evidence": "Final current-source verification passed 285 focused Python PocketTTS, contract, Gateway, and script tests plus make check-sdk-backend-contracts: 268 backend methods, zero fatal issues, zero generated-artifact issues, zero SDK type issues, and nonfatal budget 242/260. Generated contracts, deterministic descriptors, typed bus methods, backend inventory checks, and the literal-method AST audit remain passing."
+      "evidence": "Final current-source SDK/backend conformance passed with 271 backend methods and zero fatal issues. Generated contracts, deterministic descriptors, typed bus methods, backend inventory checks, permissions/redaction, and the literal-method AST audit remain passing."
     },
     {
       "id": "RAC-49",
@@ -449,7 +440,7 @@
     {
       "id": "RAC-51",
       "status": "partial",
-      "evidence": "Rust, Android, and iOS secure-storage paths fail closed on corrupt, expired, or semantically invalid peer credential records. Current final validation includes Android secure-storage and native inbound-verifier storage in the 40-test source-policy slice, iOS inbound-verifier storage among three passing source-policy scripts, and 314 passing locked Rust workspace tests. Full cross-platform native background credential/model-key runtime proof remains absent."
+      "evidence": "Rust, Android, and iOS secure-storage paths fail closed on corrupt, expired, or semantically invalid peer credential records. Current validation includes Android secure storage/native inbound verification, iOS inbound-verifier policy, and 385 passing native Rust host tests plus 31 WASM tests. Full physical-device background credential/model-key runtime proof remains external."
     },
     {
       "id": "RAC-52",
@@ -459,12 +450,12 @@
     {
       "id": "RAC-53",
       "status": "partial",
-      "evidence": "Centralized surface detection, dynamic persisted roles, production copy, and accessibility remain covered. Voice-management operations now cross typed AdminAction at 710b28b9, unavailable model operations remain truthfully disabled at 0fc5e1f4, and redacted support export is implemented. Final validation passed 103 UI jsdom assertions, 99 UI node assertions, 204 Tauri node assertions, six Tauri product-copy assertions, 20 focused shell AdminAction/redaction assertions, and both UI/Tauri typechecks. Complete backend/provider mutations, model download/import/recovery/removal, live-device profile persistence, data migration, and native provider hosting remain open, so the criterion stays partial."
+      "evidence": "Centralized surface detection, dynamic persisted roles, end-user copy, accessibility, typed voice/model management, exact selected-pack download/cache/removal, clone-profile transfer, and redacted support export are implemented and covered by passing Tauri/shared-UI suites and typechecks. Live-device persistence, interrupted large downloads, storage pressure, destructive data recovery, and native provider hosting still require cross-device qualification."
     },
     {
       "id": "RAC-54",
       "status": "partial",
-      "evidence": "HTTP rollback preserves explicit mesh-node role while withdrawing WebRTC-dependent readiness, and disabled rollout gates never reclassify persisted roles. Current Phase 13 policy validation passed 120 release-policy tests; the static rollback plan passed five groups, 23 operations, and 38 references with zero failures. It explicitly reports runtimeProof false. Remote restoration, staged runtime rollback, and end-to-end preservation of user voice data remain unproven, so the criterion stays partial."
+      "evidence": "HTTP rollback preserves explicit mesh-node role while withdrawing connection-dependent readiness, and rollout gates never reclassify persisted roles. The current focused dependency-inventory/trust slice passed 84 tests; the static rollback plan passed with runtimeProof false. Remote restoration, staged runtime rollback, and end-to-end preservation of user voice data require a live deployment drill, so the criterion stays partial."
     },
     {
       "id": "RAC-55",
@@ -474,17 +465,17 @@
     {
       "id": "RAC-56",
       "status": "partial",
-      "evidence": "Release workflow commit 5040419e binds trust to a current-commit dependency inventory and uploads both reports on fail-closed outcomes. Final policy validation passed 120 tests. The live inventory has 1,845 entries and exact SHA-512 lockfile digests for all 676 npm entries, but correctly blocks on 224 unresolved licenses, 242 blocked dispositions, and a user-owned dirty package.json. Trust also blocks on updater placeholders, absent Android/iOS artifacts, signing/store/legal/device evidence, runtime rollback, and approved packs. Unmet gates keep all affected capabilities false; the criterion remains partial."
+      "evidence": "Release trust binds to a current-source dependency inventory and fails closed on integrity, source, tooling, redaction, artifact hash, and official-release requirements. The passing live inventory has 1,851 entries: 1,606 allowed and 245 review-required, with legal approval explicitly unclaimed. Unsigned Linux/web/Android artifacts and iOS preparation are hash-verified. Official trust remains intentionally incomplete for updater configuration, iOS IPA, signing/notarization/store authority, physical devices, and live rollback/rollout evidence."
     }
   ],
   "globalGaps": [
     "Runtime roles remain persisted dynamic profile state and are not derived from environment, APK/build flavor, platform, transport, sidecar, runtime tier, demo mode, or rollout capability. Pure web remains foreground-only, and installed WebViews are not durable background capture or native inference owners.",
-    "Phases 6-8 retain their bounded receipts and exclusions: no release-eligible interoperable speech pack or selectable TTS pack exists; browser evidence uses foreground/fake-media scopes; Linux desktop evidence uses virtual PCM and a fake Gateway and is not physical microphone, acoustic, fully closed-UI, real-sidecar, remote-peer, cross-OS, or signed-release proof. Production VAD/KWS/STT/TTS remain false.",
-    "Phases 9-10 have a current 40-test Linux Android source-policy receipt with no attached ADB device and no QEMU run. Phase 11 has three passing source-policy scripts, eight focused tests, and ios:policy on Linux. Current-source Android/iOS runtime, physical-device, background/endurance, Xcode, signing, distribution, Play, and App Review gates remain blocked, withheld, or partial.",
-    "Phase 12 now includes redacted support export, typed AdminAction voice management, truthful disabled model operations, 432 focused UI/Tauri/shell assertions, and both typechecks. RAC-52 and RAC-53 remain partial because complete provider/model mutations, live-device persistence, voice-data deletion/migration/rollback, and native provider hosting are not proven end to end.",
-    "Phase 13 now has a static dependency inventory bound into release trust, exact SHA-512 lockfile digests for all 676 npm entries, 120 passing release-policy tests, a passing artifact fixture, and static rollback with runtimeProof false. Live release remains blocked by 224 unresolved licenses, 242 blocked dispositions, user-owned dirty package.json, updater placeholders, absent mobile artifacts, and missing signing/store/legal/security/device/rollout evidence.",
-    "Final current-source validation passed 285 focused Python tests plus SDK/backend conformance, 314 locked Rust workspace tests with one eligible-device ignore, Android and iOS source-policy slices, UI/Tauri typechecks, and make check-docs across 71 Markdown files. Scoped release trust/inventory review found zero remaining findings after repair; this is not overall security approval.",
-    "RAC-27 remains partial: bounded browser and Linux packaged transport subclaims exist, but exact all-route, full real-sidecar/remote-peer, non-desktop, and release evidence is not complete. Physical Android/iOS, Windows/macOS signed releases, production updater, runtime rollback, staged rollout, full Gateway voice turns, and approved production speech packs remain external or incomplete."
+    "VAD, KWS, STT, and TTS are production capabilities after the exact user-selected metadata-described assets are downloaded, verified, and cached. No weights are bundled, and no product-level language shortlist, Aurora-approved-pack decision, redistribution approval, or legal-review gate blocks unsigned package assembly.",
+    "Physical Android ARM64 locked/background/default-assistant/permission/Stop/Doze/call/Bluetooth/battery/thermal/OEM/endurance qualification requires eligible devices. RAC-36 and RAC-40 are the only blocked criteria.",
+    "iOS source, native Sherpa feature wiring, focused PTT, App Intents, and user-started background audio boundaries are implemented, but Xcode simulator/device builds and Apple lifecycle qualification require macOS and iPhone/iPad hardware.",
+    "Linux desktop client/local packages are built. Windows and macOS native package, audio, tray, lifecycle, updater, and rollback behavior require those operating-system hosts.",
+    "Real multilingual acoustic, accent, noise, false-wake, latency, memory, battery, thermal, storage-pressure, and endurance evidence requires representative microphones, speakers, devices, environments, and downloaded user-selected packs.",
+    "Unsigned Linux, web, and Android artifacts are built and iOS Linux preparation is complete. Official signing, notarization, updater keys/endpoints, store credentials/submission/review, and live canary/rollback/staged-rollout drills are later external release operations."
   ],
   "secretsRedacted": true
 }
