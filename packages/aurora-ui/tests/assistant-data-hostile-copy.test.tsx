@@ -398,7 +398,7 @@ function dataPolicySnapshot(evaluation: RoutePolicyEvaluation): DataPolicySnapsh
         description: 'Review shared-device help.',
         routeRequest: { topic: hostile.methodId, module: 'Tooling', method: 'DeleteSecret' },
         payload: { secret: hostile.json },
-        selector: { providerId: hostile.providerId },
+        selector: { provider_id: hostile.providerId },
         privacyClass: 'sensitive',
         dataClasses: ['sensitive'],
         consentGranted: false,

@@ -464,7 +464,7 @@ function scenario(
   module: string,
   method: string,
   payload: unknown,
-  selector: RouteExplainRequest['selector'],
+  selector: Exclude<RouteExplainRequest['selector'], undefined>,
   privacyClass: PrivacyClass,
   dataClasses: PrivacyClass[],
   consentGranted = false,
