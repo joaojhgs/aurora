@@ -46,6 +46,11 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 

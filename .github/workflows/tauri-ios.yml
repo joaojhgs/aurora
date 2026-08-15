@@ -10,6 +10,7 @@ on:
       - "app/shared/contracts/models/auth.py"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "packages/aurora-voice-web/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
       - "scripts/webrtc_interop_scan.py"
@@ -41,7 +42,7 @@ jobs:
       - name: Set up Rust with iOS targets
         uses: dtolnay/rust-toolchain@1.88.0
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim,wasm32-unknown-unknown
 
       - name: Set up Python interop peer
         uses: actions/setup-python@v5

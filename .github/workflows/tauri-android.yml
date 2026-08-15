@@ -10,6 +10,7 @@ on:
       - "app/shared/contracts/models/auth.py"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "packages/aurora-voice-web/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
       - "scripts/webrtc_interop_scan.py"
@@ -69,7 +70,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,wasm32-unknown-unknown
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4

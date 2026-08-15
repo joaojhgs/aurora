@@ -8,6 +8,7 @@ on:
       - "app/services/gateway/**"
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
+      - "packages/aurora-voice-web/**"
       - "scripts/desktop_live_*.sh"
       - "scripts/webrtc_interop*"
       - "tests/e2e/desktop_live/**"
@@ -70,6 +71,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -211,6 +214,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
 
       - uses: pnpm/action-setup@v4
 
@@ -269,6 +274,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
 
       - uses: pnpm/action-setup@v4
 
@@ -327,6 +334,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
