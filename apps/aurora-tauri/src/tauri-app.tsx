@@ -455,12 +455,40 @@ export async function rebuildAuroraThinRuntime(
 const DESKTOP_LOCAL_GATEWAY_READY_TIMEOUT_MS = 45_000;
 const DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS = 500;
 const DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS = 10_000;
-const NATIVE_VOICE_STATUS_POLL_MS = 2_000;
+export const NATIVE_VOICE_STATUS_POLL_MS = 2_000;
+export const NATIVE_SPEECH_READINESS_POLL_MS = 30_000;
 const ANDROID_RUNTIME_PERMISSION_IDS = new Set([
   "aurora.android.microphone",
   "aurora.android.notifications",
   "aurora.android.voiceForegroundService",
 ]);
+
+export function startNonOverlappingPoll<T>(
+  load: () => Promise<T>,
+  onValue: (value: T) => void,
+  intervalMs: number,
+): () => void {
+  let active = true;
+  let inFlight = false;
+  const refresh = async () => {
+    if (!active || inFlight) return;
+    inFlight = true;
+    try {
+      const value = await load();
+      if (active) onValue(value);
+    } finally {
+      inFlight = false;
+    }
+  };
+  void refresh();
+  const poll = globalThis.setInterval(() => {
+    void refresh();
+  }, intervalMs);
+  return () => {
+    active = false;
+    globalThis.clearInterval(poll);
+  };
+}
 
 export async function requestTauriNativeAccess(
   runtime: Pick<
@@ -539,45 +567,29 @@ export function AuroraTauriApp({
   useEffect(() => {
     const nativeVoice = runtime.nativeMobileVoice ?? runtime.nativeVoice;
     setNativeVoiceAvailable(false);
-    if (!nativeVoice) {
-      return;
-    }
-    let active = true;
-    const refresh = async () => {
-      try {
-        const status = await nativeVoice.status();
-        if (active) setNativeVoiceAvailable(status.available);
-      } catch {
-        if (active) setNativeVoiceAvailable(false);
-      }
-    };
-    void refresh();
-    const poll = window.setInterval(() => {
-      void refresh();
-    }, NATIVE_VOICE_STATUS_POLL_MS);
-    return () => {
-      active = false;
-      window.clearInterval(poll);
-    };
+    if (!nativeVoice) return;
+    return startNonOverlappingPoll(
+      async () => {
+        try {
+          return (await nativeVoice.status()).available;
+        } catch {
+          return false;
+        }
+      },
+      setNativeVoiceAvailable,
+      NATIVE_VOICE_STATUS_POLL_MS,
+    );
   }, [runtime.nativeMobileVoice, runtime.nativeVoice]);
 
   useEffect(() => {
     const catalog = runtime.localSpeechCatalog;
     setNativeSpeechReadiness(null);
     if (!catalog) return;
-    let active = true;
-    const refresh = async () => {
-      const readiness = await catalog.getReadiness().catch(() => null);
-      if (active) setNativeSpeechReadiness(readiness);
-    };
-    void refresh();
-    const poll = window.setInterval(() => {
-      void refresh();
-    }, NATIVE_VOICE_STATUS_POLL_MS);
-    return () => {
-      active = false;
-      window.clearInterval(poll);
-    };
+    return startNonOverlappingPoll(
+      () => catalog.getReadiness().catch(() => null),
+      setNativeSpeechReadiness,
+      NATIVE_SPEECH_READINESS_POLL_MS,
+    );
   }, [runtime.localSpeechCatalog]);
 
   useEffect(() => {

@@ -1335,7 +1335,9 @@ describe('desktop-thin live connection profiles', () => {
 
     tauriCoreMock.pluginListeners[0]!.callback({ phase: 'pause', foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: false })
     tauriCoreMock.pluginListeners[0]!.callback({ phase: 'stop', foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: false })
-    expect(releaseFocusedMedia).toHaveBeenCalledTimes(2)
+    tauriCoreMock.pluginListeners[0]!.callback({ phase: 'stop', foreground: false, focused: false, mustReleaseMicrophone: false, backgroundWakeword: true })
+    tauriCoreMock.pluginListeners[0]!.callback({ phase: 'stop', foreground: false, focused: false, mustReleaseMicrophone: true, backgroundWakeword: true })
+    expect(releaseFocusedMedia).toHaveBeenCalledTimes(3)
     expect(runtime.calls.disconnect).toEqual([])
 
     await release()

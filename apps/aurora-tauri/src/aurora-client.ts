@@ -2197,7 +2197,8 @@ export function installAndroidLifecyclePolicy(
     ANDROID_LIFECYCLE_EVENT,
     (payload) => {
       if (closed) return;
-      const mustRelease = payload.mustReleaseMicrophone === true || payload.foreground === false || payload.focused === false;
+      const mustRelease = payload.mustReleaseMicrophone === true
+        || (payload.backgroundWakeword !== true && (payload.foreground === false || payload.focused === false));
       if (mustRelease) {
         window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT));
       }
@@ -2222,7 +2223,7 @@ interface AndroidLifecyclePluginPayload {
   foreground?: boolean;
   focused?: boolean;
   mustReleaseMicrophone?: boolean;
-  backgroundWakeword?: false;
+  backgroundWakeword?: boolean;
   reason?: string;
 }
 
