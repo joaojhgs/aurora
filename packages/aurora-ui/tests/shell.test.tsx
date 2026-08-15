@@ -3493,7 +3493,7 @@ describe('Aurora production shell', () => {
       'admin_action'
     ])
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'tool_call')?.evaluation?.privacyClass).toBe('admin-critical')
-    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_id: 'rag:home-lab' })
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_namespace: 'home-lab' })
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'audio_session')?.evaluation?.privacyClass).toBe('raw-audio')
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'scheduler_job')?.evaluation?.repairPath).toContain('selector')
     expect(snapshot.policyCapabilityReason).toContain('Gateway.ExplainRoute')

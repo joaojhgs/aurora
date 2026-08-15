@@ -423,7 +423,6 @@ export function AssistantView({
   const [nativeVoiceStatusState, setNativeVoiceStatusState] = useState<NativeDesktopVoiceStatus | null>(null)
   const [nativeDesktopBackgroundWakeActive, setNativeDesktopBackgroundWakeActive] = useState(false)
   const [nativeMobileBackgroundWakeActive, setNativeMobileBackgroundWakeActive] = useState(false)
-  const [nativeMobileBackgroundWakeReady, setNativeMobileBackgroundWakeReady] = useState(false)
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
@@ -619,9 +618,7 @@ export function AssistantView({
       nativeDesktopVoiceStatus: nativeVoiceStatusState,
       nativeDesktopBackgroundWakeActive,
       nativeMobileBackgroundWakeActive,
-      nativeMobileBackgroundWakeReady: usesNativeMobileVoice
-        && surfaceProfile.voiceCapture.wakewordOwner === 'mobile-native'
-        && nativeMobileBackgroundWakeReady
+      nativeMobileBackgroundWakeSupported: usesNativeMobileVoice
         && typeof nativeMobileVoice?.backgroundStatus === 'function'
         && typeof nativeMobileVoice?.startBackground === 'function'
         && typeof nativeMobileVoice?.stopBackground === 'function',
@@ -642,7 +639,6 @@ export function AssistantView({
       nativeVoiceStatusState,
       nativeDesktopBackgroundWakeActive,
       nativeMobileBackgroundWakeActive,
-      nativeMobileBackgroundWakeReady,
       nativeMobileVoice,
       usesNativeMobileVoice,
       voiceEvents,
@@ -1147,7 +1143,6 @@ export function AssistantView({
 
   useEffect(() => {
     if (!usesNativeMobileVoice || !nativeMobileVoice) {
-      setNativeMobileBackgroundWakeReady(false)
       return
     }
     let active = true
@@ -1162,7 +1157,6 @@ export function AssistantView({
       }
       const backgroundStatus = await nativeMobileVoice.backgroundStatus?.().catch(() => null)
       if (!active || !backgroundStatus) return
-      setNativeMobileBackgroundWakeReady(backgroundStatus.available)
       if (isNativeMobileBackgroundCaptureActive(backgroundStatus)) {
         nativeMobileBackgroundWakeActiveRef.current = true
         setNativeMobileBackgroundWakeActive(true)
@@ -1170,14 +1164,17 @@ export function AssistantView({
       }
     }).catch(() => {
       if (active) {
-        setNativeMobileBackgroundWakeReady(false)
         setVoiceCaptureStatus('error')
       }
     })
     return () => {
       active = false
     }
-  }, [nativeMobileVoice, usesNativeMobileVoice])
+  }, [
+    nativeMobileVoice,
+    surfaceProfile.voiceCapture.wakewordOwner,
+    usesNativeMobileVoice,
+  ])
 
   useEffect(() => {
     if (!surfaceProfile.voiceCapture.avoidCoordinatorPushToTalk) return
@@ -3170,14 +3167,12 @@ export function AssistantView({
         await nativeMobileVoice.stopBackground?.().catch(() => undefined)
         nativeMobileBackgroundWakeActiveRef.current = false
         setNativeMobileBackgroundWakeActive(false)
-        setNativeMobileBackgroundWakeReady(status.available)
         setVoiceCaptureStatus('error')
         setLastError('Hands-free voice could not start. Check microphone access on this device.')
         return false
       }
       nativeMobileBackgroundWakeActiveRef.current = true
       setNativeMobileBackgroundWakeActive(true)
-      setNativeMobileBackgroundWakeReady(true)
       setVoiceCaptureStatus('listening')
       activeVoiceSessionRef.current = 'native-mobile-background'
       ownedVoiceSessionIdsRef.current.add('native-mobile-background')
@@ -4199,7 +4194,7 @@ export function buildAssistantVoiceModel(input: {
   nativeDesktopVoiceStatus?: NativeDesktopVoiceStatus | null | undefined
   nativeDesktopBackgroundWakeActive?: boolean | undefined
   nativeMobileBackgroundWakeActive?: boolean | undefined
-  nativeMobileBackgroundWakeReady?: boolean | undefined
+  nativeMobileBackgroundWakeSupported?: boolean | undefined
   voiceEvents?: VoiceRuntimeEvent[] | undefined
   waveformBars?: number[] | undefined
 }): AssistantVoiceModel {
@@ -4222,7 +4217,7 @@ export function buildAssistantVoiceModel(input: {
     && input.nativeDesktopVoiceStatus.backgroundEligible === true
   const nativeMobileWakeReady = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
     && surfaceProfile.voiceCapture.wakewordOwner === 'mobile-native'
-    && input.nativeMobileBackgroundWakeReady === true
+    && input.nativeMobileBackgroundWakeSupported === true
   const nativeDesktopWakeRoute = nativeWakeAvailability(nativeDesktopWakeReady, {
     id: 'native-desktop-wake',
     label: 'Desktop wake voice',
