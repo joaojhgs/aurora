@@ -17,6 +17,8 @@ use crate::{
     NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
 };
 use async_trait::async_trait;
+#[cfg(any(test, all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
+use aurora_voice_core::EngineError;
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
@@ -24,11 +26,6 @@ use aurora_voice_core::{
     RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
     VoiceCoreError, VoiceRuntime, VoiceState,
 };
-#[cfg(any(
-    test,
-    all(feature = "native-sherpa", feature = "native-sherpa-tts")
-))]
-use aurora_voice_core::EngineError;
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
