@@ -13,6 +13,7 @@ import sys
 import tempfile
 import types
 import wave
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -30,6 +31,7 @@ from app.services.tts.providers.base import (
     TTSVoiceInfo,
     VoiceSelectionMode,
 )
+from app.services.tts.providers.pockettts import resolve_pockettts_base_identity_spec
 from app.services.tts.service import TTSService
 from app.services.tts.voice_catalog import VoiceCatalogItem, VoiceCatalogSourceError
 from app.services.tts.voice_registry import (
@@ -75,9 +77,28 @@ from app.shared.contracts.models.tts import (
 )
 from app.shared.messaging import bus_init
 
+_POCKETTTS_TEST_CONFIG_BYTES = (
+    b"language: english\nmodel: pockettts-model.safetensors\nrevision: test\n"
+)
+
+
+def _resolve_test_pockettts_identity(config):
+    return resolve_pockettts_base_identity_spec(
+        replace(
+            config,
+            package_version="2.1.0",
+            config_yaml_bytes=_POCKETTTS_TEST_CONFIG_BYTES,
+            config_asset_refs=("pockettts-model.safetensors",),
+        )
+    )
+
 
 @pytest.fixture
-def mock_bus():
+def mock_bus(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.tts.service.resolve_pockettts_base_identity_spec",
+        _resolve_test_pockettts_identity,
+    )
     FakePocketProvider.instances = []
     FakeVoiceRegistry.entries = ()
     FakeVoiceRegistry.resolved = []
