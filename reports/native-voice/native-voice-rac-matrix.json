@@ -5,7 +5,7 @@
   "freshSessionHandoffSha256": "1aa437c5489bc620f8f0f2549a2ff73647eeccbe81ba4de5c17fb6414500f872",
   "codeEvidenceBaselineHead": "851f1591be6a4b9e73948fe85dfc43b607d868c1",
   "currentEvidenceHead": "6c88fea6bdf850acc6dd908fa052f903894b7443",
-  "reportCommit": "resolve-with-git-log-for-this-file",
+  "reportCommit": "13a524731db973eff5802838b6e7077b50fef647",
   "audit": {
     "auditedAtUtc": "2026-08-15T00:17:49Z",
     "resumedAtUtc": "2026-08-08T22:15:10Z",
