@@ -1,0 +1,75 @@
+name: Sherpa PocketTTS language packs
+
+# Temporary bootstrap publisher. Remove the convert/build job after GitHub
+# release tag sherpa-pockettts-language-packs has stable archive URLs for the
+# English 2026-04 and French 24l packs. A later task will point the on-demand
+# catalog at those URLs.
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sherpa-pockettts-language-packs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  convert-language-packs:
+    name: Convert official Kyutai PocketTTS language packs
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache PocketTTS conversion artifacts
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/pockettts/language-packs
+          key: pockettts-language-packs-${{ hashFiles('tools/voice-runtime/pockettts-packs/language_pack_sources.json') }}
+          restore-keys: |
+            pockettts-language-packs-
+
+      - name: Convert English current-generation pack
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+            --pack aurora-pockettts-en-2026-04 \
+            --json
+
+      - name: Convert French newer-protocol pack
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+            --pack aurora-pockettts-fr-24l \
+            --json
+
+      - name: Write checksum manifest
+        run: |
+          uv run python tools/voice-runtime/pockettts-packs/publish_language_packs.py \
+            --artifact-dir .artifacts/pockettts/language-packs \
+            --output .artifacts/pockettts/language-packs/checksum-manifest.json \
+            --check-workflow
+
+      - name: Upload language-pack artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-pockettts-language-packs
+          path: |
+            .artifacts/pockettts/language-packs/*.tar.bz2
+            .artifacts/pockettts/language-packs/checksum-manifest.json
+            .artifacts/pockettts/language-packs/SHA256SUMS
+          if-no-files-found: error

@@ -484,13 +484,13 @@ function ttsGenerationConfig(models: readonly AuroraVoiceWebModelDescriptor[]): 
   if (matches.length === 0) return {}
   const model = requireModel(models, 'tts')
   if (model.family !== 'pockettts') return {}
-  const referenceText = model.config?.referenceText
   const referenceSampleRate = model.config?.referenceSampleRateHz
-  if (referenceText === undefined || referenceSampleRate === undefined) throw unavailable('missing_model_role')
+  if (referenceSampleRate === undefined) throw unavailable('missing_model_role')
+  const referenceText = model.config?.referenceText?.trim()
   return {
     referenceAudio: requireRole(model, 'referenceAudio'),
-    referenceText,
-    referenceSampleRate
+    referenceSampleRate,
+    ...(referenceText ? { referenceText } : {}),
   }
 }
 
@@ -649,7 +649,7 @@ function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['
   if (config.noiseScale !== undefined) boundedFloat(config.noiseScale, 0, 10, 'invalid_model_metadata')
   if (config.noiseScaleW !== undefined) boundedFloat(config.noiseScaleW, 0, 10, 'invalid_model_metadata')
   if (config.lengthScale !== undefined) boundedFloat(config.lengthScale, 0.1, 10, 'invalid_model_metadata')
-  if (config.referenceText !== undefined && (typeof config.referenceText !== 'string' || config.referenceText.trim() === '' || config.referenceText.length > 1_000)) {
+  if (config.referenceText !== undefined && (typeof config.referenceText !== 'string' || config.referenceText.length > 1_000)) {
     throw unavailable('invalid_model_metadata')
   }
   if (config.referenceSampleRateHz !== undefined && (!Number.isSafeInteger(config.referenceSampleRateHz) || config.referenceSampleRateHz < 8_000 || config.referenceSampleRateHz > 48_000)) {

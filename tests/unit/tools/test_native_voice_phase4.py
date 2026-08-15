@@ -115,11 +115,11 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
     assert moonshine["license"]["evidence_sha256"] == (
         "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd"
     )
-    assert artifacts["sherpa-onnx-android-1.13.4"]["url"].endswith(
-        "/sherpa-onnx-v1.13.4-android.tar.bz2"
+    assert artifacts["sherpa-onnx-android-1.13.5"]["url"].endswith(
+        "/sherpa-onnx-v1.13.5-android.tar.bz2"
     )
-    assert artifacts["sherpa-onnx-ios-static-xcframework-1.13.4"]["url"].endswith(
-        "/sherpa-onnx-v1.13.4-ios.xcframework.zip"
+    assert artifacts["sherpa-onnx-ios-source-v1.13.5"]["url"].endswith(
+        "/sherpa-onnx/archive/refs/tags/v1.13.5.tar.gz"
     )
     kws = artifacts["sherpa-kws-gigaspeech-2024-01-01"]
     assert kws["url"].endswith("/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2")

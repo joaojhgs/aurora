@@ -243,7 +243,7 @@ describe('openActiveBrowserSpeechPacks', () => {
     })
   })
 
-  it('attaches explicit Pocket reference audio and text to active model bindings', async () => {
+  it('attaches explicit Pocket reference audio without written sample words', async () => {
     const host = fakeModelStoreHost()
     const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
     voiceWeb.openExistingHost.mockResolvedValueOnce(host)
@@ -258,7 +258,7 @@ describe('openActiveBrowserSpeechPacks', () => {
       loadReferenceProfile: vi.fn(async () => ({
         id: 'voice-ref-1',
         label: 'Voice sample',
-        transcript: 'hello from the speaker',
+        transcript: '',
         sampleRateHz: 16_000,
         durationMs: 1_000,
         byteLength: audioBytes.byteLength,
@@ -286,10 +286,10 @@ describe('openActiveBrowserSpeechPacks', () => {
         expect.objectContaining({ role: 'referenceAudio', fileId: 'reference-audio:voice-ref-1' }),
       ]),
       config: expect.objectContaining({
-        referenceText: 'hello from the speaker',
         referenceSampleRateHz: 16_000,
       }),
     })
+    expect(result.modelBindings.models[0]?.config).not.toHaveProperty('referenceText')
     expect(result.revision).toContain('reference-audio:voice-ref-1')
   })
 })
@@ -337,6 +337,21 @@ describe('AuroraBrowserPocketReferenceProfile store', () => {
     await deleteAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
     expect(await listAuroraBrowserPocketReferenceProfiles({ createHost: async () => host })).toEqual([])
     expect(await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })).toBeNull()
+  })
+
+  it('saves a voice sample without written sample words', async () => {
+    const host = memoryModelStoreHost()
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+
+    const saved = await saveAuroraBrowserPocketReferenceProfile({
+      audioBytes,
+      filename: 'my voice.wav',
+    }, { createHost: async () => host })
+
+    expect(saved.transcript).toBe('')
+    const loaded = await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
+    expect(loaded?.transcript).toBe('')
+    expect(loaded?.audioBytes).toEqual(audioBytes)
   })
 
   it('decodes validated mono PCM WAV samples for native adapters', () => {

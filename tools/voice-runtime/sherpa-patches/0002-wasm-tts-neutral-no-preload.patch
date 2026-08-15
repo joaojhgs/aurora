@@ -1,0 +1,75 @@
+--- a/wasm/tts/CMakeLists.txt
++++ b/wasm/tts/CMakeLists.txt
+@@ -2,9 +2,12 @@
+   message(FATAL_ERROR "Please use ./build-wasm-simd-tts.sh to build for wasm TTS")
+ endif()
+ 
+-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/tokens.txt" AND
+-   NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/lm_flow.int8.onnx")
+-  message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++set(_aurora_wasm_tts_neutral "$ENV{AURORA_SHERPA_WASM_TTS_NEUTRAL}")
++if(NOT _aurora_wasm_tts_neutral STREQUAL "1")
++  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/tokens.txt" AND
++     NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/lm_flow.int8.onnx")
++    message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++  endif()
+ endif()
+ 
+ set(exported_functions
+@@ -31,8 +34,12 @@
+ string(APPEND MY_FLAGS " -sSTACK_SIZE=10485760 ") # 10MB
+ string(APPEND MY_FLAGS " -sALLOW_TABLE_GROWTH ")
+ string(APPEND MY_FLAGS " -sEXPORTED_FUNCTIONS=[_CopyHeap,_malloc,_free,${all_exported_functions}] ")
+-string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
+-string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','addFunction','removeFunction'] ")
++if(_aurora_wasm_tts_neutral STREQUAL "1")
++  string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','addFunction','removeFunction','FS'] ")
++else()
++  string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
++  string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','addFunction','removeFunction'] ")
++endif()
+ 
+ message(STATUS "MY_FLAGS: ${MY_FLAGS}")
+ 
+@@ -49,15 +56,29 @@
+ target_link_libraries(sherpa-onnx-wasm-main-tts sherpa-onnx-c-api)
+ install(TARGETS sherpa-onnx-wasm-main-tts DESTINATION bin/wasm/tts)
+ 
+-install(
+-  FILES
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.js"
+-    "index.html"
+-    "sherpa-onnx-tts.js"
+-    "sherpa-onnx-tts.worker.js"
+-    "app-tts.js"
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.wasm"
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.data"
+-  DESTINATION
+-    bin/wasm/tts
+-)
++if(_aurora_wasm_tts_neutral STREQUAL "1")
++  install(
++    FILES
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.js"
++      "index.html"
++      "sherpa-onnx-tts.js"
++      "sherpa-onnx-tts.worker.js"
++      "app-tts.js"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.wasm"
++    DESTINATION
++      bin/wasm/tts
++  )
++else()
++  install(
++    FILES
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.js"
++      "index.html"
++      "sherpa-onnx-tts.js"
++      "sherpa-onnx-tts.worker.js"
++      "app-tts.js"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.wasm"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.data"
++    DESTINATION
++      bin/wasm/tts
++  )
++endif()

@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Stage official sherpa-onnx and apply Aurora's PocketTTS patch queue."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+import tarfile
+from pathlib import Path
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PATCH_DIR = Path(__file__).resolve().parent
+SERIES_PATH = PATCH_DIR / "series"
+MANIFEST_PATH = REPO_ROOT / "tools/voice-runtime/phase4_manifest.json"
+SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
+PATCH_SHA256 = {
+    "0001-pockettts-multilingual-protocol.patch": (
+        "e4e745b1568b790e0625f5fd3da3cc131159f1cb73b6dee94fa85e301e60287d"
+    ),
+    "0002-wasm-tts-neutral-no-preload.patch": (
+        "959b69d27457a658193404eb67233c5c0fabeb7009d575b0970ba883e83bddee"
+    ),
+}
+
+
+class PatchQueueError(RuntimeError):
+    """Raised when the staged Sherpa tree cannot be verified or patched."""
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_source_pin(manifest_path: Path = MANIFEST_PATH) -> dict[str, Any]:
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for artifact in data.get("artifacts", []):
+        if isinstance(artifact, dict) and artifact.get("id") == SHERPA_SOURCE_ID:
+            return artifact
+    raise PatchQueueError(f"manifest is missing {SHERPA_SOURCE_ID}")
+
+
+def series_patches() -> list[str]:
+    names: list[str] = []
+    for raw in SERIES_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        names.append(line)
+    if names != list(PATCH_SHA256):
+        raise PatchQueueError("series does not match the pinned patch digest map")
+    return names
+
+
+def verify_patches() -> list[dict[str, str]]:
+    records = []
+    for name in series_patches():
+        path = PATCH_DIR / name
+        if not path.is_file():
+            raise PatchQueueError(f"missing patch {name}")
+        digest = sha256_file(path)
+        expected = PATCH_SHA256[name]
+        if digest != expected:
+            raise PatchQueueError(f"patch digest mismatch for {name}: {digest}")
+        records.append({"name": name, "sha256": digest})
+    return records
+
+
+def verify_archive(archive: Path, pin: dict[str, Any]) -> None:
+    if not archive.is_file():
+        raise PatchQueueError(f"missing sherpa archive: {archive}")
+    size = archive.stat().st_size
+    if size != int(pin["size_bytes"]):
+        raise PatchQueueError(f"sherpa archive size mismatch: {size}")
+    digest = sha256_file(archive)
+    if digest != pin["sha256"]:
+        raise PatchQueueError(f"sherpa archive digest mismatch: {digest}")
+
+
+def extract_archive(archive: Path, staging_root: Path, extraction_name: str) -> Path:
+    if staging_root.exists():
+        shutil.rmtree(staging_root)
+    staging_root.mkdir(parents=True)
+    with tarfile.open(archive, "r:gz") as tar:
+        extract_kwargs: dict[str, Any] = {}
+        if hasattr(tarfile, "fully_trusted_filter"):
+            extract_kwargs["filter"] = tarfile.fully_trusted_filter
+        tar.extractall(staging_root, **extract_kwargs)
+    extracted = staging_root / extraction_name
+    if not extracted.is_dir():
+        raise PatchQueueError(f"archive did not extract {extraction_name}")
+    return extracted
+
+
+def apply_patches(source_root: Path) -> None:
+    for record in verify_patches():
+        patch = PATCH_DIR / record["name"]
+        result = subprocess.run(
+            [
+                "git",
+                "apply",
+                "--unidiff-zero",
+                "--whitespace=nowarn",
+                str(patch),
+            ],
+            cwd=source_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise PatchQueueError(
+                f"failed to apply {record['name']}: {result.stderr.strip()}"
+            )
+
+
+def patched_tree_identity(source_root: Path) -> dict[str, Any]:
+    files = [
+        "sherpa-onnx/csrc/offline-tts-pocket-model.h",
+        "sherpa-onnx/csrc/offline-tts-pocket-model.cc",
+        "sherpa-onnx/csrc/offline-tts-pocket-impl.h",
+        "wasm/tts/CMakeLists.txt",
+    ]
+    records = []
+    digest = hashlib.sha256()
+    for relative in files:
+        path = source_root / relative
+        if not path.is_file():
+            raise PatchQueueError(f"patched file missing: {relative}")
+        file_digest = sha256_file(path)
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(file_digest))
+        records.append({"path": relative, "sha256": file_digest})
+    return {"sha256": digest.hexdigest(), "files": records}
+
+
+def stage(
+    *,
+    archive: Path,
+    staging_root: Path,
+    manifest_path: Path = MANIFEST_PATH,
+) -> dict[str, Any]:
+    pin = load_source_pin(manifest_path)
+    verify_archive(archive, pin)
+    extraction_name = Path(str(pin["extraction_path"])).name
+    source_root = extract_archive(archive, staging_root, extraction_name)
+    apply_patches(source_root)
+    identity = patched_tree_identity(source_root)
+    return {
+        "upstream": {
+            "id": pin["id"],
+            "version": pin["version"],
+            "commit": pin.get("commit"),
+            "url": pin["url"],
+            "sha256": pin["sha256"],
+        },
+        "patches": verify_patches(),
+        "source_root": str(source_root),
+        "patched_tree": identity,
+    }
+
+
+def _args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--archive", type=Path, required=True)
+    parser.add_argument("--staging-root", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
+    parser.add_argument("--json", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = _args()
+    report = stage(
+        archive=args.archive,
+        staging_root=args.staging_root,
+        manifest_path=args.manifest,
+    )
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(f"patched {report['upstream']['version']} -> {report['source_root']}")
+        print(f"patched-tree sha256 {report['patched_tree']['sha256']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

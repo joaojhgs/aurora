@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "catalog_id": "aurora-sherpa-pockettts-language-packs-v1",
+  "revision": "bootstrap-sources-v1",
+  "temporary_bootstrap": true,
+  "removal_point": "After GitHub release tag sherpa-pockettts-language-packs publishes stable archive URLs, replace on-demand catalog download URLs with those release assets and delete .github/workflows/sherpa-pockettts-language-packs.yml convert/build steps.",
+  "export_helper": {
+    "repository": "https://github.com/csukuangfj/pocket-tts-onnx-export",
+    "role": "on-demand conversion helper, not a permanent fork"
+  },
+  "kyutai_source": {
+    "repository": "https://github.com/kyutai-labs/pocket-tts",
+    "tag": "v2.1.0",
+    "commit": "058886528d0b6f2f2d4022de2e244a5260729e6e"
+  },
+  "packs": [
+    {
+      "pack_id": "aurora-pockettts-en-2026-04",
+      "voice_id": "standard:pockettts:aurora-pockettts-en-2026-04",
+      "display_name": "PocketTTS English",
+      "language": "en-us",
+      "kyutai_config": "english_2026-04",
+      "protocol": {
+        "protocol_version": 1,
+        "insert_bos_before_voice": true,
+        "frames_after_eos": 3,
+        "eos_threshold": -4.0,
+        "empty_kv_seq_len": 0,
+        "latent_dim": 32,
+        "pad_with_spaces_for_short_inputs": false,
+        "remove_semicolons": false
+      },
+      "weights": {
+        "repo_id": "kyutai/pocket-tts",
+        "revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "filename": "languages/english_2026-04/model.safetensors",
+        "license": "cc-by-4.0-extra-gated",
+        "gated": true,
+        "public_fallback_repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "public_fallback_revision": "e041936c75475d350b405bc870bcf7c22da4e9e6"
+      },
+      "tokenizer": {
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
+        "filename": "languages/english_2026-04/tokenizer.model",
+        "license": "CC-BY-4.0"
+      }
+    },
+    {
+      "pack_id": "aurora-pockettts-fr-24l",
+      "voice_id": "standard:pockettts:aurora-pockettts-fr-24l",
+      "display_name": "PocketTTS French",
+      "language": "fr-fr",
+      "kyutai_config": "french_24l",
+      "protocol": {
+        "protocol_version": 1,
+        "insert_bos_before_voice": true,
+        "frames_after_eos": 8,
+        "eos_threshold": -4.0,
+        "empty_kv_seq_len": 0,
+        "latent_dim": 32,
+        "pad_with_spaces_for_short_inputs": false,
+        "remove_semicolons": true
+      },
+      "weights": {
+        "repo_id": "kyutai/pocket-tts",
+        "revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "filename": "languages/french_24l/model.safetensors",
+        "license": "cc-by-4.0-extra-gated",
+        "gated": true,
+        "public_fallback_repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "public_fallback_revision": "e041936c75475d350b405bc870bcf7c22da4e9e6"
+      },
+      "tokenizer": {
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
+        "filename": "languages/french_24l/tokenizer.model",
+        "license": "CC-BY-4.0"
+      }
+    }
+  ]
+}

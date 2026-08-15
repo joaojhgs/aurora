@@ -62,7 +62,8 @@ This index separates current documentation from historical/provenance material. 
 | [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md) | Current bounded check | Evidence-based implementation snapshot that separates implemented, build-proven, live-proven, planned, and limited client paths. |
 | [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) | Current | Implemented TypeScript WebView/Python WebRTC protocol contract, security posture, dependencies, and conformance commands. |
 | [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md) | Current bounded check | Chromium/Firefox/Playwright-WebKit direct, configured-STUN, and forced-TURN browser ↔ Python Gateway harness and report schema. |
-| [`NATIVE_VOICE_RUNTIME_PHASE4.md`](NATIVE_VOICE_RUNTIME_PHASE4.md) | Current bounded check — Phase 4 frozen | Phase 4 native voice runtime dependency/model decisions, portability evidence, platform boundaries, and withheld capabilities. |
+| [`NATIVE_VOICE_RUNTIME_PHASE4.md`](NATIVE_VOICE_RUNTIME_PHASE4.md) | Current bounded check — Phase 4 frozen | Phase 4 native voice runtime dependency/model decisions, portability evidence, platform boundaries, and withheld capabilities. Live Sherpa PocketTTS pin is [`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md). |
+| [`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md) | Current | Live sherpa-onnx v1.13.5 PocketTTS pin, patch queue, language packs, and native/WASM proof commands. |
 | [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) | Current | Desktop sidecar profiles and unsigned bundle build flow. |
 | [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) | Current | UI source-boundary rules and regression gates. |
 | [`UI_INTEGRATION.md`](UI_INTEGRATION.md) | Legacy/current bridge reference | PyQt UIBridge reference and migration notes. Prefer `FRONTEND_AND_UI_ARCHITECTURE.md` for new UI work. |

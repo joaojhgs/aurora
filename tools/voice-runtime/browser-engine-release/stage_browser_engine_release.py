@@ -21,7 +21,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = REPO_ROOT / "tools/voice-runtime/phase4_manifest.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / ".artifacts/voice-runtime/browser-engine-release"
-SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.4"
+SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
 
 FORBIDDEN_SUFFIXES = {
     ".bin",
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--source-root",
         type=Path,
-        help="Extracted sherpa-onnx v1.13.4 tree with neutral WASM build outputs.",
+        help="Extracted sherpa-onnx v1.13.5 tree with neutral WASM build outputs.",
     )
     parser.add_argument(
         "--tts-artifact-root",
@@ -235,16 +235,16 @@ def ensure_source_archive(
 
 
 def extract_source_archive(archive: Path, output_root: Path) -> Path:
-    source_root = output_root / "source" / "sherpa-onnx-1.13.4"
+    source_root = output_root / "source" / "sherpa-onnx-1.13.5"
     if source_root.exists():
         return source_root
     with tempfile.TemporaryDirectory(prefix="aurora-sherpa-src-") as tmp_name:
         tmp = Path(tmp_name)
         with tarfile.open(archive, "r:gz") as tar:
-            tar.extractall(tmp, filter="data")
-        extracted = tmp / "sherpa-onnx-1.13.4"
+            tar.extractall(tmp)
+        extracted = tmp / "sherpa-onnx-1.13.5"
         if not extracted.is_dir():
-            raise ReleaseError("source archive did not extract sherpa-onnx-1.13.4")
+            raise ReleaseError("source archive did not extract sherpa-onnx-1.13.5")
         source_root.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(extracted), source_root)
     return source_root

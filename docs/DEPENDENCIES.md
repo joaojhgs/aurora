@@ -175,6 +175,13 @@ enable redistribution or automatic download for any PocketTTS model or voice
 asset until an approved Aurora manifest records the exact upstream repo, path,
 revision, SHA-256, size, license, attribution, and redistribution decision.
 
+The Sherpa native/WASM PocketTTS path is separate from the Python PocketTTS
+provider. It uses official sherpa-onnx `v1.13.5` plus
+`tools/voice-runtime/sherpa-patches/`, converts English `english_2026-04` and
+French `french_24l` packs on demand into `.artifacts/`, and must not commit
+weights. See [`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md). The
+`sherpa-pockettts-language-packs` workflow is a temporary bootstrap publisher.
+
 Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/prepare-sidecar.mjs` and `scripts/build.py`. Profiles are explicit so the default bundle does not install every local dependency.
 
 | Profile | Intent | Typical command |

@@ -1,0 +1,4 @@
+# Aurora downstream patch queue for official sherpa-onnx v1.13.5.
+# Apply in order onto a SHA-verified extract of the pinned source archive.
+0001-pockettts-multilingual-protocol.patch
+0002-wasm-tts-neutral-no-preload.patch

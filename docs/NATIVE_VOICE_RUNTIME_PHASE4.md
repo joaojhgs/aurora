@@ -5,11 +5,9 @@
 **Audience:** contributors integrating the cross-surface local voice runtime
 
 This page freezes the Phase 4 native voice runtime engine, audio, linking,
-transport, model, and toolchain decisions. It authorizes the shared production
-foundation work in Phase 5; it is not a completion claim for the native voice
-runtime or for any later device release. Every pending row remains unverified
-until the corresponding build, device, browser, or parity check has a fresh
-report.
+transport, model, and toolchain decisions. The live Sherpa PocketTTS pin is
+[`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md) (`sherpa-onnx v1.13.5` plus the
+Aurora PocketTTS patch queue). This Phase 4 page remains a frozen snapshot.
 
 ## Superseded TypeScript prototype disposition
 

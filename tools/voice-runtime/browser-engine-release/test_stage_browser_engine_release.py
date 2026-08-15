@@ -40,10 +40,10 @@ def test_stages_engine_code_without_model_payloads(tmp_path: Path) -> None:
 
     report_path = Path(payload["report"])
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report["source"]["id"] == "sherpa-onnx-source-v1.13.4"
+    assert report["source"]["id"] == "sherpa-onnx-source-v1.13.5"
     assert (
         report["source"]["sha256"]
-        == "3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295"
+        == "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262"
     )
     assert report["policy"]["contains_model_weights"] is False
 

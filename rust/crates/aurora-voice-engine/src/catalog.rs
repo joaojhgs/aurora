@@ -9,6 +9,8 @@ use thiserror::Error;
 use crate::{canonical_json, sha256_hex, TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ};
 
 const EMBEDDED_SHERPA_TTS_CATALOG: &str = include_str!("../resources/sherpa_onnx_tts_catalog.json");
+const EMBEDDED_AURORA_POCKETTTS_OVERLAY: &str =
+    include_str!("../../../../tools/voice-runtime/pockettts-packs/aurora_pockettts_language_pack_catalog.json");
 const CATALOG_SCHEMA_VERSION: u32 = 1;
 const CATALOG_ID: &str = "sherpa-onnx-tts-models-v1";
 const CATALOG_REVISION: &str = "github-release-130612623-30d65b392bba8dfb";
@@ -24,8 +26,12 @@ const EXPECTED_LANGUAGE_COUNT: usize = 50;
 const MAX_CATALOG_BYTES: usize = 1_500_000;
 const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
 const DOWNLOAD_BASE: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/";
+const OVERLAY_CATALOG_ID: &str = "aurora-sherpa-pockettts-language-packs-v1";
+const OVERLAY_DOWNLOAD_BASE: &str =
+    "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/";
 
 static CATALOG: OnceLock<Result<TtsVoiceCatalog, TtsCatalogError>> = OnceLock::new();
+static RUNTIME_CATALOG: OnceLock<Result<TtsVoiceCatalog, TtsCatalogError>> = OnceLock::new();
 
 /// A pinned metadata-only catalog of user-selectable TTS voices.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +53,36 @@ impl TtsVoiceCatalog {
             Ok(catalog) => Ok(catalog),
             Err(error) => Err(error.clone()),
         }
+    }
+
+    /// Embedded Piper/official PocketTTS catalog plus Aurora language-pack overlay.
+    ///
+    /// Overlay archives are a temporary bootstrap until stable GitHub release
+    /// URLs replace the convert job. The embedded 537-entry pin is unchanged.
+    pub fn runtime() -> Result<&'static Self, TtsCatalogError> {
+        match RUNTIME_CATALOG.get_or_init(Self::merged_with_aurora_pockettts_overlay) {
+            Ok(catalog) => Ok(catalog),
+            Err(error) => Err(error.clone()),
+        }
+    }
+
+    fn merged_with_aurora_pockettts_overlay() -> Result<Self, TtsCatalogError> {
+        let embedded = Self::from_json(EMBEDDED_SHERPA_TTS_CATALOG)?;
+        let overlay = parse_aurora_pockettts_overlay(EMBEDDED_AURORA_POCKETTTS_OVERLAY)?;
+        let mut entries = embedded.entries;
+        let mut voice_ids: BTreeSet<String> =
+            entries.iter().map(|entry| entry.voice_id.clone()).collect();
+        for entry in overlay {
+            if !voice_ids.insert(entry.voice_id.clone()) {
+                return Err(TtsCatalogError::Invalid);
+            }
+            entries.push(entry);
+        }
+        entries.sort_by(|left, right| left.voice_id.cmp(&right.voice_id));
+        Ok(Self {
+            entries,
+            ..embedded
+        })
     }
 
     /// Parse and authenticate a catalog representation against compiled pins.
@@ -235,6 +271,42 @@ impl TtsCatalogEntry {
             self.terms.source.as_str(),
             "upstream_model_card" | "upstream_model_card_restricted_non_commercial"
         ) || self.terms.redistributed_by_aurora
+            || !self.terms.download_initiated_by_user
+        {
+            return Err(TtsCatalogError::Invalid);
+        }
+        Ok(())
+    }
+
+    fn validate_aurora_pockettts_overlay(&self) -> Result<(), TtsCatalogError> {
+        let Some(voice_slug) = self.voice_id.strip_prefix("standard:pockettts:") else {
+            return Err(TtsCatalogError::Invalid);
+        };
+        if voice_slug.is_empty()
+            || self.engine != "sherpa_onnx"
+            || self.model_family != "pockettts"
+            || self.language != "en-us" && self.language != "fr-fr"
+            || !valid_tts_sample_rate(self.model_family.as_str(), self.sample_rate_hz)
+        {
+            return Err(TtsCatalogError::Invalid);
+        }
+        let expected_filename = format!("{}.tar.bz2", self.archive.root);
+        if self.archive.asset_id == 0
+            || self.archive.filename != expected_filename
+            || self.archive.url != format!("{OVERLAY_DOWNLOAD_BASE}{expected_filename}")
+            || self.archive.byte_size == 0
+            || self.archive.byte_size > MAX_ARCHIVE_BYTES
+            || !valid_sha256(&self.archive.sha256)
+            || self.archive.format != "tar_bzip2"
+            || self.archive.root != voice_slug
+            || !safe_path_segment(&self.archive.root)
+        {
+            return Err(TtsCatalogError::Invalid);
+        }
+        self.bindings
+            .validate(&self.model_family, &self.archive.root, &self.archive.root)?;
+        if self.terms.source != "upstream_model_card_restricted_non_commercial"
+            || !self.terms.redistributed_by_aurora
             || !self.terms.download_initiated_by_user
         {
             return Err(TtsCatalogError::Invalid);
@@ -444,6 +516,49 @@ pub struct TtsCatalogTerms {
     pub download_initiated_by_user: bool,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuroraPocketTtsOverlayCatalog {
+    schema_version: u32,
+    catalog_id: String,
+    revision: String,
+    temporary_bootstrap: bool,
+    removal_point: String,
+    download_base: String,
+    entries: Vec<TtsCatalogEntry>,
+}
+
+fn parse_aurora_pockettts_overlay(payload: &str) -> Result<Vec<TtsCatalogEntry>, TtsCatalogError> {
+    if payload.len() > MAX_CATALOG_BYTES {
+        return Err(TtsCatalogError::ResourceLimit);
+    }
+    let overlay: AuroraPocketTtsOverlayCatalog =
+        serde_json::from_str(payload).map_err(|_| TtsCatalogError::Invalid)?;
+    if overlay.schema_version != CATALOG_SCHEMA_VERSION
+        || overlay.catalog_id != OVERLAY_CATALOG_ID
+        || overlay.download_base != OVERLAY_DOWNLOAD_BASE
+        || !overlay.temporary_bootstrap
+        || overlay.revision.is_empty()
+        || !overlay.removal_point.contains("stable archive URLs")
+        || overlay.entries.len() != 2
+    {
+        return Err(TtsCatalogError::Invalid);
+    }
+    let mut voice_ids = BTreeSet::new();
+    for entry in &overlay.entries {
+        entry.validate_aurora_pockettts_overlay()?;
+        if !voice_ids.insert(entry.voice_id.as_str()) {
+            return Err(TtsCatalogError::Invalid);
+        }
+    }
+    if !voice_ids.contains("standard:pockettts:aurora-pockettts-en-2026-04")
+        || !voice_ids.contains("standard:pockettts:aurora-pockettts-fr-24l")
+    {
+        return Err(TtsCatalogError::Invalid);
+    }
+    Ok(overlay.entries)
+}
+
 fn validate_reference_samples(
     model_family: &str,
     root: &str,
@@ -580,5 +695,27 @@ mod tests {
         assert!(!safe_relative_path("root/../../model.onnx"));
         assert!(!safe_relative_path("C:\\model.onnx"));
         assert!(safe_relative_path("root/model.onnx"));
+    }
+
+    #[test]
+    fn aurora_pockettts_overlay_extends_runtime_catalog_only() {
+        let embedded = TtsVoiceCatalog::embedded().expect("embedded catalog validates");
+        let runtime = TtsVoiceCatalog::runtime().expect("runtime catalog validates");
+        assert_eq!(embedded.entries.len(), EXPECTED_ENTRY_COUNT);
+        assert_eq!(runtime.entries.len(), EXPECTED_ENTRY_COUNT + 2);
+        assert_eq!(runtime.entries_sha256, ENTRIES_SHA256);
+        let english = runtime
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("english overlay");
+        let french = runtime
+            .voice("standard:pockettts:aurora-pockettts-fr-24l")
+            .expect("french overlay");
+        assert_eq!(english.language, "en-us");
+        assert_eq!(french.language, "fr-fr");
+        assert!(english.terms.redistributed_by_aurora);
+        assert!(english.archive.url.starts_with(OVERLAY_DOWNLOAD_BASE));
+        assert!(embedded
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .is_none());
     }
 }

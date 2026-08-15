@@ -18,6 +18,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `performance.yml` | Scheduled/manual performance and resilience. | Python performance tests and SDK offline/reconnect/resilience checks. |
 | `docker-build.yml` | Container and process-mode topology validation. | `docker-compose.process.yml` config validation, per-service image builds; pushes only on tags or explicit manual request. |
 | `release.yml` | Manual semantic release. | Lightweight release readiness checks, optional semantic-release publication. |
+| `sherpa-pockettts-language-packs.yml` | Temporary PocketTTS pack publisher. | `workflow_dispatch` or GitHub release only; converts English 2026-04 and French 24l packs and uploads checksummed artifacts. Remove the convert job after stable release URLs exist. |
 | `required-check-aliases.yml` | Temporary branch-protection compatibility. | Emits low-cost success contexts for stale required checks until repository settings are updated to canonical workflow/job names. |
 
 ## Local equivalents

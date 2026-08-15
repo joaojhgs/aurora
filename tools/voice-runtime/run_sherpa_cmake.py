@@ -13,7 +13,21 @@ import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.4"
+SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
+AURORA_POCKETTTS_PATCHED_FILES = {
+    "sherpa-onnx/csrc/offline-tts-pocket-model.h": (
+        "2972a1ae850c6cb3c94d2cba40fcf2abb6d0bf3452117bec698a92eceff8d541"
+    ),
+    "sherpa-onnx/csrc/offline-tts-pocket-model.cc": (
+        "6501af8e31f4777925ae5c8c2cd1f32525616d2c4ba7347e6dadd11ca9d0abec"
+    ),
+    "sherpa-onnx/csrc/offline-tts-pocket-impl.h": (
+        "7e4391fd586161e02f933f0a143105fe6cbe1c87fed16c8ba089a14da8c53b64"
+    ),
+    "wasm/tts/CMakeLists.txt": (
+        "164713e3b4366934814bed691e5ff4fc41bedf06346e9f560202a3fecec14a77"
+    ),
+}
 
 
 class SourceIdentityError(RuntimeError):
@@ -122,11 +136,18 @@ def _source_records(source_root: Path) -> dict[str, tuple[str, ...]]:
     return records
 
 
-def _verify_extracted_tree(archive: Path, source_root: Path) -> tuple[str, int]:
+def _verify_extracted_tree(
+    archive: Path,
+    source_root: Path,
+    *,
+    allow_aurora_pockettts_patches: bool = False,
+) -> tuple[str, int]:
     archive_records = _archive_records(archive, source_root.name)
     source_records = _source_records(source_root)
     archive_digest = _canonical_digest(archive_records)
     source_digest = _canonical_digest(source_records)
+    if allow_aurora_pockettts_patches:
+        return _verify_patched_tree(archive_records, source_records, source_root)
     if archive_records != source_records:
         missing = sorted(archive_records.keys() - source_records.keys())
         extra = sorted(source_records.keys() - archive_records.keys())
@@ -149,6 +170,36 @@ def _verify_extracted_tree(archive: Path, source_root: Path) -> tuple[str, int]:
     if archive_digest != source_digest:
         raise SourceIdentityError("sherpa source tree digest does not match the archive")
     return archive_digest, len(archive_records)
+
+
+def _verify_patched_tree(
+    archive_records: dict[str, tuple[str, ...]],
+    source_records: dict[str, tuple[str, ...]],
+    source_root: Path,
+) -> tuple[str, int]:
+    extra = sorted(source_records.keys() - archive_records.keys())
+    missing = sorted(archive_records.keys() - source_records.keys())
+    if extra or missing:
+        raise SourceIdentityError(
+            "patched sherpa tree changed the archive file set"
+            + (f" extra={extra[0]}" if extra else "")
+            + (f" missing={missing[0]}" if missing else "")
+        )
+    changed = sorted(
+        path
+        for path in archive_records
+        if archive_records[path] != source_records[path]
+    )
+    if set(changed) != set(AURORA_POCKETTTS_PATCHED_FILES):
+        raise SourceIdentityError(
+            "patched sherpa tree does not match the Aurora PocketTTS file set"
+            + (f" changed={changed}" if changed else "")
+        )
+    for relative, expected in AURORA_POCKETTTS_PATCHED_FILES.items():
+        actual = sha256_file(source_root / relative)
+        if actual != expected:
+            raise SourceIdentityError(f"patched file digest mismatch: {relative}")
+    return _canonical_digest(source_records), len(source_records)
 
 
 def validate_cmake_command(command: list[str], source_root: Path) -> None:
@@ -180,7 +231,11 @@ def _git_output(source_root: Path, *args: str, env: dict[str, str] | None = None
 
 
 def verify_source_identity(
-    manifest_path: Path, artifact_root: Path, source_root: Path
+    manifest_path: Path,
+    artifact_root: Path,
+    source_root: Path,
+    *,
+    allow_aurora_pockettts_patches: bool = False,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     pin = load_sherpa_pin(manifest_path)
     resolved_artifact_root = artifact_root.resolve()
@@ -211,7 +266,11 @@ def verify_source_identity(
     actual_archive_sha = sha256_file(archive)
     if actual_archive_sha != pin["sha256"]:
         raise SourceIdentityError("sherpa source archive hash does not match the manifest")
-    source_tree_sha, source_entry_count = _verify_extracted_tree(archive, resolved_source_root)
+    source_tree_sha, source_entry_count = _verify_extracted_tree(
+        archive,
+        resolved_source_root,
+        allow_aurora_pockettts_patches=allow_aurora_pockettts_patches,
+    )
 
     expected_commit = str(pin["commit"])
     inherited_git_root = _git_output(resolved_source_root, "rev-parse", "--show-toplevel")
@@ -250,6 +309,7 @@ def verify_source_identity(
         "source_root": str(resolved_source_root),
         "source_tree_sha256": source_tree_sha,
         "source_entry_count": source_entry_count,
+        "aurora_pockettts_patches": allow_aurora_pockettts_patches,
         "source_has_own_git": source_has_own_git,
         "inherited_git_root_suppressed": (
             inherited_git_root if inherited_git_root and not source_has_own_git else None
@@ -269,6 +329,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument(
+        "--allow-aurora-pockettts-patches",
+        action="store_true",
+        help="Allow the Aurora PocketTTS patch queue on the verified v1.13.5 tree",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser
 
@@ -277,7 +342,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         evidence, build_env = verify_source_identity(
-            args.manifest, args.artifact_root, args.source_root
+            args.manifest,
+            args.artifact_root,
+            args.source_root,
+            allow_aurora_pockettts_patches=args.allow_aurora_pockettts_patches,
         )
     except (OSError, KeyError, json.JSONDecodeError, SourceIdentityError) as exc:
         print(json.dumps({"status": "invalid", "error": str(exc)}), file=sys.stderr)

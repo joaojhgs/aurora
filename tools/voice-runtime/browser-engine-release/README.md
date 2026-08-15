@@ -2,7 +2,7 @@
 
 This lane stages the neutral Sherpa browser runtime as engine code only:
 VAD+STT, KWS, and TTS JavaScript/WASM/helper files. It uses the pinned
-`sherpa-onnx-source-v1.13.4` entry from `tools/voice-runtime/phase4_manifest.json`
+`sherpa-onnx-source-v1.13.5` entry from `tools/voice-runtime/phase4_manifest.json`
 for source identity and writes release outputs under ignored artifact paths.
 
 It deliberately refuses model and voice payloads. `.data`, ONNX/ORT files,

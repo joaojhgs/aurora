@@ -461,11 +461,11 @@ impl TaskPackBinding {
         sample_rate_hz: u32,
     ) -> Result<Self, EngineError> {
         let canonical_catalog =
-            TtsVoiceCatalog::embedded().map_err(|_| EngineError::InvalidRequest)?;
+            TtsVoiceCatalog::runtime().map_err(|_| EngineError::InvalidRequest)?;
         let canonical_entry = canonical_catalog
             .voice(&entry.voice_id)
             .ok_or(EngineError::InvalidRequest)?;
-        if catalog != canonical_catalog
+        if catalog.voice(&entry.voice_id) != Some(canonical_entry)
             || entry != canonical_entry
             || entry.engine != "sherpa_onnx"
             || !matches!(entry.model_family.as_str(), "vits_piper" | "pockettts")
@@ -513,7 +513,7 @@ impl TaskPackBinding {
             variant_abi: AbiRequirements {
                 min_aurora_version: "0.0.0".to_owned(),
                 min_runtime_version: "1.88.0".to_owned(),
-                min_engine_version: "sherpa-onnx-v1.13.4".to_owned(),
+                min_engine_version: "sherpa-onnx-v1.13.5".to_owned(),
                 engine_source_revision: catalog.revision().to_owned(),
                 build_flags: Vec::new(),
             },

@@ -24,8 +24,8 @@ extracted archive lives beneath another Git worktree:
 ```bash
 python tools/voice-runtime/run_sherpa_cmake.py \
   --artifact-root /path/to/pockettts/p4-native-voice \
-  --source-root /path/to/pockettts/p4-native-voice/sources/extracted/sherpa-onnx-1.13.4 \
-  -- cmake -S /path/to/sherpa-onnx-1.13.4 -B /path/to/build
+  --source-root /path/to/pockettts/p4-native-voice/sources/extracted/sherpa-onnx-1.13.5 \
+  -- cmake -S /path/to/sherpa-onnx-1.13.5 -B /path/to/build
 ```
 
 The wrapper verifies the pinned archive and records the expected upstream

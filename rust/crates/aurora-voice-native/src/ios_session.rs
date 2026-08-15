@@ -1973,7 +1973,7 @@ mod tests {
             "/private/model-pack",
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             12,
-            "sherpa-onnx-1.13.4",
+            "sherpa-onnx-1.13.5",
             "en-US",
             16_000,
             512,
@@ -1986,7 +1986,7 @@ mod tests {
         assert_eq!(binding.slot_id(), "default");
         assert_eq!(binding.pack_id(), "stt.en");
         assert_eq!(binding.expected_size_bytes(), 12);
-        assert_eq!(binding.runtime_revision(), "sherpa-onnx-1.13.4");
+        assert_eq!(binding.runtime_revision(), "sherpa-onnx-1.13.5");
         assert_eq!(binding.language(), "en-US");
         assert_eq!(binding.sample_rate_hz(), 16_000);
         assert_eq!(binding.frame_size(), 512);
@@ -2004,7 +2004,7 @@ mod tests {
             "/private/model-pack",
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             12,
-            "sherpa-onnx-1.13.4",
+            "sherpa-onnx-1.13.5",
             "en-US",
             16_000,
             512,
@@ -2173,7 +2173,7 @@ mod tests {
             link,
             sha256,
             12,
-            "sherpa-onnx-1.13.4",
+            "sherpa-onnx-1.13.5",
             "en-US",
             16_000,
             512,
@@ -2251,7 +2251,7 @@ mod tests {
             std::fs::metadata(root.join(format!("{slot}.pack")))
                 .expect("metadata")
                 .len(),
-            "sherpa-onnx-1.13.4",
+            "sherpa-onnx-1.13.5",
             "en-US",
             16_000,
             512,

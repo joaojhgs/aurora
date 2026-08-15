@@ -39,7 +39,7 @@ def write_fixture(tmp_path: Path, expected_commit: str = "1" * 40) -> tuple[Path
             {
                 "artifacts": [
                     {
-                        "id": "sherpa-onnx-source-v1.13.4",
+                        "id": "sherpa-onnx-source-v1.13.5",
                         "archive_path": "sources/sherpa.tar.gz",
                         "extraction_path": "sources/extracted/sherpa",
                         "size_bytes": archive.stat().st_size,

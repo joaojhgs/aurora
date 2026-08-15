@@ -227,7 +227,7 @@ impl SpeechPackManager {
     where
         F: FnMut(SpeechPackInstallProgress),
     {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?
@@ -381,7 +381,7 @@ impl SpeechPackManager {
 
     /// Return durable installed voices whose bindings still verify on disk.
     pub fn list_installed_voices(&self) -> Result<Vec<InstalledSpeechPack>, SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
         let mut state = read_state(&self.config.root)?;
         let mut changed = false;
@@ -474,7 +474,7 @@ impl SpeechPackManager {
     /// their model files. Callers may use this for non-authoritative UI status;
     /// runtime creation must still resolve and verify the selected bindings.
     pub fn recorded_pack_ids(&self) -> Result<Vec<String>, SpeechPackError> {
-        let voice_catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let voice_catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let model_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
         let state = read_state(&self.config.root)?;
@@ -501,7 +501,7 @@ impl SpeechPackManager {
         &self,
         voice_id: &str,
     ) -> Result<SpeechPackBindings, SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?;
@@ -546,7 +546,7 @@ impl SpeechPackManager {
 
     /// Remove one selected voice install and its digest-addressed cache when unused.
     pub fn remove_voice(&self, voice_id: &str) -> Result<(), SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?;
@@ -901,7 +901,7 @@ fn tts_task_binding(
     entry: &TtsCatalogEntry,
     extracted_root: &Path,
 ) -> Result<TaskPackBinding, SpeechPackError> {
-    let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+    let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
     TaskPackBinding::from_tts_catalog_entry(
         catalog,
         entry,

@@ -123,7 +123,7 @@ export interface AuroraBrowserPocketReferenceProfileSummary {
 
 export interface AuroraBrowserPocketReferenceProfileInput {
   readonly audioBytes: Uint8Array
-  readonly transcript: string
+  readonly transcript?: string | undefined
   readonly filename?: string | undefined
   readonly mimeType?: string | undefined
   readonly label?: string | undefined
@@ -278,7 +278,7 @@ export async function saveAuroraBrowserPocketReferenceProfile(
   options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
 ): Promise<AuroraBrowserPocketReferenceProfileSummary> {
   const decoded = decodeAuroraPocketReferenceWav(input.audioBytes)
-  const transcript = normalizePocketReferenceTranscript(input.transcript)
+  const transcript = normalizePocketReferenceTranscript(input.transcript ?? '')
   const host = await pocketReferenceProfileHost(options)
   const id = createPocketReferenceProfileId(options.globalObject)
   const now = Date.now()
@@ -451,7 +451,9 @@ export async function openActiveBrowserSpeechPacks(
             ]),
             config: Object.freeze({
               ...(model.config ?? {}),
-              referenceText: referenceProfile.transcript,
+              ...(referenceProfile.transcript.length > 0
+                ? { referenceText: referenceProfile.transcript }
+                : {}),
               referenceSampleRateHz: referenceProfile.sampleRateHz,
             }),
           })
@@ -810,7 +812,8 @@ function parsePocketReferenceProfileRecord(value: unknown): AuroraBrowserPocketR
   const record = value as Partial<PocketReferenceProfileRecord>
   let transcript: string
   try {
-    transcript = typeof record.transcript === 'string' ? normalizePocketReferenceTranscript(record.transcript) : ''
+    const rawTranscript = typeof record.transcript === 'string' ? record.transcript : ''
+    transcript = normalizePocketReferenceTranscript(rawTranscript)
   } catch {
     return null
   }
@@ -819,7 +822,7 @@ function parsePocketReferenceProfileRecord(value: unknown): AuroraBrowserPocketR
     || !isPocketReferenceProfileId(record.id)
     || typeof record.label !== 'string'
     || record.label.trim() === ''
-    || transcript !== record.transcript
+    || (typeof record.transcript === 'string' && transcript !== record.transcript)
     || typeof record.sampleRateHz !== 'number'
     || !Number.isSafeInteger(record.sampleRateHz)
     || record.sampleRateHz < 8_000
@@ -930,7 +933,7 @@ function writePcm16MonoWav(sampleRateHz: number, pcmBytes: Uint8Array): Uint8Arr
 
 function normalizePocketReferenceTranscript(value: string): string {
   const normalized = value.replace(/\s+/gu, ' ').trim()
-  if (normalized.length === 0 || normalized.length > POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS) throw new Error('voice_sample_words')
+  if (normalized.length > POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS) throw new Error('voice_sample_words')
   return normalized
 }
 

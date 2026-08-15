@@ -1351,7 +1351,7 @@ describe('VoiceSettingsView', () => {
         saveReferenceProfile: vi.fn(async () => ({
           id: 'voice-ref-1',
           label: 'sample.wav',
-          transcript: 'hello from me',
+          transcript: '',
           sampleRateHz: 16_000,
           durationMs: 1000,
           byteLength: 32044,
@@ -1377,18 +1377,17 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
     expect(select).toHaveBeenCalledTimes(2)
-    expect(visibleText(container)).toContain('Add a short WAV recording and type the words spoken in it.')
+    expect(visibleText(container)).toContain('Add a short WAV recording of the voice to clone.')
+    expect(visibleText(container)).not.toContain('Spoken words')
+    expect(visibleText(container)).not.toContain('type the words spoken')
+    expect(container.querySelector('textarea')).toBeNull()
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement | null
-    const transcriptInput = container.querySelector('textarea') as HTMLTextAreaElement | null
-    if (!fileInput || !transcriptInput) throw new Error('expected voice sample form')
+    if (!fileInput) throw new Error('expected voice sample form')
     const file = new File([new Uint8Array([1, 2, 3])], 'sample.wav', { type: 'audio/wav' })
     Object.defineProperty(file, 'arrayBuffer', { configurable: true, value: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer) })
     Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] })
     await act(async () => {
       fileInput.dispatchEvent(new Event('change', { bubbles: true }))
-      setInputValue(transcriptInput, 'hello from me')
-      transcriptInput.dispatchEvent(new Event('input', { bubbles: true }))
-      transcriptInput.dispatchEvent(new Event('change', { bubbles: true }))
     })
     await flushReactWork()
     await act(async () => {
