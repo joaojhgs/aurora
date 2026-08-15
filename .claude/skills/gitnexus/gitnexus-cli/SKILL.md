@@ -77,7 +77,7 @@ Lists all repositories registered in `~/.gitnexus/registry.json`. The MCP `list_
 ## After Indexing
 
 1. **Read `gitnexus://repo/{name}/context`** to verify the index loaded
-2. Use the other GitNexus skills (`gitnexus-exploring`, `gitnexus-debugging`, `gitnexus-impact-analysis`, `gitnexus-refactoring`) for your task
+2. Use the other GitNexus skills (`exploring`, `debugging`, `impact-analysis`, `refactoring`) for your task
 
 ## Troubleshooting
 
