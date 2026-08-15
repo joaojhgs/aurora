@@ -64,6 +64,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 

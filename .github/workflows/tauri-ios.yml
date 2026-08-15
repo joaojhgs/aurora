@@ -44,6 +44,12 @@ jobs:
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim,wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - name: Set up Python interop peer
         uses: actions/setup-python@v5
         with:

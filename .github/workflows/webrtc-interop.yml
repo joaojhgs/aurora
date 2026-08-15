@@ -56,6 +56,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - run: uv sync --extra sidecar-thin
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit

@@ -74,6 +74,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
 
@@ -217,6 +223,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -277,6 +289,12 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -336,6 +354,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
