@@ -230,6 +230,36 @@ describe('Android native voice route policy', () => {
     expect(foregroundStatusBody).toContain('wakePhraseSelection() != null')
     expect(foregroundStatusBody).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeRouteReady')
     expect(foregroundStatusBody).toContain('val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && backgroundRuntimeReady')
+    for (const statusField of [
+      'runtimeActive',
+      'runtimePhase',
+      'sessionGeneration',
+      'completedTurns',
+      'failedTurns',
+      'queuedOutputChunks',
+    ]) {
+      expect(foregroundStatusBody).toContain(`ret.put("${statusField}", capture.${statusField})`)
+    }
+    expect(foregroundService).toContain('private const val VOICE_STATS_RUNTIME_ACTIVE_INDEX = 5')
+    expect(foregroundService).toContain('private const val VOICE_STATS_RUNTIME_PHASE_INDEX = 6')
+    expect(foregroundService).toContain('private const val VOICE_STATS_SESSION_GENERATION_INDEX = 7')
+    expect(foregroundService).toContain('private const val VOICE_STATS_COMPLETED_TURNS_INDEX = 8')
+    expect(foregroundService).toContain('private const val VOICE_STATS_FAILED_TURNS_INDEX = 9')
+    expect(foregroundService).toContain('private const val VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX = 10')
+    expect(foregroundService).toContain('runtimeActive = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0 } != 0L')
+    expect(foregroundService).toContain('runtimePhase = auroraVoiceRuntimePhase(stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0 })')
+    for (const [value, phase] of [
+      ['0L', 'idle'],
+      ['1L', 'starting'],
+      ['2L', 'listening'],
+      ['3L', 'processing'],
+      ['4L', 'speaking'],
+      ['5L', 'stopping'],
+      ['6L', 'faulted'],
+    ]) {
+      expect(foregroundService).toContain(`${value} -> "${phase}"`)
+    }
+    expect(foregroundService).toContain('else -> "unknown"')
     expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
     expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
   })

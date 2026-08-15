@@ -41,6 +41,12 @@ private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
 private const val MAX_CHUNK_SAMPLES = 4_096
+private const val VOICE_STATS_RUNTIME_ACTIVE_INDEX = 5
+private const val VOICE_STATS_RUNTIME_PHASE_INDEX = 6
+private const val VOICE_STATS_SESSION_GENERATION_INDEX = 7
+private const val VOICE_STATS_COMPLETED_TURNS_INDEX = 8
+private const val VOICE_STATS_FAILED_TURNS_INDEX = 9
+private const val VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX = 10
 private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION
 private const val VOICE_SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val VOICE_SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
@@ -209,8 +215,25 @@ data class AuroraVoiceCaptureSnapshot(
     val droppedChunks: Long,
     val discontinuities: Long,
     val queuedChunks: Long,
+    val runtimeActive: Boolean,
+    val runtimePhase: String,
+    val sessionGeneration: Long,
+    val completedTurns: Long,
+    val failedTurns: Long,
+    val queuedOutputChunks: Long,
     val errorCode: String?,
 )
+
+private fun auroraVoiceRuntimePhase(value: Long): String = when (value) {
+    0L -> "idle"
+    1L -> "starting"
+    2L -> "listening"
+    3L -> "processing"
+    4L -> "speaking"
+    5L -> "stopping"
+    6L -> "faulted"
+    else -> "unknown"
+}
 
 /** JNI handle for the bounded Rust-owned PCM ingress queue. */
 private class AuroraNativeAudioBridge : AuroraPcmIngressBridge {
@@ -610,6 +633,12 @@ private class AuroraAudioCapture(
                 droppedChunks = stats.getOrElse(2) { 0 },
                 discontinuities = stats.getOrElse(3) { 0 },
                 queuedChunks = stats.getOrElse(4) { 0 },
+                runtimeActive = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0 } != 0L,
+                runtimePhase = auroraVoiceRuntimePhase(stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0 }),
+                sessionGeneration = stats.getOrElse(VOICE_STATS_SESSION_GENERATION_INDEX) { 0 },
+                completedTurns = stats.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX) { 0 },
+                failedTurns = stats.getOrElse(VOICE_STATS_FAILED_TURNS_INDEX) { 0 },
+                queuedOutputChunks = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0 },
                 errorCode = errorCode,
             ),
         )
@@ -1171,8 +1200,8 @@ class AuroraVoiceForegroundService : Service() {
             return
         }
         val stats = nativeSession.stats()
-        val active = stats.getOrElse(5) { 0L } != 0L
-        val queuedOutput = stats.getOrElse(10) { 0L }
+        val active = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0L } != 0L
+        val queuedOutput = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0L }
         if (active || queuedOutput > 0L) {
             finishHandler.postDelayed({ awaitFinishedSession() }, 100L)
             return
@@ -1248,6 +1277,12 @@ class AuroraVoiceForegroundService : Service() {
             droppedChunks = 0,
             discontinuities = 0,
             queuedChunks = 0,
+            runtimeActive = false,
+            runtimePhase = "idle",
+            sessionGeneration = 0,
+            completedTurns = 0,
+            failedTurns = 0,
+            queuedOutputChunks = 0,
             errorCode = errorCode,
         )
     }
