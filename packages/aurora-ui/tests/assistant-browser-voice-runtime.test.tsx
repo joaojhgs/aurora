@@ -1115,6 +1115,58 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
   })
 
+  it('waits for native mobile background capture before marking hands-free active', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    let startRequested = false
+    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
+      startRequested = true
+      return nativeMobileStatus('processing')
+    })
+    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
+      startRequested
+        ? nativeMobileStatus('listening', true)
+        : nativeMobileStatus('idle')
+    ))
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Open route details')
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus.mock.calls.length).toBeGreaterThan(1))
+    expect(findButtonByText(container, 'Stop hands-free')).toBeTruthy()
+  })
+
+  it('keeps hands-free inactive when native background capture is not confirmed', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    let startRequested = false
+    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
+      startRequested = true
+      return nativeMobileStatus('processing')
+    })
+    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
+      startRequested
+        ? nativeMobileStatus('unavailable')
+        : nativeMobileStatus('idle')
+    ))
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Open route details')
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.stopBackground).toHaveBeenCalledTimes(1))
+    expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
+    expect(container.textContent).toContain('Hands-free voice could not start. Check microphone access on this device.')
+  })
+
   it('keeps local native mobile hands-free independent from connected speech consent and selection', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()

@@ -59,22 +59,29 @@ function parseStatus(
   const faulted = captureError !== null
     || nested.runtimePhase === "faulted"
     || nested.state === "faulted";
-  const available = (options.background ? nested.backgroundStartable === true : nested.startable === true) || running;
+  const background = options.background === true;
+  const active = background ? backgroundSessionActive : running;
+  const statusCaptureActive = background
+    ? backgroundSessionActive && captureActive
+    : captureActive;
+  const available = background
+    ? nested.backgroundStartable === true || backgroundSessionActive
+    : nested.startable === true || running;
   const phase: NativeMobileVoicePhase = !available
     ? "unavailable"
     : faulted
       ? "faulted"
-      : captureActive
+      : statusCaptureActive
         ? "listening"
-        : running
+        : active
           ? "processing"
           : "idle";
   return {
     available,
     phase,
-    running,
-    captureActive,
-    backgroundActive: options.background === true && backgroundSessionActive,
+    running: active,
+    captureActive: statusCaptureActive,
+    backgroundActive: background && backgroundSessionActive,
     reasonCode,
     redacted: true,
   };

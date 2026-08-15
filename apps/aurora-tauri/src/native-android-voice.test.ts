@@ -34,7 +34,7 @@ describe("native Android voice port", () => {
   it("does not report foreground push-to-talk as an active background session", async () => {
     const invoke = vi.fn(async (): Promise<unknown> => ({
       startable: true,
-      backgroundStartable: true,
+      backgroundStartable: false,
       running: true,
       captureActive: true,
       backgroundSessionActive: false,
@@ -42,8 +42,36 @@ describe("native Android voice port", () => {
     const port = createTauriNativeAndroidVoicePort(invoke);
 
     await expect(port.backgroundStatus?.()).resolves.toMatchObject({
-      available: true,
+      available: false,
+      phase: "unavailable",
+      running: false,
+      captureActive: false,
       backgroundActive: false,
+    });
+    await expect(port.status()).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+      running: true,
+      captureActive: true,
+    });
+  });
+
+  it("preserves an active background session when new background starts are unavailable", async () => {
+    const invoke = vi.fn(async (): Promise<unknown> => ({
+      startable: true,
+      backgroundStartable: false,
+      running: true,
+      captureActive: true,
+      backgroundSessionActive: true,
+    }));
+    const port = createTauriNativeAndroidVoicePort(invoke);
+
+    await expect(port.backgroundStatus?.()).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+      running: true,
+      captureActive: true,
+      backgroundActive: true,
     });
   });
 
