@@ -93,9 +93,7 @@ def test_build_catalog_is_deterministic_and_selected_item_metadata_only() -> Non
     assert french["quality"] == "low"
     assert french["precision"] == "int8"
     assert french["archive"]["sha256"] == "2" * 64
-    assert french["bindings"]["model"] == (
-        "vits-piper-fr_FR-siwis-low-int8/fr_FR-siwis-low.onnx"
-    )
+    assert french["bindings"]["model"] == ("vits-piper-fr_FR-siwis-low-int8/fr_FR-siwis-low.onnx")
     assert french["bindings"]["config"] == (
         "vits-piper-fr_FR-siwis-low-int8/fr_FR-siwis-low.onnx.json"
     )
