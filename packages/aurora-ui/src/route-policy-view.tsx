@@ -46,7 +46,7 @@ export interface RoutePolicyScenario {
   description: string
   request: RouteExplainRequest
   payload: unknown
-  selector: unknown
+  selector: RouteExplainRequest['selector']
   privacyClass: PrivacyClass
   dataClasses: PrivacyClass[]
   consentGranted?: boolean
@@ -398,10 +398,10 @@ export function routePolicyScenarios(): RoutePolicyScenario[] {
   return [
     scenario('assistant_prompt', 'Assistant prompt', 'Aurora keeps personal text on this device unless you approved another device.', 'Orchestrator.UserInput', 'Orchestrator', 'UserInput', { text: 'summarize my calendar' }, null, 'personal', ['personal']),
     scenario('tool_call', 'Tool action', 'Aurora checks the source, sensitivity, and approval before another device can run an action.', 'Tooling.ExecuteTool', 'Tooling', 'ExecuteTool', { global_tool_id: 'mesh:workstation:shell.run', args_hash: 'sha256:redacted' }, { tool_id: 'mesh:workstation:shell.run' }, 'admin-critical', ['admin-critical']),
-    scenario('rag_query', 'Shared knowledge', 'Aurora checks the collection and privacy settings before searching another device.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_id: 'rag:home-lab' }, 'sensitive', ['sensitive']),
-    scenario('audio_session', 'Shared transcription', 'Aurora needs your consent and shows a microphone indicator before audio leaves this device.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
-    scenario('model_runtime', 'Model selection', 'Aurora can answer here or on another approved device, depending on your privacy settings.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { resource_id: 'model:balanced' }, 'personal', ['personal']),
-    scenario('scheduler_job', 'Scheduled task', 'Aurora checks the owner, destination, and permissions before another device runs a scheduled task.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_id: 'scheduler:household' }, 'admin-critical', ['admin-critical']),
+    scenario('rag_query', 'Shared knowledge', 'Aurora checks the collection and privacy settings before searching another device.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'home-lab' }, { resource_namespace: 'home-lab' }, 'sensitive', ['sensitive']),
+    scenario('audio_session', 'Shared transcription', 'Aurora needs your consent and shows a microphone indicator before audio leaves this device.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'audio-session-preview', sample_format: 'pcm16' }, { hardware_target: 'microphone:default' }, 'raw-audio', ['raw-audio'], true, true),
+    scenario('model_runtime', 'Model selection', 'Aurora can answer here or on another approved device, depending on your privacy settings.', 'Orchestrator.GetModelRuntime', 'Orchestrator', 'GetModelRuntime', { requested_runtime: 'balanced' }, { data_scope: 'model:balanced' }, 'personal', ['personal']),
+    scenario('scheduler_job', 'Scheduled task', 'Aurora checks the owner, destination, and permissions before another device runs a scheduled task.', 'Scheduler.ScheduleJob', 'Scheduler', 'ScheduleJob', { namespace: 'household', owner_peer_id: 'local', target_selector: { peer_id: 'studio-peer' } }, { peer_id: 'studio-peer', resource_namespace: 'household' }, 'admin-critical', ['admin-critical']),
     scenario('admin_action', 'Sensitive settings change', 'Sensitive settings changes require confirmation and are recorded in your account history.', 'Config.Set', 'Config', 'Set', { key_path: 'services.tts.mesh_routing', value: { require_explicit_selector: true } }, null, 'admin-critical', ['admin-critical'])
   ]
 }
@@ -464,7 +464,7 @@ function scenario(
   module: string,
   method: string,
   payload: unknown,
-  selector: unknown,
+  selector: RouteExplainRequest['selector'],
   privacyClass: PrivacyClass,
   dataClasses: PrivacyClass[],
   consentGranted = false,

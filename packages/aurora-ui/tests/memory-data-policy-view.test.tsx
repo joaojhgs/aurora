@@ -1,6 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
+import {
+  AuroraClient as Aurora,
+  MockAuroraTransport,
+  cloneFixture,
+  routeExplainFixture
+} from '@aurora/client'
+import { GatewayExplainRouteInputRouteExplainRequestSchema } from '@aurora/client/generated'
 import {
   buildDataPolicySnapshot,
   buildMemoryViewModel,
@@ -10,11 +16,37 @@ import {
   emptyMemoryViewModel,
   type RouteAvailability,
   auroraEmbeddedNavItems,
-  navItemSnapshot
+  navItemSnapshot,
+  routePolicyScenarios
 } from '../src/index'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Memory and data policy production stories', () => {
+  it('keeps every built-in route preview within the generated Gateway selector contract', async () => {
+    for (const scenario of routePolicyScenarios()) {
+      const parsed = GatewayExplainRouteInputRouteExplainRequestSchema.safeParse(scenario.request)
+      expect(parsed.success, `route scenario ${scenario.id}`).toBe(true)
+    }
+
+    const invalidDataRequests: Array<{ payload: unknown; issues: unknown }> = []
+    let dataRequestCount = 0
+    const transport = new MockAuroraTransport().register('Gateway.ExplainRoute', (request) => {
+      dataRequestCount += 1
+      const parsed = GatewayExplainRouteInputRouteExplainRequestSchema.safeParse(request.payload)
+      if (!parsed.success) {
+        invalidDataRequests.push({ payload: request.payload, issues: parsed.error.issues })
+      }
+      return cloneFixture(routeExplainFixture)
+    })
+    const client = new Aurora({ transport })
+    const dataRoute = await enabledRoute(client, 'data')
+
+    await buildDataPolicySnapshot(client, dataRoute)
+
+    expect(dataRequestCount).toBe(5)
+    expect(invalidDataRequests).toEqual([])
+  })
+
   it('renders prototype-density Memory & Knowledge collections and search list', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const memoryRoute = await enabledRoute(client, 'memory')

@@ -19,6 +19,7 @@ from app.services.auth.auth_manager import (
     MeshPairingDeniedError,
 )
 from app.shared.auth.audit import audit_event
+from app.shared.auth.identity import ANONYMOUS, SYSTEM
 from app.shared.auth.permissions import validate_permission
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
@@ -404,12 +405,23 @@ class AuthService(BaseService):
     ) -> WhoAmIResponse | dict[str, str]:
         """Return identity for the principal_id on the envelope."""
         pid = envelope.principal_id if envelope else None
-        if not pid:
-            return {"error": "No authenticated principal"}
+        if not pid or pid == ANONYMOUS.principal_id:
+            return {"error": "authentication_required"}
+
+        if pid == SYSTEM.principal_id:
+            return WhoAmIResponse(
+                principal_id=SYSTEM.principal_id,
+                principal_name=SYSTEM.principal_name,
+                device_id=SYSTEM.device_id,
+                is_admin=SYSTEM.is_admin,
+                permissions=sorted(SYSTEM.permissions),
+                effective_perms=sorted(envelope.effective_perms or SYSTEM.effective_perms),
+                source=envelope.identity_source or SYSTEM.source,
+            )
 
         user = await self.manager.get_principal(pid)
         if not user:
-            return {"error": "Principal not found"}
+            return {"error": "authentication_required"}
 
         return WhoAmIResponse(
             principal_id=user.id,

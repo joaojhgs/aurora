@@ -12,6 +12,7 @@ from app.services.auth.auth_manager import (
     MeshPairingDeniedError,
 )
 from app.services.auth.service import AuthService
+from app.shared.auth.identity import SYSTEM
 from app.shared.contracts.mesh_surface import PUBLIC_INFRASTRUCTURE_TOPICS
 from app.shared.contracts.models.auth import (
     AuthMethods,
@@ -23,9 +24,56 @@ from app.shared.contracts.models.auth import (
     StoreAuditEventRequest,
     TokenCreateRequest,
     TokenListRequest,
+    WhoAmIRequest,
 )
 from app.shared.contracts.models.mesh import MeshPeerGetRequest
 from app.shared.models.db import Token, User
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("principal_id", [None, "anonymous", "missing-principal"])
+async def test_whoami_requires_a_known_authenticated_principal(
+    principal_id: str | None,
+) -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(get_principal=AsyncMock(return_value=None))
+    envelope = (
+        Envelope(type=AuthMethods.WHO_AM_I, payload=WhoAmIRequest(), principal_id=principal_id)
+        if principal_id is not None
+        else None
+    )
+
+    response = await service.handle_whoami(WhoAmIRequest(), envelope=envelope)
+
+    assert response == {"error": "authentication_required"}
+    if principal_id in {None, "anonymous"}:
+        service.manager.get_principal.assert_not_awaited()
+    else:
+        service.manager.get_principal.assert_awaited_once_with(principal_id)
+
+
+@pytest.mark.asyncio
+async def test_whoami_returns_system_envelope_identity_without_database_lookup() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(get_principal=AsyncMock())
+    envelope = Envelope(
+        type=AuthMethods.WHO_AM_I,
+        payload=WhoAmIRequest(),
+        principal_id=SYSTEM.principal_id,
+        effective_perms=list(SYSTEM.effective_perms),
+        identity_source=SYSTEM.source,
+    )
+
+    response = await service.handle_whoami(WhoAmIRequest(), envelope=envelope)
+
+    assert not isinstance(response, dict)
+    assert response.principal_id == SYSTEM.principal_id
+    assert response.principal_name == SYSTEM.principal_name
+    assert response.is_admin is True
+    assert response.permissions == ["*"]
+    assert response.effective_perms == ["*"]
+    assert response.source == SYSTEM.source
+    service.manager.get_principal.assert_not_awaited()
 
 
 @pytest.mark.asyncio

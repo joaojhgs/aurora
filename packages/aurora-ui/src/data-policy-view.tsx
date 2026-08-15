@@ -26,7 +26,7 @@ export interface DataPolicyCheck {
   description: string
   routeRequest: RouteExplainRequest
   payload: unknown
-  selector: unknown
+  selector: RouteExplainRequest['selector']
   privacyClass: PrivacyClass
   dataClasses: PrivacyClass[]
   consentGranted: boolean
@@ -330,7 +330,7 @@ function dataPolicyStatusState(state: DataPolicyLoadState) {
 function dataPolicyDefinitions(): Omit<DataPolicyCheck, 'evaluation' | 'error'>[] {
   return [
     policyCheck('rag-search', 'Collection search policy', 'Collection search needs privacy class, selector, and Aurora route status.', 'DB.RAGSearch', 'DB', 'RAGSearch', { query: 'deployment notes', namespace: 'main.rag' }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false),
-    policyCheck('raw-audio', 'Audio route', 'Audio cannot leave the device without consent and a visible privacy indicator.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'policy-preview', sample_format: 'pcm16' }, { resource_id: 'microphone:default' }, 'raw-audio', ['raw-audio'], false, false, false),
+    policyCheck('raw-audio', 'Audio route', 'Audio cannot leave the device without consent and a visible privacy indicator.', 'STT.Transcribe', 'STT', 'Transcribe', { session_id: 'policy-preview', sample_format: 'pcm16' }, { hardware_target: 'microphone:default' }, 'raw-audio', ['raw-audio'], false, false, false),
     policyCheck('transcript-storage', 'Transcript storage', 'Transcript retention follows policy and per-record privacy classes.', 'DB.GetMessages', 'DB', 'GetMessages', { limit: 6, message_type: 'TEXT' }, null, 'personal', ['personal'], true, true, false),
     policyCheck('remote-fallback', 'Shared-device help', 'Shared-device help is policy-controlled and requires explicit device or resource selection.', 'DB.RAGSearchRemote', 'DB', 'RAGSearchRemote', { query: 'remote namespace', namespace: 'peer-studio-gpu.memories' }, { peer_id: 'peer-studio-gpu', resource_namespace: 'peer-studio-gpu.memories' }, 'personal', ['personal'], true, true, false),
     policyCheck('export-import-delete', 'Export/delete/import policy', 'Data changes require collection support plus administrator approval and account history before records move.', 'DB.RAGExportNamespace', 'DB', 'RAGExportNamespace', { namespace: 'main.rag', include_tombstones: false }, { resource_namespace: 'main.rag' }, 'sensitive', ['sensitive'], true, true, false)
@@ -345,7 +345,7 @@ function policyCheck(
   module: string,
   method: string,
   payload: unknown,
-  selector: unknown,
+  selector: RouteExplainRequest['selector'],
   privacyClass: PrivacyClass,
   dataClasses: PrivacyClass[],
   consentGranted: boolean,

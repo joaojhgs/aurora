@@ -726,6 +726,68 @@ async def test_generated_handler_maps_mesh_permission_denial_to_forbidden():
 
 
 @pytest.mark.asyncio
+async def test_generated_handler_maps_authentication_required_to_unauthorized():
+    bus = AsyncMock()
+    bus.request = AsyncMock(return_value=QueryResult(ok=False, error="authentication_required"))
+    method_info = MethodInfo(
+        name="WhoAmI",
+        summary="Get current identity",
+        bus_topic=AuthMethods.WHO_AM_I,
+        exposure="external",
+        method_type="use",
+        required_perms=[],
+    )
+    handler = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Auth", method_info),
+    )._create_handler("Auth", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {},
+            principal_id="anonymous",
+            effective_perms=[],
+            identity_source="none",
+        )
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "authentication_required"
+
+
+@pytest.mark.asyncio
+async def test_generated_handler_does_not_reclassify_unknown_principal_errors():
+    bus = AsyncMock()
+    bus.request = AsyncMock(return_value=QueryResult(ok=False, error="Principal not found"))
+    method_info = MethodInfo(
+        name="WhoAmI",
+        summary="Get current identity",
+        bus_topic=AuthMethods.WHO_AM_I,
+        exposure="external",
+        method_type="use",
+        required_perms=[],
+    )
+    handler = RouteGenerator(
+        bus=bus,
+        registry=_SingleMethodRegistry("Auth", method_info),
+    )._create_handler("Auth", method_info)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        await handler(
+            {},
+            principal_id="missing-principal",
+            effective_perms=[],
+            identity_source="gateway_http",
+        )
+
+    assert exc.value.status_code == 500
+    assert exc.value.detail == "Principal not found"
+
+
+@pytest.mark.asyncio
 async def test_dispatched_assistant_turn_is_persisted_only_on_origin_bus():
     """A remote answer is committed to the caller's session after dispatch returns."""
 

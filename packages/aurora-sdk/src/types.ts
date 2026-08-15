@@ -2473,11 +2473,21 @@ export interface AdminOverviewManifest {
   }
 }
 
+export interface RouteExplainSelector {
+  peer_id?: string | null
+  provider_id?: string | null
+  service_instance_id?: string | null
+  resource_namespace?: string | null
+  tool_id?: string | null
+  hardware_target?: string | null
+  data_scope?: string | null
+}
+
 export interface RouteExplainRequest {
   topic?: string | null
   module?: string | null
   method?: string | null
-  selector?: unknown
+  selector?: RouteExplainSelector | null
   include_candidates?: boolean
 }
 

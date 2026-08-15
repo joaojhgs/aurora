@@ -121,11 +121,14 @@ _SERVICE_AUTHORIZATION_ERROR_CODES = {
     "projection_restart_required",
     "provider_mesh_tooling_disabled",
 }
+_SERVICE_AUTHENTICATION_ERROR_CODES = {"authentication_required"}
 
 
 def _service_error_status_code(error: str | None) -> int:
     """Map explicit service authorization failures without hiding real faults."""
 
+    if error in _SERVICE_AUTHENTICATION_ERROR_CODES:
+        return 401
     if error in _SERVICE_AUTHORIZATION_ERROR_CODES:
         return 403
     return 500
