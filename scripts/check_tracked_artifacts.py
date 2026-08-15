@@ -95,6 +95,8 @@ FORBIDDEN_EXACT_PATHS = {
     ".omx/notepad.md",
     ".omx/project-memory.json",
     ".DS_Store",
+    "modules/Aurora Cockpit.dc.html",
+    "modules/Owl Loader (standalone).html",
 }
 
 ALLOWED_EXACT_PATHS = {

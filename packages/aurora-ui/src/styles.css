@@ -11171,7 +11171,7 @@ body { font-size:14px;line-height:1.45 }
 @media (min-width: 901px) { .aui-tool-mobile-drawer-trigger { display:none } }
 @media (max-width: 900px) { .aui-tool-source-layout,.aui-tool-grid-two { grid-template-columns:minmax(0,1fr) }.aui-tool-source-rail { position:static }.aui-tool-source-rail:not(.aui-tool-source-rail-open) { gap:0 }.aui-tool-source-rail:not(.aui-tool-source-rail-open) .aui-tool-search,.aui-tool-source-rail:not(.aui-tool-source-rail-open) .aui-tool-source-section,.aui-tool-source-rail:not(.aui-tool-source-rail-open)>.aui-btn { display:none }.aui-tool-mini-row { grid-template-columns:minmax(0,1fr) }.aui-tool-row summary { display:grid }.aui-tool-row-badges { justify-content:flex-start } }
 .aui-tool-lifecycle-strip { align-items:center;display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem }
-/* G002 assistant visual parity overrides from modules/Aurora Cockpit.dc.html. */
+/* G002 assistant visual parity overrides for the cockpit layout. */
  .aui-assistant { height:100%;min-height:0;gap:0 }
 .aui-assistant-grid { display:grid;grid-template-columns:256px minmax(0,1fr);flex:1 1 auto;min-height:0;gap:0 }
 .aui-conversation-rail { flex:0 0 256px;width:256px;background:color-mix(in srgb,var(--aui-surface-3) 18%,transparent) }

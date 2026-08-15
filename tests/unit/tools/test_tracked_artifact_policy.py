@@ -37,6 +37,8 @@ def test_artifact_policy_rejects_reports_caches_packages_models_and_runtime_stat
         "apps/aurora-web/.next.stalled-20260812/server/chunk.js",
         "apps/aurora-web/reports/playwright/run.json",
         "docs/current-release-report.md",
+        "modules/Aurora Cockpit.dc.html",
+        "modules/Owl Loader (standalone).html",
         "modules/release-bundle.zip",
         "modules/release-symbols.7z",
         "modules/release.exe",

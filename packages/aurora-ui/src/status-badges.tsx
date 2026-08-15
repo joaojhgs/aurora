@@ -77,10 +77,10 @@ const TONE_CLASS: Record<BadgeTone, string> = {
 }
 
 /**
- * Single tone-to-pill mapper replacing the prototype's four near-duplicate
- * `riskToneClass`/`trustToneClass`/`stateToneClass`/`peerStatusClass` helpers
- * (`Aurora Cockpit.dc.html:2891-2925`). Screens map their own domain string
- * (risk/trust/state/status) to a `BadgeTone` and render with this component.
+ * Single tone-to-pill mapper replacing the cockpit's four near-duplicate
+ * `riskToneClass`/`trustToneClass`/`stateToneClass`/`peerStatusClass` helpers.
+ * Screens map their own domain string (risk/trust/state/status) to a `BadgeTone`
+ * and render with this component.
  */
 export function ToneBadge({ tone, children, className }: { tone: BadgeTone; children: ReactNode; className?: string }) {
   return (

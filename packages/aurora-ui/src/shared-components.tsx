@@ -9,9 +9,9 @@ import { Badge } from '#components/ui/badge'
 import { AdminConfirmDialog } from './primitives'
 
 /**
- * Page-level tab bar matching the prototype's underline tab strip (`Aurora Cockpit.dc.html`
- * Tools/Models/Settings/Admin headers - `border-bottom-width:2px` active indicator, not a
- * pill/segmented control). Thin wrapper over shadcn `Tabs` with `variant="line"`.
+ * Page-level tab bar matching the cockpit underline tab strip: Tools/Models/Settings/Admin
+ * headers use a `border-bottom-width:2px` active indicator, not a pill/segmented control.
+ * Thin wrapper over shadcn `Tabs` with `variant="line"`.
  */
 export interface PageTabItem {
   value: string
@@ -88,8 +88,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = 'Confir
  * over the real permission catalog - there is no backend Role resource (confirmed: `Auth`/
  * `AuthManager` only stores raw `permissions: string[]` per principal). Selecting a template
  * pre-checks the matching entries in whatever `PermissionCatalogEntry[]` was passed in;
- * "Custom" leaves the current selection untouched. Mirrors `Aurora Cockpit.dc.html`'s
- * `ROLE_TEMPLATES` (Guest/Member/Automation/Admin/Custom).
+ * "Custom" leaves the current selection untouched.
  */
 export interface RoleTemplate {
   id: string
