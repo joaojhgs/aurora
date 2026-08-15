@@ -40,6 +40,17 @@ def test_webrtc_services_uses_explicit_stable_compose_project() -> None:
     assert "docker compose -f docker-compose.webrtc-interop.yml" not in source
 
 
+def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
+    for script_path in (
+        "scripts/hosted_peer_e2e.sh",
+        "scripts/hosted_mesh_node_e2e.sh",
+    ):
+        source = read_repo(script_path)
+        voice_build = source.index("pnpm --filter @aurora/voice-web build")
+        web_start = source.index("pnpm --filter @aurora/web exec next dev")
+        assert voice_build < web_start, script_path
+
+
 def test_live_harnesses_have_distinct_valid_default_compose_projects() -> None:
     shell_script_paths = [
         "scripts/desktop_live_e2e.sh",

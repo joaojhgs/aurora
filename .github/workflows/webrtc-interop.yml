@@ -15,6 +15,7 @@ on:
       - "app/shared/contracts/**"
       - "packages/aurora-sdk/src/**"
       - "packages/aurora-ui/src/**"
+      - "packages/aurora-voice-web/**"
       - "apps/aurora-web/app/**"
       - "apps/aurora-web/package.json"
       - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
@@ -49,6 +50,11 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
+
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
 
       - run: uv sync --extra sidecar-thin
       - run: pnpm install --frozen-lockfile

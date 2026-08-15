@@ -61,6 +61,7 @@ WEB_PID=""
 
 mkdir -p "$ARTIFACT_DIR" "$DATA_DIR"
 
+pnpm --filter @aurora/voice-web build
 pnpm --filter @aurora/client build
 
 wait_for_tcp() {
