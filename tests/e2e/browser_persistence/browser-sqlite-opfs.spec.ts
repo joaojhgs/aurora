@@ -13,6 +13,18 @@ test.beforeAll(async () => {
     server: {
       host: '127.0.0.1',
       port: 0,
+      watch: {
+        ignored: [
+          '**/.artifacts/**',
+          '**/.gitnexus/**',
+          '**/.next/**',
+          '**/.venv/**',
+          '**/gen/android/**',
+          '**/htmlcov/**',
+          '**/reports/**',
+          '**/target/**'
+        ]
+      },
       headers: {
         'Cross-Origin-Embedder-Policy': 'require-corp',
         'Cross-Origin-Opener-Policy': 'same-origin'
@@ -22,6 +34,7 @@ test.beforeAll(async () => {
       }
     },
     optimizeDeps: {
+      entries: ['tests/e2e/browser_persistence/browser-sqlite-proof.html'],
       exclude: ['@sqlite.org/sqlite-wasm']
     }
   })
