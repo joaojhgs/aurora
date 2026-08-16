@@ -28,7 +28,9 @@
         "empty_kv_seq_len": 0,
         "latent_dim": 32,
         "pad_with_spaces_for_short_inputs": false,
-        "remove_semicolons": false
+        "remove_semicolons": false,
+        "mimi_steps_per_latent": 16,
+        "decoder_kv_seq_len": 10000
       },
       "weights": {
         "repo_id": "kyutai/pocket-tts",
@@ -60,7 +62,9 @@
         "empty_kv_seq_len": 0,
         "latent_dim": 32,
         "pad_with_spaces_for_short_inputs": false,
-        "remove_semicolons": true
+        "remove_semicolons": true,
+        "mimi_steps_per_latent": 16,
+        "decoder_kv_seq_len": 10000
       },
       "weights": {
         "repo_id": "kyutai/pocket-tts",

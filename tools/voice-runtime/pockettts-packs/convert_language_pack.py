@@ -48,10 +48,9 @@ def pack_spec(sources: dict[str, Any], pack_id: str) -> dict[str, Any]:
 def write_protocol(pack_dir: Path, protocol: dict[str, Any], bos_path: Path | None) -> None:
     payload = dict(protocol)
     if bos_path is not None:
-        payload["bos_before_voice"] = {
-            "file": bos_path.name,
-            "shape": [1, 1, 1024],
-        }
+        # String form is required: nlohmann json.value(..., std::string())
+        # throws if this key is an object, which aborts the native Sherpa process.
+        payload["bos_before_voice"] = bos_path.name
     (pack_dir / "pocket_protocol.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -126,6 +125,7 @@ def convert_pack(
     report["export_helper"] = str(helper)
     _run_official_export(helper, spec, pack_dir)
     _ensure_sherpa_tokenizer(pack_dir)
+    _inline_pack_onnx(pack_dir, helper / "onnx")
     bos = _extract_bos(spec["kyutai_config"], pack_dir)
     write_protocol(pack_dir, spec["protocol"], bos)
     _write_model_card(pack_dir, spec, sources)
@@ -166,12 +166,9 @@ def _run_official_export(helper: Path, spec: dict[str, Any], pack_dir: Path) -> 
         "--output",
         str(pack_dir),
     ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    result = subprocess.run(cmd, check=False)
     if result.returncode != 0:
-        raise ConversionError(
-            "official export failed. "
-            f"stdout={result.stdout[-2000:]} stderr={result.stderr[-2000:]}"
-        )
+        raise ConversionError("official export failed")
 
 
 def _ensure_sherpa_tokenizer(pack_dir: Path) -> None:
@@ -198,7 +195,51 @@ def _ensure_sherpa_tokenizer(pack_dir: Path) -> None:
     )
 
 
+def _inline_pack_onnx(pack_dir: Path, helper_onnx: Path) -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    export_path = Path(__file__).with_name("run_official_export.py")
+    spec = spec_from_file_location("run_official_export", export_path)
+    if spec is None or spec.loader is None:
+        raise ConversionError("unable to load export helper")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pairs = (
+        ("mimi_encoder.onnx", "encoder.onnx"),
+        ("text_conditioner.onnx", "text_conditioner.onnx"),
+    )
+    for src_name, dest_name in pairs:
+        dest = pack_dir / dest_name
+        src = helper_onnx / src_name
+        sidecar = Path(str(src) + ".data")
+        needs_inline = src.is_file() and (
+            sidecar.is_file() or not dest.is_file() or dest.stat().st_size < 1_000_000
+        )
+        if needs_inline:
+            module.inline_onnx_file(src, dest)
+        elif dest.is_file():
+            module.inline_onnx_file(dest, dest)
+
+
 def _extract_bos(language: str, pack_dir: Path) -> Path | None:
+    existing = pack_dir / "bos_before_voice.bin"
+    if existing.is_file() and existing.stat().st_size > 0:
+        return existing
+    source = pack_dir / "weight_source.json"
+    if source.is_file():
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        weights = Path(payload.get("weights", ""))
+        if weights.is_file():
+            from importlib.util import module_from_spec, spec_from_file_location
+
+            export_path = Path(__file__).with_name("run_official_export.py")
+            spec = spec_from_file_location("run_official_export", export_path)
+            if spec is not None and spec.loader is not None:
+                module = module_from_spec(spec)
+                spec.loader.exec_module(module)
+                bos = module._extract_bos_from_safetensors(weights, pack_dir)
+                if bos is not None:
+                    return bos
     try:
         from pocket_tts import TTSModel
     except ImportError:

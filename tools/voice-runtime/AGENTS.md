@@ -22,6 +22,15 @@ python tools/voice-runtime/run_sherpa_cmake.py \
          -B .artifacts/sherpa-onnx/builds/linux-x86_64
 ```
 
+## Mimi decoder KV cache
+
+Current Kyutai attention is a linear cache, not a ring buffer. Each latent
+frame advances RoPE `offset` by 16 transformer steps. The official helper
+traces `STATIC_SEQ_LEN = 1000`, which overflows at frame 62 (`invalid Expand`).
+Aurora's export patcher sets mimi `STATIC_SEQ_LEN = 10000` so Sherpa's default
+`max_frames=500` fits. Do not rewrite only the ONNX I/O dims on a 1000-step
+graph; the baked Reshape/Gather shapes still assume 1000.
+
 ## Model artifact hygiene
 
 Downloaded models, converted ONNX, WAVs, reports, and build trees belong in

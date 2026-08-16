@@ -16,7 +16,7 @@ SRC = REPO / ".artifacts/sherpa-onnx/sherpa-onnx-1.13.5"
 STAGED = REPO / ".artifacts/sherpa-onnx/staged-patched"
 PATCH_DIR = Path(__file__).resolve().parent
 
-CREATE_ZERO_OLD = '''static Ort::Value CreateZeroTensorLike(Ort::Session &sess, int32_t input_index,
+CREATE_ZERO_OLD = """static Ort::Value CreateZeroTensorLike(Ort::Session &sess, int32_t input_index,
                                        OrtAllocator *allocator) {
   auto type_info = sess.GetInputTypeInfo(input_index);
   auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
@@ -53,9 +53,9 @@ CREATE_ZERO_OLD = '''static Ort::Value CreateZeroTensorLike(Ort::Session &sess, 
 
   return v;
 }
-'''
+"""
 
-CREATE_ZERO_NEW = '''static std::string PocketParentDir(const std::string &path) {
+CREATE_ZERO_NEW = """static std::string PocketParentDir(const std::string &path) {
   auto pos = path.find_last_of("/\\\\");
   if (pos == std::string::npos) {
     return ".";
@@ -156,7 +156,10 @@ static PocketTtsProtocol LoadPocketProtocolFromDir(const std::string &dir) {
   protocol.remove_semicolons =
       j.value("remove_semicolons", protocol.remove_semicolons);
 
-  std::string bos_file = j.value("bos_before_voice", std::string());
+  std::string bos_file;
+  if (j.contains("bos_before_voice") && j["bos_before_voice"].is_string()) {
+    bos_file = j["bos_before_voice"].get<std::string>();
+  }
   if (bos_file.empty() && j.contains("bos_before_voice") &&
       j["bos_before_voice"].is_object()) {
     bos_file = j["bos_before_voice"].value("file", std::string());
@@ -206,7 +209,7 @@ static PocketTtsProtocol LoadPocketProtocolFromDir(const std::string &dir) {
   }
   return protocol;
 }
-'''
+"""
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
