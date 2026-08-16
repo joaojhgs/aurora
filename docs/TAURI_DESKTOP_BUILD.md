@@ -24,6 +24,10 @@ The Tauri package wraps the CLI for `dev` only. It automatically selects `.venv/
 - **Package/build** stages a profiled sidecar executable for Tauri bundling.
 
 Do not run `prepare:sidecar` or set `AURORA_TAURI_SIDECAR_SOURCE` just to use `tauri dev`. Those are package/release inputs. During development, Vite, Rust/Tauri, and Python service logs should appear in the same terminal; log prefixes are `[vite]` for frontend bundler output when separated by the dev server, `[tauri]` for wrapper/Rust shell output, `[aurora][stdout]`/`[aurora][stderr]` for Python service output, and `[gateway]` for explicit Gateway readiness probes when a smoke harness separates them. Desktop-local is not shown as ready until the Tauri sidecar status command succeeds and the SDK can read `/api/health`, `/api/registry`, and a core read-only `/api/services` sample through the Gateway boundary.
+On a fresh profile, onboarding must choose and persist the runtime role before a
+local sidecar is started. CI therefore verifies the real Rust/Tauri shell-ready
+marker on that clean profile and exercises the packaged sidecar plus Gateway in
+a separate smoke; it does not compile a role into the desktop bundle.
 Closing the Tauri window hides Aurora to the tray; explicit tray Quit or Ctrl-C stops the supervised Python sidecar.
 
 ## Sidecar profiles
@@ -94,6 +98,9 @@ macOS `hdiutil`, scans the mounted application tree for embedded models,
 sidecars, runtimes, and secrets, then detaches it before accepting the package.
 The standard top-level `Applications -> /Applications` drag-install link is the
 only external DMG symlink allowed; all other escaping links remain fail-closed.
+On Windows, the same policy uses the runner's native 7-Zip console executable
+to extract and scan MSI and NSIS packages, including bounded nested installers,
+before either package is accepted.
 Android APK/AAB and iOS simulator/WKWebView packages remain in their existing
 platform-specific workflows.
 
@@ -194,7 +201,7 @@ read-only installation/resource directory are never used for mutable state.
 
 Relevant workflows:
 
-- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, boots the actual packaged minimal sidecar and requires healthy services/routes plus persistent config/data evidence, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so `tauri dev` fails on missing Gateway readiness, early process exit, or missing `[tauri]`/`[aurora][...]` logs, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
+- `.github/workflows/tauri-desktop.yml` builds the frontend, tests the Tauri runtime wrapper, runs a desktop bundle matrix for `desktop-local` and Python-free `desktop-thin`, boots the actual packaged minimal sidecar and requires healthy services/routes plus persistent config/data evidence, runs `cargo check` for both lanes, verifies desktop-thin artifact contents, runs `pnpm --filter @aurora/tauri-ui dev:smoke` under Xvfb for the local lane so a clean-profile `tauri dev` fails on early process exit or missing Rust shell readiness, and runs a sidecar profile staging matrix across `desktop-local-minimal`, local CPU, accelerator, and legacy full profiles.
 - `.github/workflows/tauri-android.yml` builds Android thin debug APK/AAB artifacts, verifies Python-free artifact contents, runs Android preflight/native plugin parity, proves UI/native-payload behavior on API 30 and API 35 emulators, and runs the packaged API 35 System WebView against an external Python WebRTC peer. Python is test infrastructure only and is not embedded in the thin package.
 - `.github/workflows/tauri-ios.yml` builds the iOS simulator baseline on macOS and installs/launches the Python-free thin `.app` in a real simulator, capturing a screenshot, process log, and keep-alive report.
 - `.github/workflows/frontend-sdk.yml` runs shared UI and SDK package checks.

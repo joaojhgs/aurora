@@ -8702,6 +8702,8 @@ pub fn run() {
                     eprintln!("aurora deep-link scheme registration failed: {error}");
                 }
             }
+            #[cfg(desktop)]
+            eprintln!("aurora_tauri_shell_ready platform=desktop");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

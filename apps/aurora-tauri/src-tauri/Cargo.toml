@@ -57,6 +57,8 @@ webrtc = "0.11.0"
 tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
+aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
+aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
 aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }
 

@@ -200,22 +200,29 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
     expect(configManager).toContain('os.environ.get("AURORA_ENV_FILE", ".env")')
   })
 
-  it('fails the desktop dev smoke when Gateway, process, or log evidence is missing', () => {
+  it('proves the native shell on a clean profile without compiling in a runtime role', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
     const smoke = repoText('apps/aurora-tauri/scripts/tauri-dev-smoke.mjs')
     const workflow = repoText('.github/workflows/tauri-desktop.yml')
+    const rustShell = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
 
     expect(packageJson.scripts['dev:smoke']).toBe('node ./scripts/tauri-dev-smoke.mjs')
-    expect(smoke).toContain("requiredGatewayPaths = ['/api/health', '/api/registry', '/api/services']")
+    expect(smoke).toContain("AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY !== '0'")
+    expect(smoke).toContain("gatewayRequired ? ['/api/health', '/api/registry', '/api/services'] : []")
     expect(smoke).toContain("AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS ?? '[tauri],[aurora]['")
-    expect(smoke).toContain('tauri dev exited before Gateway/log readiness')
-    expect(smoke).toContain('timed out waiting for Gateway/log readiness')
+    expect(smoke).toContain('tauri dev exited before native shell readiness')
+    expect(smoke).toContain('timed out waiting for native shell readiness')
     expect(smoke).toContain('writeFileSync(reportPath')
+    expect(smoke).toContain('gatewayRequired,')
     expect(smoke).toContain('lastGatewayError')
     expect(smoke).toContain("detached: process.platform !== 'win32'")
     expect(smoke).toContain('process.kill(-child.pid, signal)')
     expect(smoke).toContain("terminateOwnedTree('SIGKILL')")
+    expect(rustShell).toContain('aurora_tauri_shell_ready platform=desktop')
+    expect(workflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY: "0"')
+    expect(workflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS: "[tauri],aurora_tauri_shell_ready platform=desktop"')
     expect(workflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
+    expect(workflow).toContain('pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke')
     expect(workflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
   })
 })

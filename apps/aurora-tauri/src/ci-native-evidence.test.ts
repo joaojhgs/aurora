@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 function repoText(path: string) {
-  return readFileSync(resolve(repoRoot, path), 'utf8')
+  return readFileSync(resolve(repoRoot, path), 'utf8').replace(/\r\n?/g, '\n')
 }
 
 function workflowJobNames(workflowText: string): string[] {
@@ -164,12 +164,15 @@ describe('Tauri CI native evidence contract', () => {
     expect(desktopWorkflow).toContain('cargo check')
     expect(desktopWorkflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
     expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"')
+    expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY: "0"')
+    expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS: "[tauri],aurora_tauri_shell_ready platform=desktop"')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui eventstream:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/eventstream-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/sidecar-runtime-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
+    expect(tauriLib).toContain('aurora_tauri_shell_ready platform=desktop')
     expect(tauriLib).toContain('.transparent(true)')
     expect(cargoManifest).toContain('"macos-private-api"')
     expect(tauriConfig).toContain('"macOSPrivateApi": true')
@@ -427,7 +430,12 @@ describe('Tauri CI native evidence contract', () => {
       'aurora.android_webrtc_interop.aggregate.v1',
     )
     expect(androidSmoke).toContain('function launchApp')
-    expect(androidSmoke).toContain("['shell', 'am', 'start', '-n', `${appId}/.MainActivity`]")
+    expect(androidSmoke).toContain("['shell', 'am', 'force-stop', appId]")
+    const explicitActivityLaunch = "['shell', 'am', 'start', '-W', '-n', `${appId}/.MainActivity`]"
+    const launcherFallback = "['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1']"
+    expect(androidSmoke).toContain(explicitActivityLaunch)
+    expect(androidSmoke).toContain(launcherFallback)
+    expect(androidSmoke.indexOf(explicitActivityLaunch)).toBeLessThan(androidSmoke.indexOf(launcherFallback))
     expect(androidSmoke).toContain("adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true })")
     expect(androidSmoke).toContain('function isPidofNoProcessResult')
     expect(androidSmoke).toContain('result.status === 1')
@@ -585,6 +593,7 @@ describe('Tauri CI native evidence contract', () => {
   })
 
   it('keeps iOS native plugin sources compatible with current Swift importer contracts', () => {
+    const cargoManifest = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
     const packManager = repoText(
       'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoicePackManager.swift',
     )
@@ -594,6 +603,13 @@ describe('Tauri CI native evidence contract', () => {
     const plugin = repoText(
       'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
     )
+
+    const iosDependencies = cargoManifest.match(
+      /\[target\.'cfg\(target_os = "ios"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
+    )?.[1] ?? ''
+    expect(iosDependencies).toContain('aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }')
+    expect(iosDependencies).toContain('aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }')
+    expect(iosDependencies).toContain('aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }')
 
     expect(packManager).toContain('import CAuroraIOSVoiceBridge')
     expect(packManager).toMatch(/ai_addrlen: 0,[\s\S]*ai_canonname: nil,[\s\S]*ai_addr: nil,/)

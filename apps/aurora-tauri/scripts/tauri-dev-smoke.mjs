@@ -9,11 +9,12 @@ const timeoutMs = Number.parseInt(process.env.AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS 
 const gatewayUrl = new URL(process.env.AURORA_TAURI_DEV_SMOKE_GATEWAY_URL ?? 'http://127.0.0.1:8000')
 const command = process.env.AURORA_TAURI_DEV_SMOKE_COMMAND ?? 'pnpm'
 const args = splitArgs(process.env.AURORA_TAURI_DEV_SMOKE_ARGS ?? '--filter @aurora/tauri-ui tauri dev')
+const gatewayRequired = process.env.AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY !== '0'
 const requiredLogMarkers = (process.env.AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS ?? '[tauri],[aurora][')
   .split(',')
   .map((marker) => marker.trim())
   .filter(Boolean)
-const requiredGatewayPaths = ['/api/health', '/api/registry', '/api/services']
+const requiredGatewayPaths = gatewayRequired ? ['/api/health', '/api/registry', '/api/services'] : []
 const logState = Object.fromEntries(requiredLogMarkers.map((marker) => [marker, false]))
 const gatewayState = Object.fromEntries(requiredGatewayPaths.map((path) => [path, false]))
 const outputChunks = []
@@ -21,7 +22,7 @@ let finished = false
 let lastGatewayError = null
 
 mkdirSync(resolve(appDir, 'reports'), { recursive: true })
-console.log(`[gateway] dev smoke probing ${gatewayUrl.origin}`)
+if (gatewayRequired) console.log(`[gateway] dev smoke probing ${gatewayUrl.origin}`)
 console.log(`[tauri] dev smoke launching: ${command} ${args.join(' ')}`)
 
 const child = spawn(command, args, {
@@ -41,12 +42,12 @@ child.stderr.on('data', (chunk) => captureLog('stderr', chunk))
 child.on('error', (error) => finish(1, `failed to launch tauri dev: ${error.message}`))
 child.on('exit', (code, signal) => {
   if (!finished) {
-    finish(1, `tauri dev exited before Gateway/log readiness: code=${String(code)} signal=${String(signal)}`)
+    finish(1, `tauri dev exited before native shell readiness: code=${String(code)} signal=${String(signal)}`)
   }
 })
 
 const timeout = setTimeout(() => {
-  finish(1, `timed out waiting for Gateway/log readiness after ${timeoutMs}ms`)
+  finish(1, `timed out waiting for native shell readiness after ${timeoutMs}ms`)
 }, timeoutMs)
 
 const interval = setInterval(() => {
@@ -81,7 +82,9 @@ async function checkReadiness() {
   }))
 
   if (Object.values(gatewayState).every(Boolean) && Object.values(logState).every(Boolean)) {
-    finish(0, 'tauri dev Gateway readiness and log markers observed')
+    finish(0, gatewayRequired
+      ? 'tauri dev native shell, Gateway, and required log readiness observed'
+      : 'tauri dev native shell and required log readiness observed')
   }
 }
 
@@ -95,6 +98,7 @@ function finish(exitCode, reason) {
     reason,
     command,
     args,
+    gatewayRequired,
     gatewayUrl: gatewayUrl.origin,
     gatewayState,
     requiredLogMarkers,

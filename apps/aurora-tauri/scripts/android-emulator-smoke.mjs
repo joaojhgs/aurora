@@ -42,7 +42,10 @@ export async function runAndroidEmulatorSmoke() {
 
   const payloadJson = waitForPayloadJson()
   if (!payloadJson) {
-    throw new Error('Android native plugin payload log was not observed after app launch.')
+    const pid = adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true }).trim()
+    throw new Error(
+      `Android native plugin payload log was not observed after deterministic MainActivity launch; app process ${pid ? `remained running as ${pid}` : 'was not running'}.`,
+    )
   }
   const payload = validateNativePayload(payloadJson)
   const webview = await waitForWebviewMount(appId)
@@ -122,10 +125,11 @@ function installApk(apk) {
 }
 
 function launchApp(appId) {
+  run(adb, ['shell', 'am', 'force-stop', appId])
   try {
-    run(adb, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
+    run(adb, ['shell', 'am', 'start', '-W', '-n', `${appId}/.MainActivity`])
   } catch {
-    run(adb, ['shell', 'am', 'start', '-n', `${appId}/.MainActivity`])
+    run(adb, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
   }
 }
 

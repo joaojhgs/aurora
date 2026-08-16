@@ -230,6 +230,10 @@ jobs:
         if: matrix.smoke_local
         env:
           AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"
+          # A clean CI profile is intentionally still in onboarding, so no runtime
+          # role may be compiled in merely to force the local Gateway to start.
+          AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY: "0"
+          AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS: "[tauri],aurora_tauri_shell_ready platform=desktop"
         run: xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke
 
       - name: Upload Tauri dev smoke report

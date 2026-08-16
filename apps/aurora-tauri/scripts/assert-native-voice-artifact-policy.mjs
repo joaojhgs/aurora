@@ -178,7 +178,7 @@ function inspectRecognizedContainer(path, rel, archiveDepth) {
     return
   }
   if (['.msi', '.exe'].includes(extension)) {
-    addFailure('installer-inspection-unsupported', `installer:${rel}`, `${extension} installer inspection is not available on this host; do not treat this artifact as policy-cleared`)
+    inspectWindowsInstaller(path, rel, extension, archiveDepth)
   }
 }
 
@@ -263,7 +263,43 @@ function inspectAppImage(path, rel) {
   }
 }
 
-function scanExtractedTree(root, prefix) {
+function inspectWindowsInstaller(path, rel, extension, archiveDepth) {
+  if (process.platform !== 'win32') {
+    addFailure('installer-inspection-unsupported', `installer:${rel}`, `${extension} installer inspection requires Windows 7-Zip; do not treat this artifact as policy-cleared`)
+    return
+  }
+  if (archiveDepth >= MAX_ARCHIVE_DEPTH) {
+    addFailure('archive-depth-limit', `installer:${rel}`, `nested installer depth exceeds ${MAX_ARCHIVE_DEPTH}`)
+    return
+  }
+
+  const extractDir = mkdtempSync(join(tmpdir(), 'aurora-native-voice-windows-installer-'))
+  const format = extension === '.msi' ? 'msi' : 'nsis'
+  try {
+    execFileSync(
+      windowsSevenZipExecutable(),
+      ['x', '-y', '-bd', '-bb0', `-o${extractDir}`, path],
+      { encoding: 'utf8', timeout: 120_000, windowsHide: true },
+    )
+    report.checkedInstallers += 1
+    scanExtractedTree(extractDir, `${format}:${rel}`, archiveDepth + 1)
+  } catch (error) {
+    addFailure('installer-inspection', `installer:${rel}`, `failed to extract ${format.toUpperCase()} installer with 7-Zip: ${errorMessage(error)}`)
+  } finally {
+    rmSync(extractDir, { recursive: true, force: true })
+  }
+}
+
+function windowsSevenZipExecutable() {
+  if (process.env.AURORA_7Z_PATH) return process.env.AURORA_7Z_PATH
+  if (process.env.ProgramFiles) {
+    const installed = join(process.env.ProgramFiles, '7-Zip', '7z.exe')
+    if (existsSync(installed)) return installed
+  }
+  return '7z'
+}
+
+function scanExtractedTree(root, prefix, archiveDepth = 0) {
   for (const extracted of walkFilesystem(root)) {
     const rel = normalizePath(relative(root, extracted))
     const stat = lstatSync(extracted)
@@ -285,7 +321,7 @@ function scanExtractedTree(root, prefix) {
     report.checkedFiles += 1
     checkPath(rel, location)
     recordApprovedNativeVoiceLibrary(rel)
-    inspectRecognizedContainer(extracted, `${prefix}/${rel}`, 0)
+    inspectRecognizedContainer(extracted, `${prefix}/${rel}`, archiveDepth)
     if (shouldScanText(extracted)) checkText(readFileSync(extracted), location)
   }
 }
@@ -517,8 +553,9 @@ function ensureReadable(buffer, offset, length, label) {
 
 function installerExtension(path) {
   if (/\.AppImage$/i.test(path)) return '.AppImage'
-  if (/(\bsetup\b|\binstall(er)?\b|nsis).*\.exe$/i.test(path)) return '.exe'
+  if (/(\bsetup\b|\binstall(er)?\b|nsis).*\.exe$/i.test(basename(path))) return '.exe'
   const extension = extname(path).toLowerCase()
+  if (extension === '.exe') return ''
   if (recognizedInstallerExtensions.has(extension)) return extension
   return extension
 }
