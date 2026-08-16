@@ -6,6 +6,8 @@ name: Sherpa PocketTTS language packs
 # catalog at those URLs.
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -22,6 +24,7 @@ concurrency:
 
 jobs:
   convert-language-packs:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'sherpa-pockettts-language-packs'
     name: Convert official Kyutai PocketTTS language packs
     runs-on: ubuntu-latest
     timeout-minutes: 240
@@ -41,7 +44,9 @@ jobs:
       - name: Cache PocketTTS conversion artifacts
         uses: actions/cache@v4
         with:
-          path: .artifacts/pockettts/language-packs
+          path: |
+            .artifacts/pockettts/language-packs/export-helper-src
+            .artifacts/pockettts/language-packs/hf-cache
           key: pockettts-language-packs-${{ hashFiles('tools/voice-runtime/pockettts-packs/language_pack_sources.json') }}
           restore-keys: |
             pockettts-language-packs-
@@ -72,7 +77,8 @@ jobs:
         with:
           name: sherpa-pockettts-language-packs
           path: |
-            .artifacts/pockettts/language-packs/*.tar.bz2
+            .artifacts/pockettts/language-packs/aurora-pockettts-en-2026-04.tar.bz2
+            .artifacts/pockettts/language-packs/aurora-pockettts-fr-24l.tar.bz2
             .artifacts/pockettts/language-packs/checksum-manifest.json
             .artifacts/pockettts/language-packs/SHA256SUMS
           if-no-files-found: error
@@ -80,11 +86,13 @@ jobs:
       - name: Attach packs to the existing GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
-          tag="${{ inputs.release_tag }}"
-          gh release view "$tag"
-          gh release upload "$tag" \
-            .artifacts/pockettts/language-packs/*.tar.bz2 \
+          test "$RELEASE_TAG" = "sherpa-pockettts-language-packs"
+          gh release view "$RELEASE_TAG"
+          gh release upload "$RELEASE_TAG" \
+            .artifacts/pockettts/language-packs/aurora-pockettts-en-2026-04.tar.bz2 \
+            .artifacts/pockettts/language-packs/aurora-pockettts-fr-24l.tar.bz2 \
             .artifacts/pockettts/language-packs/checksum-manifest.json \
             .artifacts/pockettts/language-packs/SHA256SUMS \
             --clobber

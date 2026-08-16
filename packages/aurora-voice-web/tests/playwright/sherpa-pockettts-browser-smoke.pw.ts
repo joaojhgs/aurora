@@ -145,9 +145,10 @@ test('synthesizes a locally built PocketTTS pack with the browser WebAssembly ru
     await runtime.dispose()
     return {
       sampleRateHz: audio.sampleRateHz,
-      sampleCount: audio.samples.length,
-      finite: audio.samples.every((sample: number) => Number.isFinite(sample)),
-      peak: audio.samples.reduce((max: number, sample: number) => Math.max(max, Math.abs(sample)), 0)
+      sampleCount: audio.sampleCount,
+      pcmLength: audio.pcm.length,
+      finite: audio.pcm.every((sample: number) => Number.isFinite(sample)),
+      peak: audio.pcm.reduce((max: number, sample: number) => Math.max(max, Math.abs(sample)), 0)
     }
   }, {
     assets: {
@@ -163,9 +164,10 @@ test('synthesizes a locally built PocketTTS pack with the browser WebAssembly ru
 
   expect(result.sampleRateHz).toBe(24_000)
   expect(result.sampleCount).toBeGreaterThan(2400)
+  expect(result.pcmLength).toBe(result.sampleCount)
   expect(result.finite).toBe(true)
   expect(result.peak).toBeGreaterThan(0)
-  expect(result.peak).toBeLessThanOrEqual(1.5)
+  expect(result.peak).toBeLessThanOrEqual(32_767)
   expect(browserErrors).toEqual([])
   expect(requestedPaths.some((path) => path.endsWith('.data'))).toBe(false)
 })

@@ -102,6 +102,8 @@ export const AURORA_BROWSER_POCKETTTS_OVERLAY = {
   readonly schema_version: number
   readonly catalog_id: string
   readonly revision: string
+  readonly temporary_bootstrap: boolean
+  readonly removal_point: string
   readonly download_base: string
   readonly entries: readonly AuroraBrowserRawTtsEntry[]
 }

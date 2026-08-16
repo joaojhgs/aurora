@@ -133,13 +133,18 @@ def test_convert_dry_run_does_not_download(tmp_path: Path) -> None:
     assert not any(tmp_path.rglob("*.safetensors"))
 
 
-def test_release_workflow_is_manual_and_not_pr() -> None:
+def test_release_workflow_is_published_or_manual_and_not_pr() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "pull_request:" not in text
+    assert "release:" in text
+    assert "types: [published]" in text
     assert "workflow_dispatch:" in text
     assert "release_tag:" in text
     assert "gh release upload" in text
     assert "--clobber" in text
+    assert "language-packs/*.tar.bz2" not in text
+    assert "aurora-pockettts-en-2026-04.tar.bz2" in text
+    assert "aurora-pockettts-fr-24l.tar.bz2" in text
     assert "HF_TOKEN" not in text
     assert "--weights-source public-fixed-voice" in text
     assert "name: Sherpa PocketTTS language packs" in text

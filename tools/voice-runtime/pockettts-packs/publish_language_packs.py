@@ -66,12 +66,22 @@ def validate_workflow(path: Path) -> None:
         raise ValueError("language-pack workflow must not run on ordinary pull requests")
     if "workflow_dispatch" not in text:
         raise ValueError("language-pack workflow must be explicitly dispatchable")
+    if "release:" not in text or "types: [published]" not in text:
+        raise ValueError("language-pack workflow must run when the stable release is published")
     if "release_tag" not in text:
         raise ValueError("language-pack workflow must require an existing release tag")
     if "sherpa-pockettts-language-packs" not in text:
         raise ValueError("language-pack workflow name is missing")
     if "gh release upload" not in text or "--clobber" not in text:
         raise ValueError("language-pack workflow must attach durable release assets")
+    if "language-packs/*.tar.bz2" in text:
+        raise ValueError("language-pack workflow must not upload archives through a wildcard")
+    for archive_name in (
+        "aurora-pockettts-en-2026-04.tar.bz2",
+        "aurora-pockettts-fr-24l.tar.bz2",
+    ):
+        if archive_name not in text:
+            raise ValueError(f"language-pack workflow must upload {archive_name} explicitly")
     if "contents: write" not in text:
         raise ValueError("release upload job must have contents write permission")
     if "HF_TOKEN" in text:

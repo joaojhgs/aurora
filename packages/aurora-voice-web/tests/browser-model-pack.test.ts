@@ -155,14 +155,24 @@ describe('browser model pack verification', () => {
   it('allows unsigned generated catalog manifests only through embedded catalog trust', async () => {
     const manifest = findAuroraBrowserVoiceCatalogEntry('standard:piper:en_us-amy-low')?.toModelPackManifest()
     expect(manifest).toBeDefined()
+    const expectedReleaseManifestSha256 = await manifestSha256(manifest!)
 
     await expect(verifyBrowserModelPackManifest(manifest!)).rejects.toMatchObject({ code: 'unsigned' })
-    await expect(verifyBrowserModelPackManifest(manifest!, { allowEmbeddedBrowserVoiceCatalogTrust: true }))
+    await expect(verifyBrowserModelPackManifest(manifest!, {
+      allowEmbeddedBrowserVoiceCatalogTrust: true,
+      expectedReleaseManifestSha256
+    }))
       .resolves.toMatchObject({
         pack_id: 'standard:piper:en_us-amy-low',
+        manifest_sha256: expectedReleaseManifestSha256,
         verification_mode: 'embedded-catalog',
         key_id: 'aurora-browser-voice-catalog'
       })
+
+    await expect(verifyBrowserModelPackManifest(manifest!, {
+      allowEmbeddedBrowserVoiceCatalogTrust: true,
+      expectedReleaseManifestSha256: '0'.repeat(64)
+    })).rejects.toMatchObject({ code: 'release_hash' })
 
     await expect(verifyBrowserModelPackManifest({
       ...manifest!,

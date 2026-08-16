@@ -271,6 +271,13 @@ export async function verifyBrowserModelPackManifest(
   const manifestSha256 = await sha256Hex(canonicalBytes)
   if (!signature) {
     if (options.allowEmbeddedBrowserVoiceCatalogTrust === true) {
+      if (
+        options.expectedReleaseManifestSha256 !== undefined &&
+        (!isSha256(options.expectedReleaseManifestSha256) ||
+          options.expectedReleaseManifestSha256 !== manifestSha256)
+      ) {
+        throw modelPackError('release_hash')
+      }
       await verifyEmbeddedBrowserCatalogManifest(manifest, manifestSha256)
       const variant = selectWebWasmVariant(manifest)
       return {
