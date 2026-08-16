@@ -24,6 +24,12 @@ source archive / SPM. Android and Waydroid testing are deferred for this task.
 Aurora applies a PocketTTS-only downstream queue. There is no permanent
 external fork. See [`tools/voice-runtime/sherpa-patches/README.md`](../tools/voice-runtime/sherpa-patches/README.md).
 
+```bash
+python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \
+  --archive .artifacts/sherpa-onnx/sherpa-onnx-v1.13.5.tar.gz \
+  --staging-root .artifacts/sherpa-onnx/staged-v1.13.5 --json
+```
+
 ## Language packs
 
 English `english_2026-04` and French `french_24l` are converted on demand from
@@ -31,18 +37,31 @@ official Kyutai sources. Weights are not in Git. The GitHub workflow
 `sherpa-pockettts-language-packs` is a temporary bootstrap publisher: remove
 its convert job after stable GitHub release URLs exist.
 
+Current Kyutai mimi attention is a linear KV cache, not a ring buffer. Each
+latent frame advances RoPE `offset` by 16 transformer steps. A decoder traced
+at `STATIC_SEQ_LEN = 1000` overflows at frame 62. Until a pack is re-exported
+at `STATIC_SEQ_LEN = 10000`, native and WASM proof pass
+`extra.max_frames = 55`. Do not rewrite only the ONNX I/O dims on a 1000-step
+graph.
+
 ## Proof commands
 
-Keep native and WASM builds sequential.
+Acquire `/tmp/aurora-global-build.lock` for every convert, build, export, or
+heavy test. Keep native and WASM builds sequential.
 
 ```bash
-python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \
-  --archive .artifacts/sherpa-onnx/sherpa-onnx-v1.13.5.tar.gz \
-  --staging-root .artifacts/sherpa-onnx/staged-v1.13.5 --json
+uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+  --pack aurora-pockettts-en-2026-04 --json
+uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+  --pack aurora-pockettts-fr-24l --json
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime native
+AURORA_SHERPA_WASM_TTS_NEUTRAL=1 tools/voice-runtime/build_sherpa_wasm_tts.sh
+uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime wasm
 ```
 
-WASM TTS must set `AURORA_SHERPA_WASM_TTS_NEUTRAL=1`.
+WASM TTS must set `AURORA_SHERPA_WASM_TTS_NEUTRAL=1` so Aurora mounts catalog
+packs at runtime. The WASM smoke uses the production browser engine and must
+not request a `.data` preload.
 
 Voice cloning in the product UI takes a WAV sample only. Sherpa conditions from
 audio; it does not invent a transcript.

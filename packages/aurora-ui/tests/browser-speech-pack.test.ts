@@ -292,6 +292,38 @@ describe('openActiveBrowserSpeechPacks', () => {
     expect(result.modelBindings.models[0]?.config).not.toHaveProperty('referenceText')
     expect(result.revision).toContain('reference-audio:voice-ref-1')
   })
+
+  it('does not forward stored clone words as Sherpa reference text', async () => {
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+    voiceWeb.openActive.mockResolvedValueOnce(modelPack('tts', 'pocket-pack', 'tts-file', '/tts/model.onnx', 'pockettts'))
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-pack', packVersion: '1.0.0', voiceId: 'pocket.en', referenceProfileId: 'voice-ref-1' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'pocket.en',
+      loadReferenceProfile: vi.fn(async () => ({
+        id: 'voice-ref-1',
+        label: 'Voice sample',
+        transcript: 'legacy spoken words',
+        sampleRateHz: 16_000,
+        durationMs: 1_000,
+        byteLength: audioBytes.byteLength,
+        sha256: 'c'.repeat(64),
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        audioBytes,
+      })),
+    })
+
+    expect(result.state).toBe('ready')
+    if (result.state !== 'ready') throw new Error('expected ready')
+    expect(result.modelBindings.models[0]?.config).toMatchObject({
+      referenceSampleRateHz: 16_000,
+    })
+    expect(result.modelBindings.models[0]?.config).not.toHaveProperty('referenceText')
+  })
 })
 
 describe('AuroraBrowserPocketReferenceProfile store', () => {

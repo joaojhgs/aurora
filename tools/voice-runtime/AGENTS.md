@@ -38,13 +38,22 @@ Downloaded models, converted ONNX, WAVs, reports, and build trees belong in
 
 ## Native and WASM proof
 
-Keep those builds sequential. WASM TTS must set
+Acquire `/tmp/aurora-global-build.lock` for every convert, build, export, or
+heavy test. Keep those builds sequential. WASM TTS must set
 `AURORA_SHERPA_WASM_TTS_NEUTRAL=1` so Aurora mounts catalog packs at runtime.
+
+Until a pack is re-exported at `STATIC_SEQ_LEN=10000`, both runtimes pass
+`extra.max_frames=55` so the linear KV cache does not overflow at frame 62.
 
 ```bash
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime native
+AURORA_SHERPA_WASM_TTS_NEUTRAL=1 tools/voice-runtime/build_sherpa_wasm_tts.sh
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime wasm
 ```
+
+The WASM smoke is the Playwright driver in
+`packages/aurora-voice-web/tests/playwright/sherpa-pockettts-browser-smoke.pw.ts`.
+It must synthesize real audio for both locally built packs.
 
 ## Temporary bootstrap publisher
 

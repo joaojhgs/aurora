@@ -52,6 +52,7 @@ WASM TTS:
 
 ```bash
 export AURORA_SHERPA_WASM_TTS_NEUTRAL=1
+tools/voice-runtime/build_sherpa_wasm_tts.sh
 ```
 
 ## Upgrade / rebase

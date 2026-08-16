@@ -130,6 +130,7 @@ export interface AuroraVoiceWebModelDescriptor {
     readonly lengthScale?: number
     readonly referenceText?: string
     readonly referenceSampleRateHz?: number
+    readonly maxFrames?: number
   }
 }
 

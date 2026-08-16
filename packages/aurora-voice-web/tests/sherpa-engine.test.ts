@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -223,7 +224,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
         modelFile('tts', 'text-conditioner.onnx', [5]),
         modelFile('tts', 'vocab.json', [6]),
         modelFile('tts', 'token-scores.json', [7]),
-        modelFile('tts', 'reference.wav', [8])
+        referenceWavFile()
       ],
       models: [{
         task: 'tts',
@@ -245,7 +246,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
 
     expect(calls).toContain('fs:/tts-reference.wav')
-    expect(calls).toContain('tts:hello:/tts-reference.wav:16000:hello from speaker')
+    expect(calls).toContain('tts:hello:pcm16:16000:hello from speaker:55')
   })
 
   it('synthesizes PocketTTS without written reference words', async () => {
@@ -265,7 +266,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
         modelFile('tts', 'text-conditioner.onnx', [5]),
         modelFile('tts', 'vocab.json', [6]),
         modelFile('tts', 'token-scores.json', [7]),
-        modelFile('tts', 'reference.wav', [8])
+        referenceWavFile()
       ],
       models: [{
         task: 'tts',
@@ -287,7 +288,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
 
     expect(calls).toContain('fs:/tts-reference.wav')
-    expect(calls).toContain('tts:hello:/tts-reference.wav:16000:undefined')
+    expect(calls).toContain('tts:hello:pcm16:16000:undefined:55')
   })
 
   it('rejects engine sources that declare an Emscripten data preload without fetching data assets', async () => {
@@ -377,6 +378,38 @@ function engineAssets() {
   }
 }
 
+function referenceWavFile(): AuroraVoiceWebModelFileBinding {
+  const bytes = pcm16MonoWav(16_000, 16)
+  return {
+    task: 'tts',
+    fileId: 'reference.wav',
+    virtualPath: '/tts-reference.wav',
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    byteLength: bytes.byteLength,
+    bytes
+  }
+}
+
+function pcm16MonoWav(sampleRateHz: number, sampleCount: number): Uint8Array {
+  const pcmBytes = sampleCount * 2
+  const bytes = new Uint8Array(44 + pcmBytes)
+  const view = new DataView(bytes.buffer)
+  bytes.set(Buffer.from('RIFF'), 0)
+  view.setUint32(4, 36 + pcmBytes, true)
+  bytes.set(Buffer.from('WAVE'), 8)
+  bytes.set(Buffer.from('fmt '), 12)
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRateHz, true)
+  view.setUint32(28, sampleRateHz * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  bytes.set(Buffer.from('data'), 36)
+  view.setUint32(40, pcmBytes, true)
+  return bytes
+}
+
 function modelFile(task: 'vad' | 'kws' | 'stt' | 'tts', fileId: string, bytes: readonly number[], virtualPath = `/${task}-${fileId}`): AuroraVoiceWebModelFileBinding {
   return {
     task,
@@ -446,9 +479,19 @@ class FakeKws {
 class FakeTts {
   constructor(private readonly calls: string[]) {}
   generateWithConfig(text: string, config: unknown): unknown {
-    const candidate = config as { referenceAudio?: unknown; referenceSampleRate?: unknown; referenceText?: unknown }
+    const candidate = config as {
+      referenceAudio?: unknown
+      referenceSampleRate?: unknown
+      referenceText?: unknown
+      extra?: { max_frames?: unknown }
+    }
     if (candidate.referenceAudio !== undefined) {
-      this.calls.push(`tts:${text}:${String(candidate.referenceAudio)}:${String(candidate.referenceSampleRate)}:${String(candidate.referenceText)}`)
+      const pcm = candidate.referenceAudio instanceof Float32Array
+        ? `pcm${candidate.referenceAudio.length}`
+        : String(candidate.referenceAudio)
+      this.calls.push(
+        `tts:${text}:${pcm}:${String(candidate.referenceSampleRate)}:${String(candidate.referenceText)}:${String(candidate.extra?.max_frames)}`
+      )
       return { sampleRate: 16_000, samples: new Float32Array([0.2]) }
     }
     expect(text).toBe('Hello Aurora')

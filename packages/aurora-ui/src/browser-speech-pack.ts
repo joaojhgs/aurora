@@ -451,9 +451,6 @@ export async function openActiveBrowserSpeechPacks(
             ]),
             config: Object.freeze({
               ...(model.config ?? {}),
-              ...(referenceProfile.transcript.length > 0
-                ? { referenceText: referenceProfile.transcript }
-                : {}),
               referenceSampleRateHz: referenceProfile.sampleRateHz,
             }),
           })

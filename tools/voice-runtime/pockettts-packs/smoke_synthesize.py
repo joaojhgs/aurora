@@ -71,6 +71,16 @@ def assert_pack(pack_dir: Path) -> None:
             raise FileNotFoundError(f"{pack_dir} missing catalog binding {relative}")
 
 
+def _cargo() -> str:
+    explicit = os.environ.get("CARGO")
+    if explicit:
+        return explicit
+    home = Path.home() / ".cargo" / "bin" / "cargo"
+    if home.is_file():
+        return str(home)
+    return "cargo"
+
+
 def native_smoke(pack_dir: Path, reference: Path, text: str) -> None:
     assert_pack(pack_dir)
     env = dict(os.environ)
@@ -83,17 +93,66 @@ def native_smoke(pack_dir: Path, reference: Path, text: str) -> None:
     env["AURORA_POCKETTTS_TEXT"] = text
     result = subprocess.run(
         [
-            "cargo",
+            _cargo(),
             "test",
             "-p",
             "aurora-voice-sherpa-sys",
             "--features",
             "native-tts",
-            "native_tts_pockettts_real_synthesis_smoke",
+            "tests::native_tts_pockettts_real_synthesis_smoke",
             "--",
             "--nocapture",
+            "--exact",
         ],
         cwd=REPO_ROOT / "rust",
+        env=env,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+
+
+def wasm_smoke(pack_dir: Path, reference: Path, text: str) -> None:
+    assert_pack(pack_dir)
+    assets = Path(
+        os.environ.get(
+            "AURORA_SHERPA_WASM_TTS_ROOT",
+            REPO_ROOT / ".artifacts/sherpa-onnx/wasm-tts-neutral",
+        )
+    )
+    wasm = assets / "sherpa-onnx-wasm-main-tts.wasm"
+    helper = assets / "sherpa-onnx-tts.js"
+    if not wasm.is_file() or not helper.is_file():
+        raise SystemExit(
+            "WASM TTS assets missing. Build sequentially with "
+            "AURORA_SHERPA_WASM_TTS_NEUTRAL=1 via "
+            "tools/voice-runtime/build_sherpa_wasm_tts.sh"
+        )
+    package = REPO_ROOT / "packages/aurora-voice-web"
+    if not (package / "dist/browser.js").is_file():
+        build = subprocess.run(
+            ["pnpm", "--filter", "@aurora/voice-web", "run", "build"],
+            cwd=REPO_ROOT,
+            check=False,
+        )
+        if build.returncode != 0:
+            raise SystemExit(build.returncode)
+    env = dict(os.environ)
+    env["AURORA_POCKETTTS_PACK_DIR"] = str(pack_dir.resolve())
+    env["AURORA_POCKETTTS_REF_WAV"] = str(reference.resolve())
+    env["AURORA_POCKETTTS_TEXT"] = text
+    env["AURORA_SHERPA_WASM_TTS_ROOT"] = str(assets.resolve())
+    env["AURORA_ARTIFACTS_ROOT"] = str(REPO_ROOT / ".artifacts")
+    result = subprocess.run(
+        [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/playwright/sherpa-pockettts-browser-smoke.playwright.config.ts",
+        ],
+        cwd=package,
         env=env,
         check=False,
     )
@@ -132,11 +191,12 @@ def main() -> int:
             print(f"pack-check ok {pack_dir}")
             continue
         if args.runtime == "wasm":
-            print(
-                "WASM real-synthesis is the Playwright smoke after "
-                "AURORA_SHERPA_WASM_TTS_NEUTRAL=1 sequential TTS build."
+            text = args.text or (
+                "Bonjour, ceci est un essai."
+                if "fr-24l" in pack_dir.name
+                else "Hello, this is a voice check."
             )
-            assert_pack(pack_dir)
+            wasm_smoke(pack_dir, reference, text)
             continue
         text = args.text or (
             "Bonjour, ceci est un essai."

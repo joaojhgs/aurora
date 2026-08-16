@@ -17,7 +17,7 @@ import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
 
 const SAMPLE_RATE_HZ = 16_000
 const MAX_MODEL_FILES = 4096
-const MAX_MODEL_FILE_BYTES = 256 * 1024 * 1024
+const MAX_MODEL_FILE_BYTES = 1024 * 1024 * 1024
 const MAX_VIRTUAL_PATH_BYTES = 256
 const MAX_TTS_TEXT_CHARS = 1_000
 const MAX_TTS_SECONDS = 60
@@ -208,7 +208,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
         tts = helpers.createOfflineTts(ttsModule, ttsConfig(models))
         if (!validTts(tts)) throw unavailable('missing_tts_helper')
       }
-      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts, ttsGenerationConfig: ttsGenerationConfig(models) }
+      this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts, ttsGenerationConfig: ttsGenerationConfig(models, files) }
       this.capabilities = Object.freeze({
         vad: vad !== null,
         kws: kws !== null,
@@ -479,19 +479,79 @@ function ttsConfig(models: readonly AuroraVoiceWebModelDescriptor[]): unknown {
   }
 }
 
-function ttsGenerationConfig(models: readonly AuroraVoiceWebModelDescriptor[]): Record<string, unknown> {
+function ttsGenerationConfig(
+  models: readonly AuroraVoiceWebModelDescriptor[],
+  files: readonly AuroraVoiceWebModelFileBinding[]
+): Record<string, unknown> {
   const matches = models.filter((model) => model.task === 'tts')
   if (matches.length === 0) return {}
   const model = requireModel(models, 'tts')
   if (model.family !== 'pockettts') return {}
-  const referenceSampleRate = model.config?.referenceSampleRateHz
-  if (referenceSampleRate === undefined) throw unavailable('missing_model_role')
+  const configuredRate = model.config?.referenceSampleRateHz
+  if (configuredRate === undefined) throw unavailable('missing_model_role')
+  const referencePath = requireRole(model, 'referenceAudio')
+  const referenceFile = files.find((file) => file.task === 'tts' && file.virtualPath === referencePath)
+  if (referenceFile === undefined) throw unavailable('missing_model_role')
+  const decoded = decodePocketReferenceWav(referenceFile.bytes)
   const referenceText = model.config?.referenceText?.trim()
   return {
-    referenceAudio: requireRole(model, 'referenceAudio'),
-    referenceSampleRate,
+    referenceAudio: decoded.samples,
+    referenceSampleRate: decoded.sampleRateHz || configuredRate,
+    extra: { max_frames: model.config?.maxFrames ?? 55 },
     ...(referenceText ? { referenceText } : {}),
   }
+}
+
+function decodePocketReferenceWav(bytes: Uint8Array): { readonly samples: Float32Array; readonly sampleRateHz: number } {
+  if (bytes.byteLength < 44) throw unavailable('invalid_model_metadata')
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const ascii = (offset: number, length: number) => String.fromCharCode(...bytes.subarray(offset, offset + length))
+  if (ascii(0, 4) !== 'RIFF' || ascii(8, 4) !== 'WAVE') throw unavailable('invalid_model_metadata')
+  let offset = 12
+  let audioFormat = 0
+  let channelCount = 0
+  let sampleRateHz = 0
+  let bitsPerSample = 0
+  let dataOffset = -1
+  let dataLength = 0
+  while (offset + 8 <= bytes.byteLength) {
+    const chunkId = ascii(offset, 4)
+    const chunkLength = view.getUint32(offset + 4, true)
+    const chunkDataOffset = offset + 8
+    if (chunkLength > bytes.byteLength - chunkDataOffset) throw unavailable('invalid_model_metadata')
+    if (chunkId === 'fmt ') {
+      if (chunkLength < 16) throw unavailable('invalid_model_metadata')
+      audioFormat = view.getUint16(chunkDataOffset, true)
+      channelCount = view.getUint16(chunkDataOffset + 2, true)
+      sampleRateHz = view.getUint32(chunkDataOffset + 4, true)
+      bitsPerSample = view.getUint16(chunkDataOffset + 14, true)
+    } else if (chunkId === 'data') {
+      dataOffset = chunkDataOffset
+      dataLength = chunkLength
+    }
+    offset = chunkDataOffset + chunkLength + (chunkLength % 2)
+  }
+  if (
+    audioFormat !== 1 ||
+    channelCount !== 1 ||
+    bitsPerSample !== 16 ||
+    dataOffset < 0 ||
+    dataLength < 2 ||
+    dataLength % 2 !== 0 ||
+    !Number.isSafeInteger(sampleRateHz) ||
+    sampleRateHz < 8_000 ||
+    sampleRateHz > 48_000
+  ) {
+    throw unavailable('invalid_model_metadata')
+  }
+  const pcm = bytes.subarray(dataOffset, dataOffset + dataLength)
+  const pcmView = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength)
+  const samples = new Float32Array(pcm.byteLength / 2)
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = pcmView.getInt16(index * 2, true)
+    samples[index] = sample < 0 ? sample / 32768 : sample / 32767
+  }
+  return { samples, sampleRateHz }
 }
 
 async function loadControlledSherpaHelpers(urls: readonly string[], fetchImpl: typeof fetch): Promise<SherpaHelpers> {
@@ -653,6 +713,9 @@ function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['
     throw unavailable('invalid_model_metadata')
   }
   if (config.referenceSampleRateHz !== undefined && (!Number.isSafeInteger(config.referenceSampleRateHz) || config.referenceSampleRateHz < 8_000 || config.referenceSampleRateHz > 48_000)) {
+    throw unavailable('invalid_model_metadata')
+  }
+  if (config.maxFrames !== undefined && (!Number.isSafeInteger(config.maxFrames) || config.maxFrames < 1 || config.maxFrames > 500)) {
     throw unavailable('invalid_model_metadata')
   }
   return Object.freeze({ ...config })
