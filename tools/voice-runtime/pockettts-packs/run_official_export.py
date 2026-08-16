@@ -280,10 +280,18 @@ def inline_onnx_file(src: Path, dest: Path) -> None:
 def _extract_bos_from_safetensors(weights: Path, output: Path) -> Path | None:
     from safetensors import safe_open
 
+    candidates = (
+        "flow_lm.bos_before_voice",
+        "bos_before_voice",
+        "flow_lm.bos_emb",
+        "bos_emb",
+    )
     with safe_open(str(weights), framework="pt") as handle:
-        if "flow_lm.bos_before_voice" not in handle:
+        keys = set(handle.keys())
+        name = next((candidate for candidate in candidates if candidate in keys), None)
+        if name is None:
             return None
-        tensor = handle.get_tensor("flow_lm.bos_before_voice")
+        tensor = handle.get_tensor(name)
     values = tensor.detach().cpu().float().reshape(-1).tolist()
     raw = __import__("array").array("f", values)
     path = output / "bos_before_voice.bin"

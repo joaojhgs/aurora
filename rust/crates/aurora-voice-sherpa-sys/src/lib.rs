@@ -3403,7 +3403,7 @@ mod tests {
         let started = std::time::Instant::now();
         let audio = synthesizer
             .generate(&text, &generation, &|| false)
-            .expect("pocket audio");
+            .unwrap_or_else(|error| panic!("pocket audio: {error:?}"));
         let elapsed = started.elapsed();
         assert_eq!(audio.sample_rate(), 24_000);
         assert!(audio.samples().len() > 2400, "expected more than 100ms of audio");

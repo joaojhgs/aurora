@@ -39,10 +39,10 @@ its convert job after stable GitHub release URLs exist.
 
 Current Kyutai mimi attention is a linear KV cache, not a ring buffer. Each
 latent frame advances RoPE `offset` by 16 transformer steps. A decoder traced
-at `STATIC_SEQ_LEN = 1000` overflows at frame 62. Until a pack is re-exported
-at `STATIC_SEQ_LEN = 10000`, native and WASM proof pass
-`extra.max_frames = 55`. Do not rewrite only the ONNX I/O dims on a 1000-step
-graph.
+at `STATIC_SEQ_LEN = 1000` overflows at frame 62. The French 24l pack is
+exported at `STATIC_SEQ_LEN = 10000`. English 2026-04 is still a 1000-step
+graph, so native and WASM proof pass `extra.max_frames = 55`. Do not rewrite
+only the ONNX I/O dims on a 1000-step graph.
 
 ## Proof commands
 

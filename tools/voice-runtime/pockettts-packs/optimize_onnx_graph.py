@@ -41,8 +41,14 @@ def optimize_model(model: Any) -> tuple[Any, dict[str, int]]:
     removed_identity = 0
     identity_map: dict[str, str] = {}
     kept_nodes = []
+    output_names = {item.name for item in graph.output}
     for node in graph.node:
         if node.op_type == "Identity" and len(node.input) == 1 and len(node.output) == 1:
+            if node.output[0] in output_names:
+                # Keep I/O alias Identities. Folding them restores colliding
+                # state_* names and ORT then aliases View() buffers.
+                kept_nodes.append(node)
+                continue
             identity_map[node.output[0]] = node.input[0]
             removed_identity += 1
             continue
@@ -53,9 +59,6 @@ def optimize_model(model: Any) -> tuple[Any, dict[str, int]]:
                 while name in identity_map:
                     name = identity_map[name]
                     node.input[index] = name
-        for output in graph.output:
-            while output.name in identity_map:
-                output.name = identity_map[output.name]
         del graph.node[:]
         graph.node.extend(kept_nodes)
 

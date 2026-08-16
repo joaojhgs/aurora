@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog_id": "aurora-sherpa-pockettts-language-packs-v1",
-      "revision": "bootstrap-en-converted-v1",
+  "revision": "bootstrap-en-fr-converted-v1",
   "temporary_bootstrap": true,
   "removal_point": "After GitHub release tag sherpa-pockettts-language-packs publishes stable archive URLs, replace overlay download URLs with those assets and delete .github/workflows/sherpa-pockettts-language-packs.yml convert/build steps.",
   "download_base": "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/",
@@ -44,12 +44,12 @@
     {
       "archive": {
         "asset_id": 900000002,
-        "byte_size": 1,
+        "byte_size": 686925861,
         "filename": "aurora-pockettts-fr-24l.tar.bz2",
         "format": "tar_bzip2",
         "root": "aurora-pockettts-fr-24l",
-        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-        "updated_at": "2026-08-15T00:00:00Z",
+        "sha256": "d24491918f7097c84c6d3440c7219d0342d746184674ea0926b5ef9ea07c697f",
+        "updated_at": "2026-08-16T00:57:00Z",
         "url": "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/aurora-pockettts-fr-24l.tar.bz2"
       },
       "bindings": {

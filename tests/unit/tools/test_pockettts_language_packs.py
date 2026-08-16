@@ -116,6 +116,33 @@ def test_graph_optimizer_folds_identity_and_dedups_initializers(tmp_path: Path) 
     assert stats["deduplicated_initializers"] == 1
 
 
+def test_graph_optimizer_keeps_output_alias_identities(tmp_path: Path) -> None:
+    onnx = pytest.importorskip("onnx")
+    from onnx import TensorProto, helper
+
+    graph = helper.make_graph(
+        [helper.make_node("Identity", ["state_0"], ["out_state_0"])],
+        "alias",
+        [helper.make_tensor_value_info("state_0", TensorProto.FLOAT, [2, 1, 8])],
+        [helper.make_tensor_value_info("out_state_0", TensorProto.FLOAT, [2, 1, 8])],
+    )
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 17)])
+    path = tmp_path / "alias.onnx"
+    onnx.save(model, path)
+    spec = importlib.util.spec_from_file_location(
+        "optimize_onnx_graph",
+        REPO / "tools/voice-runtime/pockettts-packs/optimize_onnx_graph.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    stats = module.optimize_file(path)
+    assert stats["removed_identity"] == 0
+    repaired = onnx.load(str(path))
+    assert [item.name for item in repaired.graph.output] == ["out_state_0"]
+    assert repaired.graph.node[0].op_type == "Identity"
+
+
 def test_disambiguate_onnx_io_names_renames_colliding_outputs() -> None:
     pytest.importorskip("onnx")
     spec = importlib.util.spec_from_file_location(
@@ -187,6 +214,14 @@ MimiStreamingMultiheadAttention.increment_step = patched_mimi_increment_step
     assert patched_verify == (
         "mimi_state = init_states(tts_model.mimi, batch_size=1, sequence_length=10000)\n"
     )
+
+
+def test_bos_extract_reads_safetensors_keys() -> None:
+    text = (
+        REPO / "tools/voice-runtime/pockettts-packs/run_official_export.py"
+    ).read_text(encoding="utf-8")
+    assert "handle.keys()" in text
+    assert 'if "flow_lm.bos_before_voice" not in handle:' not in text
 
 
 def test_resize_static_kv_cache_dim_only_rewrites_rank5_cache() -> None:
