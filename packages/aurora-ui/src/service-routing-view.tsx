@@ -308,7 +308,8 @@ export function LocalServiceRoutingResource({
   const [thinSnapshot, setThinSnapshot] = useState<BrowserWebRtcSnapshot | null>(
     () => thinPeer?.snapshot() ?? null,
   )
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [localLoadError, setLocalLoadError] = useState<string | null>(null)
+  const [connectedLoadError, setConnectedLoadError] = useState<string | null>(null)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const loadGeneration = useRef(0)
@@ -318,12 +319,14 @@ export function LocalServiceRoutingResource({
   const stableRoute = useMemo(() => route, [routeKey])
   const connectedTransportReady = !thinPeer || isBrowserWebRtcConnected(thinSnapshot)
   const requiresConnectedLoad = Boolean(client && stableRoute && connectedTransportReady)
-  const [connectedLoadSettled, setConnectedLoadSettled] = useState(!requiresConnectedLoad)
 
   const load = useCallback(async () => {
     const generation = loadGeneration.current + 1
     loadGeneration.current = generation
+    setLocalLoadError(null)
+    setConnectedLoadError(null)
     let localFailed = false
+    let connectedFailed = false
     try {
       const [localResult, connectedResult] = await Promise.allSettled([
         featureSharing.load(),
@@ -346,15 +349,19 @@ export function LocalServiceRoutingResource({
               current,
             )
           : null)
+      } else if (requiresConnectedLoad) {
+        connectedFailed = true
       }
-      if (localFailed) {
-        setLoadError('Service sharing is unavailable right now. Try again.')
-      } else {
-        setLoadError(null)
+      if (localFailed || connectedFailed) {
+        const message = 'Service sharing is unavailable right now. Try again.'
+        if (localFailed) setLocalLoadError(message)
+        if (connectedFailed) setConnectedLoadError(message)
       }
     } catch {
       if (loadGeneration.current !== generation) return
-      setLoadError('Service sharing is unavailable right now. Try again.')
+      const message = 'Service sharing is unavailable right now. Try again.'
+      setLocalLoadError(message)
+      if (requiresConnectedLoad) setConnectedLoadError(message)
     }
   }, [client, featureSharing, requiresConnectedLoad, stableRoute, thinPeer])
 
@@ -376,14 +383,9 @@ export function LocalServiceRoutingResource({
   }, [thinPeer])
 
   useEffect(() => {
-    let active = true
     setConnectedSnapshot(null)
-    setConnectedLoadSettled(!requiresConnectedLoad)
-    void load().finally(() => {
-      if (active) setConnectedLoadSettled(true)
-    })
+    void load()
     return () => {
-      active = false
       loadGeneration.current += 1
     }
   }, [load, requiresConnectedLoad])
@@ -391,15 +393,17 @@ export function LocalServiceRoutingResource({
   useEffect(() => {
     return featureSharing.subscribe?.((next) => {
       setSharing(next)
-      setLoadError(null)
+      setLocalLoadError(null)
     })
   }, [featureSharing])
 
+  const loadError = connectedLoadError ?? localLoadError
+  const connectedBaselinePending = requiresConnectedLoad && !connectedSnapshot && !connectedLoadError
   const snapshot = useMemo(
-    () => requiresConnectedLoad && !connectedLoadSettled
+    () => connectedBaselinePending
       ? { ...loadingSnapshot, evidenceSource: 'This device' }
       : buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError),
-    [connectedLoadSettled, connectedSnapshot, loadError, requiresConnectedLoad, sharing],
+    [connectedBaselinePending, connectedSnapshot, loadError, sharing],
   )
 
   const previewRow = useCallback(async (
@@ -737,14 +741,14 @@ export async function buildServiceRoutingSnapshot(client: AuroraClient, route: R
   const catalog = fulfilled(catalogResult)
   const meshStatus = fulfilledOk(meshStatusResult)
   const persistedPeers = fulfilledOk(peersResult)?.peers ?? []
-  const warnings = [
-    rejectedWarning(registryResult, 'full service registry'),
-    rejectedWarning(servicesResult, 'service registry status'),
-    rejectedWarning(configResult, 'service config'),
-    rejectedWarning(metadataResult, 'config metadata'),
-    rejectedWarning(catalogResult, 'recipient capability catalog'),
-    rejectedWarning(meshStatusResult, 'mesh status'),
-  ].filter((message): message is string => Boolean(message))
+  const warnings = [...new Set([
+    rejectedWarning(registryResult),
+    rejectedWarning(servicesResult),
+    rejectedWarning(configResult),
+    rejectedWarning(metadataResult),
+    rejectedWarning(catalogResult),
+    rejectedWarning(meshStatusResult),
+  ].filter((message): message is string => Boolean(message)))]
 
   if (route.disabled || (!registry && !services && !config)) {
     return {
@@ -1354,8 +1358,14 @@ function withSnapshotTimeout<T>(promise: Promise<T>, label: string): Promise<T> 
 
 function fulfilled<T>(result: PromiseSettledResult<T>): T | null { return result.status === 'fulfilled' ? result.value : null }
 function fulfilledOk<T>(result: PromiseSettledResult<{ ok: boolean; data?: T | null }>): T | null { return result.status === 'fulfilled' && result.value.ok ? result.value.data ?? null : null }
-function rejectedWarning(result: PromiseSettledResult<unknown>, label: string): string | null { return result.status === 'rejected' ? `${label} unavailable: ${meshPeerErrorMessage(result.reason)}` : null }
-function isExpectedOfflineTransportWarning(value: string): boolean { return /webrtc mesh (?:transport|event stream) is not connected|transport datachannel not connected|preferred-mode HTTP fallback/i.test(value) }
+function rejectedWarning(result: PromiseSettledResult<unknown>): string | null {
+  if (result.status !== 'rejected') return null
+  const reason = result.reason instanceof Error ? result.reason.message : String(result.reason)
+  return isExpectedOfflineTransportWarning(reason)
+    ? 'This device is offline.'
+    : 'Some service sharing details are temporarily unavailable.'
+}
+function isExpectedOfflineTransportWarning(value: string): boolean { return value === 'This device is offline.' || /webrtc mesh (?:transport|event stream) is not connected|transport datachannel not connected|preferred-mode HTTP fallback/i.test(value) }
 function orderServiceRows(rows: ServiceRoutingRow[]): ServiceRoutingRow[] {
   const targetOrder = new Map(SERVICE_ROUTING_TARGETS.map((target, index) => [target.id, index]))
   return [...rows].sort((a, b) => Number(b.sharingEditable !== false) - Number(a.sharingEditable !== false) || (targetOrder.get(a.id) ?? 1_000) - (targetOrder.get(b.id) ?? 1_000) || a.label.localeCompare(b.label))
