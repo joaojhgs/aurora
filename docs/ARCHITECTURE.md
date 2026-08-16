@@ -136,4 +136,4 @@ See [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md).
 
 ## Documentation boundaries
 
-Current docs are indexed in [`DOCS_INDEX.md`](DOCS_INDEX.md). Historical plans and generated investigation artifacts are archived under `docs/archive/` or `.omx/plans/` and are not current architecture guidance.
+Current docs are indexed in [`DOCS_INDEX.md`](DOCS_INDEX.md). Curated historical material lives under `docs/archive/`; local agent plans and generated investigation artifacts are not tracked release source.

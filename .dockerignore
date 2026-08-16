@@ -43,7 +43,7 @@ target/
 .next/
 **/.next/
 .gitnexus/
-.omx/logs/
+.omx/
 .mypy_cache/
 .ruff_cache/
 

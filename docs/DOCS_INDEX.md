@@ -83,6 +83,6 @@ This index separates current documentation from historical/provenance material. 
 Historical plans, handoffs, task reports, and generated investigation artifacts are not part of the working tree. Git history remains the provenance record.
 
 - [`docs/archive/`](archive/) contains the limited human-readable history that is still useful to maintainers.
-- [`.omx/ROADMAP.md`](../.omx/ROADMAP.md), direct plan files under `.omx/plans/`, and task specifications under `.omx/specs/` retain current objectives without generated run output.
+- Local `.omx/` state may retain active agent plans and task context, but it is ignored and is not a release source of truth.
 
-Do not add generated reports, publishing receipts, one-off task checklists, or agent handoffs to `docs/` or tracked OMX directories. See [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).
+Do not add generated reports, publishing receipts, one-off task checklists, or agent handoffs to tracked documentation. See [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).

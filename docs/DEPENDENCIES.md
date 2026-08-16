@@ -215,7 +215,7 @@ Process-mode Compose runs separate service containers. Keep container images ser
 
 ## Dependency analysis artifacts
 
-Historical dependency investigation files were moved to `.omx/plans/dependency-analysis-archive/`. They are useful provenance but not current guidance. To refresh dependency evidence:
+Dependency investigation outputs are reproducible local or CI artifacts, not tracked documentation. To refresh dependency evidence:
 
 ```bash
 make analyze-deps
@@ -223,4 +223,4 @@ make generate-dependency-tree
 make audit-dependencies
 ```
 
-Treat outputs as local or CI artifacts unless a small, curated summary belongs in this file.
+Keep the generated outputs under local `.artifacts/` or local agent state unless a small, curated summary belongs in this file.

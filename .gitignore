@@ -266,34 +266,8 @@ instructions
 .gitnexus
 .sisyphus/notepads/
 
-# Track durable OMX planning/spec artifacts while keeping runtime state local.
-!.omx/
-.omx/*
-!.omx/ROADMAP.md
-!.omx/specs/
-!.omx/specs/**
-!.omx/multica/
-!.omx/multica/**
-.omx/archive/
-.omx/research/
-.omx/plans/dependency-analysis-archive/
-.omx/plans/docs-plans/
-.omx/specs/**/created-issues.json
-.omx/specs/**/full-coverage-review.md
-.omx/specs/**/*report*.md
-.omx/specs/**/push_to_multica.py
-.omx/multica/**/created-issues.json
-.omx/multica/**/task-index.json
-.omx/multica/**/generate_and_push.py
-.omx/multica/**/push_to_multica.py
-.omx/multica/**/resume_push.py
-.omx/multica/**/update_multica_descriptions.py
-.omx/state/
-.omx/logs/
-.omx/tmp/
-.omx/cache/
-.omx/notepad.md
-.omx/project-memory.json
+# Local OMX plans, task state, reports, and run receipts are not release source.
+.omx/
 
 # Generated reports, screenshots, logs, and run receipts belong in local or CI artifacts.
 reports/
