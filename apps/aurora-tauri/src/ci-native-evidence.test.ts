@@ -133,6 +133,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR')
     expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND')
     expect(sherpaSysBuild).toContain('println!("cargo:rustc-link-lib=static={library}")')
+    expect(builder).toContain('stage_ios_ort_archive(plan, ios_ort_binary, destination)')
+    expect(builder).toContain('"xcrun",')
+    expect(builder).toContain('"lipo",')
     expect(sherpaSysBuild).toContain('Android Sherpa packaging requires the patched shared runtime')
   })
 

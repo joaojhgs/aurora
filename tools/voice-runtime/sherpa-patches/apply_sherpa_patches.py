@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage official sherpa-onnx and apply Aurora's PocketTTS patch queue."""
+"""Stage official sherpa-onnx and apply Aurora's pinned downstream patch queue."""
 
 from __future__ import annotations
 
@@ -25,6 +25,9 @@ PATCH_SHA256 = {
     ),
     "0003-pockettts-fixed-voice-state.patch": (
         "640e64ba79fa038370310ed5bb5530f4c8d801ddc92c82d2feb56333828eb12a"
+    ),
+    "0004-macos-onnxruntime-release-hash.patch": (
+        "92fcf20803338a77bfd43330fa3b438fdfef57c9ededb47dc6def9892be65c52"
     ),
 }
 
@@ -177,6 +180,10 @@ def apply_patches(source_root: Path) -> None:
         result = subprocess.run(
             [
                 "git",
+                "-c",
+                "core.autocrlf=false",
+                "-c",
+                "core.eol=lf",
                 "apply",
                 "--unidiff-zero",
                 "--whitespace=error",
@@ -197,6 +204,7 @@ def patched_tree_identity(source_root: Path) -> dict[str, Any]:
         "sherpa-onnx/csrc/offline-tts-pocket-model.cc",
         "sherpa-onnx/csrc/offline-tts-pocket-impl.h",
         "wasm/tts/CMakeLists.txt",
+        "cmake/onnxruntime-osx-arm64-static.cmake",
     ]
     records = []
     digest = hashlib.sha256()

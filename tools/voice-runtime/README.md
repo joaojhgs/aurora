@@ -61,6 +61,9 @@ for Aurora's patched engine.
 the current Linux x64, macOS arm64, Windows x64, iOS arm64 simulator, or iOS
 arm64 device target. It verifies the target-specific ONNX Runtime `1.27.1`
 archive before configuring the verified patched source tree.
+For iOS, the builder selects the requested XCFramework slice, thins a universal
+simulator binary to the target architecture when necessary, and verifies the
+result is a real static archive before Cargo can link it.
 
 ```bash
 flock -x /tmp/aurora-global-build.lock \

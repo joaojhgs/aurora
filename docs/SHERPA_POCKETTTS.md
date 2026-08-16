@@ -18,10 +18,12 @@ This page is the live Sherpa PocketTTS pin. Phase 4 frozen evidence remains in
 
 Official `v1.13.5` no longer publishes the old release-specific iOS archive.
 Aurora builds its patched iOS C API from the same pinned source and links the
-pinned ONNX Runtime static xcframework. Patch 0003 also loads PocketTTS protocol/BOS/fixed-state
-sidecars through Android and OHOS asset managers. Live Waydroid foreground and
-background voice validation is a separate device gate and is not implied by
-the source patch alone.
+pinned ONNX Runtime static XCFramework. The native builder selects the requested
+iOS slice, thins a universal simulator binary when necessary, and rejects the
+result unless it is a valid static archive. Patch 0003 also loads PocketTTS
+protocol/BOS/fixed-state sidecars through Android and OHOS asset managers. Live
+Waydroid foreground and background voice validation is a separate device gate
+and is not implied by the source patch alone.
 
 The language-pack builder provisions a separate, version-pinned Python export
 environment under `.artifacts/`. Its Python ONNX tools are used only to export,
@@ -32,8 +34,10 @@ there is no publishable unoptimized-pack bypass.
 
 ## Patch queue
 
-Aurora applies a PocketTTS-only downstream queue. There is no permanent
-external fork. See [`tools/voice-runtime/sherpa-patches/README.md`](../tools/voice-runtime/sherpa-patches/README.md).
+Aurora applies a tightly scoped downstream queue. Inference changes are
+PocketTTS-only; the queue also corrects the stale upstream macOS ONNX Runtime
+release checksum. There is no permanent external fork. See
+[`tools/voice-runtime/sherpa-patches/README.md`](../tools/voice-runtime/sherpa-patches/README.md).
 
 ```bash
 python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \

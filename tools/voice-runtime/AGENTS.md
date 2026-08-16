@@ -97,6 +97,10 @@ Sherpa source and patch queue, verifies the target-specific ONNX Runtime
 `AURORA_SHERPA_ONNX_LINK_KIND=static` for Cargo/Tauri. Do not disable the
 native features for checks, and do not replace the static package with loose
 desktop or iOS shared libraries.
+For iOS, keep the target architecture explicit: the builder may thin a
+universal XCFramework binary with `xcrun lipo`, then must verify archive magic
+before staging it as `libonnxruntime.a`. Never rename an unverified framework
+binary to a static-archive filename.
 
 The WASM smoke is the Playwright driver in
 `packages/aurora-voice-web/tests/playwright/sherpa-pockettts-browser-smoke.pw.ts`.

@@ -7,6 +7,7 @@ import sys
 import zipfile
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -21,6 +22,24 @@ def load_builder() -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def write_installed_static_libraries(
+    builder: ModuleType,
+    plan: Any,
+    artifact_root: Path,
+    *,
+    omit: frozenset[str] = frozenset(),
+) -> Path:
+    install = artifact_root / "build/install"
+    lib_dir = install / "lib"
+    lib_dir.mkdir(parents=True)
+    for library in builder.STATIC_LIBRARIES:
+        if library in omit:
+            continue
+        filename = builder.static_library_filename(library, plan.target)
+        (lib_dir / filename).write_bytes(f"archive:{library}".encode())
+    return install
 
 
 def test_host_target_resolution_is_explicit() -> None:
@@ -103,12 +122,8 @@ def test_static_runtime_staging_requires_complete_link_set(tmp_path: Path) -> No
     builder = load_builder()
     plan = builder.TARGETS["x86_64-unknown-linux-gnu"]
     artifact_root = tmp_path / "artifacts"
-    install = artifact_root / "build/install"
+    install = write_installed_static_libraries(builder, plan, artifact_root)
     lib_dir = install / "lib"
-    lib_dir.mkdir(parents=True)
-    for library in builder.STATIC_LIBRARIES:
-        filename = builder.static_library_filename(library, plan.target)
-        (lib_dir / filename).write_bytes(f"archive:{library}".encode())
 
     output = artifact_root / "runtime" / plan.target
     builder.stage_runtime(plan, artifact_root, install, output, None)
@@ -129,6 +144,109 @@ def test_static_runtime_staging_requires_complete_link_set(tmp_path: Path) -> No
             install,
             artifact_root / "runtime/incomplete",
             None,
+        )
+
+
+def test_ios_runtime_thins_fat_onnxruntime_to_static_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    builder = load_builder()
+    plan = builder.TARGETS["aarch64-apple-ios-sim"]
+    artifact_root = tmp_path / "artifacts"
+    install = write_installed_static_libraries(
+        builder,
+        plan,
+        artifact_root,
+        omit=frozenset({"onnxruntime"}),
+    )
+    ort_binary = artifact_root / "xcframework/onnxruntime.framework/onnxruntime"
+    ort_binary.parent.mkdir(parents=True)
+    ort_binary.write_bytes(b"fat static framework")
+    commands: list[list[str]] = []
+
+    def fake_lipo(command: list[str], **kwargs: object) -> object:
+        commands.append(command)
+        assert kwargs == {"check": False, "capture_output": True, "text": True}
+        Path(command[-1]).write_bytes(builder.STATIC_ARCHIVE_MAGIC + b"onnxruntime")
+        return builder.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(builder.subprocess, "run", fake_lipo)
+    output = artifact_root / "runtime" / plan.target
+
+    builder.stage_runtime(plan, artifact_root, install, output, ort_binary)
+
+    metadata = json.loads((output / "aurora-sherpa-runtime.json").read_text())
+    assert metadata["static_libraries"] == list(builder.STATIC_LIBRARIES)
+    assert len(commands) == 1
+    assert commands[0][:-1] == [
+        "xcrun",
+        "lipo",
+        str(ort_binary),
+        "-thin",
+        "arm64",
+        "-output",
+    ]
+    assert Path(commands[0][-1]).name == "libonnxruntime.a"
+    assert Path(commands[0][-1]).parent.name.startswith(f".{output.name}.")
+    assert (output / "libonnxruntime.a").read_bytes().startswith(builder.STATIC_ARCHIVE_MAGIC)
+
+
+def test_ios_device_runtime_keeps_thin_onnxruntime_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    builder = load_builder()
+    plan = builder.TARGETS["aarch64-apple-ios"]
+    artifact_root = tmp_path / "artifacts"
+    install = write_installed_static_libraries(
+        builder,
+        plan,
+        artifact_root,
+        omit=frozenset({"onnxruntime"}),
+    )
+    ort_binary = artifact_root / "xcframework/onnxruntime.framework/onnxruntime"
+    ort_binary.parent.mkdir(parents=True)
+    expected = builder.STATIC_ARCHIVE_MAGIC + b"device-onnxruntime"
+    ort_binary.write_bytes(expected)
+
+    def unexpected_lipo(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("a thin iOS archive must not invoke lipo")
+
+    monkeypatch.setattr(builder.subprocess, "run", unexpected_lipo)
+    output = artifact_root / "runtime" / plan.target
+
+    builder.stage_runtime(plan, artifact_root, install, output, ort_binary)
+
+    assert (output / "libonnxruntime.a").read_bytes() == expected
+
+
+def test_ios_runtime_rejects_non_archive_lipo_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    builder = load_builder()
+    plan = builder.TARGETS["aarch64-apple-ios-sim"]
+    artifact_root = tmp_path / "artifacts"
+    install = write_installed_static_libraries(
+        builder,
+        plan,
+        artifact_root,
+        omit=frozenset({"onnxruntime"}),
+    )
+    ort_binary = artifact_root / "xcframework/onnxruntime.framework/onnxruntime"
+    ort_binary.parent.mkdir(parents=True)
+    ort_binary.write_bytes(b"fat static framework")
+
+    def fake_lipo(command: list[str], **_kwargs: object) -> object:
+        Path(command[-1]).write_bytes(b"not an archive")
+        return builder.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(builder.subprocess, "run", fake_lipo)
+    with pytest.raises(builder.NativeBuildError, match="not a static archive"):
+        builder.stage_runtime(
+            plan,
+            artifact_root,
+            install,
+            artifact_root / "runtime/incomplete-ios",
+            ort_binary,
         )
 
 

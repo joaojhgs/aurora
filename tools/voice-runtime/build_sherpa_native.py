@@ -53,6 +53,7 @@ STATIC_LIBRARIES = (
     "onnxruntime",
     "ssentencepiece_core",
 )
+STATIC_ARCHIVE_MAGIC = b"!<arch>\n"
 
 
 class NativeBuildError(RuntimeError):
@@ -68,6 +69,7 @@ class TargetPlan:
     cmake_args: tuple[str, ...] = ()
     build_config: str | None = None
     ios_platform: str | None = None
+    ios_arch: str | None = None
     ios_ort_slice: str | None = None
 
     @property
@@ -115,6 +117,7 @@ TARGETS = {
         host_machine=("arm64", "aarch64"),
         ort_pin=IOS_ORT_PIN,
         ios_platform="SIMULATORARM64",
+        ios_arch="arm64",
         ios_ort_slice="ios-arm64_x86_64-simulator",
     ),
     "aarch64-apple-ios": TargetPlan(
@@ -123,6 +126,7 @@ TARGETS = {
         host_machine=("arm64", "aarch64"),
         ort_pin=IOS_ORT_PIN,
         ios_platform="OS64",
+        ios_arch="arm64",
         ios_ort_slice="ios-arm64",
     ),
 }
@@ -319,6 +323,45 @@ def static_library_filename(name: str, target: str) -> str:
     return f"lib{name}.a"
 
 
+def is_static_archive(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    with path.open("rb") as archive:
+        return archive.read(len(STATIC_ARCHIVE_MAGIC)) == STATIC_ARCHIVE_MAGIC
+
+
+def stage_ios_ort_archive(plan: TargetPlan, source: Path, destination: Path) -> None:
+    if plan.ios_arch is None:
+        raise NativeBuildError("iOS ONNX Runtime staging requires a target architecture")
+    if is_static_archive(source):
+        shutil.copy2(source, destination)
+    else:
+        try:
+            result = subprocess.run(
+                [
+                    "xcrun",
+                    "lipo",
+                    str(source),
+                    "-thin",
+                    plan.ios_arch,
+                    "-output",
+                    str(destination),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as exc:
+            raise NativeBuildError("failed to launch xcrun lipo for iOS ONNX Runtime") from exc
+        if result.returncode != 0:
+            raise NativeBuildError(
+                f"failed to thin iOS ONNX Runtime for {plan.ios_arch}: {result.stderr.strip()}"
+            )
+    if not is_static_archive(destination):
+        destination.unlink(missing_ok=True)
+        raise NativeBuildError("staged iOS ONNX Runtime is not a static archive")
+
+
 def stage_runtime(
     plan: TargetPlan,
     artifact_root: Path,
@@ -326,19 +369,25 @@ def stage_runtime(
     output_dir: Path,
     ios_ort_binary: Path | None,
 ) -> None:
+    if plan.is_ios and ios_ort_binary is None:
+        raise NativeBuildError("iOS runtime staging requires the ONNX Runtime binary")
+    if not plan.is_ios and ios_ort_binary is not None:
+        raise NativeBuildError("iOS ONNX Runtime binaries are only valid for iOS targets")
+
     output_parent = output_dir.parent
     output_parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", dir=output_parent))
     try:
         for library in STATIC_LIBRARIES:
             filename = static_library_filename(library, plan.target)
+            destination = staging / filename
             if library == "onnxruntime" and ios_ort_binary is not None:
-                source = ios_ort_binary
-            else:
-                source = install_dir / "lib" / filename
+                stage_ios_ort_archive(plan, ios_ort_binary, destination)
+                continue
+            source = install_dir / "lib" / filename
             if not source.is_file():
                 raise NativeBuildError(f"Sherpa install is missing {source}")
-            shutil.copy2(source, staging / filename)
+            shutil.copy2(source, destination)
 
         primary = staging / static_library_filename("sherpa-onnx-c-api", plan.target)
         if b"TTS is not enabled. Please rebuild sherpa-onnx" in primary.read_bytes():

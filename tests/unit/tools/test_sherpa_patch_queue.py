@@ -35,6 +35,59 @@ def test_patch_bytes_keep_lf_endings_on_every_ci_host() -> None:
     assert ATTRIBUTES.read_text(encoding="utf-8").splitlines() == ["*.patch text eol=lf"]
 
 
+def test_apply_queue_disables_git_line_ending_conversion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spec = __import__("importlib.util").util.spec_from_file_location("apply_sherpa_patches", APPLY)
+    assert spec is not None and spec.loader is not None
+    module = __import__("importlib.util").util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    patch_dir = tmp_path / "patches"
+    patch_dir.mkdir()
+    patch = patch_dir / "line-endings.patch"
+    patch.write_text(
+        "--- a/value.txt\n+++ b/value.txt\n@@ -1 +1 @@\n-before\n+after\n",
+        encoding="utf-8",
+    )
+    source_root = tmp_path / "outer" / "source"
+    source_root.mkdir(parents=True)
+    (source_root / "value.txt").write_bytes(b"before\n")
+    subprocess.run(["git", "init", "-q", str(source_root.parent)], check=True)
+    subprocess.run(
+        ["git", "-C", str(source_root.parent), "config", "core.autocrlf", "true"],
+        check=True,
+    )
+    monkeypatch.setattr(module, "PATCH_DIR", patch_dir)
+    monkeypatch.setattr(
+        module,
+        "verify_patches",
+        lambda: [{"name": patch.name, "sha256": hashlib.sha256(patch.read_bytes()).hexdigest()}],
+    )
+    commands: list[list[str]] = []
+    real_run = module.subprocess.run
+
+    def capture_run(
+        command: list[str], *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess:
+        commands.append(command)
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(module.subprocess, "run", capture_run)
+
+    module.apply_patches(source_root)
+
+    assert commands[0][:6] == [
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+        "apply",
+    ]
+    assert (source_root / "value.txt").read_bytes() == b"after\n"
+
+
 def test_patches_have_no_trailing_whitespace_on_added_lines() -> None:
     spec = __import__("importlib.util").util.spec_from_file_location("apply_sherpa_patches", APPLY)
     assert spec is not None and spec.loader is not None
@@ -156,7 +209,7 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     assert payload["upstream"]["sha256"] == (
         "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262"
     )
-    assert len(payload["patches"]) == 3
+    assert len(payload["patches"]) == 4
     source = Path(payload["source_root"])
     pocket = (source / "sherpa-onnx/csrc/offline-tts-pocket-model.cc").read_text(encoding="utf-8")
     assert "ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16" in pocket
@@ -174,3 +227,6 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     assert "-sEXPORT_ES6=1" in wasm
     assert "sherpa-onnx-tts.esm.js" in wasm
     assert "export { createOfflineTts, getDefaultOfflineTtsModelType };" in wasm
+    macos_ort = (source / "cmake/onnxruntime-osx-arm64-static.cmake").read_text(encoding="utf-8")
+    assert "b9a84d5d1770818a8bb2a12d9adb45fc2cf5062b930176914cd4e7150ce3fcd2" in macos_ort
+    assert "3c043b1d5231881d940f0184bd1aaeef29d8e816f2865feed0a268bddcf8b628" not in macos_ort

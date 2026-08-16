@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
-AURORA_POCKETTTS_PATCHED_FILES = {
+AURORA_SHERPA_PATCHED_FILES = {
     "sherpa-onnx/csrc/offline-tts-pocket-model.h": (
         "53f1b87d998ba0e72340819fc0678df020d7280c917a9a8252e5f405a3a49e2f"
     ),
@@ -25,6 +25,9 @@ AURORA_POCKETTTS_PATCHED_FILES = {
         "a7896e6e8df22d678fb325f12440eb42137276542012ee4246225a8d65a29567"
     ),
     "wasm/tts/CMakeLists.txt": ("bae61a4165725f1d67d4d0f16274b2c5b4fff445e10dde2527050e630355ce11"),
+    "cmake/onnxruntime-osx-arm64-static.cmake": (
+        "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e"
+    ),
 }
 OMITTED_PINNED_UPSTREAM_SYMLINKS = {
     "scripts/go/_internal/vad-spoken-language-identification/main.go": (
@@ -205,12 +208,12 @@ def _verify_patched_tree(
         for path in archive_records.keys() & source_records.keys()
         if archive_records[path] != source_records[path]
     )
-    if set(changed) != set(AURORA_POCKETTTS_PATCHED_FILES):
+    if set(changed) != set(AURORA_SHERPA_PATCHED_FILES):
         raise SourceIdentityError(
-            "patched sherpa tree does not match the Aurora PocketTTS file set"
+            "patched sherpa tree does not match the Aurora downstream patch file set"
             + (f" changed={changed}" if changed else "")
         )
-    for relative, expected in AURORA_POCKETTTS_PATCHED_FILES.items():
+    for relative, expected in AURORA_SHERPA_PATCHED_FILES.items():
         actual = sha256_file(source_root / relative)
         if actual != expected:
             raise SourceIdentityError(f"patched file digest mismatch: {relative}")
