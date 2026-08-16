@@ -61,6 +61,11 @@ reference WAV. The schema-1 state is little-endian float32 Kyutai KV cache data
 and is loaded on demand from the installed pack. Profile-mode packs continue to
 require user reference audio.
 
+Desktop audio is pinned to CPAL `0.18.2`. Keep both Rust lockfiles aligned when
+changing it. CPAL `0.18.1` must not be restored: its open Windows dependency
+range can resolve `windows` 0.61 beside `windows-core` 0.62 and fail the WASAPI
+build with incompatible COM traits.
+
 Conversion, ONNX inlining, and graph optimization must run with the isolated
 pinned Python exporter at `.artifacts/pockettts/export-venv/bin/python`, as
 provisioned by the pack workflow. Do not import exporter-only ONNX tooling into

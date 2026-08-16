@@ -256,18 +256,18 @@
       }
     },
     {
-      "id": "cpal-crate-v0.18.1",
+      "id": "cpal-crate-v0.18.2",
       "kind": "crate",
       "role": "desktop-audio-io-candidate",
       "status": "selected",
-      "url": "https://crates.io/api/v1/crates/cpal/0.18.1/download",
-      "version": "v0.18.1",
-      "sha256": "5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028",
-      "size_bytes": 222732,
-      "archive_path": "sources/cpal-0.18.1.crate",
+      "url": "https://crates.io/api/v1/crates/cpal/0.18.2/download",
+      "version": "v0.18.2",
+      "sha256": "6f02e8d0327b42d3e2e4ab2119af397344eb9fc54a34bf0ddeaa1277af8681f1",
+      "size_bytes": 233947,
+      "archive_path": "sources/cpal-0.18.2.crate",
       "license": {
         "spdx": "Apache-2.0",
-        "evidence": "sources/extracted/cpal-0.18.1/LICENSE",
+        "evidence": "sources/extracted/cpal-0.18.2/LICENSE",
         "evidence_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
         "disposition": "allowed"
       }

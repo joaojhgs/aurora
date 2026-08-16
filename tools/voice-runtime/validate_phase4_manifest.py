@@ -43,11 +43,11 @@ REQUIRED_ARTIFACT_STATUSES = {
     "simple-sentencepiece-source-v0.7": "selected",
     "nlohmann-json-source-v3.12.0": "selected",
     "onnxruntime-linux-x64-release-1.27.1": "selected",
-    "cpal-crate-v0.18.1": "selected",
+    "cpal-crate-v0.18.2": "selected",
     "piper-phonemize-source-f3ff95af": "blocked",
     "espeak-ng-source-ed530aa1": "blocked",
 }
-CPAL_ARTIFACT_ID = "cpal-crate-v0.18.1"
+CPAL_ARTIFACT_ID = "cpal-crate-v0.18.2"
 CPAL_DOC_PATH = Path("docs/NATIVE_VOICE_RUNTIME_PHASE4.md")
 CPAL_LOCK_PATH = Path("rust/Cargo.lock")
 

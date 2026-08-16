@@ -129,15 +129,15 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
         "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678"
     )
 
-    cpal = artifacts["cpal-crate-v0.18.1"]
+    cpal = artifacts["cpal-crate-v0.18.2"]
     assert cpal["kind"] == "crate"
-    assert cpal["version"] == "v0.18.1"
-    assert cpal["url"] == "https://crates.io/api/v1/crates/cpal/0.18.1/download"
-    assert cpal["sha256"] == "5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028"
-    assert cpal["size_bytes"] == 222732
-    assert cpal["archive_path"] == "sources/cpal-0.18.1.crate"
+    assert cpal["version"] == "v0.18.2"
+    assert cpal["url"] == "https://crates.io/api/v1/crates/cpal/0.18.2/download"
+    assert cpal["sha256"] == "6f02e8d0327b42d3e2e4ab2119af397344eb9fc54a34bf0ddeaa1277af8681f1"
+    assert cpal["size_bytes"] == 233947
+    assert cpal["archive_path"] == "sources/cpal-0.18.2.crate"
     assert cpal["license"]["spdx"] == "Apache-2.0"
-    assert cpal["license"]["evidence"] == "sources/extracted/cpal-0.18.1/LICENSE"
+    assert cpal["license"]["evidence"] == "sources/extracted/cpal-0.18.2/LICENSE"
     assert cpal["license"]["evidence_sha256"] == (
         "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
     )
@@ -253,17 +253,17 @@ def test_validator_rejects_cpal_manifest_drift_from_rust_lockfile(tmp_path: Path
 
     errors = validator.validate_manifest(manifest, repo_root=REPO)
 
-    assert "cpal-crate-v0.18.1.version must match rust/Cargo.lock: v0.18.1" in errors
-    assert any("cpal-crate-v0.18.1.sha256 must match rust/Cargo.lock" in error for error in errors)
-    assert "cpal-crate-v0.18.1.archive_path must be sources/cpal-0.18.1.crate" in errors
+    assert "cpal-crate-v0.18.2.version must match rust/Cargo.lock: v0.18.2" in errors
+    assert any("cpal-crate-v0.18.2.sha256 must match rust/Cargo.lock" in error for error in errors)
+    assert "cpal-crate-v0.18.2.archive_path must be sources/cpal-0.18.2.crate" in errors
     assert (
-        "cpal-crate-v0.18.1.license.evidence must be sources/extracted/cpal-0.18.1/LICENSE"
+        "cpal-crate-v0.18.2.license.evidence must be sources/extracted/cpal-0.18.2/LICENSE"
         in errors
     )
 
     result = run_cli(str(broken))
     assert result.returncode == 2
-    assert "cpal-crate-v0.18.1.version must match rust/Cargo.lock" in result.stdout
+    assert "cpal-crate-v0.18.2.version must match rust/Cargo.lock" in result.stdout
 
 
 def test_validator_rejects_cpal_doc_drift_from_rust_lockfile(tmp_path: Path) -> None:
@@ -280,7 +280,7 @@ def test_validator_rejects_cpal_doc_drift_from_rust_lockfile(tmp_path: Path) -> 
 
     errors = validator.validate_manifest(manifest, repo_root=repo)
 
-    assert "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must pin CPAL `v0.18.1`" in errors
+    assert "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must pin CPAL `v0.18.2`" in errors
     assert any(
         "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must include CPAL checksum" in error
         for error in errors

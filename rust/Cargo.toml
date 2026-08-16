@@ -13,7 +13,7 @@ async-trait = "0.1.91"
 base64 = "0.22.1"
 bzip2 = "0.6.1"
 crossbeam-queue = "0.3.13"
-cpal = { version = "=0.18.1", default-features = false }
+cpal = { version = "=0.18.2", default-features = false }
 ed25519-dalek = "3.0.0"
 futures-util = "0.3.31"
 jsonschema = { version = "0.49.2", default-features = false, features = ["arbitrary-precision"] }
