@@ -41,6 +41,19 @@ pnpm --filter @aurora/tauri-ui ios:build:client:simulator
 pnpm --filter @aurora/tauri-ui ios:webrtc:interop
 ```
 
+Desktop and iOS native voice builds require Aurora's pinned, patched static
+Sherpa/ONNX Runtime archive set. Prepare the host runtime before a local native
+Cargo/Tauri build and export the two values printed by the command:
+
+```bash
+python tools/voice-runtime/build_sherpa_native.py --target host --jobs 2
+```
+
+CI builds one verified runtime per desktop target and builds the iOS simulator
+or device target on macOS. The generated archives stay under ignored
+`.artifacts/sherpa-onnx/native-runtime-build/`; models remain downloadable
+language packs and are not embedded in the repository or application package.
+
 These packages still need STUN and usually TURN URLs in the imported peer invite/profile. WSS signaling is rendezvous only; Aurora RPC, streams, cancellation, and events use the WebRTC DataChannel after negotiation.
 
 The iOS interop command is one serial E2E gate in the existing macOS workflow.

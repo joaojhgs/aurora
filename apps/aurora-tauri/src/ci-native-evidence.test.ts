@@ -95,6 +95,41 @@ describe('Tauri CI native evidence contract', () => {
     }
   })
 
+  it('stages the pinned patched Sherpa runtime before desktop and iOS native builds', () => {
+    const desktopWorkflow = repoText('.github/workflows/tauri-desktop.yml')
+    const iosWorkflow = repoText('.github/workflows/tauri-ios.yml')
+    const iosReleaseWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
+    const builder = repoText('tools/voice-runtime/build_sherpa_native.py')
+    const sherpaSysBuild = repoText('rust/crates/aurora-voice-sherpa-sys/build.rs')
+
+    expect(builder).toContain('SHERPA_VERSION = "1.13.5"')
+    expect(builder).toContain('ORT_VERSION = "1.27.1"')
+    expect(builder).toContain('"--allow-aurora-pockettts-patches"')
+    expect(builder).toContain('"-DBUILD_SHARED_LIBS=OFF"')
+    expect(builder).toContain('"-DSHERPA_ONNX_ENABLE_TTS=ON"')
+
+    for (const target of [
+      'x86_64-unknown-linux-gnu',
+      'aarch64-apple-darwin',
+      'x86_64-pc-windows-msvc',
+    ]) {
+      expect(desktopWorkflow).toContain(`target: ${target}`)
+    }
+    expect(desktopWorkflow).toContain('python tools/voice-runtime/build_sherpa_native.py')
+    expect(desktopWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(desktopWorkflow).toContain('actions/upload-artifact@v4')
+    expect(desktopWorkflow).toContain('actions/download-artifact@v4')
+
+    expect(iosWorkflow).toContain('--target aarch64-apple-ios-sim')
+    expect(iosWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosReleaseWorkflow).toContain('--target aarch64-apple-ios')
+    expect(iosReleaseWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+
+    expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_LINK_KIND')
+    expect(sherpaSysBuild).toContain('println!("cargo:rustc-link-lib=static={library}")')
+    expect(sherpaSysBuild).toContain('Android Sherpa packaging requires the patched shared runtime')
+  })
+
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 

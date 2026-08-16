@@ -9,6 +9,8 @@ on:
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
       - "packages/aurora-voice-web/**"
+      - "rust/crates/aurora-voice-*/**"
+      - "tools/voice-runtime/**"
       - "scripts/desktop_live_*.sh"
       - "scripts/webrtc_interop*"
       - "tests/e2e/desktop_live/**"
@@ -19,9 +21,60 @@ on:
   workflow_dispatch:
 
 jobs:
+  sherpa-native-runtimes:
+    name: Patched Sherpa runtime (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: Linux x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: sherpa-native-linux-x64
+          - platform: macOS arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: sherpa-native-macos-arm64
+          - platform: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: sherpa-native-windows-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore patched static runtime
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.target }}
+          key: sherpa-native-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('tools/voice-runtime/build_sherpa_native.py', 'tools/voice-runtime/run_sherpa_cmake.py', 'tools/voice-runtime/sherpa-patches/**') }}
+
+      - name: Build patched static runtime
+        if: steps.sherpa-cache.outputs.cache-hit != 'true'
+        run: >-
+          python tools/voice-runtime/build_sherpa_native.py
+          --target ${{ matrix.target }}
+          --jobs 2
+
+      - name: Upload patched static runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.target }}
+          if-no-files-found: error
+
   linux-tauri:
     name: Desktop Tauri bundle (${{ matrix.bundle_mode }})
     runs-on: ubuntu-latest
+    needs: sherpa-native-runtimes
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +90,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-linux-x64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Install Tauri Linux prerequisites
         run: |
@@ -190,10 +254,22 @@ jobs:
   desktop-client-live:
     name: Desktop client live Python-peer E2E
     runs-on: ubuntu-latest
+    needs: sherpa-native-runtimes
     timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-linux-x64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Install Tauri WebDriver and audio prerequisites
         run: |
@@ -263,10 +339,22 @@ jobs:
   desktop-client-live-macos-stun:
     name: macOS desktop client live Python-peer STUN E2E
     runs-on: macos-latest
+    needs: sherpa-native-runtimes
     timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-macos-arm64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-darwin
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-darwin" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Install local WebRTC services
         run: |
@@ -335,6 +423,7 @@ jobs:
   desktop-client-native-packages:
     name: Desktop client package (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    needs: sherpa-native-runtimes
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -343,12 +432,35 @@ jobs:
           - platform: macOS
             os: macos-latest
             artifact_suffix: macos
+            sherpa_artifact: sherpa-native-macos-arm64
+            sherpa_target: aarch64-apple-darwin
           - platform: Windows
             os: windows-latest
             artifact_suffix: windows
+            sherpa_artifact: sherpa-native-windows-x64
+            sherpa_target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.sherpa_artifact }}
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.sherpa_target }}
+
+      - name: Configure patched static Sherpa runtime
+        if: runner.os != 'Windows'
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.sherpa_target }}" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+
+      - name: Configure patched static Sherpa runtime on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "AURORA_SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\.artifacts\sherpa-onnx\native-runtime-build\runtime\${{ matrix.sherpa_target }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "AURORA_SHERPA_ONNX_LINK_KIND=static" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0

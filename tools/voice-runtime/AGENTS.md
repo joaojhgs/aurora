@@ -88,6 +88,16 @@ sequentially, and rejects native libraries without TTS or 16 KiB alignment.
 Point the Android bundle wrapper at its two ABI output directories through the
 existing `AURORA_SHERPA_ONNX_ANDROID_*_LIB_DIR` variables.
 
+Desktop and iOS packaging must use
+`tools/voice-runtime/build_sherpa_native.py`. The builder verifies the same
+Sherpa source and patch queue, verifies the target-specific ONNX Runtime
+`1.27.1` archive, and stages the complete static link set beneath
+`.artifacts/sherpa-onnx/native-runtime-build/runtime/<target>/`. Set
+`AURORA_SHERPA_ONNX_LIB_DIR` to that directory and
+`AURORA_SHERPA_ONNX_LINK_KIND=static` for Cargo/Tauri. Do not disable the
+native features for checks, and do not replace the static package with loose
+desktop or iOS shared libraries.
+
 The WASM smoke is the Playwright driver in
 `packages/aurora-voice-web/tests/playwright/sherpa-pockettts-browser-smoke.pw.ts`.
 It must synthesize real audio for both locally built packs with Sherpa's

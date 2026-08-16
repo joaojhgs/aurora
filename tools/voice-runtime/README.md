@@ -55,6 +55,25 @@ directories as `AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR` and
 CI uses the same script and never substitutes the stock upstream Sherpa binary
 for Aurora's patched engine.
 
+## Desktop and iOS native runtime
+
+`build_sherpa_native.py` produces a self-contained static Sherpa link set for
+the current Linux x64, macOS arm64, Windows x64, iOS arm64 simulator, or iOS
+arm64 device target. It verifies the target-specific ONNX Runtime `1.27.1`
+archive before configuring the verified patched source tree.
+
+```bash
+flock -x /tmp/aurora-global-build.lock \
+  python tools/voice-runtime/build_sherpa_native.py --target host --jobs 2
+export AURORA_SHERPA_ONNX_LIB_DIR="$PWD/.artifacts/sherpa-onnx/native-runtime-build/runtime/$(rustc -vV | sed -n 's/^host: //p')"
+export AURORA_SHERPA_ONNX_LINK_KIND=static
+```
+
+macOS/Xcode CI selects `aarch64-apple-ios-sim` for unsigned simulator packages
+and `aarch64-apple-ios` for the optional signed device dry run. Build output,
+downloaded sources, ONNX Runtime archives, and generated metadata remain under
+`.artifacts/` and are never committed.
+
 ## KWS catalog compatibility
 
 Aurora publishes the canonical full English GigaSpeech, Chinese WenetSpeech,

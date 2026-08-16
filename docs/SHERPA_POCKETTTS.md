@@ -16,11 +16,12 @@ This page is the live Sherpa PocketTTS pin. Phase 4 frozen evidence remains in
 | SHA-256 | `99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262` |
 | ONNX Runtime | `v1.27.1` |
 
-Official `v1.13.5` no longer publishes `ios.xcframework.zip`. iOS uses the same
-source archive / SPM. Patch 0003 also loads PocketTTS protocol/BOS/fixed-state
+Official `v1.13.5` no longer publishes the old release-specific iOS archive.
+Aurora builds its patched iOS C API from the same pinned source and links the
+pinned ONNX Runtime static xcframework. Patch 0003 also loads PocketTTS protocol/BOS/fixed-state
 sidecars through Android and OHOS asset managers. Live Waydroid foreground and
-background voice validation remains a final mobile release check and is not
-implied by the source patch alone.
+background voice validation is a separate device gate and is not implied by
+the source patch alone.
 
 The language-pack builder provisions a separate, version-pinned Python export
 environment under `.artifacts/`. Its Python ONNX tools are used only to export,
@@ -89,6 +90,7 @@ uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
 uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
   --pack aurora-pockettts-fr-24l --json
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime native
+python tools/voice-runtime/build_sherpa_native.py --target host --jobs 2
 AURORA_SHERPA_WASM_TTS_NEUTRAL=1 tools/voice-runtime/build_sherpa_wasm_tts.sh
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime wasm
 ```
@@ -102,3 +104,9 @@ and it uses Sherpa's production `max_frames=500` default.
 
 Voice cloning in the product UI takes a WAV sample only. Sherpa conditions from
 audio; it does not invent a transcript.
+
+Desktop and iOS Tauri builds set `AURORA_SHERPA_ONNX_LIB_DIR` to the staged
+target directory and `AURORA_SHERPA_ONNX_LINK_KIND=static`. The builder stages
+the complete Sherpa/ONNX Runtime archive set so unsigned packages do not depend
+on unbundled host shared libraries. Android continues to use its two patched,
+16-KiB-aligned shared-library ABI directories.
