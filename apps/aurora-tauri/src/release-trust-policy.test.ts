@@ -173,6 +173,12 @@ describe('release trust static policy guard', () => {
         'updater-endpoint-1-https-production',
       ]),
     )
+    expect(report.blockers.map((item: { id: string }) => item.id)).not.toContain(
+      'workflow-trust-gate-first-run',
+    )
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({ id: 'workflow-trust-gate-first-run', status: 'passed' }),
+    )
     expect(report.unsupportedChecks).toContainEqual(
       expect.objectContaining({
         id: 'sbom-license-tooling',
@@ -1207,6 +1213,10 @@ jobs:
       ['pnpm run install', validWorkflow().replace('        uses: pnpm/action-setup@v4', `        uses: pnpm/action-setup@v4
         with:
           run_install: true`)],
+      ['rust toolchain version change', validWorkflow().replace('dtolnay/rust-toolchain@1.88.0', 'dtolnay/rust-toolchain@stable')],
+      ['rust wasm target change', validWorkflow().replace('          targets: wasm32-unknown-unknown', '          targets: wasm32-wasip1')],
+      ['browser voice tool version change', validWorkflow().replace('          tool: wasm-bindgen-cli@0.2.126', '          tool: wasm-bindgen-cli@latest')],
+      ['browser voice tool fallback change', validWorkflow().replace('          fallback: none', '          fallback: cargo')],
       ['extra setup action', validWorkflow().replace('      - name: Release trust policy\n', `      - name: Extra setup action
         uses: actions/cache@v4
       - name: Release trust policy
@@ -2872,6 +2882,15 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
       - name: Install Python release dependencies
         run: uv sync --extra dev --extra build
       - name: Install workspace dependencies

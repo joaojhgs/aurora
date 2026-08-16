@@ -1816,16 +1816,21 @@ function isDependencyInventoryReportUploadCandidate(step) {
 }
 
 function hasCanonicalPregateSetupSequence(steps) {
-  return steps.length === 9 &&
+  return steps.length === 11 &&
     isExactUsesStep(steps[0], 'actions/checkout@v4', { 'fetch-depth': '0' }, { name: '' }) &&
     isExactUsesStep(steps[1], 'actions/setup-python@v5', { 'python-version': '3.11.11' }, { name: 'Set up Python' }) &&
     isExactUsesStep(steps[2], 'astral-sh/setup-uv@v5', {}, { name: 'Install uv' }) &&
     isExactUsesStep(steps[3], 'pnpm/action-setup@v4', {}, { name: 'Set up pnpm' }) &&
     isExactUsesStep(steps[4], 'actions/setup-node@v4', { 'node-version': '24', cache: 'pnpm' }, { name: 'Set up Node' }) &&
-    isExactRunStep(steps[5], 'uv sync --extra dev --extra build', { name: 'Install Python release dependencies' }) &&
-    isExactRunStep(steps[6], 'pnpm install --frozen-lockfile', { name: 'Install workspace dependencies' }) &&
-    isCanonicalDependencyInventoryStep(steps[7]) &&
-    isDependencyInventoryReportUploadStep(steps[8])
+    isExactUsesStep(steps[5], 'dtolnay/rust-toolchain@1.88.0', { targets: 'wasm32-unknown-unknown' }, { name: 'Set up Rust for browser voice runtime' }) &&
+    isExactUsesStep(steps[6], 'taiki-e/install-action@v2', {
+      tool: 'wasm-bindgen-cli@0.2.126',
+      fallback: 'none',
+    }, { name: 'Install pinned browser voice toolchain' }) &&
+    isExactRunStep(steps[7], 'uv sync --extra dev --extra build', { name: 'Install Python release dependencies' }) &&
+    isExactRunStep(steps[8], 'pnpm install --frozen-lockfile', { name: 'Install workspace dependencies' }) &&
+    isCanonicalDependencyInventoryStep(steps[9]) &&
+    isDependencyInventoryReportUploadStep(steps[10])
 }
 
 function hasCanonicalCreateReleaseSteps(steps) {
