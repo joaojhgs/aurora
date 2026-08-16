@@ -584,6 +584,34 @@ describe('Tauri CI native evidence contract', () => {
     expect(swiftPlugin).toContain('.filter { ($0["support"] as? String) == "supported-path" }')
   })
 
+  it('keeps iOS native plugin sources compatible with current Swift importer contracts', () => {
+    const packManager = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoicePackManager.swift',
+    )
+    const sessionHost = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceSessionHost.swift',
+    )
+    const plugin = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
+    )
+
+    expect(packManager).toContain('import CAuroraIOSVoiceBridge')
+    expect(packManager).toMatch(/ai_addrlen: 0,[\s\S]*ai_canonname: nil,[\s\S]*ai_addr: nil,/)
+    expect(packManager).toContain('var mutableURL = url')
+    expect(packManager).toContain('try mutableURL.setResourceValues(values)')
+    expect(sessionHost).toMatch(/public convenience init\(\n    gateway: String,/)
+    expect(sessionHost).toContain('Notification.Name.NSProcessInfoPowerStateDidChange')
+    expect(sessionHost).not.toContain('ProcessInfo.powerStateDidChangeNotification')
+    expect(plugin).toContain('let status = existing.status()')
+    expect(plugin).toContain('status.active == 0')
+    expect(plugin).toContain(
+      '"nativeTurnTransportReason": AuroraNativePlugin.nullableString(transportReady.reason)',
+    )
+    expect(plugin).not.toContain('transportReady.reason ?? NSNull()')
+    expect(plugin).toMatch(/private static func localLightInferenceStatusPayload[\s\S]*return \[/)
+    expect(plugin).toContain('"modelId": AuroraNativePlugin.nullableString(activeModelId)')
+  })
+
   it('keeps user-facing pending iOS readiness copy free of verifier wording', () => {
     const swiftPlugin = repoText(
       'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',

@@ -1,3 +1,4 @@
+import CAuroraIOSVoiceBridge
 import CryptoKit
 import Foundation
 #if canImport(Darwin)
@@ -1120,8 +1121,8 @@ enum AuroraIOSVoicePackManager {
       ai_socktype: SOCK_STREAM,
       ai_protocol: 0,
       ai_addrlen: 0,
-      ai_addr: nil,
       ai_canonname: nil,
+      ai_addr: nil,
       ai_next: nil
     )
 
@@ -1640,7 +1641,8 @@ enum AuroraIOSVoicePackManager {
   private static func excludeFromBackup(_ url: URL) throws {
     var values = URLResourceValues()
     values.isExcludedFromBackup = true
-    try url.setResourceValues(values)
+    var mutableURL = url
+    try mutableURL.setResourceValues(values)
   }
 
   private static func probeEngine(at url: URL) throws -> Bool {

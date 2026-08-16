@@ -75,7 +75,7 @@ public final class AuroraIOSVoiceSessionHost {
     )
   }
 
-  public init(
+  public convenience init(
     gateway: String,
     bearer: String?,
     remoteAudioConsent: Bool,
@@ -469,7 +469,7 @@ public final class AuroraIOSVoiceSessionHost {
     )
     lifecycleObservers.append(
       center.addObserver(
-        forName: ProcessInfo.powerStateDidChangeNotification,
+        forName: Notification.Name.NSProcessInfoPowerStateDidChange,
         object: nil,
         queue: .main
       ) { [weak self] _ in

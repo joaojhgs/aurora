@@ -38,6 +38,11 @@ function assertIncludesAll(source, snippets, messagePrefix) {
   }
 }
 
+assert(
+  packManager.includes('import CAuroraIOSVoiceBridge'),
+  'voice pack manager must import the C ABI module it calls',
+)
+
 for (const symbol of [
   'aurora_ios_voice_session_new',
   'aurora_ios_voice_session_new_with_pack_bindings',
@@ -299,7 +304,7 @@ for (const notification of [
   'AVAudioSession.mediaServicesWereResetNotification',
   'UIApplication.didEnterBackgroundNotification',
   'UIApplication.protectedDataWillBecomeUnavailableNotification',
-  'ProcessInfo.powerStateDidChangeNotification',
+  'Notification.Name.NSProcessInfoPowerStateDidChange',
   'UIApplication.willTerminateNotification',
 ]) {
   assert(sessionHost.includes(notification), `session host must observe ${notification}`)
