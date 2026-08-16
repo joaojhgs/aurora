@@ -16,8 +16,19 @@ const reportPath = resolve(
     ?? join(packageRoot, 'reports', 'android-client-bundle-prepare.json'),
 )
 const reportDir = dirname(reportPath)
+const voiceLiveTest = process.env.AURORA_TAURI_ANDROID_VOICE_LIVE_TEST === '1'
 
 const connectSrc = ["'self'", 'http:', 'https:', 'ws:', 'wss:']
+const capabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
+if (voiceLiveTest) {
+  capabilities.push({
+    identifier: 'aurora-android-voice-live-e2e-capability',
+    description: 'Debug-only capability for the maintained Android native voice live test.',
+    windows: ['main'],
+    platforms: ['android'],
+    permissions: ['aurora-android-voice-live-e2e'],
+  })
+}
 
 const config = {
   build: {
@@ -25,7 +36,7 @@ const config = {
   },
   app: {
     security: {
-      capabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+      capabilities,
       csp: `default-src 'self'; connect-src ${connectSrc.join(' ')}; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:`
     }
   },
@@ -42,14 +53,16 @@ mkdirSync(reportDir, { recursive: true })
 writeAtomicJson(configPath, config)
 writeAtomicJson(reportPath, {
   generatedAt: new Date().toISOString(),
-  bundleMode: 'android-client',
+  bundleMode: voiceLiveTest ? 'android-client-voice-live-test' : 'android-client',
   configPath: redact(configPath),
   connectSrc,
   connectionMode: 'runtime-configurable',
   gatewayOrigin: null,
   signalingOrigin: null,
   runtimeConfiguredEndpoints: true,
-  expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+  expectedCapabilities: capabilities.map((capability) =>
+    typeof capability === 'string' ? capability : capability.identifier),
+  voiceLiveTest,
   pythonSidecarStaged: false,
   externalBin: [],
   resources: {},

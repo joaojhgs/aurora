@@ -8,6 +8,7 @@
 use crate::{
     build_installed_kws_provider_from_phrases, build_installed_stt_provider,
     build_installed_vad_provider, SpeechPackManager, SpeechPackManagerConfig,
+    NATIVE_WAKE_KWS_THRESHOLD,
 };
 #[cfg(feature = "native-sherpa-tts")]
 use crate::{build_installed_tts_provider, build_installed_tts_provider_with_reference};
@@ -675,8 +676,14 @@ fn build_wake_runtime_parts(
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let vad_binding = vad.binding().clone();
     let kws_binding = kws.binding().clone();
-    let kws_config = KwsConfig::new([phrase_id], phrase_revision, 0.25, 0, 1)
-        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let kws_config = KwsConfig::new(
+        [phrase_id],
+        phrase_revision,
+        NATIVE_WAKE_KWS_THRESHOLD,
+        0,
+        1,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let wake_config =
         WakeOrchestrationConfig::new(vad_binding, kws_binding, vad_config, kws_config, 800, 1600)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -972,10 +979,10 @@ impl RuntimeEventSink for AndroidSessionSink {
 
 fn phase_for_state(state: VoiceState) -> AndroidVoiceSessionPhase {
     match state {
-        VoiceState::Arming | VoiceState::ListeningForWake | VoiceState::WakeDetected => {
-            AndroidVoiceSessionPhase::Starting
-        }
-        VoiceState::CapturingUtterance => AndroidVoiceSessionPhase::Listening,
+        VoiceState::Arming => AndroidVoiceSessionPhase::Starting,
+        VoiceState::ListeningForWake
+        | VoiceState::WakeDetected
+        | VoiceState::CapturingUtterance => AndroidVoiceSessionPhase::Listening,
         VoiceState::Transcribing | VoiceState::Dispatching | VoiceState::AwaitingResponse => {
             AndroidVoiceSessionPhase::Processing
         }
@@ -1084,6 +1091,22 @@ mod tests {
 
     #[test]
     fn state_mapping_is_product_safe() {
+        assert_eq!(
+            phase_for_state(VoiceState::Arming),
+            AndroidVoiceSessionPhase::Starting
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::ListeningForWake),
+            AndroidVoiceSessionPhase::Listening
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::WakeDetected),
+            AndroidVoiceSessionPhase::Listening
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::CapturingUtterance),
+            AndroidVoiceSessionPhase::Listening
+        );
         assert_eq!(
             phase_for_state(VoiceState::Speaking),
             AndroidVoiceSessionPhase::Speaking

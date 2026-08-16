@@ -10,6 +10,7 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -25,6 +26,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.InetAddress
 import java.net.UnknownHostException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.JsPromptResult
@@ -93,6 +96,7 @@ private const val VOICE_PACK_DOWNLOAD_READ_TIMEOUT_MS = 20_000
 private const val VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT = 3
 private const val VOICE_PACK_LOCK_STALE_AGE_MS = 10L * 60L * 1000L
 private const val VOICE_PACK_INSTALL_STACK_SIZE_BYTES = 16L * 1024L * 1024L
+private const val VOICE_LIVE_TEST_PCM_MAX_BYTES = 3_200
 private const val PEER_PROOF_PREFIX = "aurora.mesh.peer-proof."
 private const val INBOUND_VERIFIER_KEY_PREFIX = "aurora.peer-host.inbound-verifier.v1"
 private const val INBOUND_VERIFIER_STORAGE_PREFIX = "aurora.mesh.inbound-verifier."
@@ -548,6 +552,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
         AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
         val status = voiceForegroundServiceStatusObject()
+        if (
+            args.backgroundSession &&
+            status.getBoolean("running") &&
+            !status.getBoolean("backgroundSessionActive")
+        ) {
+            val ret = JSObject()
+            ret.put("started", false)
+            ret.put("status", status)
+            ret.put("reason", "foreground_voice_busy")
+            invoke.resolve(ret)
+            return
+        }
         if (args.backgroundSession && !status.getBoolean("backgroundStartable")) {
             val ret = JSObject()
             ret.put("started", false)
@@ -577,6 +593,52 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("started", true)
         ret.put("status", voiceForegroundServiceStatusObject())
         ret.put("reason", "foreground_service_start_requested")
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun injectVoicePcmForLiveTest(invoke: Invoke) {
+        val ret = JSObject()
+        if ((activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+            ret.put("accepted", false)
+            ret.put("reason", "debuggable_package_required")
+            invoke.resolve(ret)
+            return
+        }
+        val args = invoke.parseArgs(AndroidVoiceLiveTestPcmArgs::class.java)
+        if (args.armIngress) {
+            val armed = AuroraVoiceForegroundService.armPcmIngressForTest()
+            ret.put("accepted", armed)
+            ret.put("reason", if (armed) "pcm_ingress_armed" else "voice_session_not_accepting_audio")
+            invoke.resolve(ret)
+            return
+        }
+        val bytes = runCatching { Base64.decode(args.pcmBase64, Base64.NO_WRAP) }.getOrNull()
+        if (
+            bytes == null ||
+            bytes.isEmpty() ||
+            bytes.size > VOICE_LIVE_TEST_PCM_MAX_BYTES ||
+            bytes.size % 2 != 0
+        ) {
+            ret.put("accepted", false)
+            ret.put("reason", "invalid_pcm_frame")
+            invoke.resolve(ret)
+            return
+        }
+        val shortBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val samples = ShortArray(shortBuffer.remaining())
+        shortBuffer.get(samples)
+        val result = AuroraVoiceForegroundService.injectPcmForTest(samples)
+        ret.put("accepted", result == 0)
+        ret.put(
+            "reason",
+            when (result) {
+                0 -> "pcm_frame_accepted"
+                1 -> "audio_queue_overloaded"
+                2 -> "audio_queue_closed"
+                else -> "voice_session_not_accepting_audio"
+            },
+        )
         invoke.resolve(ret)
     }
 
@@ -885,7 +947,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun stopVoiceForegroundService(invoke: Invoke) {
-        val stopped = activity.stopService(Intent(activity, AuroraVoiceForegroundService::class.java))
+        val stopIntent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
+            action = AuroraVoiceForegroundService.ACTION_STOP
+        }
+        val stopped = if (AuroraVoiceForegroundService.running) {
+            activity.startService(stopIntent)
+            true
+        } else {
+            false
+        }
         val ret = JSObject()
         ret.put("stopped", stopped)
         ret.put("status", voiceForegroundServiceStatusObject())
@@ -2542,6 +2612,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("backgroundSessionActive", AuroraVoiceForegroundService.backgroundSessionActive)
         val capture = AuroraVoiceForegroundService.captureSnapshot
         ret.put("captureActive", capture.captureActive)
+        ret.put("microphoneSignalDetected", capture.microphoneSignalDetected)
         ret.put("captureBackend", "android-audiorecord-rust-queue")
         ret.put("sampleRateHz", capture.sampleRateHz)
         ret.put("acceptedChunks", capture.acceptedChunks)
@@ -3910,6 +3981,12 @@ class AndroidPermissionRequestArgs {
 class AndroidVoiceForegroundServiceStartArgs {
     var remoteAudioConsent: Boolean = false
     var backgroundSession: Boolean = false
+}
+
+@InvokeArg
+class AndroidVoiceLiveTestPcmArgs {
+    var pcmBase64: String = ""
+    var armIngress: Boolean = false
 }
 
 @InvokeArg

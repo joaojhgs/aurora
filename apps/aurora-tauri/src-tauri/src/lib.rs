@@ -262,6 +262,15 @@ struct AndroidVoiceForegroundServiceStartRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AndroidVoiceLiveTestPcmRequest {
+    #[serde(default)]
+    pcm_base64: String,
+    #[serde(default)]
+    arm_ingress: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AndroidVoicePackCatalogSetRequest {
     catalog_json: String,
 }
@@ -2107,6 +2116,31 @@ async fn aurora_android_voice_foreground_service_start(
 }
 
 #[tauri::command]
+async fn aurora_android_voice_live_test_inject_pcm(
+    request: AndroidVoiceLiveTestPcmRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "injectVoicePcmForLiveTest",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android live voice PCM injection is only available to debuggable Android packages"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
 async fn aurora_android_voice_foreground_service_finish(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
@@ -2430,6 +2464,7 @@ async fn aurora_ios_voice_pack_remove(
     }
 }
 
+#[cfg(any(target_os = "ios", test))]
 fn optional_native_tts_reference_text(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
@@ -8708,6 +8743,7 @@ pub fn run() {
             aurora_android_webview_microphone_permission_decision,
             aurora_android_voice_foreground_service_status,
             aurora_android_voice_foreground_service_start,
+            aurora_android_voice_live_test_inject_pcm,
             aurora_android_voice_foreground_service_finish,
             aurora_android_voice_foreground_service_cancel,
             aurora_android_voice_pack_catalog_status,
@@ -11049,14 +11085,8 @@ mod tests {
         assert_eq!(download["referenceSampleRateHz"], 16_000);
         assert_eq!(download["referenceSamples"], json!([0.0, 0.25, -0.25]));
         assert!(download["referenceText"].is_null());
-        assert_eq!(
-            optional_native_tts_reference_text(None),
-            None
-        );
-        assert_eq!(
-            optional_native_tts_reference_text(Some("   ")),
-            None
-        );
+        assert_eq!(optional_native_tts_reference_text(None), None);
+        assert_eq!(optional_native_tts_reference_text(Some("   ")), None);
         assert_eq!(
             optional_native_tts_reference_text(Some("Hello Aurora")),
             Some("Hello Aurora".to_string())
@@ -11081,7 +11111,9 @@ mod tests {
         assert_eq!(audio_only["referenceText"], json!(null));
         assert_eq!(audio_only["revision"], "rev-1");
         assert_eq!(audio_only["sampleRateHz"], 16_000);
-        assert!(audio_only["audioBase64"].as_str().is_some_and(|value| !value.is_empty()));
+        assert!(audio_only["audioBase64"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
 
         let blank_text = ios_tts_reference_set_payload(
             "pockettts.en",
@@ -11450,9 +11482,12 @@ mod tests {
             "AudioTrack.Builder()",
             "audio_record_read_failed",
             "requestAudioFocus",
-            "onTrimMemory",
             "onTaskRemoved",
             "AUDIOFOCUS_LOSS_TRANSIENT",
+            "START_STICKY",
+            "PowerManager.PARTIAL_WAKE_LOCK",
+            "backgroundSessionRequested",
+            "stopAfterTerminalFailure",
         ] {
             assert!(
                 service.contains(required),
@@ -11524,15 +11559,19 @@ mod tests {
         }
         for command in [
             "startVoiceForegroundService",
+            "injectVoicePcmForLiveTest",
             "finishVoiceForegroundService",
             "stopVoiceForegroundService",
         ] {
             assert!(plugin.contains(command), "{command}");
         }
         assert!(plugin.contains("AndroidVoiceForegroundServiceStartArgs"));
+        assert!(plugin.contains("AndroidVoiceLiveTestPcmArgs"));
+        assert!(plugin.contains("ApplicationInfo.FLAG_DEBUGGABLE"));
         assert!(plugin.contains("backgroundSession"));
         assert!(plugin.contains("ACTION_START_BACKGROUND"));
         assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
+        assert!(rust_source.contains("AndroidVoiceLiveTestPcmRequest"));
         assert!(rust_source.contains("AndroidVoicePackCatalogSetRequest"));
         assert!(rust_source.contains("NativeMobileSpeechPackDownloadRequest"));
         assert!(rust_source.contains("AndroidVoicePackDownloadStatusRequest"));
@@ -11541,6 +11580,7 @@ mod tests {
         assert!(rust_source.contains("serde_json::to_value(&request)"));
         for command in [
             "aurora_android_voice_foreground_service_start",
+            "aurora_android_voice_live_test_inject_pcm",
             "aurora_android_voice_foreground_service_finish",
             "aurora_android_voice_foreground_service_cancel",
             "aurora_android_voice_pack_catalog_status",
@@ -11552,9 +11592,11 @@ mod tests {
         ] {
             assert!(rust_source.contains(command), "{command}");
         }
+        let build_manifest = include_str!("../build.rs");
+        assert!(build_manifest.contains("aurora_android_voice_live_test_inject_pcm"));
         assert!(plugin.contains("backendAudioEvidenceRequired"));
-        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD)"));
-        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS)"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD,"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS,"));
         assert!(service.contains("background_voice_unavailable"));
         for required in [
             "VoiceInteractionSessionService",

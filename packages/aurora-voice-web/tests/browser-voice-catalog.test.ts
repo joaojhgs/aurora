@@ -10,13 +10,18 @@ describe('browser voice catalog', () => {
   it('exports every metadata-only speech and TTS catalog entry', () => {
     const summary = auroraBrowserVoiceCatalogSummary()
 
-    expect(summary.speechEntries).toBe(21)
+    expect(summary.speechEntries).toBe(19)
     expect(summary.ttsEntries).toBe(539)
     expect(summary.speechLanguages).toContain('en')
     expect(summary.ttsLanguages).toContain('en-us')
     expect(summary.ttsLanguages).toContain('fr-fr')
     expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(539)
     expect(listAuroraBrowserVoiceCatalogEntries({ task: 'stt' })).toHaveLength(12)
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'kws' }).map((entry) => entry.id)).toEqual([
+      'kws:zipformer:gigaspeech',
+      'kws:zipformer:wenetspeech',
+      'kws:zipformer:zh-en-2025'
+    ])
   })
 
   it('lists overlay English and French packs on the browser download path', () => {

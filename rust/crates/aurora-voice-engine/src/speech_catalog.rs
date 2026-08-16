@@ -12,8 +12,8 @@ const EMBEDDED_CATALOG: &str = include_str!("../resources/sherpa_onnx_speech_cat
 const CATALOG_SCHEMA_VERSION: u32 = 1;
 const CATALOG_ID: &str = "sherpa-onnx-speech-models-v1";
 const CATALOG_REVISION: &str = "github-releases-130628817-145831594-4e34edcb-284637b2";
-const ENTRIES_SHA256: &str = "7aaf44b88a5f3f039ed1b90c30fe4de0f257d2cc02940fa3f1ecef881c347149";
-const EXPECTED_ENTRY_COUNT: usize = 21;
+const ENTRIES_SHA256: &str = "e2a3f8790a67d0042611ba3e4ee4f7490571fba01364b92179e847fa04cd9f4e";
+const EXPECTED_ENTRY_COUNT: usize = 19;
 const EXPECTED_LANGUAGE_COUNT: usize = 100;
 const MAX_CATALOG_BYTES: usize = 250_000;
 const MAX_ARCHIVE_BYTES: u64 = 3 * 1024 * 1024 * 1024;
@@ -160,7 +160,7 @@ impl SpeechModelCatalog {
         let counts = [
             (SpeechCatalogTask::SpeechToText, 12),
             (SpeechCatalogTask::VoiceActivityDetection, 4),
-            (SpeechCatalogTask::KeywordSpotting, 5),
+            (SpeechCatalogTask::KeywordSpotting, 3),
         ];
         if counts.iter().any(|(task, expected)| {
             self.entries
@@ -390,29 +390,21 @@ impl SpeechCatalogEntry {
             ),
             ("tokens".to_owned(), format!("{root}/tokens.txt")),
         ]);
-        if matches!(
-            self.model_id.as_str(),
-            "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile"
-        ) {
+        if self.model_id == "kws:zipformer:gigaspeech" {
             expected.insert("tokenizer".to_owned(), format!("{root}/bpe.model"));
         }
         if self.model_id == "kws:zipformer:zh-en-2025" {
             expected.insert("lexicon".to_owned(), format!("{root}/en.phone"));
         }
         let expected_languages: BTreeSet<&str> = match self.model_id.as_str() {
-            "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
-                BTreeSet::from(["en"])
-            }
-            "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
-                BTreeSet::from(["zh"])
-            }
+            "kws:zipformer:gigaspeech" => BTreeSet::from(["en"]),
+            "kws:zipformer:wenetspeech" => BTreeSet::from(["zh"]),
             "kws:zipformer:zh-en-2025" => BTreeSet::from(["en", "zh"]),
             _ => return Err(SpeechCatalogError::Invalid),
         };
-        let expected_mobile = self.model_id.ends_with("-mobile");
         if self.model_family != "zipformer"
             || self.language_scope != "specific"
-            || self.mobile_optimized != Some(expected_mobile)
+            || self.mobile_optimized != Some(false)
             || self.bindings != expected
             || self
                 .languages
@@ -564,7 +556,7 @@ mod tests {
                 .iter()
                 .map(|entry| entry.archive.byte_size)
                 .sum::<u64>(),
-            9_715_015_790
+            9_684_055_105
         );
         assert!(catalog.entries.iter().all(|entry| {
             entry.terms.download_initiated_by_user && !entry.terms.redistributed_by_aurora
@@ -592,7 +584,7 @@ mod tests {
             let has_tokenizer = entry.bindings.contains_key("tokenizer");
             let has_lexicon = entry.bindings.contains_key("lexicon");
             match entry.model_id.as_str() {
-                "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
+                "kws:zipformer:gigaspeech" => {
                     assert!(has_tokenizer);
                     assert!(!has_lexicon);
                     assert!(entry
@@ -610,7 +602,7 @@ mod tests {
                         .expect("lexicon binding")
                         .ends_with("/en.phone"));
                 }
-                "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
+                "kws:zipformer:wenetspeech" => {
                     assert!(!has_tokenizer);
                     assert!(!has_lexicon);
                 }

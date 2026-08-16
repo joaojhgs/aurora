@@ -28,7 +28,7 @@ use {
         NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
         NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
         NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
-        SpeechPackManagerConfig, TransportLimits,
+        SpeechPackManagerConfig, TransportLimits, NATIVE_WAKE_KWS_THRESHOLD,
     },
     aurora_voice_sherpa::{
         NativeKwsBackend, NativeTtsReferenceAudio, NativeVadBackend, SherpaKwsPhraseInput,
@@ -1330,8 +1330,14 @@ fn build_wake_runtime(
         .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
     let kws = build_selected_wake_kws_provider(manager, kws_selection, wake_phrase)
         .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
-    let kws_config = KwsConfig::new([&wake_phrase.phrase_id], &wake_phrase.revision, 0.25, 30, 1)
-        .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
+    let kws_config = KwsConfig::new(
+        [&wake_phrase.phrase_id],
+        &wake_phrase.revision,
+        NATIVE_WAKE_KWS_THRESHOLD,
+        30,
+        1,
+    )
+    .map_err(|_| NativeVoiceCommandError::unavailable("wake_unavailable"))?;
     let wake_config = WakeOrchestrationConfig::new(
         vad.binding().clone(),
         kws.binding().clone(),
@@ -3086,7 +3092,7 @@ mod tests {
         let kws = catalog
             .models_for_task(SpeechCatalogTask::KeywordSpotting)
             .into_iter()
-            .find(|entry| entry.model_id == "kws:zipformer:gigaspeech-mobile")
+            .find(|entry| entry.model_id == "kws:zipformer:gigaspeech")
             .expect("English KWS model");
         let phrase = LocalWakePhraseSelection {
             phrase_id: "hey-aurora.en".to_owned(),

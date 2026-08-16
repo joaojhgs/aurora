@@ -183,10 +183,7 @@ fn ios_tts_reference_from_optional_fields(
             ))
         }
         (None, None, 0, 0, text, None)
-            if text
-                .as_deref()
-                .map(str::trim)
-                .is_none_or(str::is_empty) =>
+            if text.as_deref().map(str::trim).is_none_or(str::is_empty) =>
         {
             Some(None)
         }
@@ -861,8 +858,7 @@ mod tests {
     #[test]
     fn runtime_catalog_lists_public_overlay_without_user_profile() {
         let payload = embedded_catalog_json().expect("runtime catalog");
-        let entries: Vec<serde_json::Value> =
-            serde_json::from_str(&payload).expect("catalog json");
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&payload).expect("catalog json");
         let english = entries
             .iter()
             .find(|entry| entry["packId"] == "standard:pockettts:aurora-pockettts-en-2026-04")

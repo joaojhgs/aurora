@@ -222,7 +222,7 @@ pnpm --filter @aurora/tauri-ui android:preflight:ci
 pnpm --filter @aurora/tauri-ui android:preflight:strict
 ```
 
-`android:preflight` writes `apps/aurora-tauri/reports/android-preflight.json` with the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. `android:preflight:ci` requires the generated Android project after `android:init` but does not require release signing, so pull-request APK smoke can build unsigned debug APKs. `android:preflight:strict` remains the release-readiness gate and fails when the generated Android project or signing inputs are missing.
+`android:preflight` writes a report to the OS temp directory by default and can be redirected with `AURORA_ANDROID_PREFLIGHT_REPORT`; the report covers the expected AAB/APK commands, signing readiness, native plugin payload matrix, and device matrix rows for thin, mesh, assistant-role-capable, and fallback devices. Non-strict mode is CI-safe before Android SDK/emulator/signing are present. `android:preflight:ci` requires the generated Android project after `android:init` but does not require release signing, so pull-request APK smoke can build unsigned debug APKs. `android:preflight:strict` remains the release-readiness gate and fails when the generated Android project or signing inputs are missing.
 
 Signing inputs are intentionally environment-only and redacted in reports:
 
@@ -348,9 +348,13 @@ pnpm --filter @aurora/tauri-ui android:verify:client:apk
 pnpm --filter @aurora/tauri-ui android:build:client:aab
 pnpm --filter @aurora/tauri-ui android:verify:client:aab
 pnpm --filter @aurora/tauri-ui android:smoke
+pnpm --filter @aurora/tauri-ui android:build:voice-live:apk
+pnpm --filter @aurora/tauri-ui android:voice:live
 ```
 
 Current artifact proof passes for the generated debug APK and AAB and reports no Python/sidecar content. The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a WebView permission. Local Android runtime smoke still requires Java, Android SDK/NDK, an emulator or physical device, and KVM/device access where applicable. If those are absent, mark runtime smoke as pending rather than claiming device proof.
+
+`android:build:voice-live:apk` builds the same unsigned Android client with one additional debug-only capability for the maintained voice lane. Normal Android client APK/AAB builds do not grant the PCM injector. `android:voice:live` installs that debug APK on a connected Android device or Waydroid target, drives the real WebView bridge, selects and activates the requested speech packs, verifies non-silent Android microphone capture, and injects a bounded PCM fixture through the same Rust ingress queue to prove completed foreground and wakeword turns through STT, Gateway, TTS, and playback. It also proves background capture, wake-lock retention, sticky restart after process death, and force-stop recovery on one serial-scoped device at a time. The fixture command is additionally rejected by non-debuggable packages.
 
 ## Android native capability plugin
 

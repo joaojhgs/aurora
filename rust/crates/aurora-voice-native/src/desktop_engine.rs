@@ -342,12 +342,8 @@ fn installed_kws_compiler_family(
     model_id: &str,
 ) -> Result<InstalledKwsCompilerFamily, SherpaKwsPhraseCompileError> {
     match model_id {
-        "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
-            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
-        }
-        "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
-            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
-        }
+        "kws:zipformer:gigaspeech" => Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece),
+        "kws:zipformer:wenetspeech" => Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin),
         "kws:zipformer:zh-en-2025" => Ok(InstalledKwsCompilerFamily::BilingualPhonePartialPinyin),
         _ => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
     }
@@ -455,15 +451,7 @@ mod tests {
             Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
         );
         assert_eq!(
-            installed_kws_compiler_family("kws:zipformer:gigaspeech-mobile"),
-            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
-        );
-        assert_eq!(
             installed_kws_compiler_family("kws:zipformer:wenetspeech"),
-            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
-        );
-        assert_eq!(
-            installed_kws_compiler_family("kws:zipformer:wenetspeech-mobile"),
             Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
         );
         assert_eq!(

@@ -55,7 +55,7 @@ def _fixture(module, monkeypatch):
         b"silero_vad.int8.onnx\t" + b"3" * 64 + b"\n"
     )
     kws_checksums = (
-        b"sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2\t" + b"4" * 64 + b"\n"
+        b"sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2\t" + b"4" * 64 + b"\n"
     )
     asr_pins = module.ReleasePins(
         release_id=7,
@@ -107,7 +107,7 @@ def _fixture(module, monkeypatch):
             _asset(
                 module,
                 asset_id=19,
-                name=("sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2"),
+                name=("sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2"),
                 size=126,
                 tag="kws-models",
             ),
@@ -132,12 +132,14 @@ def test_build_catalog_is_deterministic_and_exact_selection_only(monkeypatch) ->
 
     assert catalog["languages"] == ["en", "fr"]
     assert [entry["model_id"] for entry in catalog["entries"]] == [
-        "kws:zipformer:gigaspeech-mobile",
+        "kws:zipformer:gigaspeech",
         "stt:whisper:tiny",
         "stt:whisper:tiny.en",
         "vad:silero:current-int8",
     ]
     multilingual = catalog["entries"][1]
+    kws = catalog["entries"][0]
+    assert kws["bindings"]["tokenizer"].endswith("/bpe.model")
     assert multilingual["languages"] == ["en", "fr"]
     assert multilingual["archive"]["sha256"] == "1" * 64
     assert multilingual["bindings"]["encoder"].endswith("tiny-encoder.int8.onnx")
@@ -185,11 +187,11 @@ def test_committed_catalog_covers_pinned_speech_models_without_weights() -> None
         "5f86d1d86363843179951550570367b37c5d6f78"
     )
     assert len(catalog["languages"]) == 100
-    assert len(catalog["entries"]) == 21
+    assert len(catalog["entries"]) == 19
     assert sum(entry["task"] == "speech_to_text" for entry in catalog["entries"]) == 12
     assert sum(entry["task"] == "voice_activity_detection" for entry in catalog["entries"]) == 4
-    assert sum(entry["task"] == "keyword_spotting" for entry in catalog["entries"]) == 5
-    assert len({entry["model_id"] for entry in catalog["entries"]}) == 21
+    assert sum(entry["task"] == "keyword_spotting" for entry in catalog["entries"]) == 3
+    assert len({entry["model_id"] for entry in catalog["entries"]}) == 19
     assert all(entry["terms"]["download_initiated_by_user"] for entry in catalog["entries"])
     assert all(not entry["terms"]["redistributed_by_aurora"] for entry in catalog["entries"])
     assert CATALOG.stat().st_size < 250_000

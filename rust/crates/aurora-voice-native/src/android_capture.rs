@@ -11,7 +11,7 @@ use aurora_voice_core::{
     AudioInput, Generation, PcmFrame, RouteRevision, TimestampMicros, TransitionReason,
     VoiceCaptureLease, VoiceCoreError,
 };
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, timeout, Duration};
 
 const DEFAULT_CAPACITY_CHUNKS: usize = 8;
 const MAX_CAPACITY_CHUNKS: usize = 64;
@@ -218,6 +218,11 @@ impl AndroidPcmIngress {
 }
 
 const ANDROID_FRAME_POLL_INTERVAL: Duration = Duration::from_millis(5);
+// Once capture has produced PCM, ten missing 100 ms frames means the Android
+// producer stalled. Before the first frame, explicit finish/interrupt/close
+// remains authoritative because a debuggable ingress lease may intentionally
+// hold live PCM while the harness prepares its first deterministic frame.
+const ANDROID_INGRESS_IDLE_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Audio-input adapter that turns bounded Android PCM ingress into runtime frames.
 ///
@@ -325,40 +330,58 @@ impl AudioInput for AndroidAudioInput {
         let Some(generation) = self.active_generation else {
             return Ok(None);
         };
-        loop {
-            if self.control.interrupted.load(Ordering::SeqCst) {
-                return Err(VoiceCoreError::Cancelled);
+        let capture_has_started = self.next_sequence != 0;
+        let wait_for_frame = async {
+            loop {
+                if self.control.interrupted.load(Ordering::SeqCst) {
+                    return Err(VoiceCoreError::Cancelled);
+                }
+                if let Some(chunk) = self.ingress.drain_chunk() {
+                    let discontinuity = self
+                        .expected_ingress_sequence
+                        .is_some_and(|expected| expected != chunk.sequence);
+                    self.expected_ingress_sequence = Some(chunk.sequence.saturating_add(1));
+                    let samples = chunk
+                        .samples
+                        .into_iter()
+                        .map(|sample| f32::from(sample) / 32_768.0)
+                        .collect::<Vec<_>>();
+                    let timestamp = TimestampMicros(
+                        self.started_at
+                            .0
+                            .saturating_add(self.next_sequence.saturating_mul(1_000_000) / 16_000),
+                    );
+                    let frame = PcmFrame::new(
+                        samples,
+                        timestamp,
+                        self.next_sequence,
+                        discontinuity,
+                        self.route_revision,
+                        generation,
+                    )?;
+                    self.next_sequence = self.next_sequence.saturating_add(1);
+                    return Ok(Some(frame));
+                }
+                if self.control.finished.load(Ordering::SeqCst) || self.ingress.stats().closed {
+                    return Ok(None);
+                }
+                sleep(ANDROID_FRAME_POLL_INTERVAL).await;
             }
-            if let Some(chunk) = self.ingress.drain_chunk() {
-                let discontinuity = self
-                    .expected_ingress_sequence
-                    .is_some_and(|expected| expected != chunk.sequence);
-                self.expected_ingress_sequence = Some(chunk.sequence.saturating_add(1));
-                let samples = chunk
-                    .samples
-                    .into_iter()
-                    .map(|sample| f32::from(sample) / 32_768.0)
-                    .collect::<Vec<_>>();
-                let timestamp = TimestampMicros(
-                    self.started_at
-                        .0
-                        .saturating_add(self.next_sequence.saturating_mul(1_000_000) / 16_000),
-                );
-                let frame = PcmFrame::new(
-                    samples,
-                    timestamp,
-                    self.next_sequence,
-                    discontinuity,
-                    self.route_revision,
-                    generation,
-                )?;
-                self.next_sequence = self.next_sequence.saturating_add(1);
-                return Ok(Some(frame));
+        };
+        if !capture_has_started {
+            return wait_for_frame.await;
+        }
+        match timeout(ANDROID_INGRESS_IDLE_TIMEOUT, wait_for_frame).await {
+            Ok(frame) => frame,
+            Err(_) if self.control.interrupted.load(Ordering::SeqCst) => {
+                Err(VoiceCoreError::Cancelled)
             }
-            if self.control.finished.load(Ordering::SeqCst) || self.ingress.stats().closed {
-                return Ok(None);
+            Err(_)
+                if self.control.finished.load(Ordering::SeqCst) || self.ingress.stats().closed =>
+            {
+                Ok(None)
             }
-            sleep(ANDROID_FRAME_POLL_INTERVAL).await;
+            Err(_) => Ok(None),
         }
     }
 
@@ -370,6 +393,26 @@ impl AudioInput for AndroidAudioInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn background_test_lease(
+        generation: u64,
+        created_at: u64,
+        route_revision: u64,
+    ) -> VoiceCaptureLease {
+        VoiceCaptureLease {
+            owner: aurora_voice_core::CaptureOwnerKind::Native,
+            surface: "android".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: aurora_voice_core::CaptureStartReason::BackgroundSession,
+            generation: Generation(generation),
+            created_at: TimestampMicros(created_at),
+            route_revision: RouteRevision(route_revision),
+            background_eligible: true,
+            consent_revision: 0,
+            heartbeat_at: TimestampMicros(created_at),
+            stop_deadline: None,
+        }
+    }
 
     #[test]
     fn bounded_queue_rejects_without_growth() {
@@ -480,24 +523,96 @@ mod tests {
         assert!(input.next_frame().await.expect("finish frame").is_none());
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn android_audio_input_waits_for_the_first_pcm_frame() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        input
+            .start(background_test_lease(10, 200, 4))
+            .await
+            .expect("start input");
+
+        let delayed_ingress = ingress.clone();
+        let (push_result, frame_result) = tokio::join!(
+            async move {
+                sleep(Duration::from_secs(11)).await;
+                delayed_ingress.push(&[1, 2], 0)
+            },
+            input.next_frame(),
+        );
+
+        assert_eq!(push_result, AndroidPcmPushResult::Accepted);
+        assert!(frame_result.expect("first delayed frame").is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn android_audio_input_ends_after_finite_pcm_stalls() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        input
+            .start(background_test_lease(11, 300, 5))
+            .await
+            .expect("start input");
+        assert_eq!(ingress.push(&[1, 2], 0), AndroidPcmPushResult::Accepted);
+        assert!(input.next_frame().await.expect("first frame").is_some());
+
+        let frame = tokio::time::timeout(Duration::from_secs(3), input.next_frame())
+            .await
+            .expect("Android PCM stall must end before the outer safety timeout")
+            .expect("stalled completion");
+
+        assert!(frame.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn android_audio_input_allows_normal_inter_frame_gaps() {
+        let ingress = AndroidPcmIngress::new(2, 4);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        input
+            .start(background_test_lease(12, 400, 6))
+            .await
+            .expect("start input");
+        assert_eq!(ingress.push(&[1, 2], 0), AndroidPcmPushResult::Accepted);
+        assert!(input.next_frame().await.expect("first frame").is_some());
+
+        let delayed_ingress = ingress.clone();
+        let (push_result, frame_result) = tokio::join!(
+            async move {
+                sleep(Duration::from_millis(90)).await;
+                delayed_ingress.push(&[3, 4], 1)
+            },
+            input.next_frame(),
+        );
+
+        assert_eq!(push_result, AndroidPcmPushResult::Accepted);
+        assert!(frame_result.expect("delayed frame").is_some());
+
+        let delayed_ingress = ingress.clone();
+        let (push_result, frame_result) = tokio::join!(
+            async move {
+                sleep(Duration::from_millis(500)).await;
+                delayed_ingress.push(&[5, 6], 2)
+            },
+            input.next_frame(),
+        );
+
+        assert_eq!(push_result, AndroidPcmPushResult::Accepted);
+        assert!(frame_result.expect("delayed frame").is_some());
+    }
+
+    #[test]
+    fn android_audio_idle_limits_cover_capture_and_live_test_cadence() {
+        assert!(ANDROID_INGRESS_IDLE_TIMEOUT > Duration::from_millis(90));
+    }
+
     #[tokio::test]
     async fn latest_biased_input_marks_one_discontinuity_then_recovers() {
         let ingress = AndroidPcmIngress::new(2, 4);
         let mut input = AndroidAudioInput::new(ingress.clone());
-        let lease = VoiceCaptureLease {
-            owner: aurora_voice_core::CaptureOwnerKind::Native,
-            surface: "android".to_owned(),
-            device_route: "default".to_owned(),
-            start_reason: aurora_voice_core::CaptureStartReason::BackgroundSession,
-            generation: Generation(10),
-            created_at: TimestampMicros(200),
-            route_revision: RouteRevision(4),
-            background_eligible: true,
-            consent_revision: 0,
-            heartbeat_at: TimestampMicros(200),
-            stop_deadline: None,
-        };
-        input.start(lease).await.expect("start input");
+        input
+            .start(background_test_lease(10, 200, 4))
+            .await
+            .expect("start input");
 
         assert_eq!(ingress.push_latest(&[1], 0), AndroidPcmPushResult::Accepted);
         assert!(!input

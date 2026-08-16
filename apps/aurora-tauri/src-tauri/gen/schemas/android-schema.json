@@ -225,6 +225,12 @@
           "markdownDescription": "Enables the aurora_android_voice_foreground_service_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-live-test-inject-pcm",
+          "markdownDescription": "Enables the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_android_voice_pack_activate command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-android-voice-pack-activate",
@@ -585,6 +591,12 @@
           "markdownDescription": "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately."
         },
         {
+          "description": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue.",
+          "type": "string",
+          "const": "aurora-android-voice-live-e2e",
+          "markdownDescription": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue."
+        },
+        {
           "description": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript.",
           "type": "string",
           "const": "aurora-assistant-provider",
@@ -823,6 +835,12 @@
           "type": "string",
           "const": "deny-aurora-android-voice-foreground-service-status",
           "markdownDescription": "Denies the aurora_android_voice_foreground_service_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-live-test-inject-pcm",
+          "markdownDescription": "Denies the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_android_voice_pack_activate command without any pre-configured scope.",

@@ -43,7 +43,7 @@ MAX_ARCHIVE_BYTES = 3 * 1024 * 1024 * 1024
 MAX_DIRECT_MODEL_BYTES = 16 * 1024 * 1024
 EXPECTED_STT_COUNT = 12
 EXPECTED_VAD_COUNT = 4
-EXPECTED_KWS_COUNT = 5
+EXPECTED_KWS_COUNT = 3
 EXPECTED_WHISPER_LANGUAGE_COUNT = 100
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -61,25 +61,16 @@ _VAD_MODELS = {
     "silero_vad_v5.onnx": ("vad:silero:v5", "Silero VAD v5"),
 }
 _KWS_MODELS = {
-    "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2": (
-        "kws:zipformer:gigaspeech-mobile",
-        "English wake words (compact)",
-        ["en"],
-        True,
-        12,
-    ),
+    # The upstream `-mobile` KWS archives are batch-one graph conversions.
+    # Aurora's streaming keyword decoder does not preserve that constraint:
+    # sherpa-onnx 1.13.5 reaches a two-hypothesis decode and the compact graph
+    # aborts in `/downsample/Reshape_1`. Keep the canonical full archives in
+    # the runtime catalog until the exact quantized native smoke passes.
     "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2": (
         "kws:zipformer:gigaspeech",
         "English wake words",
         ["en"],
         False,
-        12,
-    ),
-    "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile.tar.bz2": (
-        "kws:zipformer:wenetspeech-mobile",
-        "Chinese wake words (compact)",
-        ["zh"],
-        True,
         12,
     ),
     "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2": (
@@ -374,6 +365,16 @@ def _kws_entries(assets: list[Any], checksums: dict[str, str]) -> list[dict[str,
         model_id, display_name, languages, mobile, epoch = model
         root = filename.removesuffix(".tar.bz2")
         model_stem = f"epoch-{epoch}-avg-2-chunk-16-left-64"
+        bindings = {
+            "encoder": f"{root}/encoder-{model_stem}.int8.onnx",
+            "decoder": f"{root}/decoder-{model_stem}.onnx",
+            "joiner": f"{root}/joiner-{model_stem}.int8.onnx",
+            "tokens": f"{root}/tokens.txt",
+        }
+        if model_id.startswith("kws:zipformer:gigaspeech"):
+            bindings["tokenizer"] = f"{root}/bpe.model"
+        if model_id == "kws:zipformer:zh-en-2025":
+            bindings["lexicon"] = f"{root}/en.phone"
         entries.append(
             {
                 "model_id": model_id,
@@ -387,12 +388,7 @@ def _kws_entries(assets: list[Any], checksums: dict[str, str]) -> list[dict[str,
                 "archive": _asset_metadata(
                     raw_asset, checksums, release_tag="kws-models", archive=True
                 ),
-                "bindings": {
-                    "encoder": f"{root}/encoder-{model_stem}.int8.onnx",
-                    "decoder": f"{root}/decoder-{model_stem}.onnx",
-                    "joiner": f"{root}/joiner-{model_stem}.int8.onnx",
-                    "tokens": f"{root}/tokens.txt",
-                },
+                "bindings": bindings,
                 "terms": _terms(),
             }
         )

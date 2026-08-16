@@ -260,6 +260,7 @@ function mergePluginManifest(content) {
     '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />',
+    '    <uses-permission android:name="android.permission.WAKE_LOCK" />',
     '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
     '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />',
   ]

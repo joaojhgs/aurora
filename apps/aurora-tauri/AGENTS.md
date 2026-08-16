@@ -61,6 +61,8 @@ uv run pytest <relevant-test-file> -q
 
 # Android live lanes
 pnpm --filter @aurora/tauri-ui android:smoke
+pnpm --filter @aurora/tauri-ui android:build:voice-live:apk
+pnpm --filter @aurora/tauri-ui android:voice:live
 pnpm --filter @aurora/tauri-ui android:webrtc:webview
 pnpm --filter @aurora/tauri-ui android:webrtc:mobile-browser
 
@@ -72,6 +74,9 @@ pnpm --filter @aurora/tauri-ui test:desktop-client:live
 ```
 
 Use existing package scripts rather than duplicating their setup logic. When selecting a test manually, keep its required environment (`node` versus `jsdom`) consistent with the package script.
+The PCM injector used by `android:voice:live` is available only to the dedicated
+debug live-test capability emitted by `android:build:voice-live:apk`; normal
+Android client APK/AAB capabilities must never grant it.
 
 ## Keep the Iteration Environment Warm
 

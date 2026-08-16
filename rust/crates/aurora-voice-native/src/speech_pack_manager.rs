@@ -2109,7 +2109,7 @@ mod tests {
     const VOICE_ID: &str = "standard:piper:en_us-ljspeech-medium";
     const STT_MODEL_ID: &str = "stt:whisper:tiny.en";
     const VAD_MODEL_ID: &str = "vad:silero:current-int8";
-    const KWS_MODEL_ID: &str = "kws:zipformer:gigaspeech-mobile";
+    const KWS_MODEL_ID: &str = "kws:zipformer:gigaspeech";
 
     struct OneShotServer {
         url: Url,
