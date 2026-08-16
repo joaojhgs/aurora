@@ -102,7 +102,11 @@ function writeArtifact(context: PolicyContext, relativePath: string, content = '
   writeFileSync(path, content)
 }
 
-function createFakeHdiutil(context: PolicyContext, mountedFiles: Record<string, string>) {
+function createFakeHdiutil(
+  context: PolicyContext,
+  mountedFiles: Record<string, string>,
+  mountedSymlinks: Record<string, string> = {},
+) {
   const binDir = join(context.root, 'bin')
   mkdirSync(binDir, { recursive: true })
   const scriptPath = join(binDir, 'hdiutil')
@@ -110,11 +114,12 @@ function createFakeHdiutil(context: PolicyContext, mountedFiles: Record<string, 
   writeFileSync(
     scriptPath,
     `#!/usr/bin/env node
-const { mkdirSync, writeFileSync } = require('node:fs')
+const { mkdirSync, symlinkSync, writeFileSync } = require('node:fs')
 const { dirname } = require('node:path')
 
 const logPath = ${JSON.stringify(logPath)}
 const mountedFiles = ${JSON.stringify(mountedFiles)}
+const mountedSymlinks = ${JSON.stringify(mountedSymlinks)}
 const [command, ...args] = process.argv.slice(2)
 
 function log(line) {
@@ -140,6 +145,11 @@ if (command === 'attach') {
     const absolutePath = \`\${mountpoint}/\${relativePath}\`
     mkdirSync(dirname(absolutePath), { recursive: true })
     writeFileSync(absolutePath, content)
+  }
+  for (const [relativePath, target] of Object.entries(mountedSymlinks)) {
+    const absolutePath = \`\${mountpoint}/\${relativePath}\`
+    mkdirSync(dirname(absolutePath), { recursive: true })
+    symlinkSync(target, absolutePath)
   }
   log(\`attach:\${image}:\${mountpoint}\`)
   process.exit(0)
@@ -518,6 +528,39 @@ symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
     const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
     expect(report.checkedInstallers).toBe(1)
     expect(readFileSync(logPath, 'utf8')).toContain('detach:')
+  })
+
+  it.runIf(process.platform !== 'win32')('allows only the canonical DMG Applications link outside the mounted image', () => {
+    const allowedContext = createContext()
+    writeArtifact(allowedContext, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const allowedHdiutil = createFakeHdiutil(
+      allowedContext,
+      { 'Aurora.app/Contents/MacOS/aurora': 'executable bytes\n' },
+      { Applications: '/Applications' },
+    )
+
+    const allowed = runPolicyAsDarwin(allowedContext, {
+      PATH: `${allowedHdiutil.binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(allowed.status, allowed.stderr).toBe(0)
+    const allowedReport = JSON.parse(readFileSync(allowedContext.reportPath, 'utf8'))
+    expect(allowedReport.checkedSymlinks).toBe(1)
+
+    const rejectedContext = createContext()
+    writeArtifact(rejectedContext, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const rejectedHdiutil = createFakeHdiutil(
+      rejectedContext,
+      { 'Aurora.app/Contents/MacOS/aurora': 'executable bytes\n' },
+      { Applications: '/tmp/untrusted-applications' },
+    )
+
+    const rejected = runPolicyAsDarwin(rejectedContext, {
+      PATH: `${rejectedHdiutil.binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(rejected.status).not.toBe(0)
+    expect(rejected.stderr).toContain('symlink-unsupported')
   })
 
   it('is wired into the desktop client release bundle command', () => {

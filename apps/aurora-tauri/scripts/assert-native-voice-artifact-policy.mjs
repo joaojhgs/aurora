@@ -276,6 +276,7 @@ function scanExtractedTree(root, prefix) {
       } catch {}
       checkPath(rel, location)
       if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target)) continue
+      if (isAllowedDmgApplicationsSymlink(prefix, rel, target)) continue
       checkPath(target, `${location}->${redacted(target)}`)
       addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
       continue
@@ -287,6 +288,10 @@ function scanExtractedTree(root, prefix) {
     inspectRecognizedContainer(extracted, `${prefix}/${rel}`, 0)
     if (shouldScanText(extracted)) checkText(readFileSync(extracted), location)
   }
+}
+
+function isAllowedDmgApplicationsSymlink(prefix, rel, target) {
+  return prefix.startsWith('dmg:') && rel === 'Applications' && target === '/Applications'
 }
 
 function isContainedSymlink(root, linkPath, target) {

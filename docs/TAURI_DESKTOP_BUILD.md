@@ -92,6 +92,8 @@ builds Python-free macOS DMG and Windows MSI/NSIS thin packages on their native
 GitHub runners. The Python-free artifact policy mounts each DMG read-only with
 macOS `hdiutil`, scans the mounted application tree for embedded models,
 sidecars, runtimes, and secrets, then detaches it before accepting the package.
+The standard top-level `Applications -> /Applications` drag-install link is the
+only external DMG symlink allowed; all other escaping links remain fail-closed.
 Android APK/AAB and iOS simulator/WKWebView packages remain in their existing
 platform-specific workflows.
 
