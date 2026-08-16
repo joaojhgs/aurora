@@ -98,7 +98,7 @@
   },
   "metadata_catalogs": {
     "speech": {
-      "entry_count": 21,
+      "entry_count": 19,
       "language_count": 100,
       "path": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json"
     },

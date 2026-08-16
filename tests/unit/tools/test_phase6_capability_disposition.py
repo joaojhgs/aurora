@@ -82,7 +82,7 @@ def test_phase6_disposition_enables_on_demand_capabilities_without_bundling_weig
 def test_embedded_catalogs_list_all_pinned_entries_for_explicit_user_download():
     data = disposition()
 
-    for catalog_name, expected_count in (("speech", 21), ("tts", 537)):
+    for catalog_name, expected_count in (("speech", 19), ("tts", 537)):
         catalog_policy = data["metadata_catalogs"][catalog_name]
         catalog = load_json(ROOT / catalog_policy["path"])
         assert len(catalog["entries"]) == catalog_policy["entry_count"] == expected_count

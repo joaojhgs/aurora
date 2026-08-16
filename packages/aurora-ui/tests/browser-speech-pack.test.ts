@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AuroraWebModelStoreHost } from '@aurora/voice-web'
+import type { AuroraVoiceWebModelDescriptor, AuroraWebModelStoreHost } from '@aurora/voice-web'
 
 const voiceWeb = vi.hoisted(() => ({
   createHost: vi.fn(),
@@ -227,10 +227,12 @@ describe('openActiveBrowserSpeechPacks', () => {
     const host = fakeModelStoreHost()
     voiceWeb.openExistingHost.mockResolvedValueOnce(host)
     const pack = modelPack('tts', 'pocket-internal', 'tts-file', '/tts/model.onnx', 'pockettts')
+    const model = pack.models[0]
+    if (model === undefined) throw new Error('expected model')
     pack.models[0] = {
-      ...pack.models[0],
+      ...model,
       files: [
-        ...pack.models[0].files,
+        ...model.files,
         { role: 'referenceAudio', fileId: 'reference-audio', virtualPath: '/internal_reference.wav' },
       ],
       config: { voiceId: 'standard:pockettts:aurora-pockettts-en-2026-04', referenceAudioMode: 'internal', referenceSampleRateHz: 24_000 },
@@ -538,7 +540,42 @@ function fakeModelStoreHost(): AuroraWebModelStoreHost {
   }
 }
 
-function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: string, virtualPath: string, family?: 'vits' | 'pockettts') {
+function modelPack(
+  task: AuroraVoiceWebModelDescriptor['task'],
+  packId: string,
+  fileId: string,
+  virtualPath: string,
+  family?: 'piper' | 'pockettts',
+) {
+  const familyByTask = {
+    vad: 'silero-vad',
+    kws: 'sherpa-kws-transducer',
+    stt: 'whisper',
+    tts: family ?? 'piper',
+  } satisfies Record<
+    AuroraVoiceWebModelDescriptor['task'],
+    AuroraVoiceWebModelDescriptor['family']
+  >
+  const kindByTask = {
+    vad: 'vad',
+    kws: 'keyword-spotter',
+    stt: 'offline-asr',
+    tts: 'offline-tts',
+  } satisfies Record<
+    AuroraVoiceWebModelDescriptor['task'],
+    AuroraVoiceWebModelDescriptor['kind']
+  >
+  const model: AuroraVoiceWebModelDescriptor = {
+    task,
+    family: familyByTask[task],
+    kind: kindByTask[task],
+    files: [{
+      role: task === 'tts' ? 'model' : 'encoder',
+      fileId,
+      virtualPath,
+    }],
+    config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
+  }
   return {
     identity: {
       packId,
@@ -554,17 +591,7 @@ function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: 
       readAll: async () => new Uint8Array([1, 2, 3, 4]),
       readChunk: async () => new Uint8Array([1]),
     }],
-    models: [{
-      task,
-      family: task === 'tts' ? family ?? 'vits' : 'sherpa',
-      kind: task === 'tts' ? 'offline-tts' : task === 'stt' ? 'offline-asr' : task,
-      files: [{
-        role: task === 'tts' ? 'model' : 'encoder',
-        fileId,
-        virtualPath,
-      }],
-      config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
-    }],
+    models: [model],
   }
 }
 
