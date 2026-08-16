@@ -61,11 +61,18 @@ def test_ios_configuration_uses_pinned_static_slice(tmp_path: Path) -> None:
 
 def test_desktop_configuration_forces_verified_static_onnxruntime(tmp_path: Path) -> None:
     builder = load_builder()
-    for target in (
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-pc-windows-msvc",
-    ):
+    expected_hashes = {
+        "x86_64-unknown-linux-gnu": (
+            "6b4df7fc46d3367b6be73fdea80dee323b9dc9eaa8dc50136a33d8524e7f06bb"
+        ),
+        "aarch64-apple-darwin": (
+            "b9a84d5d1770818a8bb2a12d9adb45fc2cf5062b930176914cd4e7150ce3fcd2"
+        ),
+        "x86_64-pc-windows-msvc": (
+            "de11b05b1f42476c612e13eb2ed8f6f30d8c486d56dfab29906a947e6b3abfcf"
+        ),
+    }
+    for target, expected_hash in expected_hashes.items():
         plan = builder.TARGETS[target]
         artifact_root = tmp_path / target
         source = artifact_root / "sources/extracted/sherpa-onnx-1.13.5"
@@ -79,7 +86,7 @@ def test_desktop_configuration_forces_verified_static_onnxruntime(tmp_path: Path
         assert "-DBUILD_SHARED_LIBS=OFF" in command
         assert "-DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=OFF" in command
         assert plan.ort_pin[0].startswith(builder.ORT_RELEASE_ROOT)
-        assert len(plan.ort_pin[1]) == 64
+        assert plan.ort_pin[1] == expected_hash
 
 
 def test_zip_extraction_rejects_parent_escape(tmp_path: Path) -> None:

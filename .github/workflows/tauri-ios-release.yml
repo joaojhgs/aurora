@@ -123,8 +123,11 @@ jobs:
       - name: Configure patched device Sherpa runtime
         if: inputs.app_store_dry_run == 'true'
         run: |
-          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios" >> "$GITHUB_ENV"
+          SHERPA_RUNTIME="$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios"
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
           echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Build Tauri workspace dependencies
         run: |

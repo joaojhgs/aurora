@@ -106,8 +106,11 @@ jobs:
 
       - name: Configure patched iOS Sherpa runtime
         run: |
-          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim" >> "$GITHUB_ENV"
+          SHERPA_RUNTIME="$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim"
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
           echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Run iOS CI harness regression tests
         run: >-

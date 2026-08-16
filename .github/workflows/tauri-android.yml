@@ -152,8 +152,20 @@ jobs:
       - name: Retain Android client smoke APK
         run: |
           mkdir -p apps/aurora-tauri/reports
-          cp apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk \
-            apps/aurora-tauri/reports/android-client-smoke.apk
+          APK_OUTPUT_ROOT=apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk
+          # Tauri 2.11.3 emits the x86_64-targeted APK in either of these
+          # generated debug layouts. Require one unambiguous build product.
+          mapfile -t SMOKE_APKS < <(
+            find "$APK_OUTPUT_ROOT" -type f \
+              \( -path '*/x86_64/debug/*.apk' -o -path '*/universal/debug/*.apk' \) \
+              -print | sort
+          )
+          if [ "${#SMOKE_APKS[@]}" -ne 1 ]; then
+            printf 'Expected exactly one Android smoke APK; found %s\n' "${#SMOKE_APKS[@]}" >&2
+            printf '%s\n' "${SMOKE_APKS[@]}" >&2
+            exit 1
+          fi
+          cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk
 
       - name: Build Android client debug AAB
         run: pnpm --filter @aurora/tauri-ui android:build:client:aab

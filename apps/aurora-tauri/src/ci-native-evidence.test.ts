@@ -122,10 +122,16 @@ describe('Tauri CI native evidence contract', () => {
 
     expect(iosWorkflow).toContain('--target aarch64-apple-ios-sim')
     expect(iosWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME')
+    expect(iosWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static')
     expect(iosReleaseWorkflow).toContain('--target aarch64-apple-ios')
     expect(iosReleaseWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosReleaseWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME')
+    expect(iosReleaseWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static')
 
     expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_LINK_KIND')
+    expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR')
+    expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND')
     expect(sherpaSysBuild).toContain('println!("cargo:rustc-link-lib=static={library}")')
     expect(sherpaSysBuild).toContain('Android Sherpa packaging requires the patched shared runtime')
   })
@@ -374,11 +380,13 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')
     expect(androidWorkflow).toContain('Retain Android client smoke APK')
-    expect(androidWorkflow).toContain(
-      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk',
-    )
+    expect(androidWorkflow).toContain('mapfile -t SMOKE_APKS < <(')
+    expect(androidWorkflow).toContain("-path '*/x86_64/debug/*.apk'")
+    expect(androidWorkflow).toContain("-path '*/universal/debug/*.apk'")
+    expect(androidWorkflow).toContain('if [ "${#SMOKE_APKS[@]}" -ne 1 ]; then')
+    expect(androidWorkflow).toContain('cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk')
     expect(androidWorkflow).not.toContain(
-      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk',
+      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk',
     )
     expect(androidWorkflow).toContain('apps/aurora-tauri/reports/android-client-smoke.apk')
     expect(androidWorkflow.indexOf('Retain Android client smoke APK')).toBeLessThan(

@@ -11,6 +11,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 APPLY = REPO / "tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py"
 SERIES = REPO / "tools/voice-runtime/sherpa-patches/series"
+ATTRIBUTES = REPO / "tools/voice-runtime/sherpa-patches/.gitattributes"
 ARCHIVE = REPO / ".artifacts/sherpa-onnx/sherpa-onnx-v1.13.5.tar.gz"
 
 
@@ -28,6 +29,10 @@ def test_series_matches_pinned_patch_digests() -> None:
     for name, digest in module.PATCH_SHA256.items():
         path = REPO / "tools/voice-runtime/sherpa-patches" / name
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
+
+
+def test_patch_bytes_keep_lf_endings_on_every_ci_host() -> None:
+    assert ATTRIBUTES.read_text(encoding="utf-8").splitlines() == ["*.patch text eol=lf"]
 
 
 def test_patches_have_no_trailing_whitespace_on_added_lines() -> None:

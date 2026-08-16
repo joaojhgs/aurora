@@ -2,7 +2,11 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    // Tauri CLI 2.11.3 forwards CARGO_-prefixed variables into the Cargo
+    // process launched by its Xcode phase. Direct Cargo builds keep using the
+    // canonical Aurora names; the aliases preserve that contract on iOS.
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_LIB_DIR");
     for variable in [
         "AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR",
         "AURORA_SHERPA_ONNX_ANDROID_ARMEABI_V7A_LIB_DIR",
@@ -12,6 +16,7 @@ fn main() {
         println!("cargo:rerun-if-env-changed={variable}");
     }
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LINK_KIND");
+    println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_LINK_KIND");
 
     let native_enabled = env::var_os("CARGO_FEATURE_NATIVE_VAD").is_some()
         || env::var_os("CARGO_FEATURE_NATIVE_KWS").is_some()
@@ -27,6 +32,7 @@ fn main() {
     let lib_dir = target_lib_variable
         .and_then(env::var_os)
         .or_else(|| env::var_os("AURORA_SHERPA_ONNX_LIB_DIR"))
+        .or_else(|| env::var_os("CARGO_AURORA_SHERPA_ONNX_LIB_DIR"))
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             let target_hint = target_lib_variable
@@ -125,7 +131,11 @@ enum LinkKind {
 }
 
 fn select_link_kind(lib_dir: &std::path::Path, target_os: &str) -> LinkKind {
-    match env::var("AURORA_SHERPA_ONNX_LINK_KIND") {
+    let link_kind = env::var("AURORA_SHERPA_ONNX_LINK_KIND").or_else(|error| match error {
+        env::VarError::NotPresent => env::var("CARGO_AURORA_SHERPA_ONNX_LINK_KIND"),
+        other => Err(other),
+    });
+    match link_kind {
         Ok(value) if value == "dynamic" => LinkKind::Dynamic,
         Ok(value) if value == "static" => LinkKind::Static,
         Ok(_) => panic!("AURORA_SHERPA_ONNX_LINK_KIND must be dynamic or static"),

@@ -92,7 +92,7 @@ TARGETS = {
         host_machine=("arm64", "aarch64"),
         ort_pin=(
             f"{ORT_RELEASE_ROOT}/onnxruntime-osx-arm64-static_lib-{ORT_VERSION}.zip",
-            "3c043b1d5231881d940f0184bd1aaeef29d8e816f2865feed0a268bddcf8b628",
+            "b9a84d5d1770818a8bb2a12d9adb45fc2cf5062b930176914cd4e7150ce3fcd2",
             f"onnxruntime-osx-arm64-static_lib-{ORT_VERSION}.zip",
         ),
         cmake_args=("-DCMAKE_OSX_ARCHITECTURES=arm64",),
