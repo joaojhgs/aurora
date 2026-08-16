@@ -51,6 +51,21 @@ def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
         assert voice_build < web_start, script_path
 
 
+def test_hosted_browser_harnesses_bound_http_readiness_probes() -> None:
+    for script_path in (
+        "scripts/hosted_peer_e2e.sh",
+        "scripts/hosted_mesh_node_e2e.sh",
+    ):
+        source = read_repo(script_path)
+
+        assert (
+            'HTTP_READY_TIMEOUT_SECONDS="${AURORA_LIVE_HTTP_READY_TIMEOUT_SECONDS:-180}"' in source
+        )
+        assert "curl --connect-timeout 1 --max-time 5 -fsS" in source
+        assert source.count("wait_for_http \\") == 2
+        assert 'curl -fsS "http://127.0.0.1:' not in source
+
+
 def test_live_harnesses_have_distinct_valid_default_compose_projects() -> None:
     shell_script_paths = [
         "scripts/desktop_live_e2e.sh",

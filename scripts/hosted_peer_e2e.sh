@@ -53,6 +53,7 @@ PY
 )"
 PYTHON_PID=""
 WEB_PID=""
+HTTP_READY_TIMEOUT_SECONDS="${AURORA_LIVE_HTTP_READY_TIMEOUT_SECONDS:-180}"
 
 mkdir -p "$ARTIFACT_DIR" "$DATA_DIR"
 
@@ -78,6 +79,30 @@ PY
   exit "$status"
 }
 trap cleanup EXIT INT TERM
+
+wait_for_http() {
+  local url="$1"
+  local process_pid="$2"
+  local process_log="$3"
+  local label="$4"
+  local deadline=$((SECONDS + HTTP_READY_TIMEOUT_SECONDS))
+
+  while ((SECONDS < deadline)); do
+    if curl --connect-timeout 1 --max-time 5 -fsS "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! kill -0 "$process_pid" 2>/dev/null; then
+      cat "$process_log" >&2
+      wait "$process_pid"
+      return 1
+    fi
+    sleep 0.5
+  done
+
+  echo "Timed out waiting for $label at $url" >&2
+  cat "$process_log" >&2
+  return 1
+}
 
 python - "$CONFIG_PATH" "$GATEWAY_PORT" "$APP_ID" "$ROOM" "$BROKER_URL" <<'PY'
 import json
@@ -137,17 +162,11 @@ setsid env \
   uv run python main.py >"$PYTHON_LOG" 2>&1 &
 PYTHON_PID=$!
 
-for _ in $(seq 1 180); do
-  if curl -fsS "http://127.0.0.1:$GATEWAY_PORT/api/health" >/dev/null 2>&1; then
-    break
-  fi
-  if ! kill -0 "$PYTHON_PID" 2>/dev/null; then
-    cat "$PYTHON_LOG" >&2
-    wait "$PYTHON_PID"
-  fi
-  sleep 0.5
-done
-curl -fsS "http://127.0.0.1:$GATEWAY_PORT/api/health" >/dev/null
+wait_for_http \
+  "http://127.0.0.1:$GATEWAY_PORT/api/health" \
+  "$PYTHON_PID" \
+  "$PYTHON_LOG" \
+  "Python gateway"
 
 setsid env \
   NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
@@ -156,17 +175,11 @@ setsid env \
     --port "$WEB_PORT" >"$WEB_LOG" 2>&1 &
 WEB_PID=$!
 
-for _ in $(seq 1 180); do
-  if curl -fsS "http://127.0.0.1:$WEB_PORT/" >/dev/null 2>&1; then
-    break
-  fi
-  if ! kill -0 "$WEB_PID" 2>/dev/null; then
-    cat "$WEB_LOG" >&2
-    wait "$WEB_PID"
-  fi
-  sleep 0.5
-done
-curl -fsS "http://127.0.0.1:$WEB_PORT/" >/dev/null
+wait_for_http \
+  "http://127.0.0.1:$WEB_PORT/" \
+  "$WEB_PID" \
+  "$WEB_LOG" \
+  "hosted web UI"
 
 AURORA_HOSTED_PEER_BASE_URL="http://127.0.0.1:$WEB_PORT" \
 AURORA_HOSTED_PEER_GATEWAY_URL="http://127.0.0.1:$GATEWAY_PORT" \
