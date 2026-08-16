@@ -9,6 +9,23 @@ import { assertRoleSwitchEvidence } from './role-switch-evidence.mjs'
 const args = new Set(process.argv.slice(2))
 const forbiddenDesktopChildPattern = /\b(?:python(?:3(?:\.\d+)?)?|uv|aurora-sidecar)\b|(?:^|\s)main\.py(?:\s|$)/i
 const hookResultEnvelopeSchema = 'aurora.desktop_live_e2e.webdriver_result.v1'
+const desktopHookReadinessScript = `
+  return {
+    href: String(window.location.href),
+    tauriPresent: Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__),
+    title: String(document.title || ''),
+    readyState: String(document.readyState || ''),
+    hookReady: typeof window.__AURORA_DESKTOP_LIVE_E2E__ === 'function'
+  };
+`
+
+class DesktopHookReadinessError extends Error {
+  constructor(message, runtime) {
+    super(message)
+    this.name = 'DesktopHookReadinessError'
+    this.runtime = runtime
+  }
+}
 
 if (args.has('--self-test')) {
   await runSelfTest()
@@ -56,6 +73,7 @@ async function run() {
     session = await createSession(webdriverUrl, application)
     await setSessionTimeouts(webdriverUrl, session.sessionId, scriptTimeoutMs)
     tauriPid = await waitForApplicationPid(pidFile)
+    await waitForDesktopHookContext(webdriverUrl, session.sessionId)
     const processTreeBefore = captureProcessTree(tauriPid)
     const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
     const hookResult = await invokeDesktopHook(webdriverUrl, session.sessionId, payload)
@@ -126,13 +144,16 @@ async function run() {
     process.exit(2)
   } catch (error) {
     await writeBlocked(reportPath, donePath, {
-      blocker: 'webdriver-connection-failed',
+      blocker: error instanceof DesktopHookReadinessError
+        ? 'desktop-webview-hook-not-ready'
+        : 'webdriver-connection-failed',
       sessionNonce,
       tauriPid,
       detail: error instanceof Error ? error.message : String(error),
       webdriver: {
         endpoint: redactEndpoint(webdriverUrl),
       },
+      runtime: error instanceof DesktopHookReadinessError ? error.runtime : undefined,
     })
     process.exit(2)
   } finally {
@@ -193,6 +214,81 @@ async function executeAsyncScript(baseUrl, sessionId, script, args = []) {
     'invoke-desktop-hook',
   )
   return value.value ?? value
+}
+
+async function waitForDesktopHookContext(
+  baseUrl,
+  sessionId,
+  {
+    timeoutMs = 30_000,
+    pollMs = 50,
+    execute = executeScript,
+    sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+  } = {},
+) {
+  const deadline = Date.now() + timeoutMs
+  let lastRuntime
+  let lastTransientError
+
+  while (Date.now() < deadline) {
+    try {
+      const runtime = await execute(baseUrl, sessionId, desktopHookReadinessScript)
+      lastRuntime = normalizeDesktopHookRuntime(runtime)
+      lastTransientError = undefined
+      if (
+        lastRuntime.readyState === 'complete'
+        && lastRuntime.tauriPresent
+        && lastRuntime.hookReady
+      ) {
+        return lastRuntime
+      }
+    } catch (error) {
+      if (!isTransientDesktopContextError(error)) throw error
+      // WebKit can reject a command while replacing its initial page context.
+      // This retry is bounded to readiness polling and never retries the hook.
+      lastTransientError = webdriverErrorCode(error)
+    }
+    await sleep(pollMs)
+  }
+
+  const runtimeDetail = lastRuntime
+    ? ` Last runtime: ${JSON.stringify(lastRuntime)}.`
+    : ''
+  const errorDetail = lastTransientError
+    ? ` Last transient WebDriver error: ${lastTransientError}.`
+    : ''
+  throw new DesktopHookReadinessError(
+    `Timed out waiting for the loaded Tauri WebView and desktop live hook.${runtimeDetail}${errorDetail}`,
+    lastRuntime,
+  )
+}
+
+function normalizeDesktopHookRuntime(value) {
+  if (!value || typeof value !== 'object') {
+    return {
+      href: '',
+      tauriPresent: false,
+      title: '',
+      readyState: '',
+      hookReady: false,
+    }
+  }
+  return {
+    href: typeof value.href === 'string' ? value.href : '',
+    tauriPresent: value.tauriPresent === true,
+    title: typeof value.title === 'string' ? value.title : '',
+    readyState: typeof value.readyState === 'string' ? value.readyState : '',
+    hookReady: value.hookReady === true,
+  }
+}
+
+function webdriverErrorCode(error) {
+  const detail = error instanceof Error ? error.message : String(error)
+  return detail.match(/"error"\s*:\s*"([^"]+)"/u)?.[1]
+}
+
+function isTransientDesktopContextError(error) {
+  return webdriverErrorCode(error) === 'javascript error'
 }
 
 async function buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath }) {
@@ -536,6 +632,53 @@ async function runSelfTest() {
   await assert.rejects(
     request('http://127.0.0.1:1', 'GET', '/status', undefined, 'self-test-phase'),
     /self-test-phase failed/,
+  )
+  let readinessAttempts = 0
+  const readyRuntime = await waitForDesktopHookContext('http://unused.test', 'session', {
+    timeoutMs: 1_000,
+    pollMs: 0,
+    execute: async () => {
+      readinessAttempts += 1
+      if (readinessAttempts === 1) {
+        throw new Error(
+          'WebDriver POST /execute/sync failed with 500: '
+          + '{"value":{"error":"javascript error","message":"A JavaScript exception occurred"}}',
+        )
+      }
+      if (readinessAttempts === 2) {
+        return {
+          href: 'tauri://localhost',
+          tauriPresent: true,
+          title: 'Aurora',
+          readyState: 'complete',
+          hookReady: false,
+        }
+      }
+      return {
+        href: 'tauri://localhost',
+        tauriPresent: true,
+        title: 'Aurora',
+        readyState: 'complete',
+        hookReady: true,
+      }
+    },
+    sleep: async () => undefined,
+  })
+  assert.equal(readinessAttempts, 3)
+  assert.equal(readyRuntime.hookReady, true)
+  await assert.rejects(
+    waitForDesktopHookContext('http://unused.test', 'session', {
+      timeoutMs: 1_000,
+      pollMs: 0,
+      execute: async () => {
+        throw new Error(
+          'WebDriver POST /execute/sync failed with 404: '
+          + '{"value":{"error":"invalid session id"}}',
+        )
+      },
+      sleep: async () => undefined,
+    }),
+    /invalid session id/,
   )
   assert.doesNotThrow(() =>
     validatePassedHookResult({
