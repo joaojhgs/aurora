@@ -169,13 +169,70 @@ function inspectRecognizedContainer(path, rel, archiveDepth) {
     inspectAppImage(path, rel)
     return
   }
+  if (extension === '.dmg') {
+    inspectDmgInstaller(path, rel)
+    return
+  }
   if (extension === '.rpm') {
     addFailure('installer-inspection-unavailable', `installer:${rel}`, 'RPM inspection requires rpm2cpio and cpio; unavailable in the Node-core scanner path')
     return
   }
-  if (['.dmg', '.msi', '.exe'].includes(extension)) {
+  if (['.msi', '.exe'].includes(extension)) {
     addFailure('installer-inspection-unsupported', `installer:${rel}`, `${extension} installer inspection is not available on this host; do not treat this artifact as policy-cleared`)
   }
+}
+
+function inspectDmgInstaller(path, rel) {
+  if (process.platform !== 'darwin') {
+    addFailure('installer-inspection-unsupported', `installer:${rel}`, '.dmg installer inspection requires macOS hdiutil; do not treat this artifact as policy-cleared')
+    return
+  }
+
+  const mountRoot = mkdtempSync(join(tmpdir(), 'aurora-native-voice-dmg-'))
+  const mountPoint = join(mountRoot, 'volume')
+  mkdirSync(mountPoint)
+  let attached = false
+  let detached = false
+
+  try {
+    execFileSync(
+      'hdiutil',
+      ['attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', mountPoint, path],
+      { encoding: 'utf8', timeout: 120_000 },
+    )
+    attached = true
+  } catch (error) {
+    addFailure('installer-inspection', `installer:${rel}`, `failed to mount DMG installer read-only: ${errorMessage(error)}`)
+  }
+
+  if (attached) {
+    try {
+      report.checkedInstallers += 1
+      scanExtractedTree(mountPoint, `dmg:${rel}`)
+    } catch (error) {
+      addFailure('installer-inspection', `installer:${rel}`, `failed to inspect mounted DMG installer: ${errorMessage(error)}`)
+    } finally {
+      try {
+        execFileSync('hdiutil', ['detach', mountPoint], { encoding: 'utf8', timeout: 30_000 })
+        detached = true
+      } catch (detachError) {
+        try {
+          execFileSync('hdiutil', ['detach', '-force', mountPoint], { encoding: 'utf8', timeout: 30_000 })
+          detached = true
+        } catch (forceDetachError) {
+          addFailure(
+            'installer-cleanup',
+            `installer:${rel}`,
+            `failed to detach inspected DMG mount: ${errorMessage(forceDetachError)}; initial detach: ${errorMessage(detachError)}`,
+          )
+        }
+      }
+    }
+  }
+
+  // Delete only after hdiutil confirms that the exact temporary mount is detached.
+  // If cleanup fails, retain the mount root and fail policy verification explicitly.
+  if (!attached || detached) rmSync(mountRoot, { recursive: true, force: true })
 }
 
 function inspectDebInstaller(path, rel) {

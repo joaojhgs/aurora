@@ -89,8 +89,11 @@ feature.
 
 The existing desktop workflow builds Linux local/thin packages and now also
 builds Python-free macOS DMG and Windows MSI/NSIS thin packages on their native
-GitHub runners. Android APK/AAB and iOS simulator/WKWebView packages remain in
-their existing platform-specific workflows.
+GitHub runners. The Python-free artifact policy mounts each DMG read-only with
+macOS `hdiutil`, scans the mounted application tree for embedded models,
+sidecars, runtimes, and secrets, then detaches it before accepting the package.
+Android APK/AAB and iOS simulator/WKWebView packages remain in their existing
+platform-specific workflows.
 
 Local assistant variants are explicit:
 
