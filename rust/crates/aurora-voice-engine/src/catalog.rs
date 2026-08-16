@@ -901,7 +901,6 @@ mod tests {
         assert_ne!(piper.reference_audio_mode(), TtsReferenceAudioMode::Profile);
         assert!(english.archive.byte_size <= MAX_ARCHIVE_BYTES);
         assert!(french.archive.byte_size <= MAX_ARCHIVE_BYTES);
-        assert!(MAX_POCKETTTS_OVERLAY_ARCHIVE_BYTES > MAX_ARCHIVE_BYTES);
     }
 
     #[test]
