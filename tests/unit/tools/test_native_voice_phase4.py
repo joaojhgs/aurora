@@ -60,7 +60,7 @@ def test_manifest_selects_upstream_silero_and_blocks_piper_ljspeech() -> None:
     assert silero["sha256"] == "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28"
     assert silero["license"]["disposition"] == "allowed"
 
-    assert artifacts["onnxruntime-source-v1.27.0"]["license"]["evidence_sha256"] == (
+    assert artifacts["onnxruntime-source-v1.27.1"]["license"]["evidence_sha256"] == (
         "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
     )
 
@@ -99,17 +99,17 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
     manifest = read_manifest()
     artifacts = {item["id"]: item for item in manifest["artifacts"]}
 
-    assert artifacts["onnxruntime-android-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-android-1.27.0.zip"
+    assert artifacts["onnxruntime-android-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-android-1.27.1.zip"
     )
-    assert artifacts["onnxruntime-ios-static-xcframework-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-ios-static-xcframework-1.27.0.zip"
+    assert artifacts["onnxruntime-ios-static-xcframework-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-ios-static-xcframework-1.27.1.zip"
     )
-    assert artifacts["onnxruntime-wasm-static-lib-simd-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-wasm-static_lib-simd-1.27.0.zip"
+    assert artifacts["onnxruntime-wasm-static-lib-simd-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-wasm-static_lib-simd-1.27.1.zip"
     )
     moonshine = artifacts["moonshine-tiny-en-quantized-2026-02-27"]
     assert moonshine["license"]["evidence_sha256"] == (

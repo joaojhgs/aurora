@@ -1,12 +1,12 @@
 //! Desktop native speech-engine construction from active model-pack state.
 
+#[cfg(feature = "native-sherpa-tts")]
+use aurora_voice_engine::TtsVoiceCatalog;
 use aurora_voice_engine::{
     EngineError, EngineFaultCode, KwsConfig, LanguageSupport, ModelPackFile, ModelPackManifest,
     ModelStoreScope, PackTask, RuntimeSelection, SelectedVariant, SpeechCatalogTask,
     TaskPackBinding, VadConfig, VerifiedManifest, VoiceTask,
 };
-#[cfg(feature = "native-sherpa-tts")]
-use aurora_voice_engine::{TtsReferenceAudioMode, TtsVoiceCatalog};
 use aurora_voice_sherpa::{
     compile_gigaspeech_sentencepiece_phrase_set, compile_wenetspeech_pinyin_phrase_set,
     compile_zh_en_2025_phrase_set, NativeKwsBackend, NativeKwsModelFiles, NativeSttBackend,
@@ -216,18 +216,13 @@ pub fn build_installed_tts_provider_with_reference(
             NativeTtsBackend::from_catalog_vits_piper_model(&bindings.task_binding, files)?
         }
         Some("pockettts") => {
-            let catalog =
-                TtsVoiceCatalog::runtime().map_err(|_| EngineError::TaskUnavailable)?;
-            let entry = catalog
-                .voice(voice_id)
-                .ok_or(EngineError::InvalidRequest)?;
-            let reference_audio = match entry.reference_audio_mode() {
-                TtsReferenceAudioMode::Internal => {
-                    load_internal_reference_audio(&bindings)?
-                }
-                TtsReferenceAudioMode::Profile => {
-                    reference_audio.ok_or(EngineError::TaskUnavailable)?
-                }
+            let catalog = TtsVoiceCatalog::runtime().map_err(|_| EngineError::TaskUnavailable)?;
+            let entry = catalog.voice(voice_id).ok_or(EngineError::InvalidRequest)?;
+            let reference_audio_required = entry.requires_reference_profile();
+            let reference_audio = if reference_audio_required {
+                Some(reference_audio.ok_or(EngineError::TaskUnavailable)?)
+            } else {
+                None
             };
             let files = NativeTtsPocketModelFiles {
                 lm_flow_file_id: "lm-flow".to_owned(),
@@ -244,7 +239,7 @@ pub fn build_installed_tts_provider_with_reference(
                 vocab_path: catalog_path_for_voice(&bindings, "vocab")?,
                 token_scores_file_id: "token-scores".to_owned(),
                 token_scores_path: catalog_path_for_voice(&bindings, "token-scores")?,
-                reference_audio: Some(reference_audio),
+                reference_audio,
                 reference_text: reference_text.and_then(|text| {
                     if text.trim().is_empty() {
                         None
@@ -252,6 +247,7 @@ pub fn build_installed_tts_provider_with_reference(
                         Some(text)
                     }
                 }),
+                reference_audio_required,
             };
             NativeTtsBackend::from_catalog_pockettts_model(&bindings.task_binding, files)?
         }
@@ -325,28 +321,6 @@ fn catalog_path_for_voice(
         .get(file_id)
         .cloned()
         .ok_or(EngineError::InvalidRequest)
-}
-
-#[cfg(feature = "native-sherpa-tts")]
-fn load_internal_reference_audio(
-    bindings: &SpeechPackBindings,
-) -> Result<NativeTtsReferenceAudio, EngineError> {
-    let path = catalog_path_for_voice(bindings, "reference-audio")?;
-    let bytes = std::fs::read(&path).map_err(|_| EngineError::TaskUnavailable)?;
-    if bytes.len() < 44 || bytes.get(0..4) != Some(b"RIFF") || bytes.get(8..12) != Some(b"WAVE") {
-        return Err(EngineError::InvalidRequest);
-    }
-    let channels = u16::from_le_bytes(bytes[22..24].try_into().map_err(|_| EngineError::InvalidRequest)?);
-    let sample_rate = i32::from_le_bytes(bytes[24..28].try_into().map_err(|_| EngineError::InvalidRequest)?);
-    let bits = u16::from_le_bytes(bytes[34..36].try_into().map_err(|_| EngineError::InvalidRequest)?);
-    if channels != 1 || bits != 16 {
-        return Err(EngineError::InvalidRequest);
-    }
-    let samples = bytes[44..]
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes(chunk.try_into().expect("sample")) as f32 / 32768.0)
-        .collect();
-    NativeTtsReferenceAudio::new(sample_rate, samples).map_err(|_| EngineError::InvalidRequest)
 }
 
 fn catalog_voice_task(task: SpeechCatalogTask) -> VoiceTask {

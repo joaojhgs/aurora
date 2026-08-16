@@ -12,8 +12,8 @@ import hashlib
 import json
 import shutil
 import subprocess
-import sys
 import tarfile
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +27,22 @@ REPRODUCIBLE_TAR_UNAME = ""
 REPRODUCIBLE_TAR_GNAME = ""
 REPRODUCIBLE_TAR_FILE_MODE = 0o644
 REPRODUCIBLE_TAR_DIR_MODE = 0o755
+RUNTIME_ONNX_FILES = (
+    "decoder.int8.onnx",
+    "encoder.onnx",
+    "lm_flow.int8.onnx",
+    "lm_main.int8.onnx",
+    "text_conditioner.onnx",
+)
+RUNTIME_COMMON_FILES = (
+    *RUNTIME_ONNX_FILES,
+    "vocab.json",
+    "token_scores.json",
+    "pocket_protocol.json",
+    "bos_before_voice.bin",
+    "README.md",
+    "capability.json",
+)
 
 
 class ConversionError(RuntimeError):
@@ -52,12 +68,18 @@ def pack_spec(sources: dict[str, Any], pack_id: str) -> dict[str, Any]:
     raise ConversionError(f"unknown pack {pack_id}")
 
 
-def write_protocol(pack_dir: Path, protocol: dict[str, Any], bos_path: Path | None) -> None:
+def write_protocol(
+    pack_dir: Path,
+    protocol: dict[str, Any],
+    bos_path: Path,
+    fixed_voice_state: dict[str, Any] | None,
+) -> None:
     payload = dict(protocol)
-    if bos_path is not None:
-        # String form is required: nlohmann json.value(..., std::string())
-        # throws if this key is an object, which aborts the native Sherpa process.
-        payload["bos_before_voice"] = bos_path.name
+    # String form is required: nlohmann json.value(..., std::string())
+    # throws if this key is an object, which aborts the native Sherpa process.
+    payload["bos_before_voice"] = bos_path.name
+    if fixed_voice_state is not None:
+        payload["fixed_voice_state"] = fixed_voice_state
     (pack_dir / "pocket_protocol.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -65,11 +87,10 @@ def write_protocol(pack_dir: Path, protocol: dict[str, Any], bos_path: Path | No
 
 
 def write_bos(pack_dir: Path, values: list[float], shape: list[int]) -> Path:
-    import array
+    import struct
 
     path = pack_dir / "bos_before_voice.bin"
-    raw = array.array("f", values)
-    path.write_bytes(raw.tobytes())
+    path.write_bytes(struct.pack(f"<{len(values)}f", *values))
     expected = 1
     for dim in shape:
         expected *= dim
@@ -79,18 +100,44 @@ def write_bos(pack_dir: Path, values: list[float], shape: list[int]) -> Path:
 
 
 def optimize_onnx_files(pack_dir: Path) -> dict[str, Any]:
-    from importlib.util import module_from_spec, spec_from_file_location
-
     optimizer_path = Path(__file__).with_name("optimize_onnx_graph.py")
-    spec = spec_from_file_location("pockettts_optimize_onnx_graph", optimizer_path)
-    if spec is None or spec.loader is None:
-        raise ConversionError("unable to load graph optimizer")
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
     stats: dict[str, Any] = {}
-    for path in sorted(pack_dir.glob("*.onnx")):
-        stats[path.name] = module.optimize_file(path)
+    for name in RUNTIME_ONNX_FILES:
+        path = pack_dir / name
+        if not path.is_file():
+            raise ConversionError(f"runtime graph {name} is missing before optimization")
+        stats[path.name] = _run_optimize_onnx(optimizer_path, path)
     return stats
+
+
+def _run_optimize_onnx(optimizer_path: Path, model: Path) -> dict[str, int]:
+    result = subprocess.run(
+        [_export_python(), str(optimizer_path), str(model)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        suffix = f": {detail[-2_000:]}" if detail else ""
+        raise ConversionError(f"failed to optimize ONNX graph {model.name}{suffix}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ConversionError(
+            f"optimizer returned invalid JSON for ONNX graph {model.name}"
+        ) from exc
+    expected = {"removed_identity", "deduplicated_initializers"}
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected
+        or any(
+            not isinstance(payload[key], int) or isinstance(payload[key], bool) or payload[key] < 0
+            for key in expected
+        )
+    ):
+        raise ConversionError(f"optimizer returned invalid stats for ONNX graph {model.name}")
+    return payload
 
 
 def archive_pack(pack_dir: Path, archive: Path) -> dict[str, Any]:
@@ -138,24 +185,77 @@ def _sorted_archive_paths(pack_dir: Path) -> list[Path]:
     return members
 
 
-def write_internal_reference(
-    pack_dir: Path, sample_rate: int = 24_000, seconds: float = 0.5
-) -> Path:
-    import math
-    import struct
-    import wave
+def _runtime_file_names(source_mode: str) -> tuple[str, ...]:
+    if source_mode == "public-fixed-voice":
+        return (*RUNTIME_COMMON_FILES, "fixed_voice_state.bin")
+    if source_mode == "gated":
+        return RUNTIME_COMMON_FILES
+    raise ConversionError(f"unknown weights source {source_mode}")
 
-    path = pack_dir / "internal_reference.wav"
-    frames = int(sample_rate * seconds)
-    with wave.open(str(path), "w") as wav:
-        wav.setnchannels(1)
-        wav.setsampwidth(2)
-        wav.setframerate(sample_rate)
-        payload = bytearray()
-        for index in range(frames):
-            sample = int(8_000 * math.sin(2 * math.pi * 220 * index / sample_rate))
-            payload.extend(struct.pack("<h", sample))
-        wav.writeframes(payload)
+
+def _stage_runtime_pack(source: Path, dest: Path, source_mode: str) -> tuple[str, ...]:
+    expected = _runtime_file_names(source_mode)
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    for name in expected:
+        path = source / name
+        if path.is_symlink() or not path.is_file():
+            raise ConversionError(f"required runtime pack file {name} is missing")
+        shutil.copy2(path, dest / name)
+    actual = tuple(sorted(path.name for path in dest.iterdir()))
+    if actual != tuple(sorted(expected)):
+        raise ConversionError("runtime pack staging closure is not exact")
+    return expected
+
+
+def _load_fixed_voice_metadata(export_dir: Path) -> dict[str, Any]:
+    metadata_path = export_dir / "fixed_voice_state.json"
+    state_path = export_dir / "fixed_voice_state.bin"
+    if not metadata_path.is_file() or not state_path.is_file():
+        raise ConversionError("public pack export is missing fixed voice state")
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    expected_keys = {
+        "schema_version",
+        "file",
+        "dtype",
+        "layers",
+        "frames",
+        "heads",
+        "head_dim",
+        "byte_size",
+        "sha256",
+    }
+    if set(payload) != expected_keys:
+        raise ConversionError("fixed voice state metadata fields are invalid")
+    if payload["schema_version"] != 1 or payload["file"] != state_path.name:
+        raise ConversionError("fixed voice state metadata identity is invalid")
+    if payload["dtype"] != "float32-le":
+        raise ConversionError("fixed voice state dtype must be float32-le")
+    dimensions = tuple(payload[name] for name in ("layers", "frames", "heads", "head_dim"))
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in dimensions
+    ):
+        raise ConversionError("fixed voice state dimensions must be positive integers")
+    layers, frames, heads, head_dim = dimensions
+    expected_size = layers * 2 * frames * heads * head_dim * 4
+    if payload["byte_size"] != expected_size or state_path.stat().st_size != expected_size:
+        raise ConversionError("fixed voice state byte size is inconsistent")
+    sha256 = payload["sha256"]
+    if (
+        not isinstance(sha256, str)
+        or len(sha256) != 64
+        or any(ch not in "0123456789abcdef" for ch in sha256)
+        or sha256_file(state_path) != sha256
+    ):
+        raise ConversionError("fixed voice state checksum is invalid")
+    return payload
+
+
+def _require_exported_bos(export_dir: Path) -> Path:
+    path = export_dir / "bos_before_voice.bin"
+    if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+        raise ConversionError("official export did not produce bos_before_voice.bin")
     return path
 
 
@@ -195,7 +295,6 @@ def convert_pack(
     *,
     cache_root: Path = DEFAULT_CACHE,
     dry_run: bool = False,
-    allow_unoptimized: bool = False,
     weights_source: str | None = None,
 ) -> dict[str, Any]:
     sources = load_sources()
@@ -218,29 +317,55 @@ def convert_pack(
     }
     if dry_run:
         return report
-    pack_dir.mkdir(parents=True, exist_ok=True)
+    cache_root.mkdir(parents=True, exist_ok=True)
     helper_pin = export_helper_pin(sources)
     helper = _ensure_export_helper(cache_root / "export-helper", sources)
+    kyutai_pin = kyutai_source_pin(sources)
+    kyutai_source = _ensure_pinned_kyutai_source(
+        cache_root / "kyutai-pocket-tts-src",
+        kyutai_pin["repository"],
+        kyutai_pin["commit"],
+    )
     report["export_helper"] = str(helper)
     report["export_helper_repository"] = helper_pin["repository"]
     report["export_helper_commit"] = helper_pin["commit"]
-    _run_official_export(helper, spec, pack_dir, source_mode)
-    _ensure_sherpa_tokenizer(pack_dir)
-    _inline_pack_onnx(pack_dir, helper / "onnx")
-    bos = _extract_bos(spec["kyutai_config"], pack_dir)
-    write_protocol(pack_dir, spec["protocol"], bos)
-    write_internal_reference(pack_dir)
-    report["capability"] = write_capability(pack_dir, spec, source_mode)
-    _write_model_card(pack_dir, spec, sources, source_mode)
-    try:
-        report["graph_opt"] = optimize_onnx_files(pack_dir)
-    except Exception as exc:
-        if not allow_unoptimized:
+    report["kyutai_source_repository"] = kyutai_pin["repository"]
+    report["kyutai_source_commit"] = kyutai_pin["commit"]
+    with tempfile.TemporaryDirectory(prefix=f".{spec['pack_id']}-", dir=cache_root) as temp:
+        work_root = Path(temp)
+        export_dir = work_root / "export"
+        staged_pack = work_root / spec["pack_id"]
+        export_dir.mkdir()
+        _run_official_export(
+            helper,
+            spec,
+            export_dir,
+            source_mode,
+            sources_path=SOURCES_PATH,
+            kyutai_source=kyutai_source,
+            cache_root=cache_root / "hf-cache",
+        )
+        _ensure_sherpa_tokenizer(export_dir)
+        _inline_pack_onnx(export_dir, helper / "onnx")
+        bos = _require_exported_bos(export_dir)
+        fixed_voice_state = (
+            _load_fixed_voice_metadata(export_dir) if source_mode == "public-fixed-voice" else None
+        )
+        write_protocol(export_dir, spec["protocol"], bos, fixed_voice_state)
+        report["capability"] = write_capability(export_dir, spec, source_mode)
+        _write_model_card(export_dir, spec, sources, source_mode)
+        try:
+            report["graph_opt"] = optimize_onnx_files(export_dir)
+        except Exception as exc:
             raise ConversionError(f"graph optimization failed: {exc}") from exc
-        report["graph_opt_error"] = str(exc)
-        report["unoptimized"] = True
-    archive = cache_root / f"{spec['pack_id']}.tar.bz2"
-    report["archive"] = archive_pack(pack_dir, archive)
+        report["runtime_files"] = list(_stage_runtime_pack(export_dir, staged_pack, source_mode))
+        temp_archive = work_root / f"{spec['pack_id']}.tar.bz2"
+        report["archive"] = archive_pack(staged_pack, temp_archive)
+        final_archive = cache_root / temp_archive.name
+        if pack_dir.exists():
+            shutil.rmtree(pack_dir)
+        shutil.move(str(staged_pack), str(pack_dir))
+        temp_archive.replace(final_archive)
     (pack_dir / "conversion_manifest.json").write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -255,6 +380,16 @@ def export_helper_pin(sources: dict[str, Any] | None = None) -> dict[str, str]:
     commit = str(helper.get("commit") or "").strip().lower()
     if not repository or len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
         raise ConversionError("export helper repository and full commit pin are required")
+    return {"repository": repository, "commit": commit}
+
+
+def kyutai_source_pin(sources: dict[str, Any] | None = None) -> dict[str, str]:
+    payload = sources if sources is not None else load_sources()
+    source = payload.get("kyutai_source") or {}
+    repository = str(source.get("repository") or "").strip()
+    commit = str(source.get("commit") or "").strip().lower()
+    if not repository or len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
+        raise ConversionError("Kyutai source repository and full commit pin are required")
     return {"repository": repository, "commit": commit}
 
 
@@ -349,21 +484,85 @@ def _ensure_export_helper(dest: Path, sources: dict[str, Any] | None = None) -> 
     return _stage_clean_helper(source, dest)
 
 
+def _verify_pinned_kyutai_source(source: Path, repository: str, commit: str) -> None:
+    if not (source / ".git").is_dir():
+        raise ConversionError("pinned Kyutai source is not a git checkout")
+    head = _run_git("rev-parse", "HEAD", cwd=source).lower()
+    if head != commit.lower():
+        raise ConversionError(f"Kyutai source HEAD {head} != pin {commit}")
+    origin = _run_git("remote", "get-url", "origin", cwd=source)
+    if _normalize_git_url(origin) != _normalize_git_url(repository):
+        raise ConversionError(f"Kyutai source origin {origin} != {repository}")
+    if _run_git("status", "--porcelain", cwd=source) != "":
+        raise ConversionError("pinned Kyutai source checkout is dirty")
+    if not (source / "pocket_tts/config/french_24l.yaml").is_file():
+        raise ConversionError("pinned Kyutai source is missing multilingual configs")
+
+
+def _kyutai_source_matches_pin(source: Path, repository: str, commit: str) -> bool:
+    try:
+        _verify_pinned_kyutai_source(source, repository, commit)
+        return True
+    except ConversionError:
+        return False
+
+
+def _fetch_pinned_kyutai_source(source: Path, repository: str, commit: str) -> None:
+    source.mkdir(parents=True, exist_ok=True)
+    _run_git("init", cwd=source)
+    _configure_origin(source, repository)
+    try:
+        _run_git("fetch", "--depth", "1", "origin", commit, cwd=source)
+    except ConversionError as exc:
+        raise ConversionError(f"pinned Kyutai source {commit} is unavailable from origin") from exc
+    _run_git("checkout", "--detach", "FETCH_HEAD", cwd=source)
+    _verify_pinned_kyutai_source(source, repository, commit)
+
+
+def _ensure_pinned_kyutai_source(source: Path, repository: str, commit: str) -> Path:
+    if _kyutai_source_matches_pin(source, repository, commit):
+        return source
+    if source.exists():
+        shutil.rmtree(source)
+    _fetch_pinned_kyutai_source(source, repository, commit)
+    if not _kyutai_source_matches_pin(source, repository, commit):
+        raise ConversionError("Kyutai source is not a clean checkout of the pinned commit")
+    return source
+
+
 def _export_python() -> str:
     venv = REPO_ROOT / ".artifacts/pockettts/export-venv/bin/python"
-    return str(venv) if venv.is_file() else sys.executable
+    if not venv.is_file():
+        raise ConversionError(
+            "pinned PocketTTS export environment is missing; provision "
+            ".artifacts/pockettts/export-venv before conversion"
+        )
+    return str(venv)
 
 
 def _run_official_export(
-    helper: Path, spec: dict[str, Any], pack_dir: Path, source_mode: str
+    helper: Path,
+    spec: dict[str, Any],
+    pack_dir: Path,
+    source_mode: str,
+    *,
+    sources_path: Path,
+    kyutai_source: Path,
+    cache_root: Path,
 ) -> None:
     cmd = [
         _export_python(),
         str(Path(__file__).with_name("run_official_export.py")),
         "--helper",
         str(helper),
-        "--language",
-        spec["kyutai_config"],
+        "--sources",
+        str(sources_path),
+        "--pack",
+        spec["pack_id"],
+        "--kyutai-source",
+        str(kyutai_source),
+        "--cache-root",
+        str(cache_root),
         "--output",
         str(pack_dir),
         "--weights-source",
@@ -399,14 +598,7 @@ def _ensure_sherpa_tokenizer(pack_dir: Path) -> None:
 
 
 def _inline_pack_onnx(pack_dir: Path, helper_onnx: Path) -> None:
-    from importlib.util import module_from_spec, spec_from_file_location
-
     export_path = Path(__file__).with_name("run_official_export.py")
-    spec = spec_from_file_location("run_official_export", export_path)
-    if spec is None or spec.loader is None:
-        raise ConversionError("unable to load export helper")
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
     pairs = (
         ("mimi_encoder.onnx", "encoder.onnx"),
         ("text_conditioner.onnx", "text_conditioner.onnx"),
@@ -419,51 +611,25 @@ def _inline_pack_onnx(pack_dir: Path, helper_onnx: Path) -> None:
             sidecar.is_file() or not dest.is_file() or dest.stat().st_size < 1_000_000
         )
         if needs_inline:
-            module.inline_onnx_file(src, dest)
+            _run_inline_onnx(export_path, src, dest)
         elif dest.is_file():
-            module.inline_onnx_file(dest, dest)
+            _run_inline_onnx(export_path, dest, dest)
 
 
-def _extract_bos(language: str, pack_dir: Path) -> Path | None:
-    existing = pack_dir / "bos_before_voice.bin"
-    if existing.is_file() and existing.stat().st_size > 0:
-        return existing
-    source = pack_dir / "weight_source.json"
-    if source.is_file():
-        payload = json.loads(source.read_text(encoding="utf-8"))
-        weights = Path(payload.get("weights", ""))
-        if weights.is_file():
-            from importlib.util import module_from_spec, spec_from_file_location
-
-            export_path = Path(__file__).with_name("run_official_export.py")
-            spec = spec_from_file_location("run_official_export", export_path)
-            if spec is not None and spec.loader is not None:
-                module = module_from_spec(spec)
-                spec.loader.exec_module(module)
-                bos = module._extract_bos_from_safetensors(weights, pack_dir)
-                if bos is not None:
-                    return bos
-    try:
-        from pocket_tts import TTSModel
-    except ImportError:
-        return None
-    model = TTSModel.load_model(language=language)
-    tensor = None
-    for name in ("bos_before_voice", "bos_emb"):
-        if hasattr(model, name):
-            tensor = getattr(model, name)
-            break
-        flow = getattr(model, "flow_lm", None)
-        if flow is not None and hasattr(flow, name):
-            tensor = getattr(flow, name)
-            break
-    if tensor is None:
-        return None
-    values = tensor.detach().cpu().float().reshape(-1).tolist()
-    shape = [int(dim) for dim in tensor.shape]
-    if len(shape) == 2:
-        shape = [1, *shape]
-    return write_bos(pack_dir, values, shape)
+def _run_inline_onnx(export_path: Path, source: Path, output: Path) -> None:
+    result = subprocess.run(
+        [
+            _export_python(),
+            str(export_path),
+            "--inline-source",
+            str(source),
+            "--inline-output",
+            str(output),
+        ],
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ConversionError(f"failed to inline ONNX graph {source.name}")
 
 
 def _write_model_card(
@@ -504,7 +670,6 @@ def _args() -> argparse.Namespace:
     parser.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--allow-unoptimized", action="store_true")
     parser.add_argument(
         "--weights-source",
         choices=("public-fixed-voice", "gated"),
@@ -519,7 +684,6 @@ def main() -> int:
         args.pack,
         cache_root=args.cache_root,
         dry_run=args.dry_run,
-        allow_unoptimized=args.allow_unoptimized,
         weights_source=args.weights_source,
     )
     if args.json:

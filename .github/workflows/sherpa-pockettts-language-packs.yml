@@ -45,22 +45,48 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            .artifacts/pockettts/export-venv
             .artifacts/pockettts/language-packs/export-helper-src
+            .artifacts/pockettts/language-packs/kyutai-pocket-tts-src
             .artifacts/pockettts/language-packs/hf-cache
-          key: pockettts-language-packs-${{ hashFiles('tools/voice-runtime/pockettts-packs/language_pack_sources.json') }}
+          key: pockettts-language-packs-${{ hashFiles('tools/voice-runtime/pockettts-packs/language_pack_sources.json', '.github/workflows/sherpa-pockettts-language-packs.yml') }}
           restore-keys: |
             pockettts-language-packs-
 
+      - name: Provision pinned PocketTTS exporter
+        run: |
+          uv venv --python 3.11 --allow-existing .artifacts/pockettts/export-venv
+          uv pip install --python .artifacts/pockettts/export-venv/bin/python \
+            --index https://download.pytorch.org/whl/cpu \
+            'torch==2.13.0+cpu'
+          uv pip install --python .artifacts/pockettts/export-venv/bin/python \
+            'beartype==0.22.9' \
+            'einops==0.8.2' \
+            'huggingface-hub==1.27.0' \
+            'numpy==2.4.6' \
+            'onnx==1.22.0' \
+            'onnxruntime==1.28.0' \
+            'onnxscript==0.7.1' \
+            'pydantic==2.13.4' \
+            'requests==2.34.2' \
+            'safetensors==0.8.0' \
+            'scipy==1.17.1' \
+            'sentencepiece==0.2.2' \
+            'soundfile==0.14.0' \
+            'transformers==5.15.0'
+
       - name: Convert English current-generation pack
         run: |
-          uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+          .artifacts/pockettts/export-venv/bin/python \
+            tools/voice-runtime/pockettts-packs/convert_language_pack.py \
             --pack aurora-pockettts-en-2026-04 \
             --weights-source public-fixed-voice \
             --json
 
       - name: Convert French newer-protocol pack
         run: |
-          uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+          .artifacts/pockettts/export-venv/bin/python \
+            tools/voice-runtime/pockettts-packs/convert_language_pack.py \
             --pack aurora-pockettts-fr-24l \
             --weights-source public-fixed-voice \
             --json

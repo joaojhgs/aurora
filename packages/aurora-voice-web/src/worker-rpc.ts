@@ -1,5 +1,6 @@
 import {
   AURORA_VOICE_WORKER_MAX_REQUEST_ID,
+  AURORA_VOICE_WORKER_MAX_TIMEOUT_MS,
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   AuroraVoiceWebRuntimeError,
   type AuroraVoiceWorkerCommand,
@@ -12,7 +13,6 @@ import {
 
 const DEFAULT_MAX_IN_FLIGHT = 16
 const DEFAULT_TIMEOUT_MS = 5_000
-const MAX_TIMEOUT_MS = 120_000
 
 export interface AuroraBrowserWorkerPort {
   postMessage(message: AuroraVoiceWorkerRequestEnvelope, transfer?: readonly Transferable[]): void
@@ -46,7 +46,12 @@ export class AuroraAcknowledgedWorkerHost implements AuroraVoiceWorkerHost {
 
   constructor(private readonly worker: AuroraBrowserWorkerPort, options: { readonly maxInFlight?: number; readonly timeoutMs?: number } = {}) {
     this.maxInFlight = boundedInteger(options.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT, 'maxInFlight', 1, 256)
-    this.defaultTimeoutMs = boundedInteger(options.timeoutMs ?? DEFAULT_TIMEOUT_MS, 'timeoutMs', 1, MAX_TIMEOUT_MS)
+    this.defaultTimeoutMs = boundedInteger(
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      'timeoutMs',
+      1,
+      AURORA_VOICE_WORKER_MAX_TIMEOUT_MS
+    )
     worker.addEventListener('message', this.onMessage)
     worker.addEventListener('messageerror', this.onFatal)
     worker.addEventListener('error', this.onFatal)
@@ -67,7 +72,12 @@ export class AuroraAcknowledgedWorkerHost implements AuroraVoiceWorkerHost {
       const timer = setTimeout(() => {
         this.pending.delete(requestId)
         reject(new AuroraVoiceWebRuntimeError('worker_timeout', 'Voice worker did not respond'))
-      }, boundedInteger(options.timeoutMs ?? this.defaultTimeoutMs, 'timeoutMs', 1, MAX_TIMEOUT_MS))
+      }, boundedInteger(
+        options.timeoutMs ?? this.defaultTimeoutMs,
+        'timeoutMs',
+        1,
+        AURORA_VOICE_WORKER_MAX_TIMEOUT_MS
+      ))
       this.pending.set(requestId, { resolve, reject, timer })
       try {
         this.worker.postMessage(envelope, options.transfer ?? [])
@@ -101,7 +111,10 @@ export class AuroraAcknowledgedWorkerHost implements AuroraVoiceWorkerHost {
     clearTimeout(pending.timer)
     this.pending.delete(envelope.requestId)
     if (envelope.response.type === 'reject') {
-      pending.reject(new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request'))
+      pending.reject(new AuroraVoiceWebRuntimeError(
+        safeWorkerRejectReason(envelope.response.reason),
+        'Voice worker rejected the request'
+      ))
       return
     }
     pending.resolve(envelope.response)
@@ -121,6 +134,12 @@ export class AuroraAcknowledgedWorkerHost implements AuroraVoiceWorkerHost {
     if (this.nextRequestId > AURORA_VOICE_WORKER_MAX_REQUEST_ID) this.nextRequestId = 1
     return requestId
   }
+}
+
+function safeWorkerRejectReason(reason: unknown): string {
+  return typeof reason === 'string' && /^[a-z_]{1,48}$/.test(reason)
+    ? reason
+    : 'worker_rejected'
 }
 
 function validateResponseEnvelope(data: unknown): AuroraVoiceWorkerResponseEnvelope | null {

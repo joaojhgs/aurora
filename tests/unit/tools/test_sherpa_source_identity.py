@@ -106,6 +106,58 @@ def test_wrapper_rejects_mutated_extracted_tree(tmp_path: Path) -> None:
         wrapper.verify_source_identity(manifest, artifact_root, source_root)
 
 
+def test_patched_tree_allows_only_the_two_pinned_escaping_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_POCKETTTS_PATCHED_FILES", {})
+    regular = ("file", "1", hashlib.sha256(b"x").hexdigest())
+    archive_records = {
+        "CMakeLists.txt": regular,
+        **{
+            relative: ("symlink", target)
+            for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+        },
+    }
+    source_records = {"CMakeLists.txt": regular}
+
+    _, entry_count = wrapper._verify_patched_tree(archive_records, source_records, tmp_path)
+
+    assert entry_count == 1
+
+
+def test_patched_tree_rejects_a_retained_escaping_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_POCKETTTS_PATCHED_FILES", {})
+    archive_records = {
+        relative: ("symlink", target)
+        for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+    }
+    retained_path = next(iter(archive_records))
+    source_records = {retained_path: archive_records[retained_path]}
+
+    with pytest.raises(wrapper.SourceIdentityError, match="unsafe_link"):
+        wrapper._verify_patched_tree(archive_records, source_records, tmp_path)
+
+
+def test_patched_tree_rejects_changed_omitted_symlink_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_POCKETTTS_PATCHED_FILES", {})
+    archive_records = {
+        relative: ("symlink", target)
+        for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+    }
+    changed_path = next(iter(archive_records))
+    archive_records[changed_path] = ("symlink", "/unexpected/upstream/target")
+
+    with pytest.raises(wrapper.SourceIdentityError, match="omitted sherpa symlink changed"):
+        wrapper._verify_patched_tree(archive_records, {}, tmp_path)
+
+
 def test_wrapper_rejects_cmake_source_mismatch(tmp_path: Path) -> None:
     wrapper = load_wrapper()
     _, _, source_root = write_fixture(tmp_path)

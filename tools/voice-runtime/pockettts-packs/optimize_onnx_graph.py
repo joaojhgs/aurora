@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +122,7 @@ def _args() -> argparse.Namespace:
 def main() -> int:
     args = _args()
     stats = optimize_file(args.model, args.output)
-    print(stats)
+    print(json.dumps(stats, sort_keys=True))
     return 0
 
 

@@ -243,7 +243,15 @@ def _extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str) -> None:
         raise ReleaseError("unable to load pinned source extractor")
     module = module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.extract_pinned_source_tar(archive, dest, mode=mode)
+    # The archive digest/size were verified before this call. Omit the two
+    # stale absolute symlinks in upstream's unused Go example; never extract
+    # an entry whose target escapes the staging root.
+    module.extract_pinned_source_tar(
+        archive,
+        dest,
+        mode=mode,
+        omit_escaping_symlinks=True,
+    )
 
 
 def extract_source_archive(archive: Path, output_root: Path) -> Path:

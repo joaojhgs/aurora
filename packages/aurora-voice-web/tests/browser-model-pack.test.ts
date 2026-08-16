@@ -385,6 +385,7 @@ describe('browser model pack verification', () => {
       extractTarBzip2Archive: async (_bytes, request) => {
         expect(request.expectedRoot).toBe('archive-root')
         expect(request.expectedPaths).toEqual(['archive-root/model.onnx', 'archive-root/tokens.txt'])
+        expect(request.maxFileBytes).toBe(384 * 1024 * 1024)
         return [
           { path: 'archive-root/model.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes },
           { path: 'archive-root/tokens.txt', byteSize: tokensBytes.byteLength, sha256: await sha256Hex(tokensBytes), bytes: tokensBytes }

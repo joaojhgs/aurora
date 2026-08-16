@@ -42,7 +42,7 @@ REQUIRED_ARTIFACT_STATUSES = {
     "eigen-source-5.0.1": "selected",
     "simple-sentencepiece-source-v0.7": "selected",
     "nlohmann-json-source-v3.12.0": "selected",
-    "onnxruntime-linux-x64-release-1.27.0": "selected",
+    "onnxruntime-linux-x64-release-1.27.1": "selected",
     "cpal-crate-v0.18.1": "selected",
     "piper-phonemize-source-f3ff95af": "blocked",
     "espeak-ng-source-ed530aa1": "blocked",
@@ -377,9 +377,7 @@ def _validate_cpal_alignment(data: dict[str, Any], repo_root: Path) -> list[str]
         return [f"artifact {CPAL_ARTIFACT_ID} is required for CPAL lockfile alignment"]
 
     if artifact.get("version") != expected_version:
-        errors.append(
-            f"{CPAL_ARTIFACT_ID}.version must match {CPAL_LOCK_PATH}: {expected_version}"
-        )
+        errors.append(f"{CPAL_ARTIFACT_ID}.version must match {CPAL_LOCK_PATH}: {expected_version}")
     if artifact.get("sha256") != lock_checksum:
         errors.append(f"{CPAL_ARTIFACT_ID}.sha256 must match {CPAL_LOCK_PATH}: {lock_checksum}")
     if artifact.get("url") != expected_url:

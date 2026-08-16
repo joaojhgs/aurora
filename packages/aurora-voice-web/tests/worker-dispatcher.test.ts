@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+  AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceWebSession,
@@ -70,6 +71,76 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(port.messages[0]?.response).toMatchObject({
       type: 'ready',
       capabilities: { vad: true, kws: true, stt: true, tts: false }
+    })
+    expect(bridge.initializeCalls).toBe(1)
+  })
+
+  it('returns sanitized runtime rejection codes without exposing error messages', async () => {
+    const bridge = new FakeBridge()
+    bridge.initialize = async () => {
+      throw new AuroraVoiceWebRuntimeError('model_hash_mismatch', 'secret model path')
+    }
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+
+    await dispatcher.handleMessage(request(1, {
+      type: 'init',
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      maxFrameSamples: 4_800,
+      maxQueuedBytes: 320_000
+    }))
+
+    expect(port.messages[0]?.response).toEqual({
+      type: 'reject',
+      sessionId: null,
+      generation: 0,
+      sequence: null,
+      reason: 'model_hash_mismatch'
+    })
+    expect(JSON.stringify(port.messages)).not.toContain('secret model path')
+  })
+
+  it('accepts fixed-state PocketTTS sidecar roles at the worker boundary', async () => {
+    const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: false, tts: true } })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const files = [
+      ['protocol', 'pocket_protocol.json'],
+      ['bos', 'bos_before_voice.bin'],
+      ['fixed-state', 'fixed_voice_state.bin']
+    ] as const
+
+    await dispatcher.handleMessage(request(1, {
+      type: 'init',
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      maxFrameSamples: 4_800,
+      maxQueuedBytes: 320_000,
+      modelBindings: {
+        files: files.map(([fileId, name], index) => ({
+          task: 'tts' as const,
+          fileId,
+          virtualPath: `/${name}`,
+          sha256: String(index + 1).repeat(64),
+          byteLength: 1,
+          bytes: Uint8Array.from([index + 1])
+        })),
+        models: [{
+          task: 'tts',
+          family: 'pockettts',
+          kind: 'offline-tts',
+          files: [
+            { role: 'pocketProtocol', fileId: 'protocol', virtualPath: '/pocket_protocol.json' },
+            { role: 'bosBeforeVoice', fileId: 'bos', virtualPath: '/bos_before_voice.bin' },
+            { role: 'fixedVoiceState', fileId: 'fixed-state', virtualPath: '/fixed_voice_state.bin' }
+          ],
+          config: { referenceAudioMode: 'internal' }
+        }]
+      }
+    }))
+
+    expect(port.messages[0]?.response).toMatchObject({
+      type: 'ready',
+      capabilities: { tts: true }
     })
     expect(bridge.initializeCalls).toBe(1)
   })

@@ -9,8 +9,9 @@ use thiserror::Error;
 use crate::{canonical_json, sha256_hex, TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ};
 
 const EMBEDDED_SHERPA_TTS_CATALOG: &str = include_str!("../resources/sherpa_onnx_tts_catalog.json");
-const EMBEDDED_AURORA_POCKETTTS_OVERLAY: &str =
-    include_str!("../../../../tools/voice-runtime/pockettts-packs/aurora_pockettts_language_pack_catalog.json");
+const EMBEDDED_AURORA_POCKETTTS_OVERLAY: &str = include_str!(
+    "../../../../tools/voice-runtime/pockettts-packs/aurora_pockettts_language_pack_catalog.json"
+);
 const CATALOG_SCHEMA_VERSION: u32 = 1;
 const CATALOG_ID: &str = "sherpa-onnx-tts-models-v1";
 const CATALOG_REVISION: &str = "github-release-130612623-30d65b392bba8dfb";
@@ -198,7 +199,7 @@ pub struct TtsCatalogSource {
     pub checksum_sha256: String,
 }
 
-/// How PocketTTS obtains the reference waveform the current Sherpa path requires.
+/// How PocketTTS obtains its voice conditioning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TtsReferenceAudioMode {
@@ -385,8 +386,13 @@ impl TtsCatalogEntry {
             || capability.source_revision != PUBLIC_FIXED_VOICE_REVISION
             || capability.license != PUBLIC_FIXED_VOICE_LICENSE
             || capability.encoder_status != PUBLIC_FIXED_VOICE_ENCODER_STATUS
-            || self.bindings.reference_audio.as_deref()
-                != Some(&format!("{}/internal_reference.wav", self.archive.root))
+            || self.bindings.reference_audio.is_some()
+            || self.bindings.pocket_protocol.as_deref()
+                != Some(&format!("{}/pocket_protocol.json", self.archive.root))
+            || self.bindings.bos_before_voice.as_deref()
+                != Some(&format!("{}/bos_before_voice.bin", self.archive.root))
+            || self.bindings.fixed_voice_state.as_deref()
+                != Some(&format!("{}/fixed_voice_state.bin", self.archive.root))
             || self.requires_reference_profile()
         {
             return Err(TtsCatalogError::Invalid);
@@ -476,6 +482,12 @@ pub struct TtsCatalogBindings {
     pub token_scores_json: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reference_audio: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pocket_protocol: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bos_before_voice: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fixed_voice_state: Option<String>,
     #[serde(default)]
     pub model: String,
     #[serde(default)]
@@ -512,6 +524,9 @@ impl TtsCatalogBindings {
                     || self.vocab_json.is_some()
                     || self.token_scores_json.is_some()
                     || self.reference_audio.is_some()
+                    || self.pocket_protocol.is_some()
+                    || self.bos_before_voice.is_some()
+                    || self.fixed_voice_state.is_some()
                     || [
                         &self.model,
                         &self.config,
@@ -567,6 +582,20 @@ impl TtsCatalogBindings {
                         return Err(TtsCatalogError::Invalid);
                     }
                 }
+                let optional_sidecars = [
+                    (
+                        self.pocket_protocol.as_deref(),
+                        format!("{expected_prefix}pocket_protocol.json"),
+                    ),
+                    (
+                        self.bos_before_voice.as_deref(),
+                        format!("{expected_prefix}bos_before_voice.bin"),
+                    ),
+                    (
+                        self.fixed_voice_state.as_deref(),
+                        format!("{expected_prefix}fixed_voice_state.bin"),
+                    ),
+                ];
                 if !self.model.is_empty()
                     || !self.config.is_empty()
                     || !self.tokens.is_empty()
@@ -576,6 +605,13 @@ impl TtsCatalogBindings {
                             || !actual.is_some_and(|path| {
                                 safe_relative_path(path) && path.starts_with(&expected_prefix)
                             })
+                    })
+                    || optional_sidecars.iter().any(|(actual, expected)| {
+                        actual.is_some_and(|path| {
+                            path != expected.as_str()
+                                || !safe_relative_path(path)
+                                || !path.starts_with(&expected_prefix)
+                        })
                     })
                 {
                     return Err(TtsCatalogError::Invalid);
@@ -813,12 +849,31 @@ mod tests {
             TtsReferenceAudioMode::Internal
         );
         assert!(!english.requires_reference_profile());
-        assert_eq!(english.catalog_reference_audio_mode_label(), Some("internal"));
+        assert!(english.bindings.reference_audio.is_none());
+        assert_eq!(
+            english.bindings.pocket_protocol.as_deref(),
+            Some("aurora-pockettts-en-2026-04/pocket_protocol.json")
+        );
+        assert_eq!(
+            english.bindings.bos_before_voice.as_deref(),
+            Some("aurora-pockettts-en-2026-04/bos_before_voice.bin")
+        );
+        assert_eq!(
+            english.bindings.fixed_voice_state.as_deref(),
+            Some("aurora-pockettts-en-2026-04/fixed_voice_state.bin")
+        );
+        assert_eq!(
+            english.catalog_reference_audio_mode_label(),
+            Some("internal")
+        );
         assert_eq!(
             french.reference_audio_mode(),
             TtsReferenceAudioMode::Internal
         );
-        assert_eq!(french.catalog_reference_audio_mode_label(), Some("internal"));
+        assert_eq!(
+            french.catalog_reference_audio_mode_label(),
+            Some("internal")
+        );
         assert!(runtime.languages.iter().any(|language| language == "fr-fr"));
         let official = runtime
             .voice("standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26")
@@ -828,7 +883,10 @@ mod tests {
             TtsReferenceAudioMode::Profile
         );
         assert!(official.requires_reference_profile());
-        assert_eq!(official.catalog_reference_audio_mode_label(), Some("profile"));
+        assert_eq!(
+            official.catalog_reference_audio_mode_label(),
+            Some("profile")
+        );
         let piper = runtime
             .entries
             .iter()
@@ -841,20 +899,24 @@ mod tests {
             TtsReferenceAudioMode::Profile
         );
         assert_ne!(piper.reference_audio_mode(), TtsReferenceAudioMode::Profile);
-        assert!(english.archive.byte_size <= MAX_POCKETTTS_OVERLAY_ARCHIVE_BYTES);
-        assert!(french.archive.byte_size > MAX_ARCHIVE_BYTES);
-        assert!(french.archive.byte_size <= MAX_POCKETTTS_OVERLAY_ARCHIVE_BYTES);
+        assert!(english.archive.byte_size <= MAX_ARCHIVE_BYTES);
+        assert!(french.archive.byte_size <= MAX_ARCHIVE_BYTES);
+        assert!(MAX_POCKETTTS_OVERLAY_ARCHIVE_BYTES > MAX_ARCHIVE_BYTES);
     }
 
     #[test]
     fn overlay_rejects_placeholder_integrity_and_oversized_archives() {
-        let too_small = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen("\"byte_size\": 202924056", "\"byte_size\": 1", 1);
+        let too_small = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
+            "\"byte_size\": 75167501",
+            "\"byte_size\": 1",
+            1,
+        );
         assert_eq!(
             parse_aurora_pockettts_overlay(&too_small),
             Err(TtsCatalogError::Invalid)
         );
         let zero_sha = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
-            "\"sha256\": \"bb38a3597c9c90d3f341b821f3558a0ad812c664c962ad47393a1d8cc4a4f5c1\"",
+            "\"sha256\": \"eb7009f8e42d826a70e3f520501b33be7fbd7d60e2f8a798a69717ba81ff1063\"",
             "\"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\"",
             1,
         );
@@ -863,12 +925,21 @@ mod tests {
             Err(TtsCatalogError::Invalid)
         );
         let too_large = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
-            "\"byte_size\": 686925861",
+            "\"byte_size\": 271119980",
             "\"byte_size\": 1073741825",
             1,
         );
         assert_eq!(
             parse_aurora_pockettts_overlay(&too_large),
+            Err(TtsCatalogError::Invalid)
+        );
+        let missing_fixed_state = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
+            "\"fixed_voice_state\":",
+            "\"ignored_fixed_voice_state\":",
+            1,
+        );
+        assert_eq!(
+            parse_aurora_pockettts_overlay(&missing_fixed_state),
             Err(TtsCatalogError::Invalid)
         );
     }

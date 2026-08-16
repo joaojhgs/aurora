@@ -81,15 +81,19 @@ def _cargo() -> str:
     return "cargo"
 
 
-def native_smoke(pack_dir: Path, reference: Path, text: str) -> None:
+def native_smoke(pack_dir: Path, reference: Path | None, text: str) -> None:
     assert_pack(pack_dir)
     env = dict(os.environ)
-    lib_dir = REPO_ROOT / ".artifacts/sherpa-onnx/builds/linux-x86_64/install/lib"
+    default_lib_dir = REPO_ROOT / ".artifacts/sherpa-onnx/builds/linux-x86_64/install/lib"
+    lib_dir = Path(os.environ.get("AURORA_SHERPA_ONNX_LIB_DIR", str(default_lib_dir)))
     env["AURORA_SHERPA_ONNX_ENABLE_LIVE_POCKETTTS"] = "1"
     env["AURORA_SHERPA_ONNX_LIB_DIR"] = str(lib_dir)
     env["LD_LIBRARY_PATH"] = f"{lib_dir}:{env.get('LD_LIBRARY_PATH', '')}"
     env["AURORA_POCKETTTS_PACK_DIR"] = str(pack_dir.resolve())
-    env["AURORA_POCKETTTS_REF_WAV"] = str(reference.resolve())
+    if reference is None:
+        env.pop("AURORA_POCKETTTS_REF_WAV", None)
+    else:
+        env["AURORA_POCKETTTS_REF_WAV"] = str(reference.resolve())
     env["AURORA_POCKETTTS_TEXT"] = text
     result = subprocess.run(
         [
@@ -112,7 +116,7 @@ def native_smoke(pack_dir: Path, reference: Path, text: str) -> None:
         raise SystemExit(result.returncode)
 
 
-def wasm_smoke(pack_dir: Path, reference: Path, text: str) -> None:
+def wasm_smoke(pack_dir: Path, reference: Path | None, text: str) -> None:
     assert_pack(pack_dir)
     assets = Path(
         os.environ.get(
@@ -139,7 +143,10 @@ def wasm_smoke(pack_dir: Path, reference: Path, text: str) -> None:
             raise SystemExit(build.returncode)
     env = dict(os.environ)
     env["AURORA_POCKETTTS_PACK_DIR"] = str(pack_dir.resolve())
-    env["AURORA_POCKETTTS_REF_WAV"] = str(reference.resolve())
+    if reference is None:
+        env.pop("AURORA_POCKETTTS_REF_WAV", None)
+    else:
+        env["AURORA_POCKETTTS_REF_WAV"] = str(reference.resolve())
     env["AURORA_POCKETTTS_TEXT"] = text
     env["AURORA_SHERPA_WASM_TTS_ROOT"] = str(assets.resolve())
     env["AURORA_ARTIFACTS_ROOT"] = str(REPO_ROOT / ".artifacts")
@@ -180,9 +187,7 @@ def main() -> int:
             args.cache_root / "aurora-pockettts-fr-24l",
         ]
     )
-    reference = args.reference_wav or (args.cache_root / "reference-smoke.wav")
-    if not reference.is_file():
-        write_reference_wav(reference)
+    default_reference = args.reference_wav or (args.cache_root / "reference-smoke.wav")
     for pack_dir in packs:
         if pack_dir is None:
             continue
@@ -190,6 +195,13 @@ def main() -> int:
             assert_pack(pack_dir)
             print(f"pack-check ok {pack_dir}")
             continue
+        entry = overlay_entry(pack_dir)
+        reference_required = (
+            entry is None or entry.get("capability", {}).get("reference_audio_mode") != "internal"
+        )
+        reference = default_reference if reference_required else None
+        if reference is not None and not reference.is_file():
+            write_reference_wav(reference)
         if args.runtime == "wasm":
             text = args.text or (
                 "Bonjour, ceci est un essai."

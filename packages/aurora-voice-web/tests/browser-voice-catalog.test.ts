@@ -32,12 +32,22 @@ describe('browser voice catalog', () => {
       .toContain('standard:pockettts:aurora-pockettts-fr-24l')
     expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]).toMatchObject({
       family: 'pockettts',
-      config: { referenceAudioMode: 'internal', referenceSampleRateHz: 24_000 }
+      config: { referenceAudioMode: 'internal' }
     })
-    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(true)
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.map((file) => file.role)).toEqual(expect.arrayContaining([
+      'pocketProtocol',
+      'bosBeforeVoice',
+      'fixedVoiceState'
+    ]))
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
     expect(french?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).toMatchObject({
       referenceAudioMode: 'internal'
     })
+    expect(french?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.map((file) => file.role)).toEqual(expect.arrayContaining([
+      'pocketProtocol',
+      'bosBeforeVoice',
+      'fixedVoiceState'
+    ]))
     expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).not.toHaveProperty('referenceAudioMode')
     expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
   })

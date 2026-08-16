@@ -1,6 +1,7 @@
 import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+  AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTtsAudio,
@@ -61,13 +62,13 @@ export class AuroraVoiceWorkerDispatcher {
     try {
       const response = await this.dispatch(request.command)
       this.reply(request.requestId, response, transferForResponse(response))
-    } catch {
+    } catch (error) {
       this.reply(request.requestId, {
         type: 'reject',
         sessionId: safeSessionIdFor(request.command),
         generation: safeGenerationFor(request.command),
         sequence: safeSequenceFor(request.command),
-        reason: 'worker_rejected'
+        reason: safeWorkerRejectReason(error)
       })
     }
   }
@@ -199,6 +200,16 @@ export class AuroraVoiceWorkerDispatcher {
       response
     }), transfer)
   }
+}
+
+function safeWorkerRejectReason(error: unknown): string {
+  if (
+    error instanceof AuroraVoiceWebRuntimeError &&
+    /^[a-z_]{1,48}$/.test(error.code)
+  ) {
+    return error.code
+  }
+  return 'worker_rejected'
 }
 
 function validateRequestEnvelope(data: unknown): AuroraVoiceWorkerRequestEnvelope | null {
@@ -397,7 +408,7 @@ function validModelDescriptor(model: unknown): boolean {
     typeof file === 'object' &&
     file !== null &&
     (file as { role?: unknown }).role !== undefined &&
-    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'referenceAudio'].includes(String((file as { role?: unknown }).role)) &&
+    ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'pocketProtocol', 'bosBeforeVoice', 'fixedVoiceState', 'referenceAudio'].includes(String((file as { role?: unknown }).role)) &&
     safeString((file as { fileId?: unknown }).fileId) &&
     safeVirtualPath((file as { virtualPath?: unknown }).virtualPath)
   ))

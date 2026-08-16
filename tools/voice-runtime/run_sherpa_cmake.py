@@ -16,16 +16,24 @@ from typing import Any
 SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
 AURORA_POCKETTTS_PATCHED_FILES = {
     "sherpa-onnx/csrc/offline-tts-pocket-model.h": (
-        "2972a1ae850c6cb3c94d2cba40fcf2abb6d0bf3452117bec698a92eceff8d541"
+        "53f1b87d998ba0e72340819fc0678df020d7280c917a9a8252e5f405a3a49e2f"
     ),
     "sherpa-onnx/csrc/offline-tts-pocket-model.cc": (
-        "6501af8e31f4777925ae5c8c2cd1f32525616d2c4ba7347e6dadd11ca9d0abec"
+        "07e7375f366cfff3c8652fd79ca854979721d3d30f6eeb04edc8399893983ac9"
     ),
     "sherpa-onnx/csrc/offline-tts-pocket-impl.h": (
-        "7e4391fd586161e02f933f0a143105fe6cbe1c87fed16c8ba089a14da8c53b64"
+        "a7896e6e8df22d678fb325f12440eb42137276542012ee4246225a8d65a29567"
     ),
-    "wasm/tts/CMakeLists.txt": (
-        "164713e3b4366934814bed691e5ff4fc41bedf06346e9f560202a3fecec14a77"
+    "wasm/tts/CMakeLists.txt": ("bae61a4165725f1d67d4d0f16274b2c5b4fff445e10dde2527050e630355ce11"),
+}
+OMITTED_PINNED_UPSTREAM_SYMLINKS = {
+    "scripts/go/_internal/vad-spoken-language-identification/main.go": (
+        "/Users/fangjun/open-source/sherpa-onnx/go-api-examples/"
+        "vad-spoken-language-identification/main.go"
+    ),
+    "scripts/go/_internal/vad-spoken-language-identification/run.sh": (
+        "/Users/fangjun/open-source/sherpa-onnx/go-api-examples/"
+        "vad-spoken-language-identification/run.sh"
     ),
 }
 
@@ -178,16 +186,23 @@ def _verify_patched_tree(
     source_root: Path,
 ) -> tuple[str, int]:
     extra = sorted(source_records.keys() - archive_records.keys())
-    missing = sorted(archive_records.keys() - source_records.keys())
-    if extra or missing:
+    missing = set(archive_records.keys() - source_records.keys())
+    expected_omissions = set(OMITTED_PINNED_UPSTREAM_SYMLINKS)
+    for relative, target in OMITTED_PINNED_UPSTREAM_SYMLINKS.items():
+        if archive_records.get(relative) != ("symlink", target):
+            raise SourceIdentityError(f"pinned omitted sherpa symlink changed: {relative}")
+    unexpected_missing = sorted(missing - expected_omissions)
+    retained_escaping_links = sorted(expected_omissions - missing)
+    if extra or unexpected_missing or retained_escaping_links:
         raise SourceIdentityError(
             "patched sherpa tree changed the archive file set"
             + (f" extra={extra[0]}" if extra else "")
-            + (f" missing={missing[0]}" if missing else "")
+            + (f" missing={unexpected_missing[0]}" if unexpected_missing else "")
+            + (f" unsafe_link={retained_escaping_links[0]}" if retained_escaping_links else "")
         )
     changed = sorted(
         path
-        for path in archive_records
+        for path in archive_records.keys() & source_records.keys()
         if archive_records[path] != source_records[path]
     )
     if set(changed) != set(AURORA_POCKETTTS_PATCHED_FILES):

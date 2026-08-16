@@ -6,7 +6,6 @@ import { join, normalize, relative, sep } from 'node:path'
 const repoRoot = normalize(join(import.meta.dirname, '..', '..', '..', '..'))
 const packageRoot = join(repoRoot, 'packages', 'aurora-voice-web')
 const packDir = requiredPath('AURORA_POCKETTTS_PACK_DIR')
-const referenceWav = requiredPath('AURORA_POCKETTTS_REF_WAV')
 const wasmRoot = requiredPath('AURORA_SHERPA_WASM_TTS_ROOT')
 const preparedAssetRoot = join(
   process.env.AURORA_ARTIFACTS_ROOT ?? join(repoRoot, '.artifacts'),
@@ -21,8 +20,9 @@ const packFiles = [
   { fileId: 'text-conditioner', role: 'textConditioner', name: 'text_conditioner.onnx' },
   { fileId: 'vocab', role: 'vocabJson', name: 'vocab.json' },
   { fileId: 'token-scores', role: 'tokenScoresJson', name: 'token_scores.json' },
-  { fileId: 'protocol', role: null, name: 'pocket_protocol.json' },
-  { fileId: 'bos', role: null, name: 'bos_before_voice.bin' }
+  { fileId: 'protocol', role: 'pocketProtocol', name: 'pocket_protocol.json' },
+  { fileId: 'bos', role: 'bosBeforeVoice', name: 'bos_before_voice.bin' },
+  { fileId: 'fixed-voice-state', role: 'fixedVoiceState', name: 'fixed_voice_state.bin' }
 ] as const
 
 let server: Server
@@ -122,10 +122,7 @@ test('synthesizes a locally built PocketTTS pack with the browser WebAssembly ru
             fileId: model.fileId,
             virtualPath: model.virtualPath
           })),
-        config: {
-          referenceSampleRateHz: 24_000,
-          maxFrames: 55
-        }
+        config: { referenceAudioMode: 'internal' }
       }]
     }
     const runtime = createAuroraBrowserVoiceRuntime({
@@ -141,8 +138,18 @@ test('synthesizes a locally built PocketTTS pack with the browser WebAssembly ru
       workerTimeoutMs: 60_000,
       sessionIdFactory: (ownerId: string, generation: number) => `${ownerId}:${generation}`
     })
-    const audio = await runtime.synthesizeSpeech({ text, generation: 1 })
-    await runtime.dispose()
+    let audio
+    try {
+      audio = await runtime.synthesizeSpeech({ text, generation: 1 })
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null &&
+        'code' in error && typeof error.code === 'string' && /^[a-z_]{1,48}$/.test(error.code)
+        ? error.code
+        : 'unknown'
+      throw new Error(`voice_smoke_${code}`)
+    } finally {
+      await runtime.dispose()
+    }
     return {
       sampleRateHz: audio.sampleRateHz,
       sampleCount: audio.sampleCount,
@@ -186,19 +193,17 @@ async function prepareNeutralTtsAssets(): Promise<void> {
   await fs.mkdir(preparedAssetRoot, { recursive: true })
   await copyNeutral(join(wasmRoot, 'sherpa-onnx-wasm-main-tts.js'), 'sherpa-onnx-wasm-main-tts.js')
   await copyNeutral(join(wasmRoot, 'sherpa-onnx-wasm-main-tts.wasm'), 'sherpa-onnx-wasm-main-tts.wasm')
-  await copyNeutral(join(wasmRoot, 'sherpa-onnx-tts.js'), 'sherpa-onnx-tts.js', '\nexport { createOfflineTts };\n')
+  await copyNeutral(join(wasmRoot, 'sherpa-onnx-tts.js'), 'sherpa-onnx-tts.js')
   const source = await fs.readFile(join(preparedAssetRoot, 'sherpa-onnx-wasm-main-tts.js'), 'utf8')
+  const helperSource = await fs.readFile(join(preparedAssetRoot, 'sherpa-onnx-tts.js'), 'utf8')
   expect(source).not.toMatch(/\.data(?:["'`)\s?&]|$)/i)
   expect(source).not.toMatch(/remote_package_size|getPreloadedPackage|expectedDataFileDownloads|PACKAGE_NAME/i)
+  expect(source).toMatch(/export\s+default/)
+  expect(helperSource).toContain('export { createOfflineTts, getDefaultOfflineTtsModelType };')
 }
 
-async function copyNeutral(sourcePath: string, name: string, suffix = ''): Promise<void> {
-  const target = join(preparedAssetRoot, name)
-  if (suffix === '') {
-    await (await nodeFsPromises).copyFile(sourcePath, target)
-    return
-  }
-  await (await nodeFsPromises).writeFile(target, `${await (await nodeFsPromises).readFile(sourcePath, 'utf8')}${suffix}`)
+async function copyNeutral(sourcePath: string, name: string): Promise<void> {
+  await (await nodeFsPromises).copyFile(sourcePath, join(preparedAssetRoot, name))
 }
 
 async function resolveSelectedModels(): Promise<readonly SelectedModel[]> {
@@ -206,7 +211,6 @@ async function resolveSelectedModels(): Promise<readonly SelectedModel[]> {
   for (const file of packFiles) {
     models.push(await selectedModel(file.fileId, file.role, `/${file.name}`, join(packDir, file.name)))
   }
-  models.push(await selectedModel('reference-audio', 'referenceAudio', '/reference.wav', referenceWav))
   return models
 }
 

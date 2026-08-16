@@ -4,7 +4,7 @@ import type { AuroraBrowserRawTtsEntry } from './browser-voice-catalog.js'
 export const AURORA_BROWSER_POCKETTTS_OVERLAY = {
   "schema_version": 1,
   "catalog_id": "aurora-sherpa-pockettts-language-packs-v1",
-  "revision": "bootstrap-en-fr-converted-v1",
+  "revision": "bootstrap-en-fr-fixed-state-v1",
   "temporary_bootstrap": true,
   "removal_point": "After GitHub release tag sherpa-pockettts-language-packs publishes stable archive URLs, replace overlay download URLs with those assets and delete .github/workflows/sherpa-pockettts-language-packs.yml convert/build steps.",
   "download_base": "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/",
@@ -12,24 +12,26 @@ export const AURORA_BROWSER_POCKETTTS_OVERLAY = {
     {
       "archive": {
         "asset_id": 900000001,
-        "byte_size": 202924056,
+        "byte_size": 75167501,
         "filename": "aurora-pockettts-en-2026-04.tar.bz2",
         "format": "tar_bzip2",
         "root": "aurora-pockettts-en-2026-04",
-        "sha256": "bb38a3597c9c90d3f341b821f3558a0ad812c664c962ad47393a1d8cc4a4f5c1",
-        "updated_at": "2026-08-15T23:15:26Z",
+        "sha256": "eb7009f8e42d826a70e3f520501b33be7fbd7d60e2f8a798a69717ba81ff1063",
+        "updated_at": "2026-08-16T05:29:31Z",
         "url": "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/aurora-pockettts-en-2026-04.tar.bz2"
       },
       "bindings": {
+        "bos_before_voice": "aurora-pockettts-en-2026-04/bos_before_voice.bin",
         "decoder": "aurora-pockettts-en-2026-04/decoder.int8.onnx",
         "encoder": "aurora-pockettts-en-2026-04/encoder.onnx",
+        "fixed_voice_state": "aurora-pockettts-en-2026-04/fixed_voice_state.bin",
         "lm_flow": "aurora-pockettts-en-2026-04/lm_flow.int8.onnx",
         "lm_main": "aurora-pockettts-en-2026-04/lm_main.int8.onnx",
         "model_card": "aurora-pockettts-en-2026-04/README.md",
+        "pocket_protocol": "aurora-pockettts-en-2026-04/pocket_protocol.json",
         "text_conditioner": "aurora-pockettts-en-2026-04/text_conditioner.onnx",
         "token_scores_json": "aurora-pockettts-en-2026-04/token_scores.json",
-        "vocab_json": "aurora-pockettts-en-2026-04/vocab.json",
-        "reference_audio": "aurora-pockettts-en-2026-04/internal_reference.wav"
+        "vocab_json": "aurora-pockettts-en-2026-04/vocab.json"
       },
       "capability": {
         "encoder_status": "zeroed_by_remove_voice_cloning_and_push",
@@ -56,24 +58,26 @@ export const AURORA_BROWSER_POCKETTTS_OVERLAY = {
     {
       "archive": {
         "asset_id": 900000002,
-        "byte_size": 686925861,
+        "byte_size": 271119980,
         "filename": "aurora-pockettts-fr-24l.tar.bz2",
         "format": "tar_bzip2",
         "root": "aurora-pockettts-fr-24l",
-        "sha256": "d24491918f7097c84c6d3440c7219d0342d746184674ea0926b5ef9ea07c697f",
-        "updated_at": "2026-08-16T00:57:00Z",
+        "sha256": "92fee41aace81ec4878b1119cbff5b28e06471a61434b9def449b7bfeebe9ee2",
+        "updated_at": "2026-08-16T05:34:44Z",
         "url": "https://github.com/joaojhgs/aurora/releases/download/sherpa-pockettts-language-packs/aurora-pockettts-fr-24l.tar.bz2"
       },
       "bindings": {
+        "bos_before_voice": "aurora-pockettts-fr-24l/bos_before_voice.bin",
         "decoder": "aurora-pockettts-fr-24l/decoder.int8.onnx",
         "encoder": "aurora-pockettts-fr-24l/encoder.onnx",
+        "fixed_voice_state": "aurora-pockettts-fr-24l/fixed_voice_state.bin",
         "lm_flow": "aurora-pockettts-fr-24l/lm_flow.int8.onnx",
         "lm_main": "aurora-pockettts-fr-24l/lm_main.int8.onnx",
         "model_card": "aurora-pockettts-fr-24l/README.md",
+        "pocket_protocol": "aurora-pockettts-fr-24l/pocket_protocol.json",
         "text_conditioner": "aurora-pockettts-fr-24l/text_conditioner.onnx",
         "token_scores_json": "aurora-pockettts-fr-24l/token_scores.json",
-        "vocab_json": "aurora-pockettts-fr-24l/vocab.json",
-        "reference_audio": "aurora-pockettts-fr-24l/internal_reference.wav"
+        "vocab_json": "aurora-pockettts-fr-24l/vocab.json"
       },
       "capability": {
         "encoder_status": "zeroed_by_remove_voice_cloning_and_push",

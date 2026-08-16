@@ -1,6 +1,7 @@
 import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
   AuroraVoiceWebRuntimeError,
+  resolvePocketReferenceAudioMode,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTtsAudio,
   type AuroraVoiceTtsRequest,
@@ -488,6 +489,7 @@ function ttsGenerationConfig(
   const model = requireModel(models, 'tts')
   if (model.family !== 'pockettts') return {}
   const extra = model.config?.maxFrames === undefined ? {} : { extra: { max_frames: model.config.maxFrames } }
+  if (resolvePocketReferenceAudioMode(model.config) === 'internal') return extra
   const configuredRate = model.config?.referenceSampleRateHz
   if (configuredRate === undefined) throw unavailable('missing_model_role')
   const referencePath = requireRole(model, 'referenceAudio')
@@ -736,7 +738,14 @@ function requireRoles(model: AuroraVoiceWebModelDescriptor, refs: readonly Auror
   if (model.family === 'sense-voice') requireEvery(['model', 'tokens'])
   if (model.family === 'sherpa-kws-transducer') requireEvery(['encoder', 'decoder', 'joiner', 'tokens'])
   if (model.family === 'piper') requireEvery(['model', 'tokens', 'dataDir'])
-  if (model.family === 'pockettts') requireEvery(['lmFlow', 'lmMain', 'encoder', 'decoder', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'referenceAudio'])
+  if (model.family === 'pockettts') {
+    requireEvery(['lmFlow', 'lmMain', 'encoder', 'decoder', 'textConditioner', 'vocabJson', 'tokenScoresJson'])
+    if (resolvePocketReferenceAudioMode(model.config) === 'internal') {
+      requireEvery(['pocketProtocol', 'bosBeforeVoice', 'fixedVoiceState'])
+    } else {
+      requireEvery(['referenceAudio'])
+    }
+  }
 }
 
 function requireModel(models: readonly AuroraVoiceWebModelDescriptor[], task: AuroraVoiceWebModelTask): AuroraVoiceWebModelDescriptor {
@@ -916,6 +925,9 @@ function isRole(value: unknown): value is AuroraVoiceWebModelFileRole {
     value === 'textConditioner' ||
     value === 'vocabJson' ||
     value === 'tokenScoresJson' ||
+    value === 'pocketProtocol' ||
+    value === 'bosBeforeVoice' ||
+    value === 'fixedVoiceState' ||
     value === 'referenceAudio'
 }
 

@@ -9,17 +9,17 @@ when --weights-source gated is set explicitly. HF_TOKEN never selects a source.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
-PUBLIC_REPO = "kyutai/pocket-tts-without-voice-cloning"
-PUBLIC_REVISION = "e041936c75475d350b405bc870bcf7c22da4e9e6"
-GATED_REPO = "kyutai/pocket-tts"
-GATED_REVISION = "4c8ad48f8a003909bc4f1122cbe88a4252124621"
+SOURCES_PATH = Path(__file__).with_name("language_pack_sources.json")
 
 
 def _download(repo_id: str, revision: str, filename: str, dest_dir: Path) -> Path:
@@ -66,17 +66,59 @@ def _disable_beartype_claw(helper: Path) -> None:
     init.write_text(text, encoding="utf-8")
 
 
-def _ensure_current_pocket_tts(helper: Path) -> None:
-    config = helper / "pocket_tts/config/french_24l.yaml"
-    if config.is_file():
-        return
-    kyutai = helper.parent.parent / "kyutai-pocket-tts"
-    if not (kyutai / "pocket_tts/config/french_24l.yaml").is_file():
-        raise SystemExit("current Kyutai pocket-tts checkout is missing language configs")
+def _normalize_git_url(url: str) -> str:
+    value = url.strip().rstrip("/")
+    if value.endswith(".git"):
+        value = value[: -len(".git")]
+    if value.startswith("git@github.com:"):
+        value = "https://github.com/" + value[len("git@github.com:") :]
+    return value.lower()
+
+
+def _git_output(source: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=source,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or "git verification failed"
+        raise RuntimeError(detail)
+    return result.stdout.strip()
+
+
+def _verify_kyutai_source(source: Path, repository: str, commit: str) -> None:
+    if not (source / ".git").is_dir():
+        raise RuntimeError("pinned Kyutai source is not a git checkout")
+    head = _git_output(source, "rev-parse", "HEAD").lower()
+    if head != commit.lower():
+        raise RuntimeError(f"Kyutai source HEAD {head} != pin {commit}")
+    origin = _git_output(source, "remote", "get-url", "origin")
+    if _normalize_git_url(origin) != _normalize_git_url(repository):
+        raise RuntimeError(f"Kyutai source origin {origin} != {repository}")
+    if _git_output(source, "status", "--porcelain"):
+        raise RuntimeError("pinned Kyutai source checkout is dirty")
+    if not (source / "pocket_tts/config/french_24l.yaml").is_file():
+        raise RuntimeError("pinned Kyutai source is missing multilingual configs")
+
+
+def _ensure_current_pocket_tts(
+    helper: Path,
+    kyutai_source: Path,
+    repository: str,
+    commit: str,
+) -> None:
+    _verify_kyutai_source(kyutai_source, repository, commit)
     dest = helper / "pocket_tts"
     if dest.exists():
         shutil.rmtree(dest)
-    shutil.copytree(kyutai / "pocket_tts", dest)
+    shutil.copytree(
+        kyutai_source / "pocket_tts",
+        dest,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
 
 
 SENTINEL = "# AURORA_POCKETTTS_EXPORT_PATCHED"
@@ -279,6 +321,7 @@ def inline_onnx_file(src: Path, dest: Path) -> None:
 
 
 def _extract_bos_from_safetensors(weights: Path, output: Path) -> Path | None:
+    import numpy as np
     from safetensors import safe_open
 
     candidates = (
@@ -287,25 +330,45 @@ def _extract_bos_from_safetensors(weights: Path, output: Path) -> Path | None:
         "flow_lm.bos_emb",
         "bos_emb",
     )
-    with safe_open(str(weights), framework="pt") as handle:
+    with safe_open(str(weights), framework="numpy") as handle:
         keys = set(handle.keys())
         name = next((candidate for candidate in candidates if candidate in keys), None)
         if name is None:
             return None
-        tensor = handle.get_tensor(name)
-    values = tensor.detach().cpu().float().reshape(-1).tolist()
-    raw = __import__("array").array("f", values)
+        values = np.asarray(handle.get_tensor(name), dtype="<f4").reshape(-1)
     path = output / "bos_before_voice.bin"
-    path.write_bytes(raw.tobytes())
+    path.write_bytes(values.tobytes(order="C"))
     return path
 
 
-def download_language_weights(
-    language: str, dest_dir: Path, source_mode: str
-) -> tuple[Path, Path, str]:
+def _artifact_source(
+    spec: dict[str, Any], source_mode: str
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    tokenizer = spec["tokenizer"]
+    if source_mode == "public-fixed-voice":
+        fixed_voice = spec.get("fixed_voice")
+        if not isinstance(fixed_voice, dict):
+            raise RuntimeError("public fixed-voice pack is missing a fixed_voice source pin")
+        return spec["weights"], tokenizer, fixed_voice
+    if source_mode != "gated":
+        raise RuntimeError(f"unknown PocketTTS weights source {source_mode}")
+    weights = spec["weights"]
+    return (
+        {
+            "repo_id": weights["gated_clone_repo_id"],
+            "revision": weights["gated_clone_revision"],
+            "filename": weights["filename"],
+        },
+        tokenizer,
+        None,
+    )
+
+
+def download_language_artifacts(
+    spec: dict[str, Any], dest_dir: Path, source_mode: str
+) -> dict[str, Any]:
     dest_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"languages/{language}/model.safetensors"
-    tokenizer = f"languages/{language}/tokenizer.model"
+    weights_spec, tokenizer_spec, fixed_voice_spec = _artifact_source(spec, source_mode)
     if source_mode == "gated":
         token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
         if not token:
@@ -314,25 +377,121 @@ def download_language_weights(
                 "and HF_TOKEN; refusing the public fixed-voice repo"
             )
         try:
-            weights = _download(GATED_REPO, GATED_REVISION, filename, dest_dir / "gated")
-            tok = _download(GATED_REPO, GATED_REVISION, tokenizer, dest_dir / "gated")
+            weights = _download(
+                weights_spec["repo_id"],
+                weights_spec["revision"],
+                weights_spec["filename"],
+                dest_dir / "gated",
+            )
         except Exception as exc:
             raise RuntimeError(
                 f"gated PocketTTS download failed; refusing public fallback: {exc}"
             ) from exc
-        return weights, tok, GATED_REPO
-    if source_mode != "public-fixed-voice":
-        raise RuntimeError(f"unknown PocketTTS weights source {source_mode}")
-    weights = _download(PUBLIC_REPO, PUBLIC_REVISION, filename, dest_dir / "public")
-    tok = _download(PUBLIC_REPO, PUBLIC_REVISION, tokenizer, dest_dir / "public")
-    return weights, tok, PUBLIC_REPO
+    else:
+        weights = _download(
+            weights_spec["repo_id"],
+            weights_spec["revision"],
+            weights_spec["filename"],
+            dest_dir / "public",
+        )
+    tokenizer = _download(
+        tokenizer_spec["repo_id"],
+        tokenizer_spec["revision"],
+        tokenizer_spec["filename"],
+        dest_dir / "tokenizer",
+    )
+    fixed_voice = None
+    if fixed_voice_spec is not None:
+        fixed_voice = _download(
+            fixed_voice_spec["repo_id"],
+            fixed_voice_spec["revision"],
+            fixed_voice_spec["filename"],
+            dest_dir / "fixed-voice",
+        )
+    return {
+        "weights": weights,
+        "weights_source": weights_spec,
+        "tokenizer": tokenizer,
+        "tokenizer_source": tokenizer_spec,
+        "fixed_voice": fixed_voice,
+        "fixed_voice_source": fixed_voice_spec,
+    }
+
+
+def export_fixed_voice_state(source: Path, output: Path) -> dict[str, Any]:
+    """Convert a pinned Kyutai fixed-voice cache to Aurora's compact raw state."""
+    import numpy as np
+    from safetensors import safe_open
+
+    cache_pattern = re.compile(r"transformer\.layers\.(\d+)\.self_attn/cache")
+    offset_pattern = re.compile(r"transformer\.layers\.(\d+)\.self_attn/offset")
+    caches: dict[int, Any] = {}
+    offsets: dict[int, int] = {}
+    with safe_open(str(source), framework="numpy") as handle:
+        # safetensors.safe_open exposes keys() but is not itself iterable.
+        tensor_keys = handle.keys()
+        for key in tensor_keys:
+            cache_match = cache_pattern.fullmatch(key)
+            offset_match = offset_pattern.fullmatch(key)
+            if cache_match is not None:
+                caches[int(cache_match.group(1))] = handle.get_tensor(key)
+            elif offset_match is not None:
+                value = np.asarray(handle.get_tensor(key)).reshape(-1)
+                if value.size != 1:
+                    raise RuntimeError(f"fixed voice offset {key} is not scalar")
+                offsets[int(offset_match.group(1))] = int(value[0])
+    if not caches or sorted(caches) != list(range(len(caches))) or set(caches) != set(offsets):
+        raise RuntimeError("fixed voice state layers are incomplete")
+
+    first_shape = tuple(int(dim) for dim in np.asarray(caches[0]).shape)
+    if len(first_shape) != 5 or first_shape[0:2] != (2, 1):
+        raise RuntimeError(f"unsupported fixed voice cache shape {first_shape}")
+    frames, heads, head_dim = first_shape[2:]
+    if frames <= 0 or heads <= 0 or head_dim <= 0:
+        raise RuntimeError("fixed voice cache dimensions must be positive")
+
+    output.mkdir(parents=True, exist_ok=True)
+    target = output / "fixed_voice_state.bin"
+    digest = hashlib.sha256()
+    byte_size = 0
+    with target.open("wb") as sink:
+        for layer in range(len(caches)):
+            cache = np.asarray(caches[layer])
+            shape = tuple(int(dim) for dim in cache.shape)
+            if shape != first_shape or offsets[layer] != frames or cache.dtype != np.float32:
+                raise RuntimeError(f"fixed voice layer {layer} is incompatible")
+            payload = cache.astype("<f4", copy=False).tobytes(order="C")
+            sink.write(payload)
+            digest.update(payload)
+            byte_size += len(payload)
+    metadata = {
+        "schema_version": 1,
+        "file": target.name,
+        "dtype": "float32-le",
+        "layers": len(caches),
+        "frames": frames,
+        "heads": heads,
+        "head_dim": head_dim,
+        "byte_size": byte_size,
+        "sha256": digest.hexdigest(),
+    }
+    (output / "fixed_voice_state.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return metadata
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, required=True)
-    parser.add_argument("--language", required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--inline-source", type=Path)
+    parser.add_argument("--inline-output", type=Path)
+    parser.add_argument("--helper", type=Path)
+    parser.add_argument("--sources", type=Path, default=SOURCES_PATH)
+    parser.add_argument("--pack")
+    parser.add_argument("--kyutai-source", type=Path)
+    parser.add_argument("--cache-root", type=Path)
+    parser.add_argument("--output", type=Path)
     parser.add_argument(
         "--weights-source",
         choices=("public-fixed-voice", "gated"),
@@ -340,24 +499,58 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.inline_source is not None or args.inline_output is not None:
+        if args.inline_source is None or args.inline_output is None:
+            parser.error("--inline-source and --inline-output must be provided together")
+        inline_onnx_file(args.inline_source.resolve(), args.inline_output.resolve())
+        return 0
+
+    required = {
+        "--helper": args.helper,
+        "--pack": args.pack,
+        "--kyutai-source": args.kyutai_source,
+        "--cache-root": args.cache_root,
+        "--output": args.output,
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        parser.error(f"missing required arguments: {', '.join(missing)}")
+
+    sources = json.loads(args.sources.read_text(encoding="utf-8"))
+    spec = next(
+        (item for item in sources.get("packs", []) if item.get("pack_id") == args.pack),
+        None,
+    )
+    if spec is None:
+        raise RuntimeError(f"unknown PocketTTS pack {args.pack}")
+    kyutai_pin = sources["kyutai_source"]
     helper = args.helper.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    _ensure_current_pocket_tts(helper)
+    _ensure_current_pocket_tts(
+        helper,
+        args.kyutai_source.resolve(),
+        kyutai_pin["repository"],
+        kyutai_pin["commit"],
+    )
     _disable_beartype_claw(helper)
     _restore_helper_scripts(helper)
     _patch_helper_export_scripts(helper)
     os.chdir(helper)
 
-    cache = output.parent / "hf-cache" / args.language
-    weights, tokenizer, source_repo = download_language_weights(
-        args.language, cache, args.weights_source
+    artifacts = download_language_artifacts(
+        spec,
+        args.cache_root.resolve() / spec["kyutai_config"],
+        args.weights_source,
     )
-    shutil.copy2(tokenizer, output / "tokenizer.model")
+    weights = artifacts["weights"]
+    shutil.copy2(artifacts["tokenizer"], output / "tokenizer.model")
+    if artifacts["fixed_voice"] is not None:
+        export_fixed_voice_state(artifacts["fixed_voice"], output)
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(helper)
-    env["POCKET_TTS_LANGUAGE"] = args.language
+    env["POCKET_TTS_LANGUAGE"] = spec["kyutai_config"]
     env["POCKET_TTS_WEIGHTS"] = str(weights)
     onnx_dir = helper / "onnx"
     onnx_dir.mkdir(exist_ok=True)
@@ -399,27 +592,27 @@ def main() -> int:
         env=env,
     )
     mapping = {
-        "flow_lm_flow.onnx": "lm_flow.onnx",
         "flow_lm_flow_int8.onnx": "lm_flow.int8.onnx",
-        "flow_lm_main.onnx": "lm_main.onnx",
         "flow_lm_main_int8.onnx": "lm_main.int8.onnx",
         "mimi_encoder.onnx": "encoder.onnx",
-        "mimi_decoder.onnx": "decoder.onnx",
         "mimi_decoder_int8.onnx": "decoder.int8.onnx",
         "text_conditioner.onnx": "text_conditioner.onnx",
     }
     for src_name, dest_name in mapping.items():
         src = onnx_dir / src_name
-        if src.is_file():
-            inline_onnx_file(src, output / dest_name)
-    _extract_bos_from_safetensors(weights, output)
+        if not src.is_file():
+            raise RuntimeError(f"official export did not produce {src_name}")
+        inline_onnx_file(src, output / dest_name)
+    if _extract_bos_from_safetensors(weights, output) is None:
+        raise RuntimeError("PocketTTS weights did not contain bos_before_voice")
     (output / "weight_source.json").write_text(
         json.dumps(
             {
-                "repo": source_repo,
-                "language": args.language,
-                "weights": str(weights),
-                "tokenizer": str(tokenizer),
+                "source_mode": args.weights_source,
+                "language": spec["kyutai_config"],
+                "weights": artifacts["weights_source"],
+                "tokenizer": artifacts["tokenizer_source"],
+                "fixed_voice": artifacts["fixed_voice_source"],
             },
             indent=2,
             sort_keys=True,

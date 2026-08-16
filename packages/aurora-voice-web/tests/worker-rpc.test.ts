@@ -38,6 +38,47 @@ describe('AuroraAcknowledgedWorkerHost', () => {
     vi.useRealTimers()
   })
 
+  it('accepts the maximum production TTS timeout and rejects larger values', async () => {
+    const port = new FakeWorkerPort()
+    const host = new AuroraAcknowledgedWorkerHost(port)
+    const pending = host.request(
+      { type: 'shutdown', generation: 1, reason: 'test' },
+      { timeoutMs: 900_000 }
+    )
+    port.reply(0, { type: 'ack', sessionId: '', generation: 1, sequence: null })
+    await expect(pending).resolves.toMatchObject({ generation: 1 })
+    await expect(
+      host.request(
+        { type: 'shutdown', generation: 2, reason: 'test' },
+        { timeoutMs: 900_001 }
+      )
+    ).rejects.toMatchObject({ code: 'invalid_option' })
+  })
+
+  it('preserves only sanitized worker rejection codes', async () => {
+    const port = new FakeWorkerPort()
+    const host = new AuroraAcknowledgedWorkerHost(port)
+    const specific = host.request({ type: 'shutdown', generation: 1, reason: 'test' })
+    port.reply(0, {
+      type: 'reject',
+      sessionId: null,
+      generation: 1,
+      sequence: null,
+      reason: 'model_hash_mismatch'
+    })
+    await expect(specific).rejects.toMatchObject({ code: 'model_hash_mismatch' })
+
+    const unsafe = host.request({ type: 'shutdown', generation: 2, reason: 'test' })
+    port.reply(1, {
+      type: 'reject',
+      sessionId: null,
+      generation: 2,
+      sequence: null,
+      reason: 'secret/path'
+    })
+    await expect(unsafe).rejects.toMatchObject({ code: 'worker_rejected' })
+  })
+
   it('ignores unknown late replies but rejects pending requests on malformed replies and worker crashes', async () => {
     const port = new FakeWorkerPort()
     const host = new AuroraAcknowledgedWorkerHost(port)

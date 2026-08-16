@@ -1,5 +1,6 @@
 import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
+  AURORA_VOICE_WORKER_MAX_TIMEOUT_MS,
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
@@ -25,7 +26,6 @@ const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
 const DEFAULT_WORKER_TIMEOUT_MS = 5_000
 const DEFAULT_TTS_TIMEOUT_MS = 120_000
-const MAX_TTS_TIMEOUT_MS = 900_000
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 const MAX_TTS_TEXT_CHARS = 1_000
 const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
@@ -70,7 +70,12 @@ export class AuroraVoiceWebRuntime {
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
     this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
-    this.ttsTimeoutMs = boundedIntegerInRange(options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS, 'ttsTimeoutMs', 1_000, MAX_TTS_TIMEOUT_MS)
+    this.ttsTimeoutMs = boundedIntegerInRange(
+      options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS,
+      'ttsTimeoutMs',
+      1_000,
+      AURORA_VOICE_WORKER_MAX_TIMEOUT_MS
+    )
     this.modelBindings = options.modelBindings
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId

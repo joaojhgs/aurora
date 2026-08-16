@@ -253,7 +253,9 @@ interface ResolvedManifestTrust {
 
 const DEFAULT_ARCHIVE_LIMITS: Required<AuroraBrowserArchiveInstallLimits> = Object.freeze({
   maxEntries: 2048,
-  maxFileBytes: 256 * 1024 * 1024,
+  // The pruned French PocketTTS int8 LM graph is about 306 MiB. Keep a
+  // bounded margin for that verified artifact without admitting FP32 graphs.
+  maxFileBytes: 384 * 1024 * 1024,
   maxTotalBytes: 1024 * 1024 * 1024
 })
 const EMBEDDED_BROWSER_CATALOG_KEY_ID = 'aurora-browser-voice-catalog'
@@ -699,7 +701,7 @@ function validVariantModelBindings(
     Array.isArray(model.files) &&
     model.files.length > 0 &&
     model.files.every((file: AuroraVoiceWebModelDescriptor['files'][number]) => (
-      ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'referenceAudio'].includes(file.role) &&
+      ['model', 'encoder', 'decoder', 'mergedDecoder', 'tokens', 'joiner', 'keywords', 'bpeVocab', 'lexicon', 'dataDir', 'lmFlow', 'lmMain', 'textConditioner', 'vocabJson', 'tokenScoresJson', 'pocketProtocol', 'bosBeforeVoice', 'fixedVoiceState', 'referenceAudio'].includes(file.role) &&
       ids.has(file.fileId) &&
       safeId(file.fileId) &&
       typeof file.virtualPath === 'string' &&

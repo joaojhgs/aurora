@@ -291,7 +291,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     expect(calls).toContain('tts:hello:pcm16:16000:undefined:undefined')
   })
 
-  it('synthesizes internal-mode PocketTTS with the pack reference and no frame cap', async () => {
+  it('synthesizes internal-mode PocketTTS from fixed state without reference audio', async () => {
     const calls: string[] = []
     const engine = new AuroraSherpaWasmVoiceEngine({
       engineAssets: { ttsModuleUrl: 'https://voice.example/tts.js', ttsHelperUrl: 'https://voice.example/tts-helper.js' },
@@ -308,7 +308,9 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
         modelFile('tts', 'text-conditioner.onnx', [5]),
         modelFile('tts', 'vocab.json', [6]),
         modelFile('tts', 'token-scores.json', [7]),
-        referenceWavFile()
+        modelFile('tts', 'pocket-protocol.json', [8]),
+        modelFile('tts', 'bos-before-voice.bin', [1]),
+        modelFile('tts', 'fixed-voice-state.bin', [2])
       ],
       models: [{
         task: 'tts',
@@ -322,15 +324,22 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
           refById('textConditioner', 'text-conditioner.onnx'),
           refById('vocabJson', 'vocab.json'),
           refById('tokenScoresJson', 'token-scores.json'),
-          refById('referenceAudio', 'reference.wav')
+          refById('pocketProtocol', 'pocket-protocol.json'),
+          refById('bosBeforeVoice', 'bos-before-voice.bin'),
+          refById('fixedVoiceState', 'fixed-voice-state.bin')
         ],
-        config: { referenceAudioMode: 'internal', referenceSampleRateHz: 16_000 }
+        config: { referenceAudioMode: 'internal' }
       }]
     })
     await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
 
-    expect(calls).toContain('fs:/tts-reference.wav')
-    expect(calls).toContain('tts:hello:pcm16:16000:undefined:undefined')
+    expect(calls).toEqual(expect.arrayContaining([
+      'fs:/tts-pocket-protocol.json',
+      'fs:/tts-bos-before-voice.bin',
+      'fs:/tts-fixed-voice-state.bin',
+      'tts:hello:fixed:undefined'
+    ]))
+    expect(calls).not.toContain('fs:/tts-reference.wav')
   })
 
   it('rejects engine sources that declare an Emscripten data preload without fetching data assets', async () => {
@@ -534,6 +543,10 @@ class FakeTts {
       this.calls.push(
         `tts:${text}:${pcm}:${String(candidate.referenceSampleRate)}:${String(candidate.referenceText)}:${String(candidate.extra?.max_frames)}`
       )
+      return { sampleRate: 16_000, samples: new Float32Array([0.2]) }
+    }
+    if (text !== 'Hello Aurora') {
+      this.calls.push(`tts:${text}:fixed:${String(candidate.extra?.max_frames)}`)
       return { sampleRate: 16_000, samples: new Float32Array([0.2]) }
     }
     expect(text).toBe('Hello Aurora')

@@ -3362,7 +3362,10 @@ mod tests {
             std::env::var_os("AURORA_POCKETTTS_PACK_DIR").expect("AURORA_POCKETTTS_PACK_DIR"),
         );
         let text = std::env::var("AURORA_POCKETTTS_TEXT").unwrap_or_else(|_| {
-            if dir.file_name().is_some_and(|name| name.to_string_lossy().contains("-fr-")) {
+            if dir
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().contains("-fr-"))
+            {
                 "Bonjour, ceci est un essai.".to_owned()
             } else {
                 "Hello, this is a voice check.".to_owned()
@@ -3381,27 +3384,37 @@ mod tests {
         let mut synthesizer = OfflineTtsSynthesizer::new(&config).expect("pocket synthesizer");
         assert_eq!(synthesizer.sample_rate(), 24_000);
         let mut generation = OfflineTtsGenerationConfig::new(0, 1.0).with_num_steps(4);
-        let reference = {
+        if !dir.join("fixed_voice_state.bin").is_file() {
             let internal = dir.join("internal_reference.wav");
-            if internal.is_file() {
+            let reference = if internal.is_file() {
                 internal
             } else {
                 PathBuf::from(
                     std::env::var_os("AURORA_POCKETTTS_REF_WAV").expect("AURORA_POCKETTTS_REF_WAV"),
                 )
-            }
-        };
-        let (sample_rate, samples) = read_pcm16_wav(&reference);
-        generation = generation.with_reference_audio(
-            TtsReferenceAudio::new(sample_rate, samples).expect("reference audio"),
-        );
+            };
+            let (sample_rate, samples) = read_pcm16_wav(&reference);
+            generation = generation.with_reference_audio(
+                TtsReferenceAudio::new(sample_rate, samples).expect("reference audio"),
+            );
+        }
         let started = std::time::Instant::now();
         let audio = synthesizer
             .generate(&text, &generation, &|| false)
             .unwrap_or_else(|error| panic!("pocket audio: {error:?}"));
         let elapsed = started.elapsed();
         assert_eq!(audio.sample_rate(), 24_000);
-        assert!(audio.samples().len() > 2400, "expected more than 100ms of audio");
+        assert!(
+            audio.samples().len() > 2400,
+            "expected more than 100ms of audio"
+        );
+        assert!(
+            audio
+                .samples()
+                .iter()
+                .any(|sample| sample.is_finite() && *sample != 0.0),
+            "expected nonzero finite PCM"
+        );
         assert!(audio
             .samples()
             .iter()
@@ -3416,6 +3429,7 @@ mod tests {
         );
     }
 
+    #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
     fn read_pcm16_wav(path: &Path) -> (i32, Vec<f32>) {
         let bytes = std::fs::read(path).expect("reference wav");
         assert!(bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");

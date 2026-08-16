@@ -182,18 +182,18 @@
       }
     },
     {
-      "id": "onnxruntime-linux-x64-release-1.27.0",
+      "id": "onnxruntime-linux-x64-release-1.27.1",
       "kind": "prebuilt",
       "role": "linux-inference-runtime-probe",
       "status": "selected",
-      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-linux-x64-glibc2_17-Release-1.27.0.zip",
-      "version": "1.27.0",
-      "sha256": "9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00",
-      "size_bytes": 8509524,
-      "archive_path": "builds/linux-x86_64/_deps/onnxruntime-subbuild/onnxruntime-populate-prefix/src/onnxruntime-linux-x64-glibc2_17-Release-1.27.0.zip",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-linux-x64-glibc2_17-Release-1.27.1.zip",
+      "version": "1.27.1",
+      "sha256": "3b49aa3cded130124e1822c9683f0450bd120390f14a626369fd7a02f5b5f64e",
+      "size_bytes": 8510309,
+      "archive_path": "builds/linux-x86_64/_deps/onnxruntime-subbuild/onnxruntime-populate-prefix/src/onnxruntime-linux-x64-glibc2_17-Release-1.27.1.zip",
       "license": {
         "spdx": "MIT",
-        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence": "sources/extracted/onnxruntime-1.27.1/LICENSE",
         "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
         "disposition": "allowed"
       },
@@ -238,19 +238,19 @@
       "notes": "Current upstream still contains the fixed-buffer unbounded string scan found in this pin; no audited fixed release is available."
     },
     {
-      "id": "onnxruntime-source-v1.27.0",
+      "id": "onnxruntime-source-v1.27.1",
       "kind": "source",
       "role": "inference-runtime-source",
       "status": "selected",
-      "url": "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.27.0.tar.gz",
-      "version": "v1.27.0",
-      "commit": "8f0278c77bf44b0cc83c098c6c722b92a36ac4b5",
-      "sha256": "b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a",
-      "size_bytes": 285714570,
-      "archive_path": "sources/onnxruntime-v1.27.0.tar.gz",
+      "url": "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.27.1.tar.gz",
+      "version": "v1.27.1",
+      "commit": "df2ba1cf8108aa63627cf4cdf8f807880b938616",
+      "sha256": "e53b06ccd454f56088fde374d1af6660ef111ca7ce7a98d62b274ff9094d3005",
+      "size_bytes": 285765941,
+      "archive_path": "sources/onnxruntime-v1.27.1.tar.gz",
       "license": {
         "spdx": "MIT",
-        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence": "sources/extracted/onnxruntime-1.27.1/LICENSE",
         "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
         "disposition": "allowed"
       }
@@ -290,53 +290,53 @@
       }
     },
     {
-      "id": "onnxruntime-android-1.27.0",
+      "id": "onnxruntime-android-1.27.1",
       "kind": "prebuilt",
       "role": "android-inference-runtime",
       "status": "selected",
-      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-android-1.27.0.zip",
-      "version": "1.27.0",
-      "sha256": "a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb",
-      "size_bytes": 32794323,
-      "archive_path": "sources/onnxruntime-android-1.27.0.zip",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-android-1.27.1.zip",
+      "version": "1.27.1",
+      "sha256": "defade26209f72cf4fa9769b18052c842833d6bef12924595d26f03b995548ca",
+      "size_bytes": 32785641,
+      "archive_path": "sources/onnxruntime-android-1.27.1.zip",
       "license": {
         "spdx": "MIT",
-        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence": "sources/extracted/onnxruntime-1.27.1/LICENSE",
         "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
         "disposition": "allowed"
       },
       "notes": "Prebuilt arm64-v8a and x86_64 shared objects were inspected for 0x4000 LOAD segment alignment in the Phase 4 artifact report."
     },
     {
-      "id": "onnxruntime-ios-static-xcframework-1.27.0",
+      "id": "onnxruntime-ios-static-xcframework-1.27.1",
       "kind": "prebuilt",
       "role": "ios-inference-runtime",
       "status": "selected",
-      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-ios-static-xcframework-1.27.0.zip",
-      "version": "1.27.0",
-      "sha256": "2c4b6eda7fcf03ca51814bbc88e3709cc080e623581fce085286182cc30d60c1",
-      "size_bytes": 32580685,
-      "archive_path": "sources/onnxruntime-ios-static-xcframework-1.27.0.zip",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-ios-static-xcframework-1.27.1.zip",
+      "version": "1.27.1",
+      "sha256": "9a0316f4335017a31edd91250881594876fe5fc0805f7490a304b163de6e0817",
+      "size_bytes": 32799585,
+      "archive_path": "sources/onnxruntime-ios-static-xcframework-1.27.1.zip",
       "license": {
         "spdx": "MIT",
-        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence": "sources/extracted/onnxruntime-1.27.1/LICENSE",
         "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
         "disposition": "allowed"
       }
     },
     {
-      "id": "onnxruntime-wasm-static-lib-simd-1.27.0",
+      "id": "onnxruntime-wasm-static-lib-simd-1.27.1",
       "kind": "prebuilt",
       "role": "wasm-inference-runtime",
       "status": "selected",
-      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/onnxruntime-wasm-static_lib-simd-1.27.0.zip",
-      "version": "1.27.0",
-      "sha256": "076680969c74225caf0a6d08c0be5edd2c242b081c33cede77dcc5eac355bbcf",
-      "size_bytes": 21015625,
-      "archive_path": "sources/onnxruntime-wasm-static_lib-simd-1.27.0.zip",
+      "url": "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/onnxruntime-wasm-static_lib-simd-1.27.1.zip",
+      "version": "1.27.1",
+      "sha256": "29ac0b14af378937840d4d345e272d30602e850d916c6f7e752195fe0abbd1bc",
+      "size_bytes": 14522281,
+      "archive_path": "sources/onnxruntime-wasm-static_lib-simd-1.27.1.zip",
       "license": {
         "spdx": "MIT",
-        "evidence": "sources/extracted/onnxruntime-1.27.0/LICENSE",
+        "evidence": "sources/extracted/onnxruntime-1.27.1/LICENSE",
         "evidence_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
         "disposition": "allowed"
       }

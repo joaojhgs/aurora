@@ -224,8 +224,7 @@ function manifestFor(
         config: {
           ...(language === undefined ? {} : { language }),
           ...(voiceId === undefined ? {} : { voiceId }),
-          ...(referenceAudioMode === undefined ? {} : { referenceAudioMode }),
-          ...(referenceAudioMode === 'internal' ? { referenceSampleRateHz: 24_000 } : {})
+          ...(referenceAudioMode === undefined ? {} : { referenceAudioMode })
         }
       }]
     }],
@@ -290,6 +289,9 @@ function roleName(role: string): AuroraVoiceWebModelFileRole | null {
   if (role === 'data_dir') return 'dataDir'
   if (role === 'bpe_vocab') return 'bpeVocab'
   if (role === 'reference_audio') return 'referenceAudio'
+  if (role === 'pocket_protocol') return 'pocketProtocol'
+  if (role === 'bos_before_voice') return 'bosBeforeVoice'
+  if (role === 'fixed_voice_state') return 'fixedVoiceState'
   if (role === 'lm_flow') return 'lmFlow'
   if (role === 'lm_main') return 'lmMain'
   if (role === 'text_conditioner') return 'textConditioner'

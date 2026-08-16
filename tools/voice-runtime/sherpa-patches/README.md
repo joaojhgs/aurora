@@ -16,7 +16,10 @@ downstream queue is applied.
 
 Official `v1.13.5` no longer publishes `sherpa-onnx-v*-ios.xcframework.zip`.
 iOS builds from this same source archive / Swift Package Manager. Android and
-Waydroid testing are deferred for this PocketTTS task.
+OHOS asset-manager constructors load the protocol and fixed-state sidecars
+through the same manager as their ONNX graphs. Live Android/Waydroid proof is
+part of Aurora's final mobile release validation, not evidence implied by this
+patch queue alone.
 
 ## Patch list
 
@@ -25,10 +28,30 @@ Apply in `series` order.
 | Patch | SHA-256 | Purpose | Upstream files |
 | --- | --- | --- | --- |
 | `0001-pockettts-multilingual-protocol.patch` | `e4e745b1568b790e0625f5fd3da3cc131159f1cb73b6dee94fa85e301e60287d` | Native FP16 KV zeros (no per-token cast wrappers), protocol sidecar, `bos_before_voice` concat, EOS/frames/latent/dynamic empty-KV defaults, text flags | `sherpa-onnx/csrc/offline-tts-pocket-model.h`, `offline-tts-pocket-model.cc`, `offline-tts-pocket-impl.h` |
-| `0002-wasm-tts-neutral-no-preload.patch` | `959b69d27457a658193404eb67233c5c0fabeb7009d575b0970ba883e83bddee` | Neutral WASM TTS build without `--preload-file` / `.data` so Aurora mounts catalog packs at runtime | `wasm/tts/CMakeLists.txt` |
+| `0002-wasm-tts-neutral-no-preload.patch` | `d92ad64c4c00c29ec85df0ec2f1a406eaa605090bed73fb4979f38ead54597f0` | Neutral WASM TTS build without `--preload-file` / `.data`, with an ES-module factory and helper exports for Aurora's controlled worker loader | `wasm/tts/CMakeLists.txt` |
+| `0003-pockettts-fixed-voice-state.patch` | `640e64ba79fa038370310ed5bb5530f4c8d801ddc92c82d2feb56333828eb12a` | Load fixed Kyutai voice KV state without a synthetic reference WAV, seed alternating LM cache/offset inputs, skip reference encoding, and support filesystem plus Android/OHOS asset sidecars | `sherpa-onnx/csrc/offline-tts-pocket-model.h`, `offline-tts-pocket-model.cc`, `offline-tts-pocket-impl.h` |
 
 English PocketTTS packs without `pocket_protocol.json` keep stock v1.13.5
 behavior (`empty_kv_seq_len=1`, no BOS concat, `frames_after_eos=3`).
+
+## Fixed-voice ABI
+
+Public multilingual packs record a schema-1 `fixed_voice_state` object in
+`pocket_protocol.json` and ship `fixed_voice_state.bin`. The binary is
+little-endian float32, ordered by ascending transformer layer, with each layer
+laid out as `[2, 1, frames, heads, head_dim]`. Sherpa maps each layer to the
+alternating LM-main inputs `state_2n` (KV cache) and `state_2n+1` (int64
+offset), seeds the offset with `frames`, and starts text conditioning from that
+state. It does not run the public pack's zeroed voice encoder or require a
+reference WAV.
+
+Pack conversion verifies the sidecar SHA-256 and writes it into the protocol;
+Aurora's signed catalog/archive installation verifies the downloaded archive.
+The C++ loader independently rejects unknown schema/dtype, unsafe filenames,
+unexpected state names, invalid dimensions, oversized allocations, and byte
+size mismatches. It validates the recorded checksum format but does not embed a
+second portable SHA-256 implementation; runtime integrity therefore relies on
+Aurora's verified pack-install boundary.
 
 ## Stage and apply
 
@@ -43,7 +66,7 @@ The command verifies the archive digest, extracts it, applies `git apply`
 `--unidiff-zero`, and prints the patched-tree identity over the four touched
 files. Current patched-tree SHA-256:
 
-`9676de0fadce556b613b5b3d140ee4c89cfd65e17655570d99f6c7b44e00e805`
+`34c7feb1cc0bb94ad9f423f5a1a14cb977af86a8ac329644ec16de660371b3c3`
 
 Native CMake must go through `tools/voice-runtime/run_sherpa_cmake.py` so the
 source identity wrapper still suppresses an enclosing Aurora Git directory.
@@ -54,6 +77,12 @@ WASM TTS:
 export AURORA_SHERPA_WASM_TTS_NEUTRAL=1
 tools/voice-runtime/build_sherpa_wasm_tts.sh
 ```
+
+The neutral build emits `sherpa-onnx-wasm-main-tts.js` as an Emscripten
+ES-module factory and stages `sherpa-onnx-tts.js` with explicit named helper
+exports. Aurora imports both directly inside its module worker; smoke tests
+must consume the staged files unchanged and must not append exports at test
+time.
 
 ## Upgrade / rebase
 

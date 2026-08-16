@@ -866,20 +866,17 @@ fn build_local_ios_runtime(
             NativeTtsBackend::from_catalog_vits_piper_model(&tts_task, tts_files)
         }
         Some("pockettts") => {
-            let (reference_audio, reference_text) = if !ios_pockettts_requires_user_profile(tts_binding)
-            {
-                (
-                    load_ios_internal_reference_audio(required_file(tts_binding, "reference-audio")?)?,
-                    None,
-                )
-            } else {
+            let reference_audio_required = ios_pockettts_requires_user_profile(tts_binding);
+            let (reference_audio, reference_text) = if reference_audio_required {
                 let reference = tts_binding
                     .tts_reference()
                     .ok_or(IosVoiceSessionCommandError::Unavailable)?;
                 (
-                    load_ios_tts_reference_audio(reference)?,
+                    Some(load_ios_tts_reference_audio(reference)?),
                     reference.reference_text_for_sherpa().map(str::to_owned),
                 )
+            } else {
+                (None, None)
             };
             let tts_files = NativeTtsPocketModelFiles {
                 lm_flow_file_id: "lm-flow".to_owned(),
@@ -898,8 +895,9 @@ fn build_local_ios_runtime(
                 vocab_path: required_file(tts_binding, "vocab")?.path().clone(),
                 token_scores_file_id: "token-scores".to_owned(),
                 token_scores_path: required_file(tts_binding, "token-scores")?.path().clone(),
-                reference_audio: Some(reference_audio),
+                reference_audio,
                 reference_text,
+                reference_audio_required,
             };
             NativeTtsBackend::from_catalog_pockettts_model(&tts_task, tts_files)
         }
@@ -1393,12 +1391,9 @@ fn verify_ios_pack_binding(
                     .ok_or(IosVoiceSessionCommandError::Unavailable)?,
             )?;
         } else {
-            let file = binding
-                .files()
-                .iter()
-                .find(|file| file.file_id() == "reference-audio")
-                .ok_or(IosVoiceSessionCommandError::Unavailable)?;
-            verify_ios_pack_file_binding(file)?;
+            for file_id in ["pocket-protocol", "bos-before-voice", "fixed-voice-state"] {
+                verify_ios_pack_file_binding(required_file(binding, file_id)?)?;
+            }
         }
     } else if binding.tts_reference().is_some() {
         return Err(IosVoiceSessionCommandError::Unavailable);
@@ -1459,14 +1454,14 @@ fn ios_pockettts_requires_user_profile(binding: &IosVoicePackBinding) -> bool {
             return entry.requires_reference_profile();
         }
     }
-    !ios_pockettts_has_internal_reference(binding)
+    !ios_pockettts_has_fixed_voice_state(binding)
 }
 
-fn ios_pockettts_has_internal_reference(binding: &IosVoicePackBinding) -> bool {
+fn ios_pockettts_has_fixed_voice_state(binding: &IosVoicePackBinding) -> bool {
     binding
         .files()
         .iter()
-        .any(|file| file.file_id() == "reference-audio")
+        .any(|file| file.file_id() == "fixed-voice-state")
 }
 
 #[cfg_attr(not(feature = "ios-sherpa"), allow(dead_code))]
@@ -1530,25 +1525,6 @@ fn task_pack_binding(
         installed_bytes,
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
-}
-
-#[cfg(feature = "ios-sherpa")]
-fn load_ios_internal_reference_audio(
-    file: &IosVoicePackFileBinding,
-) -> Result<NativeTtsReferenceAudio, IosVoiceSessionCommandError> {
-    verify_ios_pack_file_binding(file)?;
-    let bytes = fs::read(file.path()).map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    if bytes.len() < 44 {
-        return Err(IosVoiceSessionCommandError::Unavailable);
-    }
-    let sample_rate = u32::from_le_bytes(
-        bytes[24..28]
-            .try_into()
-            .map_err(|_| IosVoiceSessionCommandError::Unavailable)?,
-    );
-    let samples = parse_pcm16_mono_reference_wav(&bytes, sample_rate, MAX_IOS_REFERENCE_AUDIO_SAMPLES)?;
-    NativeTtsReferenceAudio::new(sample_rate as i32, samples)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)
 }
 
 #[cfg(feature = "ios-sherpa")]
@@ -2123,7 +2099,7 @@ mod tests {
     }
 
     #[test]
-    fn ios_session_accepts_pockettts_internal_reference_without_profile() {
+    fn ios_session_accepts_pockettts_fixed_voice_state_without_profile() {
         let dir = tempfile::tempdir().expect("tempdir");
         let binding = test_pack_binding_with_family(
             dir.path(),
@@ -2137,7 +2113,9 @@ mod tests {
                 "text-conditioner",
                 "vocab",
                 "token-scores",
-                "reference-audio",
+                "pocket-protocol",
+                "bos-before-voice",
+                "fixed-voice-state",
             ],
             "pockettts",
             None,
@@ -2160,7 +2138,9 @@ mod tests {
                 "text-conditioner",
                 "vocab",
                 "token-scores",
-                "reference-audio",
+                "pocket-protocol",
+                "bos-before-voice",
+                "fixed-voice-state",
             ],
             None,
         );
@@ -2175,7 +2155,9 @@ mod tests {
                 "text-conditioner",
                 "vocab",
                 "token-scores",
-                "reference-audio",
+                "pocket-protocol",
+                "bos-before-voice",
+                "fixed-voice-state",
             ],
             None,
         );
@@ -2190,7 +2172,6 @@ mod tests {
                 "text-conditioner",
                 "vocab",
                 "token-scores",
-                "reference-audio",
             ],
             None,
         );
@@ -2232,15 +2213,10 @@ mod tests {
         assert_eq!(legacy.reference_text(), "Hello Aurora");
         assert_eq!(legacy.reference_text_for_sherpa(), Some("Hello Aurora"));
 
-        assert!(IosTtsReferenceBinding::new(
-            "",
-            test_reference_sha256(),
-            12,
-            16_000,
-            "",
-            "rev-1",
-        )
-        .is_err());
+        assert!(
+            IosTtsReferenceBinding::new("", test_reference_sha256(), 12, 16_000, "", "rev-1",)
+                .is_err()
+        );
         assert!(IosTtsReferenceBinding::new(
             "/tmp/ref.wav",
             test_reference_sha256(),
@@ -2513,7 +2489,8 @@ mod tests {
             .iter()
             .map(|file_id| {
                 let file_path = root.join(format!("{}-{file_id}.bin", pack_id.replace(':', "_")));
-                std::fs::write(&file_path, format!("cached {pack_id} {file_id}")).expect("write file");
+                std::fs::write(&file_path, format!("cached {pack_id} {file_id}"))
+                    .expect("write file");
                 let size = std::fs::metadata(&file_path).expect("metadata").len();
                 IosVoicePackFileBinding::new(
                     *file_id,

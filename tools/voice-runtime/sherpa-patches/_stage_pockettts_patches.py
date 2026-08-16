@@ -601,6 +601,20 @@ if(NOT _aurora_wasm_tts_neutral STREQUAL "1")
     message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
   endif()
 endif()
+
+set(_aurora_wasm_tts_helper "")
+if(_aurora_wasm_tts_neutral STREQUAL "1")
+  set(_aurora_wasm_tts_helper "${CMAKE_CURRENT_BINARY_DIR}/sherpa-onnx-tts.esm.js")
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/sherpa-onnx-tts.js"
+    "${_aurora_wasm_tts_helper}"
+    COPYONLY
+  )
+  file(APPEND
+    "${_aurora_wasm_tts_helper}"
+    "\\nexport { createOfflineTts, getDefaultOfflineTtsModelType };\\n"
+  )
+endif()
 """,
         "wasm asset check",
     )
@@ -610,6 +624,7 @@ endif()
 string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','addFunction','removeFunction'] ")
 """,
         """if(_aurora_wasm_tts_neutral STREQUAL "1")
+  string(APPEND MY_FLAGS " -sMODULARIZE=1 -sEXPORT_ES6=1 -sINCOMING_MODULE_JS_API=locateFile,noInitialRun,print,printErr ")
   string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','addFunction','removeFunction','FS'] ")
 else()
   string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
@@ -638,12 +653,16 @@ endif()
     FILES
       "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.js"
       "index.html"
-      "sherpa-onnx-tts.js"
       "sherpa-onnx-tts.worker.js"
       "app-tts.js"
       "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-tts>/sherpa-onnx-wasm-main-tts.wasm"
     DESTINATION
       bin/wasm/tts
+  )
+  install(
+    FILES "${_aurora_wasm_tts_helper}"
+    DESTINATION bin/wasm/tts
+    RENAME "sherpa-onnx-tts.js"
   )
 else()
   install(

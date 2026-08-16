@@ -1509,15 +1509,15 @@ fn required_tts_file_bindings(
                     .clone()
                     .ok_or(SpeechPackError::InvalidArchive)?,
             );
-            if entry.reference_audio_mode() == aurora_voice_engine::TtsReferenceAudioMode::Internal {
-                bindings.insert(
-                    "reference-audio".to_owned(),
-                    entry
-                        .bindings
-                        .reference_audio
-                        .clone()
-                        .ok_or(SpeechPackError::InvalidArchive)?,
-                );
+            for (file_id, relative) in [
+                ("reference-audio", &entry.bindings.reference_audio),
+                ("pocket-protocol", &entry.bindings.pocket_protocol),
+                ("bos-before-voice", &entry.bindings.bos_before_voice),
+                ("fixed-voice-state", &entry.bindings.fixed_voice_state),
+            ] {
+                if let Some(relative) = relative {
+                    bindings.insert(file_id.to_owned(), relative.clone());
+                }
             }
         }
         _ => return Err(SpeechPackError::InvalidArchive),
@@ -2887,6 +2887,21 @@ mod tests {
             Err(SpeechPackError::Cancelled)
         );
         assert!(manager.list_installed_voices().expect("list").is_empty());
+    }
+
+    #[test]
+    fn fixed_pockettts_pack_requires_exact_state_sidecars_without_reference_audio() {
+        let catalog = TtsVoiceCatalog::runtime().expect("runtime catalog");
+        let entry = catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("fixed PocketTTS voice");
+        let bindings = required_tts_file_bindings(entry).expect("fixed pack bindings");
+
+        assert_eq!(bindings.len(), 11);
+        for file_id in ["pocket-protocol", "bos-before-voice", "fixed-voice-state"] {
+            assert!(bindings.contains_key(file_id), "missing {file_id}");
+        }
+        assert!(!bindings.contains_key("reference-audio"));
     }
 
     #[tokio::test]

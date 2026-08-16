@@ -41,11 +41,28 @@ Downloaded models, converted ONNX, WAVs, reports, and build trees belong in
 Acquire `/tmp/aurora-global-build.lock` for every convert, build, export, or
 heavy test. Keep those builds sequential. WASM TTS must set
 `AURORA_SHERPA_WASM_TTS_NEUTRAL=1` so Aurora mounts catalog packs at runtime.
+The neutral build must emit an ES-module default factory and named TTS helper
+exports that the production module worker can import unchanged. Never repair
+or append those exports inside a test fixture.
 
 Both language packs export at `STATIC_SEQ_LEN=10000` so production
 `max_frames=500` fits. Public packs use `reference_audio_mode=internal` and
-ship `internal_reference.wav`. Do not omit reference audio on the current
-Sherpa path.
+ship `fixed_voice_state.bin`; they do not ship or synthesize an internal
+reference WAV. The schema-1 state is little-endian float32 Kyutai KV cache data
+and is loaded on demand from the installed pack. Profile-mode packs continue to
+require user reference audio.
+
+Conversion, ONNX inlining, and graph optimization must run with the isolated
+pinned Python exporter at `.artifacts/pockettts/export-venv/bin/python`, as
+provisioned by the pack workflow. Do not import exporter-only ONNX tooling into
+Aurora's normal Python runtime. The exporter's Python `onnxruntime` is a
+graph-build tool and is independent of the Sherpa runtime's pinned ONNX Runtime
+`1.27.1` binaries.
+
+Patch 0003 seeds alternating LM cache/offset inputs and skips voice encoding for
+fixed packs. Keep filesystem and Android/OHOS asset-manager sidecar loading in
+sync. The C++ loader validates the fixed-state ABI and size; archive and
+sidecar digests are enforced by the Aurora conversion/install boundary.
 
 ```bash
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime native
@@ -55,7 +72,8 @@ uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime 
 
 The WASM smoke is the Playwright driver in
 `packages/aurora-voice-web/tests/playwright/sherpa-pockettts-browser-smoke.pw.ts`.
-It must synthesize real audio for both locally built packs.
+It must synthesize real audio for both locally built packs with Sherpa's
+production `max_frames=500` default; do not add a smaller smoke-only cap.
 
 ## Temporary bootstrap publisher
 

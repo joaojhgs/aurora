@@ -21,7 +21,10 @@ PATCH_SHA256 = {
         "e4e745b1568b790e0625f5fd3da3cc131159f1cb73b6dee94fa85e301e60287d"
     ),
     "0002-wasm-tts-neutral-no-preload.patch": (
-        "959b69d27457a658193404eb67233c5c0fabeb7009d575b0970ba883e83bddee"
+        "d92ad64c4c00c29ec85df0ec2f1a406eaa605090bed73fb4979f38ead54597f0"
+    ),
+    "0003-pockettts-fixed-voice-state.patch": (
+        "640e64ba79fa038370310ed5bb5530f4c8d801ddc92c82d2feb56333828eb12a"
     ),
 }
 
@@ -87,35 +90,63 @@ def extract_archive(archive: Path, staging_root: Path, extraction_name: str) -> 
     if staging_root.exists():
         shutil.rmtree(staging_root)
     staging_root.mkdir(parents=True)
-    extract_pinned_source_tar(archive, staging_root, mode="r:gz")
+    # The SHA-pinned v1.13.5 archive contains two stale absolute symlinks in an
+    # unused Go example. Never materialize them, but do not make the verified
+    # C++/WASM source archive unusable because of those unrelated entries.
+    extract_pinned_source_tar(
+        archive,
+        staging_root,
+        mode="r:gz",
+        omit_escaping_symlinks=True,
+    )
     extracted = staging_root / extraction_name
     if not extracted.is_dir():
         raise PatchQueueError(f"archive did not extract {extraction_name}")
     return extracted
 
 
-def extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str = "r:*") -> None:
+def extract_pinned_source_tar(
+    archive: Path,
+    dest: Path,
+    *,
+    mode: str = "r:*",
+    omit_escaping_symlinks: bool = False,
+) -> None:
     """Extract a SHA-pinned upstream source tree.
 
     Language-pack `safe_tar` rejects every link. Official sherpa-onnx ships
     in-tree relative symlinks (Kotlin/Swift API copies). After the archive
     digest is verified, keep those links only when they stay inside dest.
-    Still reject traversal, absolute paths, hardlinks, devices, and FIFOs.
+    Traversal, absolute member paths, hardlinks, devices, and FIFOs are always
+    rejected. Callers staging the verified official archive may explicitly
+    omit escaping symlinks from unused examples instead of materializing them.
     """
     import tarfile
 
     dest.mkdir(parents=True, exist_ok=True)
     dest_resolved = dest.resolve()
     with tarfile.open(archive, mode) as tar:
-        for member in tar.getmembers():
-            _reject_unsafe_pinned_member(member, dest_resolved)
+        members = [
+            member
+            for member in tar.getmembers()
+            if _pinned_member_is_safe(
+                member,
+                dest_resolved,
+                omit_escaping_symlinks=omit_escaping_symlinks,
+            )
+        ]
         if hasattr(tarfile, "data_filter"):
-            tar.extractall(dest, filter="data")
+            tar.extractall(dest, members=members, filter="data")
             return
-        tar.extractall(dest)
+        tar.extractall(dest, members=members)
 
 
-def _reject_unsafe_pinned_member(member: Any, dest_resolved: Path) -> None:
+def _pinned_member_is_safe(
+    member: Any,
+    dest_resolved: Path,
+    *,
+    omit_escaping_symlinks: bool,
+) -> bool:
     name = Path(member.name)
     if name.is_absolute() or ".." in name.parts:
         raise PatchQueueError(f"unsafe tar member path: {member.name}")
@@ -129,10 +160,15 @@ def _reject_unsafe_pinned_member(member: Any, dest_resolved: Path) -> None:
     if member.issym():
         link = Path(member.linkname)
         if link.is_absolute():
+            if omit_escaping_symlinks:
+                return False
             raise PatchQueueError(f"refusing escaping symlink: {member.name}")
         link_target = (target.parent / link).resolve()
         if dest_resolved not in link_target.parents and link_target != dest_resolved:
+            if omit_escaping_symlinks:
+                return False
             raise PatchQueueError(f"refusing escaping symlink: {member.name}")
+    return True
 
 
 def apply_patches(source_root: Path) -> None:

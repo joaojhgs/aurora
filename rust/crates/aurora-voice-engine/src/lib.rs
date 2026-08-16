@@ -654,8 +654,17 @@ fn tts_catalog_selected_file_ids(entry: &TtsCatalogEntry) -> Result<Vec<String>,
                 "token-scores".to_owned(),
                 "vocab".to_owned(),
             ];
-            if entry.reference_audio_mode() == TtsReferenceAudioMode::Internal {
+            if entry.bindings.reference_audio.is_some() {
                 ids.push("reference-audio".to_owned());
+            }
+            if entry.bindings.pocket_protocol.is_some() {
+                ids.push("pocket-protocol".to_owned());
+            }
+            if entry.bindings.bos_before_voice.is_some() {
+                ids.push("bos-before-voice".to_owned());
+            }
+            if entry.bindings.fixed_voice_state.is_some() {
+                ids.push("fixed-voice-state".to_owned());
             }
             Ok(ids)
         }
@@ -4969,6 +4978,44 @@ mod tests {
             ]
         );
         assert_eq!(binding.languages()[0].language, "en-us");
+    }
+
+    #[test]
+    fn fixed_pockettts_catalog_binding_selects_sidecars_without_reference_audio() {
+        let catalog = TtsVoiceCatalog::runtime().expect("runtime tts catalog");
+        let entry = catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("fixed PocketTTS voice");
+        let binding = TaskPackBinding::from_tts_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+            24_000,
+        )
+        .expect("fixed PocketTTS binding");
+
+        assert_eq!(
+            binding.selected_file_ids(),
+            &[
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "lm-flow".to_owned(),
+                "lm-main".to_owned(),
+                "model-card".to_owned(),
+                "text-conditioner".to_owned(),
+                "token-scores".to_owned(),
+                "vocab".to_owned(),
+                "pocket-protocol".to_owned(),
+                "bos-before-voice".to_owned(),
+                "fixed-voice-state".to_owned(),
+            ]
+        );
+        assert!(!binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == "reference-audio"));
     }
 
     #[test]

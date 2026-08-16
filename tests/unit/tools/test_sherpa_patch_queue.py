@@ -76,6 +76,38 @@ def test_pinned_source_extract_allows_in_tree_relative_symlink(tmp_path: Path) -
         module.extract_pinned_source_tar(escape, tmp_path / "escape")
 
 
+def test_pinned_source_extract_can_omit_verified_upstream_escape_symlink(
+    tmp_path: Path,
+) -> None:
+    import io
+    import tarfile
+
+    spec = __import__("importlib.util").util.spec_from_file_location("apply_sherpa_patches", APPLY)
+    assert spec is not None and spec.loader is not None
+    module = __import__("importlib.util").util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    archive = tmp_path / "pinned.tar"
+    with tarfile.open(archive, "w") as tar:
+        payload = b"required\n"
+        required = tarfile.TarInfo(name="src/required.txt")
+        required.size = len(payload)
+        tar.addfile(required, fileobj=io.BytesIO(payload))
+        stale = tarfile.TarInfo(name="src/stale-example-link")
+        stale.type = tarfile.SYMTYPE
+        stale.linkname = "/Users/upstream/example.txt"
+        tar.addfile(stale)
+
+    dest = tmp_path / "out"
+    module.extract_pinned_source_tar(
+        archive,
+        dest,
+        omit_escaping_symlinks=True,
+    )
+    assert (dest / "src" / "required.txt").read_bytes() == payload
+    assert not (dest / "src" / "stale-example-link").exists()
+
+
 def test_apply_script_rejects_wrong_archive(tmp_path: Path) -> None:
     archive = tmp_path / "bad.tar.gz"
     archive.write_bytes(b"not-sherpa")
@@ -119,10 +151,21 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     assert payload["upstream"]["sha256"] == (
         "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262"
     )
-    assert len(payload["patches"]) == 2
+    assert len(payload["patches"]) == 3
     source = Path(payload["source_root"])
     pocket = (source / "sherpa-onnx/csrc/offline-tts-pocket-model.cc").read_text(encoding="utf-8")
     assert "ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16" in pocket
     assert "insert_bos_before_voice" in pocket
+    assert "fixed_voice_state" in pocket
+    assert "SeedFixedVoiceState" in pocket
+    assert "ReadPocketFile(AAssetManager" in pocket
+    pocket_impl = (source / "sherpa-onnx/csrc/offline-tts-pocket-impl.h").read_text(
+        encoding="utf-8"
+    )
+    assert "Fixed packs start from the seeded" in pocket_impl
     wasm = (source / "wasm/tts/CMakeLists.txt").read_text(encoding="utf-8")
     assert "AURORA_SHERPA_WASM_TTS_NEUTRAL" in wasm
+    assert "-sMODULARIZE=1" in wasm
+    assert "-sEXPORT_ES6=1" in wasm
+    assert "sherpa-onnx-tts.esm.js" in wasm
+    assert "export { createOfflineTts, getDefaultOfflineTtsModelType };" in wasm

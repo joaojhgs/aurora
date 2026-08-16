@@ -39,14 +39,25 @@ export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 cd "$SOURCE"
 bash ./build-wasm-simd-tts.sh
 
-mkdir -p "$DEST"
-cp -f \
-  "$SOURCE/build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-wasm-main-tts.js" \
-  "$SOURCE/build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-wasm-main-tts.wasm" \
-  "$SOURCE/build-wasm-simd-tts/install/bin/wasm/tts/sherpa-onnx-tts.js" \
-  "$DEST/"
-if [[ -f "$DEST/sherpa-onnx-wasm-main-tts.data" ]]; then
+INSTALL_ROOT="$SOURCE/build-wasm-simd-tts/install/bin/wasm/tts"
+if [[ -f "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.data" ]]; then
   echo "neutral WASM TTS must not emit a .data preload" >&2
   exit 1
 fi
+if ! grep -Eq 'export[[:space:]]+default' "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.js"; then
+  echo "neutral WASM TTS module must export its Emscripten factory" >&2
+  exit 1
+fi
+if ! grep -Fq 'export { createOfflineTts, getDefaultOfflineTtsModelType };' "$INSTALL_ROOT/sherpa-onnx-tts.js"; then
+  echo "neutral WASM TTS helper must expose named ES-module exports" >&2
+  exit 1
+fi
+
+mkdir -p "$DEST"
+rm -f "$DEST/sherpa-onnx-wasm-main-tts.data"
+cp -f \
+  "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.js" \
+  "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.wasm" \
+  "$INSTALL_ROOT/sherpa-onnx-tts.js" \
+  "$DEST/"
 echo "staged WASM TTS assets in $DEST"

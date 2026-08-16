@@ -12,12 +12,21 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 SOURCES = REPO / "tools/voice-runtime/pockettts-packs/language_pack_sources.json"
 CONVERT = REPO / "tools/voice-runtime/pockettts-packs/convert_language_pack.py"
+EXPORT = REPO / "tools/voice-runtime/pockettts-packs/run_official_export.py"
 PUBLISH = REPO / "tools/voice-runtime/pockettts-packs/publish_language_packs.py"
 WORKFLOW = REPO / ".github/workflows/sherpa-pockettts-language-packs.yml"
 
 
 def load_convert():
     spec = importlib.util.spec_from_file_location("convert_language_pack", CONVERT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_export():
+    spec = importlib.util.spec_from_file_location("run_official_export", EXPORT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -45,8 +54,10 @@ def test_overlay_catalog_matches_source_pack_ids() -> None:
         assert entry["capability"]["voice_cloning"] is False
         assert entry["capability"]["source_repo"] == "kyutai/pocket-tts-without-voice-cloning"
         assert entry["capability"]["license"] == "CC-BY-4.0"
-        assert entry["bindings"]["reference_audio"].endswith("/internal_reference.wav")
-        assert "pocket_protocol.json" not in entry["bindings"].values()
+        assert "reference_audio" not in entry["bindings"]
+        assert entry["bindings"]["pocket_protocol"].endswith("/pocket_protocol.json")
+        assert entry["bindings"]["bos_before_voice"].endswith("/bos_before_voice.bin")
+        assert entry["bindings"]["fixed_voice_state"].endswith("/fixed_voice_state.bin")
 
 
 def test_language_pack_sources_pin_official_en_and_fr() -> None:
@@ -66,6 +77,12 @@ def test_language_pack_sources_pin_official_en_and_fr() -> None:
     )
     assert packs["aurora-pockettts-en-2026-04"]["weights"]["source_mode"] == "public-fixed-voice"
     assert packs["aurora-pockettts-en-2026-04"]["weights"]["voice_cloning"] is False
+    assert packs["aurora-pockettts-en-2026-04"]["fixed_voice"]["name"] == "alba"
+    assert packs["aurora-pockettts-fr-24l"]["fixed_voice"]["name"] == "estelle"
+    for pack in packs.values():
+        assert pack["fixed_voice"]["repo_id"] == "kyutai/pocket-tts-without-voice-cloning"
+        assert len(pack["fixed_voice"]["revision"]) == 40
+        assert pack["fixed_voice"]["filename"].endswith(".safetensors")
     assert "public_fallback_repo_id" not in packs["aurora-pockettts-en-2026-04"]["weights"]
     assert sources["temporary_bootstrap"] is True
     assert "stable archive URLs" in sources["removal_point"]
@@ -73,6 +90,8 @@ def test_language_pack_sources_pin_official_en_and_fr() -> None:
         "https://github.com/csukuangfj/pocket-tts-onnx-export"
     )
     assert sources["export_helper"]["commit"] == ("f075c00bf4bbfbb081a11fd99abbf39df3849e0c")
+    assert sources["kyutai_source"]["repository"] == ("https://github.com/kyutai-labs/pocket-tts")
+    assert sources["kyutai_source"]["commit"] == ("058886528d0b6f2f2d4022de2e244a5260729e6e")
 
 
 PINNED_HELPER_REPO = "https://github.com/csukuangfj/pocket-tts-onnx-export"
@@ -120,6 +139,52 @@ def _init_helper_git(path: Path, *, origin: str, dirty: bool = False) -> str:
     return commit
 
 
+def _init_kyutai_git(path: Path, *, origin: str, dirty: bool = False) -> str:
+    config = path / "pocket_tts/config/french_24l.yaml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("language: french\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "config", "user.email", "kyutai@example.test"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "kyutai-test"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "add", "pocket_tts/config/french_24l.yaml"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "pin"],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", origin],
+        cwd=path,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
+    if dirty:
+        config.write_text("language: changed\n", encoding="utf-8")
+    return commit
+
+
 def test_convert_dry_run_does_not_download(tmp_path: Path) -> None:
     module = load_convert()
     report = module.convert_pack(
@@ -149,6 +214,7 @@ def test_release_workflow_is_published_or_manual_and_not_pr() -> None:
     assert "--weights-source public-fixed-voice" in text
     assert "name: Sherpa PocketTTS language packs" in text
     assert "sherpa-pockettts-language-packs" in text
+    assert ".artifacts/pockettts/language-packs/kyutai-pocket-tts-src" in text
 
 
 def test_publish_script_validates_workflow_without_archives() -> None:
@@ -368,6 +434,84 @@ def test_bos_extract_reads_safetensors_keys() -> None:
     assert 'if "flow_lm.bos_before_voice" not in handle:' not in text
 
 
+def _write_fixed_voice_fixture(
+    path: Path,
+    *,
+    layers: tuple[int, ...] = (0, 1),
+    frames: int = 3,
+    offset: int | None = None,
+) -> dict[int, object]:
+    np = pytest.importorskip("numpy")
+    safetensors_numpy = pytest.importorskip("safetensors.numpy")
+    tensors: dict[str, object] = {}
+    caches: dict[int, object] = {}
+    for layer in layers:
+        cache = np.arange(2 * frames * 2 * 2, dtype=np.float32).reshape(2, 1, frames, 2, 2)
+        cache = cache + np.float32(layer * 100)
+        tensors[f"transformer.layers.{layer}.self_attn/cache"] = cache
+        tensors[f"transformer.layers.{layer}.self_attn/offset"] = np.array(
+            [frames if offset is None else offset], dtype=np.int64
+        )
+        caches[layer] = cache
+    safetensors_numpy.save_file(tensors, path)
+    return caches
+
+
+def test_fixed_voice_state_export_is_little_endian_and_self_verifying(tmp_path: Path) -> None:
+    np = pytest.importorskip("numpy")
+    module = load_export()
+    source = tmp_path / "voice.safetensors"
+    caches = _write_fixed_voice_fixture(source)
+    output = tmp_path / "out"
+    metadata = module.export_fixed_voice_state(source, output)
+    state = output / "fixed_voice_state.bin"
+    expected = b"".join(
+        np.asarray(caches[layer], dtype="<f4").tobytes(order="C") for layer in (0, 1)
+    )
+    assert state.read_bytes() == expected
+    assert metadata["layers"] == 2
+    assert metadata["frames"] == 3
+    assert metadata["heads"] == 2
+    assert metadata["head_dim"] == 2
+    assert metadata["byte_size"] == len(expected)
+    assert metadata["sha256"] == __import__("hashlib").sha256(expected).hexdigest()
+    assert json.loads((output / "fixed_voice_state.json").read_text()) == metadata
+
+
+@pytest.mark.parametrize(
+    ("layers", "frames", "offset", "message"),
+    [
+        ((0, 2), 3, None, "incomplete"),
+        ((0, 1), 3, 2, "incompatible"),
+    ],
+)
+def test_fixed_voice_state_export_rejects_invalid_layer_abi(
+    tmp_path: Path,
+    layers: tuple[int, ...],
+    frames: int,
+    offset: int | None,
+    message: str,
+) -> None:
+    module = load_export()
+    source = tmp_path / "voice.safetensors"
+    _write_fixed_voice_fixture(source, layers=layers, frames=frames, offset=offset)
+    with pytest.raises(RuntimeError, match=message):
+        module.export_fixed_voice_state(source, tmp_path / "out")
+
+
+def test_fixed_voice_metadata_detects_binary_tampering(tmp_path: Path) -> None:
+    export = load_export()
+    convert = load_convert()
+    source = tmp_path / "voice.safetensors"
+    _write_fixed_voice_fixture(source)
+    output = tmp_path / "out"
+    export.export_fixed_voice_state(source, output)
+    assert convert._load_fixed_voice_metadata(output)["layers"] == 2
+    (output / "fixed_voice_state.bin").write_bytes(b"tampered")
+    with pytest.raises(convert.ConversionError, match="byte size"):
+        convert._load_fixed_voice_metadata(output)
+
+
 def test_resize_static_kv_cache_dim_only_rewrites_rank5_cache() -> None:
     pytest.importorskip("onnx")
     from onnx import TensorProto, helper
@@ -404,6 +548,17 @@ def test_resize_static_kv_cache_dim_only_rewrites_rank5_cache() -> None:
 def test_protocol_sidecar_round_trip(tmp_path: Path) -> None:
     module = load_convert()
     bos = module.write_bos(tmp_path, [0.0] * 1024, [1, 1, 1024])
+    fixed_voice = {
+        "schema_version": 1,
+        "file": "fixed_voice_state.bin",
+        "dtype": "float32-le",
+        "layers": 6,
+        "frames": 126,
+        "heads": 16,
+        "head_dim": 64,
+        "byte_size": 6_193_152,
+        "sha256": "a" * 64,
+    }
     module.write_protocol(
         tmp_path,
         {
@@ -415,10 +570,12 @@ def test_protocol_sidecar_round_trip(tmp_path: Path) -> None:
             "latent_dim": 32,
         },
         bos,
+        fixed_voice,
     )
     payload = json.loads((tmp_path / "pocket_protocol.json").read_text(encoding="utf-8"))
     assert payload["insert_bos_before_voice"] is True
     assert payload["bos_before_voice"] == "bos_before_voice.bin"
+    assert payload["fixed_voice_state"] == fixed_voice
     assert bos.stat().st_size == 1024 * 4
 
 
@@ -443,13 +600,14 @@ def test_download_never_selects_gated_because_token_exists(
 
     monkeypatch.setenv("HF_TOKEN", "should-not-select-gated")
     monkeypatch.setattr(module, "_download", fake_download)
-    weights, tokenizer, repo = module.download_language_weights(
-        "english_2026-04", tmp_path / "hf-cache", "public-fixed-voice"
+    source_spec = json.loads(SOURCES.read_text(encoding="utf-8"))["packs"][0]
+    artifacts = module.download_language_artifacts(
+        source_spec, tmp_path / "hf-cache", "public-fixed-voice"
     )
-    assert repo == "kyutai/pocket-tts-without-voice-cloning"
     assert all(repo_id == "kyutai/pocket-tts-without-voice-cloning" for repo_id, _ in calls)
-    assert weights.name == "model.safetensors"
-    assert tokenizer.name == "tokenizer.model"
+    assert artifacts["weights"].name == "model.safetensors"
+    assert artifacts["tokenizer"].name == "tokenizer.model"
+    assert artifacts["fixed_voice"].name == "alba.safetensors"
 
 
 def test_gated_download_is_explicit_and_fail_closed(
@@ -464,8 +622,9 @@ def test_gated_download_is_explicit_and_fail_closed(
     spec.loader.exec_module(module)
     monkeypatch.delenv("HF_TOKEN", raising=False)
     monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    source_spec = json.loads(SOURCES.read_text(encoding="utf-8"))["packs"][0]
     with pytest.raises(RuntimeError, match="explicit"):
-        module.download_language_weights("english_2026-04", tmp_path / "gated", "gated")
+        module.download_language_artifacts(source_spec, tmp_path / "gated", "gated")
 
     monkeypatch.setenv("HF_TOKEN", "token")
 
@@ -474,7 +633,7 @@ def test_gated_download_is_explicit_and_fail_closed(
 
     monkeypatch.setattr(module, "_download", boom)
     with pytest.raises(RuntimeError, match="refusing public fallback"):
-        module.download_language_weights("english_2026-04", tmp_path / "gated", "gated")
+        module.download_language_artifacts(source_spec, tmp_path / "gated", "gated")
 
 
 def test_graph_optimizer_fail_closed_before_archive(
@@ -486,21 +645,25 @@ def test_graph_optimizer_fail_closed_before_archive(
         raise RuntimeError("optimizer exploded")
 
     monkeypatch.setattr(module, "_ensure_export_helper", lambda dest, *_args, **_kwargs: dest)
+    monkeypatch.setattr(
+        module,
+        "_ensure_pinned_kyutai_source",
+        lambda source, *_args, **_kwargs: source,
+    )
     monkeypatch.setattr(module, "_run_official_export", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module, "_ensure_sherpa_tokenizer", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module, "_inline_pack_onnx", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(module, "_extract_bos", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_require_exported_bos", lambda path: path / "bos.bin")
+    monkeypatch.setattr(module, "_load_fixed_voice_metadata", lambda *_args: {})
     monkeypatch.setattr(module, "optimize_onnx_files", fail)
     with pytest.raises(module.ConversionError, match="graph optimization failed"):
         module.convert_pack("aurora-pockettts-en-2026-04", cache_root=tmp_path)
     assert not (tmp_path / "aurora-pockettts-en-2026-04.tar.bz2").exists()
 
 
-def test_internal_reference_and_public_model_card(tmp_path: Path) -> None:
+def test_public_fixed_voice_model_card_has_no_builder_path(tmp_path: Path) -> None:
     module = load_convert()
-    wav = module.write_internal_reference(tmp_path)
-    assert wav.name == "internal_reference.wav"
-    assert wav.stat().st_size > 44
+    assert not hasattr(module, "write_internal_reference")
     spec = {
         "display_name": "PocketTTS English",
         "kyutai_config": "english_2026-04",
@@ -863,6 +1026,204 @@ def test_pinned_helper_source_refetches_wrong_revision(
     assert (source / "export.py").read_text(encoding="utf-8") == "PINNED = True\n"
 
 
+def test_pinned_kyutai_source_requires_exact_clean_multilingual_checkout(tmp_path: Path) -> None:
+    module = load_convert()
+    repository = "https://github.com/kyutai-labs/pocket-tts"
+    source = tmp_path / "kyutai"
+    commit = _init_kyutai_git(source, origin=repository)
+    module._verify_pinned_kyutai_source(source, repository, commit)
+    assert module._kyutai_source_matches_pin(source, repository, commit) is True
+    assert module._kyutai_source_matches_pin(source, repository, "0" * 40) is False
+    assert (
+        module._kyutai_source_matches_pin(source, "https://example.test/foreign", commit) is False
+    )
+    (source / "pocket_tts/config/french_24l.yaml").write_text(
+        "language: changed\n", encoding="utf-8"
+    )
+    assert module._kyutai_source_matches_pin(source, repository, commit) is False
+
+
+def test_pinned_kyutai_source_rejects_missing_multilingual_config(tmp_path: Path) -> None:
+    module = load_convert()
+    repository = "https://github.com/kyutai-labs/pocket-tts"
+    source = tmp_path / "kyutai"
+    commit = _init_kyutai_git(source, origin=repository)
+    config = source / "pocket_tts/config/french_24l.yaml"
+    config.unlink()
+    subprocess.run(["git", "add", "-u"], cwd=source, check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "commit", "-m", "remove config"],
+        cwd=source,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    new_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=source, text=True
+    ).strip()
+    assert new_commit != commit
+    with pytest.raises(module.ConversionError, match="multilingual configs"):
+        module._verify_pinned_kyutai_source(source, repository, new_commit)
+
+
+def test_official_export_command_passes_all_pinned_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_convert()
+    calls: list[list[str]] = []
+
+    class _Result:
+        returncode = 0
+
+    def fake_run(command: list[str], **_kwargs: object) -> _Result:
+        calls.append(command)
+        return _Result()
+
+    monkeypatch.setattr(module, "_export_python", lambda: "/pinned/export/python")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    module._run_official_export(
+        tmp_path / "helper",
+        {"pack_id": "aurora-pockettts-en-2026-04"},
+        tmp_path / "out",
+        "public-fixed-voice",
+        sources_path=SOURCES,
+        kyutai_source=tmp_path / "kyutai",
+        cache_root=tmp_path / "hf-cache",
+    )
+    command = calls[0]
+    assert command[command.index("--sources") + 1] == str(SOURCES)
+    assert command[command.index("--pack") + 1] == "aurora-pockettts-en-2026-04"
+    assert command[command.index("--kyutai-source") + 1] == str(tmp_path / "kyutai")
+    assert command[command.index("--cache-root") + 1] == str(tmp_path / "hf-cache")
+    assert "--language" not in command
+
+
+def test_onnx_inlining_uses_the_isolated_export_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_convert()
+    calls: list[list[str]] = []
+
+    class _Result:
+        returncode = 0
+
+    def fake_run(command: list[str], **_kwargs: object) -> _Result:
+        calls.append(command)
+        return _Result()
+
+    monkeypatch.setattr(module, "_export_python", lambda: "/pinned/export/python")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    source = tmp_path / "source.onnx"
+    output = tmp_path / "output.onnx"
+    module._run_inline_onnx(EXPORT, source, output)
+
+    assert calls == [
+        [
+            "/pinned/export/python",
+            str(EXPORT),
+            "--inline-source",
+            str(source),
+            "--inline-output",
+            str(output),
+        ]
+    ]
+
+
+def test_graph_optimizer_uses_the_isolated_export_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_convert()
+    calls: list[list[str]] = []
+
+    class _Result:
+        returncode = 0
+        stdout = '{"deduplicated_initializers": 2, "removed_identity": 3}\n'
+        stderr = ""
+
+    def fake_run(command: list[str], **kwargs: object) -> _Result:
+        assert kwargs == {"check": False, "capture_output": True, "text": True}
+        calls.append(command)
+        return _Result()
+
+    monkeypatch.setattr(module, "_export_python", lambda: "/pinned/export/python")
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    for name in module.RUNTIME_ONNX_FILES:
+        (tmp_path / name).write_bytes(b"graph")
+
+    report = module.optimize_onnx_files(tmp_path)
+
+    optimizer = str(REPO / "tools/voice-runtime/pockettts-packs/optimize_onnx_graph.py")
+    assert calls == [
+        ["/pinned/export/python", optimizer, str(tmp_path / name)]
+        for name in module.RUNTIME_ONNX_FILES
+    ]
+    assert report == {
+        name: {"deduplicated_initializers": 2, "removed_identity": 3}
+        for name in module.RUNTIME_ONNX_FILES
+    }
+
+
+def test_graph_optimizer_rejects_invalid_subprocess_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_convert()
+
+    class _Result:
+        returncode = 0
+        stdout = "not-json\n"
+        stderr = ""
+
+    monkeypatch.setattr(module, "_export_python", lambda: "/pinned/export/python")
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: _Result())
+
+    with pytest.raises(module.ConversionError, match="optimizer returned invalid JSON"):
+        module._run_optimize_onnx(tmp_path / "optimizer.py", tmp_path / "model.onnx")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        ["removed_identity", "deduplicated_initializers"],
+        {"removed_identity": 0},
+        {"removed_identity": 0, "deduplicated_initializers": 0, "extra": 0},
+        {"removed_identity": True, "deduplicated_initializers": 0},
+        {"removed_identity": -1, "deduplicated_initializers": 0},
+    ],
+)
+def test_graph_optimizer_rejects_invalid_stats_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: object
+) -> None:
+    module = load_convert()
+
+    class _Result:
+        returncode = 0
+        stderr = ""
+
+    result = _Result()
+    result.stdout = json.dumps(payload)
+    monkeypatch.setattr(module, "_export_python", lambda: "/pinned/export/python")
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_kwargs: result)
+
+    with pytest.raises(module.ConversionError, match="optimizer returned invalid stats"):
+        module._run_optimize_onnx(tmp_path / "optimizer.py", tmp_path / "model.onnx")
+
+
+def test_export_python_fails_closed_without_pinned_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = load_convert()
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+
+    with pytest.raises(module.ConversionError, match="export environment is missing"):
+        module._export_python()
+
+
+def test_conversion_has_no_unoptimized_archive_bypass() -> None:
+    source = CONVERT.read_text(encoding="utf-8")
+    assert "allow_unoptimized" not in source
+    assert "--allow-unoptimized" not in source
+
+
 def test_archive_pack_is_byte_identical_after_mtime_and_mode_changes(tmp_path: Path) -> None:
     module = load_convert()
     pack = tmp_path / "aurora-pockettts-en-2026-04"
@@ -893,3 +1254,41 @@ def test_archive_pack_is_byte_identical_after_mtime_and_mode_changes(tmp_path: P
             else:
                 assert member.isfile()
                 assert member.mode & 0o777 == 0o644
+
+
+def test_runtime_staging_excludes_stale_fp32_and_builder_files(tmp_path: Path) -> None:
+    module = load_convert()
+    source = tmp_path / "export"
+    source.mkdir()
+    expected = module._runtime_file_names("public-fixed-voice")
+    for name in expected:
+        (source / name).write_bytes(name.encode("utf-8"))
+    for stale in (
+        "lm_main.onnx",
+        "lm_flow.onnx",
+        "decoder.onnx",
+        "internal_reference.wav",
+        "tokenizer.model",
+        "weight_source.json",
+        "fixed_voice_state.json",
+        "conversion_manifest.json",
+        "decoder.int8.onnx.data",
+    ):
+        (source / stale).write_bytes(b"stale")
+    staged = tmp_path / "aurora-pockettts-en-2026-04"
+    assert module._stage_runtime_pack(source, staged, "public-fixed-voice") == expected
+    assert {path.name for path in staged.iterdir()} == set(expected)
+    archive = tmp_path / "pack.tar.bz2"
+    module.archive_pack(staged, archive)
+    with tarfile.open(archive, "r:bz2") as tar:
+        files = {Path(member.name).name for member in tar.getmembers() if member.isfile()}
+    assert files == set(expected)
+    assert not files.intersection(
+        {
+            "lm_main.onnx",
+            "lm_flow.onnx",
+            "decoder.onnx",
+            "internal_reference.wav",
+            "conversion_manifest.json",
+        }
+    )

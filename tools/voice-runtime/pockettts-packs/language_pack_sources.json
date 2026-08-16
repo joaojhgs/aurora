@@ -53,6 +53,13 @@
         "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
         "filename": "languages/english_2026-04/tokenizer.model",
         "license": "CC-BY-4.0"
+      },
+      "fixed_voice": {
+        "name": "alba",
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
+        "filename": "languages/english_2026-04/embeddings/alba.safetensors",
+        "license": "CC-BY-4.0"
       }
     },
     {
@@ -91,6 +98,13 @@
         "repo_id": "kyutai/pocket-tts-without-voice-cloning",
         "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
         "filename": "languages/french_24l/tokenizer.model",
+        "license": "CC-BY-4.0"
+      },
+      "fixed_voice": {
+        "name": "estelle",
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
+        "filename": "languages/french_24l/embeddings/estelle.safetensors",
         "license": "CC-BY-4.0"
       }
     }
