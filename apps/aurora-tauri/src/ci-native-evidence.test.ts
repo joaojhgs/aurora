@@ -327,12 +327,24 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:frontend:ios-client']).toBe('node ./scripts/build-ios-client-frontend.mjs')
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('pnpm build:frontend:ios-client')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
+    expect(androidWorkflow).toContain('tools/voice-runtime/build_sherpa_android.sh')
+    expect(androidWorkflow).toContain('AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR=')
+    expect(androidWorkflow).toContain('AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=')
+    expect(androidWorkflow.indexOf('tools/voice-runtime/build_sherpa_android.sh')).toBeLessThan(
+      androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64'),
+    )
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64')
     expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk\n')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')
     expect(androidWorkflow).toContain('Retain Android client smoke APK')
+    expect(androidWorkflow).toContain(
+      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk',
+    )
+    expect(androidWorkflow).not.toContain(
+      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk',
+    )
     expect(androidWorkflow).toContain('apps/aurora-tauri/reports/android-client-smoke.apk')
     expect(androidWorkflow.indexOf('Retain Android client smoke APK')).toBeLessThan(
       androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:aab'),
@@ -728,6 +740,7 @@ describe('Tauri CI native evidence contract', () => {
       'android.permission.ACCESS_NETWORK_STATE',
       'android.permission.RECORD_AUDIO',
       'android.permission.MODIFY_AUDIO_SETTINGS',
+      'android.permission.WAKE_LOCK',
     ]) {
       expect(androidManifest).toContain(permission)
     }

@@ -36,6 +36,15 @@ graph; the baked Reshape/Gather shapes still assume 1000.
 Downloaded models, converted ONNX, WAVs, reports, and build trees belong in
 `.artifacts/`. Never commit them.
 
+## KWS catalog compatibility
+
+Keep the canonical full GigaSpeech, WenetSpeech, and bilingual KWS archives in
+the production catalog. The upstream `-mobile` archives are batch-one graph
+conversions and currently abort when Aurora's streaming decoder reaches two
+hypotheses. Reintroduce a compact KWS archive only after its exact quantized
+production bindings pass the native smoke; never trade away English, Chinese,
+or bilingual coverage to select it.
+
 ## Native and WASM proof
 
 Acquire `/tmp/aurora-global-build.lock` for every convert, build, export, or
@@ -69,6 +78,15 @@ uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime 
 AURORA_SHERPA_WASM_TTS_NEUTRAL=1 tools/voice-runtime/build_sherpa_wasm_tts.sh
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime wasm
 ```
+
+Android APK/AAB packaging must stage the patched native engine produced by
+`tools/voice-runtime/build_sherpa_android.sh`; the stock upstream Android
+archive is an ONNX Runtime/source comparison input, not Aurora's production
+PocketTTS engine. The builder verifies the pinned source and ONNX Runtime
+archives, applies the Aurora patch queue, builds `arm64-v8a` and `x86_64`
+sequentially, and rejects native libraries without TTS or 16 KiB alignment.
+Point the Android bundle wrapper at its two ABI output directories through the
+existing `AURORA_SHERPA_ONNX_ANDROID_*_LIB_DIR` variables.
 
 The WASM smoke is the Playwright driver in
 `packages/aurora-voice-web/tests/playwright/sherpa-pockettts-browser-smoke.pw.ts`.
