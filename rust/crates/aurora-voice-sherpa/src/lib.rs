@@ -3104,7 +3104,9 @@ mod native_tts_backend {
                         .with_num_steps(POCKET_NUM_STEPS)
                         .with_extra(POCKET_EXTRA);
                     if let Some(reference_text) = reference_text {
-                        config = config.with_reference_text(reference_text.clone());
+                        if !reference_text.trim().is_empty() {
+                            config = config.with_reference_text(reference_text.clone());
+                        }
                     }
                 }
             }

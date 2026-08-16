@@ -487,6 +487,7 @@ function ttsGenerationConfig(
   if (matches.length === 0) return {}
   const model = requireModel(models, 'tts')
   if (model.family !== 'pockettts') return {}
+  const extra = model.config?.maxFrames === undefined ? {} : { extra: { max_frames: model.config.maxFrames } }
   const configuredRate = model.config?.referenceSampleRateHz
   if (configuredRate === undefined) throw unavailable('missing_model_role')
   const referencePath = requireRole(model, 'referenceAudio')
@@ -497,7 +498,7 @@ function ttsGenerationConfig(
   return {
     referenceAudio: decoded.samples,
     referenceSampleRate: decoded.sampleRateHz || configuredRate,
-    extra: { max_frames: model.config?.maxFrames ?? 55 },
+    ...extra,
     ...(referenceText ? { referenceText } : {}),
   }
 }
@@ -716,6 +717,9 @@ function validateModelConfig(config: NonNullable<AuroraVoiceWebModelDescriptor['
     throw unavailable('invalid_model_metadata')
   }
   if (config.maxFrames !== undefined && (!Number.isSafeInteger(config.maxFrames) || config.maxFrames < 1 || config.maxFrames > 500)) {
+    throw unavailable('invalid_model_metadata')
+  }
+  if (config.referenceAudioMode !== undefined && config.referenceAudioMode !== 'profile' && config.referenceAudioMode !== 'internal') {
     throw unavailable('invalid_model_metadata')
   }
   return Object.freeze({ ...config })

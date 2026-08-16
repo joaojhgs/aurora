@@ -87,7 +87,7 @@ export {
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
-export { TauriLocalTransport } from './tauri.js'
+export { TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from './tauri.js'
 export { AuthSession } from './session.js'
 export { AuroraError, classifyHttpError, normalizeAuroraErrorForUi } from './errors.js'
 export {

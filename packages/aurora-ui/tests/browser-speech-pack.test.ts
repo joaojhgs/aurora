@@ -223,6 +223,47 @@ describe('openActiveBrowserSpeechPacks', () => {
     }))
   })
 
+  it('activates internal-mode Pocket packs without a user reference profile', async () => {
+    const host = fakeModelStoreHost()
+    voiceWeb.openExistingHost.mockResolvedValueOnce(host)
+    const pack = modelPack('tts', 'pocket-internal', 'tts-file', '/tts/model.onnx', 'pockettts')
+    pack.models[0] = {
+      ...pack.models[0],
+      files: [
+        ...pack.models[0].files,
+        { role: 'referenceAudio', fileId: 'reference-audio', virtualPath: '/internal_reference.wav' },
+      ],
+      config: { voiceId: 'standard:pockettts:aurora-pockettts-en-2026-04', referenceAudioMode: 'internal', referenceSampleRateHz: 24_000 },
+    }
+    pack.files.push({
+      fileId: 'reference-audio',
+      storageKey: 'pocket-internal@reference-audio',
+      sha256: 'd'.repeat(64),
+      byteLength: 4,
+      readAll: async () => new Uint8Array([1, 2, 3, 4]),
+      readChunk: async () => new Uint8Array([1]),
+    })
+    voiceWeb.openActive.mockResolvedValueOnce(pack)
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-internal', packVersion: '1.0.0', voiceId: 'standard:pockettts:aurora-pockettts-en-2026-04' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'standard:pockettts:aurora-pockettts-en-2026-04',
+      loadReferenceProfile: vi.fn(),
+    })
+
+    expect(result.state).toBe('ready')
+    if (result.state !== 'ready') throw new Error('expected ready')
+    expect(result.capabilities.tts).toBe(true)
+    expect(result.modelBindings.models[0]?.config).toMatchObject({
+      referenceAudioMode: 'internal',
+      referenceSampleRateHz: 24_000,
+    })
+    expect(result.modelBindings.files.some((file) => file.fileId.startsWith('reference-audio:'))).toBe(false)
+  })
+
   it('keeps Pocket voices unavailable until an explicit reference profile is selected', async () => {
     const host = fakeModelStoreHost()
     voiceWeb.openExistingHost.mockResolvedValueOnce(host)

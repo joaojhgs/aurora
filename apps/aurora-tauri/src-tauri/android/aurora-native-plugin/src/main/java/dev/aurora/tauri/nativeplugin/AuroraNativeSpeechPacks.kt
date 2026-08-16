@@ -75,6 +75,43 @@ internal fun auroraSpeechPackTaskFromName(value: String): AuroraSpeechPackTask? 
         else -> null
     }
 
+internal fun auroraTtsReferenceAudioReady(
+    id: String,
+    sampleRateHz: Int,
+    samples: FloatArray,
+): Boolean = id.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()
+
+internal fun auroraTtsReferenceSelectionOrNull(
+    id: String,
+    audioUri: String,
+    text: String,
+    revision: String,
+    sampleRateHz: Int,
+    samples: FloatArray,
+): AuroraTtsReferenceSelection? {
+    if (!auroraTtsReferenceAudioReady(id, sampleRateHz, samples)) return null
+    return AuroraTtsReferenceSelection(id, audioUri, text, revision, sampleRateHz, samples)
+}
+
+internal fun auroraTtsReferenceRequired(
+    task: AuroraSpeechPackTask?,
+    modelFamily: String,
+    requiresReferenceAudio: Boolean,
+    referenceAudioMode: String,
+): Boolean {
+    if (task != AuroraSpeechPackTask.TTS) return false
+    return when (referenceAudioMode.trim().lowercase(Locale.getDefault())) {
+        "internal" -> false
+        "profile" -> true
+        else -> requiresReferenceAudio || modelFamily == "pockettts"
+    }
+}
+
+internal fun auroraVoicePackReferenceAudioMode(item: org.json.JSONObject): String =
+    item.optString("referenceAudioMode", item.optString("reference_audio_mode", ""))
+        .trim()
+        .lowercase(Locale.getDefault())
+
 internal object AuroraNativeSpeechPackBridge {
     fun install(context: Context, packId: String, task: AuroraSpeechPackTask): Boolean =
         nativeInstall(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName)

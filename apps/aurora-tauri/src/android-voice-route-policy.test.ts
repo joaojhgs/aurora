@@ -833,4 +833,62 @@ describe('Android native voice route policy', () => {
     expect(validatorBody).toContain('validateOptionalJsonLong(record, "createdAtMs")')
     expect(validatorBody).toContain('validateOptionalJsonLong(record, "expiresAtMs", requirePositive = true)')
   })
+
+  it('honors explicit Pocket reference mode instead of forcing every pockettts pack to need a user profile', () => {
+    const plugin = repoText(kotlinPath)
+    const service = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const helper = repoText(speechPackPath)
+    const helperBody = helper.slice(
+      helper.indexOf('internal fun auroraTtsReferenceRequired'),
+      helper.indexOf('internal fun auroraVoicePackReferenceAudioMode'),
+    )
+
+    expect(androidAudio).toContain('TtsVoiceCatalog::runtime()')
+    expect(androidAudio).toContain('entry.requires_reference_profile()')
+    expect(androidAudio).toContain('catalog_reference_audio_mode_label()')
+    expect(helperBody).toContain('"internal" -> false')
+    expect(helperBody).toContain('"profile" -> true')
+    expect(helperBody).toContain('requiresReferenceAudio || modelFamily == "pockettts"')
+    expect(plugin).toContain('auroraTtsReferenceRequired(')
+    expect(plugin).toContain('entry.referenceAudioMode')
+    expect(service).toContain('auroraTtsReferenceRequired(')
+    expect(service).toContain('entry.referenceAudioMode')
+    expect(plugin).not.toContain('entry.requiresReferenceAudio || entry.modelFamily == "pockettts"')
+    expect(service).not.toContain('!entry.requiresReferenceAudio && entry.modelFamily != "pockettts"')
+  })
+
+  it('stores and loads Android audio-only clone profiles without written text', () => {
+    const plugin = repoText(kotlinPath)
+    const service = repoText(voiceStorePath)
+    const helper = repoText(speechPackPath)
+    const helperBody = helper.slice(
+      helper.indexOf('internal fun auroraTtsReferenceAudioReady'),
+      helper.indexOf('internal fun auroraTtsReferenceRequired'),
+    )
+    const pluginStoreBody = plugin.slice(
+      plugin.indexOf('private fun storeTtsReferenceSelection'),
+      plugin.indexOf('private fun clearTtsReferenceSelection'),
+    )
+    const pluginLoadBody = plugin.slice(
+      plugin.indexOf('private fun ttsReferenceSelection()'),
+      plugin.indexOf('private fun storeTtsReferenceSelection'),
+    )
+    const serviceLoadBody = service.slice(
+      service.indexOf('private fun ttsReferenceSelection()'),
+      service.indexOf('private fun parseReferenceSamples(raw: String?)'),
+    )
+
+    expect(helperBody).toContain('id.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()')
+    expect(helperBody).toContain('auroraTtsReferenceAudioReady(id, sampleRateHz, samples)')
+    expect(helperBody).not.toContain('text.isNotBlank()')
+    expect(pluginStoreBody).toContain('if (!auroraTtsReferenceAudioReady(id, sampleRateHz, samples)) return false')
+    expect(pluginStoreBody).not.toContain('text.isBlank() || sampleRateHz')
+    expect(pluginLoadBody).toContain('auroraTtsReferenceSelectionOrNull(')
+    expect(pluginLoadBody).not.toContain('text.isNotBlank()')
+    expect(pluginLoadBody).not.toContain('profileText.isNotBlank()')
+    expect(serviceLoadBody).toContain('auroraTtsReferenceSelectionOrNull(')
+    expect(serviceLoadBody).not.toContain('text.isNotBlank()')
+    expect(serviceLoadBody).not.toContain('profileText.isNotBlank()')
+  })
 })

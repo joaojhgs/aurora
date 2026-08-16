@@ -26,6 +26,16 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
   let sampleRateHz: UInt32
   let frameSize: UInt32
   let modelFamily: String
+  let requiresReferenceAudio: Bool
+  let referenceAudioMode: String?
+
+  var requiresUserReferenceProfile: Bool {
+    let mode = (referenceAudioMode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if mode == "internal" { return false }
+    if mode == "profile" { return true }
+    return task.lowercased() == "tts" &&
+      (requiresReferenceAudio || modelFamily.lowercased() == "pockettts")
+  }
 
   init(
     packId: String,
@@ -46,7 +56,9 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     modelFiles: [AuroraIOSVoicePackModelFile] = [],
     sampleRateHz: UInt32 = 16_000,
     frameSize: UInt32 = 512,
-    modelFamily: String = "vits_piper"
+    modelFamily: String = "vits_piper",
+    requiresReferenceAudio: Bool = false,
+    referenceAudioMode: String? = nil
   ) {
     self.packId = packId
     self.displayName = displayName
@@ -67,6 +79,8 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     self.sampleRateHz = sampleRateHz
     self.frameSize = frameSize
     self.modelFamily = modelFamily
+    self.requiresReferenceAudio = requiresReferenceAudio
+    self.referenceAudioMode = referenceAudioMode
   }
 
   init(from decoder: Decoder) throws {
@@ -139,6 +153,13 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
       container,
       keys: ["model_family", "modelFamily"]
     ) ?? Self.defaultModelFamily(task: task, packId: packId)
+    self.requiresReferenceAudio = (try? container.decodeIfPresent(Bool.self, forKey: .requiresReferenceAudio))
+      ?? (try? container.decodeIfPresent(Bool.self, forKey: .requires_reference_audio))
+      ?? false
+    self.referenceAudioMode = try Self.decodeStringIfPresent(
+      container,
+      keys: ["referenceAudioMode", "reference_audio_mode"]
+    )
   }
 
   func encode(to encoder: Encoder) throws {
@@ -162,6 +183,8 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     try container.encode(sampleRateHz, forKey: .sampleRateHz)
     try container.encode(frameSize, forKey: .frameSize)
     try container.encode(modelFamily, forKey: .modelFamily)
+    try container.encode(requiresReferenceAudio, forKey: .requiresReferenceAudio)
+    try container.encodeIfPresent(referenceAudioMode, forKey: .referenceAudioMode)
   }
 
   fileprivate static func decodeString(
@@ -286,6 +309,10 @@ struct AuroraIOSVoicePackCatalogEntry: Codable, Equatable {
     case frame_size
     case modelFamily
     case model_family
+    case requiresReferenceAudio
+    case requires_reference_audio
+    case referenceAudioMode
+    case reference_audio_mode
   }
 }
 
@@ -400,7 +427,7 @@ struct AuroraIOSVoicePackDownloadArgs: Decodable {
 struct AuroraIOSVoiceTTSReferenceSetArgs: Decodable {
   let packId: String
   let audioBase64: String
-  let referenceText: String
+  let referenceText: String?
   let sampleRateHz: UInt32
   let revision: String
 }
@@ -669,6 +696,9 @@ enum AuroraIOSVoicePackManager {
           "version": entry.version ?? NSNull(),
           "runtimeRevision": entry.runtimeRevision,
           "modelFamily": entry.modelFamily,
+          "requiresReferenceAudio": entry.requiresUserReferenceProfile,
+          "referenceAudioMode": entry.referenceAudioMode ?? NSNull(),
+          "requiresReferenceProfile": entry.requiresUserReferenceProfile,
           "license": entry.license,
           "attribution": entry.attribution,
           "acknowledged": entry.acknowledged,
@@ -815,6 +845,9 @@ enum AuroraIOSVoicePackManager {
         "compatibleArchitectures": entry.compatibleArchitectures,
         "runtimeRevision": entry.runtimeRevision,
         "modelFamily": entry.modelFamily,
+        "requiresReferenceAudio": entry.requiresUserReferenceProfile,
+        "referenceAudioMode": entry.referenceAudioMode ?? NSNull(),
+        "requiresReferenceProfile": entry.requiresUserReferenceProfile,
         "license": entry.license,
         "attribution": entry.attribution,
         "acknowledged": entry.acknowledged,
@@ -891,10 +924,12 @@ enum AuroraIOSVoicePackManager {
     return trimmed
   }
 
-  private static func sanitizeReferenceText(_ value: String) throws -> String {
-    let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty,
-          text.utf8.count <= maxReferenceTextBytes,
+  private static func sanitizeReferenceText(_ value: String?) throws -> String {
+    let text = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if text.isEmpty {
+      return ""
+    }
+    guard text.utf8.count <= maxReferenceTextBytes,
           !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
       throw AuroraIOSVoicePackManagerError.invalidPack
     }
@@ -1251,7 +1286,11 @@ enum AuroraIOSVoicePackManager {
           referenceAudioSha256: reference?.audioSha256,
           referenceAudioSizeBytes: reference?.audioSizeBytes ?? 0,
           referenceAudioSampleRateHz: reference?.sampleRateHz ?? 0,
-          referenceText: reference?.referenceText,
+          referenceText: reference.flatMap { record in
+            record.referenceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? nil
+              : record.referenceText
+          },
           referenceRevision: reference?.revision
         ))
       }
@@ -1376,7 +1415,7 @@ enum AuroraIOSVoicePackManager {
     for entry: AuroraIOSVoicePackCatalogEntry
   ) throws -> AuroraIOSVoiceTTSReferenceRecord? {
     guard entry.task.lowercased() == "tts",
-          entry.modelFamily.lowercased() == "pockettts" else {
+          entry.requiresUserReferenceProfile else {
       return nil
     }
     let recordURL = referenceRecordURL(packId: entry.packId)
@@ -1392,7 +1431,6 @@ enum AuroraIOSVoicePackManager {
           record.audioSizeBytes > 0,
           record.audioSizeBytes <= maxReferenceBytes,
           record.sampleRateHz > 0,
-          !record.referenceText.isEmpty,
           !record.revision.isEmpty else {
       throw AuroraIOSVoicePackManagerError.invalidPack
     }

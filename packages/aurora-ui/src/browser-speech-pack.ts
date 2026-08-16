@@ -10,11 +10,12 @@ import {
   type AuroraBrowserModelPackReleaseTrustKey,
   type AuroraBrowserVoiceCatalogEntry,
 } from '@aurora/voice-web/browser'
-import type {
-  AuroraVoiceWebModelBindings,
-  AuroraVoiceWebModelDescriptor,
-  AuroraVoiceWebModelTask,
-  AuroraWebModelStoreHost,
+import {
+  resolvePocketReferenceAudioMode,
+  type AuroraVoiceWebModelBindings,
+  type AuroraVoiceWebModelDescriptor,
+  type AuroraVoiceWebModelTask,
+  type AuroraWebModelStoreHost,
 } from '@aurora/voice-web'
 
 export interface AuroraHostedBrowserSpeechPackTrustInput {
@@ -420,7 +421,7 @@ export async function openActiveBrowserSpeechPacks(
       let taskModels = pack.models.filter((model) => model.task === task)
       if (taskModels.length === 0) return rejectedBrowserSpeechPacksStatus('rejected', 'unavailable')
       let referenceFile: AuroraVoiceWebModelBindings['files'][number] | null = null
-      if (task === 'tts' && taskModels.some(isPocketTtsModel)) {
+      if (task === 'tts' && taskModels.some(isPocketTtsProfileModel)) {
         const referenceProfileId = trusted.referenceProfileId
         if (!referenceProfileId) continue
         const referenceProfile = options.loadReferenceProfile
@@ -438,7 +439,7 @@ export async function openActiveBrowserSpeechPacks(
           bytes: referenceProfile.audioBytes,
         })
         taskModels = taskModels.map((model) => {
-          if (!isPocketTtsModel(model)) return model
+          if (!isPocketTtsProfileModel(model)) return model
           return Object.freeze({
             ...model,
             files: Object.freeze([
@@ -642,6 +643,10 @@ function isPocketTtsModel(model: AuroraVoiceWebModelDescriptor): boolean {
   return model.task === 'tts' && model.family === 'pockettts'
 }
 
+function isPocketTtsProfileModel(model: AuroraVoiceWebModelDescriptor): boolean {
+  return isPocketTtsModel(model) && resolvePocketReferenceAudioMode(model.config) === 'profile'
+}
+
 async function activeBrowserVoiceCatalogPacks(
   globalObject: Parameters<typeof AuroraBrowserModelStoreHost.create>[0] | undefined,
 ): Promise<Map<AuroraBrowserSpeechPackTask, { readonly packId: string; readonly packVersion: string }>> {
@@ -710,7 +715,11 @@ function browserVoiceInstallReceipt(
 function browserVoiceCatalogEntryNeedsReferenceProfile(entry: AuroraBrowserVoiceCatalogEntry): boolean {
   const manifest = entry.toModelPackManifest()
   return manifest.variants.some((variant) =>
-    (variant.model_bindings ?? []).some((model) => model.task === 'tts' && model.family === 'pockettts')
+    (variant.model_bindings ?? []).some((model) =>
+      model.task === 'tts'
+      && model.family === 'pockettts'
+      && resolvePocketReferenceAudioMode(model.config) === 'profile'
+    )
   )
 }
 

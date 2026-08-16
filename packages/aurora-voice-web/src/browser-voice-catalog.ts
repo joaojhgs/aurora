@@ -1,5 +1,6 @@
 import type { AuroraBrowserModelPackArchiveEntry, AuroraBrowserModelPackManifest } from './browser-model-pack.js'
 import type { AuroraVoiceWebModelDescriptor, AuroraVoiceWebModelFileRole, AuroraVoiceWebModelTask } from './types.js'
+import { AURORA_BROWSER_POCKETTTS_OVERLAY } from './aurora-pockettts-overlay.generated.js'
 import { AURORA_BROWSER_SPEECH_CATALOG, AURORA_BROWSER_TTS_CATALOG } from './browser-voice-catalog.generated.js'
 
 export interface AuroraBrowserRawArchive {
@@ -35,6 +36,14 @@ export interface AuroraBrowserRawTtsEntry {
   readonly archive: AuroraBrowserRawArchive & { readonly root: string }
   readonly bindings: Record<string, string>
   readonly reference_samples?: readonly AuroraBrowserRawTtsReferenceSample[]
+  readonly capability?: {
+    readonly reference_audio_mode: 'profile' | 'internal'
+    readonly voice_cloning: boolean
+    readonly source_repo: string
+    readonly source_revision: string
+    readonly license: string
+    readonly encoder_status: string
+  }
   readonly terms: AuroraBrowserCatalogTerms
 }
 
@@ -108,16 +117,29 @@ export function auroraBrowserVoiceCatalogSummary(): {
 } {
   return {
     speechEntries: AURORA_BROWSER_SPEECH_CATALOG.entries.length,
-    ttsEntries: AURORA_BROWSER_TTS_CATALOG.entries.length,
+    ttsEntries: AURORA_BROWSER_TTS_CATALOG.entries.length + AURORA_BROWSER_POCKETTTS_OVERLAY.entries.length,
     speechLanguages: AURORA_BROWSER_SPEECH_CATALOG.languages,
-    ttsLanguages: AURORA_BROWSER_TTS_CATALOG.languages
+    ttsLanguages: mergedTtsLanguages()
   }
+}
+
+function mergedTtsLanguages(): readonly string[] {
+  const languages = [...AURORA_BROWSER_TTS_CATALOG.languages]
+  const seen = new Set(languages)
+  for (const entry of AURORA_BROWSER_POCKETTTS_OVERLAY.entries) {
+    if (!seen.has(entry.language)) {
+      seen.add(entry.language)
+      languages.push(entry.language)
+    }
+  }
+  return languages
 }
 
 function allEntries(): readonly AuroraBrowserVoiceCatalogEntry[] {
   return [
     ...AURORA_BROWSER_SPEECH_CATALOG.entries.map(speechEntry),
-    ...AURORA_BROWSER_TTS_CATALOG.entries.map(ttsEntry)
+    ...AURORA_BROWSER_TTS_CATALOG.entries.map(ttsEntry),
+    ...AURORA_BROWSER_POCKETTTS_OVERLAY.entries.map(ttsEntry)
   ]
 }
 
@@ -145,7 +167,7 @@ function ttsEntry(entry: AuroraBrowserRawTtsEntry): AuroraBrowserVoiceCatalogEnt
     archive: entry.archive,
     installableByBrowserArchive: archiveInstallable(entry.archive),
     terms: entry.terms,
-    toModelPackManifest: () => manifestFor(entry.voice_id, entry.display_name, ['tts'], 'tts', entry.archive, entry.bindings, family, 'offline-tts', entry.language, entry.voice_id)
+    toModelPackManifest: () => manifestFor(entry.voice_id, entry.display_name, ['tts'], 'tts', entry.archive, entry.bindings, family, 'offline-tts', entry.language, entry.voice_id, entry.capability?.reference_audio_mode)
   }
 }
 
@@ -165,7 +187,8 @@ function manifestFor(
   family: AuroraVoiceWebModelDescriptor['family'],
   kind: AuroraVoiceWebModelDescriptor['kind'],
   language?: string,
-  voiceId?: string
+  voiceId?: string,
+  referenceAudioMode?: 'profile' | 'internal'
 ): AuroraBrowserModelPackManifest {
   const archiveFileId = `${task}-archive`
   const bindingEntries = bindingArchiveEntries(task, archive, bindings)
@@ -200,7 +223,9 @@ function manifestFor(
         files: modelFileRefs(bindingEntries, bindings),
         config: {
           ...(language === undefined ? {} : { language }),
-          ...(voiceId === undefined ? {} : { voiceId })
+          ...(voiceId === undefined ? {} : { voiceId }),
+          ...(referenceAudioMode === undefined ? {} : { referenceAudioMode }),
+          ...(referenceAudioMode === 'internal' ? { referenceSampleRateHz: 24_000 } : {})
         }
       }]
     }],

@@ -11,11 +11,35 @@ describe('browser voice catalog', () => {
     const summary = auroraBrowserVoiceCatalogSummary()
 
     expect(summary.speechEntries).toBe(21)
-    expect(summary.ttsEntries).toBe(537)
+    expect(summary.ttsEntries).toBe(539)
     expect(summary.speechLanguages).toContain('en')
     expect(summary.ttsLanguages).toContain('en-us')
-    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(537)
+    expect(summary.ttsLanguages).toContain('fr-fr')
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(539)
     expect(listAuroraBrowserVoiceCatalogEntries({ task: 'stt' })).toHaveLength(12)
+  })
+
+  it('lists overlay English and French packs on the browser download path', () => {
+    const summary = auroraBrowserVoiceCatalogSummary()
+    const english = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:aurora-pockettts-en-2026-04')
+    const french = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:aurora-pockettts-fr-24l')
+    const official = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26')
+
+    expect(english?.languages).toEqual(['en-us'])
+    expect(french?.languages).toEqual(['fr-fr'])
+    expect(summary.ttsLanguages).toEqual(expect.arrayContaining(['en-us', 'fr-fr']))
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts', language: 'fr-fr' }).map((entry) => entry.id))
+      .toContain('standard:pockettts:aurora-pockettts-fr-24l')
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]).toMatchObject({
+      family: 'pockettts',
+      config: { referenceAudioMode: 'internal', referenceSampleRateHz: 24_000 }
+    })
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(true)
+    expect(french?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).toMatchObject({
+      referenceAudioMode: 'internal'
+    })
+    expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).not.toHaveProperty('referenceAudioMode')
+    expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
   })
 
   it('creates an archive install descriptor for selected upstream metadata', () => {

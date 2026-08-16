@@ -362,19 +362,8 @@ impl GeneratedAudioHandle {
             return Err(TtsError::NativeInvalidAudio);
         }
         let len = usize::try_from(raw.n).map_err(|_| TtsError::NativeAudioTooLong)?;
-        let samples = unsafe { std::slice::from_raw_parts(raw.samples, len) };
-        let clamped = samples
-            .iter()
-            .map(|sample| {
-                if !sample.is_finite() || !(-1.5..=1.5).contains(sample) {
-                    None
-                } else {
-                    Some(sample.clamp(-1.0, 1.0))
-                }
-            })
-            .collect::<Option<Vec<f32>>>()
-            .ok_or(TtsError::NativeInvalidAudio)?;
-        TtsAudio::new(raw.sample_rate, clamped)
+        let samples = unsafe { std::slice::from_raw_parts(raw.samples, len) }.to_vec();
+        TtsAudio::new(raw.sample_rate, samples)
     }
 }
 
@@ -418,7 +407,7 @@ extern "C" fn progress_callback(
         let slice = unsafe { std::slice::from_raw_parts(samples, n as usize) };
         if slice
             .iter()
-            .any(|sample| !sample.is_finite() || !(-1.5..=1.5).contains(sample))
+            .any(|sample| !sample.is_finite() || !(-1.0..=1.0).contains(sample))
         {
             state.invalid_audio = true;
             return 0;

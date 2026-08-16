@@ -643,16 +643,22 @@ fn tts_catalog_selected_file_ids(entry: &TtsCatalogEntry) -> Result<Vec<String>,
             "model-card".to_owned(),
             "tokens".to_owned(),
         ]),
-        "pockettts" => Ok(vec![
-            "decoder".to_owned(),
-            "encoder".to_owned(),
-            "lm-flow".to_owned(),
-            "lm-main".to_owned(),
-            "model-card".to_owned(),
-            "text-conditioner".to_owned(),
-            "token-scores".to_owned(),
-            "vocab".to_owned(),
-        ]),
+        "pockettts" => {
+            let mut ids = vec![
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "lm-flow".to_owned(),
+                "lm-main".to_owned(),
+                "model-card".to_owned(),
+                "text-conditioner".to_owned(),
+                "token-scores".to_owned(),
+                "vocab".to_owned(),
+            ];
+            if entry.reference_audio_mode() == TtsReferenceAudioMode::Internal {
+                ids.push("reference-audio".to_owned());
+            }
+            Ok(ids)
+        }
         _ => Err(EngineError::InvalidRequest),
     }
 }

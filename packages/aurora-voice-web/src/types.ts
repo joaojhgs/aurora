@@ -131,7 +131,14 @@ export interface AuroraVoiceWebModelDescriptor {
     readonly referenceText?: string
     readonly referenceSampleRateHz?: number
     readonly maxFrames?: number
+    readonly referenceAudioMode?: 'profile' | 'internal'
   }
+}
+
+export function resolvePocketReferenceAudioMode(
+  config?: { readonly referenceAudioMode?: 'profile' | 'internal' }
+): 'profile' | 'internal' {
+  return config?.referenceAudioMode === 'internal' ? 'internal' : 'profile'
 }
 
 export interface AuroraVoiceWebModelFileBinding {

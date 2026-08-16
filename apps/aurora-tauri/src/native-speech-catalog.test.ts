@@ -1,9 +1,14 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { TauriLocalTransport } from "@aurora/client";
 import {
   createTauriNativeSpeechCatalogPort,
   type TauriNativeSpeechCatalogPortOptions,
 } from "./native-speech-catalog";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 type TransportMock = TauriNativeSpeechCatalogPortOptions["transport"];
 
@@ -150,6 +155,54 @@ describe("createTauriNativeSpeechCatalogPort", () => {
     expect(mock.removeNativeSpeechPack).toHaveBeenCalledWith({ task: "stt", packId: "whisper.tiny.en" });
   });
 
+  it("lists Android public overlay voices without a user profile", async () => {
+    const mock = transport({
+      getAndroidVoicePackCatalogStatus: vi.fn(async () => ({
+        platform: "android",
+        available: false,
+        entries: [
+          {
+            packId: "standard:pockettts:aurora-pockettts-en-2026-04",
+            packName: "Aurora English",
+            language: "en-us",
+            sha256: "b".repeat(64),
+            sizeBytes: 456,
+            engineRuntimeRevision: "sherpa-onnx-1.13.5",
+            installed: false,
+            active: false,
+            runtimeTask: "tts" as const,
+            modelFamily: "pockettts",
+            requiresReferenceAudio: false,
+            referenceAudioMode: "internal",
+            referenceSelectionPresent: false,
+          },
+          {
+            packId: "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26",
+            packName: "Official English",
+            language: "en-us",
+            sha256: "c".repeat(64),
+            sizeBytes: 789,
+            engineRuntimeRevision: "sherpa-onnx-1.13.5",
+            installed: false,
+            active: false,
+            runtimeTask: "tts" as const,
+            modelFamily: "pockettts",
+            referenceSelectionPresent: false,
+          },
+        ],
+        secretsRedacted: true,
+      })),
+    });
+    const port = createTauriNativeSpeechCatalogPort({ platform: "android", transport: mock });
+    const catalog = await port.listCatalog();
+
+    const byId = Object.fromEntries(catalog.items.map((item) => [item.packId, item]));
+    expect(byId["standard:pockettts:aurora-pockettts-en-2026-04"]).not.toHaveProperty("requiresReferenceProfile");
+    expect(byId["standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"]).toMatchObject({
+      requiresReferenceProfile: true,
+    });
+  });
+
   it("polls Android downloads and passes an explicit Pocket reference profile", async () => {
     const progress: string[] = [];
     const mock = transport({
@@ -227,6 +280,252 @@ describe("createTauriNativeSpeechCatalogPort", () => {
     expect(progress).toEqual(["queued", "downloading", "saving", "saving", "ready"]);
   });
 
+  it("selects Android and iOS clone packs with an audio-only reference profile", async () => {
+    const android = transport({
+      getAndroidVoicePackCatalogStatus: vi.fn(async () => ({
+        platform: "android",
+        available: false,
+        entries: [{
+          packId: "pocket.en",
+          packName: "Pocket English",
+          language: "en",
+          sha256: "b".repeat(64),
+          sizeBytes: 456,
+          engineRuntimeRevision: "sherpa-onnx-1.13.5",
+          installed: false,
+          active: false,
+          runtimeTask: "tts" as const,
+          modelFamily: "pockettts",
+          requiresReferenceAudio: true,
+          referenceSelectionPresent: false,
+        }],
+        secretsRedacted: true,
+      })),
+      downloadAndroidVoicePack: vi.fn(async () => ({ started: true, packId: "pocket.en", jobId: "job-1" })),
+      getAndroidVoicePackDownloadStatus: vi.fn(async () => ({
+        jobId: "job-1",
+        status: "completed",
+        packId: "pocket.en",
+        downloadedBytes: 456,
+        totalBytes: 456,
+      })),
+      activateAndroidVoicePack: vi.fn(async () => ({ ok: true })),
+    });
+    const ios = transport({
+      listIosVoicePacks: vi.fn(async () => [{
+        packId: "pocket.en",
+        displayName: "Pocket English",
+        language: "en",
+        task: "tts",
+        version: "2026.08",
+        runtimeRevision: "sherpa-onnx-1.13.5",
+        sha256: "c".repeat(64),
+        fileSize: 789,
+        installed: false,
+        activeSlot: null,
+        modelFamily: "pockettts",
+        requiresReferenceAudio: true,
+      }]),
+      downloadIosVoicePack: vi.fn(async () => ({ ok: true })),
+      activateIosVoicePack: vi.fn(async () => ({ ok: true })),
+      getIosVoicePackStatus: vi.fn(async () => ({
+        available: true,
+        activeSlots: { tts: "pocket.en" },
+        count: 1,
+        packs: [],
+        secretsRedacted: true,
+      })),
+    });
+    const loadReferenceProfile = vi.fn(async () => ({
+      referenceId: "voice-1",
+      referenceRevision: "rev-1",
+      referenceSampleRateHz: 16_000,
+      referenceSamples: [0, 0.25, -0.25],
+    }));
+
+    const androidPort = createTauriNativeSpeechCatalogPort({
+      platform: "android",
+      transport: android,
+      androidPollIntervalMs: 1,
+      sleep: vi.fn(async () => undefined),
+      loadReferenceProfile,
+    });
+    const iosPort = createTauriNativeSpeechCatalogPort({
+      platform: "ios",
+      transport: ios,
+      loadReferenceProfile,
+    });
+    const androidCatalog = await androidPort.listCatalog();
+    const iosCatalog = await iosPort.listCatalog();
+
+    await androidPort.select({
+      selection: {
+        ...androidCatalog.items[0]!,
+        referenceProfileId: "voice-1",
+        referenceProfileSelected: true,
+      },
+    });
+    await iosPort.select({
+      selection: {
+        ...iosCatalog.items[0]!,
+        referenceProfileId: "voice-1",
+        referenceProfileSelected: true,
+      },
+    });
+
+    expect(android.downloadAndroidVoicePack).toHaveBeenCalledWith({
+      task: "tts",
+      packId: "pocket.en",
+      forceDownload: false,
+      activate: false,
+      referenceId: "voice-1",
+      referenceRevision: "rev-1",
+      referenceSampleRateHz: 16_000,
+      referenceSamples: [0, 0.25, -0.25],
+    });
+    expect(ios.downloadIosVoicePack).toHaveBeenCalledWith({
+      task: "tts",
+      packId: "pocket.en",
+      forceDownload: false,
+      activate: false,
+      referenceId: "voice-1",
+      referenceRevision: "rev-1",
+      referenceSampleRateHz: 16_000,
+      referenceSamples: [0, 0.25, -0.25],
+    });
+    expect(android.downloadAndroidVoicePack).not.toHaveBeenCalledWith(
+      expect.objectContaining({ referenceText: expect.anything() }),
+    );
+    expect(ios.downloadIosVoicePack).not.toHaveBeenCalledWith(
+      expect.objectContaining({ referenceText: expect.anything() }),
+    );
+  });
+
+  it("lists public EN/FR Pocket packs without a user profile and keeps clone-capable English gated", async () => {
+    const mock = transport({
+      getNativeSpeechPackCatalog: vi.fn(async () => ({
+        available: false,
+        count: 3,
+        languages: ["en-us", "fr-fr"],
+        secretsRedacted: true,
+        packs: [
+          {
+            packId: "standard:pockettts:aurora-pockettts-en-2026-04",
+            displayName: "Aurora English",
+            task: "tts" as const,
+            languages: ["en-us"],
+            language: "en-us",
+            sha256: "a".repeat(64),
+            fileSize: 123,
+            installed: false,
+            activeSlot: null,
+            revision: "tts-catalog-2026.08",
+            runtimeRevision: "sherpa-onnx-1.13.5",
+            modelFamily: "pockettts",
+            requiresReferenceAudio: false,
+            referenceAudioMode: "internal",
+            voiceId: "standard:pockettts:aurora-pockettts-en-2026-04",
+            voiceRevision: "tts-catalog-2026.08",
+          },
+          {
+            packId: "standard:pockettts:aurora-pockettts-fr-24l",
+            displayName: "Aurora French",
+            task: "tts" as const,
+            languages: ["fr-fr"],
+            language: "fr-fr",
+            sha256: "b".repeat(64),
+            fileSize: 456,
+            installed: false,
+            activeSlot: null,
+            revision: "tts-catalog-2026.08",
+            runtimeRevision: "sherpa-onnx-1.13.5",
+            modelFamily: "pockettts",
+            requiresReferenceAudio: false,
+            referenceAudioMode: "internal",
+            voiceId: "standard:pockettts:aurora-pockettts-fr-24l",
+            voiceRevision: "tts-catalog-2026.08",
+          },
+          {
+            packId: "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26",
+            displayName: "Official English",
+            task: "tts" as const,
+            languages: ["en-us"],
+            language: "en-us",
+            sha256: "c".repeat(64),
+            fileSize: 789,
+            installed: false,
+            activeSlot: null,
+            revision: "tts-catalog-2026.08",
+            runtimeRevision: "sherpa-onnx-1.13.5",
+            modelFamily: "pockettts",
+            voiceId: "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26",
+            voiceRevision: "tts-catalog-2026.08",
+          },
+        ],
+      })),
+    });
+    const port = createTauriNativeSpeechCatalogPort({ platform: "desktop", transport: mock });
+    const catalog = await port.listCatalog();
+
+    const byId = Object.fromEntries(catalog.items.map((item) => [item.packId, item]));
+    expect(byId["standard:pockettts:aurora-pockettts-en-2026-04"]).not.toHaveProperty("requiresReferenceProfile");
+    expect(byId["standard:pockettts:aurora-pockettts-fr-24l"]).not.toHaveProperty("requiresReferenceProfile");
+    expect(byId["standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"]).toMatchObject({
+      requiresReferenceProfile: true,
+      referenceProfileSelected: false,
+    });
+  });
+
+  it("lets explicit internal mode override a Pocket family fallback on desktop and iOS", async () => {
+    const desktop = transport({
+      getNativeSpeechPackCatalog: vi.fn(async () => ({
+        available: false,
+        count: 1,
+        languages: ["en-us"],
+        secretsRedacted: true,
+        packs: [{
+          packId: "standard:pockettts:aurora-pockettts-en-2026-04",
+          displayName: "Aurora English",
+          task: "tts" as const,
+          languages: ["en-us"],
+          language: "en-us",
+          sha256: "a".repeat(64),
+          fileSize: 123,
+          installed: false,
+          activeSlot: null,
+          revision: "tts-catalog-2026.08",
+          runtimeRevision: "sherpa-onnx-1.13.5",
+          modelFamily: "pockettts",
+          referenceAudioMode: "internal",
+        }],
+      })),
+    });
+    const ios = transport({
+      listIosVoicePacks: vi.fn(async () => [{
+        packId: "standard:pockettts:aurora-pockettts-fr-24l",
+        displayName: "Aurora French",
+        language: "fr-fr",
+        task: "tts",
+        version: "2026.08",
+        runtimeRevision: "sherpa-onnx-1.13.5",
+        sha256: "c".repeat(64),
+        fileSize: 789,
+        installed: false,
+        activeSlot: null,
+        modelFamily: "pockettts",
+        referenceAudioMode: "internal",
+        requiresReferenceAudio: false,
+      }]),
+    });
+
+    const desktopCatalog = await createTauriNativeSpeechCatalogPort({ platform: "desktop", transport: desktop }).listCatalog();
+    const iosCatalog = await createTauriNativeSpeechCatalogPort({ platform: "ios", transport: ios }).listCatalog();
+    expect(desktopCatalog.items[0]?.packId).toBe("standard:pockettts:aurora-pockettts-en-2026-04");
+    expect(desktopCatalog.items[0]).not.toHaveProperty("requiresReferenceProfile");
+    expect(iosCatalog.items[0]?.packId).toBe("standard:pockettts:aurora-pockettts-fr-24l");
+    expect(iosCatalog.items[0]).not.toHaveProperty("requiresReferenceProfile");
+  });
+
   it("rejects Pocket selection before native commands when the reference profile is missing", async () => {
     const mock = transport({
       downloadAndroidVoicePack: vi.fn(),
@@ -290,5 +589,31 @@ describe("createTauriNativeSpeechCatalogPort", () => {
       activeSlots: { vad: "silero.vad" },
       catalogCount: 1,
     });
+  });
+
+  it("wires desktop and iOS catalog listing to the runtime overlay and explicit reference mode", () => {
+    const lib = readFileSync(resolve(repoRoot, "apps/aurora-tauri/src-tauri/src/lib.rs"), "utf8");
+    const nativeVoice = readFileSync(resolve(repoRoot, "apps/aurora-tauri/src-tauri/src/native_voice.rs"), "utf8");
+    const iosVoice = readFileSync(resolve(repoRoot, "apps/aurora-tauri/src-tauri/src/ios_voice.rs"), "utf8");
+    const catalogListing = lib.slice(
+      lib.indexOf("fn native_speech_pack_catalog"),
+      lib.indexOf("fn native_speech_pack_status"),
+    );
+    const activateBody = lib.slice(
+      lib.indexOf("async fn aurora_native_speech_pack_activate"),
+      lib.indexOf("async fn aurora_native_speech_pack_remove"),
+    );
+
+    expect(catalogListing).toContain("TtsVoiceCatalog::runtime()");
+    expect(catalogListing).toContain("entry.requires_reference_profile()");
+    expect(catalogListing).toContain("catalog_reference_audio_mode_label()");
+    expect(catalogListing).not.toContain('entry.model_family == "pockettts"');
+    expect(activateBody).toContain("TtsVoiceCatalog::runtime()");
+    expect(activateBody).toContain("voice.requires_reference_profile()");
+    expect(nativeVoice).toContain("TtsVoiceCatalog::runtime()");
+    expect(nativeVoice).toContain("voice.requires_reference_profile()");
+    expect(iosVoice).toContain("TtsVoiceCatalog::runtime()");
+    expect(iosVoice).toContain("entry.requires_reference_profile()");
+    expect(iosVoice).toContain("catalog_contains_pack");
   });
 });

@@ -246,7 +246,7 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
 
     expect(calls).toContain('fs:/tts-reference.wav')
-    expect(calls).toContain('tts:hello:pcm16:16000:hello from speaker:55')
+    expect(calls).toContain('tts:hello:pcm16:16000:hello from speaker:undefined')
   })
 
   it('synthesizes PocketTTS without written reference words', async () => {
@@ -288,7 +288,49 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
 
     expect(calls).toContain('fs:/tts-reference.wav')
-    expect(calls).toContain('tts:hello:pcm16:16000:undefined:55')
+    expect(calls).toContain('tts:hello:pcm16:16000:undefined:undefined')
+  })
+
+  it('synthesizes internal-mode PocketTTS with the pack reference and no frame cap', async () => {
+    const calls: string[] = []
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: { ttsModuleUrl: 'https://voice.example/tts.js', ttsHelperUrl: 'https://voice.example/tts-helper.js' },
+      loadModule: async () => ({ FS_createDataFile: (_parent, name) => calls.push(`fs:/${name}`), FS_createPath: () => undefined }),
+      loadHelpers: async () => ({ createOfflineTts: () => new FakeTts(calls) })
+    })
+
+    await engine.initialize({
+      files: [
+        modelFile('tts', 'lm-flow.onnx', [1]),
+        modelFile('tts', 'lm-main.onnx', [2]),
+        modelFile('tts', 'encoder.onnx', [3]),
+        modelFile('tts', 'decoder.onnx', [4]),
+        modelFile('tts', 'text-conditioner.onnx', [5]),
+        modelFile('tts', 'vocab.json', [6]),
+        modelFile('tts', 'token-scores.json', [7]),
+        referenceWavFile()
+      ],
+      models: [{
+        task: 'tts',
+        family: 'pockettts',
+        kind: 'offline-tts',
+        files: [
+          refById('lmFlow', 'lm-flow.onnx'),
+          refById('lmMain', 'lm-main.onnx'),
+          refById('encoder', 'encoder.onnx'),
+          refById('decoder', 'decoder.onnx'),
+          refById('textConditioner', 'text-conditioner.onnx'),
+          refById('vocabJson', 'vocab.json'),
+          refById('tokenScoresJson', 'token-scores.json'),
+          refById('referenceAudio', 'reference.wav')
+        ],
+        config: { referenceAudioMode: 'internal', referenceSampleRateHz: 16_000 }
+      }]
+    })
+    await engine.synthesizeSpeech({ text: 'hello', generation: 3 })
+
+    expect(calls).toContain('fs:/tts-reference.wav')
+    expect(calls).toContain('tts:hello:pcm16:16000:undefined:undefined')
   })
 
   it('rejects engine sources that declare an Emscripten data preload without fetching data assets', async () => {

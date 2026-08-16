@@ -116,6 +116,7 @@ assertIncludesAll(
     'from_catalog_pockettts_model',
     'verify_ios_tts_reference_binding',
     'tts_reference()',
+    'reference_text_for_sherpa()',
     'required_file(vad_binding, "model")',
     'required_file(kws_binding, "encoder-int8")',
     'stt_decoder_file(stt_binding)',
@@ -234,6 +235,9 @@ for (const snippet of [
   'modelFilesJson',
   'modelFiles',
   'modelFamily',
+  'referenceAudioMode',
+  'requiresReferenceAudio',
+  'requiresUserReferenceProfile',
   'pockettts',
   'isSafeCachedModelFile',
   'sanitizeRelativePath',
@@ -247,6 +251,38 @@ for (const snippet of [
 ]) {
   assert(packManager.includes(snippet), `voice pack manager must preserve safety policy: ${snippet}`)
 }
+assert(
+  !nativeSession.includes('|| reference_text.trim().is_empty()'),
+  'Rust iOS reference bindings must not require nonempty clone text',
+)
+assert(
+  nativeAbi.includes('text.unwrap_or_default()')
+    && nativeAbi.includes('fn ios_tts_reference_from_optional_fields'),
+  'iOS ABI must accept omitted clone text when audio and revision are present',
+)
+assert(
+  tauriLib.includes('fn optional_native_tts_reference_text')
+    && tauriLib.includes('fn ios_tts_reference_set_payload')
+    && !tauriLib.includes('.ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;\n    let revision = reference'),
+  'Tauri iOS set-reference must not require nonempty clone text',
+)
+assert(
+  packManager.includes('private static func sanitizeReferenceText(_ value: String?) throws -> String')
+    && packManager.includes('if text.isEmpty {\n      return ""\n    }'),
+  'iOS clone profiles must accept omitted or empty reference text',
+)
+assert(
+  !packManager.includes('!record.referenceText.isEmpty'),
+  'iOS stored clone records must not require written reference text',
+)
+assert(
+  /struct AuroraIOSVoiceTTSReferenceSetArgs: Decodable \{\n  let packId: String\n  let audioBase64: String\n  let referenceText: String\?/.test(packManager),
+  'iOS TTS reference set args must treat reference text as optional',
+)
+assert(
+  packManager.includes('record.referenceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty'),
+  'iOS session bindings must pass nil reference text when the stored transcript is blank',
+)
 assert(!packManager.includes('catalogEntryLimit'), 'iOS catalog fallback must not retain a 200-entry cap')
 assert(
   packManager.includes('let sanitized = try entries.map')

@@ -3361,9 +3361,6 @@ mod tests {
         let dir = PathBuf::from(
             std::env::var_os("AURORA_POCKETTTS_PACK_DIR").expect("AURORA_POCKETTTS_PACK_DIR"),
         );
-        let reference = PathBuf::from(
-            std::env::var_os("AURORA_POCKETTTS_REF_WAV").expect("AURORA_POCKETTTS_REF_WAV"),
-        );
         let text = std::env::var("AURORA_POCKETTTS_TEXT").unwrap_or_else(|_| {
             if dir.file_name().is_some_and(|name| name.to_string_lossy().contains("-fr-")) {
                 "Bonjour, ceci est un essai.".to_owned()
@@ -3371,7 +3368,6 @@ mod tests {
                 "Hello, this is a voice check.".to_owned()
             }
         });
-        let (sample_rate, samples) = read_pcm16_wav(&reference);
         let files = OfflineTtsPocketModelFiles::new(
             dir.join("lm_flow.int8.onnx"),
             dir.join("lm_main.int8.onnx"),
@@ -3384,22 +3380,21 @@ mod tests {
         let config = OfflineTtsConfig::pocket(files).with_num_threads(1);
         let mut synthesizer = OfflineTtsSynthesizer::new(&config).expect("pocket synthesizer");
         assert_eq!(synthesizer.sample_rate(), 24_000);
-        let mut generation = OfflineTtsGenerationConfig::new(0, 1.0)
-            .with_reference_audio(
-                TtsReferenceAudio::new(sample_rate, samples).expect("reference audio"),
-            )
-            .with_num_steps(4);
-        if dir
-            .file_name()
-            .is_some_and(|name| name.to_string_lossy().contains("aurora-pockettts"))
-        {
-            // Current Kyutai mimi attention is a linear KV cache. The helper
-            // traces it at 1000 transformer steps, and each latent frame
-            // advances offset by 16, so Sherpa's default max_frames=500
-            // overflows at frame 62. Stay under that cliff until the pack is
-            // exported with STATIC_SEQ_LEN=10000.
-            generation = generation.with_extra(r#"{"max_frames":55}"#);
-        }
+        let mut generation = OfflineTtsGenerationConfig::new(0, 1.0).with_num_steps(4);
+        let reference = {
+            let internal = dir.join("internal_reference.wav");
+            if internal.is_file() {
+                internal
+            } else {
+                PathBuf::from(
+                    std::env::var_os("AURORA_POCKETTTS_REF_WAV").expect("AURORA_POCKETTTS_REF_WAV"),
+                )
+            }
+        };
+        let (sample_rate, samples) = read_pcm16_wav(&reference);
+        generation = generation.with_reference_audio(
+            TtsReferenceAudio::new(sample_rate, samples).expect("reference audio"),
+        );
         let started = std::time::Instant::now();
         let audio = synthesizer
             .generate(&text, &generation, &|| false)
@@ -3410,7 +3405,7 @@ mod tests {
         assert!(audio
             .samples()
             .iter()
-            .all(|sample| sample.is_finite() && (-1.5..=1.5).contains(sample)));
+            .all(|sample| sample.is_finite() && (-1.0..=1.0).contains(sample)));
         let duration = audio.samples().len() as f64 / 24_000.0;
         eprintln!(
             "pockettts smoke pack={:?} ttfa_or_total_ms={} rtf={:.3} samples={}",

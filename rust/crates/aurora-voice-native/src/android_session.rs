@@ -208,6 +208,18 @@ pub struct AndroidVoiceSessionConfig {
 }
 
 #[cfg(feature = "native-sherpa-tts")]
+fn optional_sherpa_reference_text(value: Option<String>) -> Option<String> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    })
+}
+
+#[cfg(feature = "native-sherpa-tts")]
 #[derive(Clone, Debug)]
 pub struct AndroidTtsReferenceProfile {
     sample_rate_hz: i32,
@@ -229,7 +241,7 @@ impl AndroidTtsReferenceProfile {
         Ok(Self {
             sample_rate_hz,
             samples,
-            reference_text,
+            reference_text: optional_sherpa_reference_text(reference_text),
             revision,
         })
     }
@@ -240,7 +252,7 @@ impl AndroidTtsReferenceProfile {
     }
 
     fn reference_text(&self) -> Option<String> {
-        self.reference_text.clone()
+        optional_sherpa_reference_text(self.reference_text.clone())
     }
 
     fn revision(&self) -> Option<String> {
@@ -1185,6 +1197,32 @@ mod tests {
 
     #[cfg(feature = "native-sherpa-tts")]
     #[test]
+    fn android_internal_overlay_voices_do_not_require_reference_profile() {
+        let catalog = aurora_voice_engine::TtsVoiceCatalog::runtime().expect("runtime catalog");
+        let english = catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("english overlay");
+        let french = catalog
+            .voice("standard:pockettts:aurora-pockettts-fr-24l")
+            .expect("french overlay");
+        let official = catalog
+            .voice("standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26")
+            .expect("clone-capable english");
+        assert!(!english.requires_reference_profile());
+        assert!(!french.requires_reference_profile());
+        assert!(official.requires_reference_profile());
+        assert_eq!(
+            english.reference_audio_mode(),
+            aurora_voice_engine::TtsReferenceAudioMode::Internal
+        );
+        assert_eq!(
+            official.reference_audio_mode(),
+            aurora_voice_engine::TtsReferenceAudioMode::Profile
+        );
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
     fn android_tts_reference_profile_requires_explicit_audio() {
         let invalid = AndroidTtsReferenceProfile::new(
             16_000,
@@ -1223,5 +1261,29 @@ mod tests {
         assert_eq!(stored.reference_text().as_deref(), Some("reference text"));
         assert_eq!(stored.revision().as_deref(), Some("rev-1"));
         assert!(stored.to_native().is_ok());
+    }
+
+    #[cfg(feature = "native-sherpa-tts")]
+    #[test]
+    fn local_pack_config_accepts_audio_only_tts_reference_profile() {
+        let profile = AndroidTtsReferenceProfile::new(
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            None,
+            Some("rev-1".to_owned()),
+        )
+        .expect("audio-only profile");
+        assert_eq!(profile.reference_text(), None);
+        assert_eq!(profile.revision().as_deref(), Some("rev-1"));
+        assert!(profile.to_native().is_ok());
+
+        let blank = AndroidTtsReferenceProfile::new(
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("   ".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .expect("blank text profile");
+        assert_eq!(blank.reference_text(), None);
     }
 }

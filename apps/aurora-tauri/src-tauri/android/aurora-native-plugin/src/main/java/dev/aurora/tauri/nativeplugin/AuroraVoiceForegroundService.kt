@@ -90,6 +90,7 @@ private data class VoicePackCatalogEntry(
     val attributionText: String,
     val modelFamily: String,
     val requiresReferenceAudio: Boolean,
+    val referenceAudioMode: String,
 )
 
 data class AuroraVoiceNativeConfig(
@@ -865,7 +866,12 @@ class AuroraVoiceForegroundService : Service() {
             isPackMetadataRuntimeCompatible(entry) &&
             entry.packId in installedPackIds &&
             (task != AuroraSpeechPackTask.TTS ||
-                (!entry.requiresReferenceAudio && entry.modelFamily != "pockettts") ||
+                !auroraTtsReferenceRequired(
+                    task,
+                    entry.modelFamily,
+                    entry.requiresReferenceAudio,
+                    entry.referenceAudioMode,
+                ) ||
                 referenceSelectionReady)
     }
 
@@ -912,6 +918,7 @@ class AuroraVoiceForegroundService : Service() {
                         "requiresReferenceAudio",
                         item.optBoolean("referenceAudioRequired", item.optBoolean("requiresReference", false)),
                     ),
+                    referenceAudioMode = auroraVoicePackReferenceAudioMode(item),
                 ),
             )
         }
@@ -1035,15 +1042,15 @@ class AuroraVoiceForegroundService : Service() {
 
     private fun ttsReferenceSelection(): AuroraTtsReferenceSelection? {
         val prefs = getSharedPreferences(AURORA_TTS_REFERENCE_PREFS, Context.MODE_PRIVATE)
-        val id = prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty()
-        val audioUri = prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty()
-        val text = prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty()
-        val revision = prefs.getString(AURORA_TTS_REFERENCE_REVISION_KEY, null)?.trim().orEmpty()
-        val sampleRateHz = prefs.getInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, 0)
-        val samples = parseReferenceSamples(prefs.getString(AURORA_TTS_REFERENCE_SAMPLES_KEY, "[]"))
-        if (id.isNotBlank() && text.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()) {
-            return AuroraTtsReferenceSelection(id, audioUri, text, revision, sampleRateHz, samples)
-        }
+        val stored = auroraTtsReferenceSelectionOrNull(
+            prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_REVISION_KEY, null)?.trim().orEmpty(),
+            prefs.getInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, 0),
+            parseReferenceSamples(prefs.getString(AURORA_TTS_REFERENCE_SAMPLES_KEY, "[]")),
+        )
+        if (stored != null) return stored
         val reference = activeRuntimeProfileSelection()
             ?.let { selection ->
                 selection.optJSONObject("ttsReference")
@@ -1051,24 +1058,14 @@ class AuroraVoiceForegroundService : Service() {
                     ?: selection.optJSONObject("voiceSample")
             }
             ?: return null
-        val profileId = reference.optString("id", reference.optString("referenceId", reference.optString("sampleId", ""))).trim()
-        val profileAudioUri = reference.optString("audioUri", reference.optString("uri", "")).trim()
-        val profileText = reference.optString("text", reference.optString("referenceText", "")).trim()
-        val profileRevision = reference.optString("revision", reference.optString("sampleRevision", "")).trim()
-        val profileSampleRateHz = reference.optInt("sampleRateHz", reference.optInt("sample_rate_hz", 0))
-        val profileSamples = parseReferenceSamples(reference.optJSONArray("samples") ?: reference.optJSONArray("referenceSamples"))
-        return if (profileId.isNotBlank() && profileText.isNotBlank() && profileSampleRateHz > 0 && profileSamples.isNotEmpty()) {
-            AuroraTtsReferenceSelection(
-                profileId,
-                profileAudioUri,
-                profileText,
-                profileRevision,
-                profileSampleRateHz,
-                profileSamples,
-            )
-        } else {
-            null
-        }
+        return auroraTtsReferenceSelectionOrNull(
+            reference.optString("id", reference.optString("referenceId", reference.optString("sampleId", ""))).trim(),
+            reference.optString("audioUri", reference.optString("uri", "")).trim(),
+            reference.optString("text", reference.optString("referenceText", "")).trim(),
+            reference.optString("revision", reference.optString("sampleRevision", "")).trim(),
+            reference.optInt("sampleRateHz", reference.optInt("sample_rate_hz", 0)),
+            parseReferenceSamples(reference.optJSONArray("samples") ?: reference.optJSONArray("referenceSamples")),
+        )
     }
 
     private fun parseReferenceSamples(raw: String?): FloatArray =

@@ -151,6 +151,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val attributionText: String,
         val modelFamily: String,
         val requiresReferenceAudio: Boolean,
+        val referenceAudioMode: String,
     )
 
     private enum class VoicePackDownloadResult {
@@ -1682,6 +1683,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 "requiresReferenceAudio",
                 entryObj.optBoolean("referenceAudioRequired", entryObj.optBoolean("requiresReference", false)),
             )
+            val referenceAudioMode = auroraVoicePackReferenceAudioMode(entryObj)
             if (
                 packId.isBlank() ||
                 uri.isBlank() ||
@@ -1715,6 +1717,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                     attributionText = attributionText,
                     modelFamily = modelFamily,
                     requiresReferenceAudio = requiresReferenceAudio,
+                    referenceAudioMode = referenceAudioMode,
                 ),
             )
         }
@@ -1775,6 +1778,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             item.put("attributionText", entry.attributionText)
             item.put("modelFamily", entry.modelFamily)
             item.put("requiresReferenceAudio", entry.requiresReferenceAudio)
+            item.put("referenceAudioMode", entry.referenceAudioMode)
             item.put("referenceSelectionRequired", ttsReferenceRequired(entry))
             item.put("referenceSelectionPresent", !ttsReferenceRequired(entry) || referenceSelectionReady)
             item.put("referenceRuntimeReady", !ttsReferenceRequired(entry) || referenceSelectionReady)
@@ -1833,6 +1837,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 "requiresReferenceAudio",
                 item.optBoolean("referenceAudioRequired", item.optBoolean("requiresReference", false)),
             )
+            val referenceAudioMode = auroraVoicePackReferenceAudioMode(item)
             if (packId.isBlank() || !packCatalogIdRegex.matches(packId)) continue
             if (uri.isBlank()) continue
             if (packName.isBlank()) continue
@@ -1872,6 +1877,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             normalizedItem.put("attributionText", attributionText)
             normalizedItem.put("modelFamily", modelFamily)
             normalizedItem.put("requiresReferenceAudio", requiresReferenceAudio)
+            normalizedItem.put("referenceAudioMode", referenceAudioMode)
             normalized.put(normalizedItem)
         }
         return JSObject().put("entries", normalized)
@@ -1935,11 +1941,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             isPackDescriptorRuntimeReady(entry) &&
             (!ttsReferenceRequired(entry) || ttsReferenceSelection() != null)
 
-    private fun ttsReferenceRequired(entry: VoicePackCatalogEntry): Boolean {
-        val task = inferAuroraSpeechPackTask(entry.tasks)
-        return task == AuroraSpeechPackTask.TTS &&
-            (entry.requiresReferenceAudio || entry.modelFamily == "pockettts")
-    }
+    private fun ttsReferenceRequired(entry: VoicePackCatalogEntry): Boolean =
+        auroraTtsReferenceRequired(
+            inferAuroraSpeechPackTask(entry.tasks),
+            entry.modelFamily,
+            entry.requiresReferenceAudio,
+            entry.referenceAudioMode,
+        )
 
     private fun activeRuntimeProfileSelection(): JSONObject? {
         val raw = activity
@@ -1970,15 +1978,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun ttsReferenceSelection(): AuroraTtsReferenceSelection? {
         val prefs = ttsReferencePrefs()
-        val id = prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty()
-        val audioUri = prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty()
-        val text = prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty()
-        val revision = prefs.getString(AURORA_TTS_REFERENCE_REVISION_KEY, null)?.trim().orEmpty()
-        val sampleRateHz = prefs.getInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, 0)
-        val samples = parseReferenceSamples(prefs.getString(AURORA_TTS_REFERENCE_SAMPLES_KEY, "[]"))
-        if (id.isNotBlank() && text.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()) {
-            return AuroraTtsReferenceSelection(id, audioUri, text, revision, sampleRateHz, samples)
-        }
+        val stored = auroraTtsReferenceSelectionOrNull(
+            prefs.getString(AURORA_TTS_REFERENCE_ID_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_AUDIO_URI_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_TEXT_KEY, null)?.trim().orEmpty(),
+            prefs.getString(AURORA_TTS_REFERENCE_REVISION_KEY, null)?.trim().orEmpty(),
+            prefs.getInt(AURORA_TTS_REFERENCE_SAMPLE_RATE_HZ_KEY, 0),
+            parseReferenceSamples(prefs.getString(AURORA_TTS_REFERENCE_SAMPLES_KEY, "[]")),
+        )
+        if (stored != null) return stored
         val reference = activeRuntimeProfileSelection()
             ?.let { selection ->
                 selection.optJSONObject("ttsReference")
@@ -1986,24 +1994,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                     ?: selection.optJSONObject("voiceSample")
             }
             ?: return null
-        val profileId = reference.optString("id", reference.optString("referenceId", reference.optString("sampleId", ""))).trim()
-        val profileAudioUri = reference.optString("audioUri", reference.optString("uri", "")).trim()
-        val profileText = reference.optString("text", reference.optString("referenceText", "")).trim()
-        val profileRevision = reference.optString("revision", reference.optString("sampleRevision", "")).trim()
-        val profileSampleRateHz = reference.optInt("sampleRateHz", reference.optInt("sample_rate_hz", 0))
-        val profileSamples = parseReferenceSamples(reference.optJSONArray("samples") ?: reference.optJSONArray("referenceSamples"))
-        return if (profileId.isNotBlank() && profileText.isNotBlank() && profileSampleRateHz > 0 && profileSamples.isNotEmpty()) {
-            AuroraTtsReferenceSelection(
-                profileId,
-                profileAudioUri,
-                profileText,
-                profileRevision,
-                profileSampleRateHz,
-                profileSamples,
-            )
-        } else {
-            null
-        }
+        return auroraTtsReferenceSelectionOrNull(
+            reference.optString("id", reference.optString("referenceId", reference.optString("sampleId", ""))).trim(),
+            reference.optString("audioUri", reference.optString("uri", "")).trim(),
+            reference.optString("text", reference.optString("referenceText", "")).trim(),
+            reference.optString("revision", reference.optString("sampleRevision", "")).trim(),
+            reference.optInt("sampleRateHz", reference.optInt("sample_rate_hz", 0)),
+            parseReferenceSamples(reference.optJSONArray("samples") ?: reference.optJSONArray("referenceSamples")),
+        )
     }
 
     private fun storeTtsReferenceSelection(args: AndroidVoicePackReferenceArgs): Boolean {
@@ -2021,7 +2019,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             sampleRateHz <= 0 &&
             samples.isEmpty()
         ) return ttsReferenceSelection() != null
-        if (id.isBlank() || text.isBlank() || sampleRateHz <= 0 || samples.isEmpty()) return false
+        if (!auroraTtsReferenceAudioReady(id, sampleRateHz, samples)) return false
         if (samples.size > AURORA_TTS_REFERENCE_MAX_SAMPLES) return false
         if (samples.any { !it.isFinite() || it < -1.0f || it > 1.0f }) return false
         val encodedSamples = org.json.JSONArray().also { array ->

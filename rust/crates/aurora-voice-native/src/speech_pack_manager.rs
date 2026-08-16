@@ -1509,6 +1509,16 @@ fn required_tts_file_bindings(
                     .clone()
                     .ok_or(SpeechPackError::InvalidArchive)?,
             );
+            if entry.reference_audio_mode() == aurora_voice_engine::TtsReferenceAudioMode::Internal {
+                bindings.insert(
+                    "reference-audio".to_owned(),
+                    entry
+                        .bindings
+                        .reference_audio
+                        .clone()
+                        .ok_or(SpeechPackError::InvalidArchive)?,
+                );
+            }
         }
         _ => return Err(SpeechPackError::InvalidArchive),
     }

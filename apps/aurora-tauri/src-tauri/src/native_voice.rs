@@ -1224,7 +1224,7 @@ fn build_runtime(
                 .voice_id
                 .as_deref()
                 .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
-            let voice_catalog = TtsVoiceCatalog::embedded()
+            let voice_catalog = TtsVoiceCatalog::runtime()
                 .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
             let voice = voice_catalog
                 .voice(voice_id)
@@ -1234,7 +1234,7 @@ fn build_runtime(
                 .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
             let provider = match voice.model_family.as_str() {
                 "vits_piper" => build_installed_tts_provider(manager, voice_id),
-                "pockettts" => {
+                "pockettts" if voice.requires_reference_profile() => {
                     let reference_profile_id =
                         selection.reference_profile_id.as_deref().ok_or_else(|| {
                             NativeVoiceCommandError::unavailable("local_speech_unavailable")
@@ -1245,8 +1245,13 @@ fn build_runtime(
                         manager,
                         voice_id,
                         Some(reference_profile.to_native()?),
-                        reference_profile.reference_text.clone(),
+                        optional_desktop_tts_reference_text(
+                            reference_profile.reference_text.as_deref(),
+                        ),
                     )
+                }
+                "pockettts" => {
+                    build_installed_tts_provider_with_reference(manager, voice_id, None, None)
                 }
                 _ => Err(EngineError::InvalidRequest),
             };
@@ -1577,6 +1582,14 @@ fn desktop_tts_reference_profile_path_at(root: &Path, profile_id: &str) -> PathB
 }
 
 #[cfg(desktop)]
+fn optional_desktop_tts_reference_text(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+#[cfg(desktop)]
 fn validate_desktop_tts_reference_profile(
     profile: &DesktopTtsReferenceProfile,
     expected_id: &str,
@@ -1595,9 +1608,9 @@ fn validate_desktop_tts_reference_profile(
         ));
     }
     if let Some(reference_text) = &profile.reference_text {
-        if reference_text.trim().is_empty()
-            || reference_text.len() > TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES
-            || reference_text.as_bytes().contains(&0)
+        if !reference_text.trim().is_empty()
+            && (reference_text.len() > TTS_REFERENCE_PROFILE_MAX_TEXT_BYTES
+                || reference_text.as_bytes().contains(&0))
         {
             return Err(NativeVoiceCommandError::unavailable(
                 "local_speech_unavailable",
@@ -2204,7 +2217,7 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
         (None, None) | (Some(_), None) => {}
     }
     if let Some(selected) = &selection.tts {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| PROFILE_REASON)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| PROFILE_REASON)?;
         let voice_id = selected.voice_id.as_deref().ok_or(PROFILE_REASON)?;
         let voice = catalog.voice(voice_id).ok_or(PROFILE_REASON)?;
         if selected.pack_revision != catalog.revision()
@@ -2213,15 +2226,13 @@ fn validate_local_speech_selection(selection: &LocalSpeechSelection) -> Result<(
         {
             return Err(PROFILE_REASON);
         }
-        match (
-            voice.model_family.as_str(),
-            selected.reference_profile_id.as_deref(),
-        ) {
-            ("pockettts", Some(reference_profile_id))
-                if valid_reference_profile_id(reference_profile_id) => {}
-            ("pockettts", _) => return Err(PROFILE_REASON),
-            (_, Some(_)) => return Err(PROFILE_REASON),
-            _ => {}
+        if voice.requires_reference_profile() {
+            match selected.reference_profile_id.as_deref() {
+                Some(reference_profile_id) if valid_reference_profile_id(reference_profile_id) => {}
+                _ => return Err(PROFILE_REASON),
+            }
+        } else if selected.reference_profile_id.is_some() && voice.model_family != "pockettts" {
+            return Err(PROFILE_REASON);
         }
     }
     Ok(())
@@ -3224,6 +3235,28 @@ mod tests {
         };
         validate_local_speech_selection(&explicit_reference).expect("pocket reference profile");
 
+        let runtime_catalog = TtsVoiceCatalog::runtime().expect("runtime voice catalog");
+        let public_english = runtime_catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("public english overlay");
+        let public_french = runtime_catalog
+            .voice("standard:pockettts:aurora-pockettts-fr-24l")
+            .expect("public french overlay");
+        for overlay in [public_english, public_french] {
+            let without_profile = LocalSpeechSelection {
+                tts: Some(LocalSpeechAssetSelection {
+                    pack_id: overlay.language.clone(),
+                    pack_revision: runtime_catalog.revision().to_owned(),
+                    voice_id: Some(overlay.voice_id.clone()),
+                    voice_revision: Some(runtime_catalog.revision().to_owned()),
+                    reference_profile_id: None,
+                }),
+                ..LocalSpeechSelection::default()
+            };
+            validate_local_speech_selection(&without_profile)
+                .expect("public overlay does not require a user profile");
+        }
+
         let piper = voice_catalog
             .entries
             .iter()
@@ -3245,6 +3278,7 @@ mod tests {
         );
     }
 
+    #[cfg(desktop)]
     #[test]
     fn desktop_tts_reference_profiles_are_private_bounded_and_redacted() {
         let root = unique_test_dir("desktop-tts-reference");
@@ -3274,6 +3308,43 @@ mod tests {
         let debug = format!("{loaded:?}");
         assert!(debug.contains("<redacted>"));
         assert!(!debug.contains("0.1"));
+
+        let audio_only = DesktopTtsReferenceProfile::new(
+            "speaker:audio-only".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            None,
+            Some("rev-1".to_owned()),
+        );
+        store_desktop_tts_reference_profile_at(&root, &audio_only, voice_id)
+            .expect("store audio-only profile");
+        let loaded_audio_only =
+            load_desktop_tts_reference_profile_at(&root, "speaker:audio-only", voice_id)
+                .expect("load audio-only profile");
+        assert_eq!(loaded_audio_only.reference_text, None);
+        assert_eq!(
+            optional_desktop_tts_reference_text(loaded_audio_only.reference_text.as_deref()),
+            None
+        );
+
+        let blank_text = DesktopTtsReferenceProfile::new(
+            "speaker:blank-text".to_owned(),
+            Some(voice_id.to_owned()),
+            16_000,
+            vec![0.0, 0.1, -0.1, 0.0],
+            Some("   ".to_owned()),
+            Some("rev-1".to_owned()),
+        );
+        store_desktop_tts_reference_profile_at(&root, &blank_text, voice_id)
+            .expect("store blank-text profile");
+        let loaded_blank =
+            load_desktop_tts_reference_profile_at(&root, "speaker:blank-text", voice_id)
+                .expect("load blank-text profile");
+        assert_eq!(
+            optional_desktop_tts_reference_text(loaded_blank.reference_text.as_deref()),
+            None
+        );
 
         let empty = DesktopTtsReferenceProfile::new(
             "speaker:empty".to_owned(),
