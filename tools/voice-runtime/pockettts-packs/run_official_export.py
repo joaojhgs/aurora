@@ -198,7 +198,11 @@ def patch_helper_export_script_text(text: str) -> str:
 
 def patch_mimi_static_seq_len(text: str) -> str:
     """Give the mimi decoder a linear KV cache that can finish max_frames."""
-    return text.replace("STATIC_SEQ_LEN = 1000", MIMI_EXPORT_STATIC_SEQ_LEN)
+    text = text.replace("STATIC_SEQ_LEN = 1000", MIMI_EXPORT_STATIC_SEQ_LEN)
+    return text.replace(
+        "init_states(tts_model.mimi, batch_size=1, sequence_length=1000)",
+        f"init_states(tts_model.mimi, batch_size=1, sequence_length={MIMI_DECODER_KV_SEQ_LEN})",
+    )
 
 
 def resize_static_kv_cache_dim(

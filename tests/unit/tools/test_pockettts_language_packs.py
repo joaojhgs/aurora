@@ -182,6 +182,11 @@ MimiStreamingMultiheadAttention.increment_step = patched_mimi_increment_step
     compile(patched, "<helper>", "exec")
     mimi = "STATIC_SEQ_LEN = 1000\n" + source
     assert "STATIC_SEQ_LEN = 10000" in module.patch_mimi_static_seq_len(mimi)
+    verify = "mimi_state = init_states(tts_model.mimi, batch_size=1, sequence_length=1000)\n"
+    patched_verify = module.patch_mimi_static_seq_len(verify)
+    assert patched_verify == (
+        "mimi_state = init_states(tts_model.mimi, batch_size=1, sequence_length=10000)\n"
+    )
 
 
 def test_resize_static_kv_cache_dim_only_rewrites_rank5_cache() -> None:
