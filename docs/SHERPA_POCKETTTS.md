@@ -33,16 +33,31 @@ python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \
 ## Language packs
 
 English `english_2026-04` and French `french_24l` are converted on demand from
-official Kyutai sources. Weights are not in Git. The GitHub workflow
-`sherpa-pockettts-language-packs` is a temporary bootstrap publisher: remove
-its convert job after stable GitHub release URLs exist.
+official Kyutai sources. Weights are not in Git. The ONNX export helper is
+pinned to `csukuangfj/pocket-tts-onnx-export` @
+`f075c00bf4bbfbb081a11fd99abbf39df3849e0c` (2026-02-10). Each conversion
+stages a clean checkout under `.artifacts/`; a dirty or wrong cached helper
+is not reused. Pack archives are written with sorted members and normalized
+uid/gid/uname/gname/mtime/mode so local catalog digests can match CI.
+The GitHub workflow `sherpa-pockettts-language-packs` is a temporary
+bootstrap publisher: remove its convert job after stable GitHub release URLs
+exist.
 
 Current Kyutai mimi attention is a linear KV cache, not a ring buffer. Each
 latent frame advances RoPE `offset` by 16 transformer steps. A decoder traced
-at `STATIC_SEQ_LEN = 1000` overflows at frame 62. The French 24l pack is
-exported at `STATIC_SEQ_LEN = 10000`. English 2026-04 is still a 1000-step
-graph, so native and WASM proof pass `extra.max_frames = 55`. Do not rewrite
-only the ONNX I/O dims on a 1000-step graph.
+at `STATIC_SEQ_LEN = 1000` overflows at frame 62. Aurora export sets
+`STATIC_SEQ_LEN = 10000` so Sherpa's default `max_frames=500` fits. Do not
+rewrite only the ONNX I/O dims on a 1000-step graph.
+
+Aurora English 2026-04 and French 24l packs are public fixed-voice conversions
+from `kyutai/pocket-tts-without-voice-cloning` @
+`e041936c75475d350b405bc870bcf7c22da4e9e6` (CC-BY-4.0). Their encoder was
+zeroed by Kyutai's public export, so they are not clone-capable. Each pack
+ships a small deterministic `internal_reference.wav` and sets
+`reference_audio_mode=internal`. The official
+`sherpa-onnx-pocket-tts-int8-2026-01-26` English pack stays
+`reference_audio_mode=profile`. The current Sherpa path still requires a
+reference waveform; do not claim a no-reference runtime.
 
 ## Proof commands
 

@@ -234,14 +234,25 @@ def ensure_source_archive(
     return archive
 
 
+def _extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str) -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    helper = Path(__file__).resolve().parents[1] / "sherpa-patches" / "apply_sherpa_patches.py"
+    spec = spec_from_file_location("aurora_apply_sherpa_patches", helper)
+    if spec is None or spec.loader is None:
+        raise ReleaseError("unable to load pinned source extractor")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.extract_pinned_source_tar(archive, dest, mode=mode)
+
+
 def extract_source_archive(archive: Path, output_root: Path) -> Path:
     source_root = output_root / "source" / "sherpa-onnx-1.13.5"
     if source_root.exists():
         return source_root
     with tempfile.TemporaryDirectory(prefix="aurora-sherpa-src-") as tmp_name:
         tmp = Path(tmp_name)
-        with tarfile.open(archive, "r:gz") as tar:
-            tar.extractall(tmp)
+        _extract_pinned_source_tar(archive, tmp, mode="r:gz")
         extracted = tmp / "sherpa-onnx-1.13.5"
         if not extracted.is_dir():
             raise ReleaseError("source archive did not extract sherpa-onnx-1.13.5")

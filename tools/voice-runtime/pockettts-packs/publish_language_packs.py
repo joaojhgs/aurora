@@ -66,8 +66,18 @@ def validate_workflow(path: Path) -> None:
         raise ValueError("language-pack workflow must not run on ordinary pull requests")
     if "workflow_dispatch" not in text:
         raise ValueError("language-pack workflow must be explicitly dispatchable")
+    if "release_tag" not in text:
+        raise ValueError("language-pack workflow must require an existing release tag")
     if "sherpa-pockettts-language-packs" not in text:
         raise ValueError("language-pack workflow name is missing")
+    if "gh release upload" not in text or "--clobber" not in text:
+        raise ValueError("language-pack workflow must attach durable release assets")
+    if "contents: write" not in text:
+        raise ValueError("release upload job must have contents write permission")
+    if "HF_TOKEN" in text:
+        raise ValueError("CI must not select gated weights from HF_TOKEN")
+    if "--weights-source public-fixed-voice" not in text:
+        raise ValueError("CI convert must pin the public fixed-voice source")
 
 
 def main() -> int:

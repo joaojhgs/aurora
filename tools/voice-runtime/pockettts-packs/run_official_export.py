@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Export one Kyutai language with the official ONNX helper.
 
-Prefers gated kyutai/pocket-tts when HF_TOKEN is present. Otherwise uses the
-official public CC-BY-4.0 repo kyutai/pocket-tts-without-voice-cloning.
+Default source is the public CC-BY-4.0 repo
+kyutai/pocket-tts-without-voice-cloning. Gated kyutai/pocket-tts is used only
+when --weights-source gated is set explicitly. HF_TOKEN never selects a source.
 """
 
 from __future__ import annotations
@@ -299,18 +300,29 @@ def _extract_bos_from_safetensors(weights: Path, output: Path) -> Path | None:
     return path
 
 
-def download_language_weights(language: str, dest_dir: Path) -> tuple[Path, Path, str]:
+def download_language_weights(
+    language: str, dest_dir: Path, source_mode: str
+) -> tuple[Path, Path, str]:
     dest_dir.mkdir(parents=True, exist_ok=True)
     filename = f"languages/{language}/model.safetensors"
     tokenizer = f"languages/{language}/tokenizer.model"
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if token:
+    if source_mode == "gated":
+        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        if not token:
+            raise RuntimeError(
+                "gated PocketTTS weights require an explicit --weights-source gated "
+                "and HF_TOKEN; refusing the public fixed-voice repo"
+            )
         try:
             weights = _download(GATED_REPO, GATED_REVISION, filename, dest_dir / "gated")
             tok = _download(GATED_REPO, GATED_REVISION, tokenizer, dest_dir / "gated")
-            return weights, tok, GATED_REPO
-        except Exception as exc:  # noqa: BLE001
-            print(f"gated download failed, using public fallback: {exc}", file=sys.stderr)
+        except Exception as exc:
+            raise RuntimeError(
+                f"gated PocketTTS download failed; refusing public fallback: {exc}"
+            ) from exc
+        return weights, tok, GATED_REPO
+    if source_mode != "public-fixed-voice":
+        raise RuntimeError(f"unknown PocketTTS weights source {source_mode}")
     weights = _download(PUBLIC_REPO, PUBLIC_REVISION, filename, dest_dir / "public")
     tok = _download(PUBLIC_REPO, PUBLIC_REVISION, tokenizer, dest_dir / "public")
     return weights, tok, PUBLIC_REPO
@@ -321,6 +333,11 @@ def main() -> int:
     parser.add_argument("--helper", type=Path, required=True)
     parser.add_argument("--language", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--weights-source",
+        choices=("public-fixed-voice", "gated"),
+        default="public-fixed-voice",
+    )
     args = parser.parse_args()
 
     helper = args.helper.resolve()
@@ -333,7 +350,9 @@ def main() -> int:
     os.chdir(helper)
 
     cache = output.parent / "hf-cache" / args.language
-    weights, tokenizer, source_repo = download_language_weights(args.language, cache)
+    weights, tokenizer, source_repo = download_language_weights(
+        args.language, cache, args.weights_source
+    )
     shutil.copy2(tokenizer, output / "tokenizer.model")
 
     env = os.environ.copy()

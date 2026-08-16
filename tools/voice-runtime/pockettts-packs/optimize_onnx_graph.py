@@ -30,9 +30,7 @@ class GraphOptimizeError(RuntimeError):
 
 def _require_onnx() -> None:
     if onnx is None:
-        raise GraphOptimizeError(
-            "onnx is required for PocketTTS graph rewrites"
-        ) from _IMPORT_ERROR
+        raise GraphOptimizeError("onnx is required for PocketTTS graph rewrites") from _IMPORT_ERROR
 
 
 def optimize_model(model: Any) -> tuple[Any, dict[str, int]]:
@@ -66,7 +64,7 @@ def optimize_model(model: Any) -> tuple[Any, dict[str, int]]:
     rename: dict[str, str] = {}
     kept_inits = []
     for initializer in graph.initializer:
-        digest = hashlib.sha256(initializer.SerializeToString()).hexdigest()
+        digest = _initializer_value_digest(initializer)
         existing = seen.get(digest)
         if existing is None:
             seen[digest] = initializer.name
@@ -86,6 +84,20 @@ def optimize_model(model: Any) -> tuple[Any, dict[str, int]]:
         "deduplicated_initializers": len(rename),
     }
     return model, stats
+
+
+def _initializer_value_digest(initializer: Any) -> str:
+    """Hash tensor value identity, excluding the initializer name.
+
+    Two initializers with the same data type, dims, payload, and storage
+    metadata must collide even when their names differ.
+    """
+    _require_onnx()
+    clone = onnx.TensorProto()
+    clone.CopyFrom(initializer)
+    clone.ClearField("name")
+    clone.ClearField("doc_string")
+    return hashlib.sha256(clone.SerializeToString()).hexdigest()
 
 
 def optimize_file(path: Path, output: Path | None = None) -> dict[str, int]:

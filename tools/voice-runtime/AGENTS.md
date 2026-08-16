@@ -42,9 +42,10 @@ Acquire `/tmp/aurora-global-build.lock` for every convert, build, export, or
 heavy test. Keep those builds sequential. WASM TTS must set
 `AURORA_SHERPA_WASM_TTS_NEUTRAL=1` so Aurora mounts catalog packs at runtime.
 
-French 24l is exported at `STATIC_SEQ_LEN=10000`. English 2026-04 is still a
-1000-step graph, so both runtimes pass `extra.max_frames=55` to stay under
-the frame-62 overflow.
+Both language packs export at `STATIC_SEQ_LEN=10000` so production
+`max_frames=500` fits. Public packs use `reference_audio_mode=internal` and
+ship `internal_reference.wav`. Do not omit reference audio on the current
+Sherpa path.
 
 ```bash
 uv run python tools/voice-runtime/pockettts-packs/smoke_synthesize.py --runtime native

@@ -8,7 +8,6 @@ import hashlib
 import json
 import shutil
 import subprocess
-import tarfile
 from pathlib import Path
 from typing import Any
 
@@ -88,15 +87,52 @@ def extract_archive(archive: Path, staging_root: Path, extraction_name: str) -> 
     if staging_root.exists():
         shutil.rmtree(staging_root)
     staging_root.mkdir(parents=True)
-    with tarfile.open(archive, "r:gz") as tar:
-        extract_kwargs: dict[str, Any] = {}
-        if hasattr(tarfile, "fully_trusted_filter"):
-            extract_kwargs["filter"] = tarfile.fully_trusted_filter
-        tar.extractall(staging_root, **extract_kwargs)
+    extract_pinned_source_tar(archive, staging_root, mode="r:gz")
     extracted = staging_root / extraction_name
     if not extracted.is_dir():
         raise PatchQueueError(f"archive did not extract {extraction_name}")
     return extracted
+
+
+def extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str = "r:*") -> None:
+    """Extract a SHA-pinned upstream source tree.
+
+    Language-pack `safe_tar` rejects every link. Official sherpa-onnx ships
+    in-tree relative symlinks (Kotlin/Swift API copies). After the archive
+    digest is verified, keep those links only when they stay inside dest.
+    Still reject traversal, absolute paths, hardlinks, devices, and FIFOs.
+    """
+    import tarfile
+
+    dest.mkdir(parents=True, exist_ok=True)
+    dest_resolved = dest.resolve()
+    with tarfile.open(archive, mode) as tar:
+        for member in tar.getmembers():
+            _reject_unsafe_pinned_member(member, dest_resolved)
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(dest, filter="data")
+            return
+        tar.extractall(dest)
+
+
+def _reject_unsafe_pinned_member(member: Any, dest_resolved: Path) -> None:
+    name = Path(member.name)
+    if name.is_absolute() or ".." in name.parts:
+        raise PatchQueueError(f"unsafe tar member path: {member.name}")
+    if member.isdev() or member.isfifo() or member.ischr() or member.isblk():
+        raise PatchQueueError(f"refusing device member: {member.name}")
+    if member.islnk():
+        raise PatchQueueError(f"refusing hardlink member: {member.name}")
+    target = (dest_resolved / member.name).resolve()
+    if dest_resolved not in target.parents and target != dest_resolved:
+        raise PatchQueueError(f"unsafe tar member path: {member.name}")
+    if member.issym():
+        link = Path(member.linkname)
+        if link.is_absolute():
+            raise PatchQueueError(f"refusing escaping symlink: {member.name}")
+        link_target = (target.parent / link).resolve()
+        if dest_resolved not in link_target.parents and link_target != dest_resolved:
+            raise PatchQueueError(f"refusing escaping symlink: {member.name}")
 
 
 def apply_patches(source_root: Path) -> None:
@@ -107,7 +143,7 @@ def apply_patches(source_root: Path) -> None:
                 "git",
                 "apply",
                 "--unidiff-zero",
-                "--whitespace=nowarn",
+                "--whitespace=error",
                 str(patch),
             ],
             cwd=source_root,
@@ -116,9 +152,7 @@ def apply_patches(source_root: Path) -> None:
             text=True,
         )
         if result.returncode != 0:
-            raise PatchQueueError(
-                f"failed to apply {record['name']}: {result.stderr.strip()}"
-            )
+            raise PatchQueueError(f"failed to apply {record['name']}: {result.stderr.strip()}")
 
 
 def patched_tree_identity(source_root: Path) -> dict[str, Any]:

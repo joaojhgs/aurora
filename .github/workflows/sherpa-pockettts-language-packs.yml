@@ -7,8 +7,11 @@ name: Sherpa PocketTTS language packs
 
 on:
   workflow_dispatch:
-  release:
-    types: [published]
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag that receives the pack assets
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +25,8 @@ jobs:
     name: Convert official Kyutai PocketTTS language packs
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -42,19 +47,17 @@ jobs:
             pockettts-language-packs-
 
       - name: Convert English current-generation pack
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
             --pack aurora-pockettts-en-2026-04 \
+            --weights-source public-fixed-voice \
             --json
 
       - name: Convert French newer-protocol pack
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           uv run python tools/voice-runtime/pockettts-packs/convert_language_pack.py \
             --pack aurora-pockettts-fr-24l \
+            --weights-source public-fixed-voice \
             --json
 
       - name: Write checksum manifest
@@ -64,7 +67,7 @@ jobs:
             --output .artifacts/pockettts/language-packs/checksum-manifest.json \
             --check-workflow
 
-      - name: Upload language-pack artifacts
+      - name: Upload language-pack diagnostics
         uses: actions/upload-artifact@v4
         with:
           name: sherpa-pockettts-language-packs
@@ -73,3 +76,15 @@ jobs:
             .artifacts/pockettts/language-packs/checksum-manifest.json
             .artifacts/pockettts/language-packs/SHA256SUMS
           if-no-files-found: error
+
+      - name: Attach packs to the existing GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ inputs.release_tag }}"
+          gh release view "$tag"
+          gh release upload "$tag" \
+            .artifacts/pockettts/language-packs/*.tar.bz2 \
+            .artifacts/pockettts/language-packs/checksum-manifest.json \
+            .artifacts/pockettts/language-packs/SHA256SUMS \
+            --clobber

@@ -1,11 +1,13 @@
 {
   "schema_version": 1,
   "catalog_id": "aurora-sherpa-pockettts-language-packs-v1",
-  "revision": "bootstrap-sources-v1",
+  "revision": "bootstrap-sources-v2",
   "temporary_bootstrap": true,
   "removal_point": "After GitHub release tag sherpa-pockettts-language-packs publishes stable archive URLs, replace on-demand catalog download URLs with those release assets and delete .github/workflows/sherpa-pockettts-language-packs.yml convert/build steps.",
   "export_helper": {
     "repository": "https://github.com/csukuangfj/pocket-tts-onnx-export",
+    "commit": "f075c00bf4bbfbb081a11fd99abbf39df3849e0c",
+    "verified_date": "2026-02-10",
     "role": "on-demand conversion helper, not a permanent fork"
   },
   "kyutai_source": {
@@ -33,13 +35,18 @@
         "decoder_kv_seq_len": 10000
       },
       "weights": {
-        "repo_id": "kyutai/pocket-tts",
-        "revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
         "filename": "languages/english_2026-04/model.safetensors",
-        "license": "cc-by-4.0-extra-gated",
-        "gated": true,
-        "public_fallback_repo_id": "kyutai/pocket-tts-without-voice-cloning",
-        "public_fallback_revision": "e041936c75475d350b405bc870bcf7c22da4e9e6"
+        "license": "CC-BY-4.0",
+        "gated": false,
+        "source_mode": "public-fixed-voice",
+        "voice_cloning": false,
+        "reference_audio_mode": "internal",
+        "encoder_status": "zeroed_by_remove_voice_cloning_and_push",
+        "gated_clone_repo_id": "kyutai/pocket-tts",
+        "gated_clone_revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "gated_clone_license": "cc-by-4.0-extra-gated"
       },
       "tokenizer": {
         "repo_id": "kyutai/pocket-tts-without-voice-cloning",
@@ -67,13 +74,18 @@
         "decoder_kv_seq_len": 10000
       },
       "weights": {
-        "repo_id": "kyutai/pocket-tts",
-        "revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "repo_id": "kyutai/pocket-tts-without-voice-cloning",
+        "revision": "e041936c75475d350b405bc870bcf7c22da4e9e6",
         "filename": "languages/french_24l/model.safetensors",
-        "license": "cc-by-4.0-extra-gated",
-        "gated": true,
-        "public_fallback_repo_id": "kyutai/pocket-tts-without-voice-cloning",
-        "public_fallback_revision": "e041936c75475d350b405bc870bcf7c22da4e9e6"
+        "license": "CC-BY-4.0",
+        "gated": false,
+        "source_mode": "public-fixed-voice",
+        "voice_cloning": false,
+        "reference_audio_mode": "internal",
+        "encoder_status": "zeroed_by_remove_voice_cloning_and_push",
+        "gated_clone_repo_id": "kyutai/pocket-tts",
+        "gated_clone_revision": "4c8ad48f8a003909bc4f1122cbe88a4252124621",
+        "gated_clone_license": "cc-by-4.0-extra-gated"
       },
       "tokenizer": {
         "repo_id": "kyutai/pocket-tts-without-voice-cloning",

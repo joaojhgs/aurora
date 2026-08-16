@@ -30,6 +30,52 @@ def test_series_matches_pinned_patch_digests() -> None:
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
 
 
+def test_patches_have_no_trailing_whitespace_on_added_lines() -> None:
+    spec = __import__("importlib.util").util.spec_from_file_location("apply_sherpa_patches", APPLY)
+    assert spec is not None and spec.loader is not None
+    module = __import__("importlib.util").util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name in module.PATCH_SHA256:
+        path = REPO / "tools/voice-runtime/sherpa-patches" / name
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if line.startswith("+") and not line.startswith("+++"):
+                assert line[1:] == line[1:].rstrip(), f"{name}:{line_no} has trailing whitespace"
+
+
+def test_pinned_source_extract_allows_in_tree_relative_symlink(tmp_path: Path) -> None:
+    import io
+    import tarfile
+
+    spec = __import__("importlib.util").util.spec_from_file_location("apply_sherpa_patches", APPLY)
+    assert spec is not None and spec.loader is not None
+    module = __import__("importlib.util").util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    archive = tmp_path / "pinned.tar"
+    dest = tmp_path / "out"
+    with tarfile.open(archive, "w") as tar:
+        payload = b"shared\n"
+        target = tarfile.TarInfo(name="src/shared.txt")
+        target.size = len(payload)
+        tar.addfile(target, fileobj=io.BytesIO(payload))
+        link = tarfile.TarInfo(name="src/copy.txt")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "shared.txt"
+        tar.addfile(link)
+    module.extract_pinned_source_tar(archive, dest)
+    assert (dest / "src" / "shared.txt").read_bytes() == b"shared\n"
+    assert (dest / "src" / "copy.txt").is_symlink()
+    assert (dest / "src" / "copy.txt").read_bytes() == b"shared\n"
+
+    escape = tmp_path / "escape.tar"
+    with tarfile.open(escape, "w") as tar:
+        link = tarfile.TarInfo(name="link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/passwd"
+        tar.addfile(link)
+    with pytest.raises(module.PatchQueueError, match="escaping symlink"):
+        module.extract_pinned_source_tar(escape, tmp_path / "escape")
+
+
 def test_apply_script_rejects_wrong_archive(tmp_path: Path) -> None:
     archive = tmp_path / "bad.tar.gz"
     archive.write_bytes(b"not-sherpa")
@@ -75,9 +121,7 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     )
     assert len(payload["patches"]) == 2
     source = Path(payload["source_root"])
-    pocket = (source / "sherpa-onnx/csrc/offline-tts-pocket-model.cc").read_text(
-        encoding="utf-8"
-    )
+    pocket = (source / "sherpa-onnx/csrc/offline-tts-pocket-model.cc").read_text(encoding="utf-8")
     assert "ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16" in pocket
     assert "insert_bos_before_voice" in pocket
     wasm = (source / "wasm/tts/CMakeLists.txt").read_text(encoding="utf-8")
