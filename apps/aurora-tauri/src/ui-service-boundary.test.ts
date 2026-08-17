@@ -154,6 +154,8 @@ describe('UI and Tauri service boundary contract', () => {
     expect(rust).toContain('fn stop_sidecar(')
     expect(rust).toContain('fn check_gateway_health(')
     expect(rust).toContain('fn gateway_request_url(')
+    expect(rust).toContain('gateway path must be relative')
+    expect(rust).toContain('fn same_http_origin(')
     expect(rust).toContain('.request(method, url)')
     expect(rust).toContain('run_gateway_event_stream(')
 

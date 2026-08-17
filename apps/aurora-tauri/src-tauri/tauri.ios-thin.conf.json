@@ -8,7 +8,7 @@
         "aurora-ios-thin",
         "aurora-mobile-mesh"
       ],
-      "csp": "default-src 'self'; connect-src 'self' http: https: ws: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
     }
   },
   "bundle": {

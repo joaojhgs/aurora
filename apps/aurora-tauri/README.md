@@ -14,7 +14,7 @@ This package is the official Tauri 2 desktop shell for Aurora. It hosts the prod
 
 ## Client endpoint policy
 
-Python-free client package wrappers no longer accept build-time Gateway or signaling origins. Desktop, Android, and iOS client artifacts are endpoint-agnostic; first-run onboarding imports connection and pairing material from an invite, while the normal connection settings edit the stored Gateway/signaling profile later. The generated Tauri CSP uses `connect-src 'self' http: https: ws: wss:` so HTTP Gateway and WebSocket signaling URLs can be supplied after installation. Browser mixed-content rules and server CORS still apply to hosted web deployments. Legacy `*thin*` scripts remain compatibility aliases for the neutral client commands.
+Python-free client package wrappers no longer accept build-time Gateway or signaling origins. Desktop, Android, and iOS client artifacts are endpoint-agnostic; first-run onboarding imports connection and pairing material from an invite, while the normal connection settings edit the stored Gateway/signaling profile later. The generated Tauri CSP uses `connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:` so loopback HTTP/WS and remote HTTPS/WSS Gateway or signaling URLs can be supplied after installation. Browser mixed-content rules and server CORS still apply to hosted web deployments. Legacy `*thin*` scripts remain compatibility aliases for the neutral client commands.
 
 | Mode | Runtime profile input | Aurora HTTP application server |
 | --- | --- | --- |
