@@ -70,6 +70,7 @@ def test_zod_codegen_requires_explicit_json_value_marker() -> None:
 def test_zod_codegen_maps_only_validated_string_formats() -> None:
     rendered = render_zod_module(
         {
+            "contract_version": "1.0.0",
             "schemas": [
                 {
                     "schema_id": f"Example.Format.{fmt}",
@@ -83,7 +84,7 @@ def test_zod_codegen_maps_only_validated_string_formats() -> None:
                     },
                 }
                 for fmt in ("duration", "hostname", "ipv4", "ipv6", "binary")
-            ]
+            ],
         }
     )
 
@@ -278,6 +279,7 @@ def test_zod_codegen_rejects_unsafe_regex_refs_literals_numbers_and_unions() -> 
 
 def test_zod_codegen_maps_extra_modes_without_weakened_fallbacks() -> None:
     contract_schema = {
+        "contract_version": "1.0.0",
         "schemas": [
             {
                 "schema_id": "Example.Input.ExampleRequest",
@@ -306,7 +308,7 @@ def test_zod_codegen_maps_extra_modes_without_weakened_fallbacks() -> None:
                     "properties": {},
                 },
             },
-        ]
+        ],
     }
 
     rendered = render_zod_module(contract_schema)
