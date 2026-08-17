@@ -450,6 +450,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       session,
       remotePeerId: profile.expectedStablePeerId,
       localPeerRole: this.options.nodeRole === 'mesh-node' ? 'hybrid' as const : 'consumer' as const,
+      // Required: buildWebRtcManifestAck binds recipient_projection_evidence to
+      // this peer and fails closed without it. The bridge otherwise falls back
+      // to peerHost.localPeerId, which a consumer-role runtime does not have,
+      // so every projection manifest would be rejected as "recipient unbound".
+      ...(this.options.localStablePeerId ? { localPeerId: this.options.localStablePeerId } : {}),
       ...(this.options.peerHost ? { peerHost: this.options.peerHost } : {}),
       ...(this.activeLocalProtocolHello
         ? { localProtocolHello: this.activeLocalProtocolHello }
