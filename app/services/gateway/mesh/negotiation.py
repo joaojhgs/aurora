@@ -1275,13 +1275,10 @@ def _validate_service_feature_objects(
     ):
         return
     expected_features = {
-        feature.feature_id: _canonical_feature_payload(feature)
+        feature.feature_id: _comparable_feature_payload(feature)
         for feature in feature_contracts_for_module(module)
     }
-    actual_features = [
-        _canonical_feature_payload(feature) if hasattr(feature, "model_dump") else feature
-        for feature in callable_features
-    ]
+    actual_features = [_comparable_feature_payload(feature) for feature in callable_features]
     if not actual_features and expected_features and not allow_legacy:
         raise ValueError(
             f"{module} callable features mismatch: expected={list(expected_features.values())} "
@@ -1319,10 +1316,10 @@ def _validate_callable_method_surface_for_wire(method: Any, module: str) -> list
         return violations
 
     expected = [
-        _canonical_feature_payload(feature) for feature in feature_contracts_for_topic(topic)
+        _comparable_feature_payload(feature) for feature in feature_contracts_for_topic(topic)
     ]
     actual = [
-        _canonical_feature_payload(feature) if hasattr(feature, "model_dump") else feature
+        _comparable_feature_payload(feature)
         for feature in list(getattr(method, "callable_features", None) or [])
     ]
     if actual == expected:
@@ -1344,3 +1341,18 @@ def _canonical_feature_payload(feature: Any) -> dict[str, Any]:
     payload = feature.model_dump(mode="json") if hasattr(feature, "model_dump") else dict(feature)
     payload["method_ids"] = sorted(str(item) for item in payload.get("method_ids", []) or [])
     return payload
+
+
+# `label` and `summary` are display copy. Comparing them made the taxonomy
+# lockstep across the whole mesh: editing one feature's summary rejected every
+# peer still on the previous wording as `manifest_structure_invalid`, with no
+# version negotiation available to soften it. Identity and membership still
+# have to match exactly.
+_FEATURE_IDENTITY_FIELDS = ("feature_id", "module", "method_ids")
+
+
+def _comparable_feature_payload(feature: Any) -> dict[str, Any]:
+    """Return the load-bearing part of a feature payload for peer comparison."""
+
+    payload = _canonical_feature_payload(feature)
+    return {field: payload.get(field) for field in _FEATURE_IDENTITY_FIELDS}
