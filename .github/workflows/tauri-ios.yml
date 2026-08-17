@@ -26,6 +26,9 @@ on:
       - ".github/workflows/tauri-ios.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   macos-tauri-ios:
     name: macOS Xcode Tauri iOS init and build

@@ -24,6 +24,9 @@ on:
       - ".github/workflows/tauri-android.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   android-tauri:
     name: Android client APK/AAB build and emulator smoke

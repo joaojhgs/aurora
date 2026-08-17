@@ -33,6 +33,9 @@ on:
       - ".github/workflows/webrtc-interop.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   live-interop:
     name: Hosted peer and cross-engine network paths

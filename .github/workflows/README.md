@@ -13,6 +13,6 @@ Current durable workflow lanes:
 - `performance.yml` — manual/scheduled performance and resilience checks.
 - `docker-build.yml` — per-service container image matrix.
 - `release.yml` — manual semantic-release publication.
-- `required-check-aliases.yml` — temporary low-cost aliases for stale branch-protection contexts; remove after GitHub required checks are updated to canonical workflow/job names.
+- `required-check-aliases.yml` — temporary aliases for stale branch-protection contexts; each alias waits for the matching canonical job and fails unless that job succeeded. Remove after GitHub required checks are updated to canonical workflow/job names.
 
 See `docs/CI_CD.md` for local command equivalents and artifact policy.
