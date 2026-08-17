@@ -638,5 +638,10 @@ function requireExactVersion2(value: unknown): void {
 }
 
 function isKnownControlType(type: string): boolean {
-  return ['auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event'].includes(type)
+  // `capacity_update` is broadcast by the Python gateway to every negotiated
+  // peer. It had no case and no entry here, so it threw and was swallowed by
+  // the bridge's catch-all — a frame the mesh sends routinely, dropped silently.
+  return [
+    'auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event', 'capacity_update'
+  ].includes(type)
 }

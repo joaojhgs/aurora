@@ -16,10 +16,16 @@ export const KNOWN_PEER_CAPABILITIES = new Set<string>([
   CAP_PROVIDER_LEASE_V1
 ])
 
+// Must stay identical to DEFAULT_PEER_CAPABILITIES in
+// app/services/gateway/webrtc/peer_protocol.py. Omitting provider_lease_v1 here
+// meant any hello built from the defaults never negotiated the lease, and
+// sendLocalManifest() then returned early — so the peer-host silently never
+// answered a manifest_request at all.
 export const DEFAULT_PEER_CAPABILITIES = Object.freeze([
   CAP_FRAGMENTATION_V1,
   CAP_BACKPRESSURE_V1,
-  CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+  CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  CAP_PROVIDER_LEASE_V1
 ] as const)
 
 export const PEER_PROTOCOL_VERSION = 1 as const

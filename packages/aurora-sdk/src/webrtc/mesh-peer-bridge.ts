@@ -158,6 +158,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private incomingManifestGeneration = 0
   private asyncDispatchFailureCount = 0
   private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
+  private droppedFrameCount = 0
+  private lastDroppedFrameReason: string | null = null
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
   private readonly startedAuthorityEpochKeys = new Set<string>()
   private unsubscribeFrames: (() => void) | undefined
@@ -348,6 +350,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     remoteProtocolCapabilities: string[]
     asyncDispatchFailureCount: number
     lastAsyncDispatchFailure: AsyncDispatchFailure | null
+    droppedFrameCount: number
+    lastDroppedFrameReason: string | null
   } {
     return {
       pendingCallCount: this.pending.size,
@@ -359,7 +363,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       receivedFragmentCount: this.receivedFragmentCount,
       remoteProtocolCapabilities: [...(this.remoteProtocol?.capabilities ?? [])],
       asyncDispatchFailureCount: this.asyncDispatchFailureCount,
-      lastAsyncDispatchFailure: this.lastAsyncDispatchFailure
+      lastAsyncDispatchFailure: this.lastAsyncDispatchFailure,
+      droppedFrameCount: this.droppedFrameCount,
+      lastDroppedFrameReason: this.lastDroppedFrameReason
     }
   }
 
@@ -574,6 +580,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     } catch (error) {
       // Unknown malformed inbound frames are fail-closed for assemblies but should not crash the app shell.
       if (error instanceof Error && error.name === 'FragmentProtocolError') this.reassembler.cleanupPeer(this.remotePeerId)
+      // Counted, not logged: without this the catch made protocol drift
+      // invisible, which is how capacity_update was dropped unnoticed. The
+      // reason is a bounded parser code, never frame contents.
+      this.droppedFrameCount += 1
+      this.lastDroppedFrameReason = error instanceof Error ? error.name : 'unknown'
     }
   }
 

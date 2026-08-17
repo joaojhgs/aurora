@@ -56,6 +56,41 @@ SIGNALING_TOPICS = MappingProxyType(
 )
 RPC_FRAME_TYPES = ("call", "result", "error", "chunk", "eof", "cancel", "event")
 
+# The DataChannel carries considerably more than RPC. Listing only the RPC
+# frames left the rest of the vocabulary undocumented and unasserted, which is
+# how `capacity_update` came to be broadcast by Python and silently dropped by
+# the TypeScript parser. Every frame type either side accepts belongs in one of
+# these tuples, and both implementations assert against them.
+SUBSCRIPTION_FRAME_TYPES = (
+    "subscribe",
+    "subscribed",
+    "subscribe_rejected",
+    "unsubscribe",
+    "unsubscribed",
+)
+MESH_CONTROL_FRAME_TYPES = (
+    "protocol_hello",
+    "fragment",
+    "manifest",
+    "manifest_request",
+    "manifest_ack",
+    "provider_lease",
+    "provider_unavailable",
+    "capacity_update",
+    "ping",
+    "pong",
+)
+SESSION_FRAME_TYPES = (
+    "auth",
+    "reauth",
+    "mesh_auth_challenge_v1",
+    "mesh_auth_proof_v1",
+    "pairing_v2_commit",
+    "pairing_v2_reveal",
+    "pairing_v2_terminal",
+)
+SIGNALING_FRAME_TYPES = ("presence", "presence_departed", "offer", "answer", "candidate")
+
 WEBRTC_THIN_PROTOCOL_CAPABILITIES = MappingProxyType(
     {
         "protocol_version": WEBRTC_THIN_PROTOCOL_VERSION,
@@ -112,5 +147,9 @@ def protocol_descriptor() -> dict[str, Any]:
             "subscriptions": [dict(item) for item in SIGNALING_TOPICS["subscriptions"]],
         },
         "rpc_frame_types": list(RPC_FRAME_TYPES),
+        "subscription_frame_types": list(SUBSCRIPTION_FRAME_TYPES),
+        "mesh_control_frame_types": list(MESH_CONTROL_FRAME_TYPES),
+        "session_frame_types": list(SESSION_FRAME_TYPES),
+        "signaling_frame_types": list(SIGNALING_FRAME_TYPES),
         "capabilities": dict(WEBRTC_THIN_PROTOCOL_CAPABILITIES),
     }

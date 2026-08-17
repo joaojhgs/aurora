@@ -3,7 +3,11 @@ import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { CAP_PROVIDER_LEASE_V1 } from '../src/webrtc/peer-protocol.js'
+import {
+  CAP_PROVIDER_LEASE_V1,
+  DEFAULT_PEER_CAPABILITIES,
+  KNOWN_PEER_CAPABILITIES
+} from '../src/webrtc/peer-protocol.js'
 import { parseWebRtcJsonFrame } from '../src/webrtc/protocol.js'
 import {
   AEAD_PARAMETERS,
@@ -11,7 +15,11 @@ import {
   HKDF_INFO,
   INVITE_FORMAT_VERSION,
   PAIRING_PROTOCOL_VERSION,
+  MESH_CONTROL_FRAME_TYPES,
   RPC_FRAME_TYPES,
+  SESSION_FRAME_TYPES,
+  SIGNALING_FRAME_TYPES,
+  SUBSCRIPTION_FRAME_TYPES,
   SCRYPT_PARAMETERS,
   SIGNALING_TOPICS,
   WEBRTC_THIN_CAPABILITY_VERSION,
@@ -25,6 +33,8 @@ interface Fixture {
   rpc_frames: Record<string, { frame: Record<string, unknown>; json: string }>
   peer_protocol: {
     capability_names: string[]
+    default_peer_capabilities: string[]
+    known_peer_capabilities: string[]
     local_hello: Record<string, any>
     consumer_hello: Record<string, any>
     negotiated: Record<string, any>
@@ -84,6 +94,13 @@ describe('WebRTC web thin protocol vectors', () => {
     })
     expect(SIGNALING_TOPICS).toEqual(descriptor.signaling_topics)
     expect([...RPC_FRAME_TYPES]).toEqual(descriptor.rpc_frame_types)
+    expect([...SUBSCRIPTION_FRAME_TYPES]).toEqual(descriptor.subscription_frame_types)
+    expect([...MESH_CONTROL_FRAME_TYPES]).toEqual(descriptor.mesh_control_frame_types)
+    expect([...SESSION_FRAME_TYPES]).toEqual(descriptor.session_frame_types)
+    expect([...SIGNALING_FRAME_TYPES]).toEqual(descriptor.signaling_frame_types)
+    const peerProtocol = fixture().peer_protocol
+    expect([...DEFAULT_PEER_CAPABILITIES]).toEqual(peerProtocol.default_peer_capabilities)
+    expect([...KNOWN_PEER_CAPABILITIES].sort()).toEqual(peerProtocol.known_peer_capabilities)
     expect(WEBRTC_THIN_PROTOCOL_CAPABILITIES.rpc.fragmentation).toBe(true)
     expect(WEBRTC_THIN_PROTOCOL_CAPABILITIES.rpc.backpressure).toBe(true)
     expect(WEBRTC_THIN_PROTOCOL_CAPABILITIES.rpc.scopedEventSubscriptions).toBe(true)

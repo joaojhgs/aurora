@@ -46,6 +46,27 @@ export const SIGNALING_TOPICS = Object.freeze({
 
 export const RPC_FRAME_TYPES = Object.freeze(['call', 'result', 'error', 'chunk', 'eof', 'cancel', 'event'] as const)
 
+// Mirrors app/services/gateway/webrtc/protocol_contract.py. The DataChannel
+// carries considerably more than RPC; listing only the RPC frames left the rest
+// of the vocabulary undocumented and unasserted on both sides.
+export const SUBSCRIPTION_FRAME_TYPES = Object.freeze([
+  'subscribe', 'subscribed', 'subscribe_rejected', 'unsubscribe', 'unsubscribed'
+] as const)
+
+export const MESH_CONTROL_FRAME_TYPES = Object.freeze([
+  'protocol_hello', 'fragment', 'manifest', 'manifest_request', 'manifest_ack',
+  'provider_lease', 'provider_unavailable', 'capacity_update', 'ping', 'pong'
+] as const)
+
+export const SESSION_FRAME_TYPES = Object.freeze([
+  'auth', 'reauth', 'mesh_auth_challenge_v1', 'mesh_auth_proof_v1',
+  'pairing_v2_commit', 'pairing_v2_reveal', 'pairing_v2_terminal'
+] as const)
+
+export const SIGNALING_FRAME_TYPES = Object.freeze([
+  'presence', 'presence_departed', 'offer', 'answer', 'candidate'
+] as const)
+
 export const WEBRTC_THIN_PROTOCOL_CAPABILITIES = Object.freeze({
   protocolVersion: WEBRTC_THIN_PROTOCOL_VERSION,
   capabilityVersion: WEBRTC_THIN_CAPABILITY_VERSION,
