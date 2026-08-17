@@ -32,5 +32,10 @@ services:
         TURN
         exec turnserver -c /tmp/turnserver.conf
     ports:
-      - "127.0.0.1:3478:3478/udp"
-      - "127.0.0.1:3478:3478/tcp"
+      # Deliberately not loopback-bound. The stun lane always dials
+      # stun:<host-ipv4>:3478 and the turn lane does the same for Firefox, so
+      # coturn has to answer off-loopback or ICE never gathers candidates and
+      # the DataChannel never authorizes. Access still requires lt-cred-mech
+      # credentials, and the stack is ephemeral CI-only.
+      - "3478:3478/udp"
+      - "3478:3478/tcp"

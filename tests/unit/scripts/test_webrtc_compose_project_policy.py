@@ -166,8 +166,13 @@ def test_android_node_harnesses_set_caller_specific_defaults() -> None:
 def test_webrtc_interop_compose_binds_loopback_and_omits_mqtt_tcp() -> None:
     source = read_repo("docker-compose.webrtc-interop.yml")
 
+    # MQTT is only ever dialled at 127.0.0.1, so it stays loopback-bound and
+    # the plaintext TCP listener stays gone.
     assert '"127.0.0.1:9001:9001"' in source
-    assert '"127.0.0.1:3478:3478/udp"' in source
-    assert '"127.0.0.1:3478:3478/tcp"' in source
     assert "1883" not in source
+    # coturn must stay reachable off-loopback: scripts/webrtc_interop.sh dials
+    # stun:<host-ipv4>:3478 for the stun lane and for Firefox on the turn lane.
+    assert '"3478:3478/udp"' in source
+    assert '"3478:3478/tcp"' in source
+    assert '"127.0.0.1:3478' not in source
     assert "cli-ip=127.0.0.1" in source
