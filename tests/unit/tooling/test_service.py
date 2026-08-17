@@ -2807,7 +2807,7 @@ class TestToolingServiceToolExecution:
         assert "failure-secret-argument" not in response.error
         assert response.data["error_details"]["error_type"] == "ValueError"
         assert response.data["error_details"]["message"] == "failure echoed <redacted>"
-        assert response.data["error_details"]["trace"]
+        assert "trace" not in response.data["error_details"]
         logged_text = _mock_call_text(log_debug, log_error)
         assert "failure-secret-argument" not in logged_text
         assert "argument_hash" in logged_text
