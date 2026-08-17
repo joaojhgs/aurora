@@ -70,8 +70,14 @@ jobs:
           pnpm --filter @aurora/client test:resilience
           pnpm --filter @aurora/client typecheck
 
+      # The suite asserts on build output (dist/voice-worker.js and the
+      # generated WASM core), which is why every test:browser:* script in this
+      # package prefixes the build. The Rust wasm target and wasm-bindgen are
+      # installed above.
       - name: Test browser voice runtime
-        run: pnpm --filter @aurora/voice-web test:coverage
+        run: |
+          pnpm --filter @aurora/voice-web build
+          pnpm --filter @aurora/voice-web test:coverage
 
       - name: Test, typecheck, and build shared UI
         run: |
