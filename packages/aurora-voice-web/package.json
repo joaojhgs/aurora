@@ -41,9 +41,11 @@
     "test:browser:voice": "pnpm run build && playwright test --config tests/playwright/worker-audio-bridge.playwright.config.ts",
     "test:browser:voice:real-api": "pnpm run build && playwright test --config tests/playwright/worker-audio-realstack.playwright.config.ts",
     "test:browser:sherpa": "pnpm run build && playwright test --config tests/playwright/sherpa-browser-smoke.playwright.config.ts",
-    "test:browser:sherpa-pockettts": "playwright test --config tests/playwright/sherpa-pockettts-browser-smoke.playwright.config.ts"
+    "test:browser:sherpa-pockettts": "playwright test --config tests/playwright/sherpa-pockettts-browser-smoke.playwright.config.ts",
+    "test:coverage": "vitest run --environment node --coverage"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.1.9",
     "esbuild": "^0.27.7",
     "typescript": "5.7.3",
     "vitest": "^4.0.16"

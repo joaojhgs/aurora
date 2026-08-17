@@ -66,13 +66,16 @@ jobs:
       - name: Build, test, and typecheck SDK
         run: |
           pnpm --filter @aurora/client build
-          pnpm --filter @aurora/client test
+          pnpm --filter @aurora/client test:coverage
           pnpm --filter @aurora/client test:resilience
           pnpm --filter @aurora/client typecheck
 
+      - name: Test browser voice runtime
+        run: pnpm --filter @aurora/voice-web test:coverage
+
       - name: Test, typecheck, and build shared UI
         run: |
-          pnpm --filter @aurora/ui test
+          pnpm --filter @aurora/ui test:coverage
           pnpm --filter @aurora/ui test:accessibility
           pnpm --filter @aurora/ui typecheck
 
@@ -83,16 +86,32 @@ jobs:
 
       - name: Test, typecheck, and build web app
         run: |
-          pnpm --filter @aurora/web test
+          pnpm --filter @aurora/web test:coverage
           pnpm --filter @aurora/web typecheck
           pnpm --filter @aurora/web build
 
       - name: Test, typecheck, and build Tauri frontend
         run: |
-          pnpm --filter @aurora/tauri-ui test
+          pnpm --filter @aurora/tauri-ui test:coverage
           pnpm --filter @aurora/tauri-ui test:ci-regression-gates
           pnpm --filter @aurora/tauri-ui typecheck
           pnpm --filter @aurora/tauri-ui build
+
+      # Runs even when a suite above failed, so a red build still reports the
+      # coverage of everything that did run instead of going dark.
+      - name: Upload TypeScript coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: >-
+            ./packages/aurora-sdk/coverage/lcov.info,
+            ./packages/aurora-voice-web/coverage/lcov.info,
+            ./packages/aurora-ui/coverage/lcov.info,
+            ./apps/aurora-web/coverage/lcov.info,
+            ./apps/aurora-tauri/coverage/lcov.info
+          flags: typescript
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload UI and SDK test reports
         if: always()

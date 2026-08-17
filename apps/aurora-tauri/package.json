@@ -120,7 +120,8 @@
     "build:frontend:android-thin": "pnpm build:frontend:android-client",
     "build:frontend:ios-client": "node ./scripts/build-ios-client-frontend.mjs",
     "build:frontend:ios-thin": "pnpm build:frontend:ios-client",
-    "android:sync-native-plugin": "node ./scripts/install-android-native-plugin.mjs"
+    "android:sync-native-plugin": "node ./scripts/install-android-native-plugin.mjs",
+    "test:coverage": "vitest run --environment jsdom --no-file-parallelism src --coverage"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
@@ -138,6 +139,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/coverage-v8": "4.1.9",
     "jsdom": "^27.3.0",
     "typescript": "5.7.3",
     "vite": "^7.2.7",

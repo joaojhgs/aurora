@@ -91,6 +91,9 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+# Vitest lcov output, one directory per TypeScript workspace package.
+coverage/
+lcov.info
 .artifacts/
 .uv-cache/
 .tox/
