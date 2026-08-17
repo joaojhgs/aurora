@@ -5,17 +5,13 @@ services:
     command:
       - |
         cat > /tmp/mosquitto.conf <<'MOSQ'
-        per_listener_settings false
         allow_anonymous true
-        listener 1883 0.0.0.0
-        protocol mqtt
         listener 9001 0.0.0.0
         protocol websockets
         MOSQ
         exec mosquitto -c /tmp/mosquitto.conf
     ports:
-      - "1883:1883"
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"
   webrtc-interop-turn:
     image: coturn/coturn:4.6
     entrypoint: ["/bin/sh", "-lc"]
@@ -28,6 +24,7 @@ services:
         user=interop:interop
         realm=aurora-interop.test
         allow-loopback-peers
+        cli-ip=127.0.0.1
         cli-password=interop-cli
         no-tls
         no-dtls
@@ -35,5 +32,5 @@ services:
         TURN
         exec turnserver -c /tmp/turnserver.conf
     ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
+      - "127.0.0.1:3478:3478/udp"
+      - "127.0.0.1:3478:3478/tcp"
