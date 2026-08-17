@@ -19,8 +19,8 @@ const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const ACTIVE_MANIFEST_PROTOCOL = 'projection-v1'
 const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
 const MAX_GRANTS = 512
-// RecipientProjectionEvidence in app/services/gateway/mesh/models.py, which is
-// declared extra="forbid" — the wire object carries exactly these fields.
+// The gateway's RecipientProjectionEvidence model is declared extra="forbid",
+// so the wire object carries exactly these fields.
 const EVIDENCE_FIELDS: ReadonlySet<string> = new Set([
   'provider_peer_id',
   'recipient_peer_id',
@@ -242,8 +242,8 @@ function serviceStatus(
 /**
  * Verify the projection-v1 evidence chain the same way the Python gateway does.
  *
- * `_classify_projection_manifest` in app/services/gateway/mesh/negotiation.py is
- * the reference. Without these checks a peer Python classifies as
+ * The gateway's `_classify_projection_manifest` is the reference.
+ * Without these checks a peer Python classifies as
  * `permissions_unknown` — revoked authority, unsigned grants, a manifest whose
  * services are not in canonical order — was accepted here, so the two
  * implementations disagreed about which peers were usable.

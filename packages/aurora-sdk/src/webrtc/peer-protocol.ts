@@ -16,8 +16,8 @@ export const KNOWN_PEER_CAPABILITIES = new Set<string>([
   CAP_PROVIDER_LEASE_V1
 ])
 
-// Must stay identical to DEFAULT_PEER_CAPABILITIES in
-// app/services/gateway/webrtc/peer_protocol.py. Omitting provider_lease_v1 here
+// Must stay identical to the gateway's DEFAULT_PEER_CAPABILITIES, which the
+// committed protocol vectors assert. Omitting provider_lease_v1 here
 // meant any hello built from the defaults never negotiated the lease, and
 // sendLocalManifest() then returned early — so the peer-host silently never
 // answered a manifest_request at all.

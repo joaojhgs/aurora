@@ -46,7 +46,7 @@ export const SIGNALING_TOPICS = Object.freeze({
 
 export const RPC_FRAME_TYPES = Object.freeze(['call', 'result', 'error', 'chunk', 'eof', 'cancel', 'event'] as const)
 
-// Mirrors app/services/gateway/webrtc/protocol_contract.py. The DataChannel
+// Mirrors the gateway protocol contract descriptor. The DataChannel
 // carries considerably more than RPC; listing only the RPC frames left the rest
 // of the vocabulary undocumented and unasserted on both sides.
 export const SUBSCRIPTION_FRAME_TYPES = Object.freeze([
