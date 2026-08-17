@@ -26,6 +26,7 @@ from pydantic.version import VERSION as PYDANTIC_VERSION
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.registry import (
     MethodContract,
+    _get_package_version,
     all_contracts,
     clear_registry,
     get_implementation,
@@ -2624,6 +2625,13 @@ def build_sdk_contract_schema() -> dict[str, Any]:
         "artifact": "aurora-sdk-backend-contracts",
         "schema_draft": "https://json-schema.org/draft/2020-12/schema",
         "generator_format_version": GENERATOR_FORMAT_VERSION,
+        # Version of the service contracts these descriptors were generated
+        # from. Every module registers without an explicit version, so this is
+        # the single Aurora contract version that `register_module` assigns to
+        # all of them. Clients that project these contracts onto the mesh
+        # advertise it as their service version, so mesh `min_version` policy
+        # can compare a TypeScript peer-host against a Python node.
+        "contract_version": _get_package_version(),
         "allowlist": list(SDK_CONTRACT_ALLOWLIST),
         "allowlist_hash": sha256_json(list(SDK_CONTRACT_ALLOWLIST)),
         "tooling_provider_allowlist": list(SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST),

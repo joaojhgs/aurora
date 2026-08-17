@@ -1,4 +1,5 @@
 import {
+  AURORA_BACKEND_CONTRACT_VERSION,
   generatedBackendContract,
   generatedBackendEventContract,
   type GeneratedBackendEventOutput,
@@ -168,7 +169,11 @@ export function generatedPeerHostMethodDescriptor<
     serviceCapabilities:
       options.serviceCapabilities
       ?? (descriptor.module === 'Tooling' ? TOOLING_PROVIDER_CAPABILITIES : []),
-    serviceVersion: options.serviceVersion ?? '0.0.0',
+    // The projected surface is the generated backend contract, so the version
+    // we advertise on the mesh is the contract version it came from. A literal
+    // '0.0.0' here made every thin shell fail any `min_version` policy on a
+    // major-version mismatch while an equivalent Python node passed.
+    serviceVersion: options.serviceVersion ?? AURORA_BACKEND_CONTRACT_VERSION,
     maxConcurrent: options.maxConcurrent ?? 10,
     maxRequestBytes: options.maxRequestBytes ?? DEFAULT_METHOD_BYTES,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,

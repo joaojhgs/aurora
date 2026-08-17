@@ -162,12 +162,13 @@ describe('generated peer-host registration', () => {
     ])
   })
 
-  it('groups mixed generated services and requires every advertised service ACK', async () => {
+  it('groups mixed generated services and admits each ACKed service independently', async () => {
     const registry = new PeerHostContractRegistry()
+    const toolingHandler = vi.fn(async () => ({ count: 0, tools: [] }))
     registerGeneratedPeerHostMethod(
       registry,
       'Tooling.GetTools',
-      async () => { throw new Error('not called') }
+      toolingHandler
     )
     const ttsHandler = vi.fn(async () => ({
       voice_id: 'standard:starter:voice',
@@ -290,7 +291,11 @@ describe('generated peer-host registration', () => {
         { service_id: 'TTS', service_label: '', status: 'incompatible', reason_codes: ['unsupported'], reason: '' }
       ]
     }
-    expect(peerHost.markManifestAcknowledged(incompleteAck)).toBe(false)
+    // A partial ACK admits the services the recipient called compatible and
+    // closes only the rest. The recipient declining TTS is a statement about
+    // its own routing preference, so it must not also close Tooling.
+    expect(peerHost.markManifestAcknowledged(incompleteAck)).toBe(true)
+    expect(sent.filter((frame) => (frame as { type?: string }).type === 'provider_lease')).toHaveLength(1)
     await peerHost.handleCall({
       type: 'call',
       id: 'tts-incompatible',
@@ -306,14 +311,32 @@ describe('generated peer-host registration', () => {
     expect(sent.at(-1)).toMatchObject({
       type: 'error',
       id: 'tts-incompatible',
-      error: { code: 425, reason_code: 'provider_not_ready' }
+      error: { code: 403, reason_code: 'service_not_admitted' }
     })
-    expect(sent.filter((frame) => (frame as { type?: string }).type === 'provider_lease')).toHaveLength(0)
 
+    // ...and the service the recipient did admit stays fully callable.
+    await peerHost.handleCall({
+      type: 'call',
+      id: 'tooling-admitted',
+      method: 'Tooling.GetTools',
+      params: {},
+      identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
+    }, 'peer-a')
+    expect(toolingHandler).toHaveBeenCalledTimes(1)
+    expect(sent.at(-1)).toMatchObject({ type: 'result', id: 'tooling-admitted' })
+
+    // A manifest is acknowledged once, so widening admission to TTS requires a
+    // fresh announce rather than a second ACK for the same pending manifest.
+    const reannounced = await peerHost.startEpoch('peer-a')
+    const reannouncedEvidence = reannounced.recipient_projection_evidence as Record<string, unknown>
     const completeAck = {
       ...incompleteAck,
       compatible_services: serviceIds,
       incompatible_services: [],
+      registry_revision: reannouncedEvidence.registry_revision,
+      export_policy_revision: reannouncedEvidence.policy_revision,
+      auth_grant_revision: reannouncedEvidence.auth_grant_revision,
+      projection_digest: reannouncedEvidence.projection_digest,
       services: serviceIds.map((serviceId) => ({
         service_id: serviceId,
         service_label: '',

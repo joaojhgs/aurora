@@ -3,6 +3,9 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 import { z } from 'zod/v4'
 
+/** Aurora service contract version these schemas were generated from. */
+export const AURORA_BACKEND_CONTRACT_VERSION = "1.0.0"
+
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | { [key: string]: JsonValue | undefined } | JsonValue[]
 type AuroraCustomIssue = { code: 'custom'; path?: Array<string | number>; message: string }
