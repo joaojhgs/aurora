@@ -971,7 +971,7 @@ function mobileFirstLaunchNotes(snapshot: AuroraShellSnapshot): MobileFirstLaunc
     {
       platform: 'iOS',
       state: iosState,
-      detail: 'Aurora integrates through Siri/Shortcuts/App Intents, widgets, share sheet, file associations, and deep links in app-owned surfaces only.',
+      detail: 'On iPhone, Aurora can open from Shortcuts, widgets, sharing, and links. It cannot replace the system assistant or listen in the background.',
       evidence: iosLocalLightEvidence(snapshot),
     },
   ]
