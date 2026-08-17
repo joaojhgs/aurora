@@ -51,6 +51,7 @@ const MAX_TOPIC_LENGTH = 256
 const MAX_CORRELATION_IDS = 32
 const MAX_CORRELATION_ID_LENGTH = 128
 const VALID_TOPIC_RE = /^[A-Za-z0-9_.:/-]+$/
+export const CORRELATION_REQUIRED_EVENT_TOPICS = Object.freeze(['Orchestrator.Response', 'TTS.AudioChunk'])
 
 export class MeshEventSubscriptionRegistry {
   private readonly maxTopicsPerPeer: number
@@ -78,6 +79,10 @@ export class MeshEventSubscriptionRegistry {
     const id = requireIdentifier(input.id, 'id')
     const topics = normalizeTopics(input.topics, this.maxTopicsPerPeer, input.exactTopics ?? true)
     const correlationIds = normalizeIdentifiers(input.correlationIds ?? [], MAX_CORRELATION_IDS, 'correlation_id')
+    const correlationRequired = topics.filter((topic) => CORRELATION_REQUIRED_EVENT_TOPICS.includes(topic))
+    if (correlationRequired.length > 0 && correlationIds.length === 0) {
+      throw new Error('correlation_id is required for scoped event topics')
+    }
     const ttlSeconds = normalizeTtl(input.ttlSeconds ?? this.maxTtlSeconds, this.maxTtlSeconds)
     const now = this.clock()
     this.cleanup({ now })
@@ -166,7 +171,10 @@ export class MeshEventSubscriptionRegistry {
       if (subscription.peerId !== peerId) continue
       if (subscription.expiresAt <= now) continue
       if (!subscription.acceptedTopics.includes(topic)) continue
-      if (input.correlationId && subscription.correlationIds.length > 0 && !subscription.correlationIds.includes(input.correlationId)) {
+      const requiresCorrelation = CORRELATION_REQUIRED_EVENT_TOPICS.includes(topic)
+      if (requiresCorrelation && !input.correlationId) continue
+      if (requiresCorrelation && subscription.correlationIds.length === 0) continue
+      if (subscription.correlationIds.length > 0 && (!input.correlationId || !subscription.correlationIds.includes(input.correlationId))) {
         continue
       }
       return true

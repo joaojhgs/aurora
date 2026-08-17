@@ -77,6 +77,7 @@ MESH_CONTROL_FRAME_TYPES = (
     "provider_lease",
     "provider_unavailable",
     "capacity_update",
+    "mesh_event",
     "ping",
     "pong",
 )
@@ -89,7 +90,14 @@ SESSION_FRAME_TYPES = (
     "pairing_v2_reveal",
     "pairing_v2_terminal",
 )
-SIGNALING_FRAME_TYPES = ("presence", "presence_departed", "offer", "answer", "candidate")
+SIGNALING_FRAME_TYPES = (
+    "presence",
+    "presence_departed",
+    "offer",
+    "answer",
+    "candidate",
+    "mesh_event",
+)
 
 WEBRTC_THIN_PROTOCOL_CAPABILITIES = MappingProxyType(
     {

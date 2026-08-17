@@ -89,6 +89,10 @@ export class WebRtcPeerHost {
     this.lease = new ProviderLeaseController({ peerId: options.localPeerId, clock, randomId })
   }
 
+  get localPeerId(): string {
+    return this.options.localPeerId
+  }
+
   attach(sender: PeerHostFrameSender): void {
     this.sender = sender
   }

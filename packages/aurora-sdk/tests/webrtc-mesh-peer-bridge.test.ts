@@ -376,6 +376,39 @@ describe('WebRtcMeshPeerBridge', () => {
     expect(session.sent.some((frame) => (frame as any).type === 'unsubscribe' && (frame as any).id === 'sub-1')).toBe(true)
   })
 
+  it('rejects empty correlation IDs for scoped event topics after protocol hello', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'sub-required' })
+    session.emit(hello())
+    expect(() => bridge.subscribe({
+      peerId: 'peer-a',
+      stream: 'assistant',
+      topics: ['Orchestrator.Response'],
+      candidates: []
+    } as any)).toThrow('correlation_id is required')
+    expect(() => bridge.subscribe({
+      peerId: 'peer-a',
+      stream: 'assistant',
+      topics: ['TTS.AudioChunk'],
+      payload: { correlation_ids: [''] },
+      candidates: []
+    } as any)).toThrow('correlation ids must be non-empty bounded strings')
+    bridge.close()
+  })
+
+  it('stores remote capacity_update state', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a' })
+    session.emit(hello())
+    session.emit({ type: 'capacity_update', module: 'Orchestrator', available: 1, max_concurrent: 4 })
+    expect(bridge.getRemoteServiceCapacity('Orchestrator')).toEqual({
+      available: 1,
+      maxConcurrent: 4,
+      activeCalls: 3
+    })
+    bridge.close()
+  })
+
   it('streams RPC chunks through the mesh transport and cancels exactly once on abort', async () => {
     const session = new FakeSession()
     const bridge = new WebRtcMeshPeerBridge({
