@@ -20,6 +20,9 @@ on:
       - ".github/workflows/tauri-desktop.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   sherpa-native-runtimes:
     name: Patched Sherpa runtime (${{ matrix.platform }})

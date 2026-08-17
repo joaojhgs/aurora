@@ -14,7 +14,7 @@ const reportPath = resolve(
     ?? process.env.AURORA_TAURI_IOS_THIN_REPORT_PATH
     ?? join(packageRoot, 'reports', 'ios-client-bundle-prepare.json'),
 )
-const connectSrc = ["'self'", 'http:', 'https:', 'ws:', 'wss:']
+const connectSrc = ["'self'", 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
 
 const config = {
   build: {

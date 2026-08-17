@@ -161,3 +161,13 @@ def test_android_node_harnesses_set_caller_specific_defaults() -> None:
     assert (
         "process.env.COMPOSE_PROJECT_NAME ||= 'aurora-android-mobile-webrtc-e2e'" in android_mobile
     )
+
+
+def test_webrtc_interop_compose_binds_loopback_and_omits_mqtt_tcp() -> None:
+    source = read_repo("docker-compose.webrtc-interop.yml")
+
+    assert '"127.0.0.1:9001:9001"' in source
+    assert '"127.0.0.1:3478:3478/udp"' in source
+    assert '"127.0.0.1:3478:3478/tcp"' in source
+    assert "1883" not in source
+    assert "cli-ip=127.0.0.1" in source

@@ -85,7 +85,10 @@ export function parseWebRtcMeshManifest(
   }
 }
 
-export function buildWebRtcManifestAck(manifest: MeshPeerManifest): MeshManifestAckFrame {
+export function buildWebRtcManifestAck(
+  manifest: MeshPeerManifest,
+  options: { expectedRecipientPeerId?: string } = {}
+): MeshManifestAckFrame {
   const input = requirePlainRecord(manifest, 'manifest') as unknown as MeshPeerManifest
   validateManifestTree(input, 'manifest')
   const peerId = requireString(input.peerId, 'peerId')
@@ -117,7 +120,7 @@ export function buildWebRtcManifestAck(manifest: MeshPeerManifest): MeshManifest
   // Ordering and per-service digests first, matching the precedence in
   // Python's _classify_projection_manifest, so a non-canonical manifest is
   // reported as such rather than as a digest mismatch.
-  verifyProjectionEvidence(raw, evidence)
+  verifyProjectionEvidence(raw, evidence, options.expectedRecipientPeerId)
   const projectionDigest = requireDigest(evidence.projection_digest, 'projection_digest')
   const computedDigest = manifestProjectionDigest(raw)
   if (projectionDigest !== computedDigest) {
@@ -255,7 +258,8 @@ function serviceStatus(
  */
 function verifyProjectionEvidence(
   rawManifest: Record<string, unknown>,
-  evidence: Record<string, unknown>
+  evidence: Record<string, unknown>,
+  expectedRecipientPeerId?: string
 ): void {
   if (rawManifest.granted_permissions !== null && rawManifest.granted_permissions !== undefined) {
     throw new WebRtcManifestParseError('projection manifest cannot carry legacy granted_permissions')
@@ -275,6 +279,12 @@ function verifyProjectionEvidence(
   }
   const recipientPeerId = requireString(evidence.recipient_peer_id, 'recipient_peer_id')
   assertIdentifier(recipientPeerId, 'recipient_peer_id')
+  if (!expectedRecipientPeerId) {
+    throw new WebRtcManifestParseError('projection evidence recipient is unbound')
+  }
+  if (recipientPeerId !== expectedRecipientPeerId) {
+    throw new WebRtcManifestParseError('projection evidence recipient mismatch')
+  }
 
   const grants = requireArray(evidence.grants, 'grants', MAX_GRANTS).map((grant, index) => {
     const record = requirePlainRecord(grant, `grants[${index}]`)

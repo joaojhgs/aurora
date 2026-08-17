@@ -229,7 +229,7 @@ describe('WebRTC mesh manifest parser', () => {
 
   it('builds a Python-compatible projection manifest ACK from authoritative raw evidence', () => {
     const parsed = parseWebRtcMeshManifest(projectionFrame(), 'stable-peer-1')
-    const ack = buildWebRtcManifestAck(parsed)
+    const ack = buildWebRtcManifestAck(parsed, { expectedRecipientPeerId: 'thin-consumer-1' })
 
     expect(ack).toEqual({
       type: 'manifest_ack',
@@ -270,7 +270,9 @@ describe('WebRTC mesh manifest parser', () => {
     function ackFor(mutate: (frame: Record<string, unknown> & { shared_services: unknown[] }) => void) {
       const frame = projectionFrame()
       mutate(frame)
-      return () => buildWebRtcManifestAck(parseWebRtcMeshManifest(frame, 'stable-peer-1'))
+      return () => buildWebRtcManifestAck(parseWebRtcMeshManifest(frame, 'stable-peer-1'), {
+        expectedRecipientPeerId: 'thin-consumer-1'
+      })
     }
 
     function evidenceOf(frame: Record<string, unknown>): Record<string, unknown> {
@@ -324,6 +326,18 @@ describe('WebRTC mesh manifest parser', () => {
     it('rejects legacy granted_permissions smuggled into a projection manifest', () => {
       expect(ackFor((frame) => { frame.granted_permissions = ['Tooling.GetTools'] })).toThrow(/legacy granted_permissions/)
     })
+
+    it('rejects projection evidence bound to a different recipient', () => {
+      const frame = projectionFrame()
+      expect(() => buildWebRtcManifestAck(parseWebRtcMeshManifest(frame, 'stable-peer-1'), {
+        expectedRecipientPeerId: 'other-consumer'
+      })).toThrow(/recipient mismatch/)
+    })
+
+    it('rejects projection evidence when the local recipient is unbound', () => {
+      const frame = projectionFrame()
+      expect(() => buildWebRtcManifestAck(parseWebRtcMeshManifest(frame, 'stable-peer-1'))).toThrow(/recipient is unbound/)
+    })
   })
 
   it('fails closed for legacy manifests without inventing projection evidence', () => {
@@ -368,7 +382,7 @@ describe('WebRTC mesh manifest parser', () => {
       { ...projectionFrame(), recipient_projection_evidence: undefined },
       'stable-peer-1'
     )
-    expect(() => buildWebRtcManifestAck(missingEvidence)).toThrow(/recipient_projection_evidence/u)
+    expect(() => buildWebRtcManifestAck(missingEvidence, { expectedRecipientPeerId: 'thin-consumer-1' })).toThrow(/recipient_projection_evidence/u)
 
     const contradictory = projectionFrame()
     contradictory.recipient_projection_evidence = {
@@ -378,12 +392,12 @@ describe('WebRTC mesh manifest parser', () => {
     const parsed = parseWebRtcMeshManifest(contradictory, 'stable-peer-1')
     // Rewriting projection_digest also invalidates the evidence digest that
     // covers it, and that check now runs first.
-    expect(() => buildWebRtcManifestAck(parsed)).toThrow(/evidence_digest contradicts/u)
+    expect(() => buildWebRtcManifestAck(parsed, { expectedRecipientPeerId: 'thin-consumer-1' })).toThrow(/evidence_digest contradicts/u)
   })
 
   it('rejects unsafe manifest ACK inputs before reading authority fields', () => {
     const parsed = parseWebRtcMeshManifest(projectionFrame(), 'stable-peer-1') as unknown as Record<string, unknown>
     Object.defineProperty(parsed, 'peerId', { get: () => 'stable-peer-1', enumerable: true })
-    expect(() => buildWebRtcManifestAck(parsed as never)).toThrow(WebRtcManifestParseError)
+    expect(() => buildWebRtcManifestAck(parsed as never, { expectedRecipientPeerId: 'thin-consumer-1' })).toThrow(WebRtcManifestParseError)
   })
 })

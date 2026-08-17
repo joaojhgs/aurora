@@ -7,13 +7,9 @@ fn main() {
     // canonical Aurora names; the aliases preserve that contract on iOS.
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LIB_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_LIB_DIR");
-    for variable in [
-        "AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR",
-        "AURORA_SHERPA_ONNX_ANDROID_ARMEABI_V7A_LIB_DIR",
-        "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR",
-        "AURORA_SHERPA_ONNX_ANDROID_X86_LIB_DIR",
-    ] {
+    for variable in ANDROID_ABI_LIB_VARS {
         println!("cargo:rerun-if-env-changed={variable}");
+        println!("cargo:rerun-if-env-changed=CARGO_{variable}");
     }
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LINK_KIND");
     println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_LINK_KIND");
@@ -27,21 +23,26 @@ fn main() {
         return;
     }
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-
-    let target_lib_variable = android_target_lib_variable(&target_os, &target_arch);
-    let lib_dir = target_lib_variable
-        .and_then(env::var_os)
-        .or_else(|| env::var_os("AURORA_SHERPA_ONNX_LIB_DIR"))
-        .or_else(|| env::var_os("CARGO_AURORA_SHERPA_ONNX_LIB_DIR"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let target_hint = target_lib_variable
-                .map(|variable| format!(" or {variable}"))
-                .unwrap_or_default();
-            panic!(
-                "AURORA_SHERPA_ONNX_LIB_DIR{target_hint} is required when enabling a native sherpa feature"
-            )
+    let lib_dir = if target_os == "android" {
+        let variable = android_target_lib_variable(&target_arch).unwrap_or_else(|| {
+            panic!("unsupported Android target arch {target_arch} for native sherpa linking")
         });
+        env_os_with_cargo_alias(variable)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{variable} or CARGO_{variable} is required when enabling a native sherpa feature for Android"
+                )
+            })
+    } else {
+        env_os_with_cargo_alias("AURORA_SHERPA_ONNX_LIB_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                panic!(
+                    "AURORA_SHERPA_ONNX_LIB_DIR is required when enabling a native sherpa feature"
+                )
+            })
+    };
 
     if !lib_dir.is_dir() {
         panic!("AURORA_SHERPA_ONNX_LIB_DIR must name an existing directory");
@@ -111,10 +112,18 @@ fn emit_static_platform_links(target_os: &str) {
     }
 }
 
-fn android_target_lib_variable(target_os: &str, target_arch: &str) -> Option<&'static str> {
-    if target_os != "android" {
-        return None;
-    }
+const ANDROID_ABI_LIB_VARS: &[&str] = &[
+    "AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR",
+    "AURORA_SHERPA_ONNX_ANDROID_ARMEABI_V7A_LIB_DIR",
+    "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR",
+    "AURORA_SHERPA_ONNX_ANDROID_X86_LIB_DIR",
+];
+
+fn env_os_with_cargo_alias(name: &str) -> Option<std::ffi::OsString> {
+    env::var_os(name).or_else(|| env::var_os(format!("CARGO_{name}")))
+}
+
+fn android_target_lib_variable(target_arch: &str) -> Option<&'static str> {
     match target_arch {
         "aarch64" => Some("AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR"),
         "arm" => Some("AURORA_SHERPA_ONNX_ANDROID_ARMEABI_V7A_LIB_DIR"),

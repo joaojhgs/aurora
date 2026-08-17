@@ -1,0 +1,60 @@
+name: Wait for canonical check
+description: Fail unless a named GitHub check on this SHA completed successfully.
+
+inputs:
+  check-name:
+    description: Exact GitHub check-run name to require
+    required: true
+  timeout-minutes:
+    description: How long to wait for the canonical check to complete
+    required: false
+    default: "100"
+
+runs:
+  using: composite
+  steps:
+    - name: Verify ${{ inputs.check-name }} succeeded
+      uses: actions/github-script@v7
+      env:
+        CANONICAL_CHECK_NAME: ${{ inputs.check-name }}
+        CANONICAL_CHECK_TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+      with:
+        script: |
+          const checkName = process.env.CANONICAL_CHECK_NAME
+          const timeoutMs = Number(process.env.CANONICAL_CHECK_TIMEOUT_MINUTES || '100') * 60 * 1000
+          const sha = context.payload.pull_request?.head.sha ?? context.sha
+          const deadline = Date.now() + timeoutMs
+          const pollMs = 15000
+
+          core.info(`Waiting for canonical check "${checkName}" on ${sha}`)
+          while (Date.now() < deadline) {
+            const { data } = await github.rest.checks.listForRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: sha,
+              check_name: checkName,
+              filter: 'latest',
+              per_page: 20,
+            })
+            const runs = (data.check_runs || []).filter((run) => run.name === checkName)
+            if (runs.length === 0) {
+              core.info(`Canonical check "${checkName}" has not been reported yet`)
+            } else {
+              const pending = runs.filter((run) => run.status !== 'completed')
+              if (pending.length > 0) {
+                core.info(`Canonical check "${checkName}" is still ${pending.map((run) => run.status).join(', ')}`)
+              } else {
+                const failed = runs.filter((run) => run.conclusion !== 'success')
+                if (failed.length > 0) {
+                  core.setFailed(
+                    `Canonical check "${checkName}" concluded ${failed.map((run) => run.conclusion).join(', ')}`
+                  )
+                  return
+                }
+                core.info(`Canonical check "${checkName}" succeeded`)
+                return
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, pollMs))
+          }
+          core.setFailed(`Timed out waiting for canonical check "${checkName}" on ${sha}`)

@@ -25,6 +25,9 @@ on:
           - "false"
           - "true"
 
+permissions:
+  contents: read
+
 jobs:
   ios-policy:
     name: iOS manifest and UI policy

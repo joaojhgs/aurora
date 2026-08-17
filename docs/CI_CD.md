@@ -19,7 +19,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `docker-build.yml` | Container and process-mode topology validation. | `docker-compose.process.yml` config validation, per-service image builds; pushes only on tags or explicit manual request. |
 | `release.yml` | Manual semantic release. | Lightweight release readiness checks, optional semantic-release publication. |
 | `sherpa-pockettts-language-packs.yml` | Temporary PocketTTS pack publisher. | `workflow_dispatch` or GitHub release only; converts English 2026-04 and French 24l packs and uploads checksummed artifacts. Remove the convert job after stable release URLs exist. |
-| `required-check-aliases.yml` | Temporary branch-protection compatibility. | Emits low-cost success contexts for stale required checks until repository settings are updated to canonical workflow/job names. |
+| `required-check-aliases.yml` | Temporary branch-protection compatibility. | Waits for the canonical required jobs (`Quality / Python lint, format, and generated config` and `Python Tests / Unit, integration, and E2E tests`) and copies their conclusions into the stale check names. Unconditional success is not allowed. |
 
 ## Local equivalents
 
@@ -102,7 +102,7 @@ Use [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md) for repor
 
 ## Branch protection compatibility
 
-GitHub branch protection can keep expecting old check names after workflow consolidation. `required-check-aliases.yml` is intentionally tiny and should be removed after the required checks are updated in repository settings to the canonical lanes above:
+GitHub branch protection can keep expecting old check names after workflow consolidation. `required-check-aliases.yml` waits for the canonical jobs below and fails if those jobs are missing, cancelled, or unsuccessful. Remove the alias workflow after the required checks are updated in repository settings to the canonical lanes above:
 
 - `Quality / Python lint, format, and generated config`
 - `Python Tests / Unit, integration, and E2E tests`

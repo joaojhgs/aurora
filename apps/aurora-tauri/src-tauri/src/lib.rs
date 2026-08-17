@@ -7674,14 +7674,35 @@ fn gateway_request_url(
     path: Option<&str>,
     method: &str,
 ) -> Result<Url, AuroraCommandError> {
-    if let Some(path) = path {
-        return base
-            .join(path.trim_start_matches('/'))
-            .map_err(|error| AuroraCommandError::Gateway(error.to_string()));
+    let relative = if let Some(path) = path {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(AuroraCommandError::Gateway("gateway path is empty".into()));
+        }
+        if trimmed.contains("://") || trimmed.starts_with("//") {
+            return Err(AuroraCommandError::Gateway(
+                "gateway path must be relative".into(),
+            ));
+        }
+        trimmed.trim_start_matches('/').to_string()
+    } else {
+        format!("api/methods/{}", method.replace('.', "/"))
+    };
+    let joined = base
+        .join(&relative)
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    if !same_http_origin(base, &joined) {
+        return Err(AuroraCommandError::Gateway(
+            "gateway path must stay on the configured origin".into(),
+        ));
     }
-    let route = method.replace('.', "/");
-    base.join(&format!("api/methods/{route}"))
-        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))
+    Ok(joined)
+}
+
+fn same_http_origin(left: &Url, right: &Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host() == right.host()
+        && left.port_or_known_default() == right.port_or_known_default()
 }
 
 fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
@@ -10735,6 +10756,34 @@ mod tests {
         );
         assert!(canonical_remote_origin("https://*.example").is_err());
         clear_remote_env();
+    }
+
+    #[test]
+    fn gateway_request_url_rejects_absolute_and_protocol_relative_overrides() {
+        let base = Url::parse("http://127.0.0.1:8000/").unwrap();
+        assert_eq!(
+            gateway_request_url(&base, None, "Gateway.GetRegistry").unwrap().as_str(),
+            "http://127.0.0.1:8000/api/methods/Gateway/GetRegistry"
+        );
+        assert_eq!(
+            gateway_request_url(&base, Some("/health"), "Gateway.GetRegistry")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:8000/health"
+        );
+        assert!(gateway_request_url(
+            &base,
+            Some("https://evil.example/steal"),
+            "Gateway.GetRegistry"
+        )
+        .is_err());
+        assert!(gateway_request_url(&base, Some("//evil.example/steal"), "Gateway.GetRegistry").is_err());
+        assert!(gateway_request_url(
+            &base,
+            Some("http://evil.example/steal"),
+            "Gateway.GetRegistry"
+        )
+        .is_err());
     }
 
     #[test]

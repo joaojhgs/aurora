@@ -100,7 +100,7 @@ describe('desktop client bundle artifact proof', () => {
 
     const config = JSON.parse(readFileSync(context.configPath, 'utf8'))
     const report = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
-    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config.app.security.csp).toContain("connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(config.app.security.csp).not.toContain('gateway.example.invalid')
     expect(config.app.security.csp).not.toContain('signaling.example.invalid')
     expect(config.bundle.externalBin).toEqual([])

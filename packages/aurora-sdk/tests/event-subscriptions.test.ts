@@ -46,8 +46,54 @@ describe('Mesh event subscriptions', () => {
       peerId: 'peer-a',
       id: 'sub-002',
       topics: ['Orchestrator.Response'],
+      correlationIds: ['corr-quota'],
       ttlSeconds: 60
     })
     expect(second.accepted).toBe(false)
+  })
+
+  it('requires correlation IDs for Orchestrator.Response and TTS.AudioChunk', () => {
+    const registry = new MeshEventSubscriptionRegistry({ clock: () => 10 })
+    expect(() =>
+      registry.subscribe({
+        peerId: 'peer-a',
+        id: 'sub-required',
+        topics: ['Orchestrator.Response'],
+        ttlSeconds: 60
+      })
+    ).toThrow(/correlation_id is required/)
+    expect(() =>
+      registry.subscribe({
+        peerId: 'peer-a',
+        id: 'sub-tts',
+        topics: ['TTS.AudioChunk'],
+        ttlSeconds: 60
+      })
+    ).toThrow(/correlation_id is required/)
+
+    registry.subscribe({
+      peerId: 'peer-a',
+      id: 'sub-scoped',
+      topics: ['Orchestrator.Response'],
+      correlationIds: ['corr-event-001'],
+      ttlSeconds: 60
+    })
+    expect(registry.isInterested({
+      peerId: 'peer-a',
+      topic: 'Orchestrator.Response',
+      correlationId: 'corr-event-001',
+      now: 20
+    })).toBe(true)
+    expect(registry.isInterested({
+      peerId: 'peer-a',
+      topic: 'Orchestrator.Response',
+      now: 20
+    })).toBe(false)
+    expect(registry.isInterested({
+      peerId: 'peer-a',
+      topic: 'Orchestrator.Response',
+      correlationId: '',
+      now: 20
+    })).toBe(false)
   })
 })

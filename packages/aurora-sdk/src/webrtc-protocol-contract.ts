@@ -55,7 +55,7 @@ export const SUBSCRIPTION_FRAME_TYPES = Object.freeze([
 
 export const MESH_CONTROL_FRAME_TYPES = Object.freeze([
   'protocol_hello', 'fragment', 'manifest', 'manifest_request', 'manifest_ack',
-  'provider_lease', 'provider_unavailable', 'capacity_update', 'ping', 'pong'
+  'provider_lease', 'provider_unavailable', 'capacity_update', 'mesh_event', 'ping', 'pong'
 ] as const)
 
 export const SESSION_FRAME_TYPES = Object.freeze([
@@ -64,7 +64,7 @@ export const SESSION_FRAME_TYPES = Object.freeze([
 ] as const)
 
 export const SIGNALING_FRAME_TYPES = Object.freeze([
-  'presence', 'presence_departed', 'offer', 'answer', 'candidate'
+  'presence', 'presence_departed', 'offer', 'answer', 'candidate', 'mesh_event'
 ] as const)
 
 export const WEBRTC_THIN_PROTOCOL_CAPABILITIES = Object.freeze({

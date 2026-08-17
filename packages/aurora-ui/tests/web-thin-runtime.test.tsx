@@ -93,9 +93,9 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(androidHttp.trustsNativeWebViewOrigin).toBe(true)
     expect(androidHttp.canManageLocalServiceConfiguration).toBe(false)
     expect(androidHttp.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
-    expect(androidHttp.voiceCapture.wakewordOwner).toBe('webview-focused')
-    expect(androidHttp.voiceCapture.detail).toContain('Android capture')
-    expect(androidHttp.voiceCapture.detail).toContain('foreground')
+    expect(androidHttp.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(androidHttp.voiceCapture.detail).toContain('push-to-talk')
+    expect(androidHttp.voiceCapture.detail).toContain('Hands-free voice is unavailable')
 
     const androidWebRtc = getAuroraSurfaceProfile({ runtimeMode: 'mobile-native', transportKind: 'webrtc-preferred', nativePlatform: 'android' })
     expect(androidWebRtc.kind).toBe('android')
@@ -150,7 +150,7 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(android.features).toMatchObject({
       usesBrowserVoiceRuntime: false,
       focusedPushToTalkOwner: 'webview-focused',
-      wakewordOwner: 'webview-focused',
+      wakewordOwner: 'unavailable',
       localSpeechPack: {
         state: 'disabled',
         canRunLocalStt: false,

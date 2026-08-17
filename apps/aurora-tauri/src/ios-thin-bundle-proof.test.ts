@@ -69,7 +69,7 @@ describe('iOS client bundle policy', () => {
       'aurora-mobile-mesh',
     ])
     expect(config.app.security.csp).toContain(
-      "connect-src 'self' http: https: ws: wss:",
+      "connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:",
     )
     expect(config.app.security.csp).not.toContain('gateway.operator.example')
     expect(config.app.security.csp).not.toContain('signal.operator.example')
@@ -91,7 +91,7 @@ describe('iOS client bundle policy', () => {
   it('does not require endpoint env to generate the iOS thin overlay', () => {
     const { config, report } = prepare()
 
-    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config.app.security.csp).toContain("connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(report).toMatchObject({
       connectionMode: 'runtime-configurable',
       gatewayOrigin: null,

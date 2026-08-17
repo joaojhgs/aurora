@@ -208,7 +208,7 @@ function syncNativeSpeechLibraries() {
       )
     }
     const configured = process.env[spec.libDirEnv]
-      ?? (targets.length === 1 ? process.env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+      ?? process.env[`CARGO_${spec.libDirEnv}`]
     if (!configured) {
       throw new Error(
         `${spec.libDirEnv} is required to stage Android native speech libraries for ${spec.abi}`,

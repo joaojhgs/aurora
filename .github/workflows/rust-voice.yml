@@ -4,9 +4,14 @@ on:
   pull_request:
     paths:
       - "rust/**"
+      - "tools/voice-runtime/ios-audio-spike/native/**"
+      - "tools/voice-runtime/android-audio-spike/native/**"
       - "Makefile"
       - ".github/workflows/rust-voice.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   rust-voice:
@@ -40,9 +45,10 @@ jobs:
       - name: Check native and browser runtimes
         run: make check-rust-voice
 
-      # Native workspace only. The wasm32 target cannot be instrumented by
-      # llvm-cov, and apps/aurora-tauri/src-tauri is a separate Cargo project
-      # verified by the Tauri workflows; neither is represented here.
+      # Native workspace plus the standalone voice-runtime Cargo manifests
+      # exercised by `make check-rust-voice`. The wasm32 target cannot be
+      # instrumented by llvm-cov, and apps/aurora-tauri/src-tauri is a
+      # separate Cargo project verified by the Tauri workflows.
       - name: Measure native workspace coverage
         run: >-
           cargo +1.88.0 llvm-cov

@@ -174,6 +174,10 @@ check-rust-voice:
 	@cargo +$(RUST_TOOLCHAIN) clippy --manifest-path rust/Cargo.toml --locked --workspace --all-targets -- -D warnings
 	@cargo +$(RUST_TOOLCHAIN) test --manifest-path rust/Cargo.toml --locked --workspace
 	@cd rust && cargo +$(RUST_TOOLCHAIN) test --locked -p aurora-voice-wasm --target wasm32-unknown-unknown
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path tools/voice-runtime/ios-audio-spike/native/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path tools/voice-runtime/ios-audio-spike/native/Cargo.toml --locked
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path tools/voice-runtime/android-audio-spike/native/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path tools/voice-runtime/android-audio-spike/native/Cargo.toml --locked
 
 
 # Docker Process Mode Commands

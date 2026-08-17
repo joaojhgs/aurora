@@ -28,6 +28,9 @@ on:
       - ".github/workflows/frontend-sdk.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   frontend-sdk:
     name: SDK, shared UI, and web app

@@ -36,6 +36,22 @@ load_dotenv(os.environ.get("AURORA_ENV_FILE", ".env"))
 config_api.migrate_from_env()
 
 
+async def _publish_startup_greeting(bus) -> None:
+    """Send the startup greeting only when optional TTS is registered."""
+    if get_contract(TTSMethods.REQUEST) is None:
+        log_info("TTS startup greeting skipped because TTS.Request is not registered")
+        return
+    from app.messaging.priority_helpers import get_interactive_priority
+
+    await bus.publish(
+        TTSMethods.REQUEST,
+        TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
+        event=False,
+        priority=get_interactive_priority(),
+        origin="internal",
+    )
+
+
 async def main_async():
     """Main async entry point for CLI mode (no UI)."""
     log_info("Starting Aurora with Message Bus Architecture (CLI mode)...")
@@ -79,18 +95,7 @@ async def main_async():
             log_info("OpenRecall started in background thread")
 
         # Initial greeting via bus only when optional TTS is active.
-        if get_contract(TTSMethods.REQUEST) is not None:
-            from app.messaging.priority_helpers import get_interactive_priority
-
-            await supervisor.bus.publish(
-                TTSMethods.REQUEST,
-                TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
-                event=False,
-                priority=get_interactive_priority(),
-                origin="internal",
-            )
-        else:
-            log_info("TTS startup greeting skipped because TTS.Request is not registered")
+        await _publish_startup_greeting(supervisor.bus)
 
         # Run supervisor (blocks until shutdown signal)
         await supervisor.run()
@@ -205,22 +210,12 @@ def main_with_ui():
 
     log_info("✓ UI bridge started")
 
-    # Send initial greeting
-    from app.messaging.priority_helpers import get_interactive_priority
-
+    # Send initial greeting only when optional TTS is registered.
     greeting_future = asyncio.run_coroutine_threadsafe(
-        supervisor.bus.publish(
-            TTSMethods.REQUEST,
-            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
-            event=False,
-            priority=get_interactive_priority(),
-            origin="internal",
-        ),
+        _publish_startup_greeting(supervisor.bus),
         supervisor_loop,
     )
     greeting_future.result(timeout=5.0)
-
-    log_info("✓ Initial greeting sent")
 
     # Show window
     window.show()

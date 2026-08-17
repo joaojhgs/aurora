@@ -151,7 +151,7 @@ function resolveNativeSpeechBuild(env, selectedTargets) {
       )
     }
     const configured = env[spec.libDirEnv]
-      ?? (selectedTargets.length === 1 ? env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+      ?? env[`CARGO_${spec.libDirEnv}`]
     if (!configured) {
       throw new Error(
         `${spec.libDirEnv} is required to package production native speech for Android ${spec.abi}`,

@@ -618,6 +618,10 @@ pub unsafe extern "C" fn aurora_ios_audio_output_drain(
     {
         return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
     }
+    if sample_capacity == 0 || sample_capacity > (isize::MAX as usize) / std::mem::size_of::<i16>()
+    {
+        return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
+    }
     // SAFETY: pointers are non-null and the caller guarantees the sample capacity.
     let output = unsafe { &*output };
     if output.is_closed() {
@@ -988,6 +992,50 @@ mod tests {
                 )
             },
             AURORA_IOS_AUDIO_CLOSED
+        );
+        unsafe { aurora_ios_audio_output_free(output) };
+    }
+
+    #[tokio::test]
+    async fn drain_rejects_empty_or_overflowing_sample_capacity() {
+        let output = aurora_ios_audio_output_new(1);
+        assert!(!output.is_null());
+        let mut samples = [0_i16; 2];
+        let mut sample_count = 0;
+        let mut sample_rate_hz = 0;
+        let mut channels = 0;
+        let mut sequence = 0;
+        let mut final_chunk = 0;
+        let overflowing = (isize::MAX as usize / std::mem::size_of::<i16>()) + 1;
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    samples.as_mut_ptr(),
+                    0,
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_INVALID_ARGUMENT
+        );
+        assert_eq!(
+            unsafe {
+                aurora_ios_audio_output_drain(
+                    output,
+                    samples.as_mut_ptr(),
+                    overflowing,
+                    &mut sample_count,
+                    &mut sample_rate_hz,
+                    &mut channels,
+                    &mut sequence,
+                    &mut final_chunk,
+                )
+            },
+            AURORA_IOS_AUDIO_INVALID_ARGUMENT
         );
         unsafe { aurora_ios_audio_output_free(output) };
     }

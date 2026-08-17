@@ -382,7 +382,7 @@ function checkRuntimeConfigurableConnectSrc(csp) {
     return
   }
   const sources = directive.split(/\s+/).slice(1)
-  const expected = new Set(["'self'", 'http:', 'https:', 'ws:', 'wss:'])
+  const expected = new Set(["'self'", 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:'])
   for (const source of expected) {
     if (!sources.includes(source)) {
       failures.push(`Android client CSP connect-src must include runtime-configurable source ${source}`)
