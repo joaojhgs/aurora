@@ -18,6 +18,26 @@ const MAX_RAW_ARRAY_ITEMS = 1024
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 const ACTIVE_MANIFEST_PROTOCOL = 'projection-v1'
 const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
+const MAX_GRANTS = 512
+// RecipientProjectionEvidence in app/services/gateway/mesh/models.py, which is
+// declared extra="forbid" — the wire object carries exactly these fields.
+const EVIDENCE_FIELDS: ReadonlySet<string> = new Set([
+  'provider_peer_id',
+  'recipient_peer_id',
+  'registry_revision',
+  'registry_digest',
+  'policy_revision',
+  'policy_digest',
+  'auth_grant_revision',
+  'auth_grant_state',
+  'auth_grant_digest',
+  'grants_digest',
+  'protocol_tier',
+  'projection_digest',
+  'evidence_digest',
+  'grants'
+])
+const GRANT_FIELDS: ReadonlySet<string> = new Set(['permission', 'source'])
 
 type MeshManifestAckFrame = ManifestAck & { type: 'manifest_ack' }
 
@@ -94,6 +114,10 @@ export function buildWebRtcManifestAck(manifest: MeshPeerManifest): MeshManifest
   const registryRevision = requireString(evidence.registry_revision, 'registry_revision')
   const exportPolicyRevision = requireString(evidence.policy_revision, 'policy_revision')
   const authGrantRevision = requireNonNegativeInteger(evidence.auth_grant_revision, 'auth_grant_revision')
+  // Ordering and per-service digests first, matching the precedence in
+  // Python's _classify_projection_manifest, so a non-canonical manifest is
+  // reported as such rather than as a digest mismatch.
+  verifyProjectionEvidence(raw, evidence)
   const projectionDigest = requireDigest(evidence.projection_digest, 'projection_digest')
   const computedDigest = manifestProjectionDigest(raw)
   if (projectionDigest !== computedDigest) {
@@ -213,6 +237,165 @@ function serviceStatus(
     reason_codes: [...new Set(reasonCodes)].sort() as ManifestServiceCompatibility['reason_codes'],
     reason: ''
   }
+}
+
+/**
+ * Verify the projection-v1 evidence chain the same way the Python gateway does.
+ *
+ * `_classify_projection_manifest` in app/services/gateway/mesh/negotiation.py is
+ * the reference. Without these checks a peer Python classifies as
+ * `permissions_unknown` — revoked authority, unsigned grants, a manifest whose
+ * services are not in canonical order — was accepted here, so the two
+ * implementations disagreed about which peers were usable.
+ *
+ * Digests are recomputed over the raw wire objects, matching how
+ * `projection_digest` is already verified. Both shipped providers emit a
+ * complete field set, so a provider that omits optional keys is rejected here
+ * where Python would accept it; that direction is fail-closed and visible.
+ */
+function verifyProjectionEvidence(
+  rawManifest: Record<string, unknown>,
+  evidence: Record<string, unknown>
+): void {
+  if (rawManifest.granted_permissions !== null && rawManifest.granted_permissions !== undefined) {
+    throw new WebRtcManifestParseError('projection manifest cannot carry legacy granted_permissions')
+  }
+  if (rawManifest.projection_supported !== true) {
+    throw new WebRtcManifestParseError('projection manifest must advertise projection support')
+  }
+  assertCanonicalProjectionOrder(rawManifest)
+  assertExactKeys(evidence, EVIDENCE_FIELDS, 'recipient_projection_evidence')
+
+  if (evidence.auth_grant_state !== 'active') {
+    throw new WebRtcManifestParseError('projection evidence authority is not active')
+  }
+  const authGrantRevision = requireNonNegativeInteger(evidence.auth_grant_revision, 'auth_grant_revision')
+  if (authGrantRevision < 1) {
+    throw new WebRtcManifestParseError('projection evidence authority revision is unknown')
+  }
+  const recipientPeerId = requireString(evidence.recipient_peer_id, 'recipient_peer_id')
+  assertIdentifier(recipientPeerId, 'recipient_peer_id')
+
+  const grants = requireArray(evidence.grants, 'grants', MAX_GRANTS).map((grant, index) => {
+    const record = requirePlainRecord(grant, `grants[${index}]`)
+    assertExactKeys(record, GRANT_FIELDS, `grants[${index}]`)
+    return {
+      permission: requireString(record.permission, 'grants[].permission'),
+      source: requireString(record.source, 'grants[].source')
+    }
+  })
+  assertCanonicalGrants(grants)
+
+  if (requireDigest(evidence.grants_digest, 'grants_digest') !== canonicalDigest({ grants })) {
+    throw new WebRtcManifestParseError('grants_digest contradicts the grant evidence')
+  }
+
+  // Mirrors RecipientEvidence.to_canonical(include_digest=False).
+  const expectedAuthorityDigest = canonicalDigest({
+    grants,
+    peer_id: recipientPeerId,
+    readiness: 'ready',
+    revision: authGrantRevision,
+    state: 'active'
+  })
+  if (requireDigest(evidence.auth_grant_digest, 'auth_grant_digest') !== expectedAuthorityDigest) {
+    throw new WebRtcManifestParseError('auth_grant_digest contradicts the recipient authority')
+  }
+
+  const { evidence_digest: declaredEvidenceDigest, ...evidenceWithoutDigest } = evidence
+  if (requireDigest(declaredEvidenceDigest, 'evidence_digest') !== canonicalDigest(evidenceWithoutDigest)) {
+    throw new WebRtcManifestParseError('evidence_digest contradicts the projection evidence')
+  }
+}
+
+/** Canonical ordering, uniqueness, and per-service digests, as Python requires. */
+function assertCanonicalProjectionOrder(rawManifest: Record<string, unknown>): void {
+  const protocols = rawManifest.supported_protocols
+  if (protocols !== undefined && protocols !== null) {
+    assertCanonicalUnique(requireStringArray(protocols, 'supported_protocols', MAX_CAPABILITIES), 'supported_protocols')
+  }
+  const services = requireArray(rawManifest.shared_services, 'shared_services', MAX_SERVICES)
+  assertCanonicalUnique(
+    services.map((service, index) => requireString(requirePlainRecord(service, `shared_services[${index}]`).module, 'service.module')),
+    'shared_services'
+  )
+  for (const [index, service] of services.entries()) {
+    const record = requirePlainRecord(service, `shared_services[${index}]`)
+    assertCanonicalUnique(requireStringArray(record.capabilities ?? [], 'service.capabilities', MAX_CAPABILITIES), 'capabilities')
+    assertCanonicalUnique(
+      requireStringArray(record.available_feature_ids ?? [], 'service.available_feature_ids', MAX_CAPABILITIES),
+      'available_feature_ids'
+    )
+    assertCanonicalFeatures(record.callable_features, 'service.callable_features')
+
+    const methods = requireArray(record.methods ?? [], 'service.methods', MAX_METHODS)
+    const topics = methods.map((method, methodIndex) => {
+      const methodRecord = requirePlainRecord(method, `methods[${methodIndex}]`)
+      const topic = requireString(methodRecord.bus_topic, 'method.bus_topic')
+      assertCanonicalUnique(requireStringArray(methodRecord.required_perms ?? [], 'method.required_perms', MAX_CAPABILITIES), 'required_perms')
+      assertCanonicalUnique(
+        requireStringArray(methodRecord.callable_feature_ids ?? [], 'method.callable_feature_ids', MAX_CAPABILITIES),
+        'callable_feature_ids'
+      )
+      assertCanonicalFeatures(methodRecord.callable_features, 'method.callable_features')
+      return topic
+    })
+    assertCanonicalUnique(topics, 'methods')
+
+    const declaredDigest = record.digest
+    if (typeof declaredDigest !== 'string' || declaredDigest.length === 0) {
+      throw new WebRtcManifestParseError('projection service is missing its digest')
+    }
+    const { digest: _ignored, ...serviceWithoutDigest } = record
+    if (requireDigest(declaredDigest, 'service.digest') !== canonicalDigest(serviceWithoutDigest)) {
+      throw new WebRtcManifestParseError('service digest contradicts the advertised service')
+    }
+  }
+}
+
+function assertCanonicalFeatures(value: unknown, label: string): void {
+  if (value === undefined || value === null) return
+  const features = requireArray(value, label, MAX_CAPABILITIES)
+  const ids = features.map((feature, index) => {
+    const record = requirePlainRecord(feature, `${label}[${index}]`)
+    assertCanonicalUnique(requireStringArray(record.method_ids ?? [], `${label}.method_ids`, MAX_METHODS), `${label}.method_ids`)
+    return requireString(record.feature_id, `${label}.feature_id`)
+  })
+  assertCanonicalUnique(ids, label)
+}
+
+/** Python's `_require_canonical_unique`: unique and already in code-point order. */
+function assertCanonicalUnique(values: string[], field: string): void {
+  assertUnique(values, field)
+  for (let index = 1; index < values.length; index += 1) {
+    if (values[index - 1]! > values[index]!) {
+      throw new WebRtcManifestParseError(`${field} is not canonical`)
+    }
+  }
+}
+
+function assertCanonicalGrants(grants: Array<{ permission: string; source: string }>): void {
+  assertUnique(grants.map((grant) => grant.permission), 'grants')
+  for (let index = 1; index < grants.length; index += 1) {
+    const previous = grants[index - 1]!
+    const current = grants[index]!
+    const ordered = previous.permission < current.permission
+      || (previous.permission === current.permission && previous.source <= current.source)
+    if (!ordered) throw new WebRtcManifestParseError('grants are not canonical')
+  }
+}
+
+function assertExactKeys(record: Record<string, unknown>, allowed: ReadonlySet<string>, label: string): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) throw new WebRtcManifestParseError(`${label} has unknown field`)
+  }
+  for (const key of allowed) {
+    if (!(key in record)) throw new WebRtcManifestParseError(`${label} is missing ${key}`)
+  }
+}
+
+function canonicalDigest(value: unknown): string {
+  return bytesToHex(sha256(new TextEncoder().encode(canonicalJson(value))))
 }
 
 function manifestProjectionDigest(rawManifest: Record<string, unknown>): string {
