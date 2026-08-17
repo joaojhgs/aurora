@@ -111,7 +111,12 @@ function renderJsonString(value: string, options: CanonicalJsonOptions): string 
 }
 
 function escapeAscii(value: string): string {
-  return value.replace(/[^\x00-\x7F]/gu, (character) => {
+  // Python's json encoder escapes everything outside ` ` (0x20) to `~` (0x7E),
+  // so U+007F is escaped there. Excluding it here left the two languages
+  // producing different digests for the same value — the exact class of bug the
+  // cross-language vectors exist to prevent. Codepoints below 0x20 are already
+  // escaped by JSON.stringify before this runs, identically to Python.
+  return value.replace(/[^\x00-\x7E]/gu, (character) => {
     const codePoint = character.codePointAt(0) ?? 0
     if (codePoint <= 0xFFFF) return `\\u${codePoint.toString(16).padStart(4, '0')}`
     const normalized = codePoint - 0x10000

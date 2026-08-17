@@ -2828,6 +2828,16 @@ def build_tooling_local_provider(contract_schema: dict[str, Any]) -> dict[str, A
                 "canonical_b": {"retirements": [], "tools": [], "blocked_tools": []},
                 "digest": canonical_digest({"retirements": [], "tools": [], "blocked_tools": []}),
             },
+            {
+                # U+007F is ASCII but Python escapes it, because its encoder
+                # passes through ` `..`~` only. JavaScript's JSON.stringify does
+                # not, so an ensure_ascii implementation that keys off "non
+                # ASCII" silently disagrees here.
+                "name": "delete_control_character",
+                "canonical_a": {"label": "before\u007fafter"},
+                "canonical_b": {"label": "before\u007fafter"},
+                "digest": canonical_digest({"label": "before\u007fafter"}),
+            },
         ],
         "identity_digest": {
             "reordered_json_a": (

@@ -39,6 +39,16 @@
         },
         "digest": "afc57677f518846e749b1767957654f89d39d5c9c056d5c7c831f542128871c8",
         "name": "empty_projection"
+      },
+      {
+        "canonical_a": {
+          "label": "beforeafter"
+        },
+        "canonical_b": {
+          "label": "beforeafter"
+        },
+        "digest": "32811c760d55ee65799b8719d9aee17a05e01651d8d77bb46f31fdc6c177279a",
+        "name": "delete_control_character"
       }
     ],
     "canonical_tool_identity": {
