@@ -16,7 +16,7 @@ const reportPath = resolve(
 )
 const reportDir = dirname(reportPath)
 
-const connectSrc = ["'self'", 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
+const connectSrc = ["'self'", 'http://ipc.localhost', 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
 
 const config = {
   build: {

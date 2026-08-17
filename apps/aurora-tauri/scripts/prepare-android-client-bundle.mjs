@@ -18,7 +18,7 @@ const reportPath = resolve(
 const reportDir = dirname(reportPath)
 const voiceLiveTest = process.env.AURORA_TAURI_ANDROID_VOICE_LIVE_TEST === '1'
 
-const connectSrc = ["'self'", 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
+const connectSrc = ["'self'", 'http://ipc.localhost', 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
 const capabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
 if (voiceLiveTest) {
   capabilities.push({

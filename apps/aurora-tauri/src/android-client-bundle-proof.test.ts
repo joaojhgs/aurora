@@ -143,7 +143,7 @@ describeIfNode('Android client bundle artifact proof', () => {
     const report = readFileSync(context.prepareReportPath, 'utf8')
 
     expect(config).toContain('aurora-android-thin')
-    expect(config).toContain("connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
+    expect(config).toContain("connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(config).not.toContain('https://gateway.example.invalid')
     expect(config).not.toContain('wss://signaling.example.invalid')
     expect(config).toContain('"externalBin": []')
@@ -159,7 +159,7 @@ describeIfNode('Android client bundle artifact proof', () => {
 
     const config = JSON.parse(readFileSync(context.configPath, 'utf8'))
     const report = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
-    expect(config.app.security.csp).toContain("connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
+    expect(config.app.security.csp).toContain("connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(report).toMatchObject({
       bundleMode: 'android-client',
       connectionMode: 'runtime-configurable',
