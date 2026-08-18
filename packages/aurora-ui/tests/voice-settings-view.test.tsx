@@ -923,6 +923,25 @@ describe('VoiceSettingsView', () => {
     expect(markup).not.toContain('>Advanced<')
   })
 
+  it('hides server spoken-reply controls in This-device Settings and on-device sections in Operate', async () => {
+    const client = voiceClient({
+      profiles: [profile({ installed: false, ready: false })]
+    })
+    const local = await renderVoiceSettings(client, { hideServerVoiceSections: true })
+    expect(local.container.querySelector('[aria-label="Spoken reply summary"]')).toBeNull()
+    expect(local.container.textContent).not.toContain('Spoken reply voices')
+    expect(local.container.textContent).not.toContain('Voices available to Aurora')
+    expect(local.container.textContent).toContain('Wake phrase')
+    await local.unmount()
+
+    const operate = await renderVoiceSettings(client, { hideOnDeviceSections: true })
+    expect(operate.container.querySelector('[aria-label="Spoken reply summary"]')).not.toBeNull()
+    expect(operate.container.textContent).toContain('Spoken reply voices')
+    expect(operate.container.textContent).toContain('Voices available to Aurora')
+    expect(operate.container.textContent).not.toContain('Wake phrase')
+    await operate.unmount()
+  })
+
   it('keeps shared web and client copy neutral about where voices are kept', async () => {
     const client = voiceClient({
       profiles: [profile({ installed: false, ready: false })]

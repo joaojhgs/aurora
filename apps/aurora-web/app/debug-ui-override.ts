@@ -3,9 +3,15 @@
  *
  * Query contract (kept on `/` so product routes stay `/mesh`, `/settings`, …):
  *   aurora-surface=web|desktop-local|desktop-thin|android|ios
- *   aurora-role=remote-console|mesh-node|python-full
+ *   aurora-role=remote-console|mesh-node
+ *   aurora-tier=none|lightweight-ts|python-full
  *   aurora-admin=0|1
  *   aurora-viewport=phone|tablet|full
+ *
+ * Compatibility: `aurora-role=python-full` (and `run-aurora-on-this-computer`)
+ * still parses as `aurora-role=mesh-node` + `aurora-tier=python-full`.
+ * `python-full` is clamped to desktop-local; other surfaces fall back to
+ * `lightweight-ts` when the role is a mesh node.
  *
  * Viewport is independent of surface/role. Mobile surfaces (android/ios/mobile)
  * default to `phone` when the param is omitted; desktop/web default to `full`.
@@ -15,6 +21,7 @@
 
 export const AURORA_DEBUG_UI_QUERY_SURFACE = 'aurora-surface'
 export const AURORA_DEBUG_UI_QUERY_ROLE = 'aurora-role'
+export const AURORA_DEBUG_UI_QUERY_TIER = 'aurora-tier'
 export const AURORA_DEBUG_UI_QUERY_ADMIN = 'aurora-admin'
 export const AURORA_DEBUG_UI_QUERY_VIEWPORT = 'aurora-viewport'
 export const AURORA_DEBUG_UI_COOKIE_NAME = 'aurora-debug-ui'
@@ -36,6 +43,11 @@ export const AURORA_DEBUG_UI_SURFACES = [
 export const AURORA_DEBUG_UI_ROLES = [
   'remote-console',
   'mesh-node',
+] as const
+
+export const AURORA_DEBUG_UI_TIERS = [
+  'none',
+  'lightweight-ts',
   'python-full',
 ] as const
 
@@ -47,6 +59,7 @@ export const AURORA_DEBUG_UI_VIEWPORTS = [
 
 export type AuroraDebugUiSurface = (typeof AURORA_DEBUG_UI_SURFACES)[number]
 export type AuroraDebugUiRole = (typeof AURORA_DEBUG_UI_ROLES)[number]
+export type AuroraDebugUiTier = (typeof AURORA_DEBUG_UI_TIERS)[number]
 export type AuroraDebugUiViewport = (typeof AURORA_DEBUG_UI_VIEWPORTS)[number]
 
 export type AuroraDebugUiViewportSize = {
@@ -65,6 +78,7 @@ export const AURORA_DEBUG_UI_VIEWPORT_PRESETS: Record<
 export type AuroraDebugUiOverride = {
   readonly surface: AuroraDebugUiSurface
   readonly role: AuroraDebugUiRole
+  readonly tier: AuroraDebugUiTier
   readonly admin: boolean
   readonly viewport: AuroraDebugUiViewport
   readonly viewportExplicit: boolean
@@ -73,6 +87,7 @@ export type AuroraDebugUiOverride = {
 export const AURORA_DEBUG_UI_DEFAULT_OVERRIDE: AuroraDebugUiOverride = {
   surface: 'web',
   role: 'remote-console',
+  tier: 'none',
   admin: false,
   viewport: 'full',
   viewportExplicit: false,
@@ -98,9 +113,18 @@ const ROLE_ALIASES: Record<string, AuroraDebugUiRole> = {
   'connect-to-aurora': 'remote-console',
   'mesh-node': 'mesh-node',
   'make-this-device-available': 'mesh-node',
+}
+
+const TIER_ALIASES: Record<string, AuroraDebugUiTier> = {
+  none: 'none',
+  'lightweight-ts': 'lightweight-ts',
+  lightweight: 'lightweight-ts',
+  'this-device': 'lightweight-ts',
   'python-full': 'python-full',
   'run-aurora-on-this-computer': 'python-full',
 }
+
+const LEGACY_PYTHON_FULL_ROLES = new Set(['python-full', 'run-aurora-on-this-computer'])
 
 const VIEWPORT_ALIASES: Record<string, AuroraDebugUiViewport> = {
   full: 'full',
@@ -123,6 +147,10 @@ export function isAuroraDebugUiSurface(value: string): value is AuroraDebugUiSur
 
 export function isAuroraDebugUiRole(value: string): value is AuroraDebugUiRole {
   return (AURORA_DEBUG_UI_ROLES as readonly string[]).includes(value)
+}
+
+export function isAuroraDebugUiTier(value: string): value is AuroraDebugUiTier {
+  return (AURORA_DEBUG_UI_TIERS as readonly string[]).includes(value)
 }
 
 export function isAuroraDebugUiViewport(value: string): value is AuroraDebugUiViewport {
@@ -154,6 +182,22 @@ export function parseAuroraDebugUiRole(value: string | null | undefined): Aurora
   return ROLE_ALIASES[normalized] ?? null
 }
 
+export function parseAuroraDebugUiTier(value: string | null | undefined): AuroraDebugUiTier | null {
+  const normalized = normalize(value)
+  return TIER_ALIASES[normalized] ?? null
+}
+
+export function clampAuroraDebugUiTier(
+  surface: AuroraDebugUiSurface,
+  role: AuroraDebugUiRole,
+  tier: AuroraDebugUiTier,
+): AuroraDebugUiTier {
+  if (role === 'remote-console') return 'none'
+  if (tier === 'python-full' && surface !== 'desktop-local') return 'lightweight-ts'
+  if (tier === 'none') return 'lightweight-ts'
+  return tier
+}
+
 export function parseAuroraDebugUiAdmin(value: string | null | undefined): boolean | null {
   if (value == null || value.trim() === '') return null
   const normalized = normalize(value)
@@ -172,15 +216,29 @@ export function parseAuroraDebugUiOverride(
 ): AuroraDebugUiOverride | null {
   const params = toSearchParams(source)
   if (!params) return null
+  const rawRole = params.get(AURORA_DEBUG_UI_QUERY_ROLE)
   const surface = parseAuroraDebugUiSurface(params.get(AURORA_DEBUG_UI_QUERY_SURFACE))
-  const role = parseAuroraDebugUiRole(params.get(AURORA_DEBUG_UI_QUERY_ROLE))
+  const roleFromQuery = parseAuroraDebugUiRole(rawRole)
+  const legacyPythonFullRole = isLegacyPythonFullRole(rawRole)
+  const tierFromQuery = parseAuroraDebugUiTier(params.get(AURORA_DEBUG_UI_QUERY_TIER))
   const admin = parseAuroraDebugUiAdmin(params.get(AURORA_DEBUG_UI_QUERY_ADMIN))
   const viewport = parseAuroraDebugUiViewport(params.get(AURORA_DEBUG_UI_QUERY_VIEWPORT))
-  if (surface == null && role == null && admin == null && viewport == null) return null
+  if (
+    surface == null
+    && roleFromQuery == null
+    && !legacyPythonFullRole
+    && tierFromQuery == null
+    && admin == null
+    && viewport == null
+  ) return null
   const resolvedSurface = surface ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.surface
+  const role = roleFromQuery ?? (legacyPythonFullRole ? 'mesh-node' : AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role)
+  const requestedTier = tierFromQuery
+    ?? (legacyPythonFullRole ? 'python-full' : role === 'mesh-node' ? 'lightweight-ts' : AURORA_DEBUG_UI_DEFAULT_OVERRIDE.tier)
   return {
     surface: resolvedSurface,
-    role: role ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role,
+    role,
+    tier: clampAuroraDebugUiTier(resolvedSurface, role, requestedTier),
     admin: admin ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.admin,
     viewport: viewport ?? defaultAuroraDebugUiViewport(resolvedSurface),
     viewportExplicit: viewport != null,
@@ -203,6 +261,7 @@ export function serializeAuroraDebugUiOverride(override: AuroraDebugUiOverride):
   const params = new URLSearchParams()
   params.set(AURORA_DEBUG_UI_QUERY_SURFACE, override.surface)
   params.set(AURORA_DEBUG_UI_QUERY_ROLE, override.role)
+  params.set(AURORA_DEBUG_UI_QUERY_TIER, override.tier)
   params.set(AURORA_DEBUG_UI_QUERY_ADMIN, override.admin ? '1' : '0')
   if (override.viewportExplicit) {
     params.set(AURORA_DEBUG_UI_QUERY_VIEWPORT, override.viewport)
@@ -239,6 +298,11 @@ export function mergeAuroraDebugUiOverride(
   return {
     surface,
     role: patch.role ?? current?.role ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role,
+    tier: clampAuroraDebugUiTier(
+      surface,
+      patch.role ?? current?.role ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role,
+      patch.tier ?? current?.tier ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.tier,
+    ),
     admin: patch.admin ?? current?.admin ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.admin,
     viewport,
     viewportExplicit,
@@ -290,6 +354,7 @@ export function preserveAuroraDebugUiSearch(href: string, currentSearch = typeof
   for (const key of [
     AURORA_DEBUG_UI_QUERY_SURFACE,
     AURORA_DEBUG_UI_QUERY_ROLE,
+    AURORA_DEBUG_UI_QUERY_TIER,
     AURORA_DEBUG_UI_QUERY_ADMIN,
     AURORA_DEBUG_UI_QUERY_VIEWPORT,
   ]) {
@@ -344,4 +409,8 @@ function writeSessionStorage(value: string): void {
 
 function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase()
+}
+
+function isLegacyPythonFullRole(value: string | null | undefined): boolean {
+  return LEGACY_PYTHON_FULL_ROLES.has(normalize(value))
 }

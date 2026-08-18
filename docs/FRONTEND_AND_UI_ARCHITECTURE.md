@@ -154,7 +154,8 @@ Query contract (kept on `/` so Assistant/Mesh/Settings stay `/mesh`, `/settings`
 | Param | Values |
 | --- | --- |
 | `aurora-surface` | `web` (alias `web-thin`) · `desktop-local` · `desktop-thin` · `android` · `ios` (`mobile` is a compatibility alias) |
-| `aurora-role` | `remote-console` (Connect) · `mesh-node` (Make this device available) · `python-full` (Run Aurora on this computer) |
+| `aurora-role` | `remote-console` (Connect) · `mesh-node` (Make this device available). Compatibility: `python-full` still means mesh-node + the python-full tier. |
+| `aurora-tier` | `none` · `lightweight-ts` (This device runtime) · `python-full` (Run Aurora on this computer; desktop-local only) |
 | `aurora-admin` | `0` member · `1` admin |
 | `aurora-viewport` | `phone` (390×844) · `tablet` (768×1024) · `full` (no device frame). Independent of surface. Android/iOS/`mobile` default to `phone` when omitted; web/desktop default to `full`. |
 

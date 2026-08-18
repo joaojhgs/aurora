@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, RotateCcw, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -577,6 +577,8 @@ export function AssistantView({
     : primaryComposerAction === 'stop'
       ? 'Stop assistant generation'
       : 'Send assistant prompt'
+  const handsFreeControl = voiceModel.controls.find((control) => control.id === 'background-wake')
+  const handsFreeActive = nativeDesktopBackgroundWakeActive || nativeMobileBackgroundWakeActive
   const contextSummary = summarizeAttachments(attachments)
   const runtimeStrip = useMemo(
     () => ({
@@ -2981,6 +2983,15 @@ export function AssistantView({
     void cancelNativeDesktopVoice(reason)
   }
 
+  async function toggleNativeDesktopBackgroundWake(): Promise<boolean> {
+    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
+    if (!control?.enabled && !nativeDesktopBackgroundWakeActiveRef.current) return false
+    if (nativeDesktopBackgroundWakeActiveRef.current) {
+      return cancelNativeDesktopVoice('user_request')
+    }
+    return startNativeDesktopVoice('background_wake')
+  }
+
   async function cancelNativeDesktopVoiceGeneration(
     generation: number,
     reason: NativeDesktopVoiceStopReason
@@ -3195,6 +3206,21 @@ export function AssistantView({
       }
       return false
     }
+  }
+
+  async function toggleNativeMobileBackgroundWake(): Promise<boolean> {
+    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
+    if (!control?.enabled && !nativeMobileBackgroundWakeActiveRef.current) return false
+    if (nativeMobileBackgroundWakeActiveRef.current) {
+      return stopNativeMobileBackgroundWake()
+    }
+    return startNativeMobileBackgroundWake()
+  }
+
+  async function toggleBackgroundWakeForSurface(): Promise<boolean> {
+    if (usesNativeDesktopVoice) return toggleNativeDesktopBackgroundWake()
+    if (usesNativeMobileVoice) return toggleNativeMobileBackgroundWake()
+    return false
   }
 
   async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
@@ -3951,6 +3977,21 @@ export function AssistantView({
                 {voiceCaptureStatus === 'listening' ? <StopCircle size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
                 <span className="aui-sr-only">{voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}</span>
               </button>
+              {handsFreeControl && (handsFreeControl.enabled || handsFreeActive) ? (
+                <button
+                  type="button"
+                  className="aui-secondary-button aui-composer-icon"
+                  data-hands-free={handsFreeActive ? 'active' : 'idle'}
+                  disabled={!handsFreeControl.enabled && !handsFreeActive}
+                  aria-pressed={handsFreeActive}
+                  aria-label={handsFreeControl.label}
+                  title={handsFreeControl.reason}
+                  onClick={(event) => { event.preventDefault(); void toggleBackgroundWakeForSurface() }}
+                >
+                  <Radio size={18} aria-hidden />
+                  <span className="aui-sr-only">{handsFreeControl.label}</span>
+                </button>
+              ) : null}
               <button
                 type={primaryComposerAction === 'send' ? 'submit' : 'button'}
                 className="aui-composer-send"

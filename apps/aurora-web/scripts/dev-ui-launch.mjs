@@ -42,7 +42,8 @@ const PRESETS = {
   },
   'desktop-local': {
     surface: 'desktop-local',
-    role: 'python-full',
+    role: 'mesh-node',
+    tier: 'python-full',
     admin: '0',
     label: 'Desktop native · local node',
   },
@@ -158,7 +159,13 @@ async function startOrAttachPreset(id, version, forceIsolated) {
 }
 
 function queryForPreset(preset) {
-  return `aurora-surface=${preset.surface}&aurora-role=${preset.role}&aurora-admin=${preset.admin}`
+  const params = [
+    `aurora-surface=${preset.surface}`,
+    `aurora-role=${preset.role}`,
+    `aurora-admin=${preset.admin}`,
+  ]
+  if (preset.tier) params.splice(2, 0, `aurora-tier=${preset.tier}`)
+  return params.join('&')
 }
 
 function withQuery(baseUrl, query) {
@@ -172,7 +179,8 @@ function printQueryContract(url) {
   console.log(`[aurora-ui-launch] ${url}`)
   console.log('[aurora-ui-launch] Query contract (runtime override, not compile-time env):')
   console.log('[aurora-ui-launch]   aurora-surface=web|desktop-local|desktop-thin|android|ios')
-  console.log('[aurora-ui-launch]   aurora-role=remote-console|mesh-node|python-full')
+  console.log('[aurora-ui-launch]   aurora-role=remote-console|mesh-node')
+  console.log('[aurora-ui-launch]   aurora-tier=none|lightweight-ts|python-full')
   console.log('[aurora-ui-launch]   aurora-admin=0|1')
   console.log('[aurora-ui-launch]   aurora-viewport=phone|tablet|full')
   console.log(`[aurora-ui-launch] Example: ${url}/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=phone`)

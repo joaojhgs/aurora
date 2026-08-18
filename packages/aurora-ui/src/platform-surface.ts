@@ -316,6 +316,21 @@ function localSpeechPackBlockers(state: AuroraLocalSpeechPackState): string[] {
   }
 }
 
+/**
+ * Best-effort runtimeMode when a host only has the SDK transport kind.
+ * Prefer passing an explicit runtimeMode from the saved profile.
+ */
+export function runtimeModeFromTransportKind(transportKind: string | null | undefined): string {
+  const kind = normalize(transportKind)
+  if (kind === 'tauri-local') return 'desktop-local'
+  if (kind === 'tauri-thin') return 'desktop-thin'
+  if (kind === 'native-mobile') return 'mobile-native'
+  if (kind === 'mock') return 'mock'
+  if (kind === 'mesh' || kind === 'webrtc' || kind === 'webrtc-preferred' || kind === 'webrtc-only') return 'web-thin'
+  if (kind === 'http') return 'web-thin'
+  return 'web-thin'
+}
+
 export function getAuroraPhysicalSurfaceKind(
   input: AuroraSurfaceProfileInput = {},
 ): AuroraSurfaceKind {

@@ -112,6 +112,7 @@ export interface SettingsPermissionsViewProps {
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
   onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
+  onNavigate?: ((href: string) => void) | undefined
   /** Optional host-supplied content rendered inside the Connection & role section (e.g. Tauri "Change device setup"). */
   connectionRoleContent?: ReactNode | undefined
 }
@@ -123,6 +124,7 @@ export function SettingsPermissionsView({
   runtimeProfile = null,
   surfaceProfile = null,
   onRequestNativeAccess,
+  onNavigate,
   connectionRoleContent
 }: SettingsPermissionsViewProps) {
   const routePath = currentPath ?? browserPathname()
@@ -143,8 +145,9 @@ export function SettingsPermissionsView({
       model={model}
       profile={profile}
       includeOsAccess={activeSurface === 'native'}
-      onRequestNativeAccess={onRequestNativeAccess}
-      connectionRoleContent={connectionRoleContent}
+        onRequestNativeAccess={onRequestNativeAccess}
+        onNavigate={onNavigate}
+        connectionRoleContent={connectionRoleContent}
     />
   )
 }
@@ -159,6 +162,7 @@ function ThisDeviceSettingsSurface({
   profile,
   includeOsAccess,
   onRequestNativeAccess,
+  onNavigate,
   connectionRoleContent
 }: {
   snapshot: AuroraShellSnapshot
@@ -166,6 +170,7 @@ function ThisDeviceSettingsSurface({
   profile: AuroraSurfaceProfile
   includeOsAccess: boolean
   onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
+  onNavigate?: ((href: string) => void) | undefined
   connectionRoleContent?: ReactNode | undefined
 }) {
   const accessRows = nativeAccessRows(model, snapshot)
@@ -403,11 +408,23 @@ function ThisDeviceSettingsSurface({
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
           <div>
             <strong className="text-sm font-medium">Export or delete your data</strong>
-            <p className="mt-0.5 text-xs text-muted-foreground">Preview affected records before either action runs.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Review what will be included before either action runs.</p>
           </div>
           <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-            <Button variant="outline" className="w-full justify-center sm:w-auto">Export my data</Button>
-            <Button variant="danger" className="w-full justify-center sm:w-auto">Delete my data</Button>
+            <Button
+              variant="outline"
+              className="w-full justify-center sm:w-auto"
+              onClick={() => openDataPolicy(onNavigate)}
+            >
+              Export my data
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full justify-center sm:w-auto"
+              onClick={() => openDataPolicy(onNavigate)}
+            >
+              Delete my data
+            </Button>
           </div>
         </div>
       </Card>
@@ -461,16 +478,33 @@ function RouteDefaultRow({ label, detail, state, value }: { label: string; detai
 }
 
 function nativeAccessRows(model: SettingsPermissionsModel, snapshot: AuroraShellSnapshot): SettingsNativePermissionCard[] {
-  if (snapshot.nativePlatform !== 'android') return []
-  const ids = [
-    'android.assistantRole',
-    'aurora.android.microphone',
-    'aurora.android.notifications',
-    'aurora.android.voiceForegroundService'
-  ]
+  const ids = snapshot.nativePlatform === 'android'
+    ? [
+      'android.assistantRole',
+      'aurora.android.microphone',
+      'aurora.android.notifications',
+      'aurora.android.voiceForegroundService'
+    ]
+    : snapshot.nativePlatform === 'ios'
+      ? [
+        'aurora.iosKeychain',
+        'aurora.iosBiometricUnlock',
+        'ios.backgroundVoice'
+      ]
+      : []
   return ids
     .map((id) => model.nativePermissions.find((permission) => permission.id === id))
     .filter((permission): permission is SettingsNativePermissionCard => Boolean(permission))
+}
+
+function openDataPolicy(onNavigate?: ((href: string) => void) | undefined): void {
+  if (onNavigate) {
+    onNavigate('/memory/policy')
+    return
+  }
+  if (typeof globalThis.location?.assign === 'function') {
+    globalThis.location.assign('/memory/policy')
+  }
 }
 
 function nativeAccessLabel(permissionId: string): string {
@@ -687,9 +721,9 @@ function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
         </div>
         <small className="text-xs text-muted-foreground">{item.enabled ? 'Configured' : 'Needs configuration'}</small>
       </div>
-      <Button variant="ghost" disabled>
+      <span className="shrink-0 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground">
         {item.enabled ? 'Needs confirmation' : 'Not ready'}
-      </Button>
+      </span>
     </article>
   )
 }
@@ -712,9 +746,9 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
         </div>
         <small className="text-xs text-muted-foreground">{safeCopy(control.providerLabel, 'Review this setting.')}</small>
       </div>
-      <Button variant="ghost" disabled={control.disabled || control.requiresAdminAction}>
+      <span className="shrink-0 rounded-md border border-border/60 px-2 py-1 text-xs text-muted-foreground">
         {control.requiresAdminAction ? 'Needs confirmation' : control.enabled ? 'Enabled' : 'Not ready'}
-      </Button>
+      </span>
     </article>
   )
 }

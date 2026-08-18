@@ -19,6 +19,7 @@ import {
   type AuroraDebugUiOverride,
   type AuroraDebugUiRole,
   type AuroraDebugUiSurface,
+  type AuroraDebugUiTier,
   type AuroraDebugUiViewport,
 } from './debug-ui-override'
 import {
@@ -39,13 +40,17 @@ const SURFACE_LABELS: Record<AuroraDebugUiSurface, string> = {
 const ROLE_LABELS: Record<AuroraDebugUiRole, string> = {
   'remote-console': 'Connect',
   'mesh-node': 'Make this device available',
-  'python-full': 'Run Aurora on this computer',
 }
 
 const BADGE_ROLE_LABELS: Record<AuroraDebugUiRole, string> = {
   'remote-console': 'Connect',
   'mesh-node': 'Make available',
-  'python-full': 'This computer',
+}
+
+const TIER_LABELS: Record<AuroraDebugUiTier, string> = {
+  none: 'Not a local runtime',
+  'lightweight-ts': 'This device runtime',
+  'python-full': 'Run Aurora on this computer',
 }
 
 const VIEWPORT_LABELS: Record<AuroraDebugUiViewport, string> = {
@@ -126,6 +131,7 @@ export function DebugUiPicker({ children, onOverrideChange }: DebugUiPickerProps
         !override
         || next.surface !== override.surface
         || next.role !== override.role
+        || next.tier !== override.tier
         || next.admin !== override.admin
       setOverride(next)
       if (runtimeChanged) onOverrideChange?.(next)
@@ -152,8 +158,9 @@ export function debugUiBadgeLabel(override: AuroraDebugUiOverride): string {
   const parts = [
     SURFACE_LABELS[override.surface],
     BADGE_ROLE_LABELS[override.role],
-    VIEWPORT_LABELS[override.viewport],
   ]
+  if (override.tier === 'python-full') parts.push('Full runtime')
+  parts.push(VIEWPORT_LABELS[override.viewport])
   if (override.admin) parts.push('Admin')
   return parts.join(' · ')
 }
@@ -265,10 +272,31 @@ function DebugUiIndicatorChrome() {
               <select
                 aria-label="Development preview role"
                 value={override.role}
-                onChange={(event) => apply({ role: event.target.value as AuroraDebugUiRole })}
+                onChange={(event) => {
+                  const role = event.target.value as AuroraDebugUiRole
+                  apply({
+                    role,
+                    tier: role === 'remote-console'
+                      ? 'none'
+                      : override.tier === 'none' ? 'lightweight-ts' : override.tier,
+                  })
+                }}
               >
                 {AURORA_DEBUG_UI_ROLES.map((role) => (
                   <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="aurora-debug-ui-field">
+              Runtime
+              <select
+                aria-label="Development preview runtime"
+                value={override.tier}
+                disabled={override.role === 'remote-console'}
+                onChange={(event) => apply({ tier: event.target.value as AuroraDebugUiTier })}
+              >
+                {visibleDebugUiTiers(override).map((tier) => (
+                  <option key={tier} value={tier}>{TIER_LABELS[tier]}</option>
                 ))}
               </select>
             </label>
@@ -406,6 +434,12 @@ function restoreMobileViewportFrame(override: AuroraDebugUiOverride): AuroraDebu
     return override
   }
   return { ...override, viewport: 'phone', viewportExplicit: false }
+}
+
+function visibleDebugUiTiers(override: AuroraDebugUiOverride): readonly AuroraDebugUiTier[] {
+  if (override.role === 'remote-console') return ['none']
+  if (override.surface === 'desktop-local') return ['lightweight-ts', 'python-full']
+  return ['lightweight-ts']
 }
 
 const AURORA_DEBUG_UI_RUNTIME_CSS = `

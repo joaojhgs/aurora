@@ -47,7 +47,8 @@ const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
   onboarding: ['OnboardingClientPage'],
   settings: ['SettingsClientPage'],
   data: ['DataPolicyClientPage'],
-  native: ['SettingsClientPage'],
+  native: ['NativeSettingsClientPage'],
+  'spoken-replies': ['SpokenRepliesClientPage'],
 }
 
 function pageFileForHref(href: string): string {
@@ -90,8 +91,8 @@ describe('Aurora web route registry', () => {
   })
 
 
-  it('source-crawls all 22 web routes with production mounts and route oracle evidence', () => {
-    expect(auroraWebRouteRegistry).toHaveLength(22)
+  it('source-crawls all 23 web routes with production mounts and route oracle evidence', () => {
+    expect(auroraWebRouteRegistry).toHaveLength(23)
     expect(new Set(Object.keys(WEB_ROUTE_PRODUCTION_MOUNTS))).toEqual(
       new Set(auroraWebRouteRegistryRouteIds),
     )
@@ -118,7 +119,8 @@ describe('Aurora web route registry', () => {
       { href: '/admin/contracts', expected: 'AdminContractsClientPage' },
       { href: '/admin/tokens', expected: 'AdminTokensClientPage' },
       { href: '/memory/policy', expected: 'DataPolicyClientPage' },
-      { href: '/settings/native', expected: 'SettingsClientPage' }
+      { href: '/settings/native', expected: 'NativeSettingsClientPage' },
+      { href: '/admin/voice', expected: 'SpokenRepliesClientPage' }
     ]
     const forbidden = /will use|will render|follow-up task|downstream UI task wires|placeholder|debug-dashboard|route dump/i
 
@@ -133,15 +135,16 @@ describe('Aurora web route registry', () => {
     expect(fallbackSource).toContain('Actions remain unavailable')
   })
 
-  it('keeps /settings on the shared default pane and /settings/native as an alias', () => {
+  it('keeps /settings on the This-device page and /settings/native on the device-access surface', () => {
     const clientSource = readFileSync(join(appDir, 'settings', 'settings-client.tsx'), 'utf8')
     expect(clientSource).toContain('SettingsView')
     expect(clientSource).not.toContain('initialTab')
     expect(clientSource).not.toContain("'advanced'")
 
-    const nativeSource = readFileSync(join(appDir, 'settings', 'native', 'page.tsx'), 'utf8')
-    expect(nativeSource).toContain('SettingsClientPage')
-    expect(nativeSource).not.toContain('SettingsPermissionsView')
-    expect(nativeSource).not.toContain('surface="native"')
+    const nativePage = readFileSync(join(appDir, 'settings', 'native', 'page.tsx'), 'utf8')
+    const nativeClient = readFileSync(join(appDir, 'settings', 'native', 'native-settings-client.tsx'), 'utf8')
+    expect(nativePage).toContain('NativeSettingsClientPage')
+    expect(nativeClient).toContain('SettingsNativeView')
+    expect(nativeClient).not.toContain('SettingsView')
   })
 })

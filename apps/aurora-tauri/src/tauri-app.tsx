@@ -28,6 +28,7 @@ import {
   MeshDiagnosticsResource,
   MeshPeersResource,
   ModelsView,
+  VoiceSettingsView,
   type OnboardingModePreferenceStore,
   type OnboardingProductModeId,
   OnboardingView,
@@ -173,6 +174,7 @@ const embeddedTauriRouteIds = [
   "diagnostics",
   "data",
   "native",
+  "spoken-replies",
   "onboarding",
 ] as const;
 
@@ -340,6 +342,17 @@ export const tauriRouteRegistry = {
   devices: ({ client }) => <AdminDevicesResource client={client} />,
   config: ({ route, client }) => (
     <ConfigEditorView client={client} route={route} />
+  ),
+  "spoken-replies": ({ nativeContext, client }) => (
+    <section aria-label="Spoken replies">
+      <VoiceSettingsView
+        client={client}
+        runtimeProfile={nativeContext.runtimeProfile ?? null}
+        surfaceProfile={nativeContext.surfaceProfile}
+        localSpeechCatalog={nativeContext.localSpeechCatalog ?? null}
+        hideOnDeviceSections
+      />
+    </section>
   ),
   contracts: ({ client }) => <AdminContractsResource client={client} />,
   plugins: ({ route, client }) => (

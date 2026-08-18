@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAuroraSurfaceProfile, shouldShowForSurface } from '../src/platform-surface'
+import { getAuroraSurfaceProfile, runtimeModeFromTransportKind, shouldShowForSurface } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Aurora surface profile regression coverage', () => {
@@ -616,5 +616,15 @@ describe('Aurora surface profile regression coverage', () => {
     expect(profile.supportsMobileNative).toBe(true)
     expect(profile.supportsAndroidOnly).toBe(true)
     expect(profile.usesBrowserVoiceRuntime).toBe(false)
+  })
+
+  it('maps SDK transport kinds to a best-effort runtimeMode', () => {
+    expect(runtimeModeFromTransportKind('tauri-local')).toBe('desktop-local')
+    expect(runtimeModeFromTransportKind('tauri-thin')).toBe('desktop-thin')
+    expect(runtimeModeFromTransportKind('native-mobile')).toBe('mobile-native')
+    expect(runtimeModeFromTransportKind('mock')).toBe('mock')
+    expect(runtimeModeFromTransportKind('mesh')).toBe('web-thin')
+    expect(runtimeModeFromTransportKind('http')).toBe('web-thin')
+    expect(runtimeModeFromTransportKind(null)).toBe('web-thin')
   })
 })

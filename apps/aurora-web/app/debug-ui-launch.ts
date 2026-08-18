@@ -9,6 +9,7 @@ import {
   type AuroraDebugUiOverride,
   type AuroraDebugUiRole,
   type AuroraDebugUiSurface,
+  type AuroraDebugUiTier,
   type AuroraDebugUiViewport,
 } from './debug-ui-override'
 
@@ -226,6 +227,7 @@ export function overrideFromDebugUiLaunch(
   return {
     surface,
     role: roleFromLaunch(definition),
+    tier: definition.runtimeTier,
     admin: definition.sessionRole === 'admin',
     viewport: defaultAuroraDebugUiViewport(surface),
     viewportExplicit: false,
@@ -317,6 +319,7 @@ export function debugUiOverrideJson(launch: AuroraDebugUiLaunch | null): {
   enabled: boolean
   surface: AuroraDebugUiSurface | null
   role: AuroraDebugUiRole | null
+  tier: AuroraDebugUiTier | null
   admin: boolean | null
   viewport: AuroraDebugUiViewport | null
   preset: string | null
@@ -328,6 +331,7 @@ export function debugUiOverrideJson(launch: AuroraDebugUiLaunch | null): {
       enabled: pickerEnabled,
       surface: null,
       role: null,
+      tier: null,
       admin: null,
       viewport: null,
       preset: null,
@@ -338,6 +342,7 @@ export function debugUiOverrideJson(launch: AuroraDebugUiLaunch | null): {
     enabled: true,
     surface: launch.override.surface,
     role: launch.override.role,
+    tier: launch.override.tier,
     admin: launch.override.admin,
     viewport: launch.override.viewport,
     preset: launch.preset,
@@ -360,6 +365,7 @@ function matchNamedPreset(override: AuroraDebugUiOverride): AuroraDebugUiLaunchP
     const definition = AURORA_DEBUG_UI_LAUNCH_PRESETS[presetId]
     if (surfaceFromRuntimeMode(definition.runtimeMode) !== override.surface) continue
     if (roleFromLaunch(definition) !== override.role) continue
+    if (definition.runtimeTier !== override.tier) continue
     if ((definition.sessionRole === 'admin') !== override.admin) continue
     return presetId
   }
@@ -367,11 +373,11 @@ function matchNamedPreset(override: AuroraDebugUiOverride): AuroraDebugUiLaunchP
 }
 
 function launchFieldsFromOverride(override: AuroraDebugUiOverride): AuroraDebugUiLaunchPresetDefinition {
-  const roleFields = roleLaunchFields(override.role)
   const surfaceFields = surfaceLaunchFields(override.surface, override.role)
   return {
     ...surfaceFields,
-    ...roleFields,
+    nodeMode: override.role === 'mesh-node' ? 'mesh-node' : 'remote-console',
+    runtimeTier: override.tier,
     sessionRole: override.admin ? 'admin' : 'member',
     label: debugUiOverrideLabel(override),
   }
@@ -405,15 +411,25 @@ function surfaceLaunchFields(
   }
 }
 
-function roleLaunchFields(role: AuroraDebugUiRole): Pick<AuroraDebugUiLaunchPresetDefinition, 'nodeMode' | 'runtimeTier'> {
-  switch (role) {
-    case 'remote-console':
-      return { nodeMode: 'remote-console', runtimeTier: 'none' }
-    case 'mesh-node':
-      return { nodeMode: 'mesh-node', runtimeTier: 'lightweight-ts' }
-    case 'python-full':
-      return { nodeMode: 'mesh-node', runtimeTier: 'python-full' }
-  }
+function roleFromLaunch(
+  launch: Pick<AuroraDebugUiLaunchPresetDefinition, 'nodeMode' | 'runtimeTier'>,
+): AuroraDebugUiRole {
+  return launch.nodeMode === 'mesh-node' ? 'mesh-node' : 'remote-console'
+}
+
+function syntheticPresetId(override: AuroraDebugUiOverride): string {
+  const tierPart = override.tier === 'python-full' ? `-${override.tier}` : ''
+  return `${override.surface}-${override.role}${tierPart}${override.admin ? '-admin' : ''}`
+}
+
+function debugUiOverrideLabel(override: AuroraDebugUiOverride): string {
+  const surface = override.surface === 'web' ? 'Hosted web' : override.surface
+  const role = override.tier === 'python-full'
+    ? 'full local runtime'
+    : override.role === 'mesh-node'
+      ? 'mesh node'
+      : 'remote console'
+  return `${surface} · ${role}${override.admin ? ' admin' : ''}`
 }
 
 function surfaceFromRuntimeMode(runtimeMode: string): AuroraDebugUiSurface {
@@ -423,27 +439,6 @@ function surfaceFromRuntimeMode(runtimeMode: string): AuroraDebugUiSurface {
   if (runtimeMode === 'desktop-thin') return 'desktop-thin'
   if (runtimeMode.includes('mobile')) return 'mobile'
   return 'web'
-}
-
-function roleFromLaunch(
-  launch: Pick<AuroraDebugUiLaunchPresetDefinition, 'nodeMode' | 'runtimeTier'>,
-): AuroraDebugUiRole {
-  if (launch.runtimeTier === 'python-full') return 'python-full'
-  return launch.nodeMode === 'mesh-node' ? 'mesh-node' : 'remote-console'
-}
-
-function syntheticPresetId(override: AuroraDebugUiOverride): string {
-  return `${override.surface}-${override.role}${override.admin ? '-admin' : ''}`
-}
-
-function debugUiOverrideLabel(override: AuroraDebugUiOverride): string {
-  const surface = override.surface === 'web' ? 'Hosted web' : override.surface
-  const role = override.role === 'python-full'
-    ? 'full local runtime'
-    : override.role === 'mesh-node'
-      ? 'mesh node'
-      : 'remote console'
-  return `${surface} · ${role}${override.admin ? ' admin' : ''}`
 }
 
 function parseLaunchSource(source: NodeJS.ProcessEnv | AuroraDebugUiLaunchSource): {

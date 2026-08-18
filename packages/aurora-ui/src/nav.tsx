@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Volume2,
   Wrench,
   type LucideIcon
 } from 'lucide-react'
@@ -64,6 +65,7 @@ export const auroraNavSections: AuroraNavSection[] = [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('config', 'Server settings', '/admin/config', Server, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
+      item('spoken-replies', 'Spoken replies', '/admin/voice', Volume2, 'TTS', 'ListVoices', 'use', 'personal', 'unsupported', 'service contract', true),
       item('access', 'Access & RBAC', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
       item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'service contract', true),
       item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'use', 'admin-critical', 'unsupported', 'service contract', true),
@@ -257,6 +259,8 @@ function mobileLabelForNavItem(id: string, label: string): string {
       return 'Settings'
     case 'config':
       return 'Server'
+    case 'spoken-replies':
+      return 'Speech'
     case 'assistant':
       return 'Assistant'
     default:

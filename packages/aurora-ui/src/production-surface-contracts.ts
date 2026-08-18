@@ -11,6 +11,7 @@ export type ProductionSurfaceId =
   | 'admin-devices'
   | 'admin-scheduler'
   | 'config-editor'
+  | 'spoken-replies'
   | 'memory-rag'
   | 'backup-restore'
   | 'models-runtime'
@@ -105,11 +106,11 @@ const CONFIG_SCHEMA_METADATA_METHOD = ['Config', 'GetSchemaMetadata'].join('.')
 export const productionSurfaceContracts: ProductionSurfaceContract[] = [
   {
     id: 'assistant-route-sheet',
-    label: 'Assistant and route choices',
+    label: 'Assistant conversation and voice capture',
     navItemIds: ['assistant', 'assistant-cancel', 'voice-transcription', 'voice-wake-process', 'voice-wake-control', 'voice-tts-synthesize', 'voice-tts-stop'],
-    routeOracles: [routeOracle('assistant', ['Assistant', 'Prompt'], ['Assistant conversation list', 'Send'])],
-    mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/route-sheet.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
-    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Prompt composer', 'Action needs approval'],
+    routeOracles: [routeOracle('assistant', ['Assistant', 'Prompt'], ['Assistant conversation list', 'Send', 'Hands-free'])],
+    mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
+    mockUxAnchors: ['Conversation rail', 'Prompt composer', 'Hands-free', 'Action needs approval'],
     componentFiles: ['assistant-view.tsx', 'route-sheet.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [
@@ -307,6 +308,26 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     fixturePolicy: 'test-only',
     degradedState: 'Secrets are redacted; apply/rollback controls require AdminAction and schema-derived validation.',
     coverage: ['packages/aurora-ui/tests/shell.test.tsx']
+  },
+  {
+    id: 'spoken-replies',
+    label: 'Spoken replies',
+    navItemIds: ['spoken-replies'],
+    routeOracles: [routeOracle('spoken-replies', ['Spoken replies'], ['Show available voices'])],
+    mockReferenceFiles: ['packages/aurora-ui/src/voice-settings-view.tsx'],
+    mockUxAnchors: ['Spoken reply voices', 'Voices available to Aurora', 'Show available voices'],
+    componentFiles: ['voice-settings-view.tsx'],
+    stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
+    truthSources: [
+      source('sdk-method', 'spoken-reply voice catalog', ['TTS.ListVoices', 'TTS.GetCapabilities']),
+      source('admin-action', 'spoken-reply voice management', ['TTS.ListVoiceProfiles', 'Gateway.AdminActionDraft', 'Gateway.AdminActionConfirm'])
+    ],
+    highestPrivacyClass: 'personal',
+    mutatingMethodType: 'manage',
+    adminActionRequired: true,
+    fixturePolicy: 'test-only',
+    degradedState: 'Voice add/remove stays locked until an administrator confirms the change.',
+    coverage: ['packages/aurora-ui/tests/voice-settings-view.test.tsx']
   },
   {
     id: 'memory-rag',

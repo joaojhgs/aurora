@@ -27,6 +27,6 @@ export function useIsMobile() {
 }
 
 function readIsMobileLayout(mql: MediaQueryList): boolean {
-  if (document.documentElement.hasAttribute(DEBUG_COMPACT_ATTR)) return true
+  if (document.documentElement.getAttribute(DEBUG_COMPACT_ATTR) === "phone") return true
   return mql.matches || window.innerWidth < MOBILE_BREAKPOINT
 }

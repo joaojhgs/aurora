@@ -93,6 +93,7 @@ describe('development preview picker', () => {
     expect(host?.textContent).toContain('Development preview')
     expect(document.querySelector('select[aria-label="Development preview surface"]')).toHaveProperty('value', 'android')
     expect(document.querySelector('select[aria-label="Development preview role"]')).toHaveProperty('value', 'mesh-node')
+    expect(document.querySelector('select[aria-label="Development preview runtime"]')).toHaveProperty('value', 'lightweight-ts')
     expect(document.querySelector('select[aria-label="Development preview access"]')).toHaveProperty('value', 'admin')
     expect(document.querySelector('select[aria-label="Development preview viewport"]')).toHaveProperty('value', 'phone')
   })
@@ -191,6 +192,7 @@ describe('development preview picker', () => {
     expect(debugUiBadgeLabel({
       surface: 'web',
       role: 'remote-console',
+      tier: 'none',
       admin: false,
       viewport: 'full',
       viewportExplicit: false,
@@ -198,9 +200,18 @@ describe('development preview picker', () => {
     expect(debugUiBadgeLabel({
       surface: 'android',
       role: 'mesh-node',
+      tier: 'lightweight-ts',
       admin: false,
       viewport: 'phone',
       viewportExplicit: false,
     })).toBe('Android · Make available · Phone')
+    expect(debugUiBadgeLabel({
+      surface: 'desktop-local',
+      role: 'mesh-node',
+      tier: 'python-full',
+      admin: false,
+      viewport: 'full',
+      viewportExplicit: false,
+    })).toBe('Desktop local · Make available · Full runtime · Full')
   })
 })

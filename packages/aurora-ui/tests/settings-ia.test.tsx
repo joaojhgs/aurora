@@ -51,6 +51,7 @@ describe('settings nav information architecture', () => {
     expect(configure?.items.map((item) => item.id)).toContain('settings')
     expect(operate?.items.map((item) => item.id)).not.toContain('settings')
     expect(operate?.items.map((item) => item.id)).toContain('config')
+    expect(operate?.items.map((item) => item.id)).toContain('spoken-replies')
     expect(settings).toEqual(expect.objectContaining({
       id: 'settings',
       label: 'Settings',
@@ -66,6 +67,14 @@ describe('settings nav information architecture', () => {
       adminGated: true,
       capabilityModule: 'Config',
       capabilityMethod: 'Get'
+    }))
+    expect(getAuroraNavItem('spoken-replies')).toEqual(expect.objectContaining({
+      id: 'spoken-replies',
+      label: 'Spoken replies',
+      href: '/admin/voice',
+      adminGated: true,
+      capabilityModule: 'TTS',
+      capabilityMethod: 'ListVoices'
     }))
     expect(auroraMobileTabs.map((tab) => tab.id)).toEqual(['assistant', 'mesh', 'settings'])
     expect(auroraMobileTabs.every((tab) => !tab.adminGated)).toBe(true)
@@ -189,7 +198,10 @@ describe('spoken replies stay out of local Settings', () => {
     }
     const readyRender = await renderSettings(ready, { sessionIsAdmin: true })
     expect(readyRender.container.querySelector('[aria-label="Spoken replies"]')).toBeNull()
+    expect(readyRender.container.querySelector('[aria-label="Spoken reply summary"]')).toBeNull()
     expect(readyRender.container.textContent).toContain('Voice on this device')
+    expect(readyRender.container.textContent).not.toContain('Spoken reply voices')
+    expect(readyRender.container.textContent).not.toContain('Voices available to Aurora')
     expect(hasExactTextControl(readyRender.container, 'Voice')).toBe(false)
     await readyRender.unmount()
   })

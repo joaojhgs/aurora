@@ -4,7 +4,8 @@ import { useMemo, type ReactNode } from 'react'
 import type { AuroraClient } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { SettingsPermissionsView } from './settings-permissions-view'
-import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
+import { VoiceSettingsView } from './voice-settings-view'
+import { getAuroraSurfaceProfile, shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraRuntimeProfileV2 } from './runtime-profile'
 import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 
@@ -14,8 +15,10 @@ export type SettingsViewTab = 'general' | 'voice' | 'configuration' | 'advanced'
 export interface SettingsViewProps {
   client: AuroraClient
   snapshot: AuroraShellSnapshot
-  configRoute: RouteAvailability
-  dataRoute: RouteAvailability
+  /** @deprecated Ignored: server schema editing lives on Server settings (`/admin/config`). */
+  configRoute?: RouteAvailability
+  /** @deprecated Ignored: export/delete lives on Data Policy (`/memory/policy`). */
+  dataRoute?: RouteAvailability
   /** @deprecated Ignored: Settings is a single This-device page. */
   initialTab?: SettingsViewTab
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
@@ -31,10 +34,14 @@ export interface SettingsViewProps {
 }
 
 export function SettingsView({
+  client,
   snapshot,
   runtimeProfile = null,
   surfaceProfile = null,
+  localSpeechCatalog = null,
+  onLocalSpeechSelectionConfirmed,
   onRequestNativeAccess,
+  onNavigate,
   connectionRoleContent
 }: SettingsViewProps) {
   const profile = useMemo(() => surfaceProfile ?? getAuroraSurfaceProfile({
@@ -47,6 +54,8 @@ export function SettingsView({
     localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState ?? null
   }), [surfaceProfile, snapshot.nativePlatform, snapshot.transportKind, runtimeProfile])
 
+  const showLocalVoiceEditor = shouldShowForSurface(profile, 'localVoice')
+
   return (
     <section className="flex flex-col gap-4" aria-label="Settings">
       <SettingsPermissionsView
@@ -56,8 +65,19 @@ export function SettingsView({
         runtimeProfile={runtimeProfile}
         surfaceProfile={profile}
         onRequestNativeAccess={onRequestNativeAccess}
+        onNavigate={onNavigate}
         connectionRoleContent={connectionRoleContent}
       />
+      {showLocalVoiceEditor ? (
+        <VoiceSettingsView
+          client={client}
+          runtimeProfile={runtimeProfile}
+          surfaceProfile={profile}
+          localSpeechCatalog={localSpeechCatalog}
+          onLocalSpeechSelectionConfirmed={onLocalSpeechSelectionConfirmed}
+          hideServerVoiceSections
+        />
+      ) : null}
     </section>
   )
 }

@@ -19,6 +19,7 @@ describe('debug UI runtime override', () => {
     )).toEqual({
       surface: 'web',
       role: 'remote-console',
+      tier: 'none',
       admin: true,
       viewport: 'full',
       viewportExplicit: false,
@@ -29,6 +30,7 @@ describe('debug UI runtime override', () => {
     )).toEqual({
       surface: 'android',
       role: 'mesh-node',
+      tier: 'lightweight-ts',
       admin: false,
       viewport: 'phone',
       viewportExplicit: false,
@@ -38,9 +40,32 @@ describe('debug UI runtime override', () => {
       'aurora-surface=desktop-local&aurora-role=python-full',
     )).toEqual({
       surface: 'desktop-local',
-      role: 'python-full',
+      role: 'mesh-node',
+      tier: 'python-full',
       admin: false,
       viewport: 'full',
+      viewportExplicit: false,
+    })
+
+    expect(parseAuroraDebugUiOverride(
+      'aurora-surface=desktop-local&aurora-role=mesh-node&aurora-tier=python-full',
+    )).toEqual({
+      surface: 'desktop-local',
+      role: 'mesh-node',
+      tier: 'python-full',
+      admin: false,
+      viewport: 'full',
+      viewportExplicit: false,
+    })
+
+    expect(parseAuroraDebugUiOverride(
+      'aurora-surface=android&aurora-role=python-full',
+    )).toEqual({
+      surface: 'android',
+      role: 'mesh-node',
+      tier: 'lightweight-ts',
+      admin: false,
+      viewport: 'phone',
       viewportExplicit: false,
     })
   })
@@ -51,6 +76,7 @@ describe('debug UI runtime override', () => {
     )).toEqual({
       surface: 'android',
       role: 'remote-console',
+      tier: 'none',
       admin: false,
       viewport: 'tablet',
       viewportExplicit: true,
@@ -82,6 +108,7 @@ describe('debug UI runtime override', () => {
     expect(parseAuroraDebugUiOverrideFromCookie(cookie)).toEqual({
       surface: 'ios',
       role: 'mesh-node',
+      tier: 'lightweight-ts',
       admin: false,
       viewport: 'phone',
       viewportExplicit: false,
@@ -95,6 +122,7 @@ describe('debug UI runtime override', () => {
     })).toEqual({
       surface: 'android',
       role: 'remote-console',
+      tier: 'none',
       admin: true,
       viewport: 'phone',
       viewportExplicit: false,
@@ -114,18 +142,20 @@ describe('debug UI runtime override', () => {
     const query = serializeAuroraDebugUiOverride({
       surface: 'desktop-thin',
       role: 'mesh-node',
+      tier: 'lightweight-ts',
       admin: false,
       viewport: 'full',
       viewportExplicit: false,
     })
-    expect(query).toBe('aurora-surface=desktop-thin&aurora-role=mesh-node&aurora-admin=0')
+    expect(query).toBe('aurora-surface=desktop-thin&aurora-role=mesh-node&aurora-tier=lightweight-ts&aurora-admin=0')
     expect(serializeAuroraDebugUiOverride({
       surface: 'android',
       role: 'mesh-node',
+      tier: 'lightweight-ts',
       admin: false,
       viewport: 'tablet',
       viewportExplicit: true,
-    })).toBe('aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=tablet')
+    })).toBe('aurora-surface=android&aurora-role=mesh-node&aurora-tier=lightweight-ts&aurora-admin=0&aurora-viewport=tablet')
     expect(preserveAuroraDebugUiSearch('/mesh', `?${query}`)).toBe(
       `/mesh?${query}`,
     )
@@ -139,6 +169,7 @@ describe('debug UI runtime override', () => {
     expect(mergeAuroraDebugUiOverride(androidDefault, { surface: 'web' })).toEqual({
       surface: 'web',
       role: 'remote-console',
+      tier: 'none',
       admin: false,
       viewport: 'full',
       viewportExplicit: false,
@@ -159,6 +190,7 @@ describe('debug UI runtime override', () => {
     expect(mergeAuroraDebugUiOverride(leftoverFull, { surface: 'android' })).toEqual({
       surface: 'android',
       role: 'remote-console',
+      tier: 'none',
       admin: false,
       viewport: 'phone',
       viewportExplicit: false,

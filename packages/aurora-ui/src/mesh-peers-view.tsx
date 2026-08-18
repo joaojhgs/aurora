@@ -25,6 +25,7 @@ import { PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shar
 import { decodeMeshInvite, encodeMeshInviteUrl, meshInviteSummary } from './mesh-invite'
 import {
   getAuroraSurfaceProfile,
+  runtimeModeFromTransportKind,
   type AuroraSurfaceProfile,
 } from './platform-surface'
 import { presentableSignal } from './status-badges'
@@ -336,14 +337,7 @@ export function MeshPeersResource({
     () =>
       surfaceProfile
       ?? getAuroraSurfaceProfile({
-        runtimeMode:
-          client.transport.kind === 'tauri-local'
-            ? 'desktop-local'
-            : client.transport.kind === 'native-mobile'
-              ? 'mobile-native'
-              : client.transport.kind === 'mock'
-                ? 'mock'
-                : 'web-thin',
+        runtimeMode: runtimeModeFromTransportKind(client.transport.kind),
         transportKind: client.transport.kind,
         userAgent:
           typeof navigator === 'undefined' ? undefined : navigator.userAgent,
@@ -1524,8 +1518,8 @@ export function MeshPeersView({
   const resolvedSurface =
     surfaceProfile
     ?? getAuroraSurfaceProfile({
-      runtimeMode: 'web-thin',
-      transportKind: snapshot.transportKind === 'mock' ? 'mock' : snapshot.transportKind,
+      runtimeMode: runtimeModeFromTransportKind(snapshot.transportKind),
+      transportKind: snapshot.transportKind,
       userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent,
     })
 

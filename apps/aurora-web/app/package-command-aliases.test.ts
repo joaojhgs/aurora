@@ -64,6 +64,7 @@ describe('web neutral dev command aliases', () => {
     expect(launcher).toContain('reserveFreePort')
     expect(launcher).toContain('aurora-surface=')
     expect(launcher).toContain('aurora-role=')
+    expect(launcher).toContain('aurora-tier=')
     expect(launcher).toContain('aurora-admin=')
     expect(launcher).toContain('aurora-viewport=')
     expect(launcher).toContain("presetId === 'debug'")

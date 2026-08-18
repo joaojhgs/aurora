@@ -105,7 +105,7 @@ describe('debug UI launch presets', () => {
     }
   })
 
-  it('maps python-full role onto a mesh-node runtime with the full local tier', () => {
+  it('maps a python-full query alias onto mesh-node with the full local tier', () => {
     const launch = resolveAuroraDebugUiLaunch({
       nodeEnv: 'development',
       search: 'aurora-surface=desktop-local&aurora-role=python-full&aurora-admin=0',
@@ -116,7 +116,8 @@ describe('debug UI launch presets', () => {
       runtimeTier: 'python-full',
       override: {
         surface: 'desktop-local',
-        role: 'python-full',
+        role: 'mesh-node',
+        tier: 'python-full',
         admin: false,
       },
     })

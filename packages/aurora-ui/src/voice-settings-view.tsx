@@ -195,6 +195,8 @@ export interface VoiceSettingsViewProps {
   onLocalSpeechSelectionConfirmed?: ((selection: AuroraLocalSpeechSelectionProfile) => void | Promise<void>) | undefined
   /** Hide on-device pack and wake-phrase sections when embedding server spoken-reply controls outside local Settings. */
   hideOnDeviceSections?: boolean | undefined
+  /** Hide server spoken-reply catalog/admin controls when embedding this view in This-device Settings. */
+  hideServerVoiceSections?: boolean | undefined
 }
 
 export function VoiceSettingsView({
@@ -203,7 +205,8 @@ export function VoiceSettingsView({
   surfaceProfile: providedSurfaceProfile = null,
   localSpeechCatalog = null,
   onLocalSpeechSelectionConfirmed,
-  hideOnDeviceSections = false
+  hideOnDeviceSections = false,
+  hideServerVoiceSections = false
 }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
@@ -750,8 +753,11 @@ export function VoiceSettingsView({
     }
   }
 
+  const showServerVoiceSections = !hideServerVoiceSections
+
   return (
     <div className="flex flex-col gap-4 py-4">
+      {showServerVoiceSections ? (
       <StatStrip
         ariaLabel="Spoken reply summary"
         items={[
@@ -773,6 +779,7 @@ export function VoiceSettingsView({
           }
         ]}
       />
+      ) : null}
 
       {state.message ? (
         <p role={state.loadState === 'error' ? 'alert' : 'status'} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
@@ -800,6 +807,8 @@ export function VoiceSettingsView({
         </p>
       ) : null}
 
+      {showServerVoiceSections ? (
+        <>
       <Card title="Spoken reply voices" description="Voices Aurora can use for spoken replies.">
         <div className="flex flex-col gap-3">
           {state.loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading voice choices.</p> : null}
@@ -842,6 +851,8 @@ export function VoiceSettingsView({
           ) : null}
         </div>
       </Card>
+        </>
+      ) : null}
 
       {!hideOnDeviceSections && (localSpeechRows.length > 0 || state.browserCatalogState === 'loading' || state.browserCatalogState === 'limited') ? (
         <Card title="On-device speech" description="Speech pieces this device can use locally.">
@@ -1005,6 +1016,8 @@ export function VoiceSettingsView({
       </Card>
       )}
 
+      {showServerVoiceSections ? (
+        <>
       <Card title="Voices available to Aurora" description="Voices Aurora can use or add for spoken replies.">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 rounded-md border border-border/70 p-3">
@@ -1181,6 +1194,8 @@ export function VoiceSettingsView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </>
+      ) : null}
     </div>
   )
 }
