@@ -1,13 +1,15 @@
 {
   "name": "@aurora/web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "dev:web": "NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 next dev",
+    "dev:web": "node ./scripts/dev-ui-launch.mjs debug",
     "dev:web-thin": "pnpm dev:web",
+    "dev:ui:debug": "node ./scripts/dev-ui-launch.mjs debug",
     "dev:ui:web-remote": "node ./scripts/dev-ui-launch.mjs web-remote",
+    "dev:ui:web-remote-admin": "node ./scripts/dev-ui-launch.mjs web-remote-admin",
     "dev:ui:web-node": "node ./scripts/dev-ui-launch.mjs web-node",
     "dev:ui:desktop-local": "node ./scripts/dev-ui-launch.mjs desktop-local",
     "dev:ui:desktop-thin-remote": "node ./scripts/dev-ui-launch.mjs desktop-thin-remote",

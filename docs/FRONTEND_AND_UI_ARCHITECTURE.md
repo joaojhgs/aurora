@@ -137,6 +137,36 @@ When changing frontend behavior, update the narrowest relevant set:
 - User-facing architecture changes: this document and [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md).
 - Client profile, target capability, or readiness changes: [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md) and [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md).
 
+## Local UI debug server
+
+The hosted web polish loop uses **one** Next process. Do not start a Next server per surface/role combination.
+
+```bash
+pnpm dev:ui:debug
+# same debug-capable server:
+pnpm dev:web
+```
+
+Surface, product role, and admin are a **runtime override**, not a compile-time env. Production APK/desktop/web bundles must never reintroduce `VITE_AURORA_RUNTIME_MODE` or bake `NEXT_PUBLIC_*` role/surface values.
+
+Query contract (kept on `/` so Assistant/Mesh/Settings stay `/mesh`, `/settings`, …):
+
+| Param | Values |
+| --- | --- |
+| `aurora-surface` | `web` (alias `web-thin`) · `desktop-local` · `desktop-thin` · `android` · `ios` (`mobile` is a compatibility alias) |
+| `aurora-role` | `remote-console` (Connect) · `mesh-node` (Make this device available) · `python-full` (Run Aurora on this computer) |
+| `aurora-admin` | `0` member · `1` admin |
+
+Example:
+
+```text
+http://127.0.0.1:3000/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0
+```
+
+The override is persisted in the `aurora-debug-ui` cookie and sessionStorage so in-app navigation keeps it. A Development preview picker (not in production navigation) writes the cookie, updates the URL with `replaceState`, and reloads the client snapshot without restarting Next. `GET /__aurora/debug-preset` returns the active override JSON for agents. Production (`NODE_ENV === 'production'`) ignores query, cookie, and picker.
+
+Named `pnpm dev:ui:<preset>` commands (`web-remote`, `web-remote-admin`, `web-node`, `desktop-local`, `desktop-thin-remote`, `desktop-node`, `android-remote`, `android-node`, `ios-remote`, `ios-node`, `mobile-node`) remain valid. They either print a query URL against `AURORA_UI_DEBUG_URL` or spawn an isolated Next process on a random port that still applies the same query string — they must not compile a unique preset env. Prefer the shared debug server plus query/picker.
+
 ## Validation commands
 
 ```bash

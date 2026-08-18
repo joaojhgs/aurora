@@ -1,6 +1,7 @@
 {
   "name": "aurora-workspace",
   "private": true,
+  "version": "1.0.0",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "build": "pnpm -r build",
@@ -8,12 +9,14 @@
     "test": "pnpm -r test",
     "tauri": "pnpm --filter @aurora/tauri-ui tauri",
     "dev:web": "pnpm --filter @aurora/web dev:web",
+    "dev:ui:debug": "pnpm --filter @aurora/web dev:ui:debug",
     "dev:desktop-client": "pnpm --filter @aurora/tauri-ui dev:desktop-client",
     "dev:desktop-full": "pnpm --filter @aurora/tauri-ui dev:desktop-full",
     "dev:desktop-local": "pnpm dev:desktop-full",
     "dev:desktop-thin": "pnpm dev:desktop-client",
     "dev:web-thin": "pnpm dev:web",
     "dev:ui:web-remote": "pnpm --filter @aurora/web dev:ui:web-remote",
+    "dev:ui:web-remote-admin": "pnpm --filter @aurora/web dev:ui:web-remote-admin",
     "dev:ui:web-node": "pnpm --filter @aurora/web dev:ui:web-node",
     "dev:ui:desktop-local": "pnpm --filter @aurora/web dev:ui:desktop-local",
     "dev:ui:desktop-thin-remote": "pnpm --filter @aurora/web dev:ui:desktop-thin-remote",

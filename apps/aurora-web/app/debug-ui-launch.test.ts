@@ -1,9 +1,18 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { getAuroraSurfaceProfile, sanitizeRuntimeProfile } from '@aurora/ui'
 import {
   AURORA_DEBUG_UI_LAUNCH_PRESETS,
   applyDebugUiLaunchToRuntimeProfile,
+  debugUiLaunchQuery,
+  debugUiLaunchSanitizeOptions,
+  debugUiLaunchSessionIsAdmin,
+  isAuroraDebugUiPickerEnabled,
+  launchFromDebugUiOverride,
   listAuroraDebugUiLaunchPresetIds,
+  overrideFromDebugUiLaunch,
   resolveAuroraDebugUiLaunch,
   shellRuntimeModeFromSurfaceKind,
 } from './debug-ui-launch'
@@ -26,6 +35,7 @@ describe('debug UI launch presets', () => {
 
       const profile = sanitizeRuntimeProfile(
         applyDebugUiLaunchToRuntimeProfile(launch!, undefined),
+        debugUiLaunchSanitizeOptions(launch!),
       )
       const surface = getAuroraSurfaceProfile({
         runtimeMode: launch!.runtimeMode,
@@ -48,6 +58,15 @@ describe('debug UI launch presets', () => {
         expect(surface.kind).toBe('desktop-local')
         expect(surface.usesLocalSidecar).toBe(true)
         expect(surface.canManageLocalServiceConfiguration).toBe(true)
+        expect(profile.runtimeTier).toBe('python-full')
+      }
+      if (presetId === 'web-remote') {
+        expect(debugUiLaunchSessionIsAdmin(launch!)).toBe(false)
+      }
+      if (presetId === 'web-remote-admin') {
+        expect(debugUiLaunchSessionIsAdmin(launch!)).toBe(true)
+        expect(surface.kind).toBe('web')
+        expect(profile.nodeMode).toBe('remote-console')
       }
       if (presetId === 'desktop-thin-remote' || presetId === 'desktop-node') {
         expect(surface.kind).toBe('desktop-thin')
@@ -68,12 +87,55 @@ describe('debug UI launch presets', () => {
     }
   })
 
+  it('resolves the same named presets from query params without a baked env preset', () => {
+    for (const presetId of listAuroraDebugUiLaunchPresetIds()) {
+      const definition = AURORA_DEBUG_UI_LAUNCH_PRESETS[presetId]
+      const launch = resolveAuroraDebugUiLaunch({
+        nodeEnv: 'development',
+        search: debugUiLaunchQuery(launchFromDebugUiOverride(overrideFromDebugUiLaunch(definition))),
+      })
+
+      expect(launch).toMatchObject({
+        preset: presetId,
+        runtimeMode: definition.runtimeMode,
+        nodeMode: definition.nodeMode,
+        override: overrideFromDebugUiLaunch(definition),
+      })
+    }
+  })
+
+  it('maps python-full role onto a mesh-node runtime with the full local tier', () => {
+    const launch = resolveAuroraDebugUiLaunch({
+      nodeEnv: 'development',
+      search: 'aurora-surface=desktop-local&aurora-role=python-full&aurora-admin=0',
+    })
+    expect(launch).toMatchObject({
+      preset: 'desktop-local',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'python-full',
+      override: {
+        surface: 'desktop-local',
+        role: 'python-full',
+        admin: false,
+      },
+    })
+  })
+
   it('stays inert in production even when public debug values are present', () => {
     expect(resolveAuroraDebugUiLaunch({
       NODE_ENV: 'production',
       NEXT_PUBLIC_AURORA_DEBUG_UI: '1',
       NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET: 'desktop-local',
     })).toBeNull()
+    expect(resolveAuroraDebugUiLaunch({
+      nodeEnv: 'production',
+      search: 'aurora-surface=android&aurora-role=mesh-node&aurora-admin=1',
+      cookie: 'aurora-debug-ui=aurora-surface=ios&aurora-role=python-full&aurora-admin=1',
+    })).toBeNull()
+    expect(isAuroraDebugUiPickerEnabled({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_AURORA_DEBUG_UI: '1',
+    })).toBe(false)
   })
 
   it('synthesizes a product-safe runtime profile for shell ownership', () => {
@@ -96,5 +158,13 @@ describe('debug UI launch presets', () => {
   it('maps hosted web surface kinds back to the web-thin shell mode alias', () => {
     expect(shellRuntimeModeFromSurfaceKind('web')).toBe('web-thin')
     expect(shellRuntimeModeFromSurfaceKind('desktop-local')).toBe('desktop-local')
+  })
+
+  it('enables the debug flag via static process.env and keeps named presets as a test fallback only', () => {
+    const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'debug-ui-launch.ts'), 'utf8')
+    expect(source).toContain('process.env.NEXT_PUBLIC_AURORA_DEBUG_UI')
+    expect(source).toContain('process.env.NODE_ENV')
+    expect(source).toContain('readBrowserAuroraDebugUiSources')
+    expect(source).not.toContain('VITE_AURORA_RUNTIME_MODE')
   })
 })

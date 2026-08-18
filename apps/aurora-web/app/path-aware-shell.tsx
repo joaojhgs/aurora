@@ -27,6 +27,8 @@ import {
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
 import { createAuroraBrowserLocalAssistantConfig } from './browser-local-assistant'
+import { DebugUiPicker } from './debug-ui-picker'
+import { preserveAuroraDebugUiSearch } from './debug-ui-override'
 import { shellRuntimeModeFromSurfaceKind } from './debug-ui-launch'
 
 type PathAwareShellProps = {
@@ -83,24 +85,26 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
     return () => window.removeEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
   }, [])
 
-  if (startFailed) {
-    return (
-      <BrowserShellStartError
-        onRetry={() => setRefreshKey((value) => value + 1)}
-      />
-    )
-  }
-  if (!runtime) return <BrowserShellBootScreen />
+  const refreshRuntime = () => setRefreshKey((value) => value + 1)
 
   return (
-    <ReadyPathAwareShell
-      key={refreshKey}
-      runtime={runtime}
-      snapshot={snapshot}
-      onRefreshRuntime={() => setRefreshKey((value) => value + 1)}
-    >
-      {children}
-    </ReadyPathAwareShell>
+    <>
+      {startFailed ? (
+        <BrowserShellStartError onRetry={refreshRuntime} />
+      ) : !runtime ? (
+        <BrowserShellBootScreen />
+      ) : (
+        <ReadyPathAwareShell
+          key={refreshKey}
+          runtime={runtime}
+          snapshot={snapshot}
+          onRefreshRuntime={refreshRuntime}
+        >
+          {children}
+        </ReadyPathAwareShell>
+      )}
+      <DebugUiPicker onOverrideChange={refreshRuntime} />
+    </>
   )
 }
 
@@ -236,7 +240,7 @@ function ReadyPathAwareShell({
       <AppShell
         snapshot={activeSnapshot}
         currentPath={pathname ?? '/'}
-        onNavigate={(href) => router.push(href)}
+        onNavigate={(href) => router.push(preserveAuroraDebugUiSearch(href))}
         sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
         runtimeMode={shellRuntimeModeFromSurfaceKind(runtime.surface.kind)}
         nodeMode={configuredRuntimeProfile?.nodeMode ?? runtime.surface.nodeMode ?? runtimeNodeMode}

@@ -8,6 +8,7 @@ const repoRoot = resolve(appRoot, '..', '..')
 
 const UI_LAUNCH_PRESETS = [
   'web-remote',
+  'web-remote-admin',
   'web-node',
   'desktop-local',
   'desktop-thin-remote',
@@ -34,9 +35,9 @@ describe('web neutral dev command aliases', () => {
 
     expect(rootScripts['dev:web']).toBe('pnpm --filter @aurora/web dev:web')
     expect(rootScripts['dev:web-thin']).toBe('pnpm dev:web')
-    expect(webScripts['dev:web']).toBe(
-      'NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 next dev',
-    )
+    expect(rootScripts['dev:ui:debug']).toBe('pnpm --filter @aurora/web dev:ui:debug')
+    expect(webScripts['dev:web']).toBe('node ./scripts/dev-ui-launch.mjs debug')
+    expect(webScripts['dev:ui:debug']).toBe('node ./scripts/dev-ui-launch.mjs debug')
     expect(webScripts['dev:web-thin']).toBe('pnpm dev:web')
 
     for (const scriptValue of [
@@ -61,8 +62,13 @@ describe('web neutral dev command aliases', () => {
     expect(launcher).toContain("NEXT_PUBLIC_AURORA_DEBUG_UI: '1'")
     expect(launcher).toContain('--port')
     expect(launcher).toContain('reserveFreePort')
+    expect(launcher).toContain('aurora-surface=')
+    expect(launcher).toContain('aurora-role=')
+    expect(launcher).toContain('aurora-admin=')
+    expect(launcher).toContain("presetId === 'debug'")
+    expect(launcher).toContain('AURORA_UI_DEBUG_URL')
     expect(launcher).not.toContain('VITE_AURORA_RUNTIME_MODE')
     expect(launcher).not.toContain('NEXT_PUBLIC_AURORA_DEBUG_UI_NODE_MODE')
-    expect(launcher).not.toContain('NEXT_PUBLIC_AURORA_DEBUG_UI_SURFACE')
+    expect(launcher).not.toMatch(/NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET:\s/)
   })
 })
