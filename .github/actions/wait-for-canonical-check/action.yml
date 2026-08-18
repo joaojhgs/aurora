@@ -27,15 +27,32 @@ runs:
           const pollMs = 15000
 
           core.info(`Waiting for canonical check "${checkName}" on ${sha}`)
+          let consecutiveApiErrors = 0
           while (Date.now() < deadline) {
-            const { data } = await github.rest.checks.listForRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: sha,
-              check_name: checkName,
-              filter: 'latest',
-              per_page: 20,
-            })
+            let data
+            try {
+              ;({ data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: sha,
+                check_name: checkName,
+                filter: 'latest',
+                per_page: 20,
+              }))
+              consecutiveApiErrors = 0
+            } catch (error) {
+              // A transient API failure says nothing about the canonical job.
+              // Previously it escaped as an unhandled HttpError and failed this
+              // alias outright — a green canonical check reported as red. Back
+              // off and keep polling; the deadline below still bounds the wait.
+              consecutiveApiErrors += 1
+              core.info(
+                `Checks API call failed (attempt ${consecutiveApiErrors}): ${error.status ?? ''} ${error.message}`
+              )
+              const backoffMs = Math.min(pollMs * consecutiveApiErrors, 60000)
+              await new Promise((resolve) => setTimeout(resolve, backoffMs))
+              continue
+            }
             const runs = (data.check_runs || []).filter((run) => run.name === checkName)
             if (runs.length === 0) {
               core.info(`Canonical check "${checkName}" has not been reported yet`)
