@@ -11760,8 +11760,16 @@ body { font-size:14px;line-height:1.45 }
 }
 
 /* Conversation history stays in the desktop rail and moves into a compact sheet when that rail is hidden. */
+.aui-mobile-history-host,
 .aui-mobile-history-trigger {
-  display: none;
+  display: none !important;
+}
+
+@media (min-width: 1041px) {
+  .aui-mobile-history-host,
+  .aui-mobile-history-trigger {
+    display: none !important;
+  }
 }
 .aui-conversation-sheet {
   width: min(22rem, calc(100vw - 1rem));
@@ -11848,8 +11856,12 @@ body { font-size:14px;line-height:1.45 }
 }
 
 @media (max-width: 1040px) {
+  .aui-mobile-history-host {
+    display: flex !important;
+    align-items: center;
+  }
   .aui-assistant-form .aui-mobile-history-trigger {
-    display: inline-flex;
+    display: inline-flex !important;
     width: auto;
     min-height: 2.15rem;
     flex: 0 0 auto;
@@ -11915,9 +11927,6 @@ body { font-size:14px;line-height:1.45 }
   .aui-composer-route-context {
     flex: 0 0 auto;
     gap: 0;
-  }
-  .aui-composer-route-context > [data-slot="badge"] {
-    display: none;
   }
 }
 
@@ -11985,5 +11994,91 @@ body { font-size:14px;line-height:1.45 }
     order: 0;
     flex: 1 1 auto;
     min-width: 0;
+  }
+  .aui-content:has(.aui-assistant) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding-bottom: calc(4.1rem + env(safe-area-inset-bottom, 0px));
+  }
+  .aui-assistant,
+  .aui-assistant-grid,
+  .aui-chat-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+  }
+  .aui-chat-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .aui-assistant-form {
+    flex: 0 0 auto;
+    margin-top: auto;
+    position: relative;
+    bottom: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .aui-content:has(.aui-assistant) {
+    scrollbar-gutter: auto;
+  }
+  .aui-assistant-form {
+    width: 100%;
+    padding: 0.45rem 0 0;
+  }
+  .aui-composer-toolbar {
+    width: 100%;
+    box-sizing: border-box;
+    padding-inline: 0.75rem;
+  }
+  .aui-composer-control-row {
+    width: 100%;
+    margin-inline: 0;
+    border-radius: 1rem 1rem 0 0;
+  }
+  .aui-assistant-form > .aui-composer-attachment-preview,
+  .aui-assistant-form > .aui-composer-recorder-row,
+  .aui-composer-voice-recovery {
+    width: auto;
+    max-width: none;
+    margin-inline: 0.75rem;
+  }
+  .aui-chat-workspace {
+    --aui-chat-width: 100%;
+  }
+  .aui-chat-panel,
+  .aui-chat-panel[data-slot="message-scroller"] {
+    width: 100%;
+    padding-inline: 0;
+    scrollbar-gutter: auto;
+  }
+  .aui-chat-scroller-viewport[data-slot="message-scroller-viewport"] {
+    width: 100%;
+    scrollbar-width: none;
+    scrollbar-gutter: auto;
+    -ms-overflow-style: none;
+  }
+  .aui-chat-scroller-viewport[data-slot="message-scroller-viewport"]::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  .aui-chat-scroller-content[data-slot="message-scroller-content"] {
+    width: 100%;
+    padding-inline: 0.5rem;
+  }
+  .aui-chat-assistant,
+  .aui-chat-user,
+  .aui-chat-bubble {
+    max-width: 100%;
+  }
+  .aui-chat-message-content[data-slot="message-content"] {
+    max-width: 100%;
+  }
+  .aui-chat-user .aui-chat-message-content {
+    max-width: 92%;
   }
 }

@@ -5,9 +5,11 @@ import {
   parseAuroraDebugUiOverrideFromCookie,
   readBrowserAuroraDebugUiSources,
   serializeAuroraDebugUiOverride,
+  defaultAuroraDebugUiViewport,
   type AuroraDebugUiOverride,
   type AuroraDebugUiRole,
   type AuroraDebugUiSurface,
+  type AuroraDebugUiViewport,
 } from './debug-ui-override'
 
 export type AuroraDebugUiLaunchSessionRole = 'member' | 'admin'
@@ -195,13 +197,17 @@ export function isAuroraDebugUiPickerEnabled(
 ): boolean {
   const parsed = parseLaunchSource(source)
   if (isAuroraDebugUiProductionEnv(parsed.nodeEnv)) return false
-  if (truthy(parsed.debugEnv.flag)) return true
-  return resolveAuroraDebugUiLaunch(source) != null
+  return truthy(parsed.debugEnv.flag)
 }
 
 export function launchFromDebugUiOverride(override: AuroraDebugUiOverride): AuroraDebugUiLaunch {
   const matched = matchNamedPreset(override)
-  if (matched) return launchFromNamedPreset(matched)
+  if (matched) {
+    return {
+      ...launchFromNamedPreset(matched),
+      override,
+    }
+  }
   return {
     preset: syntheticPresetId(override),
     enabled: true,
@@ -216,10 +222,13 @@ export function overrideFromDebugUiLaunch(
 ): AuroraDebugUiOverride {
   if ('override' in launch && launch.override) return launch.override
   const definition = launch as AuroraDebugUiLaunchPresetDefinition
+  const surface = surfaceFromRuntimeMode(definition.runtimeMode)
   return {
-    surface: surfaceFromRuntimeMode(definition.runtimeMode),
+    surface,
     role: roleFromLaunch(definition),
     admin: definition.sessionRole === 'admin',
+    viewport: defaultAuroraDebugUiViewport(surface),
+    viewportExplicit: false,
   }
 }
 
@@ -309,15 +318,18 @@ export function debugUiOverrideJson(launch: AuroraDebugUiLaunch | null): {
   surface: AuroraDebugUiSurface | null
   role: AuroraDebugUiRole | null
   admin: boolean | null
+  viewport: AuroraDebugUiViewport | null
   preset: string | null
   query: string | null
 } {
   if (!launch) {
+    const pickerEnabled = isAuroraDebugUiPickerEnabled()
     return {
-      enabled: false,
+      enabled: pickerEnabled,
       surface: null,
       role: null,
       admin: null,
+      viewport: null,
       preset: null,
       query: null,
     }
@@ -327,6 +339,7 @@ export function debugUiOverrideJson(launch: AuroraDebugUiLaunch | null): {
     surface: launch.override.surface,
     role: launch.override.role,
     admin: launch.override.admin,
+    viewport: launch.override.viewport,
     preset: launch.preset,
     query: debugUiLaunchQuery(launch),
   }

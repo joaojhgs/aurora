@@ -174,7 +174,8 @@ function printQueryContract(url) {
   console.log('[aurora-ui-launch]   aurora-surface=web|desktop-local|desktop-thin|android|ios')
   console.log('[aurora-ui-launch]   aurora-role=remote-console|mesh-node|python-full')
   console.log('[aurora-ui-launch]   aurora-admin=0|1')
-  console.log(`[aurora-ui-launch] Example: ${url}/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0`)
+  console.log('[aurora-ui-launch]   aurora-viewport=phone|tablet|full')
+  console.log(`[aurora-ui-launch] Example: ${url}/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=phone`)
   console.log(`[aurora-ui-launch] Active override JSON: ${url}/__aurora/debug-preset`)
 }
 

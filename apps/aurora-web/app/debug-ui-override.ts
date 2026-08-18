@@ -1,11 +1,14 @@
 /**
- * Dev-only runtime override for UI surface, role, and admin.
+ * Dev-only runtime override for UI surface, role, admin, and viewport frame.
  *
  * Query contract (kept on `/` so product routes stay `/mesh`, `/settings`, …):
  *   aurora-surface=web|desktop-local|desktop-thin|android|ios
  *   aurora-role=remote-console|mesh-node|python-full
  *   aurora-admin=0|1
+ *   aurora-viewport=phone|tablet|full
  *
+ * Viewport is independent of surface/role. Mobile surfaces (android/ios/mobile)
+ * default to `phone` when the param is omitted; desktop/web default to `full`.
  * Persistence: same values in the `aurora-debug-ui` cookie and sessionStorage.
  * Production (`NODE_ENV === 'production'`) ignores query, cookie, and storage.
  */
@@ -13,8 +16,13 @@
 export const AURORA_DEBUG_UI_QUERY_SURFACE = 'aurora-surface'
 export const AURORA_DEBUG_UI_QUERY_ROLE = 'aurora-role'
 export const AURORA_DEBUG_UI_QUERY_ADMIN = 'aurora-admin'
+export const AURORA_DEBUG_UI_QUERY_VIEWPORT = 'aurora-viewport'
 export const AURORA_DEBUG_UI_COOKIE_NAME = 'aurora-debug-ui'
 export const AURORA_DEBUG_UI_STORAGE_KEY = 'aurora-debug-ui'
+export const AURORA_DEBUG_UI_OVERRIDE_EVENT = 'aurora-debug-ui-override'
+export const AURORA_DEBUG_UI_ROOT_ID = 'aurora-debug-ui-root'
+export const AURORA_DEBUG_VIEWPORT_ROOT_ID = 'aurora-debug-viewport-root'
+export const AURORA_DEBUG_COMPACT_ATTR = 'data-aurora-debug-compact'
 
 export const AURORA_DEBUG_UI_SURFACES = [
   'web',
@@ -31,19 +39,43 @@ export const AURORA_DEBUG_UI_ROLES = [
   'python-full',
 ] as const
 
+export const AURORA_DEBUG_UI_VIEWPORTS = [
+  'full',
+  'tablet',
+  'phone',
+] as const
+
 export type AuroraDebugUiSurface = (typeof AURORA_DEBUG_UI_SURFACES)[number]
 export type AuroraDebugUiRole = (typeof AURORA_DEBUG_UI_ROLES)[number]
+export type AuroraDebugUiViewport = (typeof AURORA_DEBUG_UI_VIEWPORTS)[number]
+
+export type AuroraDebugUiViewportSize = {
+  readonly width: number
+  readonly height: number
+}
+
+export const AURORA_DEBUG_UI_VIEWPORT_PRESETS: Record<
+  Exclude<AuroraDebugUiViewport, 'full'>,
+  AuroraDebugUiViewportSize
+> = {
+  phone: { width: 390, height: 844 },
+  tablet: { width: 768, height: 1024 },
+}
 
 export type AuroraDebugUiOverride = {
   readonly surface: AuroraDebugUiSurface
   readonly role: AuroraDebugUiRole
   readonly admin: boolean
+  readonly viewport: AuroraDebugUiViewport
+  readonly viewportExplicit: boolean
 }
 
 export const AURORA_DEBUG_UI_DEFAULT_OVERRIDE: AuroraDebugUiOverride = {
   surface: 'web',
   role: 'remote-console',
   admin: false,
+  viewport: 'full',
+  viewportExplicit: false,
 }
 
 const SURFACE_ALIASES: Record<string, AuroraDebugUiSurface> = {
@@ -70,6 +102,17 @@ const ROLE_ALIASES: Record<string, AuroraDebugUiRole> = {
   'run-aurora-on-this-computer': 'python-full',
 }
 
+const VIEWPORT_ALIASES: Record<string, AuroraDebugUiViewport> = {
+  full: 'full',
+  none: 'full',
+  desktop: 'full',
+  tablet: 'tablet',
+  ipad: 'tablet',
+  phone: 'phone',
+  mobile: 'phone',
+  iphone: 'phone',
+}
+
 export function isAuroraDebugUiProductionEnv(nodeEnv: string | undefined): boolean {
   return (nodeEnv ?? '').trim().toLowerCase() === 'production'
 }
@@ -80,6 +123,25 @@ export function isAuroraDebugUiSurface(value: string): value is AuroraDebugUiSur
 
 export function isAuroraDebugUiRole(value: string): value is AuroraDebugUiRole {
   return (AURORA_DEBUG_UI_ROLES as readonly string[]).includes(value)
+}
+
+export function isAuroraDebugUiViewport(value: string): value is AuroraDebugUiViewport {
+  return (AURORA_DEBUG_UI_VIEWPORTS as readonly string[]).includes(value)
+}
+
+export function isMobileAuroraDebugUiSurface(surface: AuroraDebugUiSurface): boolean {
+  return surface === 'android' || surface === 'ios' || surface === 'mobile'
+}
+
+export function defaultAuroraDebugUiViewport(surface: AuroraDebugUiSurface): AuroraDebugUiViewport {
+  return isMobileAuroraDebugUiSurface(surface) ? 'phone' : 'full'
+}
+
+export function auroraDebugUiViewportPreset(
+  viewport: AuroraDebugUiViewport,
+): AuroraDebugUiViewportSize | null {
+  if (viewport === 'full') return null
+  return AURORA_DEBUG_UI_VIEWPORT_PRESETS[viewport]
 }
 
 export function parseAuroraDebugUiSurface(value: string | null | undefined): AuroraDebugUiSurface | null {
@@ -100,6 +162,11 @@ export function parseAuroraDebugUiAdmin(value: string | null | undefined): boole
   return null
 }
 
+export function parseAuroraDebugUiViewport(value: string | null | undefined): AuroraDebugUiViewport | null {
+  const normalized = normalize(value)
+  return VIEWPORT_ALIASES[normalized] ?? null
+}
+
 export function parseAuroraDebugUiOverride(
   source: string | URLSearchParams | null | undefined,
 ): AuroraDebugUiOverride | null {
@@ -108,11 +175,15 @@ export function parseAuroraDebugUiOverride(
   const surface = parseAuroraDebugUiSurface(params.get(AURORA_DEBUG_UI_QUERY_SURFACE))
   const role = parseAuroraDebugUiRole(params.get(AURORA_DEBUG_UI_QUERY_ROLE))
   const admin = parseAuroraDebugUiAdmin(params.get(AURORA_DEBUG_UI_QUERY_ADMIN))
-  if (surface == null && role == null && admin == null) return null
+  const viewport = parseAuroraDebugUiViewport(params.get(AURORA_DEBUG_UI_QUERY_VIEWPORT))
+  if (surface == null && role == null && admin == null && viewport == null) return null
+  const resolvedSurface = surface ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.surface
   return {
-    surface: surface ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.surface,
+    surface: resolvedSurface,
     role: role ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role,
     admin: admin ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.admin,
+    viewport: viewport ?? defaultAuroraDebugUiViewport(resolvedSurface),
+    viewportExplicit: viewport != null,
   }
 }
 
@@ -133,6 +204,9 @@ export function serializeAuroraDebugUiOverride(override: AuroraDebugUiOverride):
   params.set(AURORA_DEBUG_UI_QUERY_SURFACE, override.surface)
   params.set(AURORA_DEBUG_UI_QUERY_ROLE, override.role)
   params.set(AURORA_DEBUG_UI_QUERY_ADMIN, override.admin ? '1' : '0')
+  if (override.viewportExplicit) {
+    params.set(AURORA_DEBUG_UI_QUERY_VIEWPORT, override.viewport)
+  }
   return params.toString()
 }
 
@@ -144,10 +218,30 @@ export function mergeAuroraDebugUiOverride(
   current: AuroraDebugUiOverride | null | undefined,
   patch: Partial<AuroraDebugUiOverride>,
 ): AuroraDebugUiOverride {
+  const surface = patch.surface ?? current?.surface ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.surface
+  const surfaceChanged = patch.surface != null && patch.surface !== current?.surface
+  const patchSetsViewport = patch.viewport != null
+  const currentExplicit = current?.viewportExplicit === true
+  const currentMatchesOldDefault = current != null
+    && current.viewport === defaultAuroraDebugUiViewport(current.surface)
+  let viewport: AuroraDebugUiViewport
+  let viewportExplicit: boolean
+  if (patchSetsViewport) {
+    viewport = patch.viewport
+    viewportExplicit = true
+  } else if (surfaceChanged && (!currentExplicit || currentMatchesOldDefault)) {
+    viewport = defaultAuroraDebugUiViewport(surface)
+    viewportExplicit = false
+  } else {
+    viewport = current?.viewport ?? defaultAuroraDebugUiViewport(surface)
+    viewportExplicit = currentExplicit
+  }
   return {
-    surface: patch.surface ?? current?.surface ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.surface,
+    surface,
     role: patch.role ?? current?.role ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.role,
     admin: patch.admin ?? current?.admin ?? AURORA_DEBUG_UI_DEFAULT_OVERRIDE.admin,
+    viewport,
+    viewportExplicit,
   }
 }
 
@@ -193,7 +287,12 @@ export function persistAuroraDebugUiOverride(
 export function preserveAuroraDebugUiSearch(href: string, currentSearch = typeof window === 'undefined' ? '' : window.location.search): string {
   const next = new URL(href, 'http://aurora.local')
   const current = new URLSearchParams(currentSearch.startsWith('?') ? currentSearch.slice(1) : currentSearch)
-  for (const key of [AURORA_DEBUG_UI_QUERY_SURFACE, AURORA_DEBUG_UI_QUERY_ROLE, AURORA_DEBUG_UI_QUERY_ADMIN]) {
+  for (const key of [
+    AURORA_DEBUG_UI_QUERY_SURFACE,
+    AURORA_DEBUG_UI_QUERY_ROLE,
+    AURORA_DEBUG_UI_QUERY_ADMIN,
+    AURORA_DEBUG_UI_QUERY_VIEWPORT,
+  ]) {
     const value = current.get(key)
     if (value && !next.searchParams.has(key)) next.searchParams.set(key, value)
   }

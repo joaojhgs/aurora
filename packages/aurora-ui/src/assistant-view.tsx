@@ -65,7 +65,6 @@ import {
 } from '#components/ui/message-scroller'
 import { ToolFallbackArgs, ToolFallbackContent, ToolFallbackResult, ToolFallbackRoot } from '#components/assistant-ui/tool-fallback'
 import { ModelSelector, type ModelOption } from '#components/assistant-ui/model-selector'
-import { Badge } from '#components/ui/badge'
 import {
   Sheet,
   SheetContent,
@@ -3864,10 +3863,11 @@ export function AssistantView({
                   </ModelSelector.Content>
                 </ModelSelector.Root>
               </div>
-              <div className="aui-composer-route-context">
-                <AssistantPrivacyBadge privacy={route.item.privacyClass} />
-                {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
-              </div>
+              {attachments.length > 0 ? (
+                <div className="aui-composer-route-context">
+                  <span className="aui-composer-attachment-count">{attachments.length} attached</span>
+                </div>
+              ) : null}
             </div>
             <label htmlFor="assistant-prompt" className="aui-sr-only">Prompt</label>
             {voiceCaptureStatus === 'listening' ? (
@@ -3966,9 +3966,6 @@ export function AssistantView({
             {lastError && (voiceCaptureStatus === 'permission-denied' || voiceCaptureStatus === 'no-device' || voiceCaptureStatus === 'error' || voiceCaptureStatus === 'listening') ? (
               <p className="aui-composer-voice-recovery" data-voice-recovery="true" role="alert">{lastError}</p>
             ) : null}
-            <p className="aui-mobile-composer-note">
-              Aurora uses this device by default. You can review another device before anything is sent.
-            </p>
           </form>
         </div>
       </div>
@@ -5132,10 +5129,6 @@ function executionPeerLabel(label: string, peerId: string | null): string {
   return readable || peerId || 'Connected device'
 }
 
-function AssistantPrivacyBadge({ privacy }: { privacy: string }) {
-  return <Badge variant={assistantPrivacyVariant(privacy)}>{assistantPrivacyClassCopy(privacy)}</Badge>
-}
-
 export function assistantPrivacyClassCopy(privacy: string | null | undefined): string {
   switch (privacy) {
     case 'public':
@@ -5155,12 +5148,6 @@ export function assistantPrivacyClassCopy(privacy: string | null | undefined): s
     default:
       return 'Sensitive'
   }
-}
-
-function assistantPrivacyVariant(privacy: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (privacy === 'admin-critical' || privacy === 'secret' || privacy === 'credential') return 'destructive'
-  if (privacy === 'sensitive' || privacy === 'raw-audio') return 'secondary'
-  return 'outline'
 }
 
 export function assistantRemotePrivacyWarning(route: RouteAvailability): string | null {
@@ -6302,7 +6289,7 @@ function MobileConversationSheet({
   onNewConversation: () => void
 }) {
   return (
-    <div className="aui-mobile-history-host">
+    <div className="aui-mobile-history-host hidden max-[1040px]:flex">
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger
         render={(

@@ -9,6 +9,7 @@ import {
   debugUiLaunchQuery,
   debugUiLaunchSanitizeOptions,
   debugUiLaunchSessionIsAdmin,
+  debugUiOverrideJson,
   isAuroraDebugUiPickerEnabled,
   launchFromDebugUiOverride,
   listAuroraDebugUiLaunchPresetIds,
@@ -166,5 +167,61 @@ describe('debug UI launch presets', () => {
     expect(source).toContain('process.env.NODE_ENV')
     expect(source).toContain('readBrowserAuroraDebugUiSources')
     expect(source).not.toContain('VITE_AURORA_RUNTIME_MODE')
+  })
+
+  it('mounts debug chrome from the client layout wrapper and disables Next overlapping indicator', () => {
+    const appDir = dirname(fileURLToPath(import.meta.url))
+    const layout = readFileSync(join(appDir, 'layout.tsx'), 'utf8')
+    const shell = readFileSync(join(appDir, 'path-aware-shell.tsx'), 'utf8')
+    const globals = readFileSync(join(appDir, 'globals.css'), 'utf8')
+    const proxy = readFileSync(join(appDir, '..', 'proxy.ts'), 'utf8')
+    const nextConfig = readFileSync(join(appDir, '..', 'next.config.mjs'), 'utf8')
+    const host = readFileSync(join(appDir, 'debug-ui-host.tsx'), 'utf8')
+    expect(layout).toContain('DebugUiIndicator')
+    expect(layout).toContain('./debug-ui-host')
+    expect(layout).not.toContain('./debug-ui-picker')
+    expect(layout).toContain('process.env.NODE_ENV !== \'production\'')
+    expect(layout).toContain('process.env.NEXT_PUBLIC_AURORA_DEBUG_UI === \'1\'')
+    expect(shell).toContain('./debug-ui-host')
+    expect(shell).not.toContain('./debug-ui-picker')
+    expect(globals).not.toContain('aurora-debug-ui')
+    expect(globals).not.toContain('aurora-debug-viewport')
+    expect(host).toContain("process.env.NEXT_PUBLIC_AURORA_DEBUG_UI === '1'")
+    expect(host).toContain("import('./debug-ui-picker')")
+    expect(proxy).toContain('isAuroraDebugUiPickerEnabled')
+    expect(nextConfig).toContain('devIndicators: false')
+  })
+
+  it('preserves an explicit tablet viewport when the surface matches a named preset', () => {
+    const launch = resolveAuroraDebugUiLaunch({
+      nodeEnv: 'development',
+      search: 'aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=tablet',
+    })
+    expect(launch?.override).toMatchObject({
+      surface: 'android',
+      role: 'mesh-node',
+      viewport: 'tablet',
+      viewportExplicit: true,
+    })
+  })
+
+  it('enables the debug picker from the public flag even without an override', () => {
+    expect(isAuroraDebugUiPickerEnabled({
+      NODE_ENV: 'development',
+      NEXT_PUBLIC_AURORA_DEBUG_UI: '1',
+    })).toBe(true)
+    expect(isAuroraDebugUiPickerEnabled({
+      NODE_ENV: 'development',
+      search: 'aurora-surface=android&aurora-role=mesh-node&aurora-admin=0',
+    })).toBe(false)
+    const launch = resolveAuroraDebugUiLaunch({
+      nodeEnv: 'development',
+      search: 'aurora-surface=android&aurora-role=mesh-node&aurora-admin=0',
+    })
+    expect(debugUiOverrideJson(launch)).toMatchObject({
+      enabled: true,
+      surface: 'android',
+      viewport: 'phone',
+    })
   })
 })

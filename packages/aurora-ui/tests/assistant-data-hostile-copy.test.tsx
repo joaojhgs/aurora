@@ -161,7 +161,7 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
     expect(findForbiddenProductionCopyTerms(warning ?? '').map((term) => term.id)).toEqual([])
   })
 
-  it('renders raw-audio assistant and voice privacy copy without leaking the enum in text or user-facing attributes', () => {
+  it('renders raw-audio assistant without leaking the privacy enum or showing a composer privacy badge', () => {
     const route = rawAudioAssistantRoute()
     const markup = renderToStaticMarkup(
       <AssistantView
@@ -178,7 +178,8 @@ describe('hostile production copy mapping for assistant and data surfaces', () =
     const rendered = renderedUserCopy(markup)
 
     expect(route.item.privacyClass).toBe('raw-audio')
-    expect(rendered).toContain('Microphone audio')
+    expect(markup).not.toContain('aui-composer-route-context')
+    expect(rendered).not.toContain('Microphone audio')
     expect(rendered).not.toContain('raw-audio')
     expect(rendered).not.toContain('Raw Audio')
     expect(rendered).not.toContain('Raw audio')

@@ -65,6 +65,7 @@ describe('web neutral dev command aliases', () => {
     expect(launcher).toContain('aurora-surface=')
     expect(launcher).toContain('aurora-role=')
     expect(launcher).toContain('aurora-admin=')
+    expect(launcher).toContain('aurora-viewport=')
     expect(launcher).toContain("presetId === 'debug'")
     expect(launcher).toContain('AURORA_UI_DEBUG_URL')
     expect(launcher).not.toContain('VITE_AURORA_RUNTIME_MODE')

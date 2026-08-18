@@ -614,6 +614,16 @@ describe('Aurora production shell', () => {
     expect(css).toContain('.aui-shell[data-mobile-viewport="true"] {\n    height: var(--aui-visual-viewport-height, 100dvh);')
     expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-mobile-tabs {\n    display: none;')
     expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-content:has(.aui-assistant) {\n    padding-bottom: 0;')
+    expect(css).toContain('.aui-mobile-history-host,\n.aui-mobile-history-trigger {\n  display: none !important;')
+    expect(css).toContain('@media (min-width: 1041px) {\n  .aui-mobile-history-host,\n  .aui-mobile-history-trigger {\n    display: none !important;')
+    expect(css).toContain('.aui-mobile-history-host {\n    display: flex !important;')
+    expect(css).toContain('@media (max-width: 720px) {\n  .aui-content:has(.aui-assistant) {\n    scrollbar-gutter: auto;')
+    expect(css).toContain('.aui-chat-workspace {\n    --aui-chat-width: 100%;')
+    expect(css).toContain('.aui-chat-scroller-viewport[data-slot="message-scroller-viewport"] {\n    width: 100%;\n    scrollbar-width: none;\n    scrollbar-gutter: auto;')
+    expect(css).toContain('.aui-chat-scroller-content[data-slot="message-scroller-content"] {\n    width: 100%;\n    padding-inline: 0.5rem;')
+    expect(css).toContain('.aui-assistant-form {\n    width: 100%;\n    padding: 0.45rem 0 0;')
+    expect(css).toContain('.aui-composer-toolbar {\n    width: 100%;\n    box-sizing: border-box;\n    padding-inline: 0.75rem;')
+    expect(css).toContain('.aui-composer-control-row {\n    width: 100%;\n    margin-inline: 0;\n    border-radius: 1rem 1rem 0 0;')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {

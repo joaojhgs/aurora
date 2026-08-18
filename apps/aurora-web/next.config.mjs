@@ -14,6 +14,8 @@ const nextConfig = {
   // Isolated `dev:ui:<preset>` processes use a unique distDir so they can
   // coexist with the shared debug server. Prefer one `pnpm dev:ui:debug`.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  // Next's own bottom-left indicator uses the top layer and covers the "A" chip.
+  devIndicators: false,
   transpilePackages: ['@aurora/ui'],
   env: {
     NEXT_PUBLIC_AURORA_VERSION_LABEL: auroraVersion,

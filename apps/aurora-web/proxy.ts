@@ -1,14 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import {
   AURORA_DEBUG_UI_COOKIE_NAME,
-  isAuroraDebugUiProductionEnv,
   serializeAuroraDebugUiOverride,
 } from './app/debug-ui-override'
-import { debugUiOverrideJson, resolveAuroraDebugUiLaunch } from './app/debug-ui-launch'
+import {
+  debugUiOverrideJson,
+  isAuroraDebugUiPickerEnabled,
+  resolveAuroraDebugUiLaunch,
+} from './app/debug-ui-launch'
 
 export function proxy(request: NextRequest) {
   const nodeEnv = process.env.NODE_ENV ?? ''
-  if (isAuroraDebugUiProductionEnv(nodeEnv)) {
+  if (!isAuroraDebugUiPickerEnabled({ nodeEnv, env: process.env })) {
     if (request.nextUrl.pathname === '/__aurora/debug-preset') {
       return new NextResponse(null, { status: 404 })
     }

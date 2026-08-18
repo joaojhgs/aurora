@@ -147,7 +147,7 @@ pnpm dev:ui:debug
 pnpm dev:web
 ```
 
-Surface, product role, and admin are a **runtime override**, not a compile-time env. Production APK/desktop/web bundles must never reintroduce `VITE_AURORA_RUNTIME_MODE` or bake `NEXT_PUBLIC_*` role/surface values.
+Surface, product role, admin, and viewport are a **runtime override**, not a compile-time env. Production APK/desktop/web bundles must never reintroduce `VITE_AURORA_RUNTIME_MODE` or bake `NEXT_PUBLIC_*` role/surface values.
 
 Query contract (kept on `/` so Assistant/Mesh/Settings stay `/mesh`, `/settings`, …):
 
@@ -156,14 +156,17 @@ Query contract (kept on `/` so Assistant/Mesh/Settings stay `/mesh`, `/settings`
 | `aurora-surface` | `web` (alias `web-thin`) · `desktop-local` · `desktop-thin` · `android` · `ios` (`mobile` is a compatibility alias) |
 | `aurora-role` | `remote-console` (Connect) · `mesh-node` (Make this device available) · `python-full` (Run Aurora on this computer) |
 | `aurora-admin` | `0` member · `1` admin |
+| `aurora-viewport` | `phone` (390×844) · `tablet` (768×1024) · `full` (no device frame). Independent of surface. Android/iOS/`mobile` default to `phone` when omitted; web/desktop default to `full`. |
 
 Example:
 
 ```text
-http://127.0.0.1:3000/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0
+http://127.0.0.1:3000/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=phone
 ```
 
-The override is persisted in the `aurora-debug-ui` cookie and sessionStorage so in-app navigation keeps it. A Development preview picker (not in production navigation) writes the cookie, updates the URL with `replaceState`, and reloads the client snapshot without restarting Next. `GET /__aurora/debug-preset` returns the active override JSON for agents. Production (`NODE_ENV === 'production'`) ignores query, cookie, and picker.
+The override is persisted in the `aurora-debug-ui` cookie and sessionStorage so in-app navigation keeps it. A Development preview badge (not in production navigation) shows the current surface · role · viewport; clicking it opens the picker, writes the cookie, updates the URL with `replaceState`, and reloads the client snapshot without restarting Next when surface/role/admin change. Viewport frames the shell inside a centered device chrome with a dark letterbox; the badge stays fixed to the real browser window. `GET /__aurora/debug-preset` returns the active override JSON for agents.
+
+The badge, overlay, device frame, and emulator CSS are loaded only when a debug launcher (`pnpm dev:ui:debug` or `pnpm dev:ui:<preset>`) sets `NEXT_PUBLIC_AURORA_DEBUG_UI=1`. Layout and the shell import a passthrough host; that host dynamically imports the picker module only when the flag is set. Production Next builds (`NODE_ENV === 'production'`) and plain `next dev` without the flag never mount that chrome, ignore query/cookie overrides, and return 404 for `/__aurora/debug-preset`.
 
 Named `pnpm dev:ui:<preset>` commands (`web-remote`, `web-remote-admin`, `web-node`, `desktop-local`, `desktop-thin-remote`, `desktop-node`, `android-remote`, `android-node`, `ios-remote`, `ios-node`, `mobile-node`) remain valid. They either print a query URL against `AURORA_UI_DEBUG_URL` or spawn an isolated Next process on a random port that still applies the same query string — they must not compile a unique preset env. Prefer the shared debug server plus query/picker.
 

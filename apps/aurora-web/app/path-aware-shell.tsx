@@ -27,8 +27,8 @@ import {
 } from './aurora-client'
 import { BrowserShellRuntimeProvider } from './browser-shell-runtime'
 import { createAuroraBrowserLocalAssistantConfig } from './browser-local-assistant'
-import { DebugUiPicker } from './debug-ui-picker'
-import { preserveAuroraDebugUiSearch } from './debug-ui-override'
+import { DebugUiPicker } from './debug-ui-host'
+import { AURORA_DEBUG_UI_OVERRIDE_EVENT, preserveAuroraDebugUiSearch } from './debug-ui-override'
 import { shellRuntimeModeFromSurfaceKind } from './debug-ui-launch'
 
 type PathAwareShellProps = {
@@ -44,13 +44,19 @@ export function PathAwareShell({ children, snapshot }: PathAwareShellProps) {
   }, [])
 
   if (!mounted) {
-    return <BrowserShellBootScreen />
+    return (
+      <DebugUiPicker>
+        <BrowserShellBootScreen />
+      </DebugUiPicker>
+    )
   }
 
   return (
-    <HydratedPathAwareShell snapshot={snapshot}>
-      {children}
-    </HydratedPathAwareShell>
+    <DebugUiPicker>
+      <HydratedPathAwareShell snapshot={snapshot}>
+        {children}
+      </HydratedPathAwareShell>
+    </DebugUiPicker>
   )
 }
 
@@ -82,29 +88,30 @@ function HydratedPathAwareShell({ children, snapshot }: PathAwareShellProps) {
   useEffect(() => {
     const refreshRuntime = () => setRefreshKey((value) => value + 1)
     window.addEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
-    return () => window.removeEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
+    window.addEventListener(AURORA_DEBUG_UI_OVERRIDE_EVENT, refreshRuntime)
+    return () => {
+      window.removeEventListener(AURORA_BROWSER_VOICE_PACKS_CHANGED_EVENT, refreshRuntime)
+      window.removeEventListener(AURORA_DEBUG_UI_OVERRIDE_EVENT, refreshRuntime)
+    }
   }, [])
 
   const refreshRuntime = () => setRefreshKey((value) => value + 1)
 
+  if (startFailed) {
+    return <BrowserShellStartError onRetry={refreshRuntime} />
+  }
+  if (!runtime) {
+    return <BrowserShellBootScreen />
+  }
   return (
-    <>
-      {startFailed ? (
-        <BrowserShellStartError onRetry={refreshRuntime} />
-      ) : !runtime ? (
-        <BrowserShellBootScreen />
-      ) : (
-        <ReadyPathAwareShell
-          key={refreshKey}
-          runtime={runtime}
-          snapshot={snapshot}
-          onRefreshRuntime={refreshRuntime}
-        >
-          {children}
-        </ReadyPathAwareShell>
-      )}
-      <DebugUiPicker onOverrideChange={refreshRuntime} />
-    </>
+    <ReadyPathAwareShell
+      key={refreshKey}
+      runtime={runtime}
+      snapshot={snapshot}
+      onRefreshRuntime={refreshRuntime}
+    >
+      {children}
+    </ReadyPathAwareShell>
   )
 }
 
