@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
   type AuroraClient,
-  type ConfigFieldMetadata,
   androidNativeCapabilityManifestFixture,
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
@@ -37,40 +36,40 @@ function snapshotFor(nativeManifest: typeof nativeCapabilityManifestFixture, tra
   return snapshotFromGraph(transportKind, graph, nativeManifest)
 }
 
-describe('settings/native route separation', () => {
-  it('keeps /settings focused on route, voice, assistant, theme/accessibility/local storage, and AdminAction policy', () => {
+describe('settings this-device surface', () => {
+  it('renders This device with connection, appearance, voice, overlay, and storage sections and no legacy tab labels', () => {
     const snapshot = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
     const settingsMarkup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} currentPath="/settings" />)
     const nativeMarkup = renderToStaticMarkup(<SettingsNativeView snapshot={snapshot} />)
 
-    expect(settingsMarkup).toContain('General')
-    expect(settingsMarkup).toContain('Configuration')
-    expect(settingsMarkup).toContain('Advanced')
+    expect(settingsMarkup).toContain('This device')
     expect(settingsMarkup).toContain('Privacy defaults')
-    expect(settingsMarkup).toContain('Voice behavior')
     expect(settingsMarkup).toContain('Assistant behavior')
-    expect(settingsMarkup).toContain('Theme, accessibility, and local storage')
-    expect(settingsMarkup).toContain('Connection choices')
-    expect(settingsMarkup).toContain('Needs confirmation')
-    expect(settingsMarkup).toContain('Display choices only')
+    expect(settingsMarkup).toContain('Appearance')
+    expect(settingsMarkup).toContain('Connection &amp; role')
+    expect(settingsMarkup).toContain('Voice on this device')
+    expect(settingsMarkup).toContain('Overlay &amp; shortcuts')
+    expect(settingsMarkup).toContain('Storage on this device')
+    expect(settingsMarkup).toContain('Export my data')
+    expect(settingsMarkup).toContain('Delete my data')
 
+    expect(settingsMarkup).not.toContain('>General<')
+    expect(settingsMarkup).not.toContain('Configuration')
+    expect(settingsMarkup).not.toContain('>Advanced<')
     expect(settingsMarkup).not.toContain('Native permissions and capabilities')
     expect(settingsMarkup).not.toContain('Tauri tray status')
     expect(settingsMarkup).not.toContain('iOS App Intents, Shortcuts, widgets, share, and deep links')
 
-    expect(nativeMarkup).toContain('Advanced')
-    expect(nativeMarkup).toContain('Additional device and account choices')
-    expect(nativeMarkup).toContain('Routes')
-    expect(nativeMarkup).toContain('Experience')
-    expect(nativeMarkup).toContain('Platform')
+    expect(nativeMarkup).toContain('This device')
     expect(nativeMarkup).toContain('Export my data')
     expect(nativeMarkup).toContain('Delete my data')
-    expect(nativeMarkup).not.toContain('Native permissions and capabilities')
+    expect(nativeMarkup).not.toContain('>Advanced<')
+    expect(nativeMarkup).not.toContain('Additional device and account choices')
+    expect(nativeMarkup).not.toContain('>Configuration<')
     expect(nativeMarkup).not.toContain('Theme, accessibility, and local storage')
-    expect(nativeMarkup).not.toBe(settingsMarkup)
   })
 
-  it('renders Android native assistant, notifications, foreground audio, Keystore, biometrics, share, and deep-link state with request buttons only for supported commands', () => {
+  it('renders Android device access with request buttons only for supported commands', () => {
     const snapshot = snapshotFor(androidNativeCapabilityManifestFixture)
     const model = buildSettingsPermissionsModel(snapshot)
     const markup = renderToStaticMarkup(<SettingsPermissionsView snapshot={snapshot} surface="native" />)
@@ -87,12 +86,14 @@ describe('settings/native route separation', () => {
       expect.arrayContaining(['androidShareSheet', 'androidDeepLinks'])
     )
 
-    expect(markup).toContain('Advanced')
+    expect(markup).toContain('This device')
+    expect(markup).toContain('Android')
     expect(markup).toContain('Device access')
     expect(markup).toContain('Default assistant')
     expect(markup).toContain('Request access')
-    expect(markup).toContain('Platform')
     expect(markup).toContain('Export my data')
+    expect(markup).not.toContain('>Advanced<')
+    expect(markup).not.toContain('Overlay &amp; shortcuts')
     expect(markup).not.toContain('Request permission')
     expect(markup).not.toContain('Request unavailable')
     expect(markup).not.toContain('Theme, accessibility, and local storage')
@@ -136,7 +137,7 @@ describe('settings/native route separation', () => {
     }
   })
 
-  it('renders iOS Keychain, biometrics, App Intents, Shortcuts, widgets, share/deep links, and foreground constraints without native request fallbacks', () => {
+  it('renders iOS limits without native request fallbacks and without legacy Advanced labeling', () => {
     const iosManifest = {
       ...iosNativeCapabilityManifestFixture,
       permissions: {
@@ -181,9 +182,11 @@ describe('settings/native route separation', () => {
         .map((permission) => permission.state)
     ).not.toContain('privacy-blocked')
 
-    expect(markup).toContain('Advanced')
-    expect(markup).toContain('Platform')
+    expect(markup).toContain('This device')
     expect(markup).toContain('Export my data')
+    expect(markup).not.toContain('>Advanced<')
+    expect(markup).not.toContain('Voice on this device')
+    expect(markup).not.toContain('Overlay &amp; shortcuts')
     expect(markup).not.toContain('system assistant ownership is unavailable')
     expect(markup).not.toContain('Request permission')
   })
@@ -211,7 +214,7 @@ it('maps hostile settings/native text and copy attributes across desktop, web, A
   }
 })
 
-it('keeps hostile advanced settings metadata and errors out of rendered copy while preserving mutation keys across surfaces', async () => {
+it('does not render leftover schema forms, home panes, or Configuration/Advanced tabs in Settings', async () => {
   const webGraph = buildCapabilityGraph({
     catalog: capabilityGraphCatalogFixture,
     registry: gatewayRegistryFixture,
@@ -224,13 +227,9 @@ it('keeps hostile advanced settings metadata and errors out of rendered copy whi
     snapshotFor(androidNativeCapabilityManifestFixture, 'native-mobile'),
     snapshotFor(iosNativeCapabilityManifestFixture, 'native-mobile')
   ]
-  const fields = hostileAdvancedFields()
 
   for (const snapshot of snapshots) {
     const configRoute = availableConfigRoute(snapshot)
-    const dataRoute = { ...configRoute, disabled: true, explanation: 'r-a-w provider manifest schema fallback permission error' }
-    const applied: unknown[] = []
-    const client = hostileSettingsClient(applied, fields)
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -238,99 +237,29 @@ it('keeps hostile advanced settings metadata and errors out of rendered copy whi
     await act(async () => {
       root.render(
         <SettingsView
-          client={client}
+          client={hostileSettingsClient([], [])}
           snapshot={snapshot}
           configRoute={configRoute}
-          dataRoute={dataRoute}
-          initialTab="advanced"
+          dataRoute={configRoute}
+          sessionIsAdmin
         />
       )
     })
     await flushReactWork()
 
-    const advancedMarkup = advancedSettingsMarkup(container)
-    const advancedText = visibleText(advancedMarkup)
-    assertNoForbiddenRenderedCopy(`${snapshot.transportKind}-advanced-settings`, advancedMarkup)
-    expect(advancedText).toContain('Automation')
-    expect(advancedText).toContain('More settings 1')
-    expect(advancedText).toContain('Model Choice')
-    expect(advancedText).toContain('Setting')
-    expect(Array.from(container.querySelectorAll('input')).some((candidate) => candidate.value === '[REDACTED]')).toBe(true)
-    expect(advancedText).not.toContain('scheduler')
-    expect(advancedText).not.toContain('arbitraryService')
-    expect(advancedText).not.toContain('services.orchestrator.llm.provider')
-    expect(advancedText).not.toContain('Orchestrator.ExternalUserInput')
-
-    const input = Array.from(container.querySelectorAll('input')).find((candidate) => candidate.value === 'remote') as HTMLInputElement
-    input.value = 'local'
-    await act(async () => {
-      input.focus()
-      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'local' }))
-      input.blur()
-    })
-    await flushReactWork()
-
-    expect(applied).toEqual([
-      expect.objectContaining({
-        change: expect.objectContaining({ key_path: 'services.scheduler.hostile_provider_choice' })
-      })
-    ])
-    assertNoForbiddenRenderedCopy(`${snapshot.transportKind}-advanced-settings-after-save`, advancedSettingsMarkup(container))
+    const text = visibleText(container.innerHTML)
+    expect(container.querySelector('#settings-this-device-title')?.textContent).toBe('This device')
+    expect(container.querySelector('[aria-label="All Aurora settings"]')).toBeNull()
+    expect(container.querySelector('#settings-home-title')).toBeNull()
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.startsWith('Aurora on '))).toBe(false)
+    expect(text).not.toContain('All Aurora settings')
+    expect(text).not.toMatch(/\bConfiguration\b/)
+    expect(text).not.toMatch(/\bAdvanced\b/)
+    assertNoForbiddenRenderedCopy(`${snapshot.transportKind}-settings-local-only`, container.innerHTML)
 
     await act(async () => root.unmount())
     container.remove()
   }
-})
-
-it('maps unavailable and load-error settings copy without echoing raw explanations or errors', async () => {
-  const snapshot = snapshotFor(nativeCapabilityManifestFixture, 'tauri-local')
-  const unavailableContainer = document.createElement('div')
-  document.body.appendChild(unavailableContainer)
-  const unavailableRoot = createRoot(unavailableContainer)
-  const unavailableRoute = {
-    ...availableConfigRoute(snapshot),
-    disabled: true,
-    explanation: 'r.a.w AdminAction provider manifest schema method services.scheduler.host'
-  }
-
-  await act(async () => {
-    unavailableRoot.render(
-      <SettingsView
-        client={hostileSettingsClient([], [])}
-        snapshot={snapshot}
-        configRoute={unavailableRoute}
-        dataRoute={unavailableRoute}
-        initialTab="advanced"
-      />
-    )
-  })
-  await flushReactWork()
-  assertNoForbiddenRenderedCopy('advanced-settings-unavailable', advancedSettingsMarkup(unavailableContainer))
-  expect(unavailableContainer.textContent).toContain('Review access and try again.')
-
-  await act(async () => unavailableRoot.unmount())
-  unavailableContainer.remove()
-
-  const errorContainer = document.createElement('div')
-  document.body.appendChild(errorContainer)
-  const errorRoot = createRoot(errorContainer)
-  await act(async () => {
-    errorRoot.render(
-      <SettingsView
-        client={errorSettingsClient()}
-        snapshot={snapshot}
-        configRoute={availableConfigRoute(snapshot)}
-        dataRoute={unavailableRoute}
-        initialTab="advanced"
-      />
-    )
-  })
-  await flushReactWork()
-  assertNoForbiddenRenderedCopy('advanced-settings-error', advancedSettingsMarkup(errorContainer))
-  expect(visibleText(advancedSettingsMarkup(errorContainer))).toContain('Connection lost. Reconnecting')
-
-  await act(async () => errorRoot.unmount())
-  errorContainer.remove()
 })
 
 it('builds stable JSON status for desktop local, web fallback, Android preflight, and iOS preflight without unsupported-available claims', () => {
@@ -471,55 +400,10 @@ function poisonSnapshot(snapshot: AuroraShellSnapshot): AuroraShellSnapshot {
   return poisoned
 }
 
-function hostileAdvancedFields(): ConfigFieldMetadata[] {
-  return [
-    configField({
-      key_path: 'services.scheduler.hostile_provider_choice',
-      title: 'Model Choice',
-      description: 'provider manifest schema fallback key_path services.orchestrator.llm.provider',
-      current_value: 'remote'
-    }),
-    configField({
-      key_path: 'services.arbitraryService.raw_title',
-      title: 'r.a.w',
-      description: 'm-e-t-h-o-d Orchestrator.ExternalUserInput p-r-o-v-i-d-e-r'
-    }),
-    configField({
-      key_path: 'services.arbitraryService.secret_method_id',
-      title: 'Secret method id',
-      description: 'AdminAction schema permission evidence',
-      current_value: 'Orchestrator.ExternalUserInput',
-      secret: true
-    }),
-    configField({
-      key_path: 'customRoot.debug_manifest_setting',
-      title: 'Debug manifest setting',
-      description: 'f.a.l.l.b.a.c.k p.r.o.v.i.d.e.r schema'
-    })
-  ]
-}
-
-function configField(overrides: Partial<ConfigFieldMetadata>): ConfigFieldMetadata {
-  return {
-    key_path: 'services.scheduler.setting',
-    title: 'Setting',
-    description: 'Update how Aurora behaves on this device.',
-    type: 'string',
-    default: 'remote',
-    current_value: 'remote',
-    source_layer: 'schema',
-    secret: false,
-    reload_required: false,
-    restart_required: false,
-    affected_services: [],
-    constraints: {},
-    ...overrides
-  }
-}
-
 function availableConfigRoute(snapshot: AuroraShellSnapshot): RouteAvailability {
+  const route = snapshot.routes.find((candidate) => candidate.item.id === 'config')!
   return {
-    ...snapshot.routes.find((route) => route.item.id === 'settings')!,
+    ...route,
     disabled: false,
     state: 'available-local' as const,
     explanation: 'Ready',
@@ -527,13 +411,19 @@ function availableConfigRoute(snapshot: AuroraShellSnapshot): RouteAvailability 
   }
 }
 
-function hostileSettingsClient(applied: unknown[], fields: ConfigFieldMetadata[]): AuroraClient {
+function hostileSettingsClient(applied: unknown[], fields: unknown[]): AuroraClient {
   return {
     config: {
       getSchemaMetadata: async () => ({ ok: true, data: { fields, secrets_redacted: true } }),
       applyChange: async (change: unknown) => {
         applied.push(change)
         return { ok: true, data: { success: true } }
+      }
+    },
+    speech: {
+      tts: {
+        getCapabilities: async () => ({ ok: true, data: { capabilities: { ready: false } } }),
+        listVoices: async () => ({ ok: true, data: { voices: [] } })
       }
     },
     memory: {
@@ -543,20 +433,6 @@ function hostileSettingsClient(applied: unknown[], fields: ConfigFieldMetadata[]
     capabilities: {
       listCatalog: async () => ({ ok: true, data: capabilityGraphCatalogFixture })
     },
-    routes: { evaluatePolicy: async (request: { auditReceiptTarget?: string }) => policyEvaluation(request) }
-  } as unknown as AuroraClient
-}
-
-function errorSettingsClient(): AuroraClient {
-  return {
-    config: {
-      getSchemaMetadata: async () => ({
-        ok: false,
-        error: { message: 'r.a.w provider manifest schema method failure', code: 'connection_lost' }
-      })
-    },
-    memory: { listNamespaces: async () => ({ ok: true, data: { namespaces: [] } }), listMessages: async () => ({ ok: true, data: { conversations: [] } }) },
-    capabilities: { listCatalog: async () => ({ ok: true, data: capabilityGraphCatalogFixture }) },
     routes: { evaluatePolicy: async (request: { auditReceiptTarget?: string }) => policyEvaluation(request) }
   } as unknown as AuroraClient
 }
@@ -588,12 +464,6 @@ function assertNoForbiddenRenderedCopy(name: string, markup: string): void {
   expect(visibleMatches, `${name} visible copy: ${visible}`).toEqual([])
   const attributeMatches = copyAttributeValues(markup).flatMap((value) => forbiddenCopyMatches(value))
   expect(attributeMatches, `${name} copy attributes: ${copyAttributeValues(markup).join(' | ')}`).toEqual([])
-}
-
-function advancedSettingsMarkup(container: HTMLElement): string {
-  const html = container.innerHTML
-  const stop = html.indexOf('Memory')
-  return stop >= 0 ? html.slice(0, stop) : html
 }
 
 function forbiddenCopyMatches(value: string): string[] {

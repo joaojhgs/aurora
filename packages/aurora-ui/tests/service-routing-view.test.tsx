@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient, MeshStatusResponse } from '@aurora/client'
 import {
   LocalServiceRoutingResource,
+  MeshServiceSharingResource,
   ServiceRoutingView,
   buildLocalServiceRoutingSnapshot,
   buildNodeServiceRoutingSnapshot,
@@ -21,6 +22,7 @@ import {
   type ServiceRoutingPreviewEvidence,
   type ServiceRoutingSnapshot,
 } from '../src/service-routing-view'
+import { getAuroraSurfaceProfile } from '../src/platform-surface'
 import type {
   LocalFeatureSharingPort,
   LocalFeatureSharingSnapshot,
@@ -183,6 +185,95 @@ describe('Service sharing and outbound routing', () => {
       label: 'Studio node',
       stale: false,
     })
+  })
+
+  it('shows the sharing table for a remote console instead of omitting it', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const surface = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      nodeMode: 'remote-console',
+      transportKind: 'http',
+    })
+    expect(surface.ownsLocalNodeState).toBe(false)
+    expect(surface.canManageLocalServiceConfiguration).toBe(false)
+
+    await act(async () => {
+      root.render(
+        <MeshServiceSharingResource
+          client={snapshotClient()}
+          route={route()}
+          surface={surface}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Service sharing')
+    expect(container.textContent).toContain('Text to speech')
+    expect(container.querySelector('[aria-label="Share Text to speech from this device"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Where Aurora sends Text to speech requests"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('keeps lightweight mesh-node sharing on the same table', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const surface = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      nodeMode: 'mesh-node',
+      transportKind: 'mesh',
+    })
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: () => () => undefined,
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+
+    await act(async () => {
+      root.render(
+        <MeshServiceSharingResource
+          client={snapshotClient()}
+          route={route()}
+          surface={surface}
+          localFeatureSharing={port}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Service sharing')
+    expect(container.textContent).toContain('Tools')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('shows an honest empty state when this device has nothing to share', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <ServiceRoutingView
+          snapshot={{
+            loadState: 'ready',
+            rows: [],
+            knownPeers: [],
+            editable: false,
+            registryMode: null,
+            warnings: [],
+            error: null,
+            evidenceSource: 'test',
+          }}
+        />,
+      )
+    })
+    expect(container.textContent).toContain('Service sharing')
+    expect(container.textContent).toContain('This device has nothing to share yet.')
+    await act(async () => root.unmount())
   })
 
   it('keeps a reviewed change ready across status-only service refreshes', async () => {
@@ -401,6 +492,7 @@ describe('Service sharing and outbound routing', () => {
           featureSharing={port}
           client={client}
           route={route()}
+          sessionIsAdmin
         />,
       )
       await Promise.resolve()

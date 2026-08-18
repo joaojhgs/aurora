@@ -307,10 +307,14 @@ describe('Aurora production shell', () => {
     expect(snapshot.evidenceSource).toContain('Local transport')
     expect(snapshot.routes.some((route) => route.state === 'available-local')).toBe(true)
     expect(route(snapshot, 'data').state).toBe('privacy-blocked')
-    for (const id of ['access', 'tokens', 'devices', 'config', 'plugins', 'pairing', 'backups', 'scheduler', 'settings']) {
+    for (const id of ['access', 'tokens', 'devices', 'config', 'plugins', 'pairing', 'backups', 'scheduler']) {
       const adminReadRoute = route(snapshot, id)
       expect(adminReadRoute.requiresAdminAction, `${id} read route must not require AdminAction`).toBe(false)
     }
+    const settingsRoute = route(snapshot, 'settings')
+    expect(settingsRoute.item.adminGated, 'settings is a shared member route').toBe(false)
+    expect(settingsRoute.routeable, 'settings stays routeable for every session').toBe(true)
+    expect(settingsRoute.disabled, 'settings is a locally owned shell page').toBe(false)
     const accessRoute = route(snapshot, 'access')
     expect(`${accessRoute.item.capabilityModule}.${accessRoute.item.capabilityMethod}`).toBe('Auth.ListPrincipals')
     expect(accessRoute.state).not.toBe('unsupported')
@@ -348,7 +352,7 @@ describe('Aurora production shell', () => {
   it('keeps read-only sensitive admin routes routeable without route-level AdminAction while mutations stay gated', async () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const adminReadRouteIds = ['admin', 'services', 'access', 'tokens', 'devices', 'config', 'contracts', 'plugins', 'pairing', 'backups', 'scheduler', 'audit']
-    const sensitiveReadRouteIds = [...adminReadRouteIds, 'settings']
+    const sensitiveReadRouteIds = [...adminReadRouteIds]
 
     for (const id of adminReadRouteIds) {
       const adminReadRoute = route(snapshot, id)
@@ -593,7 +597,7 @@ describe('Aurora production shell', () => {
     expect(css).toContain('max-height: min(12rem, 32dvh);')
     expect(css).toContain('field-sizing: fixed;')
     expect(css).toContain('.aui-webthin-invite-action {\n    margin-bottom: 0;')
-    expect(css).toContain('.aui-assistant-form .aui-route-details-trigger {\n  width:1.75rem;\n  flex:0 0 1.75rem;')
+    expect(css).toContain('.aui-assistant-grid { display:grid;grid-template-columns:256px minmax(0,1fr);flex:1 1 auto;min-height:0;gap:0 }')
     expect(css).toContain('.aui-chat-workspace {\n    overflow-x:hidden;\n    overscroll-behavior-x:none;')
     expect(css).toContain('.aui-assistant-form {\n    position:relative;\n    bottom:auto;')
     expect(css).toContain('.aui-chat-panel {\n    padding-bottom:0;\n    scroll-padding-bottom:0;')
@@ -618,7 +622,7 @@ describe('Aurora production shell', () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport }))
 
     const services = route(snapshot, 'services')
-    const config = route(snapshot, 'settings')
+    const config = route(snapshot, 'config')
     const tools = route(snapshot, 'tools')
     const memory = route(snapshot, 'memory')
 
@@ -2822,7 +2826,10 @@ describe('Aurora production shell', () => {
           .slice(0, 1),
       ),
     )
-    expect(retained.routes.every((route) => route.state === 'stale')).toBe(true)
+    expect(retained.routes.filter((route) => route.item.id !== 'settings').every((route) => route.state === 'stale')).toBe(true)
+    expect(retained.routes.find((route) => route.item.id === 'settings')).toEqual(
+      expect.objectContaining({ state: 'available-local', routeable: true, disabled: false }),
+    )
     expect(
       Object.values(retained.assistantVoiceRoutes).every(
         (route) => route.state === 'stale',
@@ -2852,7 +2859,7 @@ describe('Aurora production shell', () => {
       thinPeerSnapshot,
     )
     expect(coldOffline.routes).toHaveLength(failed.routes.length)
-    expect(coldOffline.routes.every((route) => route.state === 'stale')).toBe(true)
+    expect(coldOffline.routes.filter((route) => route.item.id !== 'settings').every((route) => route.state === 'stale')).toBe(true)
     expect(coldOffline.routes[0]?.explanation).toContain(
       'approved Aurora device reconnects',
     )
@@ -2919,9 +2926,10 @@ describe('Aurora production shell', () => {
         <MeshPeersView
           snapshot={{ ...snapshot, peers: [{ ...peer, latencyMs: null, connectionStatus: 'connected' }] }}
           route={meshRoute()}
+          sessionIsAdmin
         />
       ))
-      expect(container.textContent).toContain('connected')
+      expect(container.textContent).toContain('Remote')
       expect(container.textContent).toContain('Response time unavailable')
       expect(container.textContent).not.toContain('measuring')
       expect(container.textContent).not.toContain('Route qualitygood')
@@ -2930,10 +2938,10 @@ describe('Aurora production shell', () => {
         <MeshPeersView
           snapshot={{ ...snapshot, peers: [{ ...peer, latencyMs: 479.43071997724473, connectionStatus: 'connected' }] }}
           route={meshRoute()}
+          sessionIsAdmin
         />
       ))
       expect(container.textContent).toContain('479.4 ms')
-      expect(container.textContent).toContain('poor')
       expect(container.textContent).not.toContain('479.43071997724473')
       expect(container.textContent).not.toContain('0%')
     } finally {
@@ -3493,7 +3501,7 @@ describe('Aurora production shell', () => {
       'admin_action'
     ])
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'tool_call')?.evaluation?.privacyClass).toBe('admin-critical')
-    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_id: 'rag:home-lab' })
+    expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'rag_query')?.scenario.selector).toEqual({ resource_namespace: 'home-lab' })
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'audio_session')?.evaluation?.privacyClass).toBe('raw-audio')
     expect(snapshot.scenarios.find((scenario) => scenario.scenario.id === 'scheduler_job')?.evaluation?.repairPath).toContain('selector')
     expect(snapshot.policyCapabilityReason).toContain('Gateway.ExplainRoute')

@@ -74,6 +74,7 @@ export const PRODUCT_COPY = {
     approve: 'Approve device',
     deny: 'Deny device',
     remove: 'Forget this device',
+    adminSharingLocked: 'Only an administrator can change sharing on this Aurora.',
   },
   localData: {
     saved: 'Saved on this device',

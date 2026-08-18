@@ -10,7 +10,6 @@ export default async function Page() {
   return (
     <SettingsClientPage
       snapshot={snapshot}
-      settingsRoute={settingsRoute}
       configRoute={configRoute}
       dataRoute={dataRoute}
     />

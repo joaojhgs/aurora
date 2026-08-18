@@ -129,9 +129,10 @@ export interface PermissionEditorTableProps {
   onToggle: (permissionId: string) => void
   showRoleTemplates?: boolean
   showPermissionIds?: boolean
+  disabled?: boolean
 }
 
-export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelectRoleTemplate, onToggle, showRoleTemplates = true, showPermissionIds = true }: PermissionEditorTableProps) {
+export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelectRoleTemplate, onToggle, showRoleTemplates = true, showPermissionIds = true, disabled = false }: PermissionEditorTableProps) {
   return (
     <div className="flex flex-col gap-3">
       {showRoleTemplates ? <div className="flex flex-wrap gap-1.5" role="group" aria-label="Role templates">
@@ -139,8 +140,8 @@ export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelect
           <Badge
             key={template.id}
             variant={roleTemplate === template.id ? 'default' : 'outline'}
-            className="cursor-pointer select-none"
-            onClick={() => onSelectRoleTemplate(template.id)}
+            className={disabled ? 'cursor-not-allowed select-none opacity-50' : 'cursor-pointer select-none'}
+            onClick={disabled ? undefined : () => onSelectRoleTemplate(template.id)}
           >
             {template.name}
           </Badge>
@@ -174,6 +175,7 @@ export function PermissionEditorTable({ catalog, checked, roleTemplate, onSelect
                 <TableCell className="text-right">
                   <Switch
                     checked={Boolean(checked[permission.id])}
+                    disabled={disabled}
                     onCheckedChange={() => onToggle(permission.id)}
                     aria-label={`Toggle ${permission.label}`}
                   />

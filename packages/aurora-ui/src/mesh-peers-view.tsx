@@ -13,7 +13,6 @@ import { Checkbox } from '#components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
 import { Input } from '#components/ui/input'
 import { Label } from '#components/ui/label'
-import { Progress } from '#components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '#components/ui/sheet'
 import { Skeleton } from '#components/ui/skeleton'
@@ -29,7 +28,7 @@ import {
   type AuroraSurfaceProfile,
 } from './platform-surface'
 import { presentableSignal } from './status-badges'
-import { safeErrorCopy } from './product-copy'
+import { PRODUCT_COPY, safeErrorCopy } from './product-copy'
 import {
   type LocalDeviceFeature,
   type LocalFeatureSharingPort,
@@ -186,6 +185,8 @@ export interface MeshPeersResourceProps {
   localFeatureSharing?: LocalFeatureSharingPort | undefined
   /** Stable identity owned by a lightweight mesh node on this surface. */
   localNode?: LocalMeshNodeIdentity | undefined
+  /** Session admin from WhoAmI / host shell. Home-server sharing stays visible but locked when false. */
+  sessionIsAdmin?: boolean
 }
 
 export interface LocalMeshNodeIdentity {
@@ -234,6 +235,8 @@ export interface MeshPeersViewProps {
   /** Services this local node can share. Tool-level choices remain on the Tools page. */
   localServiceScopes?: readonly LocalShareableServiceScope[] | undefined
   ownsLocalNodeState?: boolean
+  /** Session admin from WhoAmI / host shell. Home-server peer scopes stay visible but locked when false. */
+  sessionIsAdmin?: boolean
 }
 
 export interface MeshInviteImportOperation {
@@ -298,6 +301,26 @@ const loadingSnapshot: MeshPeersSnapshot = {
   fixtureOnly: false,
 }
 
+export function resolveSessionIsAdmin(
+  sessionIsAdmin: boolean | undefined,
+  client?: { auth?: { snapshot?: () => { isAdmin?: boolean } } } | null,
+): boolean {
+  if (typeof sessionIsAdmin === 'boolean') return sessionIsAdmin
+  try {
+    return client?.auth?.snapshot?.()?.isAdmin === true
+  } catch {
+    return false
+  }
+}
+
+/** Home-server sharing and peer scopes are administrator-owned. Local this-device sharing is not. */
+export function meshHomeServerConfigLocked(input: {
+  sessionIsAdmin: boolean
+  ownsLocalNodeState: boolean
+}): boolean {
+  return !input.ownsLocalNodeState && !input.sessionIsAdmin
+}
+
 export function MeshPeersResource({
   client,
   route,
@@ -307,6 +330,7 @@ export function MeshPeersResource({
   onScanQr,
   localFeatureSharing,
   localNode,
+  sessionIsAdmin,
 }: MeshPeersResourceProps) {
   const resolvedSurface = useMemo(
     () =>
@@ -350,6 +374,27 @@ export function MeshPeersResource({
   const canManageLocalServiceConfiguration =
     resolvedSurface.canManageLocalServiceConfiguration
   const ownsLocalNodeState = resolvedSurface.ownsLocalNodeState
+  const [resolvedSessionIsAdmin, setResolvedSessionIsAdmin] = useState(
+    () => resolveSessionIsAdmin(sessionIsAdmin, client),
+  )
+  useEffect(() => {
+    if (typeof sessionIsAdmin === 'boolean') {
+      setResolvedSessionIsAdmin(sessionIsAdmin)
+      return
+    }
+    const auth = client.auth
+    if (!auth?.subscribe) {
+      setResolvedSessionIsAdmin(resolveSessionIsAdmin(undefined, client))
+      return
+    }
+    return auth.subscribe((next) => {
+      setResolvedSessionIsAdmin(next.isAdmin === true)
+    })
+  }, [client, sessionIsAdmin])
+  const homeServerConfigLocked = meshHomeServerConfigLocked({
+    sessionIsAdmin: resolvedSessionIsAdmin,
+    ownsLocalNodeState,
+  })
 
   const sanitizePermissions = useCallback(
     (value: string) =>
@@ -541,6 +586,7 @@ export function MeshPeersResource({
 
   const runAction = useCallback(
     async (peer: MeshPeerRow, kind: 'approve' | 'deny' | 'remove') => {
+      if (homeServerConfigLocked) return
       const action =
         kind === 'approve'
           ? buildMeshPeerAdminAction(peer, 'approve', {
@@ -572,7 +618,7 @@ export function MeshPeersResource({
         setOptimisticPeerId(null)
       }
     },
-    [client.admin, loadPeers, permissions, revokeToken],
+    [client.admin, homeServerConfigLocked, loadPeers, permissions, revokeToken],
   )
 
   const runConfigChange = useCallback(
@@ -653,6 +699,7 @@ export function MeshPeersResource({
 
   const saveScopes = useCallback(
     async (peer: MeshPeerRow, nextPermissions: string[]) => {
+      if (homeServerConfigLocked) return
       const action = buildMeshScopesAdminAction(peer, filterPermissions(nextPermissions))
       if (!action) {
         setMutationError('Pending pairing requests must be reviewed by comparing the verification code on both Auroras before shared features can be changed.')
@@ -671,7 +718,7 @@ export function MeshPeersResource({
         setOptimisticPeerId(null)
       }
     },
-    [client.admin, loadPeers],
+    [client.admin, filterPermissions, homeServerConfigLocked, loadPeers],
   )
 
   const saveLocalScopes = useCallback(
@@ -764,6 +811,7 @@ export function MeshPeersResource({
       onRefresh={loadPeers}
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
       ownsLocalNodeState={ownsLocalNodeState}
+      sessionIsAdmin={resolvedSessionIsAdmin}
       thinPeerSnapshot={thinPeerSnapshot}
       thinPeerEvidence={thinPeerEvidence}
       thinPeerMutationError={thinPeerMutationError}
@@ -1423,6 +1471,7 @@ export function MeshPeersView({
   localFeatureSharing,
   localServiceScopes = [],
   ownsLocalNodeState = false,
+  sessionIsAdmin = false,
 }: MeshPeersViewProps) {
   const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
   const [connectOpen, setConnectOpen] = useState<boolean>(() => Boolean(initialInviteText))
@@ -1450,6 +1499,8 @@ export function MeshPeersView({
     : null
   const controlsDisabled = route.disabled || snapshot.loadState === 'loading' || snapshot.loadState === 'denied'
   const mutationDisabled = controlsDisabled || Boolean(pendingPeerId) || !['available-local', 'available-remote', 'degraded'].includes(snapshot.mutationState)
+  const homeServerConfigLocked = meshHomeServerConfigLocked({ sessionIsAdmin, ownsLocalNodeState })
+  const homeServerMutationsDisabled = mutationDisabled || homeServerConfigLocked
   const inviteReadiness = useMemo(() => meshInviteReadiness(snapshot), [snapshot])
   const invitePayload = useMemo(() => (inviteReadiness.ready ? buildMeshInvitePayload(snapshot) : null), [inviteReadiness.ready, snapshot])
   const inviteUrl = useMemo(() => (invitePayload ? encodeMeshInviteUrl(invitePayload) : null), [invitePayload])
@@ -1580,13 +1631,26 @@ export function MeshPeersView({
       ) : null}
 
       <PendingRequestsTable peers={pendingRequests} pendingPeerId={pendingPeerId} onReview={setReviewRequestId} />
+      {homeServerConfigLocked ? (
+        <p className="text-xs text-muted-foreground">{PRODUCT_COPY.mesh.adminSharingLocked}</p>
+      ) : null}
       <PeerCardGrid peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} onOpenDetails={setDetailsPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onReview={(peerId) => {
         const request = pendingRequests.find((peer) => peer.peerId === peerId)
         if (request) setReviewRequestId(request.pendingPairing.request_id)
       }} />
 
       <div className="hidden md:block">
-        <PeerTable peers={snapshot.peers} pendingPeerId={pendingPeerId} optimisticPeerId={optimisticPeerId} mutationDisabled={mutationDisabled} onOpenDetails={setDetailsPeerId} onOpenScopes={onSaveScopes ? setScopesPeerId : undefined} onApprove={onApprovePeer} onDeny={onDenyPeer} onRemove={onRemovePeer} />
+        <PeerTable
+          peers={snapshot.peers}
+          pendingPeerId={pendingPeerId}
+          optimisticPeerId={optimisticPeerId}
+          mutationDisabled={mutationDisabled}
+          onOpenDetails={setDetailsPeerId}
+          onOpenScopes={onSaveScopes ? setScopesPeerId : undefined}
+          onApprove={onApprovePeer}
+          onDeny={onDenyPeer}
+          onRemove={onRemovePeer}
+        />
       </div>
       <PeerDetailSheet
         peer={detailsPeer}
@@ -1599,7 +1663,7 @@ export function MeshPeersView({
       <RequestReviewDialog
         peer={reviewPeer}
         open={Boolean(reviewPeer)}
-        disabled={mutationDisabled}
+        disabled={homeServerMutationsDisabled}
         pending={reviewPeer ? pendingPeerId === meshPeerActionIdentity(reviewPeer) : false}
         permissions={permissions}
         surfaceProfile={resolvedSurface}
@@ -1626,7 +1690,8 @@ export function MeshPeersView({
         <ScopesDialog
           peer={scopesPeer}
           open={Boolean(scopesPeer)}
-          disabled={mutationDisabled}
+          disabled={homeServerMutationsDisabled}
+          lockMessage={homeServerConfigLocked ? PRODUCT_COPY.mesh.adminSharingLocked : null}
           pending={scopesPeer ? pendingPeerId === scopesPeer.peerId : false}
           surfaceProfile={resolvedSurface}
           {...(ownsLocalNodeState
@@ -2055,7 +2120,6 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenDetails, o
       {peers.map((peer) => {
         const pending = pendingPeerId === peer.peerId
         const optimistic = optimisticPeerId === peer.peerId
-        const qualityPct = routeQualityPercent(peer)
         return (
           <Card key={peer.peerId} size="sm" data-state={optimistic ? 'optimistic' : undefined} className="transition-all hover:border-primary/40">
             <CardContent className="flex flex-col gap-3">
@@ -2072,13 +2136,6 @@ function PeerCardGrid({ peers, pendingPeerId, optimisticPeerId, onOpenDetails, o
                   </div>
                 </div>
                 <MeshPeerStateBadge peer={peer} optimistic={optimistic} />
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>Connection quality</span>
-                  <span>{qualityLabel(peer)}</span>
-                </div>
-                <Progress value={qualityPct} className="mt-1.5" aria-label={`Connection quality for ${peer.nodeName}`} />
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>{peer.latencyMs === null ? 'Response time unavailable' : formatLatencyMs(peer.latencyMs)}</span>
@@ -2113,32 +2170,6 @@ function peerPresenceDotClass(peer: MeshPeerRow): string {
   if (peer.connectionStatus.includes('connected') && !peer.connectionStatus.includes('disconnected')) return 'bg-emerald-500'
   if (peer.trustState === 'pending' || peer.pendingPairing) return 'bg-amber-500'
   return 'bg-muted-foreground/40'
-}
-
-/** Coarse latency band used only to drive the progress treatment. */
-function routeQualityPercent(peer: MeshPeerRow): number {
-  if (peer.trustState === 'denied' || peer.outboundStatus === 'removed') return 0
-  if (peer.latencyMs !== null) {
-    if (peer.latencyMs <= 50) return 100
-    if (peer.latencyMs <= 150) return 75
-    if (peer.latencyMs <= 300) return 45
-    return 15
-  }
-  if (peer.lifecycleState === 'available-local' || peer.lifecycleState === 'available-remote') return 60
-  if (peer.connectionStatus.includes('connected')) return 20
-  if (peer.trustState === 'available-local' || peer.trustState === 'available-remote') return 60
-  if (peer.trustState === 'pending') return 25
-  return 10
-}
-
-function qualityLabel(peer: MeshPeerRow): string {
-  if (peer.latencyMs === null) {
-    return peer.connectionStatus.includes('connected') ? 'connected' : 'unavailable'
-  }
-  if (peer.latencyMs <= 50) return 'excellent'
-  if (peer.latencyMs <= 150) return 'good'
-  if (peer.latencyMs <= 300) return 'fair'
-  return 'poor'
 }
 
 function formatLatencyMs(latencyMs: number): string {
@@ -2399,7 +2430,6 @@ function PeerDetailSheet({
               <CardContent className="flex flex-col gap-3">
                 <DetailItem label="Available features" value={peer.services.join(', ') || 'None reported'} />
                 <DetailItem label="App compatibility" value={peer.compatibility} />
-                <DetailItem label="Connection quality" value={peer.routeQuality} />
               </CardContent>
             </Card>
           </div>
@@ -2506,6 +2536,7 @@ function RequestReviewDialog({
               catalog={catalog}
               checked={checked}
               roleTemplate={matchRoleTemplate(filteredSelected)}
+              disabled={disabled}
               onSelectRoleTemplate={(templateId) => {
                 const template = ROLE_TEMPLATES.find((entry) => entry.id === templateId)
                 if (template?.permissions) applyPermissions(template.permissions)
@@ -2743,6 +2774,7 @@ function ScopesDialog({
   peer,
   open,
   disabled,
+  lockMessage = null,
   pending,
   surfaceProfile,
   permissionCatalog,
@@ -2754,6 +2786,7 @@ function ScopesDialog({
   peer: MeshPeerRow | null
   open: boolean
   disabled: boolean
+  lockMessage?: string | null
   pending: boolean
   surfaceProfile: AuroraSurfaceProfile
   permissionCatalog?: readonly PermissionCatalogEntry[] | undefined
@@ -2790,11 +2823,13 @@ function ScopesDialog({
           <DialogTitle>Features{peer ? ` - ${peer.nodeName}` : ''}</DialogTitle>
           <DialogDescription>Choose what this device can use. The other device separately controls what it shares back.</DialogDescription>
         </DialogHeader>
+        {lockMessage ? <p className="text-xs text-muted-foreground">{lockMessage}</p> : null}
     {peer && meshPeerScopesEditable(peer) ? (
           <PermissionEditorTable
             catalog={catalog}
             checked={Object.fromEntries(sanitizedSelected.map((permission) => [permission, true]))}
             roleTemplate={matchRoleTemplate(sanitizedSelected)}
+            disabled={disabled}
             onSelectRoleTemplate={(templateId) => {
               const template = ROLE_TEMPLATES.find((entry) => entry.id === templateId)
               if (template?.permissions) setSelected(template.permissions.filter(permissionAllowed))

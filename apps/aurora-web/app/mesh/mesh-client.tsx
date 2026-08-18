@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import {
-  LocalServiceRoutingResource,
   MeshPeersResource,
-  RoutePolicyResource,
-  ServiceRoutingResource,
+  MeshServiceSharingResource,
   type RouteAvailability,
 } from '@aurora/ui'
 import {
@@ -19,6 +17,7 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
   const runtime = useBrowserShellRuntime()
   const runtimeProfile = useBrowserRuntimeProfile()
   const client = runtime.client
+  const sessionIsAdmin = client.auth.snapshot().isAdmin
   const activeRoute = useBrowserRoute(route)
   const providerStatus = runtime.localNodeProviderStatus
 
@@ -49,6 +48,7 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
         thinPeer={runtime.peer}
         initialInviteText={incomingInvite}
         localFeatureSharing={runtime.localFeatureSharing}
+        sessionIsAdmin={sessionIsAdmin}
         localNode={runtimeProfile?.nodeMode === 'mesh-node'
           ? {
               peerId: runtimeProfile.localNode.stablePeerId,
@@ -56,23 +56,14 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
             }
           : undefined}
       />
-      {runtime.surface.canManageLocalServiceConfiguration ? (
-        <ServiceRoutingResource
-          client={client}
-          route={activeRoute}
-          thinPeer={runtime.peer}
-        />
-      ) : runtime.surface.ownsLocalNodeState && runtime.localFeatureSharing ? (
-        <LocalServiceRoutingResource
-          featureSharing={runtime.localFeatureSharing}
-          client={client}
-          route={activeRoute}
-          thinPeer={runtime.peer}
-        />
-      ) : null}
-      {runtime.surface.isRemoteConsole ? (
-        <RoutePolicyResource client={client} route={activeRoute} />
-      ) : null}
+      <MeshServiceSharingResource
+        client={client}
+        route={activeRoute}
+        surface={runtime.surface}
+        thinPeer={runtime.peer}
+        localFeatureSharing={runtime.localFeatureSharing}
+        sessionIsAdmin={sessionIsAdmin}
+      />
     </div>
   )
 }

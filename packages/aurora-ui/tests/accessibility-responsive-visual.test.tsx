@@ -17,6 +17,7 @@ import {
 } from '@aurora/client'
 import { AdminOverviewContent } from '../src/admin-overview-view'
 import { AppShell } from '../src/shell'
+import { AURORA_FALLBACK_VERSION } from '../src/version'
 import { AssistantView } from '../src/assistant-view'
 import { SettingsPermissionsView } from '../src/settings-permissions-view'
 import { buildShellSnapshot, type AuroraShellSnapshot } from '../src/shell-data'
@@ -58,22 +59,22 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Assistant baselines include product-safe response status copy without
-  // exposing internal event identifiers in the route sheet.
+  // Assistant baselines omit the retired route-and-privacy sheet while keeping
+  // product-safe conversation copy.
   assistant: {
-    desktop: 'a5c9c7f64088',
-    tablet: '290fb773e2c6',
-    mobile: '91d7aefc3700'
+    desktop: 'fd6b5e9ac2bd',
+    tablet: '4e3ba89da594',
+    mobile: '348b815e112a'
   },
   admin: {
-    desktop: '67f282441278',
-    tablet: '23234c522af3',
-    mobile: 'cef0ef05e05d'
+    desktop: '31168261c927',
+    tablet: '9a26c863e23f',
+    mobile: '1d292565b618'
   },
   'native-settings': {
-    desktop: '775b04229bb3',
-    tablet: 'f169f58a7031',
-    mobile: '87eb8cd49826'
+    desktop: '7f51090910fc',
+    tablet: '28798dde9c29',
+    mobile: '5cfd630ca8a4'
   }
 }
 
@@ -143,8 +144,8 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       })
       if (surface.id === 'assistant') {
         expect(surface.html, `assistant composer marker/${surface.viewport.id}`).toContain('data-first-viewport-work="assistant-chat-composer"')
-        expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before route status/${surface.viewport.id}`)
-          .toBeLessThan(surface.html.indexOf('aria-label="Assistant route and privacy details"'))
+        expect(surface.html, `assistant has no route privacy sheet/${surface.viewport.id}`).not.toContain('aria-label="Assistant route and privacy details"')
+        expect(surface.html, `assistant has no route details trigger/${surface.viewport.id}`).not.toContain('Open route details')
         expect(surface.html, `assistant clean composer has no bottom voice panel/${surface.viewport.id}`)
           .not.toContain('aria-labelledby="assistant-voice-title"')
         expect(surface.html.indexOf('aria-label="Prompt composer"'), `assistant composer before attachment status/${surface.viewport.id}`)
@@ -199,7 +200,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('AD admin Administrator')
     expect(stateCoverage).toContain('Runs with Aurora')
     expect(stateCoverage).toContain('Healthy')
-    expect(stateCoverage).toContain('v0.9.2')
+    expect(stateCoverage).toContain(`v${AURORA_FALLBACK_VERSION}`)
     expect(stateCoverage).toContain('· connected')
     expect(stateCoverage).not.toContain('4h 12m')
     expect(stateCoverage).not.toContain('v0.9.4')
@@ -224,7 +225,7 @@ describe('Accessibility, responsive, and visual regression suite', () => {
 
     expect(text).toContain('Sensitive details stay hidden')
     expect(text).toContain('Review access, consent, or device selection')
-    expect(text).toContain('Platform')
+    expect(text).toContain('This device')
     expect(text).not.toMatch(/api[_ -]?key|password|token value|credential hash/i)
 
     writeJsonReport('security-privacy-negative-cases.json', {

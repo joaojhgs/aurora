@@ -47,7 +47,7 @@ const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
   onboarding: ['OnboardingClientPage'],
   settings: ['SettingsClientPage'],
   data: ['DataPolicyClientPage'],
-  native: ['SettingsPermissionsView', 'surface="native"'],
+  native: ['SettingsClientPage'],
 }
 
 function pageFileForHref(href: string): string {
@@ -118,7 +118,7 @@ describe('Aurora web route registry', () => {
       { href: '/admin/contracts', expected: 'AdminContractsClientPage' },
       { href: '/admin/tokens', expected: 'AdminTokensClientPage' },
       { href: '/memory/policy', expected: 'DataPolicyClientPage' },
-      { href: '/settings/native', expected: 'surface="native"' }
+      { href: '/settings/native', expected: 'SettingsClientPage' }
     ]
     const forbidden = /will use|will render|follow-up task|downstream UI task wires|placeholder|debug-dashboard|route dump/i
 
@@ -131,5 +131,17 @@ describe('Aurora web route registry', () => {
     const fallbackSource = readFileSync(join(appDir, 'page-content.tsx'), 'utf8')
     expect(fallbackSource).not.toMatch(/will use|will render|follow-up task|downstream UI task wires/i)
     expect(fallbackSource).toContain('Actions remain unavailable')
+  })
+
+  it('keeps /settings on the shared default pane and /settings/native as an alias', () => {
+    const clientSource = readFileSync(join(appDir, 'settings', 'settings-client.tsx'), 'utf8')
+    expect(clientSource).toContain('SettingsView')
+    expect(clientSource).not.toContain('initialTab')
+    expect(clientSource).not.toContain("'advanced'")
+
+    const nativeSource = readFileSync(join(appDir, 'settings', 'native', 'page.tsx'), 'utf8')
+    expect(nativeSource).toContain('SettingsClientPage')
+    expect(nativeSource).not.toContain('SettingsPermissionsView')
+    expect(nativeSource).not.toContain('surface="native"')
   })
 })

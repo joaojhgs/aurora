@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, Route as RouteIcon, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, RotateCcw, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
   AttachmentContextItem,
@@ -40,7 +40,6 @@ import type {
 } from '@aurora/voice-web/browser'
 import type { AuroraVoiceInferenceOutput, AuroraVoiceTtsAudio } from '@aurora/voice-web'
 import type { AssistantVoiceRoutes, RouteAvailability } from './shell-data'
-import { RouteSheet } from './route-sheet'
 import { AudioRecorderVisualizer } from './audio-recorder-visualizer'
 import {
   Attachment,
@@ -75,7 +74,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '#components/ui/sheet'
-import { EvidenceBadge, StatusBadge } from './status-badges'
+import { EvidenceBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason, NativeDesktopVoiceTrigger } from './native-desktop-voice'
@@ -420,7 +419,6 @@ export function AssistantView({
   const [nativeVoiceStatusState, setNativeVoiceStatusState] = useState<NativeDesktopVoiceStatus | null>(null)
   const [nativeDesktopBackgroundWakeActive, setNativeDesktopBackgroundWakeActive] = useState(false)
   const [nativeMobileBackgroundWakeActive, setNativeMobileBackgroundWakeActive] = useState(false)
-  const [routeDetailsOpen, setRouteDetailsOpen] = useState(false)
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
   const attachmentInputRef = useRef<HTMLInputElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -599,7 +597,6 @@ export function AssistantView({
   const browserSpeechPacksRevision = browserSpeechPacks?.revision ?? 'none'
   const readyBrowserSpeechPacks = browserSpeechPacks?.state === 'ready' ? browserSpeechPacks : null
   const browserLocalTtsVoiceId = readyBrowserSpeechPacks?.capabilities.tts ? readyBrowserSpeechPacks.ttsVoiceId : undefined
-  const remotePrivacyWarning = assistantRemotePrivacyWarning(route)
   const voiceModel = useMemo(
     () => buildAssistantVoiceModel({
       client,
@@ -2974,20 +2971,6 @@ export function AssistantView({
     void cancelNativeDesktopVoice(reason)
   }
 
-  async function startNativeDesktopForegroundWake(): Promise<boolean> {
-    if (!voiceModel.controls.find((control) => control.id === 'wakeword')?.enabled) return false
-    return startNativeDesktopVoice('wake_word')
-  }
-
-  async function toggleNativeDesktopBackgroundWake(): Promise<boolean> {
-    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
-    if (!control?.enabled) return false
-    if (nativeDesktopBackgroundWakeActiveRef.current) {
-      return cancelNativeDesktopVoice('user_request')
-    }
-    return startNativeDesktopVoice('background_wake')
-  }
-
   async function cancelNativeDesktopVoiceGeneration(
     generation: number,
     reason: NativeDesktopVoiceStopReason
@@ -3170,21 +3153,6 @@ export function AssistantView({
       }
       return false
     }
-  }
-
-  async function toggleNativeMobileBackgroundWake(): Promise<boolean> {
-    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
-    if (!control?.enabled) return false
-    if (nativeMobileBackgroundWakeActiveRef.current) {
-      return stopNativeMobileBackgroundWake()
-    }
-    return startNativeMobileBackgroundWake()
-  }
-
-  async function toggleBackgroundWakeForSurface(): Promise<boolean> {
-    if (usesNativeDesktopVoice) return toggleNativeDesktopBackgroundWake()
-    if (usesNativeMobileVoice) return toggleNativeMobileBackgroundWake()
-    return false
   }
 
   async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
@@ -3856,19 +3824,6 @@ export function AssistantView({
               <div className="aui-composer-route-context">
                 <AssistantPrivacyBadge privacy={route.item.privacyClass} />
                 {attachments.length > 0 ? <span className="aui-composer-attachment-count">{attachments.length} attached</span> : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="aui-route-details-trigger"
-                  onClick={() => setRouteDetailsOpen(true)}
-                  aria-expanded={routeDetailsOpen}
-                  aria-controls="assistant-route-panel"
-                  aria-label="Open route details"
-                  title="Route details"
-                >
-                  <RouteIcon aria-hidden />
-                </Button>
               </div>
             </div>
             <label htmlFor="assistant-prompt" className="aui-sr-only">Prompt</label>
@@ -3965,7 +3920,7 @@ export function AssistantView({
                 <span className="aui-button-label">{primaryComposerLabel}</span>
               </button>
             </div>
-            {lastError && (voiceCaptureStatus === 'permission-denied' || voiceCaptureStatus === 'no-device' || voiceCaptureStatus === 'error') ? (
+            {lastError && (voiceCaptureStatus === 'permission-denied' || voiceCaptureStatus === 'no-device' || voiceCaptureStatus === 'error' || voiceCaptureStatus === 'listening') ? (
               <p className="aui-composer-voice-recovery" data-voice-recovery="true" role="alert">{lastError}</p>
             ) : null}
             <p className="aui-mobile-composer-note">
@@ -3973,75 +3928,10 @@ export function AssistantView({
             </p>
           </form>
         </div>
-
-        <aside
-          id="assistant-route-panel"
-          className="aui-route-panel"
-          aria-label="Assistant route and privacy details"
-          aria-hidden={routeDetailsOpen ? undefined : true}
-          data-open={routeDetailsOpen ? 'true' : 'false'}
-        >
-          <div className="aui-route-panel-head">
-            <h2>Route &amp; privacy sheet</h2>
-            <button type="button" onClick={() => setRouteDetailsOpen(false)} aria-label="Close route and privacy sheet">
-              <X size={17} aria-hidden />
-            </button>
-          </div>
-          <dl>
-	            <div><dt>Device or service</dt><dd>{assistantRouteProviderCopy(route)}</dd></div>
-            <div><dt>Availability</dt><dd>{route.state}</dd></div>
-            <div><dt>Privacy</dt><dd>{assistantPrivacyClassCopy(route.item.privacyClass)}</dd></div>
-            <div><dt>Selector</dt><dd>{route.selectorRequired ? 'required' : 'not required'}</dd></div>
-            <div><dt>Approval</dt><dd>{route.approvalRequired ? 'required' : 'not required'}</dd></div>
-            <div><dt>Cancellation</dt><dd>{controls.canCancel ? 'supported' : controls.cancelReason}</dd></div>
-            <div><dt>Model</dt><dd>{safeAssistantRuntimeValue(modelLabel, lastResult ? 'not reported' : 'model response pending')}</dd></div>
-            <div><dt>Context</dt><dd>{contextSummary.ready} ready, {contextSummary.blocked} blocked</dd></div>
-          </dl>
-          <p>{assistantRouteExplanationCopy(route)}</p>
-          {remotePrivacyWarning ? <p className="aui-privacy-route-warning" role="status">{remotePrivacyWarning}</p> : null}
-          {route.disabled ? <p role="alert">Assistant send is disabled: {assistantRouteBlockerCopy(route)}.</p> : null}
-          {lastError ? <p role="alert">{lastError}</p> : null}
-          {routeDetailsOpen ? (
-            <>
-              <VoiceModePanel
-                client={client}
-                model={voiceModel}
-                captureStatus={voiceCaptureStatus}
-                elapsedSeconds={voiceElapsedSeconds}
-                onToggleCapture={requestVoiceToggle}
-                onToggleConsent={() => { void toggleRemoteAudioConsent() }}
-                onWakeForeground={() => { void startNativeDesktopForegroundWake() }}
-                onToggleBackgroundWake={() => { void toggleBackgroundWakeForSurface() }}
-              />
-              <RouteSheet
-                client={client}
-                title="Assistant route preview"
-                description="Aurora checks where this prompt can run before it leaves this device."
-                payload={{
-                  message: text.trim() || '<pending prompt>',
-                  session_id: session.sessionId,
-                  route_surface: route.item.id
-                }}
-                routeRequest={{
-                  topic: `${route.item.capabilityModule}.${route.item.capabilityMethod ?? ''}`,
-                  method: route.item.capabilityMethod ?? null,
-                  include_candidates: true
-                }}
-                privacyClass={route.item.privacyClass}
-                auditReceiptTarget={route.providerLabel}
-                requiresAdminAction={route.requiresAdminAction}
-              />
-            </>
-          ) : null}
-        </aside>
       </div>
 
     </section>
   )
-}
-
-function assistantVoicePlatformTruth(model: AssistantVoiceModel): string {
-  return model.platformTruth
 }
 
 function AssistantRuntimeStrip({ health }: { health: AssistantRuntimeHealth }) {
@@ -4276,150 +4166,6 @@ export function buildAssistantVoiceModel(input: {
     speechRoute: ttsSynthesize,
     waveformBars: input.waveformBars ?? waveformBars(input.captureStatus)
   }
-}
-
-function VoiceModePanel({
-  client,
-  model,
-  captureStatus,
-  elapsedSeconds,
-  onToggleCapture,
-  onToggleConsent,
-  onWakeForeground,
-  onToggleBackgroundWake
-}: {
-  client: AuroraClient
-  model: AssistantVoiceModel
-  captureStatus: VoiceCaptureStatus
-  elapsedSeconds: number
-  onToggleCapture: () => void
-  onToggleConsent: () => void
-  onWakeForeground: () => void
-  onToggleBackgroundWake: () => void
-}) {
-  return (
-    <section className="aui-voice-panel" aria-labelledby="assistant-voice-title">
-      <header className="aui-voice-header">
-        <div>
-          <p className="aui-kicker">Voice</p>
-          <h2 id="assistant-voice-title">Voice modes</h2>
-        </div>
-        <div className="aui-assistant-badges" aria-label="Voice status">
-          <AssistantPrivacyBadge privacy={model.privacyClass} />
-          <EvidenceBadge label={productConnectionCopy(model.transport)} />
-          <EvidenceBadge label={model.consentGranted ? 'consent granted' : 'consent required'} />
-          <EvidenceBadge label={voiceDestinationCopy(model.targetLabel)} />
-        </div>
-      </header>
-
-      <div className="aui-voice-chip-grid" aria-label="Voice mode capability states">
-        {model.chips.map((chip) => (
-          <article key={chip.id} className="aui-voice-chip">
-            <header>
-              <strong>{chip.label}</strong>
-              <StatusBadge state={chip.state} />
-            </header>
-            <p>{chip.detail}</p>
-            <div className="aui-settings-inline">
-              <AssistantPrivacyBadge privacy={chip.privacyClass} />
-              <EvidenceBadge label={voiceProviderCopy(chip.providerLabel)} />
-            </div>
-            <small>{voiceChipStatusCopy(chip)}</small>
-          </article>
-        ))}
-      </div>
-
-      <p className="aui-voice-platform-note">{assistantVoicePlatformTruth(model)}</p>
-
-      <div className="aui-voice-body">
-        <section className="aui-voice-controls" aria-labelledby="voice-controls-title">
-          <h3 id="voice-controls-title">Session controls</h3>
-          <AudioRecorderVisualizer
-            status={captureStatus}
-            bars={model.waveformBars}
-            elapsedSeconds={elapsedSeconds}
-            variant="panel"
-            sourceLabel={model.visualizerSourceLabel}
-            onToggle={onToggleCapture}
-          />
-          <div className="aui-voice-action-grid">
-            {model.controls.filter((control) => control.id !== 'push-to-talk').map((control) => {
-              const isCapture = control.id === 'push-to-talk'
-              const isConsent = control.id === 'remote-consent'
-              const isWakeForeground = control.id === 'wakeword'
-              const isBackgroundWake = control.id === 'background-wake'
-              return (
-                <button
-                  key={control.id}
-                  type="button"
-                  disabled={!control.enabled}
-                  onPointerUp={isCapture ? (event) => { if (event.button === 0) { event.preventDefault(); onToggleCapture() } } : undefined}
-                  onClick={
-                    isCapture
-                      ? (event) => { event.preventDefault() }
-                      : isConsent
-                        ? onToggleConsent
-                        : isWakeForeground
-                          ? onWakeForeground
-                          : isBackgroundWake
-                            ? onToggleBackgroundWake
-                            : undefined
-                  }
-                >
-                  {isCapture ? <Mic size={16} aria-hidden /> : control.id.includes('tts') || control.id.includes('playback') ? <Volume2 size={16} aria-hidden /> : <Radio size={16} aria-hidden />}
-                  <span>{control.label}</span>
-                </button>
-              )
-            })}
-          </div>
-          <ul className="aui-voice-reasons" aria-live="polite">
-            {model.controls.map((control) => (
-              <li key={control.id}>
-                <StatusBadge state={control.state} />
-                <span>{voiceControlReasonCopy(control)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <aside className="aui-voice-privacy" aria-label="Audio sharing details">
-          <h3>Audio privacy</h3><span className="aui-sr-only">Connection details</span>
-          <dl>
-            <div><dt>Audio type</dt><dd>{assistantPrivacyClassCopy(model.privacyClass)}</dd></div>
-            <div><dt>Destination</dt><dd>{voiceDestinationCopy(model.targetLabel)}</dd></div>
-            <div><dt>Connection</dt><dd>{productConnectionCopy(model.transport)}</dd></div>
-            <div><dt>Audio storage</dt><dd>{model.retentionPolicy}</dd></div>
-            <div><dt>Access duration</dt><dd>{model.sessionTtl}</dd></div>
-          </dl>
-          <RouteSheet
-            client={client}
-            title="Review audio sharing"
-            description="Aurora shares microphone audio only after you allow it and the selected device is available."
-            payload={{
-              audio_privacy_class: model.privacyClass,
-              capture_state: model.captureStatus,
-              retention_policy: model.retentionPolicy,
-              session_ttl: model.sessionTtl
-            }}
-            routeRequest={{
-              topic: model.routeSheetRoute.item.capabilityMethod
-                ? `${model.routeSheetRoute.item.capabilityModule}.${model.routeSheetRoute.item.capabilityMethod}`
-                : model.routeSheetRoute.item.capabilityModule,
-              method: model.routeSheetRoute.item.capabilityMethod ?? null,
-              include_candidates: true
-            }}
-            dataClasses={['raw-audio', model.routeSheetRoute.item.privacyClass]}
-            privacyClass="raw-audio"
-            consentGranted={model.consentGranted}
-            privacyIndicatorShown={model.captureStatus === 'listening' || model.consentGranted}
-            auditReceiptTarget={model.targetLabel}
-            requiresAdminAction={model.routeSheetRoute.requiresAdminAction}
-          />
-        </aside>
-      </div>
-
-    </section>
-  )
 }
 
 export function attachmentToContextItem(attachment: AssistantAttachmentDraft): AttachmentContextItem {
@@ -6504,6 +6250,7 @@ function MobileConversationSheet({
   onNewConversation: () => void
 }) {
   return (
+    <div className="aui-mobile-history-host">
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger
         render={(
@@ -6548,6 +6295,7 @@ function MobileConversationSheet({
         />
       </SheetContent>
     </Sheet>
+    </div>
   )
 }
 
@@ -7397,53 +7145,12 @@ function assistantRouteProviderCopy(route: RouteAvailability): string {
   return 'This device'
 }
 
-function assistantRouteExplanationCopy(route: RouteAvailability): string {
-  if (route.disabled) return assistantRouteBlockerCopy(route)
-  if (route.state === 'available-remote') return 'Assistant is available through a connected Aurora device.'
-  if (route.state === 'available-local') return 'Assistant is available on this device.'
-  if (route.state === 'privacy-blocked') return 'Assistant needs a privacy choice before continuing.'
-  if (route.state === 'degraded' || route.state === 'stale') return 'Assistant is available with limited status.'
-  return 'Assistant status is unavailable right now.'
-}
-
 function assistantRouteBlockerCopy(route: RouteAvailability): string {
   const raw = `${route.state} ${route.blockers.join(' ')} ${route.explanation}`.toLowerCase()
   if (/auth|permission|denied|forbidden/.test(raw)) return 'Review access before continuing'
   if (/privacy|consent|selector/.test(raw)) return 'Make the required privacy choice before continuing'
   if (/offline|timeout|stale|unavailable|unsupported|missing/.test(raw)) return 'This assistant route is unavailable right now'
   return 'This assistant route is unavailable right now'
-}
-
-function voiceProviderCopy(value: string | null | undefined): string {
-  const raw = (value ?? '').toLowerCase()
-  if (!raw || raw === 'not available') return 'Not available'
-  if (/remote|peer|mesh|cloud/.test(raw)) return 'Connected Aurora device'
-  return 'This device'
-}
-
-function voiceDestinationCopy(value: string | null | undefined): string {
-  return voiceProviderCopy(value)
-}
-
-function voiceChipStatusCopy(chip: VoiceCapabilityChip): string {
-  if (chip.state === 'available-local' || chip.state === 'available-remote') return 'Ready'
-  if (chip.state === 'privacy-blocked') return 'Privacy choice needed'
-  if (chip.state === 'denied') return 'Permission needed'
-  if (chip.state === 'pending') return 'Waiting for confirmation'
-  if (chip.state === 'degraded' || chip.state === 'stale') return 'Needs attention'
-  return 'Unavailable'
-}
-
-function voiceControlReasonCopy(control: VoiceControlModel): string {
-  if (control.reason === 'Hands-free voice is listening on this device.') return control.reason
-  if (control.reason === 'Hands-free voice needs a ready local speech pack on this device.') return control.reason
-  if (control.enabled) return 'Ready'
-  if (control.reason === 'Choose a connected voice device before starting speech.') return control.reason
-  if (control.state === 'privacy-blocked') return 'Grant session consent before sharing audio with another device.'
-  if (control.state === 'denied') return 'Permission is needed before continuing.'
-  if (control.state === 'pending') return 'Start local capture before creating an audio session.'
-  if (control.state === 'degraded' || control.state === 'stale') return 'Audio is temporarily unavailable.'
-  return 'Audio can start after this device confirms microphone access.'
 }
 
 function selectedRuntimeProvider(

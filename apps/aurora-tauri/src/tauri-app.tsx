@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type {
+  ComponentProps,
+  ComponentType,
+  ReactElement,
+  ReactNode,
+} from "react";
 import {
   AdminAuditResource,
   AdminOverviewContent,
@@ -29,11 +34,9 @@ import {
   PageHeader,
   PairingQueueView,
   RouteMatrix,
-  RoutePolicyResource,
-  LocalServiceRoutingResource,
-  ServiceRoutingResource,
+  MeshServiceSharingResource,
   SettingsPermissionsView,
-  VoiceSettingsView,
+  SettingsView,
   StateSurface,
   LightweightToolApprovalPanel,
   ToolApprovalPanel,
@@ -291,32 +294,17 @@ export const tauriRouteRegistry = {
           initialInviteText={inviteParam}
           localFeatureSharing={nativeContext.localFeatureSharing}
           localNode={localNode}
+          sessionIsAdmin={client.auth.snapshot().isAdmin}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
-        {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ? (
-          <ServiceRoutingResource
-            client={client}
-            route={route}
-            thinPeer={nativeContext.thinPeer}
-          />
-        ) : nativeContext.surfaceProfile.ownsLocalNodeState &&
-          nativeContext.localFeatureSharing ? (
-          <LocalServiceRoutingResource
-            featureSharing={nativeContext.localFeatureSharing}
-            client={client}
-            route={route}
-            thinPeer={nativeContext.thinPeer}
-          />
-        ) : null}
-        {nativeContext.surfaceProfile.canManageLocalServiceConfiguration ||
-        nativeContext.surfaceProfile.isRemoteConsole ? (
-          <details>
-            <summary className="cursor-pointer text-sm text-muted-foreground">
-              Device selection details
-            </summary>
-            <RoutePolicyResource client={client} route={route} />
-          </details>
-        ) : null}
+        <MeshServiceSharingResource
+          client={client}
+          route={route}
+          surface={nativeContext.surfaceProfile}
+          thinPeer={nativeContext.thinPeer}
+          localFeatureSharing={nativeContext.localFeatureSharing}
+          sessionIsAdmin={client.auth.snapshot().isAdmin}
+        />
       </div>
     );
   },
@@ -345,6 +333,7 @@ export const tauriRouteRegistry = {
       snapshot={snapshot}
       nativeContext={nativeContext}
       client={client}
+      navigate={navigate}
       onChangeDeviceSetup={() => navigate("/onboarding")}
     />
   ),
@@ -1759,6 +1748,8 @@ function TauriNativeSettingsPage({
         snapshot={snapshot}
         surface="native"
         currentPath="/settings/native"
+        runtimeProfile={nativeContext.runtimeProfile ?? null}
+        surfaceProfile={nativeContext.surfaceProfile}
         onRequestNativeAccess={nativeContext.requestNativeAccess}
       />
       {showDesktopCommands ? (
@@ -1908,24 +1899,38 @@ function TauriAdminOverviewPage({
   );
 }
 
+/**
+ * Host slots the shared two-pane `SettingsView` (owned by packages/aurora-ui)
+ * consumes from the Tauri host. The shared view renders
+ * `connectionRoleContent` inside This device → Connection & role. A
+ * SettingsView build without the slot ignores it at runtime, and the widened
+ * prop type below keeps this call site compiling against both builds.
+ */
+interface TauriSettingsHostSlots {
+  connectionRoleContent?: ReactNode;
+}
+
+const SettingsViewWithHostSlots = SettingsView as ComponentType<
+  ComponentProps<typeof SettingsView> & TauriSettingsHostSlots
+>;
+
 function TauriSettingsPage({
   route,
   snapshot,
   nativeContext,
   client,
+  navigate,
   onChangeDeviceSetup,
 }: {
   route: RouteAvailability;
   snapshot: AuroraShellSnapshot;
   nativeContext: NativeContext;
   client: AuroraTauriClient;
+  navigate: (href: string) => void;
   onChangeDeviceSetup: () => void;
 }) {
   const configRoute = embeddedRoute("config", snapshot) ?? route;
   const dataRoute = embeddedRoute("data", snapshot) ?? route;
-  const [activeTab, setActiveTab] = useState<
-    "general" | "voice" | "configuration" | "advanced"
-  >("general");
   return (
     <div className="ata-page-stack">
       <PageHeader
@@ -1953,127 +1958,34 @@ function TauriSettingsPage({
           </>
         }
       />
-      <p className="aui-muted">
-        Privacy history and device-specific controls are available in Advanced.
-      </p>
-      {nativeContext.thinProfileController ? (
-        <section className="ata-panel" aria-labelledby="device-setup-title">
-          <h2 id="device-setup-title">How this device works with Aurora</h2>
-          <p className="aui-muted">
-            {nativeContext.nodeMode === "mesh-node"
-              ? "Approved Aurora devices can use features you choose from this device."
-              : "This device uses Aurora running on another approved device or server."}
-          </p>
-          <Button variant="outline" onClick={onChangeDeviceSetup}>
-            Change device setup
-          </Button>
-        </section>
-      ) : null}
-      <div
-        className="aui-tab-list"
-        role="tablist"
-        aria-label="Settings sections"
-      >
-        <button
-          type="button"
-          id="settings-tab-general"
-          role="tab"
-          aria-selected={activeTab === "general"}
-          aria-controls="settings-panel-general"
-          data-active={activeTab === "general"}
-          onClick={() => setActiveTab("general")}
-        >
-          General
-        </button>
-        <button
-          type="button"
-          id="settings-tab-voice"
-          role="tab"
-          aria-selected={activeTab === "voice"}
-          aria-controls="settings-panel-voice"
-          data-active={activeTab === "voice"}
-          onClick={() => setActiveTab("voice")}
-        >
-          Voice
-        </button>
-        <button
-          type="button"
-          id="settings-tab-configuration"
-          role="tab"
-          aria-selected={activeTab === "configuration"}
-          aria-controls="settings-panel-configuration"
-          data-active={activeTab === "configuration"}
-          onClick={() => setActiveTab("configuration")}
-        >
-          Configuration
-        </button>
-        <button
-          type="button"
-          id="settings-tab-advanced"
-          role="tab"
-          aria-selected={activeTab === "advanced"}
-          aria-controls="settings-panel-advanced"
-          data-active={activeTab === "advanced"}
-          onClick={() => setActiveTab("advanced")}
-        >
-          Advanced
-        </button>
-      </div>
-      <section
-        id="settings-panel-general"
-        role="tabpanel"
-        aria-labelledby="settings-tab-general"
-        hidden={activeTab !== "general"}
-        className="aui-tab-panel"
-      >
-        <SettingsPermissionsView
-          snapshot={snapshot}
-          surface="settings"
-          currentPath="/settings"
-          hideTabs
-        />
-      </section>
-      <section
-        id="settings-panel-voice"
-        role="tabpanel"
-        aria-labelledby="settings-tab-voice"
-        hidden={activeTab !== "voice"}
-        className="aui-tab-panel"
-      >
-        {activeTab === "voice" ? (
-          <VoiceSettingsView
-            client={client}
-            runtimeProfile={nativeContext.runtimeProfile ?? null}
-            surfaceProfile={nativeContext.surfaceProfile}
-            localSpeechCatalog={nativeContext.localSpeechCatalog}
-            onLocalSpeechSelectionConfirmed={nativeContext.saveLocalSpeechSelection}
-          />
-        ) : null}
-      </section>
-      <section
-        id="settings-panel-configuration"
-        role="tabpanel"
-        aria-labelledby="settings-tab-configuration"
-        hidden={activeTab !== "configuration"}
-        className="aui-tab-panel"
-      >
-        <ConfigEditorView client={client} route={configRoute} />
-      </section>
-      <section
-        id="settings-panel-advanced"
-        role="tabpanel"
-        aria-labelledby="settings-tab-advanced"
-        hidden={activeTab !== "advanced"}
-        className="aui-tab-panel"
-      >
-        <div className="ata-page-stack">
-          <DataPolicyResource client={client} route={dataRoute} />
-          <TauriNativeSettingsPage
-            snapshot={snapshot}
-            nativeContext={nativeContext}
-          />
-        </div>
-      </section>
+      <SettingsViewWithHostSlots
+        client={client}
+        snapshot={snapshot}
+        configRoute={configRoute}
+        dataRoute={dataRoute}
+        runtimeProfile={nativeContext.runtimeProfile ?? null}
+        surfaceProfile={nativeContext.surfaceProfile}
+        localSpeechCatalog={nativeContext.localSpeechCatalog ?? null}
+        onLocalSpeechSelectionConfirmed={nativeContext.saveLocalSpeechSelection}
+        sessionIsAdmin={client.auth.snapshot().isAdmin}
+        onRequestNativeAccess={nativeContext.requestNativeAccess}
+        onNavigate={navigate}
+        connectionRoleContent={
+          nativeContext.thinProfileController ? (
+            <section className="ata-panel" aria-labelledby="device-setup-title">
+              <h2 id="device-setup-title">How this device works with Aurora</h2>
+              <p className="aui-muted">
+                {nativeContext.nodeMode === "mesh-node"
+                  ? "Approved Aurora devices can use features you choose from this device."
+                  : "This device uses Aurora running on another approved device or server."}
+              </p>
+              <Button variant="outline" onClick={onChangeDeviceSetup}>
+                Change device setup
+              </Button>
+            </section>
+          ) : null
+        }
+      />
     </div>
   );
 }

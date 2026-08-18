@@ -76,6 +76,8 @@ export interface AuroraShellSnapshot {
   loadState: ShellLoadState
   nodeName: string
   localPeerId: string | null
+  /** Aurora version reported by the connected server, when it provides one. */
+  serverVersion?: string | null
   transportKind: string
   evidenceSource: string
   generatedAt: string | null
@@ -115,6 +117,7 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   loadState: 'loading',
   nodeName: 'Loading Aurora',
   localPeerId: null,
+  serverVersion: null,
   transportKind: 'pending',
   evidenceSource: 'pending SDK request',
   generatedAt: null,
@@ -175,6 +178,7 @@ export function snapshotFromGraph(
     loadState: 'ready',
     nodeName: graph.localNodeName || 'This device',
     localPeerId: graph.localPeerId,
+    serverVersion: graph.serverVersion ?? null,
     transportKind,
     evidenceSource: transportKind === 'mock' ? 'Local transport' : 'Aurora service response',
     generatedAt: graph.generatedAt,
@@ -277,7 +281,9 @@ export function retainThinShellSnapshot(
     )
   const base = hasLastKnownGraph ? current : next
   const peerLabel = safePeerDisplayName(peer)
-  const retainRoute = (route: RouteAvailability): RouteAvailability => ({
+  const retainRoute = (route: RouteAvailability): RouteAvailability => {
+    if (route.item.id === 'settings') return route
+    return {
     ...route,
     state: 'stale',
     explanation: hasLastKnownGraph
@@ -294,7 +300,8 @@ export function retainThinShellSnapshot(
     })),
     routeable: false,
     disabled: true,
-  })
+    }
+  }
   const routes = base.routes.map(retainRoute)
   const assistantCancellationRoute = base.assistantCancellationRoute
     ? retainRoute(base.assistantCancellationRoute)
@@ -400,6 +407,7 @@ function routeAvailability(
   explanation: CapabilityExplanation,
   native: NativeCapabilityManifest | null
 ): RouteAvailability {
+  if (item.id === 'settings') return localSettingsRouteAvailability(item)
   if (item.capabilityModule === 'Native') return nativeRouteAvailability(item, native)
   const state = graphStateForExplanation(explanation, item.fallbackState)
   const blockers = sortedUnique([
@@ -423,6 +431,29 @@ function routeAvailability(
     routeable: explanation.routeable,
     disabled,
     requiresAdminAction: item.methodType === 'manage'
+  }
+}
+
+/**
+ * Settings is a locally owned shell page. Nav visibility is gated by
+ * `shouldShowForSurface(..., 'localSettings')`; when shown, the route stays
+ * available for members even if the connected Aurora denies Config reads.
+ */
+function localSettingsRouteAvailability(item: AuroraNavItem): RouteAvailability {
+  return {
+    item: navItemSnapshot(item),
+    state: 'available-local',
+    explanation: 'Settings for this device and connection.',
+    providerLabel: 'This device',
+    blockers: [],
+    repairActions: [repairAction('open-settings', 'Open Settings', item.href, true, `${item.label} is available on this device.`)],
+    candidateProviders: [],
+    evidenceSources: ['local-shell'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false
   }
 }
 

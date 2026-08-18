@@ -28,12 +28,14 @@ import { Label } from '#components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
 import { Switch } from '#components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
-import { meshPeerErrorMessage } from './mesh-peers-view'
+import { meshPeerErrorMessage, resolveSessionIsAdmin } from './mesh-peers-view'
+import { PRODUCT_COPY } from './product-copy'
 import {
   localShareableServiceScopes,
   type LocalFeatureSharingPort,
   type LocalFeatureSharingSnapshot,
 } from './local-feature-sharing'
+import type { AuroraSurfaceProfile } from './platform-surface'
 import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
@@ -150,6 +152,7 @@ export interface ServiceRoutingResourceProps {
   client: AuroraClient
   route: RouteAvailability
   thinPeer?: BrowserWebRtcPeerController
+  sessionIsAdmin?: boolean
 }
 
 export interface LocalServiceRoutingResourceProps {
@@ -157,6 +160,16 @@ export interface LocalServiceRoutingResourceProps {
   client?: AuroraClient
   route?: RouteAvailability
   thinPeer?: BrowserWebRtcPeerController
+  sessionIsAdmin?: boolean
+}
+
+export interface MeshServiceSharingResourceProps {
+  client: AuroraClient
+  route: RouteAvailability
+  surface: AuroraSurfaceProfile
+  thinPeer?: BrowserWebRtcPeerController
+  localFeatureSharing?: LocalFeatureSharingPort
+  sessionIsAdmin?: boolean
 }
 
 export interface ServiceRoutingViewProps {
@@ -168,6 +181,8 @@ export interface ServiceRoutingViewProps {
   onSaveRow?: (row: ServiceRoutingRow, changes: ServiceRoutingChange[], preview: ServiceRoutingPreviewEvidence, confirmation: ServiceRoutingSaveConfirmation) => void
   /** Reuse the canonical table while hiding outbound controls a local lightweight node does not implement. */
   sharingOnly?: boolean
+  /** Home-server sharing is visible but not editable for non-administrators. */
+  adminLocked?: boolean
 }
 
 export interface ServiceRoutingSaveConfirmation { reauthConfirmed: boolean }
@@ -218,10 +233,45 @@ const loadingSnapshot: ServiceRoutingSnapshot = {
   evidenceSource: 'pending Aurora service calls',
 }
 
+/**
+ * Mesh always shows the canonical service-sharing table.
+ * Lightweight nodes that own local features use the local sharing projection;
+ * home-node owners and remote consoles load sharing from the connected Aurora.
+ */
+export function MeshServiceSharingResource({
+  client,
+  route,
+  surface,
+  thinPeer,
+  localFeatureSharing,
+  sessionIsAdmin,
+}: MeshServiceSharingResourceProps) {
+  if (surface.ownsLocalNodeState && localFeatureSharing && !surface.canManageLocalServiceConfiguration) {
+    return (
+      <LocalServiceRoutingResource
+        featureSharing={localFeatureSharing}
+        client={client}
+        route={route}
+        {...(thinPeer ? { thinPeer } : {})}
+        {...(typeof sessionIsAdmin === 'boolean' ? { sessionIsAdmin } : {})}
+      />
+    )
+  }
+  return (
+    <ServiceRoutingResource
+      client={client}
+      route={route}
+      {...(thinPeer ? { thinPeer } : {})}
+      {...(typeof sessionIsAdmin === 'boolean' ? { sessionIsAdmin } : {})}
+    />
+  )
+}
+
 export function ServiceRoutingResource({
   client,
   route,
   thinPeer,
+  sessionIsAdmin,
 }: ServiceRoutingResourceProps) {
   const [snapshot, setSnapshot] = useState<ServiceRoutingSnapshot>(loadingSnapshot)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
@@ -276,10 +326,11 @@ export function ServiceRoutingResource({
     async (_row: ServiceRoutingRow, changes: ServiceRoutingChange[]) => previewServiceRoutingChanges(client, changes),
     [client.config],
   )
+  const adminLocked = !resolveSessionIsAdmin(sessionIsAdmin, client)
 
   const saveRow = useCallback(
     async (row: ServiceRoutingRow, changes: ServiceRoutingChange[], preview: ServiceRoutingPreviewEvidence, confirmation: ServiceRoutingSaveConfirmation) => {
-      if (changes.length === 0) return
+      if (adminLocked || changes.length === 0) return
       setPendingRowId(row.id)
       setMutationError(null)
       try {
@@ -291,10 +342,10 @@ export function ServiceRoutingResource({
         setPendingRowId(null)
       }
     },
-    [client.config, load],
+    [adminLocked, client.config, load],
   )
 
-  return <ServiceRoutingView snapshot={snapshot} pendingRowId={pendingRowId} mutationError={mutationError} onRefresh={load} onPreviewRow={previewRow} onSaveRow={saveRow} />
+  return <ServiceRoutingView snapshot={snapshot} pendingRowId={pendingRowId} mutationError={mutationError} adminLocked={adminLocked} onRefresh={load} onPreviewRow={previewRow} onSaveRow={saveRow} />
 }
 
 export function LocalServiceRoutingResource({
@@ -302,6 +353,7 @@ export function LocalServiceRoutingResource({
   client,
   route,
   thinPeer,
+  sessionIsAdmin,
 }: LocalServiceRoutingResourceProps) {
   const [sharing, setSharing] = useState<LocalFeatureSharingSnapshot | null>(null)
   const [connectedSnapshot, setConnectedSnapshot] = useState<ServiceRoutingSnapshot | null>(null)
@@ -395,11 +447,15 @@ export function LocalServiceRoutingResource({
     })
   }, [featureSharing])
 
+  const canEditHomeServerSharing = resolveSessionIsAdmin(sessionIsAdmin, client)
   const snapshot = useMemo(
-    () => requiresConnectedLoad && !connectedLoadSettled
-      ? { ...loadingSnapshot, evidenceSource: 'This device' }
-      : buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError),
-    [connectedLoadSettled, connectedSnapshot, loadError, requiresConnectedLoad, sharing],
+    () => {
+      const next = requiresConnectedLoad && !connectedLoadSettled
+        ? { ...loadingSnapshot, evidenceSource: 'This device' }
+        : buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError)
+      return canEditHomeServerSharing ? next : lockHomeServerRoutingRows(next)
+    },
+    [canEditHomeServerSharing, connectedLoadSettled, connectedSnapshot, loadError, requiresConnectedLoad, sharing],
   )
 
   const previewRow = useCallback(async (
@@ -458,7 +514,9 @@ export function LocalServiceRoutingResource({
   ) => {
     if (!confirmation.reauthConfirmed || !preview.valid || !preview.previewToken) return
     const localChanges = changes.filter((change) => change.keyPath.startsWith('local.'))
-    const connectedChanges = changes.filter((change) => change.keyPath.startsWith('services.'))
+    const connectedChanges = canEditHomeServerSharing
+      ? changes.filter((change) => change.keyPath.startsWith('services.'))
+      : []
     setPendingRowId(row.id)
     setMutationError(null)
     try {
@@ -504,7 +562,7 @@ export function LocalServiceRoutingResource({
     } finally {
       setPendingRowId(null)
     }
-  }, [client, featureSharing, load])
+  }, [canEditHomeServerSharing, client, featureSharing, load])
 
   return (
     <ServiceRoutingView
@@ -662,6 +720,22 @@ export function buildNodeServiceRoutingSnapshot(
     warnings: [...new Set(warnings)],
     error: local.error,
     evidenceSource: connected.evidenceSource,
+  }
+}
+
+function lockHomeServerRoutingRows(snapshot: ServiceRoutingSnapshot): ServiceRoutingSnapshot {
+  return {
+    ...snapshot,
+    rows: snapshot.rows.map((row) => (
+      row.basePath.startsWith('local.')
+        ? { ...row, routingEditable: false }
+        : {
+            ...row,
+            sharingEditable: false,
+            sharingDetailsEditable: false,
+            routingEditable: false,
+          }
+    )),
   }
 }
 
@@ -1028,7 +1102,7 @@ export function serviceRoutingDraftChanges(row: ServiceRoutingRow, draft: Servic
   return changes
 }
 
-export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationError = null, onRefresh, onPreviewRow, onSaveRow, sharingOnly = false }: ServiceRoutingViewProps) {
+export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationError = null, onRefresh, onPreviewRow, onSaveRow, sharingOnly = false, adminLocked = false }: ServiceRoutingViewProps) {
   const [drafts, setDrafts] = useState<Record<string, ServiceRoutingRowDraft>>({})
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
   const [reviews, setReviews] = useState<Record<string, ServiceRoutingReviewState | undefined>>({})
@@ -1066,7 +1140,7 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
         .map((row) => [row.id, current[row.id]]),
     ))
   }, [rowRevisions, rowsRevision, snapshot.rows])
-  const readOnly = !snapshot.editable || !onPreviewRow || !onSaveRow || snapshot.loadState === 'loading' || snapshot.loadState === 'unavailable'
+  const readOnly = adminLocked || !snapshot.editable || !onPreviewRow || !onSaveRow || snapshot.loadState === 'loading' || snapshot.loadState === 'unavailable'
   const invalidateReview = (rowId: string) => {
     reviewGenerations.current[rowId] = (reviewGenerations.current[rowId] ?? 0) + 1
     setReviews((current) => ({ ...current, [rowId]: undefined }))
@@ -1116,7 +1190,11 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
           {mutationError ? <p className="text-sm text-destructive">Service sharing update failed: {mutationError}</p> : null}
           {snapshot.error ? <p className="text-sm text-destructive">{snapshot.error}</p> : null}
           {snapshot.warnings.map((warning) => <p key={warning} className="text-xs text-muted-foreground">{warning}</p>)}
-          {readOnly && snapshot.loadState !== 'loading' ? <p className="text-xs text-muted-foreground">Service sharing is read-only right now.</p> : null}
+          {readOnly && snapshot.loadState !== 'loading' ? (
+            <p className="text-xs text-muted-foreground">
+              {adminLocked ? PRODUCT_COPY.mesh.adminSharingLocked : 'Service sharing is read-only right now.'}
+            </p>
+          ) : null}
         </div>
         <div className={sharingOnly ? 'overflow-x-auto' : 'hidden overflow-x-auto md:block'}>
           <Table className={sharingOnly ? 'aui-service-sharing-table' : undefined}>
@@ -1132,7 +1210,7 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
                 return <ServiceRoutingTableRow key={row.id} row={row} draft={draft} knownPeers={snapshot.knownPeers} dirty={changes.length > 0} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} sharingOnly={sharingOnly} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
               })}
               {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">Loading service sharing through Aurora...</TableCell></TableRow> : null}
-              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">No shareable services were found.</TableCell></TableRow> : null}
+              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">This device has nothing to share yet.</TableCell></TableRow> : null}
             </TableBody>
           </Table>
         </div>
@@ -1147,7 +1225,7 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
             return <ServiceRoutingMobileCard key={row.id} row={row} draft={draft} changes={changes} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
           })}
           {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">Loading service sharing through Aurora...</p> : null}
-          {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">No shareable services were found.</p> : null}
+          {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">This device has nothing to share yet.</p> : null}
         </div>
       </CardContent>
     </Card>

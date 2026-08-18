@@ -4,8 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient } from '@aurora/client'
+import { buildCapabilityGraph, capabilityGraphCatalogFixture, gatewayRegistryFixture } from '@aurora/client'
 import { AppShell } from '../src/shell'
-import { errorShellSnapshot, type AuroraShellSnapshot, type RouteAvailability } from '../src/shell-data'
+import { SettingsView } from '../src/settings-view'
+import { errorShellSnapshot, snapshotFromGraph, type AuroraShellSnapshot, type RouteAvailability } from '../src/shell-data'
 import { MeshPeersView, type MeshPeersSnapshot } from '../src/mesh-peers-view'
 import { OnboardingView, type OnboardingModePreferenceStore } from '../src/onboarding-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
@@ -41,6 +43,16 @@ describe('production UI copy', () => {
       ],
       ['mesh', <MeshPeersView key="mesh" snapshot={meshSnapshot()} route={route()} canManageLocalServiceConfiguration={false} />],
       ['service-sharing', <ServiceRoutingView key="service-sharing" snapshot={serviceRoutingSnapshot()} />],
+      [
+        'settings',
+        <SettingsView
+          key="settings"
+          client={client('http')}
+          snapshot={settingsSnapshot()}
+          configRoute={route()}
+          dataRoute={route()}
+        />,
+      ],
     ] as const
 
     for (const [name, element] of surfaces) {
@@ -665,6 +677,16 @@ function client(kind: string = 'http'): AuroraClient {
       pairingExchange: vi.fn(),
     },
   } as unknown as AuroraClient
+}
+
+function settingsSnapshot(): AuroraShellSnapshot {
+  const graph = buildCapabilityGraph({
+    catalog: capabilityGraphCatalogFixture,
+    registry: gatewayRegistryFixture,
+    nativeManifest: null,
+    transportKind: 'http',
+  })
+  return snapshotFromGraph('http', graph, null)
 }
 
 function safeShellSnapshot(overrides: Partial<AuroraShellSnapshot> = {}): AuroraShellSnapshot {

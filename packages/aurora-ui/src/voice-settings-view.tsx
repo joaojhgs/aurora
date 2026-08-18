@@ -193,6 +193,8 @@ export interface VoiceSettingsViewProps {
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
   localSpeechCatalog?: AuroraLocalSpeechCatalogPort | null | undefined
   onLocalSpeechSelectionConfirmed?: ((selection: AuroraLocalSpeechSelectionProfile) => void | Promise<void>) | undefined
+  /** Hide on-device pack and wake-phrase sections when embedding server spoken-reply controls outside local Settings. */
+  hideOnDeviceSections?: boolean | undefined
 }
 
 export function VoiceSettingsView({
@@ -200,7 +202,8 @@ export function VoiceSettingsView({
   runtimeProfile = null,
   surfaceProfile: providedSurfaceProfile = null,
   localSpeechCatalog = null,
-  onLocalSpeechSelectionConfirmed
+  onLocalSpeechSelectionConfirmed,
+  hideOnDeviceSections = false
 }: VoiceSettingsViewProps) {
   const [state, setState] = useState<VoiceSettingsState>(initialVoiceSettingsState)
   const [installingVoiceId, setInstallingVoiceId] = useState<string | null>(null)
@@ -846,7 +849,7 @@ export function VoiceSettingsView({
         </div>
       </Card>
 
-      {localSpeechRows.length > 0 || state.browserCatalogState === 'loading' || state.browserCatalogState === 'limited' ? (
+      {!hideOnDeviceSections && (localSpeechRows.length > 0 || state.browserCatalogState === 'loading' || state.browserCatalogState === 'limited') ? (
         <Card title="On-device speech" description="Speech pieces this device can use locally.">
           <div className="flex flex-col gap-3">
             {state.browserCatalogState === 'loading' ? (
@@ -878,7 +881,7 @@ export function VoiceSettingsView({
         </Card>
       ) : null}
 
-      {browserTtsRows.length > 0 ? (
+      {!hideOnDeviceSections && browserTtsRows.length > 0 ? (
         <Card title="On-device voices" description="Voices this device can add for spoken replies.">
           <div className="flex flex-col gap-3">
             {browserTtsRows.map((row) => (
@@ -985,6 +988,7 @@ export function VoiceSettingsView({
         </Card>
       ) : null}
 
+      {hideOnDeviceSections ? null : (
       <Card title="Wake phrase" description="Choose the phrase Aurora listens for.">
         <div className="flex flex-col gap-3">
           {!canChooseWakePhrase ? (
@@ -1017,6 +1021,7 @@ export function VoiceSettingsView({
           })}
         </div>
       </Card>
+      )}
 
       <Card title="Voices available to Aurora" description="Voices Aurora can use or add for spoken replies.">
         <div className="flex flex-col gap-3">
@@ -1911,7 +1916,7 @@ function languageLabel(value: unknown): string | null {
   if (!normalized) return null
   try {
     const displayNames = typeof Intl !== 'undefined' && 'DisplayNames' in Intl
-      ? new Intl.DisplayNames(undefined, { type: 'language' })
+      ? new Intl.DisplayNames(['en'], { type: 'language' })
       : null
     const label = displayNames?.of(normalized)
     if (label && label !== normalized) return titleCaseLanguage(label)

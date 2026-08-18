@@ -131,14 +131,14 @@ describe('AppShell side-panel toggles', () => {
     await act(async () => root.unmount())
   })
 
-  it('hides admin navigation from non-admin peer sessions while retaining ordinary settings', async () => {
+  it('hides admin navigation from non-admin hosted-web sessions and omits local Settings', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
 
     await act(async () => {
       root.render(
-        <AppShell snapshot={snapshot} sessionIsAdmin={false} runtimeMode="web-thin">
+        <AppShell snapshot={snapshot} sessionIsAdmin={false} runtimeMode="web-thin" nodeMode="remote-console">
           <div>Content</div>
         </AppShell>,
       )
@@ -149,8 +149,10 @@ describe('AppShell side-panel toggles', () => {
     expect(container.querySelector('[data-mobile-tab="admin"]')).toBeNull()
     expect(container.querySelector('a[href="/admin/services"]')).toBeNull()
     expect(container.querySelector('a[href="/admin/tokens"]')).toBeNull()
-    expect(container.querySelector('a[href="/settings"]')).not.toBeNull()
-    expect(container.querySelector('[data-mobile-tab="settings"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/admin/config"]')).toBeNull()
+    expect(container.querySelector('a[href="/settings"]')).toBeNull()
+    expect(container.querySelector('[data-mobile-tab="settings"]')).toBeNull()
+    expect(container.querySelector('a[href="/mesh"]')).not.toBeNull()
     expect(container.textContent).toContain('Connected to Aurora')
     expect(container.textContent).toContain('member')
     expect(container.textContent).toContain('Limited access')
@@ -160,7 +162,7 @@ describe('AppShell side-panel toggles', () => {
 
     await act(async () => {
       root.render(
-        <AppShell snapshot={snapshot} sessionIsAdmin runtimeMode="web-thin">
+        <AppShell snapshot={snapshot} sessionIsAdmin runtimeMode="web-thin" nodeMode="remote-console">
           <div>Content</div>
         </AppShell>,
       )
@@ -169,10 +171,13 @@ describe('AppShell side-panel toggles', () => {
     expect(container.textContent).toContain('Operate · admin only')
     expect(container.querySelector('a[href="/admin"]')).not.toBeNull()
     expect(container.querySelector('[data-mobile-tab="admin"]')).toBeNull()
+    expect(container.textContent).toContain('Server settings')
+    expect(container.querySelector('a[href="/admin/config"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/settings"]')).toBeNull()
     expect(
       Array.from(container.querySelectorAll<HTMLElement>('[data-mobile-tab]'))
         .map((tab) => tab.dataset.mobileTab),
-    ).toEqual(['assistant', 'mesh', 'settings'])
+    ).toEqual(['assistant', 'mesh'])
     expect(container.querySelector('a[href="/admin/services"]')).not.toBeNull()
     expect(container.querySelector('a[href="/admin/tokens"]')).not.toBeNull()
     expect(container.textContent).toContain('admin')

@@ -678,6 +678,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       <MeshPeersView
         snapshot={snapshot}
         route={meshRoute()}
+        sessionIsAdmin
         permissions="Gateway.use"
         onApprovePeer={approvePeer}
         onDenyPeer={denyPeer}

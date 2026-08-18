@@ -107,7 +107,7 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
   ],
   mesh: ["Connected devices", "Connect trusted devices and choose what each one can use."],
   backups: ["Backups", "Snapshots, verification and restore"],
-  settings: ["Settings", "Connection choices"],
+  settings: ["Settings", "This device"],
   models: ["Models & Sources", "Loading model sources from Aurora"],
   onboarding: ["Welcome to Aurora", "Detected installation"],
 };
@@ -921,6 +921,72 @@ function memoryGatewayTransport(): RecordingMockAuroraTransport {
   transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
   transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
     memoryCapabilityCatalog(),
+  );
+  return transport;
+}
+
+function spokenRepliesCapabilityCatalog() {
+  const catalog = cloneFixture(capabilityCatalogFixture);
+  const baseProvider = catalog.providers[0]!;
+  const baseAction = catalog.actions[0]!;
+  const provider = {
+    ...baseProvider,
+    provider_id: "local:TTS",
+    provider_kind: "local" as const,
+    peer_id: "local-peer",
+    node_name: "local Aurora node",
+    service_instance_id: "tts-local",
+    module: "TTS",
+    eligible: true,
+    reason_code: "available",
+    reason: "Local Aurora offers spoken replies.",
+    policy: {
+      ...baseProvider.policy,
+      required_permissions: ["TTS.use"],
+      explicit_selector_required: false,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      selector_required: false,
+      denial_reasons: [],
+    },
+  };
+  const action = {
+    ...baseAction,
+    action_id: "tts-synthesize-local",
+    module: "TTS",
+    method: "Synthesize",
+    topic: "TTS.Synthesize",
+    provider_id: provider.provider_id,
+    provider_kind: provider.provider_kind,
+    peer_id: provider.peer_id,
+    service_instance_id: provider.service_instance_id,
+    selector: { peer_id: "local-peer", module: "TTS" },
+    bindability: "available" as const,
+    route_blockers: [],
+    summary: "Local Aurora speaks replies.",
+    policy: provider.policy,
+    freshness: provider.freshness,
+  };
+  catalog.providers = [...catalog.providers, provider];
+  catalog.actions = [...catalog.actions, action];
+  catalog.provider_index = {
+    ...catalog.provider_index,
+    TTS: [...(catalog.provider_index.TTS ?? []), provider.provider_id],
+  };
+  catalog.action_index = {
+    ...catalog.action_index,
+    TTS: [...(catalog.action_index.TTS ?? []), action.action_id],
+    "TTS.Synthesize": [action.action_id],
+  };
+  return catalog;
+}
+
+function spokenRepliesGatewayTransport(): RecordingMockAuroraTransport {
+  const transport = new RecordingMockAuroraTransport();
+  transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
+  transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
+    spokenRepliesCapabilityCatalog(),
   );
   return transport;
 }
@@ -2696,7 +2762,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(adminText).not.toBe(servicesText);
   });
 
-  it("e2e:routes embeds configuration, data policy, and native settings inside Settings", () => {
+  it("e2e:routes renders Settings with the This device pane first and no legacy settings tabs", () => {
     const settingsMarkup = renderTauriRoute("/settings");
     const settingsText = mainContentText(settingsMarkup);
 
@@ -2704,21 +2770,29 @@ describe("Tauri CI/E2E route gates", () => {
     expect(settingsText).toContain(
       "Permissions, connection choices, privacy, and data controls are grouped on one Settings page.",
     );
-    expect(settingsText).toContain("Privacy defaults");
-    expect(settingsText).toContain("Voice behavior");
-    expect(settingsText).toContain("Theme, accessibility, and local storage");
-    expect(settingsText).toContain("Connection choices");
+    expect(settingsText).toContain("This device");
+    expect(settingsText).toContain("Connection & role");
+    expect(settingsText).toContain("Appearance");
+    expect(settingsText).not.toContain("Configuration");
+    expect(settingsText).not.toContain("Advanced");
     expect(settingsText).not.toContain("Spoken reply voices");
     expect(settingsText).not.toContain("Voices available to Aurora");
-    expect(settingsText).toContain("Configuration");
-    expect(settingsText).toContain("Data policy and retention");
-    expect(settingsText).toContain("Device controls");
+    for (const removedTabId of [
+      "settings-tab-general",
+      "settings-tab-voice",
+      "settings-tab-configuration",
+      "settings-tab-advanced",
+    ]) {
+      expect(settingsMarkup, removedTabId).not.toContain(
+        `id="${removedTabId}"`,
+      );
+    }
     expect(settingsText).not.toContain("Route and fallback policy");
     expect(settingsText).not.toContain("Native permission id");
   });
 
-  it("e2e:settings reads voice details only after the Voice tab is selected", async () => {
-    const transport = memoryGatewayTransport();
+  it("e2e:settings stays local-only and does not load server spoken-reply voices", async () => {
+    const transport = spokenRepliesGatewayTransport();
     const client = new Aurora({ transport });
     client.auth.setAdmin({
       principalId: "test-admin",
@@ -2734,33 +2808,107 @@ describe("Tauri CI/E2E route gates", () => {
 
     try {
       await waitUntil(() => {
+        expect(settings.container.textContent).toContain("This device");
         expect(
           settings.container.querySelector<HTMLButtonElement>(
             "#settings-tab-voice",
           ),
-        ).not.toBeNull();
+        ).toBeNull();
       });
       expect(getCapabilities).not.toHaveBeenCalled();
       expect(listVoices).not.toHaveBeenCalled();
       expect(adminExecute).not.toHaveBeenCalled();
+      expect(settings.container.querySelector("#settings-home-title")).toBeNull();
+      expect(
+        Array.from(settings.container.querySelectorAll("button")).some((button) =>
+          button.textContent?.trim().startsWith("Aurora on "),
+        ),
+      ).toBe(false);
+      expect(settings.container.textContent).not.toContain("All Aurora settings");
+      expect(settings.container.textContent).not.toContain("Spoken reply voices");
+      expect(settings.container.querySelector('[aria-label="Spoken replies"]')).toBeNull();
+    } finally {
+      await act(async () => settings.root.unmount());
+      settings.container.remove();
+    }
+  });
 
-      const voiceTab = settings.container.querySelector<HTMLButtonElement>(
-        "#settings-tab-voice",
-      );
-      await act(async () => {
-        voiceTab!.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, cancelable: true }),
+  it("e2e:settings keeps the This device pane and overlay section visible on desktop", async () => {
+    const client = new Aurora({ transport: memoryGatewayTransport() });
+    const runtime = testRuntime(client);
+    window.history.replaceState({}, "", "/settings");
+    const settings = await mountOutcomeApp({
+      ...runtime,
+      mode: "desktop-thin",
+    });
+
+    try {
+      await waitUntil(() => {
+        expect(settings.container.textContent).toContain("This device");
+        expect(settings.container.textContent).toContain(
+          "Connection & role",
         );
-        await flushReactWork();
+        expect(settings.container.textContent).toContain(
+          "Overlay & shortcuts",
+        );
+        expect(settings.container.textContent).not.toContain("Configuration");
+        expect(
+          settings.container.querySelector("#settings-tab-configuration"),
+        ).toBeNull();
+      });
+    } finally {
+      await act(async () => settings.root.unmount());
+      settings.container.remove();
+    }
+  });
+
+  // Tripwire for the documented host-slot contract (see
+  // .omc/notepads/ui-multi-surface-settings-ia/tauri-host-contract.md):
+  // passes once the shared SettingsView consumes `connectionRoleContent`.
+  it("e2e:settings surfaces change device setup inside This device via the host slot", async () => {
+    const client = new Aurora({ transport: memoryGatewayTransport() });
+    const profile = thinRuntimeProfile("webrtc-only");
+    const document = {
+      version: 1 as const,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    };
+    let runtime!: AuroraTauriRuntime;
+    runtime = {
+      ...testRuntime(client),
+      mode: "desktop-thin",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "authorized" }),
+      thinProfileConfigured: true,
+      requiresOnboarding: false,
+      pendingThinInviteText: null,
+      thinProfile: profile,
+      thinProfileController: {
+        evidence: "test runtime profile store",
+        document,
+        saveProfile: async (nextProfile) => ({
+          version: 1,
+          activeProfileId: nextProfile.id,
+          profiles: [nextProfile],
+        }),
+        selectProfile: async () => document,
+        createRuntime: async () => runtime,
+      },
+    };
+    window.history.replaceState({}, "", "/settings");
+    const settings = await mountOutcomeApp(runtime);
+
+    try {
+      await waitUntil(() => {
+        expect(settings.container.textContent).toContain("This device");
+        expect(settings.container.textContent).toContain(
+          "This device uses Aurora on another device.",
+        );
       });
 
+      await clickButtonByLabel(settings.container, "Change device setup");
       await waitUntil(() => {
-        expect(getCapabilities).toHaveBeenCalledTimes(1);
-        expect(listVoices).toHaveBeenCalledTimes(1);
-        expect(adminExecute).not.toHaveBeenCalled();
-        expect(settings.container.textContent).toContain(
-          "Spoken reply voices",
-        );
+        expect(window.location.pathname).toBe("/onboarding");
       });
     } finally {
       await act(async () => settings.root.unmount());
@@ -2979,7 +3127,7 @@ describe("Tauri CI/E2E route gates", () => {
     const runtime = testRuntime(
       new Aurora({ transport: memoryGatewayTransport() }),
     );
-    window.history.replaceState({}, "", "/settings");
+    window.history.replaceState({}, "", "/memory/policy");
     const dataPolicy = await mountOutcomeApp(runtime);
     try {
       await waitUntil(() => {
@@ -3007,9 +3155,6 @@ describe("Tauri CI/E2E route gates", () => {
         );
         expect(dataPolicy.container.textContent).toContain(
           "Activity history for policy changes",
-        );
-        expect(dataPolicy.container.textContent).toContain(
-          "Confirmation is required before settings can be changed.",
         );
         expect(dataPolicy.container.textContent).not.toMatch(
           /\b(draft|confirm\/audit|fallback)\b/,
@@ -3086,9 +3231,9 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(mesh.container.textContent).toContain("Connected devices");
         expect(mesh.container.textContent).toContain("Waiting for approval");
-        expect(mesh.container.textContent).toContain("How Aurora chooses a device");
         expect(mesh.container.textContent).toContain("Service sharing");
-        expect(mesh.container.textContent).toContain("Device selection details");
+        expect(mesh.container.textContent).not.toContain("How Aurora chooses a device");
+        expect(mesh.container.textContent).not.toContain("Device selection details");
         expect(mesh.container.textContent).toContain("All devices");
         expect(mesh.container.textContent).toContain("Review & approve");
         expect(mesh.container.textContent).not.toContain("Gateway.ExplainRoute");
@@ -3163,7 +3308,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("keeps local service settings off remote mobile mesh surfaces", async () => {
+  it("shows service sharing on remote mobile mesh without local mesh invite controls", async () => {
     const transport = new RecordingMockAuroraTransport();
     const runtime: AuroraTauriRuntime = {
       ...testRuntime(
@@ -3179,15 +3324,13 @@ describe("Tauri CI/E2E route gates", () => {
     try {
       await waitUntil(() => {
         expect(mesh.container.textContent).toContain("Connected devices");
+        expect(mesh.container.textContent).toContain("Service sharing");
         expect(requestMethods(transport)).toContain(
           GATEWAY_METHODS.getMeshStatus,
         );
       });
-      expect(mesh.container.textContent).not.toContain("Service sharing");
-      expect(requestMethods(transport)).not.toContain("Config.Get");
-      expect(requestMethods(transport)).not.toContain(
-        "Config.GetSchemaMetadata",
-      );
+      expect(mesh.container.textContent).not.toContain("Device network settings");
+      expect(mesh.container.textContent).not.toContain("Connect device");
       expect(requestMethods(transport)).not.toContain(
         GATEWAY_METHODS.getMeshInviteConfig,
       );
@@ -4221,8 +4364,8 @@ describe("Tauri CI/E2E route gates", () => {
   it("e2e:runtime renders runtime routes without false global privacy blocking", () => {
     const routes = routesByGroup(runtimeRouteIds);
     expect(routes.map((route) => route.id)).toEqual([
-      "settings",
       "models",
+      "settings",
     ]);
 
     for (const route of routes) {
@@ -4629,7 +4772,7 @@ describe("Tauri CI/E2E route gates", () => {
         source: "aurora_audio_bridge_status",
       }),
     };
-    window.history.replaceState({}, "", "/settings");
+    window.history.replaceState({}, "", "/settings/native");
 
     const desktop = await mountOutcomeApp(desktopRuntime);
     try {
@@ -4658,7 +4801,7 @@ describe("Tauri CI/E2E route gates", () => {
       sidecarStatus: async () => null,
       startSidecar: async () => null,
     };
-    window.history.replaceState({}, "", "/settings");
+    window.history.replaceState({}, "", "/settings/native");
 
     const browser = await mountOutcomeApp(browserRuntime);
     try {

@@ -109,7 +109,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['assistant', 'assistant-cancel', 'voice-transcription', 'voice-wake-process', 'voice-wake-control', 'voice-tts-synthesize', 'voice-tts-stop'],
     routeOracles: [routeOracle('assistant', ['Assistant', 'Prompt'], ['Assistant conversation list', 'Send'])],
     mockReferenceFiles: ['components/aurora/assistant/assistant-view.tsx', 'components/aurora/assistant/route-sheet.tsx', 'components/aurora/assistant/tool-call-card.tsx'],
-    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Voice modes', 'Action needs approval'],
+    mockUxAnchors: ['Conversation rail', 'Route and privacy', 'Prompt composer', 'Action needs approval'],
     componentFiles: ['assistant-view.tsx', 'route-sheet.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action', 'privacy', 'native-permission'],
     truthSources: [

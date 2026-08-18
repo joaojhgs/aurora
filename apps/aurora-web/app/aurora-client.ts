@@ -3,9 +3,14 @@ import {
   AuroraError,
   HttpGatewayTransport,
   MockAuroraTransport,
+  androidNativeCapabilityManifestFixture,
+  cloneFixture,
+  iosNativeCapabilityManifestFixture,
+  nativeCapabilityManifestFixture,
   type AuroraTransport,
   type AuroraTransportRequest,
   type AuroraTransportResponse,
+  type NativeCapabilityManifest,
   type ToolingProjectionToolInfo,
 } from '@aurora/client'
 import type {
@@ -70,7 +75,10 @@ import {
 } from './browser-mesh-node-services'
 import {
   applyDebugUiLaunchToRuntimeProfile,
+  debugUiLaunchSanitizeOptions,
+  debugUiLaunchSessionIsAdmin,
   resolveAuroraDebugUiLaunch,
+  type AuroraDebugUiLaunch,
 } from './debug-ui-launch'
 
 type BrowserRuntimeCache = {
@@ -181,7 +189,7 @@ export function createAuroraWebClient(): AuroraClient {
     })
   }
   if (isServerDemoMode()) {
-    return new AuroraClient({ transport: new MockAuroraTransport() })
+    return createDebugUiDemoClient(resolveAuroraDebugUiLaunch())
   }
   return new AuroraClient({ transport: new MissingGatewayTransport() })
 }
@@ -386,8 +394,12 @@ function createAuroraBrowserRuntimeFromStore(
     ...(localStablePeerId ? { localStablePeerId } : {}),
     visibilityDocument: typeof document === 'undefined' ? undefined : document,
     windowLocation: typeof window === 'undefined' ? undefined : window.location,
-    createClient: (transport) => new AuroraClient({ transport }),
-    createDemoClient: () => new AuroraClient({ transport: new MockAuroraTransport() }),
+    createClient: (transport) => (
+      debugLaunch && isBrowserDemoMode()
+        ? createDebugUiDemoClient(debugLaunch)
+        : new AuroraClient({ transport })
+    ),
+    createDemoClient: () => createDebugUiDemoClient(debugLaunch),
   })
   const runtimeWithLocalServices = Object.assign(runtime, {
     ...(effectiveMeshNodeServices
@@ -544,7 +556,8 @@ function ensureDebugUiLaunchRuntimeProfile(
 
   const profileId = `ui-launch-${launch.preset}`
   const existing = current.profiles.find((profile) => profile.id === profileId)
-  const profile = sanitizeRuntimeProfile(applyDebugUiLaunchToRuntimeProfile(launch, existing))
+  const sanitizeOptions = debugUiLaunchSanitizeOptions(launch)
+  const profile = sanitizeRuntimeProfile(applyDebugUiLaunchToRuntimeProfile(launch, existing), sanitizeOptions)
   const next = sanitizeRuntimeProfileDocument({
     version: 2,
     activeProfileId: profile.id,
@@ -552,12 +565,28 @@ function ensureDebugUiLaunchRuntimeProfile(
       ...current.profiles.filter((candidate) => candidate.id !== profile.id),
       profile,
     ],
-  })
-  if (JSON.stringify(next) !== JSON.stringify(current)) {
-    store.saveRuntimeProfileDocument(next)
+  }, sanitizeOptions)
+  const persistable = persistableDebugLaunchDocument(next, launch)
+  if (JSON.stringify(persistable) !== JSON.stringify(current)) {
+    store.saveRuntimeProfileDocument(persistable)
     browserRuntimeProfileRevision += 1
   }
   return next
+}
+
+function persistableDebugLaunchDocument(
+  document: AuroraRuntimeProfileDocumentV2,
+  launch: AuroraDebugUiLaunch,
+): AuroraRuntimeProfileDocumentV2 {
+  if (launch.runtimeTier !== 'python-full') return document
+  return sanitizeRuntimeProfileDocument({
+    ...document,
+    profiles: document.profiles.map((candidate) => (
+      candidate.runtimeTier === 'python-full'
+        ? { ...candidate, runtimeTier: 'lightweight-ts' }
+        : candidate
+    )),
+  })
 }
 
 export async function saveAuroraBrowserThinProfile(
@@ -1035,6 +1064,51 @@ function isServerDemoMode(): boolean {
 
 function isBrowserDemoMode(): boolean {
   return process.env.NODE_ENV === 'test' || truthy(process.env.NEXT_PUBLIC_AURORA_WEB_DEMO_MODE)
+}
+
+function createDebugUiDemoClient(launch: AuroraDebugUiLaunch | null): AuroraClient {
+  const transport = new MockAuroraTransport()
+  const sessionIsAdmin = launch ? debugUiLaunchSessionIsAdmin(launch) : false
+  const whoAmI = {
+    principal_id: sessionIsAdmin ? 'demo-admin' : 'demo-member',
+    principal_name: sessionIsAdmin ? 'Admin' : 'Member',
+    permissions: sessionIsAdmin ? ['*'] : ['Gateway.use'],
+    effective_perms: sessionIsAdmin ? ['*'] : ['Gateway.use'],
+    is_admin: sessionIsAdmin,
+  }
+  transport.register('Auth.WhoAmI', () => whoAmI)
+  const nativeManifest = nativeManifestForDebugLaunch(launch)
+  if (nativeManifest === 'unavailable') {
+    transport.register('Native.GetCapabilityManifest', () => {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'Device features are not available here yet.',
+      })
+    })
+  } else if (nativeManifest) {
+    transport.register('Native.GetCapabilityManifest', () => cloneFixture(nativeManifest))
+  }
+  const client = new AuroraClient({ transport })
+  client.auth.updateFromWhoAmI(whoAmI)
+  return client
+}
+
+function nativeManifestForDebugLaunch(
+  launch: AuroraDebugUiLaunch | null,
+): NativeCapabilityManifest | 'unavailable' | null {
+  if (!launch) return null
+  const runtimeMode = launch.runtimeMode
+  const nativePlatform = launch.nativePlatform ?? ''
+  if (runtimeMode.startsWith('android') || nativePlatform === 'android') {
+    return androidNativeCapabilityManifestFixture
+  }
+  if (runtimeMode.startsWith('ios') || nativePlatform === 'ios') {
+    return iosNativeCapabilityManifestFixture
+  }
+  if (runtimeMode.startsWith('desktop')) {
+    return nativeCapabilityManifestFixture
+  }
+  return 'unavailable'
 }
 
 function truthy(value: string | undefined): boolean {

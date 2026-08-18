@@ -14,6 +14,7 @@ import {
   Network,
   Plug,
   ScrollText,
+  Server,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -21,6 +22,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { AvailabilityState, ContractMethodType, PrivacyClass } from '@aurora/client'
+import { shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
 
 export interface AuroraNavItem {
   id: string
@@ -44,6 +46,8 @@ export interface AuroraNavSection {
   items: AuroraNavItem[]
 }
 
+export const OPERATE_NAV_SECTION_LABEL = 'Operate · admin only'
+
 export const auroraNavSections: AuroraNavSection[] = [
   {
     label: 'Assistant',
@@ -55,22 +59,23 @@ export const auroraNavSections: AuroraNavSection[] = [
     ]
   },
   {
-    label: 'Operate · admin only',
+    label: OPERATE_NAV_SECTION_LABEL,
     items: [
       item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'service contract', true),
       item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'service contract', true),
+      item('config', 'Server settings', '/admin/config', Server, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
       item('access', 'Access & RBAC', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
       item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'service contract', true),
       item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'use', 'admin-critical', 'unsupported', 'service contract', true),
       item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-      item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'service contract', true),
-      item('settings', 'Settings', '/settings', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true)
+      item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'service contract', true)
     ]
   },
   {
     label: 'Configure',
     items: [
-      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract')
+      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
+      item('settings', 'Settings', '/settings', Settings, 'Shell', 'Settings', 'use', 'personal', 'available-local', 'shell page')
     ]
   }
 ]
@@ -78,7 +83,6 @@ export const auroraNavSections: AuroraNavSection[] = [
 export const auroraEmbeddedNavItems: AuroraNavItem[] = [
   item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'first-run gate'),
   item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
-  item('config', 'Configuration', '/admin/config', Settings, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
   item('contracts', 'Service Catalog', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),
   item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'service contract', true),
   item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'service contract', true),
@@ -88,11 +92,11 @@ export const auroraEmbeddedNavItems: AuroraNavItem[] = [
 ]
 
 
-export const auroraMobileTabs = [
-  auroraNavSections[0]!.items[0]!,
-  auroraNavSections[0]!.items[3]!,
-  auroraNavSections[1]!.items[7]!
-]
+export const auroraMobileTabs = ['assistant', 'mesh', 'settings'].map((id) => {
+  const match = getAuroraNavItem(id)
+  if (!match) throw new Error(`Missing mobile nav item: ${id}`)
+  return match
+})
 
 export const auroraAssistantCancellationItem = item(
   'assistant-cancel',
@@ -178,6 +182,31 @@ export function getAuroraNavItem(id: string): AuroraNavItem | undefined {
   return auroraEmbeddedNavItems.find((item) => item.id === id)
 }
 
+export function visibleAuroraNavSections(
+  profile: AuroraSurfaceProfile,
+  sessionIsAdmin: boolean,
+): AuroraNavSection[] {
+  const showLocalSettings = shouldShowForSurface(profile, 'localSettings')
+  return auroraNavSections.flatMap((section) => {
+    if (!sessionIsAdmin && section.label === OPERATE_NAV_SECTION_LABEL) return []
+    const items = section.items.filter((candidate) => candidate.id !== 'settings' || showLocalSettings)
+    if (items.length === 0) return []
+    return [{ ...section, items }]
+  })
+}
+
+export function visibleAuroraMobileTabs(
+  profile: AuroraSurfaceProfile,
+  sessionIsAdmin: boolean,
+): AuroraNavItem[] {
+  const showLocalSettings = shouldShowForSurface(profile, 'localSettings')
+  return auroraMobileTabs.filter((tab) => {
+    if (tab.adminGated && !sessionIsAdmin) return false
+    if (tab.id === 'settings') return showLocalSettings
+    return true
+  })
+}
+
 export function navItemSnapshot(item: AuroraNavItem): AuroraNavItemSnapshot {
   const { icon: _icon, ...snapshot } = item
   return snapshot
@@ -226,6 +255,8 @@ function mobileLabelForNavItem(id: string, label: string): string {
       return 'Admin'
     case 'settings':
       return 'Settings'
+    case 'config':
+      return 'Server'
     case 'assistant':
       return 'Assistant'
     default:

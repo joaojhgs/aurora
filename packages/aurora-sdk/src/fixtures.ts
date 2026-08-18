@@ -26,7 +26,10 @@ import type {
   ToolingListApprovalGrantsResponse,
   ToolingSharingPolicy,
   OrchestratorListPendingToolApprovalsResponse,
-  WebRTCDiagnosticsResponse
+  WebRTCDiagnosticsResponse,
+  JsonValue,
+  ModuleRegistryInfo,
+  ServiceInfo
 } from './types.js'
 import type { BackupListResponse } from './backup.js'
 import type { SchedulerListJobsResponse } from './scheduler.js'
@@ -44,6 +47,7 @@ import type {
 } from './memory.js'
 import type {
   ConfigDiffPreviewResponse,
+  ConfigFieldMetadata,
   ConfigGetResponse,
   ConfigReloadImpactResponse,
   ConfigRollbackResponse,
@@ -60,6 +64,134 @@ export const emptyRegistryFixture: GetRegistryResponse = {
   service_count: 0,
   method_count: 0
 }
+
+const shareableServiceRegistryModules: ModuleRegistryInfo[] = [
+  shareableRegistryModule('TTS', 'Speech playback', ['speech'], {
+    featureId: 'speech',
+    label: 'Speech playback',
+    summary: 'Speak responses on this device.',
+    methodId: 'TTS.Speak',
+    methodName: 'Speak',
+    methodSummary: 'Play spoken replies.',
+    permission: 'TTS.use'
+  }),
+  shareableRegistryModule('DB', 'Memory and saved knowledge', ['memory'], {
+    featureId: 'memory_search',
+    label: 'Saved knowledge',
+    summary: 'Search and recall saved knowledge.',
+    methodId: 'DB.RAGSearch',
+    methodName: 'Search',
+    methodSummary: 'Search saved knowledge.',
+    permission: 'DB.use'
+  }),
+  shareableRegistryModule('Tooling', 'Tools', ['tools'], {
+    featureId: 'tool_catalog',
+    label: 'Tools',
+    summary: 'Use approved tools from this device.',
+    methodId: 'Tooling.GetToolCatalog',
+    methodName: 'List tools',
+    methodSummary: 'List tools available on this device.',
+    permission: 'Tooling.use'
+  }),
+  shareableRegistryModule('STTCoordinator', 'Listening coordinator', ['listening'], {
+    featureId: 'listening',
+    label: 'Listening',
+    summary: 'Coordinate listening on this device.',
+    methodId: 'STT.GetStatus',
+    methodName: 'Status',
+    methodSummary: 'Report listening status.',
+    permission: 'STT.use'
+  }),
+  shareableRegistryModule('WakeWord', 'Wake listening', ['wake'], {
+    featureId: 'wake_listening',
+    label: 'Wake listening',
+    summary: 'Listen for the wake phrase on this device.',
+    methodId: 'WakeWord.GetStatus',
+    methodName: 'Status',
+    methodSummary: 'Report wake listening status.',
+    permission: 'STT.use'
+  }),
+  shareableRegistryModule('Transcription', 'Speech to text', ['transcription'], {
+    featureId: 'transcription',
+    label: 'Speech to text',
+    summary: 'Turn speech into text on this device.',
+    methodId: 'Transcription.Transcribe',
+    methodName: 'Transcribe',
+    methodSummary: 'Turn speech into text.',
+    permission: 'STT.use'
+  })
+]
+
+function shareableRegistryModule(
+  module: string,
+  summary: string,
+  capabilities: string[],
+  feature: {
+    featureId: string
+    label: string
+    summary: string
+    methodId: string
+    methodName: string
+    methodSummary: string
+    permission: string
+  }
+): ModuleRegistryInfo {
+  return {
+    module,
+    version: '0.1.0',
+    summary,
+    capabilities,
+    callable_features: [{
+      feature_id: feature.featureId,
+      module,
+      label: feature.label,
+      summary: feature.summary,
+      method_ids: [feature.methodId]
+    }],
+    methods: [{
+      name: feature.methodName,
+      summary: feature.methodSummary,
+      bus_topic: feature.methodId,
+      exposure: 'external',
+      input_model: null,
+      output_model: null,
+      required_perms: [feature.permission],
+      method_type: 'use',
+      input_schema: null,
+      output_schema: null
+    }]
+  }
+}
+
+function healthyShareableService(
+  module: string,
+  summary: string,
+  capabilities: string[],
+  methodCount: number,
+  instanceId: string
+): ServiceInfo {
+  return {
+    module,
+    version: '0.1.0',
+    summary,
+    capabilities,
+    method_count: methodCount,
+    last_seen: '2026-06-19T00:00:00Z',
+    status: 'healthy',
+    instance_id: instanceId
+  }
+}
+
+const shareableServiceStatusEntries: ServiceInfo[] = [
+  healthyShareableService('Orchestrator', 'Assistant orchestration and model runtime', ['assistant', 'models'], 5, 'orchestrator-local'),
+  ...shareableServiceRegistryModules.map((module) => healthyShareableService(
+    module.module,
+    module.summary,
+    module.capabilities,
+    module.methods.length,
+    `${module.module.toLowerCase()}-local`
+  ))
+]
 
 export const gatewayRegistryFixture: GetRegistryResponse = {
   modules: [
@@ -502,11 +634,12 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         }
       ]
-    }
+    },
+    ...shareableServiceRegistryModules
   ],
   digest: 'fixture',
-  service_count: 4,
-  method_count: 25
+  service_count: 4 + shareableServiceRegistryModules.length,
+  method_count: 25 + shareableServiceRegistryModules.reduce((count, module) => count + module.methods.length, 0)
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -1579,7 +1712,8 @@ export const gatewayServicesFixture: GetServicesResponse = {
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: 'scheduler-local'
-    }
+    },
+    ...shareableServiceStatusEntries
   ]
 }
 
@@ -5360,6 +5494,96 @@ export const pendingToolApprovalsFixture: OrchestratorListPendingToolApprovalsRe
   ]
 }
 
+function meshRoutingBlock(prefer: string) {
+  return {
+    prefer,
+    fallback: 'local',
+    allowed_provider_peer_ids: null as string[] | null,
+    min_version: null as string | null,
+    required_provider_feature_ids: [] as string[],
+    required_provider_capability_tags: [] as string[],
+    require_explicit_selector: false
+  }
+}
+
+function meshPolicyForService(share: boolean, prefer: string) {
+  return {
+    mesh_sharing: {
+      share,
+      max_concurrent: 10,
+      unshared_feature_ids: [],
+      unshared_method_ids: []
+    },
+    mesh_routing: meshRoutingBlock(prefer)
+  }
+}
+
+function meshPolicyMetadataFields(
+  basePath: string,
+  affected: string,
+  current: { share: boolean; prefer: string }
+): ConfigFieldMetadata[] {
+  const fields: Array<{
+    suffix: string
+    title: string
+    type: string
+    defaultValue: JsonValue
+    currentValue: JsonValue
+    choices: JsonValue[] | null
+  }> = [
+    { suffix: 'mesh_sharing.share', title: 'Share service', type: 'boolean', defaultValue: false, currentValue: current.share, choices: null },
+    { suffix: 'mesh_sharing.max_concurrent', title: 'Maximum simultaneous calls', type: 'integer', defaultValue: 10, currentValue: 10, choices: null },
+    { suffix: 'mesh_sharing.unshared_feature_ids', title: 'Shared features', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_sharing.unshared_method_ids', title: 'Feature exceptions', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.prefer', title: 'Preferred device', type: 'string', defaultValue: 'local', currentValue: current.prefer, choices: ['local', 'network', 'local_only', 'network_only'] },
+    { suffix: 'mesh_routing.fallback', title: 'Unavailable service action', type: 'string', defaultValue: 'local', currentValue: 'local', choices: ['local', 'network', 'error', 'none'] },
+    { suffix: 'mesh_routing.allowed_provider_peer_ids', title: 'Allowed devices', type: 'array', defaultValue: null, currentValue: null, choices: null },
+    { suffix: 'mesh_routing.min_version', title: 'Minimum device version', type: 'string', defaultValue: null, currentValue: null, choices: null },
+    { suffix: 'mesh_routing.required_provider_feature_ids', title: 'Required features', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.required_provider_capability_tags', title: 'Required device capabilities', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.require_explicit_selector', title: 'Device selection requirement', type: 'boolean', defaultValue: false, currentValue: false, choices: null }
+  ]
+  return fields.map((field) => ({
+    key_path: `${basePath}.${field.suffix}`,
+    title: field.title,
+    description: field.title,
+    type: field.type,
+    default: field.defaultValue,
+    current_value: field.currentValue,
+    source_layer: 'config.json',
+    secret: false,
+    reload_required: true,
+    restart_required: false,
+    affected_services: [affected],
+    constraints: {},
+    choices: field.choices
+  }))
+}
+
+const meshServicePolicyConfig = {
+  orchestrator: meshPolicyForService(true, 'local'),
+  db: meshPolicyForService(true, 'local'),
+  tooling: meshPolicyForService(true, 'local'),
+  scheduler: meshPolicyForService(true, 'local'),
+  tts: meshPolicyForService(true, 'network'),
+  stt: {
+    coordinator: meshPolicyForService(false, 'local'),
+    wakeword: meshPolicyForService(false, 'local'),
+    transcription: meshPolicyForService(false, 'local')
+  }
+}
+
+const meshServicePolicyMetadataFields: ConfigFieldMetadata[] = [
+  ...meshPolicyMetadataFields('services.orchestrator', 'orchestrator', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.db', 'db', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.tooling', 'tooling', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.scheduler', 'scheduler', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.tts', 'tts', { share: true, prefer: 'network' }),
+  ...meshPolicyMetadataFields('services.stt.coordinator', 'stt', { share: false, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.stt.wakeword', 'stt', { share: false, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.stt.transcription', 'stt', { share: false, prefer: 'local' })
+]
+
 export const configGetFixture: ConfigGetResponse = {
   config: {
     services: {
@@ -5399,7 +5623,8 @@ export const configGetFixture: ConfigGetResponse = {
         default_pairing_permissions: ['Gateway.use'],
         webrtc_auth_timeout_seconds: 30,
         webrtc_pairing_timeout_seconds: 300
-      }
+      },
+      ...meshServicePolicyConfig
     }
   }
 }
@@ -5790,7 +6015,8 @@ export const configSchemaMetadataFixture: ConfigSchemaMetadataResponse = {
       affected_services: ['auth'],
       constraints: { minimum: 1 },
       choices: null
-    }
+    },
+    ...meshServicePolicyMetadataFields
   ],
   secrets_redacted: true
 }

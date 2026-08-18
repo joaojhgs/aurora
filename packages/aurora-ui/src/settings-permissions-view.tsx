@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, Mic, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, HardDrive, Keyboard, Mic, Palette, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
 import type {
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
@@ -14,13 +14,12 @@ import type {
   PrivacyClass
 } from '@aurora/client'
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
-import { getAuroraSurfaceProfile } from './platform-surface'
+import { getAuroraSurfaceProfile, shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
+import type { AuroraRuntimeProfileV2 } from './runtime-profile'
 import { safeErrorCopy } from './product-copy'
 import { PrivacyBadge, StatusBadge } from './status-badges'
 import { PageHeader } from './state-surface'
 import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
-import { cn } from '#lib/utils'
-import { Input } from '#components/ui/input'
 
 export type SettingsMutationState = 'idle' | 'optimistic' | 'rollback-error' | 'disabled'
 
@@ -108,170 +107,66 @@ export interface SettingsPermissionsViewProps {
   snapshot: AuroraShellSnapshot
   surface?: SettingsPermissionsSurface
   currentPath?: string
+  /** @deprecated Settings no longer renders a tab strip; the prop is accepted for host compatibility. */
   hideTabs?: boolean | undefined
+  runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
+  surfaceProfile?: AuroraSurfaceProfile | null | undefined
   onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
+  /** Optional host-supplied content rendered inside the Connection & role section (e.g. Tauri "Change device setup"). */
+  connectionRoleContent?: ReactNode | undefined
 }
 
 export function SettingsPermissionsView({
   snapshot,
   surface,
   currentPath,
-  hideTabs = false,
-  onRequestNativeAccess
+  runtimeProfile = null,
+  surfaceProfile = null,
+  onRequestNativeAccess,
+  connectionRoleContent
 }: SettingsPermissionsViewProps) {
   const routePath = currentPath ?? browserPathname()
   const activeSurface = surface ?? (routePath === '/settings/native' ? 'native' : 'settings')
+  const profile = surfaceProfile ?? getAuroraSurfaceProfile({
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform,
+    userAgent: typeof navigator === 'undefined' ? null : navigator.userAgent,
+    nodeMode: runtimeProfile?.nodeMode ?? null,
+    runtimeTier: runtimeProfile?.runtimeTier ?? null,
+    enabledCapabilityPacks: runtimeProfile?.nodeMode === 'mesh-node' ? runtimeProfile.localNode.enabledCapabilityPacks : [],
+    localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState ?? null
+  })
   const model = buildSettingsPermissionsModel(snapshot)
-  if (activeSurface === 'native') {
-    return (
-      <NativeSettingsSurface
-        snapshot={snapshot}
-        model={model}
-        hideTabs={hideTabs}
-        onRequestNativeAccess={onRequestNativeAccess}
-      />
-    )
-  }
-  return <RouteSettingsSurface snapshot={snapshot} model={model} hideTabs={hideTabs} />
+  return (
+    <ThisDeviceSettingsSurface
+      snapshot={snapshot}
+      model={model}
+      profile={profile}
+      includeOsAccess={activeSurface === 'native'}
+      onRequestNativeAccess={onRequestNativeAccess}
+      connectionRoleContent={connectionRoleContent}
+    />
+  )
 }
 
 function browserPathname(): string | null {
   return typeof globalThis.location?.pathname === 'string' ? globalThis.location.pathname : null
 }
 
-function RouteSettingsSurface({
+function ThisDeviceSettingsSurface({
   snapshot,
   model,
-  hideTabs
+  profile,
+  includeOsAccess,
+  onRequestNativeAccess,
+  connectionRoleContent
 }: {
   snapshot: AuroraShellSnapshot
   model: SettingsPermissionsModel
-  hideTabs: boolean
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      {hideTabs ? null : <SettingsTabs active="general" />}
-      <PageHeader
-        id="settings-permissions-title"
-        eyebrow="Settings"
-        title="General"
-        description="Privacy defaults, voice behavior, and assistant preferences."
-      />
-
-      {model.error ? (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-          <AlertTriangle size={17} aria-hidden />
-          <span>{model.error}</span>
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card>
-          <PanelTitle
-            icon={<ShieldCheck size={18} aria-hidden />}
-            title="Privacy defaults"
-            description="Aurora keeps sensitive choices visible and requires confirmation before they change."
-            id="privacy-defaults-title"
-          />
-          <div className="flex flex-col gap-3">
-            {model.privacyControls.map((control) => (
-              <PrivacyControlRow key={control.id} control={control} />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <PanelTitle
-            icon={<Volume2 size={18} aria-hidden />}
-            title="Voice behavior"
-            description="Push-to-talk, wake behavior, and spoken replies are shown with the access needed before they can be used."
-            id="voice-behavior-title"
-          />
-          <div className="flex flex-col gap-3">
-            {model.voiceBehavior.map((item) => (
-              <VoiceBehaviorRow key={item.id} item={item} />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <PanelTitle
-            icon={<Mic size={18} aria-hidden />}
-            title="Assistant behavior"
-            description="Assistant defaults show what is ready, what needs review, and what can be changed next."
-            id="assistant-behavior-title"
-          />
-          <div className="flex flex-col gap-2.5">
-            {model.assistantBehavior.map((item) => (
-              <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      <Card>
-        <PanelTitle
-          icon={<ToggleLeft size={18} aria-hidden />}
-          title="Theme, accessibility, and local storage"
-          description="Display and local preferences stay on this device unless you choose otherwise."
-          id="theme-accessibility-storage-title"
-        />
-        <div className="flex flex-col gap-2.5">
-          {model.userExperienceDefaults.map((item) => (
-            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
-          ))}
-        </div>
-      </Card>
-
-      <Card>
-        <PanelTitle
-          icon={<RefreshCw size={18} aria-hidden />}
-          title="Connection choices"
-          description="Aurora shows when another device can help and when a chosen device needs attention."
-          id="route-policy-title"
-        />
-        <div className="flex flex-col gap-2.5">
-          {model.routeDefaults.map((item) => (
-            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
-          ))}
-        </div>
-        <MetaGrid
-          items={[
-            { label: 'Admin confirmation', value: model.adminActionLabel },
-            { label: 'Backup choice', value: model.fallbackLabel },
-          ]}
-          columns={1}
-        />
-      </Card>
-    </div>
-  )
-}
-
-function RouteDefaultRow({ label, detail, state, value }: { label: string; detail: string; state: AvailabilityState; value: string }) {
-  return (
-    <article className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
-      <div className="flex flex-col gap-0.5">
-        <strong className="text-sm">{label}</strong>
-        <span className="text-xs text-muted-foreground">{detail}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <StatusBadge state={state} />
-        <code className="font-mono text-xs text-muted-foreground">{value}</code>
-      </div>
-    </article>
-  )
-}
-
-function NativeSettingsSurface({
-  snapshot,
-  model,
-  hideTabs,
-  onRequestNativeAccess
-}: {
-  snapshot: AuroraShellSnapshot
-  model: SettingsPermissionsModel
-  hideTabs: boolean
+  profile: AuroraSurfaceProfile
+  includeOsAccess: boolean
   onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
+  connectionRoleContent?: ReactNode | undefined
 }) {
   const accessRows = nativeAccessRows(model, snapshot)
   const grantedCount = accessRows.filter((permission) => permission.granted).length
@@ -357,14 +252,22 @@ function NativeSettingsSurface({
     }
   ]
 
+  const showOsAccess = accessRows.length > 0
+    && (includeOsAccess || shouldShowForSurface(profile, 'android') || shouldShowForSurface(profile, 'ios'))
+  const showLocalVoice = shouldShowForSurface(profile, 'localVoice')
+  const showOverlay = shouldShowForSurface(profile, 'desktopOverlay')
+  const appearanceRows = model.userExperienceDefaults.filter((item) => item.id !== 'local-storage')
+  const storageRows = model.userExperienceDefaults.filter((item) => item.id === 'local-storage')
+  const localVoiceRows = model.voiceBehavior.filter((item) => item.id !== 'spoken-replies')
+  const osTitle = profile.isIos ? 'iOS' : 'Android'
+
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="settings-native-title">
-      {hideTabs ? null : <SettingsTabs active="advanced" />}
+    <section className="flex flex-col gap-4" aria-labelledby="settings-this-device-title">
       <PageHeader
         eyebrow="Settings"
-        id="settings-native-title"
-        title="Advanced"
-        description="Additional device and account choices."
+        id="settings-this-device-title"
+        title="This device"
+        description="Privacy defaults, voice behavior, and assistant preferences."
       />
 
       {model.error ? (
@@ -374,11 +277,91 @@ function NativeSettingsSurface({
         </div>
       ) : null}
 
-      {accessRows.length > 0 ? (
+      <Card>
+        <PanelTitle
+          icon={<RefreshCw size={18} aria-hidden />}
+          title="Connection & role"
+          description="How this device works with Aurora, and when another device can help."
+          id="connection-role-title"
+        />
+        <p className="mb-3 text-sm text-muted-foreground">
+          {profile.nodeMode === 'mesh-node'
+            ? 'This device can share features with approved Aurora devices.'
+            : 'This device uses Aurora on another device.'}
+        </p>
+        {model.loadState !== 'ready' ? (
+          <p className="mb-3 text-sm text-muted-foreground">Connect this device to Aurora to manage shared features.</p>
+        ) : null}
+        {connectionRoleContent ? (
+          <div className="mb-3">{connectionRoleContent}</div>
+        ) : null}
+        <div className="flex flex-col gap-2.5">
+          {model.routeDefaults.map((item) => (
+            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
+          ))}
+        </div>
+        <MetaGrid
+          items={[
+            { label: 'Connection', value: surfaceConnectionLabel(profile) },
+            { label: 'Device', value: surfaceDeviceLabel(profile) },
+            { label: 'Admin confirmation', value: model.adminActionLabel },
+            { label: 'Backup choice', value: model.fallbackLabel },
+          ]}
+          columns={1}
+        />
+      </Card>
+
+      <Card>
+        <PanelTitle
+          icon={<Palette size={18} aria-hidden />}
+          title="Appearance"
+          description="Display and comfort preferences stay on this device unless you choose otherwise."
+          id="appearance-title"
+        />
+        <div className="flex flex-col gap-2.5">
+          {appearanceRows.map((item) => (
+            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
+          ))}
+        </div>
+      </Card>
+
+      {showLocalVoice ? (
+        <Card>
+          <PanelTitle
+            icon={<Volume2 size={18} aria-hidden />}
+            title="Voice on this device"
+            description="Voice behavior on this device: push-to-talk, wake listening, and microphone status."
+            id="local-voice-title"
+          />
+          <div className="mb-3 flex flex-col gap-1">
+            <p className="text-sm text-muted-foreground">{profile.voiceCapture.detail}</p>
+            <p className="text-sm text-muted-foreground">{profile.localSpeechPack.detail}</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            {localVoiceRows.map((item) => (
+              <VoiceBehaviorRow key={item.id} item={item} />
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {showOverlay ? (
+        <Card>
+          <PanelTitle
+            icon={<Keyboard size={18} aria-hidden />}
+            title="Overlay & shortcuts"
+            description="Show Aurora over other windows and use a keyboard shortcut."
+            id="overlay-shortcuts-title"
+          />
+          <p className="text-sm text-muted-foreground">Overlay and shortcuts are not available to change here yet.</p>
+        </Card>
+      ) : null}
+
+      {showOsAccess ? (
         <Card>
           <PanelTitle
             icon={<Smartphone size={18} aria-hidden />}
-            title="Device access"
+            title={osTitle}
             description="Choose which device features Aurora may use. Your device always asks before granting new access."
             id="device-access-title"
           />
@@ -405,9 +388,75 @@ function NativeSettingsSurface({
         </Card>
       ) : null}
 
-      <AdvancedSettingsSections model={model} snapshot={snapshot} />
-      <SettingsDataBlock />
+      <Card>
+        <PanelTitle
+          icon={<HardDrive size={18} aria-hidden />}
+          title="Storage on this device"
+          description="Display preferences and local data saved on this device."
+          id="storage-this-device-title"
+        />
+        <div className="flex flex-col gap-2.5">
+          {storageRows.map((item) => (
+            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+          <div>
+            <strong className="text-sm font-medium">Export or delete your data</strong>
+            <p className="mt-0.5 text-xs text-muted-foreground">Preview affected records before either action runs.</p>
+          </div>
+          <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+            <Button variant="outline" className="w-full justify-center sm:w-auto">Export my data</Button>
+            <Button variant="danger" className="w-full justify-center sm:w-auto">Delete my data</Button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <PanelTitle
+            icon={<ShieldCheck size={18} aria-hidden />}
+            title="Privacy defaults"
+            description="Aurora keeps sensitive choices visible and requires confirmation before they change."
+            id="privacy-defaults-title"
+          />
+          <div className="flex flex-col gap-3">
+            {model.privacyControls.map((control) => (
+              <PrivacyControlRow key={control.id} control={control} />
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <PanelTitle
+            icon={<Mic size={18} aria-hidden />}
+            title="Assistant behavior"
+            description="Assistant defaults show what is ready, what needs review, and what can be changed next."
+            id="assistant-behavior-title"
+          />
+          <div className="flex flex-col gap-2.5">
+            {model.assistantBehavior.map((item) => (
+              <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
+            ))}
+          </div>
+        </Card>
+      </div>
     </section>
+  )
+}
+
+function RouteDefaultRow({ label, detail, state, value }: { label: string; detail: string; state: AvailabilityState; value: string }) {
+  return (
+    <article className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
+      <div className="flex flex-col gap-0.5">
+        <strong className="text-sm">{label}</strong>
+        <span className="text-xs text-muted-foreground">{detail}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <StatusBadge state={state} />
+        <code className="font-mono text-xs text-muted-foreground">{value}</code>
+      </div>
+    </article>
   )
 }
 
@@ -448,87 +497,6 @@ function nativeAccessDetail(permission: SettingsNativePermissionCard): string {
     return 'Keeps a user-started listening session visible and easy to stop.'
   }
   return 'Review whether Aurora may use this feature on your device.'
-}
-
-function SettingsTabs({ active }: { active: 'general' | 'configuration' | 'advanced' }) {
-  const tabs = [
-    { id: 'general' as const, label: 'General', href: '/settings' },
-    { id: 'configuration' as const, label: 'Configuration', href: '/admin/config' },
-    { id: 'advanced' as const, label: 'Advanced', href: '/settings/native' }
-  ]
-  return (
-    <nav className="flex items-center gap-1 border-b border-border" aria-label="Settings sections">
-      {tabs.map((tab) => (
-        <a
-          key={tab.id}
-          href={tab.href}
-          className={cn(
-            'border-b-2 border-transparent px-3.5 py-2 text-sm font-medium text-muted-foreground -mb-px',
-            tab.id === active && 'border-primary text-foreground'
-          )}
-        >
-          {tab.label}
-        </a>
-      ))}
-    </nav>
-  )
-}
-
-function AdvancedSettingsSections({ model, snapshot }: { model: SettingsPermissionsModel; snapshot: AuroraShellSnapshot }) {
-  const sections = [
-    {
-      section: 'Routes',
-      entries: model.routeDefaults.map((item) => ({ key: item.id, label: item.label, description: item.detail, value: item.value }))
-    },
-    {
-      section: 'Experience',
-      entries: model.userExperienceDefaults.map((item) => ({ key: item.id, label: item.label, description: item.detail, value: item.value }))
-    },
-    {
-      section: 'Platform',
-      entries: [
-        { key: 'connection', label: 'Connection', description: 'How this screen is connected.', value: surfaceConnectionLabel(snapshot) },
-        { key: 'device', label: 'Device', description: 'Where Aurora is running.', value: surfaceDeviceLabel(snapshot) },
-        { key: 'available-access', label: 'Available access', description: 'Device features ready to use.', value: String(model.nativePermissions.filter((permission) => permission.granted).length) }
-      ]
-    }
-  ]
-  return (
-    <div className="flex flex-col gap-4">
-      {sections.map((section) => (
-        <Card key={section.section} title={section.section}>
-          <div className="flex flex-col gap-3">
-            {section.entries.map((entry) => (
-              <label key={entry.key} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1fr_minmax(0,260px)] sm:items-center">
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium">{entry.label}</span>
-                  <small className="text-xs text-muted-foreground">{entry.description}</small>
-                </span>
-                <Input value={entry.value} readOnly className="font-mono text-xs" />
-              </label>
-            ))}
-          </div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function SettingsDataBlock() {
-  return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <strong className="text-sm font-medium">Export or delete your data</strong>
-          <p className="mt-0.5 text-xs text-muted-foreground">Preview affected records before either action runs.</p>
-        </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-          <Button variant="outline" className="w-full justify-center sm:w-auto">Export my data</Button>
-          <Button variant="danger" className="w-full justify-center sm:w-auto">Delete my data</Button>
-        </div>
-      </div>
-    </Card>
-  )
 }
 
 export function buildSettingsPermissionsModel(snapshot: AuroraShellSnapshot): SettingsPermissionsModel {
@@ -721,42 +689,6 @@ function VoiceBehaviorRow({ item }: { item: SettingsVoiceBehaviorCard }) {
       </div>
       <Button variant="ghost" disabled>
         {item.enabled ? 'Needs confirmation' : 'Not ready'}
-      </Button>
-    </article>
-  )
-}
-
-function NativeIntegrationRow({ integration }: { integration: SettingsNativeIntegrationCard }) {
-  return (
-    <article className="aui-settings-row flex items-start gap-3 rounded-lg border border-border/60 p-3">
-      <div className="mt-0.5 text-muted-foreground">
-        {integration.state === 'unsupported' ? <AlertTriangle size={18} aria-hidden /> : <CheckCircle2 size={18} aria-hidden />}
-      </div>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <h3 className="text-sm font-medium">{integration.label}</h3>
-        <p className="text-xs text-muted-foreground">{integration.detail}</p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusBadge state={integration.state} />
-          <PrivacyBadge privacy={integration.privacyClass} />
-        </div>
-        <small className="text-xs text-muted-foreground">{safeCopy(integration.capability, 'Device feature')}</small>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-3">
-          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
-            <dt className="text-muted-foreground">Action</dt>
-            <dd className="font-medium">{safeCopy(integration.backendMethod, 'Review setup')}</dd>
-          </div>
-          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
-            <dt className="text-muted-foreground">Access</dt>
-            <dd className="font-medium">{integration.permission ? 'Needs device access' : 'No extra access'}</dd>
-          </div>
-          <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
-            <dt className="text-muted-foreground">System assistant role</dt>
-            <dd className="font-medium">{integration.siriReplacement ? 'claimed' : 'false'}</dd>
-          </div>
-        </dl>
-      </div>
-      <Button variant="ghost" disabled>
-        {integration.state === 'unsupported' ? 'Not ready' : 'Needs device review'}
       </Button>
     </article>
   )
@@ -1349,22 +1281,14 @@ function nativeLimitationDetail(id: string, detail: string): string {
   return safeCopy(detail, 'This device cannot use that feature right now.')
 }
 
-function surfaceConnectionLabel(snapshot: AuroraShellSnapshot): string {
-  const profile = getAuroraSurfaceProfile({
-    transportKind: snapshot.transportKind,
-    nativePlatform: snapshot.nativePlatform
-  })
+function surfaceConnectionLabel(profile: AuroraSurfaceProfile): string {
   if (profile.usesLocalSidecar) return 'This computer'
   if (profile.isMobile) return 'Mobile app'
   if (profile.isWebThin) return 'Connected browser'
   return 'Aurora app'
 }
 
-function surfaceDeviceLabel(snapshot: AuroraShellSnapshot): string {
-  const profile = getAuroraSurfaceProfile({
-    transportKind: snapshot.transportKind,
-    nativePlatform: snapshot.nativePlatform
-  })
+function surfaceDeviceLabel(profile: AuroraSurfaceProfile): string {
   if (profile.isAndroid) return 'Android device'
   if (profile.isIos) return 'iOS device'
   if (profile.isDesktop) return 'Desktop computer'
@@ -1400,21 +1324,4 @@ function containsInternalCopy(value: string): boolean {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort()
-}
-
-function integrationStatusState(status: NativePlatformIntegration['status']): AvailabilityState {
-  if (status === 'supported') return 'available-local'
-  if (status === 'partial') return 'degraded'
-  if (status === 'requires-native-target') return 'privacy-blocked'
-  if (status === 'deferred') return 'pending'
-  return 'unsupported'
-}
-
-function releaseGateState(status: NativeReleaseGate['status']): AvailabilityState {
-  if (status === 'passed') return 'available-local'
-  if (status === 'pending') return 'pending'
-  if (status === 'blocked') return 'denied'
-  if (status === 'requires-credentials') return 'privacy-blocked'
-  if (status === 'requires-macos' || status === 'requires-xcode') return 'degraded'
-  return 'unsupported'
 }

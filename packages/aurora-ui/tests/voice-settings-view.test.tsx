@@ -901,7 +901,7 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
-  it('wires the shared Settings voice tab', () => {
+  it('keeps Settings as a local This-device page without spoken-reply tabs', () => {
     const snapshot = webSnapshot()
     const route = availableRoute(snapshot, 'settings')
     const markup = renderToStaticMarkup(
@@ -913,10 +913,14 @@ describe('VoiceSettingsView', () => {
       />
     )
 
-    expect(markup).toContain('Voice')
-    expect(markup).toContain('General')
-    expect(markup).toContain('Configuration')
-    expect(markup).toContain('Advanced')
+    expect(markup).toContain('This device')
+    expect(markup).not.toContain('id="settings-home-title"')
+    expect(markup).not.toContain('All Aurora settings')
+    expect(markup).not.toContain('>General<')
+    expect(markup).not.toContain('role="tab"')
+    expect(markup).not.toContain('role="tablist"')
+    expect(markup).not.toContain('Configuration')
+    expect(markup).not.toContain('>Advanced<')
   })
 
   it('keeps shared web and client copy neutral about where voices are kept', async () => {

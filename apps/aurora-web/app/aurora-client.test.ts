@@ -186,6 +186,61 @@ describe('createAuroraBrowserClient', () => {
     expect(runtime.client.transport.kind).toBe('mock')
   })
 
+  it('seeds member vs admin demo sessions from the named launch preset', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET', 'web-remote')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage()
+
+    const memberRuntime = createAuroraBrowserRuntime()
+    expect(memberRuntime.client.auth.snapshot()).toEqual(expect.objectContaining({
+      isAdmin: false,
+      principalName: 'Member',
+    }))
+
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET', 'web-remote-admin')
+    resetAuroraBrowserClientForTests()
+    installBrowserStorage()
+    const adminRuntime = createAuroraBrowserRuntime()
+    expect(adminRuntime.client.auth.snapshot()).toEqual(expect.objectContaining({
+      isAdmin: true,
+      principalName: 'Admin',
+    }))
+  })
+
+  it('applies a runtime query override without a baked debug preset env', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage('https://app.example/?aurora-surface=ios&aurora-role=remote-console&aurora-admin=0')
+
+    const runtime = createAuroraBrowserRuntime()
+    expect(runtime.surface.kind).toBe('ios')
+    expect(runtime.surface.nodeMode).toBe('remote-console')
+    expect(runtime.client.auth.snapshot()).toEqual(expect.objectContaining({
+      isAdmin: false,
+      principalName: 'Member',
+    }))
+    expect(process.env.NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET).toBeUndefined()
+  })
+
+  it('persists a python-full desktop-local launch profile for the native node demo', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI_PRESET', 'desktop-local')
+    vi.stubEnv('NEXT_PUBLIC_AURORA_WEB_DEMO_MODE', '1')
+    installBrowserStorage()
+
+    const runtime = createAuroraBrowserRuntime()
+    expect(runtime.surface.kind).toBe('desktop-local')
+    expect(runtime.surface.usesLocalSidecar).toBe(true)
+    expect(auroraBrowserRuntimeProfile()).toEqual(expect.objectContaining({
+      nodeMode: 'mesh-node',
+      runtimeTier: 'python-full',
+    }))
+  })
+
   it('persists a dev launch profile before applying its surface simulation', () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('NEXT_PUBLIC_AURORA_DEBUG_UI', '1')
@@ -1014,7 +1069,7 @@ function plainHeaders(headers: HeadersInit | undefined): Record<string, string> 
   return headers
 }
 
-function installBrowserStorage(): Storage & { dump(): Record<string, string> } {
+function installBrowserStorage(href = 'https://app.example/'): Storage & { dump(): Record<string, string> } {
   const values = new Map<string, string>()
   const storage: Storage & { dump(): Record<string, string> } = {
     length: 0,
@@ -1030,7 +1085,9 @@ function installBrowserStorage(): Storage & { dump(): Record<string, string> } {
   })
   vi.stubGlobal('window', {
     localStorage: storage,
-    location: new URL('https://app.example/'),
+    sessionStorage: storage,
+    location: new URL(href),
+    history: { replaceState: vi.fn(), state: null },
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   })

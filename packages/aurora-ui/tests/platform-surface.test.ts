@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAuroraSurfaceProfile } from '../src/platform-surface'
+import { getAuroraSurfaceProfile, shouldShowForSurface } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Aurora surface profile regression coverage', () => {
@@ -548,6 +548,57 @@ describe('Aurora surface profile regression coverage', () => {
     expect(unknown.usesNativeShell).toBe(false)
     expect(unknown.supportsMobileNative).toBe(false)
     expect(unknown.usesBrowserVoiceRuntime).toBe(false)
+  })
+
+  it('shows local Settings on native shells and hosted-web nodes, not hosted-web remote consoles', () => {
+    const webRemote = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'http',
+      nodeMode: 'remote-console',
+    })
+    const webNode = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'http',
+      nodeMode: 'mesh-node',
+    })
+    const desktopThin = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'tauri-thin',
+      nativePlatform: 'linux',
+      nodeMode: 'remote-console',
+    })
+    const androidRemote = getAuroraSurfaceProfile({
+      runtimeMode: 'android',
+      transportKind: 'native-mobile',
+      nativePlatform: 'android',
+      nodeMode: 'remote-console',
+    })
+    const hostedAndroidBrowser = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'http',
+      nodeMode: 'remote-console',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36',
+    })
+
+    expect(shouldShowForSurface(webRemote, 'localSettings')).toBe(false)
+    expect(shouldShowForSurface(webNode, 'localSettings')).toBe(true)
+    expect(shouldShowForSurface(desktopThin, 'localSettings')).toBe(true)
+    expect(shouldShowForSurface(androidRemote, 'localSettings')).toBe(true)
+    expect(shouldShowForSurface(hostedAndroidBrowser, 'localSettings')).toBe(false)
+    expect(hostedAndroidBrowser.physicalKind).toBe('hosted-web')
+  })
+
+  it('does not let mock SDK transport hide hosted-web node Settings', () => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'mock',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+    })
+
+    expect(profile.physicalKind).toBe('hosted-web')
+    expect(profile.ownsLocalNodeState).toBe(true)
+    expect(shouldShowForSurface(profile, 'localSettings')).toBe(true)
   })
 
   it('lets explicit native platform override conflicting hosted-web hints', () => {

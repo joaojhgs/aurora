@@ -9,6 +9,9 @@ export const AURORA_RELEASE_FOCUSED_MEDIA_EVENT = 'aurora:release-focused-media'
 
 export type AuroraSurfaceFeature =
   | 'desktopCommands'
+  | 'desktopOverlay'
+  | 'localVoice'
+  | 'localSettings'
   | 'sidecar'
   | 'ios'
   | 'android'
@@ -165,7 +168,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
         ? 'desktop-local'
         : isDesktopThin
           ? 'desktop-thin'
-          : runtimeMode === 'mock' || transportKind === 'mock'
+          : runtimeMode === 'mock' || (transportKind === 'mock' && !runtimeMode)
             ? 'mock'
             : explicitWebThin || transportKind === 'http'
               ? 'web'
@@ -334,10 +337,28 @@ export function surfaceSupportsRuntimeTier(
   }
 }
 
+/**
+ * Local This-device Settings belong on native shells and on hosted web only
+ * when this browser is itself a mesh node. Hosted web remote consoles manage
+ * the connected Aurora through Operate, not a local Settings page.
+ */
+export function surfaceOwnsLocalSettings(profile: AuroraSurfaceProfile): boolean {
+  if (profile.isDesktop && profile.usesNativeShell) return true
+  if (profile.supportsMobileNative) return true
+  return profile.physicalKind === 'hosted-web' && profile.ownsLocalNodeState
+}
+
 export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: AuroraSurfaceFeature): boolean {
   switch (feature) {
     case 'desktopCommands':
       return profile.supportsDesktopCommands
+    case 'desktopOverlay':
+      return profile.isDesktop && profile.usesNativeShell
+    case 'localSettings':
+      return surfaceOwnsLocalSettings(profile)
+    case 'localVoice':
+      return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
+        || profile.voiceCapture.wakewordOwner !== 'unavailable'
     case 'sidecar':
     case 'localOnly':
       return profile.usesLocalSidecar

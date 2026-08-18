@@ -20,10 +20,10 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { auroraMobileTabs, auroraNavSections, getAuroraNavItem } from "./nav";
+import { getAuroraNavItem, visibleAuroraMobileTabs, visibleAuroraNavSections } from "./nav";
 import type { AuroraNavItem } from "./nav";
-import type { AuroraNavSection } from "./nav";
-import { getAuroraSurfaceProfile } from "./platform-surface";
+import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from "./platform-surface";
+import { auroraRuntimeVersionLabel } from "./version";
 import { PRODUCT_COPY, productStatusCopy } from "./product-copy";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
 import type { AuroraNodeMode } from "./runtime-profile";
@@ -69,7 +69,12 @@ export function AppShell({
   localNodeAvailable,
 }: AppShellProps) {
   const activePath = normalizePath(currentPath);
-  const surfaceProfile = getAuroraSurfaceProfile({ runtimeMode, nodeMode });
+  const surfaceProfile = getAuroraSurfaceProfile({
+    runtimeMode,
+    nodeMode,
+    transportKind: snapshot.transportKind,
+    nativePlatform: snapshot.nativePlatform,
+  });
   const mobileViewport = useMobileVisualViewport(surfaceProfile.isMobile);
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activityRailCollapsed, setActivityRailCollapsed] = useState(true);
@@ -154,6 +159,7 @@ export function AppShell({
             activePath={activePath}
             routes={snapshot.routes}
             sessionIsAdmin={sessionIsAdmin}
+            surfaceProfile={surfaceProfile}
             {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
           />
           <div className="flex items-center gap-2 border-t border-border p-2.5">
@@ -196,6 +202,7 @@ export function AppShell({
                 activePath={activePath}
                 routes={snapshot.routes}
                 sessionIsAdmin={sessionIsAdmin}
+                surfaceProfile={surfaceProfile}
                 {...(onNavigate ? { onNavigate: handleMobileNavigate } : {})}
                 onClose={closeMobileNavigation}
               />
@@ -218,7 +225,7 @@ export function AppShell({
             className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
             aria-label="Aurora version and connection state"
           >
-            <span className="aui-runtime-version">v0.9.2</span>{" "}
+            <span className="aui-runtime-version">v{auroraRuntimeVersionLabel(snapshot.serverVersion)}</span>{" "}
             <strong className={shellRuntimeStateToneClass(snapshot, runtimeMode, nodeMode, localNodeAvailable)}>
               <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
             </strong>
@@ -275,6 +282,7 @@ export function AppShell({
         activePath={activePath}
         routes={snapshot.routes}
         sessionIsAdmin={sessionIsAdmin}
+        surfaceProfile={surfaceProfile}
         {...(onNavigate ? { onNavigate } : {})}
       />
     </div>
@@ -382,6 +390,7 @@ function MobileNavigationSheet({
   activePath,
   routes,
   sessionIsAdmin,
+  surfaceProfile,
   onNavigate,
   onClose,
 }: {
@@ -389,6 +398,7 @@ function MobileNavigationSheet({
   activePath: string;
   routes: RouteAvailability[];
   sessionIsAdmin: boolean;
+  surfaceProfile: AuroraSurfaceProfile;
   onNavigate?: (href: string) => void;
   onClose: () => void;
 }) {
@@ -409,6 +419,7 @@ function MobileNavigationSheet({
           routes={routes}
           compact
           sessionIsAdmin={sessionIsAdmin}
+          surfaceProfile={surfaceProfile}
           {...(onNavigate ? { onNavigate } : {})}
         />
       </div>
@@ -431,18 +442,17 @@ function MobileBottomTabs({
   activePath,
   routes,
   sessionIsAdmin,
+  surfaceProfile,
   onNavigate,
 }: {
   activePath: string;
   routes: RouteAvailability[];
   sessionIsAdmin: boolean;
+  surfaceProfile: AuroraSurfaceProfile;
   onNavigate?: (href: string) => void;
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
-  const mobileTabOrder = new Set(["assistant", "mesh", "settings"]);
-  const tabs = auroraMobileTabs.filter(
-    (tab) => mobileTabOrder.has(tab.id) && (sessionIsAdmin || !tab.adminGated || tab.id === "settings"),
-  );
+  const tabs = visibleAuroraMobileTabs(surfaceProfile, sessionIsAdmin);
   return (
     <nav
       className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-50 flex min-h-[calc(4.1rem+env(safe-area-inset-bottom))] items-center justify-around border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pt-1.5 md:hidden"
@@ -516,16 +526,18 @@ export function ShellNavigation({
   routes,
   compact = false,
   sessionIsAdmin = false,
+  surfaceProfile,
   onNavigate,
 }: {
   activePath: string;
   routes: RouteAvailability[];
   compact?: boolean;
   sessionIsAdmin?: boolean;
+  surfaceProfile: AuroraSurfaceProfile;
   onNavigate?: (href: string) => void;
 }) {
   const routeById = new Map(routes.map((route) => [route.item.id, route]));
-  const navigationSections = shellNavigationSections(sessionIsAdmin);
+  const navigationSections = visibleAuroraNavSections(surfaceProfile, sessionIsAdmin);
   return (
     <nav
       className={cn("aui-nav flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
@@ -563,18 +575,6 @@ export function ShellNavigation({
       ))}
     </nav>
   );
-}
-
-function shellNavigationSections(sessionIsAdmin: boolean): AuroraNavSection[] {
-  if (sessionIsAdmin) return auroraNavSections;
-  const settings = auroraNavSections
-    .flatMap((section) => section.items)
-    .find((item) => item.id === "settings");
-  return auroraNavSections.flatMap((section) => {
-    if (section.label === "Operate · admin only") return [];
-    if (section.label !== "Configure" || !settings) return [section];
-    return [{ ...section, items: [settings, ...section.items] }];
-  });
 }
 
 export function RouteMatrix({ routes }: { routes: RouteAvailability[] }) {

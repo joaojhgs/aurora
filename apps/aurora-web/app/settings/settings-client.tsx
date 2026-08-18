@@ -6,17 +6,14 @@ import { useBrowserRoute, useBrowserRuntimeProfile, useBrowserShellRuntime } fro
 
 export function SettingsClientPage({
   snapshot,
-  settingsRoute,
   configRoute,
   dataRoute
 }: {
   snapshot: AuroraShellSnapshot
-  settingsRoute: RouteAvailability
   configRoute: RouteAvailability
   dataRoute: RouteAvailability
 }) {
   const runtime = useBrowserShellRuntime()
-  const activeSettingsRoute = useBrowserRoute(settingsRoute)
   const activeConfigRoute = useBrowserRoute(configRoute)
   const activeDataRoute = useBrowserRoute(dataRoute)
   const runtimeProfile = useBrowserRuntimeProfile()
@@ -27,7 +24,6 @@ export function SettingsClientPage({
       snapshot={snapshot}
       configRoute={activeConfigRoute}
       dataRoute={activeDataRoute}
-      initialTab={activeSettingsRoute.disabled ? 'advanced' : 'general'}
       runtimeProfile={runtimeProfile}
       surfaceProfile={runtime.surface}
       localSpeechCatalog={runtime.localSpeechCatalog}
