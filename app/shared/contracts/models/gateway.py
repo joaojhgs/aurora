@@ -1050,6 +1050,9 @@ class CapabilityCatalogResponse(IOModel):
     generated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     local_peer_id: str | None = None
     local_node_name: str = ""
+    # Unified monorepo version reported by this server (same value the mesh
+    # manifest advertises as aurora_version); empty when unknown.
+    aurora_version: str = ""
     providers: list[CapabilityProviderInfo] = Field(default_factory=list)
     actions: list[CapabilityActionInfo] = Field(default_factory=list)
     resources: list[CapabilityCatalogResourceInfo] = Field(default_factory=list)

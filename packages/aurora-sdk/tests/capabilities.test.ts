@@ -114,6 +114,7 @@ describe('capability graph callable grouping', () => {
     }
 
     const graph = buildCapabilityGraph({ catalog, registry: null, transportKind: 'http' })
+    expect(graph.serverVersion).toBeNull()
     const methodFeatureIds = [
       'method:TTS.StreamStart',
       'method:TTS.StreamChunk',
@@ -152,6 +153,24 @@ describe('capability graph callable grouping', () => {
       'method:TTS.StreamStart:local:TTS:StreamStart@local:TTS:main'
     ])
     expect(new Set(graph.candidateProviderIndex['callable:TTS:speech_streaming'])).toHaveLength(3)
+  })
+
+  it('surfaces a non-empty catalog aurora_version as the graph serverVersion', () => {
+    const catalog: CapabilityCatalogResponse = {
+      generated_at: '2026-01-01T00:00:00Z',
+      local_peer_id: 'local',
+      local_node_name: 'local',
+      aurora_version: ' 1.0.0 ',
+      providers: [provider()],
+      actions: [action('StreamStart')],
+      resources: [],
+      provider_index: {},
+      action_index: {},
+      secrets_redacted: true
+    }
+
+    const graph = buildCapabilityGraph({ catalog, registry: null, transportKind: 'http' })
+    expect(graph.serverVersion).toBe('1.0.0')
   })
 
   it('roundtrips callable feature objects on services and registry announcements', async () => {

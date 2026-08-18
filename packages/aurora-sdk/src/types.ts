@@ -2138,6 +2138,8 @@ export interface CapabilityCatalogResponse {
   generated_at: string
   local_peer_id: string | null
   local_node_name: string
+  /** Unified monorepo version reported by the connected server, when provided. */
+  aurora_version?: string
   providers: CapabilityProviderInfo[]
   actions: CapabilityActionInfo[]
   resources: CapabilityCatalogResourceInfo[]
@@ -2248,6 +2250,8 @@ export interface CapabilityGraph {
   generatedAt: string
   localPeerId: string | null
   localNodeName: string
+  /** Aurora version reported by the connected server; null when not provided. */
+  serverVersion?: string | null
   secretsRedacted: boolean
   nodes: CapabilityGraphNode[]
   byFeatureId: Record<string, CapabilityGraphNode>

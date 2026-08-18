@@ -1,5 +1,7 @@
 """Unit tests for Gateway capability catalog and route explain contracts."""
 
+from pathlib import Path
+
 import pytest
 
 from app.services.gateway.config import MeshConfig
@@ -163,6 +165,8 @@ async def test_catalog_exposes_multiple_providers_bindability_and_redacted_schem
         local_peer_id="local-peer",
     )
 
+    version_path = Path(__file__).resolve().parents[3] / "VERSION"
+    assert catalog.aurora_version == version_path.read_text(encoding="utf-8").strip()
     assert catalog.secrets_redacted is True
     assert {provider.peer_id: provider.node_name for provider in catalog.providers} == {
         "local-peer": "local-node",

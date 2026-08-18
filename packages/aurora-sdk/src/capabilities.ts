@@ -102,10 +102,16 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
     ...callableCandidateProviderIndex
   }
 
+  const serverVersion =
+    typeof input.catalog.aurora_version === 'string' && input.catalog.aurora_version.trim()
+      ? input.catalog.aurora_version.trim()
+      : null
+
   return {
     generatedAt: input.catalog.generated_at,
     localPeerId: input.catalog.local_peer_id,
     localNodeName: input.catalog.local_node_name,
+    serverVersion,
     secretsRedacted: input.catalog.secrets_redacted,
     nodes,
     byFeatureId,

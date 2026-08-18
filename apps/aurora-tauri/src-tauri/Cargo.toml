@@ -1,6 +1,7 @@
 [package]
 name = "aurora-tauri"
-version = "0.1.0"
+# Keep in sync with the repo-root VERSION file (unified monorepo version).
+version = "1.0.0"
 description = "Official Tauri 2 desktop shell for Aurora."
 authors = ["Aurora contributors"]
 license = "MIT"

@@ -189,21 +189,34 @@ def validate_canonical_taxonomy() -> None:
 
 
 def _get_package_version() -> str:
-    """Get package version from pyproject.toml or __init__.py.
+    """Get the unified monorepo version.
+
+    Resolution order: repo-root VERSION file (single source of truth shared
+    with the JS/Tauri builds), then installed package metadata, then
+    pyproject.toml for legacy checkouts.
 
     Returns:
         Package version string (e.g., "1.0.0")
     """
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
     try:
-        # Try to get version from package metadata (works after installation)
+        version_path = os.path.join(project_root, "VERSION")
+        if os.path.exists(version_path):
+            with open(version_path) as f:
+                version = f.read().strip()
+                if version:
+                    return version
+    except Exception:
+        pass
+
+    try:
         if get_package_version_from_metadata:
             return get_package_version_from_metadata("aurora")
     except Exception:
         pass
 
     try:
-        # Fallback: Read from pyproject.toml
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         pyproject_path = os.path.join(project_root, "pyproject.toml")
         if os.path.exists(pyproject_path):
             with open(pyproject_path) as f:
@@ -212,7 +225,6 @@ def _get_package_version() -> str:
     except Exception:
         pass
 
-    # Final fallback
     return "0.0.0"
 
 

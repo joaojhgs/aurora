@@ -1,6 +1,6 @@
 {
   "name": "@aurora/client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Transport-independent TypeScript client SDK for Aurora Gateway and native adapters.",
   "license": "MIT",
   "type": "module",

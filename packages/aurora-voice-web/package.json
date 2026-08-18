@@ -1,6 +1,6 @@
 {
   "name": "@aurora/voice-web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Thin browser host contract for Aurora local voice workers.",
   "license": "MIT",
   "type": "module",

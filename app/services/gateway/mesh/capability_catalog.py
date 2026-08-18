@@ -25,6 +25,7 @@ from app.shared.contracts.models.gateway import (
     ServiceAnnouncement,
 )
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.registry import _get_package_version
 
 from .capability_graph import build_capability_graph
 from .route_errors import public_message_for_reason, public_route_error
@@ -101,6 +102,7 @@ def build_capability_catalog(
         generated_at=datetime.now(UTC).isoformat(),
         local_peer_id=graph.local_peer_id,
         local_node_name=graph.local_node_name,
+        aurora_version=_get_package_version(),
         providers=sorted(providers, key=lambda item: item.provider_id),
         actions=sorted(actions, key=lambda item: item.action_id),
         resources=sorted(resources, key=lambda item: item.resource_id),
