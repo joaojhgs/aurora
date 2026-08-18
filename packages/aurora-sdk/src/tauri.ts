@@ -263,6 +263,9 @@ export interface AndroidVoicePackCatalogEntry {
   tasks?: string[]
   modelFamily?: string
   requiresReferenceAudio?: boolean
+  referenceAudioMode?: 'profile' | 'internal' | string
+  requiresReferenceProfile?: boolean
+  referenceSelectionRequired?: boolean
   referenceSelectionPresent?: boolean
   readyForRuntime?: boolean
   readyForInstall?: boolean
@@ -313,9 +316,25 @@ export interface NativeSpeechPackCatalogEntry {
   runtimeRevision?: string | null
   modelFamily?: string | null
   requiresReferenceAudio?: boolean
+  referenceAudioMode?: 'profile' | 'internal' | string | null
+  requiresReferenceProfile?: boolean
   voiceId?: string | null
   voiceRevision?: string | null
   referenceProfileId?: string | null
+}
+
+export function resolveNativeTtsRequiresReferenceProfile(input: {
+  referenceAudioMode?: string | null
+  requiresReferenceProfile?: boolean
+  requiresReferenceAudio?: boolean
+  modelFamily?: string | null
+}): boolean {
+  const mode = input.referenceAudioMode?.trim()
+  if (mode === 'internal') return false
+  if (mode === 'profile') return true
+  if (input.requiresReferenceProfile === true || input.requiresReferenceAudio === true) return true
+  if (input.requiresReferenceProfile === false || input.requiresReferenceAudio === false) return false
+  return input.modelFamily === 'pockettts'
 }
 
 export interface NativeSpeechPackCatalogResponse {

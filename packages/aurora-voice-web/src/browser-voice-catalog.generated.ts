@@ -2,7 +2,7 @@
 import type { AuroraBrowserRawSpeechCatalog, AuroraBrowserRawTtsCatalog } from './browser-voice-catalog.js'
 
 export const AURORA_BROWSER_TTS_CATALOG_RESOURCE_SHA256 = '284875477e2c10248e6efaae2a142abb6a21b8f5c9e76cdf563a4c3a7f0cba84'
-export const AURORA_BROWSER_SPEECH_CATALOG_RESOURCE_SHA256 = '49a3d2cd10bfc5391cfa1c7d55b1a4cb3ee5e8de7e3fbf2777af24686c0d9c23'
+export const AURORA_BROWSER_SPEECH_CATALOG_RESOURCE_SHA256 = '64198df7ec5fa7ab778caeac7b66a793ad65d83a0ced5553cee111dd725dba0e'
 
 export const AURORA_BROWSER_TTS_CATALOG = {
   "catalog_id": "sherpa-onnx-tts-models-v1",
@@ -16764,40 +16764,6 @@ export const AURORA_BROWSER_SPEECH_CATALOG = {
     },
     {
       "archive": {
-        "asset_id": 191975328,
-        "byte_size": 15667804,
-        "filename": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2",
-        "format": "tar_bzip2",
-        "root": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile",
-        "sha256": "2e6ac2577310bfa2f4b6b5fab0478b868c9d0b2cb2c51b3e13b50581b588864d",
-        "updated_at": "2024-09-11T14:02:32Z",
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile.tar.bz2"
-      },
-      "bindings": {
-        "decoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-        "encoder": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
-        "joiner": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
-        "tokenizer": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/bpe.model",
-        "tokens": "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01-mobile/tokens.txt"
-      },
-      "display_name": "English wake words (compact)",
-      "engine": "sherpa_onnx",
-      "language_scope": "specific",
-      "languages": [
-        "en"
-      ],
-      "mobile_optimized": true,
-      "model_family": "zipformer",
-      "model_id": "kws:zipformer:gigaspeech-mobile",
-      "task": "keyword_spotting",
-      "terms": {
-        "download_initiated_by_user": true,
-        "redistributed_by_aurora": false,
-        "source": "upstream_release_checksums"
-      }
-    },
-    {
-      "archive": {
         "asset_id": 191975136,
         "byte_size": 32654866,
         "filename": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2",
@@ -16822,39 +16788,6 @@ export const AURORA_BROWSER_SPEECH_CATALOG = {
       "mobile_optimized": false,
       "model_family": "zipformer",
       "model_id": "kws:zipformer:wenetspeech",
-      "task": "keyword_spotting",
-      "terms": {
-        "download_initiated_by_user": true,
-        "redistributed_by_aurora": false,
-        "source": "upstream_release_checksums"
-      }
-    },
-    {
-      "archive": {
-        "asset_id": 191975318,
-        "byte_size": 15292881,
-        "filename": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile.tar.bz2",
-        "format": "tar_bzip2",
-        "root": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile",
-        "sha256": "b812a043aef628a6915f89cb9a94e55f8e87e89ff904b516f822d7e0a3e6de2b",
-        "updated_at": "2024-09-11T14:02:27Z",
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile.tar.bz2"
-      },
-      "bindings": {
-        "decoder": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile/decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
-        "encoder": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
-        "joiner": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
-        "tokens": "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01-mobile/tokens.txt"
-      },
-      "display_name": "Chinese wake words (compact)",
-      "engine": "sherpa_onnx",
-      "language_scope": "specific",
-      "languages": [
-        "zh"
-      ],
-      "mobile_optimized": true,
-      "model_family": "zipformer",
-      "model_id": "kws:zipformer:wenetspeech-mobile",
       "task": "keyword_spotting",
       "terms": {
         "download_initiated_by_user": true,
@@ -18170,7 +18103,7 @@ export const AURORA_BROWSER_SPEECH_CATALOG = {
       }
     }
   ],
-  "entries_sha256": "7aaf44b88a5f3f039ed1b90c30fe4de0f257d2cc02940fa3f1ecef881c347149",
+  "entries_sha256": "e2a3f8790a67d0042611ba3e4ee4f7490571fba01364b92179e847fa04cd9f4e",
   "languages": [
     "af",
     "am",

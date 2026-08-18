@@ -64,10 +64,29 @@ export function base64UrlDecode(value: string): Uint8Array {
 }
 
 function escapeAscii(value: string): string {
-  return value.replace(/[\u007f-\uffff]/g, (char) => {
-    const code = char.charCodeAt(0).toString(16).padStart(4, '0')
-    return `\\u${code}`
+  // Match Python json.dumps(ensure_ascii=True): escape everything outside
+  // 0x00-0x7E. JSON.stringify already escaped C0 controls; U+007F and
+  // non-ASCII must still become `\uXXXX` or they diverge from Python
+  // manifest digests.
+  return value.replace(/[^\x00-\x7E]/gu, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0
+    if (codePoint <= 0xFFFF) return `\\u${codePoint.toString(16).padStart(4, '0')}`
+    const normalized = codePoint - 0x10000
+    const high = 0xD800 + (normalized >> 10)
+    const low = 0xDC00 + (normalized & 0x3FF)
+    return `\\u${high.toString(16)}\\u${low.toString(16)}`
   })
+}
+
+function comparePythonStringOrder(left: string, right: string): number {
+  const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0)
+  const rightPoints = Array.from(right, (character) => character.codePointAt(0) ?? 0)
+  const length = Math.min(leftPoints.length, rightPoints.length)
+  for (let index = 0; index < length; index += 1) {
+    const diff = (leftPoints[index] ?? 0) - (rightPoints[index] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return leftPoints.length - rightPoints.length
 }
 
 function canonicalize(value: unknown, sortKeys: boolean): unknown {
@@ -80,7 +99,7 @@ function canonicalize(value: unknown, sortKeys: boolean): unknown {
   const record = value as Record<string, unknown>
   const keys = Object.keys(record)
   if (sortKeys) {
-    keys.sort()
+    keys.sort(comparePythonStringOrder)
   }
   const out: Record<string, unknown> = {}
   for (const key of keys) {

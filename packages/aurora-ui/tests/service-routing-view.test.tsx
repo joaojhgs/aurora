@@ -28,7 +28,10 @@ import type {
   LocalFeatureSharingSnapshot,
 } from '../src/local-feature-sharing'
 import type { RouteAvailability } from '../src/shell-data'
-import type { BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
+import type {
+  BrowserWebRtcPeerController,
+  BrowserWebRtcSnapshot,
+} from '../src/web-thin-runtime'
 
 const TARGET_BASES = [
   'services.orchestrator', 'services.db', 'services.tooling', 'services.scheduler',
@@ -99,8 +102,58 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
+function browserPeerSnapshot(
+  overrides: Partial<BrowserWebRtcSnapshot> = {},
+): BrowserWebRtcSnapshot {
+  return {
+    state: 'closed',
+    connectionMode: 'webrtc-only',
+    expectedStablePeerId: 'peer-provider',
+    nodeName: 'Studio node',
+    icePathCategory: 'unknown',
+    protocolCapabilities: [],
+    reconnectCount: 0,
+    pendingCallCount: 0,
+    pendingStreamCount: 0,
+    pendingSubscriptionCount: 0,
+    pendingFragmentCount: 0,
+    bufferPressureHighWaterBytes: 0,
+    sentFragmentCount: 0,
+    receivedFragmentCount: 0,
+    updatedAt: '2026-07-28T00:00:00Z',
+    status: 'closed',
+    secureContext: true,
+    visible: true,
+    focused: true,
+    hasHttpFallback: false,
+    secretsPersisted: true,
+    persistenceBackend: 'platform-keychain',
+    ...overrides,
+  }
+}
+
+function mutableBrowserPeer(initial: BrowserWebRtcSnapshot) {
+  let current = initial
+  const listeners = new Set<(snapshot: BrowserWebRtcSnapshot) => void>()
+  const peer = {
+    snapshot: () => current,
+    subscribe: (listener: (snapshot: BrowserWebRtcSnapshot) => void) => {
+      listeners.add(listener)
+      listener(current)
+      return () => listeners.delete(listener)
+    },
+  } as unknown as BrowserWebRtcPeerController
+  return {
+    peer,
+    emit(next: BrowserWebRtcSnapshot) {
+      current = next
+      for (const listener of listeners) listener(current)
+    },
+  }
+}
+
 function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === text)!
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.trim() === text)!
 }
 
 function metadataFields() {
@@ -380,6 +433,200 @@ describe('Service sharing and outbound routing', () => {
 
     expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
     expect(container.textContent).toContain('Send requests to')
+    await act(async () => root.unmount())
+  })
+
+  it('returns to loading when an authorized peer makes the connected baseline required', async () => {
+    const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
+    const baseClient = snapshotClient()
+    const registryResult = await baseClient.registry.getRegistry()
+    const client = {
+      ...baseClient,
+      registry: {
+        ...baseClient.registry,
+        getRegistry: vi.fn(() => connectedRegistry.promise),
+      },
+    } as unknown as AuroraClient
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: (listener) => {
+        listener(localSharingSnapshot())
+        return () => undefined
+      },
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const thinPeer = mutableBrowserPeer(browserPeerSnapshot())
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={client}
+          route={route()}
+          thinPeer={thinPeer.peer}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+
+    await act(async () => {
+      thinPeer.emit(browserPeerSnapshot({ state: 'authorized', status: 'authorized' }))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+
+    await act(async () => {
+      connectedRegistry.resolve(registryResult)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(container.textContent).toContain('Send requests to')
+    await act(async () => root.unmount())
+  })
+
+  it('shows degraded connected evidence when one connected source cannot load', async () => {
+    const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
+    const baseClient = snapshotClient()
+    const client = {
+      ...baseClient,
+      registry: {
+        ...baseClient.registry,
+        getRegistry: vi.fn(() => connectedRegistry.promise),
+      },
+    } as unknown as AuroraClient
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: (listener) => {
+        listener(localSharingSnapshot())
+        return () => undefined
+      },
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const thinPeer = mutableBrowserPeer(browserPeerSnapshot({ state: 'authorized', status: 'authorized' }))
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={client}
+          route={route()}
+          thinPeer={thinPeer.peer}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Loading service sharing through Aurora')
+
+    await act(async () => {
+      connectedRegistry.reject(new Error('connected registry unavailable'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Needs attention')
+    expect(container.textContent).toContain('Some service sharing details are temporarily unavailable.')
+    expect(container.textContent).not.toMatch(/registry unavailable|config metadata|capability catalog/iu)
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('re-enters loading while retrying a rejected required connected load', async () => {
+    const retryConnectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
+    const baseClient = snapshotClient()
+    const registryResult = await baseClient.registry.getRegistry()
+    const client = {
+      ...baseClient,
+      registry: {
+        ...baseClient.registry,
+        getRegistry: vi.fn()
+          .mockImplementationOnce(() => {
+            throw new Error('connected registry unavailable')
+          })
+          .mockReturnValueOnce(retryConnectedRegistry.promise),
+      },
+    } as unknown as AuroraClient
+    let localSharingListener: ((snapshot: LocalFeatureSharingSnapshot) => void) | null = null
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: (listener) => {
+        localSharingListener = listener
+        listener(localSharingSnapshot())
+        return () => { localSharingListener = null }
+      },
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const thinPeer = mutableBrowserPeer(browserPeerSnapshot())
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <LocalServiceRoutingResource
+          featureSharing={port}
+          client={client}
+          route={route()}
+          thinPeer={thinPeer.peer}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+
+    await act(async () => {
+      thinPeer.emit(browserPeerSnapshot({ state: 'authorized', status: 'authorized' }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+
+    await act(async () => {
+      localSharingListener?.(localSharingSnapshot())
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(buttonByText(container, 'Refresh').disabled).toBe(false)
+
+    await act(async () => {
+      buttonByText(container, 'Refresh').click()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+
+    await act(async () => {
+      retryConnectedRegistry.resolve(registryResult)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
     await act(async () => root.unmount())
   })
 

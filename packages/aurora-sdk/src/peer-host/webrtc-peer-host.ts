@@ -57,6 +57,9 @@ export class WebRtcPeerHost {
   private readonly active = new Map<string, ActiveWork>()
   private sender: PeerHostFrameSender | null = null
   private acceptingInbound = false
+  // Modules the recipient's ACK reported compatible. Admission is per service:
+  // a consumer that does not route one of our modules must not close the rest.
+  private admittedServices: ReadonlySet<string> = new Set<string>()
   private availabilityRevision = 0
   private connectionEpoch: string
   private pendingManifest: ManifestEvidence = null
@@ -86,12 +89,17 @@ export class WebRtcPeerHost {
     this.lease = new ProviderLeaseController({ peerId: options.localPeerId, clock, randomId })
   }
 
+  get localPeerId(): string {
+    return this.options.localPeerId
+  }
+
   attach(sender: PeerHostFrameSender): void {
     this.sender = sender
   }
 
   async startEpoch(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
     this.acceptingInbound = false
+    this.admittedServices = new Set<string>()
     this.connectionEpoch = this.lease.startEpoch()
     this.availabilityRevision = 0
     this.pendingManifest = null
@@ -110,8 +118,15 @@ export class WebRtcPeerHost {
     if (!this.manifestAckEvidenceMatches(ack)) return false
     const compatible = this.validateStructuredManifestAckServices(ack)
     if (compatible === null) return false
-    if (!this.pendingManifest.requiredServices.every((service) => compatible.includes(service))) return false
     if (this.pendingManifest.requiredServices.length === 0) return false
+    // Admit exactly the projected modules the recipient called compatible.
+    // Python classifies a service it has no routing config for as `unused`,
+    // which is a statement about the consumer's preference, not about whether
+    // the service works — so an all-or-nothing gate here let one uninterested
+    // consumer close the provider entirely.
+    const admitted = this.pendingManifest.requiredServices.filter((service) => compatible.includes(service))
+    if (admitted.length === 0) return false
+    this.admittedServices = new Set(admitted)
     this.acceptingInbound = true
     this.pendingManifest = null
     this.pendingManifestFrame = null
@@ -132,6 +147,7 @@ export class WebRtcPeerHost {
 
   suspend(reason = 'provider_unavailable'): Record<string, unknown> {
     this.acceptingInbound = false
+    this.admittedServices = new Set<string>()
     this.cancelAll(reason)
     const frame = this.lease.tombstone(reason) as unknown as Record<string, unknown>
     return frame
@@ -203,6 +219,17 @@ export class WebRtcPeerHost {
     if (!sameOrderedStrings(actual.incompatible, incompatible)) return null
     if (!sameOrderedStrings(actual.unused, unused)) return null
     return compatible
+  }
+
+  /**
+   * Whether the recipient's ACK admitted this module for inbound work.
+   *
+   * Callers must derive the module with `methodModule`, the same helper that
+   * builds the manifest, so the admitted set and the advertised set cannot
+   * disagree about which module a descriptor belongs to.
+   */
+  private isServiceAdmitted(module: string): boolean {
+    return this.admittedServices.has(module)
   }
 
   private manifestAckEvidenceMatches(ack: Record<string, unknown>): boolean {
@@ -362,6 +389,10 @@ export class WebRtcPeerHost {
         await sender.sendFrame(errorFrame(frame.id, 425, 'provider is not ready', 'provider_not_ready'))
         return
       }
+      if (!this.isServiceAdmitted(methodModule(method))) {
+        await sender.sendFrame(errorFrame(frame.id, 403, 'service is not admitted', 'service_not_admitted'))
+        return
+      }
       const requestBytes = utf8Bytes(JSON.stringify(frame.params ?? {}))
       const maxBytes = method.maxRequestBytes ?? this.options.maxRequestBytes
       if (requestBytes > maxBytes) {
@@ -468,6 +499,10 @@ export class WebRtcPeerHost {
       await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'topic_not_registered', rejected_topics: frame.topics })
       return
     }
+    // Subscriptions are deliberately not gated on manifest admission: the
+    // manifest advertises method-bearing services only, so an event-only module
+    // has no entry in the ACK partition to be admitted by. Event authorization
+    // is enforced per topic by authorizationStore.authorize below.
     const nowMs = Math.floor(this.options.clock())
     const identity = identityFromAuthority(epochContext, undefined, remotePeerId)
     for (const event of events as PeerHostEventDescriptor[]) {
@@ -607,6 +642,7 @@ export class WebRtcPeerHost {
 
   handleDisconnect(reason = 'disconnect'): void {
     this.acceptingInbound = false
+    this.admittedServices = new Set<string>()
     this.cancelAll(reason)
     this.unbindRevocation()
   }
@@ -794,6 +830,7 @@ export class WebRtcPeerHost {
     if (!this.selectorMatchesActiveAuthority(event.selector)) return
     this.authorityRevoked = true
     this.acceptingInbound = false
+    this.admittedServices = new Set<string>()
     const terminal = revocationTerminalError(event)
     for (const [id, active] of [...this.active]) {
       active.abort.abort('peer_authority_revoked')
@@ -925,7 +962,7 @@ function manifestService(
 ): Record<string, unknown> {
   const methods = descriptors
     .map((method) => manifestMethod(method))
-    .sort((left, right) => String(left.bus_topic).localeCompare(String(right.bus_topic)))
+    .sort((left, right) => compareCodePoints(String(left.bus_topic), String(right.bus_topic)))
   const declaredCapabilities = sortedUnique(
     descriptors.flatMap((method) => method.serviceCapabilities ?? [])
   )
@@ -1034,8 +1071,21 @@ function canonicalCallableFeatures(
     })
   }
   return [...byId.values()].sort((left, right) =>
-    String(left.feature_id).localeCompare(String(right.feature_id))
+    compareCodePoints(String(left.feature_id), String(right.feature_id))
   )
+}
+
+/**
+ * Order strings exactly the way Python's `sorted()` does.
+ *
+ * The projection manifest must arrive in canonical order or Python's
+ * `_require_canonical_unique` rejects the whole thing as
+ * `projection_not_canonical`. `localeCompare` uses ICU collation, which is
+ * case-insensitive at the primary level and orders punctuation differently, so
+ * it can disagree with code-point order and silently fail the manifest closed.
+ */
+function compareCodePoints(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {

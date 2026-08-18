@@ -1,6 +1,6 @@
 import { MeshP2PTransport, type AsyncMeshEventSource, type MeshP2PTransportOptions, type MeshPeerBridge, type MeshPeerManifest, type MeshRpcRequest, type MeshRpcResponse, type MeshStreamRpcRequest } from '../mesh.js'
 import type { AuroraEvent } from '../types.js'
-import { MeshEventSubscriptionRegistry } from './event-subscriptions.js'
+import { MeshEventSubscriptionRegistry, CORRELATION_REQUIRED_EVENT_TOPICS } from './event-subscriptions.js'
 import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
@@ -18,13 +18,14 @@ import {
 } from './peer-protocol.js'
 import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
 import { buildWebRtcManifestAck, parseWebRtcMeshManifest } from './manifest.js'
-import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type ProviderLeaseFrame } from './protocol.js'
+import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type ProviderLeaseFrame, type CapacityUpdateFrame } from './protocol.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
 import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
 
 export interface WebRtcMeshPeerBridgeOptions {
   session: Pick<WebRtcPeerSession, 'sendFrame' | 'subscribeFrames' | 'subscribe' | 'getSnapshot'>
   remotePeerId: string
+  localPeerId?: string
   localPeerRole?: 'consumer' | 'provider' | 'hybrid'
   timeoutMs?: number
   streamQueueLimit?: number
@@ -125,6 +126,7 @@ const TOPIC_RE = /^[A-Za-z0-9_.:/-]+$/
 export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly session: WebRtcMeshPeerBridgeOptions['session']
   private readonly remotePeerId: string
+  private readonly localPeerId: string | undefined
   private readonly localPeerRole: 'consumer' | 'provider' | 'hybrid'
   private readonly timeoutMs: number
   private readonly streamQueueLimit: number
@@ -158,6 +160,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private incomingManifestGeneration = 0
   private asyncDispatchFailureCount = 0
   private lastAsyncDispatchFailure: AsyncDispatchFailure | null = null
+  private droppedFrameCount = 0
+  private lastDroppedFrameReason: string | null = null
+  private readonly remoteCapacity = new Map<string, { module: string; available: number; maxConcurrent: number; activeCalls: number }>()
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
   private readonly startedAuthorityEpochKeys = new Set<string>()
   private unsubscribeFrames: (() => void) | undefined
@@ -166,6 +171,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   constructor(options: WebRtcMeshPeerBridgeOptions) {
     this.session = options.session
     this.remotePeerId = requireIdentifier(options.remotePeerId, 'remotePeerId')
+    this.localPeerId = options.localPeerId ? requireIdentifier(options.localPeerId, 'localPeerId') : options.peerHost?.localPeerId
     this.localPeerRole = options.localPeerRole ?? 'consumer'
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.streamQueueLimit = options.streamQueueLimit ?? DEFAULT_STREAM_QUEUE_LIMIT
@@ -264,8 +270,12 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.assertOpen()
     this.assertPeer(request.peerId)
     const topics = normalizeTopics(request.topics)
-    const correlationIds = normalizeCorrelationIds(readCorrelationIds(request))
     if (!this.remoteProtocol?.capabilities.has(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1)) throw new Error('unsupported scoped_event_subscriptions_v1')
+    const correlationIds = normalizeCorrelationIds(readCorrelationIds(request))
+    const correlationRequired = topics.filter((topic) => CORRELATION_REQUIRED_EVENT_TOPICS.includes(topic))
+    if (correlationRequired.length > 0 && correlationIds.length === 0) {
+      throw new Error('correlation_id is required for scoped event topics')
+    }
     if (request.signal?.aborted) throw abortError()
     const id = this.randomId()
     const stream: StreamController = { id, topics, correlationIds, queue: [], waiters: [], done: false, error: null }
@@ -348,6 +358,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     remoteProtocolCapabilities: string[]
     asyncDispatchFailureCount: number
     lastAsyncDispatchFailure: AsyncDispatchFailure | null
+    droppedFrameCount: number
+    lastDroppedFrameReason: string | null
   } {
     return {
       pendingCallCount: this.pending.size,
@@ -359,7 +371,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       receivedFragmentCount: this.receivedFragmentCount,
       remoteProtocolCapabilities: [...(this.remoteProtocol?.capabilities ?? [])],
       asyncDispatchFailureCount: this.asyncDispatchFailureCount,
-      lastAsyncDispatchFailure: this.lastAsyncDispatchFailure
+      lastAsyncDispatchFailure: this.lastAsyncDispatchFailure,
+      droppedFrameCount: this.droppedFrameCount,
+      lastDroppedFrameReason: this.lastDroppedFrameReason
     }
   }
 
@@ -574,6 +588,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     } catch (error) {
       // Unknown malformed inbound frames are fail-closed for assemblies but should not crash the app shell.
       if (error instanceof Error && error.name === 'FragmentProtocolError') this.reassembler.cleanupPeer(this.remotePeerId)
+      // Counted, not logged: without this the catch made protocol drift
+      // invisible, which is how capacity_update was dropped unnoticed. The
+      // reason is a bounded parser code, never frame contents.
+      this.droppedFrameCount += 1
+      this.lastDroppedFrameReason = error instanceof Error ? error.name : 'unknown'
     }
   }
 
@@ -660,6 +679,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         return
       case 'ping':
         void this.sendLogicalFrame({ type: 'pong', id: typeof frame.id === 'string' ? frame.id : undefined }).catch(() => undefined)
+        return
+      case 'capacity_update':
+        this.handleCapacityUpdate(frame as unknown as CapacityUpdateFrame)
         return
       default:
         return
@@ -889,7 +911,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         remoteAvailabilityBeforeAck: this.remoteAvailability
       }
       this.incomingManifestAck = incoming
-      await this.sendLogicalFrame(buildManifestAck(manifest))
+      await this.sendLogicalFrame(buildManifestAck(manifest, this.localPeerId))
       if (this.incomingManifestAck?.generation !== generation) return
       this.incomingManifestAck = null
       if (!this.remoteRequiresProviderLease()) {
@@ -941,6 +963,22 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (!this.peerHost || this.localPeerRole === 'consumer') return
     if (!this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)) return
     await this.sendLogicalFrame(await this.peerHost.buildManifest(this.remotePeerId, this.authenticatedPeerContext))
+  }
+
+  getRemoteServiceCapacity(module: string): { available: number; maxConcurrent: number; activeCalls: number } | undefined {
+    const record = this.remoteCapacity.get(module)
+    if (!record) return undefined
+    return { available: record.available, maxConcurrent: record.maxConcurrent, activeCalls: record.activeCalls }
+  }
+
+  private handleCapacityUpdate(frame: CapacityUpdateFrame): void {
+    const activeCalls = frame.max_concurrent > 0 ? Math.max(0, frame.max_concurrent - frame.available) : 0
+    this.remoteCapacity.set(frame.module, {
+      module: frame.module,
+      available: frame.available,
+      maxConcurrent: frame.max_concurrent,
+      activeCalls
+    })
   }
 
   private handleProviderLease(frame: ProviderLeaseFrame): void {
@@ -1123,8 +1161,22 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     return context
   }
 
+  /**
+   * One bridge serves exactly one remote peer.
+   *
+   * That is the intended shape for the remote-console role, where the shell
+   * talks to its home node over WebRTC just as it would over HTTP. For the
+   * mesh-node role the shell should redirect between peers the way the Python
+   * RoutingTable does; until a per-peer session registry exists, this bridge
+   * refuses cross-peer routing instead of silently ignoring it, and
+   * MeshRpcRequest.candidates is carried but never consulted.
+   */
   private assertPeer(peerId: string): void {
-    if (peerId !== this.remotePeerId) throw new Error('WebRTC mesh peer id mismatch')
+    if (peerId !== this.remotePeerId) {
+      throw new Error(
+        `WebRTC mesh bridge is bound to a single peer (${this.remotePeerId}); route ${peerId} via the home node`
+      )
+    }
   }
 }
 
@@ -1185,7 +1237,18 @@ function normalizeTopics(topics: unknown): string[] {
 function normalizeCorrelationIds(value: unknown): string[] {
   if (value === undefined || value === null) return []
   if (!Array.isArray(value) || value.length > 32) throw new Error('correlation ids must be bounded array')
-  return value.filter((item): item is string => typeof item === 'string' && item.length > 0 && item.length <= 128)
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (typeof item !== 'string' || item.length === 0 || item.length > 128) {
+      throw new Error('correlation ids must be non-empty bounded strings')
+    }
+    if (!seen.has(item)) {
+      seen.add(item)
+      result.push(item)
+    }
+  }
+  return result
 }
 
 function readCorrelationIds(request: MeshStreamRpcRequest): string[] {
@@ -1221,8 +1284,11 @@ function buildIdentity(request: MeshRpcRequest): Record<string, unknown> {
   }
 }
 
-function buildManifestAck(manifest: MeshPeerManifest): Record<string, unknown> {
-  return buildWebRtcManifestAck(manifest) as unknown as Record<string, unknown>
+function buildManifestAck(manifest: MeshPeerManifest, expectedRecipientPeerId?: string): Record<string, unknown> {
+  return buildWebRtcManifestAck(
+    manifest,
+    expectedRecipientPeerId ? { expectedRecipientPeerId } : {}
+  ) as unknown as Record<string, unknown>
 }
 
 function isLeaseBearingFrame(frame: Record<string, unknown>): boolean {

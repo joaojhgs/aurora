@@ -148,7 +148,10 @@ function validateThinWebRtcContract() {
     "capabilities: ['aurora-ios-thin', 'aurora-mobile-mesh']",
     'externalBin: []',
     'resources: {}',
-    '"\'self\'", \'http:\', \'https:\', \'ws:\', \'wss:\'',
+    // Plaintext is confined to loopback; remote origins must be https/wss.
+    // Pinned here so the overlay cannot silently widen back to bare
+    // 'http:'/'ws:', which allowed cleartext to any host.
+    '"\'self\'", \'http://ipc.localhost\', \'http://127.0.0.1:*\', \'http://localhost:*\', \'ws://127.0.0.1:*\', \'ws://localhost:*\', \'https:\', \'wss:\'',
     "connectionMode: 'runtime-configurable'",
     'runtimeConfiguredEndpoints: true'
   ]) {

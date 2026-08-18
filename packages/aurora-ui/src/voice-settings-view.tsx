@@ -216,11 +216,9 @@ export function VoiceSettingsView({
   const [browserCatalogItems, setBrowserCatalogItems] = useState<readonly AuroraBrowserSpeechPackCatalogSelection[]>([])
   const [referenceProfiles, setReferenceProfiles] = useState<readonly AuroraBrowserPocketReferenceProfileSummary[]>([])
   const [referenceEditor, setReferenceEditor] = useState<LocalSpeechAssetRow | null>(null)
-  const [referenceTranscript, setReferenceTranscript] = useState('')
   const [referenceFile, setReferenceFile] = useState<File | null>(null)
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null)
   const importFileInputRef = useRef<HTMLInputElement | null>(null)
-  const referenceTranscriptInputRef = useRef<HTMLTextAreaElement | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
   const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
@@ -644,7 +642,6 @@ export function VoiceSettingsView({
 
   function openReferenceEditor(row: LocalSpeechAssetRow): void {
     setReferenceEditor(row)
-    setReferenceTranscript('')
     setReferenceFile(null)
     setMutationMessage(null)
   }
@@ -652,9 +649,8 @@ export function VoiceSettingsView({
   async function saveReferenceVoiceSample(): Promise<void> {
     if (!referenceEditor || actionPending || !localSpeechCatalog?.saveReferenceProfile) return
     const file = referenceFile ?? referenceFileInputRef.current?.files?.[0] ?? null
-    const transcript = (referenceTranscript || referenceTranscriptInputRef.current?.value || '').trim()
-    if (!file || transcript.length === 0) {
-      setMutationMessage('Choose a voice sample and add the spoken words.')
+    if (!file) {
+      setMutationMessage('Choose a voice sample.')
       return
     }
     const row = referenceEditor
@@ -665,7 +661,6 @@ export function VoiceSettingsView({
       const audioBytes = new Uint8Array(await file.arrayBuffer())
       const profile = await localSpeechCatalog.saveReferenceProfile({
         audioBytes,
-        transcript,
         filename: file.name,
         mimeType: file.type || undefined,
       })
@@ -703,7 +698,6 @@ export function VoiceSettingsView({
         return
       }
       setReferenceEditor(null)
-      setReferenceTranscript('')
       setReferenceFile(null)
       setMutationMessage('Voice sample saved.')
     } catch (error) {
@@ -935,7 +929,7 @@ export function VoiceSettingsView({
               >
                 <div>
                   <p className="text-sm font-medium">{referenceEditor.label}</p>
-                  <p className="text-xs text-muted-foreground">Add a short WAV recording and type the words spoken in it.</p>
+                  <p className="text-xs text-muted-foreground">Add a short WAV recording of the voice to clone.</p>
                 </div>
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="font-medium">Voice sample</span>
@@ -944,17 +938,6 @@ export function VoiceSettingsView({
                     type="file"
                     accept="audio/wav,audio/x-wav,.wav"
                     onChange={(event) => setReferenceFile(event.currentTarget.files?.[0] ?? null)}
-                    disabled={actionPending}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="font-medium">Spoken words</span>
-                  <textarea
-                    ref={referenceTranscriptInputRef}
-                    className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    value={referenceTranscript}
-                    onChange={(event) => setReferenceTranscript(event.currentTarget.value)}
-                    maxLength={1000}
                     disabled={actionPending}
                   />
                 </label>
@@ -974,7 +957,6 @@ export function VoiceSettingsView({
                     className="h-8 px-3 text-xs"
                     onClick={() => {
                       setReferenceEditor(null)
-                      setReferenceTranscript('')
                       setReferenceFile(null)
                     }}
                     disabled={actionPending}
@@ -1966,7 +1948,6 @@ function referenceSampleErrorCopy(error: unknown): string {
   if (message === 'voice_sample_rate') return 'Use a WAV file between 8 kHz and 48 kHz.'
   if (message === 'voice_sample_short') return 'Use a voice sample at least half a second long.'
   if (message === 'voice_sample_long') return 'Use a voice sample shorter than 30 seconds.'
-  if (message === 'voice_sample_words') return 'Add the spoken words for this voice sample.'
   if (message === 'voice_sample_file') return 'Use a WAV file smaller than 10 MB.'
   return 'Voice sample was not saved. Try again.'
 }

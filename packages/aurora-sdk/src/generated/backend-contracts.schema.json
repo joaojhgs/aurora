@@ -42,6 +42,7 @@
   ],
   "allowlist_hash": "97d6529cb9d9c61be4b005dc8044eba630d89ffee82a855bddc3d741251227ce",
   "artifact": "aurora-sdk-backend-contracts",
+  "contract_version": "1.0.0",
   "envelope_descriptors": [
     {
       "authorized": true,

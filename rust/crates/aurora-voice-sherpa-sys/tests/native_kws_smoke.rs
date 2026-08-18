@@ -149,7 +149,7 @@ fn assert_light_up(results: &[KeywordResult]) {
 fn kws_config() -> KeywordSpotterConfig {
     let dir = env_path("AURORA_SHERPA_ONNX_KWS_DIR");
     KeywordSpotterConfig::new(
-        dir.join("encoder-epoch-12-avg-2-chunk-16-left-64.onnx"),
+        dir.join("encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx"),
         dir.join("decoder-epoch-12-avg-2-chunk-16-left-64.onnx"),
         dir.join("joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx"),
         dir.join("tokens.txt"),

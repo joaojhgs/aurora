@@ -85,6 +85,13 @@ export interface ProviderLeaseFrame {
   available?: boolean
   reason_code?: string
 }
+export interface CapacityUpdateFrame {
+  type: 'capacity_update'
+  module: string
+  available: number
+  max_concurrent: number
+}
+
 export interface ManifestAckFrame {
   type: 'manifest_ack'
   compatible_services: string[]
@@ -106,7 +113,7 @@ export type AuroraSubscriptionFrame = SubscribeFrame | SubscribedFrame | Subscri
 export type AuroraSignalingFrame = OfferFrame | AnswerFrame | CandidateFrame | PresenceFrame
 export type AuroraPairingFrame = PairingCommitFrame | PairingRevealFrame | PairingTerminalFrame
 export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame | ProviderLeaseFrame | ManifestAckFrame
-export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
+export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | CapacityUpdateFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
 
 export class WebRtcProtocolParseError extends Error {
   constructor(message: string) {
@@ -192,6 +199,7 @@ export function parseWebRtcFrame(frame: unknown, limits: Partial<ParserLimits> =
     case 'manifest_ack': return parseManifestAck(object, merged)
     case 'provider_lease':
     case 'provider_unavailable': return parseProviderLease(object, type)
+    case 'capacity_update': return parseCapacityUpdate(object)
     case PROTOCOL_HELLO_TYPE: return parseProtocolHello(object)
     case FRAGMENT_FRAME_TYPE: return parseFragmentMetadata(object)
     default:
@@ -637,6 +645,17 @@ function requireExactVersion2(value: unknown): void {
   if (value !== 2) throw new WebRtcProtocolParseError('pairing v2 frame requires version 2')
 }
 
+function parseCapacityUpdate(object: Record<string, unknown>): CapacityUpdateFrame {
+  return {
+    type: 'capacity_update',
+    module: requireString(object.module, 'module', 128),
+    available: requireInteger(object.available, 'available', 0, 1_000_000),
+    max_concurrent: requireInteger(object.max_concurrent, 'max_concurrent', 0, 1_000_000)
+  }
+}
+
 function isKnownControlType(type: string): boolean {
-  return ['auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event'].includes(type)
+  return [
+    'auth', 'reauth', 'manifest', 'manifest_request', 'ping', 'pong', 'mesh_event'
+  ].includes(type)
 }

@@ -106,7 +106,8 @@ const DEFAULT_LIMITS: Required<AuroraBrowserModelStoreLimits> = Object.freeze({
   maxKeyBytes: 256,
   maxJsonBytes: 1024 * 1024,
   maxChunkBytes: 2 * 1024 * 1024,
-  maxFileBytes: 256 * 1024 * 1024,
+  // The pruned French PocketTTS int8 LM graph is about 306 MiB.
+  maxFileBytes: 384 * 1024 * 1024,
   maxTotalBytes: 1024 * 1024 * 1024
 })
 

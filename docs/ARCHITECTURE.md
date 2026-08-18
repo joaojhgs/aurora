@@ -89,6 +89,33 @@ See:
 
 The Gateway owns external HTTP/SSE/WebRTC boundaries. Auth owns principals, token/pairing/audit contract state. Mesh features are policy-gated and require explicit sharing/routing rules instead of transparent data access.
 
+### Mesh topology and where routing decisions are made
+
+Multi-peer routing lives in Python. `RoutingTable`, `PeerRegistry`, and the pure
+`evaluate_outbound_provider` layer resolve a topic to a provider using routing
+policy, provider candidates with typed reason codes, capacity leases, latency or
+round-robin selection, and explicit-selector rules, and they fall back to another
+peer when one fails.
+
+TypeScript shells join the mesh in two roles, and they differ:
+
+| Shell role | Consumer shape | Provider shape |
+| --- | --- | --- |
+| Remote console | Single peer. `WebRtcMeshPeerBridge` binds to one home node and reaches the rest of the mesh through it, exactly as the HTTP transport reaches one Gateway. | Not a provider. |
+| Mesh node | Single peer today; multi-peer redirection matching the Python routing table is intended and not yet built. | Full provider via `WebRtcPeerHost`: projects granted contracts as a projection-v1 manifest and serves inbound RPC. |
+
+So a thin shell is a real mesh **provider** node in both roles that support it,
+but it is not yet a routing participant. `MeshRpcRequest.candidates` and
+`MeshP2PTransportOptions.fallbackPeerIds` exist as the seam for that work;
+`WebRtcMeshPeerBridge` does not consult them and refuses a peer it is not bound
+to rather than ignoring the request.
+
+Reaching multi-peer needs a per-peer session registry in `WebRtcPeerRuntime`
+(today one `WebRtcPeerSession` built from one connection profile carrying its own
+signaling room, pairing state, credentials, and E2EE keys), a peer-discovery and
+per-peer authorization model, a runtime profile that holds more than one node,
+and a `MeshPeerBridge` façade that honours candidates.
+
 See:
 
 - [`GATEWAY.md`](GATEWAY.md)
@@ -136,4 +163,4 @@ See [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md).
 
 ## Documentation boundaries
 
-Current docs are indexed in [`DOCS_INDEX.md`](DOCS_INDEX.md). Historical plans and generated investigation artifacts are archived under `docs/archive/` or `.omx/plans/` and are not current architecture guidance.
+Current docs are indexed in [`DOCS_INDEX.md`](DOCS_INDEX.md). Curated historical material lives under `docs/archive/`; local agent plans and generated investigation artifacts are not tracked release source.

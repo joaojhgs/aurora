@@ -60,7 +60,7 @@ def test_manifest_selects_upstream_silero_and_blocks_piper_ljspeech() -> None:
     assert silero["sha256"] == "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28"
     assert silero["license"]["disposition"] == "allowed"
 
-    assert artifacts["onnxruntime-source-v1.27.0"]["license"]["evidence_sha256"] == (
+    assert artifacts["onnxruntime-source-v1.27.1"]["license"]["evidence_sha256"] == (
         "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
     )
 
@@ -99,27 +99,27 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
     manifest = read_manifest()
     artifacts = {item["id"]: item for item in manifest["artifacts"]}
 
-    assert artifacts["onnxruntime-android-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-android-1.27.0.zip"
+    assert artifacts["onnxruntime-android-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-android-1.27.1.zip"
     )
-    assert artifacts["onnxruntime-ios-static-xcframework-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-ios-static-xcframework-1.27.0.zip"
+    assert artifacts["onnxruntime-ios-static-xcframework-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-ios-static-xcframework-1.27.1.zip"
     )
-    assert artifacts["onnxruntime-wasm-static-lib-simd-1.27.0"]["url"] == (
-        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.0/"
-        "onnxruntime-wasm-static_lib-simd-1.27.0.zip"
+    assert artifacts["onnxruntime-wasm-static-lib-simd-1.27.1"]["url"] == (
+        "https://github.com/csukuangfj/onnxruntime-libs/releases/download/v1.27.1/"
+        "onnxruntime-wasm-static_lib-simd-1.27.1.zip"
     )
     moonshine = artifacts["moonshine-tiny-en-quantized-2026-02-27"]
     assert moonshine["license"]["evidence_sha256"] == (
         "6148d7574a6554b7379b633cfd4c4fe5840c3f548d13bc83e00b52dc6fa00abd"
     )
-    assert artifacts["sherpa-onnx-android-1.13.4"]["url"].endswith(
-        "/sherpa-onnx-v1.13.4-android.tar.bz2"
+    assert artifacts["sherpa-onnx-android-1.13.5"]["url"].endswith(
+        "/sherpa-onnx-v1.13.5-android.tar.bz2"
     )
-    assert artifacts["sherpa-onnx-ios-static-xcframework-1.13.4"]["url"].endswith(
-        "/sherpa-onnx-v1.13.4-ios.xcframework.zip"
+    assert artifacts["sherpa-onnx-ios-source-v1.13.5"]["url"].endswith(
+        "/sherpa-onnx/archive/refs/tags/v1.13.5.tar.gz"
     )
     kws = artifacts["sherpa-kws-gigaspeech-2024-01-01"]
     assert kws["url"].endswith("/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2")
@@ -129,15 +129,15 @@ def test_manifest_pins_correct_native_release_urls_and_contained_sizes() -> None
         "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678"
     )
 
-    cpal = artifacts["cpal-crate-v0.18.1"]
+    cpal = artifacts["cpal-crate-v0.18.2"]
     assert cpal["kind"] == "crate"
-    assert cpal["version"] == "v0.18.1"
-    assert cpal["url"] == "https://crates.io/api/v1/crates/cpal/0.18.1/download"
-    assert cpal["sha256"] == "5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028"
-    assert cpal["size_bytes"] == 222732
-    assert cpal["archive_path"] == "sources/cpal-0.18.1.crate"
+    assert cpal["version"] == "v0.18.2"
+    assert cpal["url"] == "https://crates.io/api/v1/crates/cpal/0.18.2/download"
+    assert cpal["sha256"] == "6f02e8d0327b42d3e2e4ab2119af397344eb9fc54a34bf0ddeaa1277af8681f1"
+    assert cpal["size_bytes"] == 233947
+    assert cpal["archive_path"] == "sources/cpal-0.18.2.crate"
     assert cpal["license"]["spdx"] == "Apache-2.0"
-    assert cpal["license"]["evidence"] == "sources/extracted/cpal-0.18.1/LICENSE"
+    assert cpal["license"]["evidence"] == "sources/extracted/cpal-0.18.2/LICENSE"
     assert cpal["license"]["evidence_sha256"] == (
         "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
     )
@@ -253,17 +253,17 @@ def test_validator_rejects_cpal_manifest_drift_from_rust_lockfile(tmp_path: Path
 
     errors = validator.validate_manifest(manifest, repo_root=REPO)
 
-    assert "cpal-crate-v0.18.1.version must match rust/Cargo.lock: v0.18.1" in errors
-    assert any("cpal-crate-v0.18.1.sha256 must match rust/Cargo.lock" in error for error in errors)
-    assert "cpal-crate-v0.18.1.archive_path must be sources/cpal-0.18.1.crate" in errors
+    assert "cpal-crate-v0.18.2.version must match rust/Cargo.lock: v0.18.2" in errors
+    assert any("cpal-crate-v0.18.2.sha256 must match rust/Cargo.lock" in error for error in errors)
+    assert "cpal-crate-v0.18.2.archive_path must be sources/cpal-0.18.2.crate" in errors
     assert (
-        "cpal-crate-v0.18.1.license.evidence must be sources/extracted/cpal-0.18.1/LICENSE"
+        "cpal-crate-v0.18.2.license.evidence must be sources/extracted/cpal-0.18.2/LICENSE"
         in errors
     )
 
     result = run_cli(str(broken))
     assert result.returncode == 2
-    assert "cpal-crate-v0.18.1.version must match rust/Cargo.lock" in result.stdout
+    assert "cpal-crate-v0.18.2.version must match rust/Cargo.lock" in result.stdout
 
 
 def test_validator_rejects_cpal_doc_drift_from_rust_lockfile(tmp_path: Path) -> None:
@@ -280,7 +280,7 @@ def test_validator_rejects_cpal_doc_drift_from_rust_lockfile(tmp_path: Path) -> 
 
     errors = validator.validate_manifest(manifest, repo_root=repo)
 
-    assert "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must pin CPAL `v0.18.1`" in errors
+    assert "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must pin CPAL `v0.18.2`" in errors
     assert any(
         "docs/NATIVE_VOICE_RUNTIME_PHASE4.md must include CPAL checksum" in error
         for error in errors

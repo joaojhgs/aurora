@@ -10,11 +10,12 @@ import {
   type AuroraBrowserModelPackReleaseTrustKey,
   type AuroraBrowserVoiceCatalogEntry,
 } from '@aurora/voice-web/browser'
-import type {
-  AuroraVoiceWebModelBindings,
-  AuroraVoiceWebModelDescriptor,
-  AuroraVoiceWebModelTask,
-  AuroraWebModelStoreHost,
+import {
+  resolvePocketReferenceAudioMode,
+  type AuroraVoiceWebModelBindings,
+  type AuroraVoiceWebModelDescriptor,
+  type AuroraVoiceWebModelTask,
+  type AuroraWebModelStoreHost,
 } from '@aurora/voice-web'
 
 export interface AuroraHostedBrowserSpeechPackTrustInput {
@@ -123,7 +124,7 @@ export interface AuroraBrowserPocketReferenceProfileSummary {
 
 export interface AuroraBrowserPocketReferenceProfileInput {
   readonly audioBytes: Uint8Array
-  readonly transcript: string
+  readonly transcript?: string | undefined
   readonly filename?: string | undefined
   readonly mimeType?: string | undefined
   readonly label?: string | undefined
@@ -278,7 +279,7 @@ export async function saveAuroraBrowserPocketReferenceProfile(
   options: AuroraBrowserPocketReferenceProfileStoreOptions = {},
 ): Promise<AuroraBrowserPocketReferenceProfileSummary> {
   const decoded = decodeAuroraPocketReferenceWav(input.audioBytes)
-  const transcript = normalizePocketReferenceTranscript(input.transcript)
+  const transcript = normalizePocketReferenceTranscript(input.transcript ?? '')
   const host = await pocketReferenceProfileHost(options)
   const id = createPocketReferenceProfileId(options.globalObject)
   const now = Date.now()
@@ -420,7 +421,7 @@ export async function openActiveBrowserSpeechPacks(
       let taskModels = pack.models.filter((model) => model.task === task)
       if (taskModels.length === 0) return rejectedBrowserSpeechPacksStatus('rejected', 'unavailable')
       let referenceFile: AuroraVoiceWebModelBindings['files'][number] | null = null
-      if (task === 'tts' && taskModels.some(isPocketTtsModel)) {
+      if (task === 'tts' && taskModels.some(isPocketTtsProfileModel)) {
         const referenceProfileId = trusted.referenceProfileId
         if (!referenceProfileId) continue
         const referenceProfile = options.loadReferenceProfile
@@ -438,7 +439,7 @@ export async function openActiveBrowserSpeechPacks(
           bytes: referenceProfile.audioBytes,
         })
         taskModels = taskModels.map((model) => {
-          if (!isPocketTtsModel(model)) return model
+          if (!isPocketTtsProfileModel(model)) return model
           return Object.freeze({
             ...model,
             files: Object.freeze([
@@ -451,7 +452,6 @@ export async function openActiveBrowserSpeechPacks(
             ]),
             config: Object.freeze({
               ...(model.config ?? {}),
-              referenceText: referenceProfile.transcript,
               referenceSampleRateHz: referenceProfile.sampleRateHz,
             }),
           })
@@ -643,6 +643,10 @@ function isPocketTtsModel(model: AuroraVoiceWebModelDescriptor): boolean {
   return model.task === 'tts' && model.family === 'pockettts'
 }
 
+function isPocketTtsProfileModel(model: AuroraVoiceWebModelDescriptor): boolean {
+  return isPocketTtsModel(model) && resolvePocketReferenceAudioMode(model.config) === 'profile'
+}
+
 async function activeBrowserVoiceCatalogPacks(
   globalObject: Parameters<typeof AuroraBrowserModelStoreHost.create>[0] | undefined,
 ): Promise<Map<AuroraBrowserSpeechPackTask, { readonly packId: string; readonly packVersion: string }>> {
@@ -711,7 +715,11 @@ function browserVoiceInstallReceipt(
 function browserVoiceCatalogEntryNeedsReferenceProfile(entry: AuroraBrowserVoiceCatalogEntry): boolean {
   const manifest = entry.toModelPackManifest()
   return manifest.variants.some((variant) =>
-    (variant.model_bindings ?? []).some((model) => model.task === 'tts' && model.family === 'pockettts')
+    (variant.model_bindings ?? []).some((model) =>
+      model.task === 'tts'
+      && model.family === 'pockettts'
+      && resolvePocketReferenceAudioMode(model.config) === 'profile'
+    )
   )
 }
 
@@ -810,7 +818,8 @@ function parsePocketReferenceProfileRecord(value: unknown): AuroraBrowserPocketR
   const record = value as Partial<PocketReferenceProfileRecord>
   let transcript: string
   try {
-    transcript = typeof record.transcript === 'string' ? normalizePocketReferenceTranscript(record.transcript) : ''
+    const rawTranscript = typeof record.transcript === 'string' ? record.transcript : ''
+    transcript = normalizePocketReferenceTranscript(rawTranscript)
   } catch {
     return null
   }
@@ -819,7 +828,7 @@ function parsePocketReferenceProfileRecord(value: unknown): AuroraBrowserPocketR
     || !isPocketReferenceProfileId(record.id)
     || typeof record.label !== 'string'
     || record.label.trim() === ''
-    || transcript !== record.transcript
+    || (typeof record.transcript === 'string' && transcript !== record.transcript)
     || typeof record.sampleRateHz !== 'number'
     || !Number.isSafeInteger(record.sampleRateHz)
     || record.sampleRateHz < 8_000
@@ -930,7 +939,7 @@ function writePcm16MonoWav(sampleRateHz: number, pcmBytes: Uint8Array): Uint8Arr
 
 function normalizePocketReferenceTranscript(value: string): string {
   const normalized = value.replace(/\s+/gu, ' ').trim()
-  if (normalized.length === 0 || normalized.length > POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS) throw new Error('voice_sample_words')
+  if (normalized.length > POCKET_REFERENCE_MAX_TRANSCRIPT_CHARS) throw new Error('voice_sample_words')
   return normalized
 }
 

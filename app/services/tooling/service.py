@@ -5071,7 +5071,8 @@ class ToolingService(BaseService):
                 args_schema(**safe_args)
                 return None
         except Exception as error:
-            return f"invalid_arguments: {error}"
+            log_error(f"Tool argument validation failed: {error}")
+            return "invalid_arguments"
 
         schema_dict = args_schema if isinstance(args_schema, dict) else None
         if not schema_dict:
@@ -5081,9 +5082,11 @@ class ToolingService(BaseService):
             validator = Draft202012Validator(schema_dict)
             errors = sorted(validator.iter_errors(safe_args), key=lambda error: list(error.path))
         except jsonschema_exceptions.SchemaError as error:
-            return f"invalid_tool_schema: {error.message}"
+            log_error(f"Tool argument schema is invalid: {error}")
+            return "invalid_tool_schema"
         except Exception as error:
-            return f"invalid_arguments: {error}"
+            log_error(f"Tool argument validation failed: {error}")
+            return "invalid_arguments"
         if errors:
             error = errors[0]
             path = ".".join(str(part) for part in error.path)
@@ -10208,9 +10211,10 @@ class ToolingService(BaseService):
                 error_details = {
                     **log_context,
                     "message": safe_error_message,
-                    "trace": self._safe_error_trace(tool_error),
                 }
-                log_error(f"Tool execution failed: {log_context}")
+                log_error(
+                    f"Tool execution failed: {log_context} trace={self._safe_error_trace(tool_error)}"
+                )
                 await self._audit_tool_execution(
                     request,
                     local_tool_name=local_tool_name,
@@ -10240,7 +10244,7 @@ class ToolingService(BaseService):
             log_error(f"Error handling execute tool command: {e}", exc_info=True)
             return ToolingExecuteToolResponse(
                 ok=False,
-                error=str(e),
+                error="Tooling could not complete this request",
                 data=None,
                 status="failed",
                 error_code="tooling_internal_error",

@@ -1,4 +1,4 @@
-//! Safe containment for pinned sherpa-onnx v1.13.4 native speech C ABIs.
+//! Safe containment for pinned sherpa-onnx v1.13.5 native speech C ABIs.
 //!
 //! The crate intentionally exposes only a small RAII API. Raw C layouts and all
 //! unsafe calls remain private to the native implementation module.
@@ -215,7 +215,7 @@ mod native_tts {
     }
 }
 
-pub const SHERPA_ONNX_VERSION: &str = "1.13.4";
+pub const SHERPA_ONNX_VERSION: &str = "1.13.5";
 
 const DEFAULT_THRESHOLD: f32 = 0.5;
 const DEFAULT_MIN_SILENCE_DURATION: f32 = 0.5;
@@ -3347,6 +3347,102 @@ mod tests {
         let cancelled = result.expect_err("atomic callback cancellation should stop generation");
         assert_eq!(cancelled, TtsError::Cancelled);
         assert!(cancellation.load(Ordering::Acquire));
+    }
+
+    #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
+    #[test]
+    fn native_tts_pockettts_real_synthesis_smoke() {
+        if std::env::var("AURORA_SHERPA_ONNX_ENABLE_LIVE_POCKETTTS").as_deref() != Ok("1") {
+            eprintln!(
+                "skipping live PocketTTS smoke; set AURORA_SHERPA_ONNX_ENABLE_LIVE_POCKETTTS=1"
+            );
+            return;
+        }
+        let dir = PathBuf::from(
+            std::env::var_os("AURORA_POCKETTTS_PACK_DIR").expect("AURORA_POCKETTTS_PACK_DIR"),
+        );
+        let text = std::env::var("AURORA_POCKETTTS_TEXT").unwrap_or_else(|_| {
+            if dir
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().contains("-fr-"))
+            {
+                "Bonjour, ceci est un essai.".to_owned()
+            } else {
+                "Hello, this is a voice check.".to_owned()
+            }
+        });
+        let files = OfflineTtsPocketModelFiles::new(
+            dir.join("lm_flow.int8.onnx"),
+            dir.join("lm_main.int8.onnx"),
+            dir.join("encoder.onnx"),
+            dir.join("decoder.int8.onnx"),
+            dir.join("text_conditioner.onnx"),
+            dir.join("vocab.json"),
+            dir.join("token_scores.json"),
+        );
+        let config = OfflineTtsConfig::pocket(files).with_num_threads(1);
+        let mut synthesizer = OfflineTtsSynthesizer::new(&config).expect("pocket synthesizer");
+        assert_eq!(synthesizer.sample_rate(), 24_000);
+        let mut generation = OfflineTtsGenerationConfig::new(0, 1.0).with_num_steps(4);
+        if !dir.join("fixed_voice_state.bin").is_file() {
+            let internal = dir.join("internal_reference.wav");
+            let reference = if internal.is_file() {
+                internal
+            } else {
+                PathBuf::from(
+                    std::env::var_os("AURORA_POCKETTTS_REF_WAV").expect("AURORA_POCKETTTS_REF_WAV"),
+                )
+            };
+            let (sample_rate, samples) = read_pcm16_wav(&reference);
+            generation = generation.with_reference_audio(
+                TtsReferenceAudio::new(sample_rate, samples).expect("reference audio"),
+            );
+        }
+        let started = std::time::Instant::now();
+        let audio = synthesizer
+            .generate(&text, &generation, &|| false)
+            .unwrap_or_else(|error| panic!("pocket audio: {error:?}"));
+        let elapsed = started.elapsed();
+        assert_eq!(audio.sample_rate(), 24_000);
+        assert!(
+            audio.samples().len() > 2400,
+            "expected more than 100ms of audio"
+        );
+        assert!(
+            audio
+                .samples()
+                .iter()
+                .any(|sample| sample.is_finite() && *sample != 0.0),
+            "expected nonzero finite PCM"
+        );
+        assert!(audio
+            .samples()
+            .iter()
+            .all(|sample| sample.is_finite() && (-1.0..=1.0).contains(sample)));
+        let duration = audio.samples().len() as f64 / 24_000.0;
+        eprintln!(
+            "pockettts smoke pack={:?} ttfa_or_total_ms={} rtf={:.3} samples={}",
+            dir.file_name(),
+            elapsed.as_millis(),
+            elapsed.as_secs_f64() / duration,
+            audio.samples().len()
+        );
+    }
+
+    #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
+    fn read_pcm16_wav(path: &Path) -> (i32, Vec<f32>) {
+        let bytes = std::fs::read(path).expect("reference wav");
+        assert!(bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
+        let channels = u16::from_le_bytes(bytes[22..24].try_into().expect("channels"));
+        let sample_rate = i32::from_le_bytes(bytes[24..28].try_into().expect("rate"));
+        let bits = u16::from_le_bytes(bytes[34..36].try_into().expect("bits"));
+        assert_eq!(channels, 1, "reference wav must be mono");
+        assert_eq!(bits, 16, "reference wav must be pcm16");
+        let data = bytes[44..]
+            .chunks_exact(2)
+            .map(|chunk| i16::from_le_bytes(chunk.try_into().expect("sample")) as f32 / 32768.0)
+            .collect::<Vec<_>>();
+        (sample_rate, data)
     }
 
     #[cfg(not(feature = "native-vad"))]

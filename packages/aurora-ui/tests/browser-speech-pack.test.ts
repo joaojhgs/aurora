@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AuroraWebModelStoreHost } from '@aurora/voice-web'
+import type { AuroraVoiceWebModelDescriptor, AuroraWebModelStoreHost } from '@aurora/voice-web'
 
 const voiceWeb = vi.hoisted(() => ({
   createHost: vi.fn(),
@@ -223,6 +223,49 @@ describe('openActiveBrowserSpeechPacks', () => {
     }))
   })
 
+  it('activates internal-mode Pocket packs without a user reference profile', async () => {
+    const host = fakeModelStoreHost()
+    voiceWeb.openExistingHost.mockResolvedValueOnce(host)
+    const pack = modelPack('tts', 'pocket-internal', 'tts-file', '/tts/model.onnx', 'pockettts')
+    const model = pack.models[0]
+    if (model === undefined) throw new Error('expected model')
+    pack.models[0] = {
+      ...model,
+      files: [
+        ...model.files,
+        { role: 'referenceAudio', fileId: 'reference-audio', virtualPath: '/internal_reference.wav' },
+      ],
+      config: { voiceId: 'standard:pockettts:aurora-pockettts-en-2026-04', referenceAudioMode: 'internal', referenceSampleRateHz: 24_000 },
+    }
+    pack.files.push({
+      fileId: 'reference-audio',
+      storageKey: 'pocket-internal@reference-audio',
+      sha256: 'd'.repeat(64),
+      byteLength: 4,
+      readAll: async () => new Uint8Array([1, 2, 3, 4]),
+      readChunk: async () => new Uint8Array([1]),
+    })
+    voiceWeb.openActive.mockResolvedValueOnce(pack)
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-internal', packVersion: '1.0.0', voiceId: 'standard:pockettts:aurora-pockettts-en-2026-04' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'standard:pockettts:aurora-pockettts-en-2026-04',
+      loadReferenceProfile: vi.fn(),
+    })
+
+    expect(result.state).toBe('ready')
+    if (result.state !== 'ready') throw new Error('expected ready')
+    expect(result.capabilities.tts).toBe(true)
+    expect(result.modelBindings.models[0]?.config).toMatchObject({
+      referenceAudioMode: 'internal',
+      referenceSampleRateHz: 24_000,
+    })
+    expect(result.modelBindings.files.some((file) => file.fileId.startsWith('reference-audio:'))).toBe(false)
+  })
+
   it('keeps Pocket voices unavailable until an explicit reference profile is selected', async () => {
     const host = fakeModelStoreHost()
     voiceWeb.openExistingHost.mockResolvedValueOnce(host)
@@ -243,7 +286,7 @@ describe('openActiveBrowserSpeechPacks', () => {
     })
   })
 
-  it('attaches explicit Pocket reference audio and text to active model bindings', async () => {
+  it('attaches explicit Pocket reference audio without written sample words', async () => {
     const host = fakeModelStoreHost()
     const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
     voiceWeb.openExistingHost.mockResolvedValueOnce(host)
@@ -258,7 +301,7 @@ describe('openActiveBrowserSpeechPacks', () => {
       loadReferenceProfile: vi.fn(async () => ({
         id: 'voice-ref-1',
         label: 'Voice sample',
-        transcript: 'hello from the speaker',
+        transcript: '',
         sampleRateHz: 16_000,
         durationMs: 1_000,
         byteLength: audioBytes.byteLength,
@@ -286,11 +329,43 @@ describe('openActiveBrowserSpeechPacks', () => {
         expect.objectContaining({ role: 'referenceAudio', fileId: 'reference-audio:voice-ref-1' }),
       ]),
       config: expect.objectContaining({
-        referenceText: 'hello from the speaker',
         referenceSampleRateHz: 16_000,
       }),
     })
+    expect(result.modelBindings.models[0]?.config).not.toHaveProperty('referenceText')
     expect(result.revision).toContain('reference-audio:voice-ref-1')
+  })
+
+  it('does not forward stored clone words as Sherpa reference text', async () => {
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+    voiceWeb.openActive.mockResolvedValueOnce(modelPack('tts', 'pocket-pack', 'tts-file', '/tts/model.onnx', 'pockettts'))
+
+    const result = await openActiveBrowserSpeechPacks({
+      trustSelections: [
+        { ...releaseTrust(), task: 'tts', packId: 'pocket-pack', packVersion: '1.0.0', voiceId: 'pocket.en', referenceProfileId: 'voice-ref-1' },
+      ],
+      tasks: ['tts'],
+      ttsVoiceId: 'pocket.en',
+      loadReferenceProfile: vi.fn(async () => ({
+        id: 'voice-ref-1',
+        label: 'Voice sample',
+        transcript: 'legacy spoken words',
+        sampleRateHz: 16_000,
+        durationMs: 1_000,
+        byteLength: audioBytes.byteLength,
+        sha256: 'c'.repeat(64),
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        audioBytes,
+      })),
+    })
+
+    expect(result.state).toBe('ready')
+    if (result.state !== 'ready') throw new Error('expected ready')
+    expect(result.modelBindings.models[0]?.config).toMatchObject({
+      referenceSampleRateHz: 16_000,
+    })
+    expect(result.modelBindings.models[0]?.config).not.toHaveProperty('referenceText')
   })
 })
 
@@ -337,6 +412,21 @@ describe('AuroraBrowserPocketReferenceProfile store', () => {
     await deleteAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
     expect(await listAuroraBrowserPocketReferenceProfiles({ createHost: async () => host })).toEqual([])
     expect(await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })).toBeNull()
+  })
+
+  it('saves a voice sample without written sample words', async () => {
+    const host = memoryModelStoreHost()
+    const audioBytes = wavBytes({ sampleRateHz: 16_000, durationMs: 1_000 })
+
+    const saved = await saveAuroraBrowserPocketReferenceProfile({
+      audioBytes,
+      filename: 'my voice.wav',
+    }, { createHost: async () => host })
+
+    expect(saved.transcript).toBe('')
+    const loaded = await readAuroraBrowserPocketReferenceProfile(saved.id, { createHost: async () => host })
+    expect(loaded?.transcript).toBe('')
+    expect(loaded?.audioBytes).toEqual(audioBytes)
   })
 
   it('decodes validated mono PCM WAV samples for native adapters', () => {
@@ -450,7 +540,42 @@ function fakeModelStoreHost(): AuroraWebModelStoreHost {
   }
 }
 
-function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: string, virtualPath: string, family?: 'vits' | 'pockettts') {
+function modelPack(
+  task: AuroraVoiceWebModelDescriptor['task'],
+  packId: string,
+  fileId: string,
+  virtualPath: string,
+  family?: 'piper' | 'pockettts',
+) {
+  const familyByTask = {
+    vad: 'silero-vad',
+    kws: 'sherpa-kws-transducer',
+    stt: 'whisper',
+    tts: family ?? 'piper',
+  } satisfies Record<
+    AuroraVoiceWebModelDescriptor['task'],
+    AuroraVoiceWebModelDescriptor['family']
+  >
+  const kindByTask = {
+    vad: 'vad',
+    kws: 'keyword-spotter',
+    stt: 'offline-asr',
+    tts: 'offline-tts',
+  } satisfies Record<
+    AuroraVoiceWebModelDescriptor['task'],
+    AuroraVoiceWebModelDescriptor['kind']
+  >
+  const model: AuroraVoiceWebModelDescriptor = {
+    task,
+    family: familyByTask[task],
+    kind: kindByTask[task],
+    files: [{
+      role: task === 'tts' ? 'model' : 'encoder',
+      fileId,
+      virtualPath,
+    }],
+    config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
+  }
   return {
     identity: {
       packId,
@@ -466,17 +591,7 @@ function modelPack(task: 'vad' | 'kws' | 'stt' | 'tts', packId: string, fileId: 
       readAll: async () => new Uint8Array([1, 2, 3, 4]),
       readChunk: async () => new Uint8Array([1]),
     }],
-    models: [{
-      task,
-      family: task === 'tts' ? family ?? 'vits' : 'sherpa',
-      kind: task === 'tts' ? 'offline-tts' : task === 'stt' ? 'offline-asr' : task,
-      files: [{
-        role: task === 'tts' ? 'model' : 'encoder',
-        fileId,
-        virtualPath,
-      }],
-      config: task === 'tts' ? { voiceId: 'voice-en' } : { language: 'en' },
-    }],
+    models: [model],
   }
 }
 

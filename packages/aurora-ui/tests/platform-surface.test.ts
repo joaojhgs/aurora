@@ -159,8 +159,8 @@ describe('Aurora surface profile regression coverage', () => {
       canRunLocalTts: false,
     })
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('webview-focused')
-    expect(android.voiceCapture.wakewordOwner).toBe('webview-focused')
-    expect(android.voiceCapture.detail).toBe('Android capture is available while Aurora is open in the foreground.')
+    expect(android.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(android.voiceCapture.detail).toBe('Android push-to-talk is available while Aurora is open. Hands-free voice is unavailable on this device.')
     expect(ios.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
     expect(ios.voiceCapture.wakewordOwner).toBe('unavailable')
     expect(ios.voiceCapture.canUseWebViewVisualizer).toBe(false)

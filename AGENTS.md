@@ -27,6 +27,7 @@ Use the documentation index when orienting yourself before implementation, inves
 | Contracts (topic constants, IO models, registry) | [`app/shared/contracts/AGENTS.md`](app/shared/contracts/AGENTS.md) |
 | **Configuration (ConfigAPI vs ConfigManager, process mode)** | [`docs/CONFIG_SERVICE_PATTERN.md`](docs/CONFIG_SERVICE_PATTERN.md) |
 | Tests (structure, markers, mocking patterns) | [`tests/AGENTS.md`](tests/AGENTS.md) |
+| Sherpa PocketTTS (patch queue, language packs, native/WASM proof) | [`tools/voice-runtime/AGENTS.md`](tools/voice-runtime/AGENTS.md) |
 
 ---
 

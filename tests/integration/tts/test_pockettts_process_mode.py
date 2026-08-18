@@ -289,9 +289,16 @@ async def _wait_for_config_service(bus: BullMQBus, proc: subprocess.Popen[str]) 
             timeout=1.0,
             origin="integration-test",
         )
-        if result.ok:
-            return
-        last_error = result.error or ""
+        if result.ok and isinstance(result.data, dict):
+            config = result.data.get("config")
+            if isinstance(config, dict) and {
+                "primary_language",
+                "voice_language",
+            }.issubset(config):
+                return
+            last_error = "Config.Get returned an incomplete system configuration"
+        else:
+            last_error = result.error or ""
         await asyncio.sleep(0.15)
     raise AssertionError(f"ConfigService did not become ready: {last_error}")
 

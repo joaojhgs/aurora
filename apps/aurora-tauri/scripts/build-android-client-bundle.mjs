@@ -45,6 +45,7 @@ const requiredNativeSpeechLibraries = [
 const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.includes('--apk') ? 'apk' : 'apk')
 const target = readOption('--target')
+const voiceLiveTest = args.includes('--voice-live-test')
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
@@ -67,6 +68,7 @@ try {
     ...process.env,
     AURORA_TAURI_ANDROID_CLIENT_CONFIG_PATH: tempConfigPath,
     AURORA_TAURI_ANDROID_CLIENT_REPORT_PATH: tempPrepareReportPath,
+    AURORA_TAURI_ANDROID_VOICE_LIVE_TEST: voiceLiveTest ? '1' : '0',
   })
 
   configRaw = readFileSync(tempConfigPath, 'utf8')
@@ -99,7 +101,7 @@ try {
   mkdirSync(dirname(buildProvenancePath), { recursive: true })
   writeAtomicJson(buildProvenancePath, {
     generatedAt: new Date().toISOString(),
-    bundleMode: 'android-client',
+    bundleMode: voiceLiveTest ? 'android-client-voice-live-test' : 'android-client',
     kind,
     target: target ?? 'universal',
     targets,
@@ -116,7 +118,8 @@ try {
     command: ['pnpm', ...buildArgs.map((value) => value === tempConfigPath ? '<temp-android-client-config>' : value)],
     artifactRoot: redacted(artifactOutputRoot),
     cleanBuildOutputs: true,
-    expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+    expectedCapabilities: prepareReport.expectedCapabilities,
+    voiceLiveTest,
     nativeSpeechRuntime: {
       abis: nativeSpeechBuild.records.map((record) => record.abi),
       libraries: requiredNativeSpeechLibraries,
@@ -148,7 +151,7 @@ function resolveNativeSpeechBuild(env, selectedTargets) {
       )
     }
     const configured = env[spec.libDirEnv]
-      ?? (selectedTargets.length === 1 ? env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+      ?? env[`CARGO_${spec.libDirEnv}`]
     if (!configured) {
       throw new Error(
         `${spec.libDirEnv} is required to package production native speech for Android ${spec.abi}`,

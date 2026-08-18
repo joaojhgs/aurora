@@ -5,6 +5,7 @@ declare const process: {
 
 declare const Buffer: {
   readonly isBuffer: (value: unknown) => boolean
+  readonly from: (value: string) => Uint8Array
 }
 
 interface ImportMeta {
@@ -13,6 +14,15 @@ interface ImportMeta {
 
 declare module 'node:fs/promises' {
   export function readFile(path: string): Promise<Uint8Array>
+}
+
+declare module 'node:crypto' {
+  export interface Hash {
+    update(value: string | Uint8Array): this
+    digest(encoding: 'hex'): string
+  }
+
+  export function createHash(algorithm: 'sha256'): Hash
 }
 
 declare module 'node:fs' {

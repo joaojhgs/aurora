@@ -208,7 +208,7 @@ function syncNativeSpeechLibraries() {
       )
     }
     const configured = process.env[spec.libDirEnv]
-      ?? (targets.length === 1 ? process.env.AURORA_SHERPA_ONNX_LIB_DIR : null)
+      ?? process.env[`CARGO_${spec.libDirEnv}`]
     if (!configured) {
       throw new Error(
         `${spec.libDirEnv} is required to stage Android native speech libraries for ${spec.abi}`,
@@ -260,6 +260,7 @@ function mergePluginManifest(content) {
     '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />',
+    '    <uses-permission android:name="android.permission.WAKE_LOCK" />',
     '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
     '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />',
   ]

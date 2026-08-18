@@ -11,6 +11,8 @@ on:
       - "packages/aurora-sdk/**"
       - "packages/aurora-ui/**"
       - "packages/aurora-voice-web/**"
+      - "rust/crates/aurora-voice-*/**"
+      - "tools/voice-runtime/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
       - "scripts/webrtc_interop_scan.py"
@@ -24,11 +26,14 @@ on:
       - ".github/workflows/tauri-ios.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   macos-tauri-ios:
     name: macOS Xcode Tauri iOS init and build
     runs-on: macos-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +48,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim,wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
 
       - name: Set up Python interop peer
         uses: actions/setup-python@v5
@@ -81,6 +92,28 @@ jobs:
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore patched iOS Sherpa runtime
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim
+          key: sherpa-native-${{ runner.os }}-aarch64-apple-ios-sim-${{ hashFiles('tools/voice-runtime/build_sherpa_native.py', 'tools/voice-runtime/run_sherpa_cmake.py', 'tools/voice-runtime/sherpa-patches/**') }}
+
+      - name: Build patched iOS Sherpa runtime
+        if: steps.sherpa-cache.outputs.cache-hit != 'true'
+        run: >-
+          python tools/voice-runtime/build_sherpa_native.py
+          --target aarch64-apple-ios-sim
+          --jobs 2
+
+      - name: Configure patched iOS Sherpa runtime
+        run: |
+          SHERPA_RUNTIME="$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim"
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Run iOS CI harness regression tests
         run: >-

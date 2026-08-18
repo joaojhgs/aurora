@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { AuroraError, TauriLocalTransport } from '../src/index.js'
+import { AuroraError, TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from '../src/index.js'
 
 describe('Tauri bounded native action transport', () => {
   it('uses only exact native action commands and omits absent optional fields', async () => {
@@ -188,6 +188,121 @@ describe('Tauri bounded native action transport', () => {
         args: { request: { task: 'tts', packId: 'pocket.en' } }
       }
     ])
+  })
+
+  it('sends audio-only clone profiles without written reference text', async () => {
+    const calls: Array<{ command: string, args: unknown }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_android_voice_pack_download') {
+          return { started: true, packId: 'pocket.en', jobId: 'job-1' }
+        }
+        if (command === 'aurora_ios_voice_pack_download') {
+          return { ok: true, secretsRedacted: true }
+        }
+        if (command === 'aurora_ios_voice_pack_activate') {
+          return { ok: true, secretsRedacted: true }
+        }
+        throw new Error(`unexpected command: ${command}`)
+      }
+    })
+
+    await transport.downloadAndroidVoicePack({
+      task: 'tts',
+      packId: 'pocket.en',
+      activate: true,
+      referenceId: 'reference-1',
+      referenceRevision: 'sha256:abc',
+      referenceSampleRateHz: 24_000,
+      referenceSamples: [0, 0.25, -0.25]
+    })
+    await transport.downloadIosVoicePack({
+      task: 'tts',
+      packId: 'pocket.en',
+      referenceId: 'reference-1',
+      referenceRevision: 'sha256:abc',
+      referenceSampleRateHz: 24_000,
+      referenceSamples: [0, 0.25, -0.25]
+    })
+    await transport.activateIosVoicePack({
+      task: 'tts',
+      packId: 'pocket.en',
+      slot: 'tts',
+      referenceId: 'reference-1',
+      referenceRevision: 'sha256:abc',
+      referenceSampleRateHz: 24_000,
+      referenceSamples: [0, 0.25, -0.25]
+    })
+
+    expect(calls).toEqual([
+      {
+        command: 'aurora_android_voice_pack_download',
+        args: {
+          request: {
+            task: 'tts',
+            packId: 'pocket.en',
+            activate: true,
+            referenceId: 'reference-1',
+            referenceRevision: 'sha256:abc',
+            referenceSampleRateHz: 24_000,
+            referenceSamples: [0, 0.25, -0.25]
+          }
+        }
+      },
+      {
+        command: 'aurora_ios_voice_pack_download',
+        args: {
+          request: {
+            task: 'tts',
+            packId: 'pocket.en',
+            referenceId: 'reference-1',
+            referenceRevision: 'sha256:abc',
+            referenceSampleRateHz: 24_000,
+            referenceSamples: [0, 0.25, -0.25]
+          }
+        }
+      },
+      {
+        command: 'aurora_ios_voice_pack_activate',
+        args: {
+          request: {
+            task: 'tts',
+            packId: 'pocket.en',
+            slot: 'tts',
+            referenceId: 'reference-1',
+            referenceRevision: 'sha256:abc',
+            referenceSampleRateHz: 24_000,
+            referenceSamples: [0, 0.25, -0.25]
+          }
+        }
+      }
+    ])
+    for (const call of calls) {
+      expect(JSON.stringify(call.args)).not.toContain('referenceText')
+    }
+  })
+
+  it('honors explicit Pocket reference mode and falls back to family only when mode is absent', () => {
+    expect(resolveNativeTtsRequiresReferenceProfile({
+      modelFamily: 'pockettts',
+      referenceAudioMode: 'internal',
+      requiresReferenceAudio: true,
+    })).toBe(false)
+    expect(resolveNativeTtsRequiresReferenceProfile({
+      modelFamily: 'pockettts',
+      referenceAudioMode: 'profile',
+    })).toBe(true)
+    expect(resolveNativeTtsRequiresReferenceProfile({
+      modelFamily: 'pockettts',
+      requiresReferenceAudio: false,
+    })).toBe(false)
+    expect(resolveNativeTtsRequiresReferenceProfile({
+      modelFamily: 'pockettts',
+    })).toBe(true)
+    expect(resolveNativeTtsRequiresReferenceProfile({
+      modelFamily: 'vits_piper',
+    })).toBe(false)
   })
 
 })

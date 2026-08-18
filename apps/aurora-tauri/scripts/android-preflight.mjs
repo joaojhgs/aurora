@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import { dirname, join, relative as pathRelative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,8 +11,7 @@ const args = new Set(process.argv.slice(2))
 const strict = args.has('--strict')
 const requireAndroidProject = strict || args.has('--require-android-project')
 const reportPath = resolve(
-  appDir,
-  process.env.AURORA_ANDROID_PREFLIGHT_REPORT ?? 'reports/android-preflight.json'
+  process.env.AURORA_ANDROID_PREFLIGHT_REPORT ?? join(os.tmpdir(), 'aurora-android-preflight.json'),
 )
 
 const packageJson = readJson(join(appDir, 'package.json'))
@@ -401,6 +401,7 @@ function androidNativeManifestIntegration() {
     'android.permission.POST_NOTIFICATIONS',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+    'android.permission.WAKE_LOCK',
     'android.permission.USE_BIOMETRIC',
     'dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService',
     'dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService',

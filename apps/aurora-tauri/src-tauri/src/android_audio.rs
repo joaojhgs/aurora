@@ -144,10 +144,11 @@ fn android_embedded_catalog_json() -> Option<String> {
             "attributionText": "",
             "modelFamily": &entry.model_family,
             "requiresReferenceAudio": false,
+            "referenceAudioMode": "",
         }));
     }
 
-    let tts_catalog = TtsVoiceCatalog::embedded().ok()?;
+    let tts_catalog = TtsVoiceCatalog::runtime().ok()?;
     for entry in &tts_catalog.entries {
         entries.push(json!({
             "packId": &entry.voice_id,
@@ -165,7 +166,8 @@ fn android_embedded_catalog_json() -> Option<String> {
             "attributionRequired": false,
             "attributionText": "",
             "modelFamily": &entry.model_family,
-            "requiresReferenceAudio": entry.model_family == "pockettts",
+            "requiresReferenceAudio": entry.requires_reference_profile(),
+            "referenceAudioMode": entry.catalog_reference_audio_mode_label().unwrap_or(""),
         }));
     }
     serde_json::to_string(&entries).ok()

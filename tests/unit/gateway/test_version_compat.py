@@ -3,7 +3,6 @@
 import pytest
 
 from app.services.gateway.mesh.version_compat import (
-    check_contract_compatibility,
     is_compatible,
     parse_semver,
 )
@@ -90,37 +89,12 @@ class TestIsCompatible:
         assert is_compatible("abc", "abc", "exact") is True
         assert is_compatible("abc", "def", "exact") is False
 
-    def test_unparseable_versions_compatible(self):
-        # Can't parse → falls back to accepting
-        assert is_compatible("abc", "def", "compatible") is True
+    def test_unparseable_versions_compatible_fail_closed(self):
+        # "compatible" is an ordering question and an unparseable version
+        # cannot be ordered, so it must not satisfy a min_version constraint.
+        assert is_compatible("abc", "def", "compatible") is False
+        assert is_compatible("1.0.0", "latest", "compatible") is False
+        assert is_compatible("latest", "1.0.0", "compatible") is False
 
     def test_unknown_policy_is_permissive(self):
         assert is_compatible("1.0.0", "2.0.0", "unknown_policy") is True
-
-
-class TestCheckContractCompatibility:
-    """Tests for check_contract_compatibility()."""
-
-    def test_same_digest(self):
-        assert check_contract_compatibility("abc123", "abc123") is True
-
-    def test_same_digest_strict(self):
-        assert check_contract_compatibility("abc123", "abc123", strict=True) is True
-
-    def test_different_digest_non_strict(self):
-        assert check_contract_compatibility("abc", "def", strict=False) is True
-
-    def test_different_digest_strict(self):
-        assert check_contract_compatibility("abc", "def", strict=True) is False
-
-    def test_empty_digest_non_strict(self):
-        assert check_contract_compatibility("", "abc", strict=False) is True
-
-    def test_empty_digest_strict(self):
-        assert check_contract_compatibility("", "abc", strict=True) is False
-
-    def test_both_empty_non_strict(self):
-        assert check_contract_compatibility("", "", strict=False) is True
-
-    def test_both_empty_strict(self):
-        assert check_contract_compatibility("", "", strict=True) is False

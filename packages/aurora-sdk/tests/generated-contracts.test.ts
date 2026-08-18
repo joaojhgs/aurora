@@ -334,7 +334,9 @@ const escapeAscii = (value: string): string => {
   let escaped = ''
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
-    escaped += code > 0x7F ? `\\u${code.toString(16).padStart(4, '0')}` : value.charAt(index)
+    // Python's encoder passes through ` `(0x20)..`~`(0x7E) only, so U+007F is
+    // escaped. `> 0x7F` let this helper disagree with the backend it checks.
+    escaped += code >= 0x7F ? `\\u${code.toString(16).padStart(4, '0')}` : value.charAt(index)
   }
   return escaped
 }

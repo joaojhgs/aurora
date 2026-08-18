@@ -13,7 +13,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -50,6 +50,44 @@ function runPolicy(context: PolicyContext) {
   })
 }
 
+function runPolicyAsPlatform(
+  context: PolicyContext,
+  platform: 'darwin' | 'win32',
+  env: NodeJS.ProcessEnv,
+) {
+  const bootstrap = join(context.root, `run-policy-as-${platform}.mjs`)
+  writeFileSync(
+    bootstrap,
+    `Object.defineProperty(process, 'platform', { value: ${JSON.stringify(platform)} })\nawait import(${JSON.stringify(pathToFileURL(script).href)})\n`,
+  )
+  return spawnSync(process.execPath, [
+    bootstrap,
+    '--root',
+    context.artifactRoot,
+    '--report',
+    context.reportPath,
+  ], {
+    cwd: packageRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...env,
+    },
+  })
+}
+
+function runPolicyAsDarwin(context: PolicyContext, env: NodeJS.ProcessEnv) {
+  return runPolicyAsPlatform(context, 'darwin', env)
+}
+
+function runPolicyAsWin32(context: PolicyContext, env: NodeJS.ProcessEnv) {
+  return runPolicyAsPlatform(context, 'win32', {
+    TEMP: context.root,
+    TMP: context.root,
+    ...env,
+  })
+}
+
 function runWrapper(context: PolicyContext) {
   const configPath = join(context.root, 'tauri.client.conf.json')
   execFileSync(process.execPath, [prepareClient], {
@@ -78,6 +116,106 @@ function writeArtifact(context: PolicyContext, relativePath: string, content = '
   const path = join(context.artifactRoot, relativePath)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, content)
+}
+
+function createFakeHdiutil(
+  context: PolicyContext,
+  mountedFiles: Record<string, string>,
+  mountedSymlinks: Record<string, string> = {},
+) {
+  const binDir = join(context.root, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const scriptPath = join(binDir, 'hdiutil')
+  const logPath = join(context.root, 'hdiutil.log')
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+const { mkdirSync, symlinkSync, writeFileSync } = require('node:fs')
+const { dirname } = require('node:path')
+
+const logPath = ${JSON.stringify(logPath)}
+const mountedFiles = ${JSON.stringify(mountedFiles)}
+const mountedSymlinks = ${JSON.stringify(mountedSymlinks)}
+const [command, ...args] = process.argv.slice(2)
+
+function log(line) {
+  writeFileSync(logPath, \`\${line}\\n\`, { flag: 'a' })
+}
+
+if (command === 'attach') {
+  const requiredOptions = ['-readonly', '-nobrowse', '-noautoopen', '-mountpoint']
+  if (!requiredOptions.every((option) => args.includes(option))) process.exit(64)
+  let mountpoint = ''
+  let image = ''
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index]
+    if (value === '-mountpoint') {
+      mountpoint = args[++index] ?? ''
+      continue
+    }
+    if (value === '-readonly' || value === '-nobrowse' || value === '-noautoopen') continue
+    image = value
+  }
+  mkdirSync(mountpoint, { recursive: true })
+  for (const [relativePath, content] of Object.entries(mountedFiles)) {
+    const absolutePath = \`\${mountpoint}/\${relativePath}\`
+    mkdirSync(dirname(absolutePath), { recursive: true })
+    writeFileSync(absolutePath, content)
+  }
+  for (const [relativePath, target] of Object.entries(mountedSymlinks)) {
+    const absolutePath = \`\${mountpoint}/\${relativePath}\`
+    mkdirSync(dirname(absolutePath), { recursive: true })
+    symlinkSync(target, absolutePath)
+  }
+  log(\`attach:\${image}:\${mountpoint}\`)
+  process.exit(0)
+}
+
+if (command === 'detach') {
+  log(\`detach:\${args[0] ?? ''}\`)
+  process.exit(0)
+}
+
+log(\`unexpected:\${command ?? ''}\`)
+process.exit(1)
+`,
+  )
+  chmodSync(scriptPath, 0o755)
+  return { binDir, logPath }
+}
+
+function createFakeSevenZip(
+  context: PolicyContext,
+  extractedFiles: Record<string, string>,
+) {
+  const scriptPath = join(context.root, 'fake-7z')
+  const logPath = join(context.root, '7z.log')
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+const { mkdirSync, writeFileSync } = require('node:fs')
+const { dirname } = require('node:path')
+
+const logPath = ${JSON.stringify(logPath)}
+const extractedFiles = ${JSON.stringify(extractedFiles)}
+const [command, ...args] = process.argv.slice(2)
+const outputArgument = args.find((value) => value.startsWith('-o')) ?? ''
+const outputDirectory = outputArgument.slice(2)
+const archive = args.at(-1) ?? ''
+
+if (command !== 'x' || !outputDirectory || !['-y', '-bd', '-bb0'].every((option) => args.includes(option))) {
+  process.exit(64)
+}
+for (const [relativePath, content] of Object.entries(extractedFiles)) {
+  const absolutePath = \`\${outputDirectory}/\${relativePath}\`
+  mkdirSync(dirname(absolutePath), { recursive: true })
+  writeFileSync(absolutePath, content)
+}
+writeFileSync(logPath, \`extract:\${archive}:\${outputDirectory}\\n\`, { flag: 'a' })
+`,
+  )
+  chmodSync(scriptPath, 0o755)
+  return { scriptPath, logPath }
 }
 
 describe('native voice desktop artifact policy', () => {
@@ -390,7 +528,6 @@ symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
   it('fails closed for recognized installer formats that cannot be inspected', () => {
     const context = createContext()
     writeArtifact(context, 'Aurora.rpm', 'not an rpm\n')
-    writeArtifact(context, 'Aurora.dmg', 'not a dmg\n')
     writeArtifact(context, 'Aurora.msi', 'not a msi\n')
     writeArtifact(context, 'Aurora Setup.exe', 'not an installer\n')
 
@@ -399,6 +536,112 @@ symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('installer-inspection-unavailable')
     expect(result.stderr).toContain('installer-inspection-unsupported')
+  })
+
+  it.runIf(process.platform !== 'win32')('extracts and scans MSI and NSIS installers on Windows', () => {
+    const context = createContext()
+    writeArtifact(context, 'Aurora.msi', 'fake MSI container\n')
+    writeArtifact(context, 'Aurora Setup.exe', 'fake NSIS container\n')
+    const { scriptPath, logPath } = createFakeSevenZip(context, {
+      'Aurora.exe': 'native shell\n',
+      'aurora_native_voice.dll': 'rust native voice library\n',
+    })
+
+    const result = runPolicyAsWin32(context, { AURORA_7Z_PATH: scriptPath })
+
+    expect(result.status, result.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.checkedInstallers).toBe(2)
+    expect(report.approvedNativeVoiceLibraries).toContain('aurora_native_voice.dll')
+    expect(readFileSync(logPath, 'utf8').match(/^extract:/gm)).toHaveLength(2)
+  })
+
+  it.runIf(process.platform !== 'win32')('rejects speech models extracted from Windows installers', () => {
+    const context = createContext()
+    writeArtifact(context, 'Aurora Setup.exe', 'fake NSIS container\n')
+    const { scriptPath } = createFakeSevenZip(context, {
+      'models/tts/pockettts.onnx': 'model bytes\n',
+    })
+
+    const result = runPolicyAsWin32(context, { AURORA_7Z_PATH: scriptPath })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('speech-model-asset')
+  })
+
+  it.runIf(process.platform !== 'win32')('mounts and scans DMG installers read-only before detaching them', () => {
+    const context = createContext()
+    writeArtifact(context, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const { binDir, logPath } = createFakeHdiutil(context, {
+      'usr/lib/libaurora_native_voice.so': 'native voice runtime\n',
+      'share/applications/aurora.desktop': '[Desktop Entry]\nName=Aurora\n',
+    })
+
+    const result = runPolicyAsDarwin(context, {
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('Native voice artifact policy passed')
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.checkedInstallers).toBe(1)
+    expect(report.approvedNativeVoiceLibraries).toEqual([
+      'usr/lib/libaurora_native_voice.so',
+    ])
+    expect(readFileSync(logPath, 'utf8')).toContain('attach:')
+    expect(readFileSync(logPath, 'utf8')).toContain('detach:')
+  })
+
+  it.runIf(process.platform !== 'win32')('rejects bundled speech models found inside a mounted DMG', () => {
+    const context = createContext()
+    writeArtifact(context, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const { binDir, logPath } = createFakeHdiutil(context, {
+      'Aurora.app/Contents/Resources/models/tts/pockettts.onnx': 'model bytes\n',
+    })
+
+    const result = runPolicyAsDarwin(context, {
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('speech-model-asset')
+    expect(result.stderr).not.toContain('installer-inspection-unsupported')
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.checkedInstallers).toBe(1)
+    expect(readFileSync(logPath, 'utf8')).toContain('detach:')
+  })
+
+  it.runIf(process.platform !== 'win32')('allows only the canonical DMG Applications link outside the mounted image', () => {
+    const allowedContext = createContext()
+    writeArtifact(allowedContext, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const allowedHdiutil = createFakeHdiutil(
+      allowedContext,
+      { 'Aurora.app/Contents/MacOS/aurora': 'executable bytes\n' },
+      { Applications: '/Applications' },
+    )
+
+    const allowed = runPolicyAsDarwin(allowedContext, {
+      PATH: `${allowedHdiutil.binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(allowed.status, allowed.stderr).toBe(0)
+    const allowedReport = JSON.parse(readFileSync(allowedContext.reportPath, 'utf8'))
+    expect(allowedReport.checkedSymlinks).toBe(1)
+
+    const rejectedContext = createContext()
+    writeArtifact(rejectedContext, 'Aurora.dmg', 'not a real dmg, just a fake test container\n')
+    const rejectedHdiutil = createFakeHdiutil(
+      rejectedContext,
+      { 'Aurora.app/Contents/MacOS/aurora': 'executable bytes\n' },
+      { Applications: '/tmp/untrusted-applications' },
+    )
+
+    const rejected = runPolicyAsDarwin(rejectedContext, {
+      PATH: `${rejectedHdiutil.binDir}:${process.env.PATH ?? ''}`,
+    })
+
+    expect(rejected.status).not.toBe(0)
+    expect(rejected.stderr).toContain('symlink-unsupported')
   })
 
   it('is wired into the desktop client release bundle command', () => {

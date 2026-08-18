@@ -155,14 +155,24 @@ describe('browser model pack verification', () => {
   it('allows unsigned generated catalog manifests only through embedded catalog trust', async () => {
     const manifest = findAuroraBrowserVoiceCatalogEntry('standard:piper:en_us-amy-low')?.toModelPackManifest()
     expect(manifest).toBeDefined()
+    const expectedReleaseManifestSha256 = await manifestSha256(manifest!)
 
     await expect(verifyBrowserModelPackManifest(manifest!)).rejects.toMatchObject({ code: 'unsigned' })
-    await expect(verifyBrowserModelPackManifest(manifest!, { allowEmbeddedBrowserVoiceCatalogTrust: true }))
+    await expect(verifyBrowserModelPackManifest(manifest!, {
+      allowEmbeddedBrowserVoiceCatalogTrust: true,
+      expectedReleaseManifestSha256
+    }))
       .resolves.toMatchObject({
         pack_id: 'standard:piper:en_us-amy-low',
+        manifest_sha256: expectedReleaseManifestSha256,
         verification_mode: 'embedded-catalog',
         key_id: 'aurora-browser-voice-catalog'
       })
+
+    await expect(verifyBrowserModelPackManifest(manifest!, {
+      allowEmbeddedBrowserVoiceCatalogTrust: true,
+      expectedReleaseManifestSha256: '0'.repeat(64)
+    })).rejects.toMatchObject({ code: 'release_hash' })
 
     await expect(verifyBrowserModelPackManifest({
       ...manifest!,
@@ -375,6 +385,7 @@ describe('browser model pack verification', () => {
       extractTarBzip2Archive: async (_bytes, request) => {
         expect(request.expectedRoot).toBe('archive-root')
         expect(request.expectedPaths).toEqual(['archive-root/model.onnx', 'archive-root/tokens.txt'])
+        expect(request.maxFileBytes).toBe(384 * 1024 * 1024)
         return [
           { path: 'archive-root/model.onnx', byteSize: modelBytes.byteLength, sha256: await sha256Hex(modelBytes), bytes: modelBytes },
           { path: 'archive-root/tokens.txt', byteSize: tokensBytes.byteLength, sha256: await sha256Hex(tokensBytes), bytes: tokensBytes }

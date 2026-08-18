@@ -7,6 +7,9 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     name: Unit, integration, and E2E tests
@@ -100,7 +103,11 @@ jobs:
           --cov-report=xml:e2e-coverage.xml
           --cov-report=html:e2e-coverage.html
 
+      # Runs even when a suite above failed. Previously this step inherited the
+      # default success() condition, so a single red suite uploaded nothing and
+      # left a hole in the coverage history exactly when it was most useful.
       - name: Upload coverage reports
+        if: always()
         uses: codecov/codecov-action@v4
         with:
           files: ./unit-coverage.xml,./integration-coverage.xml,./process-coverage.xml,./e2e-coverage.xml

@@ -2802,6 +2802,9 @@ mod native_tts_backend {
     const POCKET_TEXT_CONDITIONER_FILE_ID: &str = "text-conditioner";
     const POCKET_VOCAB_FILE_ID: &str = "vocab";
     const POCKET_TOKEN_SCORES_FILE_ID: &str = "token-scores";
+    const POCKET_PROTOCOL_FILE_ID: &str = "pocket-protocol";
+    const POCKET_BOS_BEFORE_VOICE_FILE_ID: &str = "bos-before-voice";
+    const POCKET_FIXED_VOICE_STATE_FILE_ID: &str = "fixed-voice-state";
     const POCKET_NUM_STEPS: i32 = 5;
     const POCKET_EXTRA: &str = r#"{"max_reference_audio_len":10.0,"seed":42}"#;
 
@@ -2815,6 +2818,7 @@ mod native_tts_backend {
         Pocket {
             reference_audio: Option<TtsReferenceAudio>,
             reference_text: Option<String>,
+            reference_audio_required: bool,
         },
     }
 
@@ -2939,6 +2943,7 @@ mod native_tts_backend {
                 family: NativeTtsFamily::Pocket {
                     reference_audio: files.reference_audio.map(|reference| reference.audio),
                     reference_text: files.reference_text,
+                    reference_audio_required: files.reference_audio_required,
                 },
             })
         }
@@ -2967,8 +2972,24 @@ mod native_tts_backend {
                 &files.token_scores_file_id,
                 POCKET_TOKEN_SCORES_FILE_ID,
             )?;
+            if !files.reference_audio_required {
+                require_fixed_pockettts_sidecars(binding)?;
+            }
             Self::from_selected_pockettts_model(binding, files)
         }
+    }
+
+    pub(super) fn require_fixed_pockettts_sidecars(
+        binding: &TaskPackBinding,
+    ) -> Result<(), EngineError> {
+        for file_id in [
+            POCKET_PROTOCOL_FILE_ID,
+            POCKET_BOS_BEFORE_VOICE_FILE_ID,
+            POCKET_FIXED_VOICE_STATE_FILE_ID,
+        ] {
+            require_catalog_selected_file(binding, file_id, file_id)?;
+        }
+        Ok(())
     }
 
     pub struct NativeTtsVitsPiperModelFiles {
@@ -3042,6 +3063,7 @@ mod native_tts_backend {
         pub token_scores_path: PathBuf,
         pub reference_audio: Option<NativeTtsReferenceAudio>,
         pub reference_text: Option<String>,
+        pub reference_audio_required: bool,
     }
 
     impl fmt::Debug for NativeTtsPocketModelFiles {
@@ -3069,6 +3091,7 @@ mod native_tts_backend {
                 )
                 .field("token_scores_path", &"<redacted>")
                 .field("reference_audio_present", &self.reference_audio.is_some())
+                .field("reference_audio_required", &self.reference_audio_required)
                 .field(
                     "reference_text_bytes",
                     &self.reference_text.as_ref().map(String::len),
@@ -3095,16 +3118,20 @@ mod native_tts_backend {
                 NativeTtsFamily::Pocket {
                     reference_audio,
                     reference_text,
+                    reference_audio_required,
                 } => {
-                    let Some(reference_audio) = reference_audio.clone() else {
-                        return Err(SherpaAdapterError::InvalidConfig);
-                    };
                     config = config
-                        .with_reference_audio(reference_audio)
                         .with_num_steps(POCKET_NUM_STEPS)
                         .with_extra(POCKET_EXTRA);
+                    if let Some(reference_audio) = reference_audio.clone() {
+                        config = config.with_reference_audio(reference_audio);
+                    } else if *reference_audio_required {
+                        return Err(SherpaAdapterError::InvalidConfig);
+                    }
                     if let Some(reference_text) = reference_text {
-                        config = config.with_reference_text(reference_text.clone());
+                        if !reference_text.trim().is_empty() {
+                            config = config.with_reference_text(reference_text.clone());
+                        }
                     }
                 }
             }
@@ -5054,6 +5081,32 @@ mod tests {
             },
         );
         assert!(matches!(result, Err(EngineError::InvalidRequest)));
+    }
+
+    #[cfg(feature = "native-tts")]
+    #[test]
+    fn fixed_pockettts_requires_all_catalog_sidecars() {
+        let missing_state = binding_with_files(
+            "fixed-pockettts-missing-state",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["pocket-protocol", "bos-before-voice"],
+        );
+        assert!(matches!(
+            native_tts_backend::require_fixed_pockettts_sidecars(&missing_state),
+            Err(EngineError::InvalidRequest)
+        ));
+
+        let complete = binding_with_files(
+            "fixed-pockettts-sidecars",
+            PackTask::Tts,
+            VoiceTask::TextToSpeech,
+            &["pocket-protocol", "bos-before-voice", "fixed-voice-state"],
+        );
+        assert_eq!(
+            native_tts_backend::require_fixed_pockettts_sidecars(&complete),
+            Ok(())
+        );
     }
 
     #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]

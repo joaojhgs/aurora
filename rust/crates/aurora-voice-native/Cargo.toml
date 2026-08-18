@@ -54,6 +54,7 @@ desktop-sherpa-tts = ["native-sherpa-tts"]
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

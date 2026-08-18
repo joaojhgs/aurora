@@ -4,27 +4,65 @@ on:
   pull_request:
     paths:
       - "rust/**"
+      - "tools/voice-runtime/ios-audio-spike/native/**"
+      - "tools/voice-runtime/android-audio-spike/native/**"
       - "Makefile"
       - ".github/workflows/rust-voice.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   rust-voice:
     name: Rust 1.88 native and browser WASM checks
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux audio development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libasound2-dev
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0
         with:
-          components: clippy,rustfmt
+          components: clippy,rustfmt,llvm-tools
           targets: wasm32-unknown-unknown
 
       - name: Install pinned browser test runner
         run: cargo +1.88.0 install wasm-bindgen-cli --version 0.2.126 --locked
 
+      - name: Install coverage instrumentation
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+          fallback: none
+
       - name: Check native and browser runtimes
         run: make check-rust-voice
+
+      # Native workspace plus the standalone voice-runtime Cargo manifests
+      # exercised by `make check-rust-voice`. The wasm32 target cannot be
+      # instrumented by llvm-cov, and apps/aurora-tauri/src-tauri is a
+      # separate Cargo project verified by the Tauri workflows.
+      - name: Measure native workspace coverage
+        run: >-
+          cargo +1.88.0 llvm-cov
+          --manifest-path rust/Cargo.toml
+          --locked
+          --workspace
+          --lcov
+          --output-path rust-lcov.info
+
+      - name: Upload Rust coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./rust-lcov.info
+          flags: rust
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

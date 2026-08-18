@@ -103,6 +103,9 @@ export type AuroraVoiceWebModelFileRole =
   | 'textConditioner'
   | 'vocabJson'
   | 'tokenScoresJson'
+  | 'pocketProtocol'
+  | 'bosBeforeVoice'
+  | 'fixedVoiceState'
   | 'referenceAudio'
 
 export interface AuroraVoiceWebModelFileReference {
@@ -130,7 +133,15 @@ export interface AuroraVoiceWebModelDescriptor {
     readonly lengthScale?: number
     readonly referenceText?: string
     readonly referenceSampleRateHz?: number
+    readonly maxFrames?: number
+    readonly referenceAudioMode?: 'profile' | 'internal'
   }
+}
+
+export function resolvePocketReferenceAudioMode(
+  config?: { readonly referenceAudioMode?: 'profile' | 'internal' }
+): 'profile' | 'internal' {
+  return config?.referenceAudioMode === 'internal' ? 'internal' : 'profile'
 }
 
 export interface AuroraVoiceWebModelFileBinding {
@@ -232,6 +243,7 @@ export interface AuroraAudioWorkletPcmSink {
 
 export const AURORA_VOICE_WORKER_PROTOCOL_VERSION = 1
 export const AURORA_VOICE_WORKER_MAX_REQUEST_ID = 2_147_483_647
+export const AURORA_VOICE_WORKER_MAX_TIMEOUT_MS = 900_000
 
 export type AuroraVoiceWorkerCommand =
   | {

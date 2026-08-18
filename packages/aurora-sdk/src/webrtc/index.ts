@@ -82,7 +82,8 @@ export {
 export type { DataChannelFlowLimits } from './datachannel-flow.js'
 
 export {
-  MeshEventSubscriptionRegistry
+  MeshEventSubscriptionRegistry,
+  CORRELATION_REQUIRED_EVENT_TOPICS
 } from './event-subscriptions.js'
 export type {
   MeshEventSubscriptionRegistryOptions,
@@ -110,6 +111,7 @@ export type {
   CallFrame,
   CandidateFrame,
   CancelFrame,
+  CapacityUpdateFrame,
   ChunkFrame,
   ErrorFrame,
   EventFrame,

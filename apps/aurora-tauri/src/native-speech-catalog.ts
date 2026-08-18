@@ -299,6 +299,18 @@ async function readinessForPlatform(
   return readinessFromDesktopStatus(await options.transport.getNativeSpeechPackStatus());
 }
 
+function resolveNativeRequiresReferenceProfile(
+  record: Record<string, unknown>,
+  modelFamily?: string,
+): boolean {
+  const mode = stringField(record, "referenceAudioMode") ?? stringField(record, "reference_audio_mode");
+  if (mode === "internal") return false;
+  if (mode === "profile") return true;
+  if (record.requiresReferenceProfile === true || record.requiresReferenceAudio === true) return true;
+  if (record.requiresReferenceProfile === false || record.requiresReferenceAudio === false) return false;
+  return (modelFamily ?? stringField(record, "modelFamily") ?? stringField(record, "model_family")) === "pockettts";
+}
+
 function normalizeDesktopEntry(entry: NativeSpeechPackCatalogResponse["packs"][number]): AuroraBrowserSpeechPackCatalogSelection {
   const record = entry as unknown as Record<string, unknown>;
   const packVersion = stringField(record, "version")
@@ -307,9 +319,7 @@ function normalizeDesktopEntry(entry: NativeSpeechPackCatalogResponse["packs"][n
     ?? entry.activeSlot
     ?? "native";
   const modelFamily = stringField(record, "modelFamily");
-  const requiresReferenceProfile = booleanField(record, "requiresReferenceProfile")
-    || booleanField(record, "requiresReferenceAudio")
-    || modelFamily === "pockettts";
+  const requiresReferenceProfile = resolveNativeRequiresReferenceProfile(record, modelFamily);
   return freezeSelection({
     task: entry.task,
     packId: entry.packId,
@@ -347,7 +357,7 @@ function normalizeAndroidEntry(entry: AndroidVoicePackCatalogStatus["entries"][n
       voiceId: entry.packId,
       voiceRevision: packVersion,
     } : {}),
-    ...(entry.requiresReferenceAudio === true ? {
+    ...(resolveNativeRequiresReferenceProfile(entry as unknown as Record<string, unknown>, entry.modelFamily) ? {
       requiresReferenceProfile: true,
       referenceProfileSelected: entry.referenceSelectionPresent === true,
     } : {}),
@@ -360,9 +370,7 @@ function normalizeIosEntry(entry: unknown): AuroraBrowserSpeechPackCatalogSelect
   const packId = stringField(record, "packId") ?? stringField(record, "pack_id") ?? "";
   const packVersion = stringField(record, "version") ?? stringField(record, "runtimeRevision") ?? stringField(record, "sha256") ?? "ios";
   const modelFamily = stringField(record, "modelFamily");
-  const requiresReferenceProfile = booleanField(record, "requiresReferenceProfile")
-    || booleanField(record, "requiresReferenceAudio")
-    || modelFamily === "pockettts";
+  const requiresReferenceProfile = resolveNativeRequiresReferenceProfile(record, modelFamily);
   return freezeSelection({
     task,
     packId,

@@ -84,7 +84,7 @@ export function SettingsPermissionsView() {
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><WandSparkles className="size-4 text-primary" />iOS invocation</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {iosStates.map(([label, value, state]) => <div key={label} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{value}</p></div><CapabilityStateBadge state={state} /></div>)}
-                <Badge variant="outline" className="border-warning/30 text-warning">Siri/Shortcuts/App Intents integration only</Badge>
+                <Badge variant="outline" className="border-warning/30 text-warning">Shortcuts can open Aurora; iOS does not replace the system assistant</Badge>
               </CardContent>
             </Card>
           </TabsContent>

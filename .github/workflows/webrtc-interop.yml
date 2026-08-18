@@ -33,6 +33,9 @@ on:
       - ".github/workflows/webrtc-interop.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   live-interop:
     name: Hosted peer and cross-engine network paths
@@ -55,6 +58,12 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
 
       - run: uv sync --extra sidecar-thin
       - run: pnpm install --frozen-lockfile

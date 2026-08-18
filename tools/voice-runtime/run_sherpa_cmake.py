@@ -13,7 +13,32 @@ import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.4"
+SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
+AURORA_SHERPA_PATCHED_FILES = {
+    "sherpa-onnx/csrc/offline-tts-pocket-model.h": (
+        "53f1b87d998ba0e72340819fc0678df020d7280c917a9a8252e5f405a3a49e2f"
+    ),
+    "sherpa-onnx/csrc/offline-tts-pocket-model.cc": (
+        "07e7375f366cfff3c8652fd79ca854979721d3d30f6eeb04edc8399893983ac9"
+    ),
+    "sherpa-onnx/csrc/offline-tts-pocket-impl.h": (
+        "a7896e6e8df22d678fb325f12440eb42137276542012ee4246225a8d65a29567"
+    ),
+    "wasm/tts/CMakeLists.txt": ("bae61a4165725f1d67d4d0f16274b2c5b4fff445e10dde2527050e630355ce11"),
+    "cmake/onnxruntime-osx-arm64-static.cmake": (
+        "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e"
+    ),
+}
+OMITTED_PINNED_UPSTREAM_SYMLINKS = {
+    "scripts/go/_internal/vad-spoken-language-identification/main.go": (
+        "/Users/fangjun/open-source/sherpa-onnx/go-api-examples/"
+        "vad-spoken-language-identification/main.go"
+    ),
+    "scripts/go/_internal/vad-spoken-language-identification/run.sh": (
+        "/Users/fangjun/open-source/sherpa-onnx/go-api-examples/"
+        "vad-spoken-language-identification/run.sh"
+    ),
+}
 
 
 class SourceIdentityError(RuntimeError):
@@ -122,11 +147,18 @@ def _source_records(source_root: Path) -> dict[str, tuple[str, ...]]:
     return records
 
 
-def _verify_extracted_tree(archive: Path, source_root: Path) -> tuple[str, int]:
+def _verify_extracted_tree(
+    archive: Path,
+    source_root: Path,
+    *,
+    allow_aurora_pockettts_patches: bool = False,
+) -> tuple[str, int]:
     archive_records = _archive_records(archive, source_root.name)
     source_records = _source_records(source_root)
     archive_digest = _canonical_digest(archive_records)
     source_digest = _canonical_digest(source_records)
+    if allow_aurora_pockettts_patches:
+        return _verify_patched_tree(archive_records, source_records, source_root)
     if archive_records != source_records:
         missing = sorted(archive_records.keys() - source_records.keys())
         extra = sorted(source_records.keys() - archive_records.keys())
@@ -149,6 +181,43 @@ def _verify_extracted_tree(archive: Path, source_root: Path) -> tuple[str, int]:
     if archive_digest != source_digest:
         raise SourceIdentityError("sherpa source tree digest does not match the archive")
     return archive_digest, len(archive_records)
+
+
+def _verify_patched_tree(
+    archive_records: dict[str, tuple[str, ...]],
+    source_records: dict[str, tuple[str, ...]],
+    source_root: Path,
+) -> tuple[str, int]:
+    extra = sorted(source_records.keys() - archive_records.keys())
+    missing = set(archive_records.keys() - source_records.keys())
+    expected_omissions = set(OMITTED_PINNED_UPSTREAM_SYMLINKS)
+    for relative, target in OMITTED_PINNED_UPSTREAM_SYMLINKS.items():
+        if archive_records.get(relative) != ("symlink", target):
+            raise SourceIdentityError(f"pinned omitted sherpa symlink changed: {relative}")
+    unexpected_missing = sorted(missing - expected_omissions)
+    retained_escaping_links = sorted(expected_omissions - missing)
+    if extra or unexpected_missing or retained_escaping_links:
+        raise SourceIdentityError(
+            "patched sherpa tree changed the archive file set"
+            + (f" extra={extra[0]}" if extra else "")
+            + (f" missing={unexpected_missing[0]}" if unexpected_missing else "")
+            + (f" unsafe_link={retained_escaping_links[0]}" if retained_escaping_links else "")
+        )
+    changed = sorted(
+        path
+        for path in archive_records.keys() & source_records.keys()
+        if archive_records[path] != source_records[path]
+    )
+    if set(changed) != set(AURORA_SHERPA_PATCHED_FILES):
+        raise SourceIdentityError(
+            "patched sherpa tree does not match the Aurora downstream patch file set"
+            + (f" changed={changed}" if changed else "")
+        )
+    for relative, expected in AURORA_SHERPA_PATCHED_FILES.items():
+        actual = sha256_file(source_root / relative)
+        if actual != expected:
+            raise SourceIdentityError(f"patched file digest mismatch: {relative}")
+    return _canonical_digest(source_records), len(source_records)
 
 
 def validate_cmake_command(command: list[str], source_root: Path) -> None:
@@ -180,7 +249,11 @@ def _git_output(source_root: Path, *args: str, env: dict[str, str] | None = None
 
 
 def verify_source_identity(
-    manifest_path: Path, artifact_root: Path, source_root: Path
+    manifest_path: Path,
+    artifact_root: Path,
+    source_root: Path,
+    *,
+    allow_aurora_pockettts_patches: bool = False,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     pin = load_sherpa_pin(manifest_path)
     resolved_artifact_root = artifact_root.resolve()
@@ -211,7 +284,11 @@ def verify_source_identity(
     actual_archive_sha = sha256_file(archive)
     if actual_archive_sha != pin["sha256"]:
         raise SourceIdentityError("sherpa source archive hash does not match the manifest")
-    source_tree_sha, source_entry_count = _verify_extracted_tree(archive, resolved_source_root)
+    source_tree_sha, source_entry_count = _verify_extracted_tree(
+        archive,
+        resolved_source_root,
+        allow_aurora_pockettts_patches=allow_aurora_pockettts_patches,
+    )
 
     expected_commit = str(pin["commit"])
     inherited_git_root = _git_output(resolved_source_root, "rev-parse", "--show-toplevel")
@@ -250,6 +327,7 @@ def verify_source_identity(
         "source_root": str(resolved_source_root),
         "source_tree_sha256": source_tree_sha,
         "source_entry_count": source_entry_count,
+        "aurora_pockettts_patches": allow_aurora_pockettts_patches,
         "source_has_own_git": source_has_own_git,
         "inherited_git_root_suppressed": (
             inherited_git_root if inherited_git_root and not source_has_own_git else None
@@ -269,6 +347,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--source-root", type=Path, required=True)
+    parser.add_argument(
+        "--allow-aurora-pockettts-patches",
+        action="store_true",
+        help="Allow the Aurora PocketTTS patch queue on the verified v1.13.5 tree",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     return parser
 
@@ -277,7 +360,10 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         evidence, build_env = verify_source_identity(
-            args.manifest, args.artifact_root, args.source_root
+            args.manifest,
+            args.artifact_root,
+            args.source_root,
+            allow_aurora_pockettts_patches=args.allow_aurora_pockettts_patches,
         )
     except (OSError, KeyError, json.JSONDecodeError, SourceIdentityError) as exc:
         print(json.dumps({"status": "invalid", "error": str(exc)}), file=sys.stderr)

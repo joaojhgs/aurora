@@ -27,6 +27,7 @@ fn main() {
             "aurora_android_webview_microphone_permission_decision",
             "aurora_android_voice_foreground_service_status",
             "aurora_android_voice_foreground_service_start",
+            "aurora_android_voice_live_test_inject_pcm",
             "aurora_android_voice_foreground_service_finish",
             "aurora_android_voice_foreground_service_cancel",
             "aurora_android_voice_pack_catalog_status",

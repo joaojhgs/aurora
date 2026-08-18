@@ -1,5 +1,7 @@
 //! Desktop native speech-engine construction from active model-pack state.
 
+#[cfg(feature = "native-sherpa-tts")]
+use aurora_voice_engine::TtsVoiceCatalog;
 use aurora_voice_engine::{
     EngineError, EngineFaultCode, KwsConfig, LanguageSupport, ModelPackFile, ModelPackManifest,
     ModelStoreScope, PackTask, RuntimeSelection, SelectedVariant, SpeechCatalogTask,
@@ -214,8 +216,13 @@ pub fn build_installed_tts_provider_with_reference(
             NativeTtsBackend::from_catalog_vits_piper_model(&bindings.task_binding, files)?
         }
         Some("pockettts") => {
-            let Some(reference_audio) = reference_audio else {
-                return Err(EngineError::TaskUnavailable);
+            let catalog = TtsVoiceCatalog::runtime().map_err(|_| EngineError::TaskUnavailable)?;
+            let entry = catalog.voice(voice_id).ok_or(EngineError::InvalidRequest)?;
+            let reference_audio_required = entry.requires_reference_profile();
+            let reference_audio = if reference_audio_required {
+                Some(reference_audio.ok_or(EngineError::TaskUnavailable)?)
+            } else {
+                None
             };
             let files = NativeTtsPocketModelFiles {
                 lm_flow_file_id: "lm-flow".to_owned(),
@@ -232,8 +239,15 @@ pub fn build_installed_tts_provider_with_reference(
                 vocab_path: catalog_path_for_voice(&bindings, "vocab")?,
                 token_scores_file_id: "token-scores".to_owned(),
                 token_scores_path: catalog_path_for_voice(&bindings, "token-scores")?,
-                reference_audio: Some(reference_audio),
-                reference_text,
+                reference_audio,
+                reference_text: reference_text.and_then(|text| {
+                    if text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(text)
+                    }
+                }),
+                reference_audio_required,
             };
             NativeTtsBackend::from_catalog_pockettts_model(&bindings.task_binding, files)?
         }
@@ -328,12 +342,8 @@ fn installed_kws_compiler_family(
     model_id: &str,
 ) -> Result<InstalledKwsCompilerFamily, SherpaKwsPhraseCompileError> {
     match model_id {
-        "kws:zipformer:gigaspeech" | "kws:zipformer:gigaspeech-mobile" => {
-            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
-        }
-        "kws:zipformer:wenetspeech" | "kws:zipformer:wenetspeech-mobile" => {
-            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
-        }
+        "kws:zipformer:gigaspeech" => Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece),
+        "kws:zipformer:wenetspeech" => Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin),
         "kws:zipformer:zh-en-2025" => Ok(InstalledKwsCompilerFamily::BilingualPhonePartialPinyin),
         _ => Err(SherpaKwsPhraseCompileError::UnsupportedFamily),
     }
@@ -441,15 +451,7 @@ mod tests {
             Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
         );
         assert_eq!(
-            installed_kws_compiler_family("kws:zipformer:gigaspeech-mobile"),
-            Ok(InstalledKwsCompilerFamily::GigaspeechSentencePiece)
-        );
-        assert_eq!(
             installed_kws_compiler_family("kws:zipformer:wenetspeech"),
-            Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
-        );
-        assert_eq!(
-            installed_kws_compiler_family("kws:zipformer:wenetspeech-mobile"),
             Ok(InstalledKwsCompilerFamily::WenetSpeechPartialPinyin)
         );
         assert_eq!(

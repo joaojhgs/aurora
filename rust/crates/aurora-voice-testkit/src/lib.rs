@@ -1808,13 +1808,13 @@ mod tests {
 
     #[tokio::test]
     async fn fake_wake_turn_uses_same_runtime_path() -> Result<(), VoiceCoreError> {
-        let frames = vec![fake_frame(1, Generation(1))?];
+        let frames = vec![fake_frame(1, Generation(1))?, fake_frame(2, Generation(1))?];
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("wake phrase");
         let transport = FakeTransport::new("wake answer");
         let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let (vad, kws, wake_config) = fake_wake_providers([1], [1], [1]);
+        let (vad, kws, wake_config) = fake_wake_providers([1], [2], [2]);
         let mut runtime = VoiceRuntime::new(
             audio,
             engine.clone(),
@@ -1848,13 +1848,13 @@ mod tests {
     #[tokio::test]
     async fn fake_background_turn_preserves_background_capture_lease() -> Result<(), VoiceCoreError>
     {
-        let frames = vec![fake_frame(1, Generation(1))?];
+        let frames = vec![fake_frame(1, Generation(1))?, fake_frame(2, Generation(1))?];
         let audio = FakeAudioInput::new(frames);
         let engine = FakeEngine::new("background phrase");
         let transport = FakeTransport::new("background answer");
         let output = FakeAudioOutput::new();
         let sink = FakeEventSink::default();
-        let (vad, kws, wake_config) = fake_wake_providers([1], [1], [1]);
+        let (vad, kws, wake_config) = fake_wake_providers([1], [2], [2]);
         let mut runtime = VoiceRuntime::new(
             audio,
             engine.clone(),

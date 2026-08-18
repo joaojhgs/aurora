@@ -170,39 +170,33 @@ class ConfigService(BaseService):
             Returns:
                 GetConfigResponse (automatically published to reply_to by base_service wrapper)
         """
-        try:
-            section = query.section
+        section = query.section
 
-            # Log the request with debug details (only shown when AURORA_DEBUG_LOGS=true)
-            log_debug(f"[GetConfig] section='{section}'")
+        # Log the request with debug details (only shown when AURORA_DEBUG_LOGS=true)
+        log_debug(f"[GetConfig] section='{section}'")
 
-            if section:
-                config = self.config_manager.get(section, {})
-            else:
-                config = self.config_manager.get_config_dict()
+        if section:
+            config = self.config_manager.get(section, {})
+        else:
+            config = self.config_manager.get_config_dict()
 
-            identity_source = getattr(envelope, "identity_source", None)
-            external_read = getattr(
-                envelope, "origin", "internal"
-            ) == "external" or identity_source in {
-                "gateway_http",
-                "webrtc_rpc",
-                "mesh_peer",
-                "remote_peer",
-                "token",
-            }
-            if external_read:
-                config = self.config_manager.redact_external_config(
-                    config,
-                    root_path=section or "",
-                )
+        identity_source = getattr(envelope, "identity_source", None)
+        external_read = getattr(
+            envelope, "origin", "internal"
+        ) == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if external_read:
+            config = self.config_manager.redact_external_config(
+                config,
+                root_path=section or "",
+            )
 
-            response = GetConfigResponse(config=config)
-            return response
-        except Exception as e:
-            log_error(f"Error handling GetConfig query: {e}", exc_info=True)
-            # Return empty config on error
-            return GetConfigResponse(config={})
+        return GetConfigResponse(config=config)
 
     @method_contract(
         method_id=ConfigMethods.SET,

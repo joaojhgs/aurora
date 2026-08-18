@@ -550,6 +550,8 @@ export function AuroraTauriApp({
     useState<AndroidMediaPolicyStatus | null>(null);
   const [nativeVoiceAvailable, setNativeVoiceAvailable] =
     useState(false);
+  const [nativeBackgroundVoiceAvailable, setNativeBackgroundVoiceAvailable] =
+    useState(false);
   const [nativeSpeechReadiness, setNativeSpeechReadiness] =
     useState<TauriNativeSpeechCatalogReadiness | null>(null);
 
@@ -569,6 +571,24 @@ export function AuroraTauriApp({
       NATIVE_VOICE_STATUS_POLL_MS,
     );
   }, [runtime.nativeMobileVoice, runtime.nativeVoice]);
+
+  useEffect(() => {
+    const nativeVoice = runtime.nativeMobileVoice;
+    const backgroundStatus = nativeVoice?.backgroundStatus;
+    setNativeBackgroundVoiceAvailable(false);
+    if (!backgroundStatus) return;
+    return startNonOverlappingPoll(
+      async () => {
+        try {
+          return (await backgroundStatus()).available;
+        } catch {
+          return false;
+        }
+      },
+      setNativeBackgroundVoiceAvailable,
+      NATIVE_VOICE_STATUS_POLL_MS,
+    );
+  }, [runtime.nativeMobileVoice]);
 
   useEffect(() => {
     const catalog = runtime.localSpeechCatalog;
@@ -985,7 +1005,8 @@ export function AuroraTauriApp({
     nativeVoiceAvailable,
     nativeWakewordAvailable:
       nativeSpeechReadiness?.capabilities.vad === true
-      && nativeSpeechReadiness.capabilities.kws === true,
+      && nativeSpeechReadiness.capabilities.kws === true
+      && (!runtime.nativeMobileVoice || nativeBackgroundVoiceAvailable),
     userAgent:
       typeof window === "undefined" ? undefined : window.navigator.userAgent,
   });
@@ -2387,10 +2408,10 @@ function androidMediaPolicyLabel(
   status: AndroidMediaPolicyStatus | null,
 ): string {
   if (!status) {
-    return "Microphone use is available only while Aurora is open; background listening is unavailable";
+    return "Open Aurora to use the microphone; hands-free availability depends on voice setup";
   }
   return status.microphoneAllowedInForeground
-    ? "Microphone available while Aurora is open; background listening is unavailable"
+    ? "Microphone available while Aurora is open; hands-free listening uses voice setup"
     : "Microphone access is unavailable; review device permissions";
 }
 

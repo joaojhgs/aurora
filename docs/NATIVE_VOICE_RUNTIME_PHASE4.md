@@ -5,11 +5,9 @@
 **Audience:** contributors integrating the cross-surface local voice runtime
 
 This page freezes the Phase 4 native voice runtime engine, audio, linking,
-transport, model, and toolchain decisions. It authorizes the shared production
-foundation work in Phase 5; it is not a completion claim for the native voice
-runtime or for any later device release. Every pending row remains unverified
-until the corresponding build, device, browser, or parity check has a fresh
-report.
+transport, model, and toolchain decisions. The live Sherpa PocketTTS pin is
+[`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md) (`sherpa-onnx v1.13.5` plus the
+Aurora PocketTTS patch queue). This Phase 4 page remains a frozen snapshot.
 
 ## Superseded TypeScript prototype disposition
 
@@ -44,7 +42,7 @@ evidence; they are not the production catalog or a default-pack decision.
 - Rust `1.88.0` is the pinned local build toolchain for this lane.
   The Tauri crate declaration and native CI workflows are aligned to that
   minimum after the complete Phase 4 build matrix.
-- sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.18.1`, and
+- sherpa-onnx `v1.13.4`, ONNX Runtime `v1.27.0`, CPAL `v0.18.2`, and
   Emscripten `4.0.23` are the pinned runtime/build inputs for the Phase 4
   validation shape.
 - The Phase 4 validation-only model set is English-only for ASR, VAD, and KWS:
@@ -67,7 +65,7 @@ evidence; they are not the production catalog or a default-pack decision.
 | sherpa-onnx source archive | `v1.13.4`, tag commit `142807252687d81b40d6315f23470a1512a00de3` | `3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295` | Pinned |
 | ONNX Runtime source archive | `v1.27.0`, commit `8f0278c77bf44b0cc83c098c6c722b92a36ac4b5` | `b41d09905a3c2f3a25709d1dcce8ef3942a4c2799d1046f74be7b6bbebc45e6a` | Pinned |
 | ONNX Runtime Linux x64 probe package | `1.27.0`, glibc 2.17 release | `9f0c0a6998f1b94c399eeddcb443beb4a922c9a4fd431fdc9cd6de67a1935d00` | Exact prebuilt consumed by the Linux shared-library probe; the source archive above is provenance input, not a source-build claim |
-| CPAL crates.io package | `v0.18.1` | registry checksum `5f77b11176c37874be37e8d691c946e31b2b8c357abce9526f6a99eb469e1028` | Pinned in `rust/Cargo.lock` and `tools/voice-runtime/phase4_manifest.json`; source archive provenance is not claimed |
+| CPAL crates.io package | `v0.18.2` | registry checksum `6f02e8d0327b42d3e2e4ab2119af397344eb9fc54a34bf0ddeaa1277af8681f1` | Pinned in `rust/Cargo.lock` and `tools/voice-runtime/phase4_manifest.json`; this patch release aligns CPAL's Windows bindings on `windows` and `windows-core` 0.62 |
 | Emscripten SDK archive | `4.0.23` | `a91a4c1f42dbb0345faac093161e27d43e9b6964840d8c8d80976ab8d3eaf2d3` | Pinned |
 | ONNX Runtime Android package | `1.27.0` | `a78f303a26b5e75c84c8b2a97fa2ddb400b2d1b5e069bec19aa229ccd3597fdb` | Pinned; staged prebuilt for Android source builds |
 | ONNX Runtime WASM SIMD static package | `1.27.0` | `076680969c74225caf0a6d08c0be5edd2c242b081c33cede77dcc5eac355bbcf` | Pinned |
@@ -105,7 +103,7 @@ Moonshine extracted file hashes already recorded for integration:
 
 | Surface | Decision | Current status |
 | --- | --- | --- |
-| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.1` for the Phase 4 desktop audio validation path. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
+| Desktop local | Use Rust host code for model lifecycle and native HTTP/SSE; use CPAL `0.18.2` for the Phase 4 desktop audio validation path. | Linux sherpa shared-library build completed. Standalone CPAL capture/playback and Android comparison checks passed; the full integrated local audio path remains pending. |
 | Hosted web and WebView foreground capture | Use browser microphone capture and worker-hosted WASM modules; keep the UI thread nonblocking. | Chromium, Firefox, and WebKit pass worker-hosted VAD, Moonshine ASR, and KWS with COOP/COEP and `SharedArrayBuffer`. KWS uses the Phase 4 validation full GigaSpeech BPE pack and detects `LOVELY CHILD` and `FOREVER`; the smaller mobile pack remains disqualified by the ONNX Runtime reshape abort. The later browser runtime activates TTS only after explicit voice selection and verified cache installation. |
 | Android | Use Kotlin `AudioRecord`/`AudioManager` lifecycle and data plane into Rust with bounded PCM transfer. Treat CPAL/AAudio as comparison only for this phase. | sherpa source-built for `arm64-v8a` and `x86_64` against staged prebuilt ONNX Runtime. All four inspected libraries are ELF-correct and every LOAD segment is `0x4000` aligned. Kotlin audio ingress through JNI into a bounded Rust PCM queue packages for `arm64-v8a` and `x86_64`; the API 35 x86_64 emulator smoke proves synthetic JNI ingress and permission-granted `AudioRecord` frames reaching Rust. WebView parity, durable background voice, physical-device results, and Android sherpa VAD/STT runtime remain pending. |
 | iOS | Use Swift `AVAudioEngine`/`AVAudioSession` lifecycle and data plane into Rust. Treat CPAL/CoreAudio as comparison only for this phase. | The Rust `IosVoiceSession` executor now owns typed Gateway HTTP/SSE STT/TTS transport, generation/cancellation, bounded ingress/egress, and redacted status. Swift owns AVAudioEngine capture, AVAudioPlayerNode playback, Keychain-backed native credentials, PTT finish/cancel, and fail-closed interruption/route/media-reset handling. App background/lock/termination and low-power notifications are explicitly handled; only a future user-started background session may survive backgrounding or lock. Hash-pinned XCFrameworks contain the expected device `arm64`/iOS slice and simulator `arm64`+`x86_64`/iOSSimulator slices. Swift compilation, runtime linking, signing, simulator execution, device microphone behavior, and packaged runtime validation remain pending. |

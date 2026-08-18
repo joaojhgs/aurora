@@ -461,11 +461,11 @@ impl TaskPackBinding {
         sample_rate_hz: u32,
     ) -> Result<Self, EngineError> {
         let canonical_catalog =
-            TtsVoiceCatalog::embedded().map_err(|_| EngineError::InvalidRequest)?;
+            TtsVoiceCatalog::runtime().map_err(|_| EngineError::InvalidRequest)?;
         let canonical_entry = canonical_catalog
             .voice(&entry.voice_id)
             .ok_or(EngineError::InvalidRequest)?;
-        if catalog != canonical_catalog
+        if catalog.voice(&entry.voice_id) != Some(canonical_entry)
             || entry != canonical_entry
             || entry.engine != "sherpa_onnx"
             || !matches!(entry.model_family.as_str(), "vits_piper" | "pockettts")
@@ -513,7 +513,7 @@ impl TaskPackBinding {
             variant_abi: AbiRequirements {
                 min_aurora_version: "0.0.0".to_owned(),
                 min_runtime_version: "1.88.0".to_owned(),
-                min_engine_version: "sherpa-onnx-v1.13.4".to_owned(),
+                min_engine_version: "sherpa-onnx-v1.13.5".to_owned(),
                 engine_source_revision: catalog.revision().to_owned(),
                 build_flags: Vec::new(),
             },
@@ -643,16 +643,31 @@ fn tts_catalog_selected_file_ids(entry: &TtsCatalogEntry) -> Result<Vec<String>,
             "model-card".to_owned(),
             "tokens".to_owned(),
         ]),
-        "pockettts" => Ok(vec![
-            "decoder".to_owned(),
-            "encoder".to_owned(),
-            "lm-flow".to_owned(),
-            "lm-main".to_owned(),
-            "model-card".to_owned(),
-            "text-conditioner".to_owned(),
-            "token-scores".to_owned(),
-            "vocab".to_owned(),
-        ]),
+        "pockettts" => {
+            let mut ids = vec![
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "lm-flow".to_owned(),
+                "lm-main".to_owned(),
+                "model-card".to_owned(),
+                "text-conditioner".to_owned(),
+                "token-scores".to_owned(),
+                "vocab".to_owned(),
+            ];
+            if entry.bindings.reference_audio.is_some() {
+                ids.push("reference-audio".to_owned());
+            }
+            if entry.bindings.pocket_protocol.is_some() {
+                ids.push("pocket-protocol".to_owned());
+            }
+            if entry.bindings.bos_before_voice.is_some() {
+                ids.push("bos-before-voice".to_owned());
+            }
+            if entry.bindings.fixed_voice_state.is_some() {
+                ids.push("fixed-voice-state".to_owned());
+            }
+            Ok(ids)
+        }
         _ => Err(EngineError::InvalidRequest),
     }
 }
@@ -4963,6 +4978,44 @@ mod tests {
             ]
         );
         assert_eq!(binding.languages()[0].language, "en-us");
+    }
+
+    #[test]
+    fn fixed_pockettts_catalog_binding_selects_sidecars_without_reference_audio() {
+        let catalog = TtsVoiceCatalog::runtime().expect("runtime tts catalog");
+        let entry = catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("fixed PocketTTS voice");
+        let binding = TaskPackBinding::from_tts_catalog_entry(
+            catalog,
+            entry,
+            RuntimeTarget::Desktop,
+            TargetOs::Linux,
+            TargetArch::X86_64,
+            24_000,
+        )
+        .expect("fixed PocketTTS binding");
+
+        assert_eq!(
+            binding.selected_file_ids(),
+            &[
+                "decoder".to_owned(),
+                "encoder".to_owned(),
+                "lm-flow".to_owned(),
+                "lm-main".to_owned(),
+                "model-card".to_owned(),
+                "text-conditioner".to_owned(),
+                "token-scores".to_owned(),
+                "vocab".to_owned(),
+                "pocket-protocol".to_owned(),
+                "bos-before-voice".to_owned(),
+                "fixed-voice-state".to_owned(),
+            ]
+        );
+        assert!(!binding
+            .selected_file_ids()
+            .iter()
+            .any(|file_id| file_id == "reference-audio"));
     }
 
     #[test]

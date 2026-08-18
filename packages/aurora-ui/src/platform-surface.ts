@@ -476,12 +476,12 @@ export function getAuroraVoiceCapturePolicy(
       }
       return {
         focusedPushToTalkOwner: 'webview-focused',
-        wakewordOwner: 'webview-focused',
+        wakewordOwner: 'unavailable',
         wakewordRequiresFocus: true,
         canUseWebViewVisualizer: true,
         avoidCoordinatorPushToTalk: true,
         usesBrowserVoiceRuntime: false,
-        detail: 'Android capture is available while Aurora is open in the foreground.'
+        detail: 'Android push-to-talk is available while Aurora is open. Hands-free voice is unavailable on this device.'
       }
     case 'ios':
       if (options.nativeVoiceAvailable === true) {

@@ -744,6 +744,47 @@ class TestSerialization:
 
         assert result is None
 
+    def test_parse_manifest_tolerates_remote_feature_display_copy_drift(self):
+        """A peer on older display copy stays usable; membership drift does not."""
+
+        feature = feature_contracts_for_topic("TTS.Synthesize")[0]
+
+        def _manifest(feature_payload: dict) -> dict:
+            return {
+                "type": "manifest",
+                "peer_id": "peer-1",
+                "shared_services": [
+                    {
+                        "module": "TTS",
+                        "version": "1.0.0",
+                        "available_feature_ids": [feature.feature_id],
+                        "callable_features": [feature_payload],
+                        "methods": [
+                            {
+                                "name": "Synthesize",
+                                "bus_topic": "TTS.Synthesize",
+                                "exposure": "both",
+                                "required_perms": ["TTS.Synthesize"],
+                                "callable_feature_ids": [feature.feature_id],
+                                "callable_features": [feature_payload],
+                            }
+                        ],
+                    }
+                ],
+            }
+
+        canonical = feature.model_dump(mode="json")
+        canonical["method_ids"] = sorted(str(item) for item in canonical["method_ids"])
+
+        stale_copy = {**canonical, "label": "Older Label", "summary": "Older summary."}
+        assert parse_manifest(_manifest(stale_copy)) is not None
+
+        wrong_membership = {**canonical, "method_ids": [*canonical["method_ids"], "TTS.Bogus"]}
+        assert parse_manifest(_manifest(wrong_membership)) is None
+
+        wrong_module = {**canonical, "module": "Tooling"}
+        assert parse_manifest(_manifest(wrong_module)) is None
+
     def test_parse_manifest_accepts_wholly_legacy_zero_method_service(self):
         result = parse_manifest(
             {

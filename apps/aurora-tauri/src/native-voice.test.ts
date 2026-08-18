@@ -441,7 +441,7 @@ describe("Tauri native desktop voice port", () => {
             installed: true,
             activeSlot: null,
             revision: "tts-catalog-2026.08",
-            runtimeRevision: "sherpa-onnx-1.13.4",
+            runtimeRevision: "sherpa-onnx-1.13.5",
             modelFamily: "vits_piper",
             requiresReferenceAudio: false,
             voiceId: "piper.en_US.ava-high",

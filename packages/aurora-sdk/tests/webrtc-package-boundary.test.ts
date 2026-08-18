@@ -8,6 +8,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const rootIndexPath = resolve(packageRoot, 'src/index.ts')
 const webrtcIndexPath = resolve(packageRoot, 'src/webrtc/index.ts')
 const signalingMqttPath = resolve(packageRoot, 'src/webrtc/signaling-mqtt.ts')
+const runtimePath = resolve(packageRoot, 'src/webrtc/runtime.ts')
 const packageJsonPath = resolve(packageRoot, 'package.json')
 
 function read(path: string): string {
@@ -83,5 +84,16 @@ describe('WebRTC package boundary', () => {
       expect(target.startsWith('./dist/')).toBe(true)
       expect(existsSync(resolve(packageRoot, target))).toBe(true)
     }
+  })
+
+  it('binds the mesh bridge to the local peer id so projection evidence can be verified', () => {
+    // buildWebRtcManifestAck fails closed when expectedRecipientPeerId is
+    // absent, and the bridge only falls back to peerHost.localPeerId — which a
+    // consumer-role runtime does not have. Without this option every
+    // projection manifest is rejected as "recipient is unbound" and the
+    // DataChannel closes, which unit tests that construct the bridge directly
+    // cannot catch.
+    const runtime = read(runtimePath)
+    expect(runtime).toMatch(/localPeerId: this\.options\.localStablePeerId/u)
   })
 })

@@ -48,7 +48,8 @@
     "build:workspace-dependencies": "pnpm --dir ../.. --filter @aurora/client build && pnpm --dir ../.. --filter @aurora/voice-web build",
     "typecheck": "pnpm --dir ../.. --filter @aurora/voice-web build && tsc --noEmit --incremental false",
     "test": "pnpm run build:workspace-dependencies && vitest run --environment node --exclude 'dist/**'",
-    "test:accessibility": "pnpm run build:workspace-dependencies && vitest run --environment node tests/accessibility-responsive-visual.test.tsx"
+    "test:accessibility": "pnpm run build:workspace-dependencies && vitest run --environment node tests/accessibility-responsive-visual.test.tsx",
+    "test:coverage": "pnpm run build:workspace-dependencies && vitest run --environment node --exclude 'dist/**' --coverage"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.26",
@@ -93,6 +94,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "4.1.9",
     "axe-core": "^4.12.1",
     "jsdom": "^27.4.0",
     "react-dom": "^19",

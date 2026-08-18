@@ -1,5 +1,6 @@
 import {
   AURORA_VOICE_WEB_DEFAULT_CAPABILITIES,
+  AURORA_VOICE_WORKER_MAX_TIMEOUT_MS,
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
   AuroraVoiceWebRuntimeError,
   type AuroraCapturedAudio,
@@ -69,7 +70,12 @@ export class AuroraVoiceWebRuntime {
     this.maxFrameSamples = boundedIntegerInRange(options.maxFrameSamples ?? DEFAULT_MAX_FRAME_SAMPLES, 'maxFrameSamples', 1, DEFAULT_MAX_FRAME_SAMPLES)
     this.maxQueuedBytes = boundedIntegerInRange(options.maxQueuedBytes ?? DEFAULT_MAX_QUEUED_BYTES, 'maxQueuedBytes', 2, DEFAULT_MAX_QUEUED_BYTES)
     this.workerTimeoutMs = boundedIntegerInRange(options.workerTimeoutMs ?? DEFAULT_WORKER_TIMEOUT_MS, 'workerTimeoutMs', 1, 60_000)
-    this.ttsTimeoutMs = boundedIntegerInRange(options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS, 'ttsTimeoutMs', 1_000, DEFAULT_TTS_TIMEOUT_MS)
+    this.ttsTimeoutMs = boundedIntegerInRange(
+      options.ttsTimeoutMs ?? DEFAULT_TTS_TIMEOUT_MS,
+      'ttsTimeoutMs',
+      1_000,
+      AURORA_VOICE_WORKER_MAX_TIMEOUT_MS
+    )
     this.modelBindings = options.modelBindings
     this.nowMs = options.nowMs ?? Date.now
     this.sessionIdFactory = options.sessionIdFactory ?? defaultSessionId

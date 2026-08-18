@@ -2,6 +2,10 @@
 
 #![forbid(unsafe_code)]
 
+/// Sherpa's documented low-threshold KWS setting, validated against Aurora's
+/// quantized GigaSpeech pack and the `Hey Aurora` production phrase.
+pub const NATIVE_WAKE_KWS_THRESHOLD: f32 = 0.1;
+
 mod android_capture;
 mod android_playback;
 mod android_session;

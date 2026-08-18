@@ -14,6 +14,7 @@ const speechPackPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeSpeechPacks.kt'
 const nativeDownloaderPath = 'rust/crates/aurora-voice-native/src/downloader.rs'
 const permissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
+const liveTestPermissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-voice-live-e2e.toml'
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
 
 function repoText(path: string): string {
@@ -135,6 +136,9 @@ describe('Android native voice route policy', () => {
   it('starts assistant and background voice through the native session with fail-closed readiness', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
+    const manifest = repoText(
+      'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
+    )
     const assistActivity = repoText(assistActivityPath)
     const assistantService = repoText(
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt',
@@ -145,9 +149,11 @@ describe('Android native voice route policy', () => {
     expect(plugin).toContain('if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND')
     expect(foregroundService).toContain('ACTION_START_ASSISTANT')
     expect(foregroundService).not.toContain('BACKGROUND_VOICE_AVAILABLE')
-    expect(foregroundService).toContain('intent?.action == ACTION_START_BACKGROUND || intent?.action == ACTION_START_ASSISTANT')
     expect(foregroundService).toContain('backgroundSession && !isBackgroundVoiceSessionAvailable()')
     expect(foregroundService).toContain('if (backgroundSession) it.startBackground() else it.start()')
+    expect(foregroundService).toContain('private const val VOICE_SERVICE_PREFS = "aurora_voice_foreground_service_state"')
+    expect(foregroundService).toContain('PowerManager.PARTIAL_WAKE_LOCK')
+    expect(manifest).toContain('android.permission.WAKE_LOCK')
     expect(assistantService).toContain('action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
     expect(assistActivity).toContain('if (!isAuroraAssistantRoleHeld())')
@@ -193,6 +199,101 @@ describe('Android native voice route policy', () => {
     )
     expect(onStartBody).not.toContain('createNativeVoiceSession(')
     expect(onStartBody).not.toContain('AuroraNativeVoiceSessionBridge(')
+  })
+
+  it('makes only an explicitly enabled hands-free session durable across Android process recreation', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const pluginStartBody = plugin.slice(
+      plugin.indexOf('fun startVoiceForegroundService(invoke: Invoke)'),
+      plugin.indexOf('fun finishVoiceForegroundService(invoke: Invoke)'),
+    )
+    const onStartBody = foregroundService.slice(
+      foregroundService.indexOf('override fun onStartCommand'),
+      foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable'),
+    )
+    const restartModeBody = foregroundService.slice(
+      foregroundService.indexOf('private fun serviceRestartMode()'),
+      foregroundService.indexOf('private fun stopAfterTerminalFailure'),
+    )
+    const durableStartBody = foregroundService.slice(
+      foregroundService.indexOf('private fun enableDurableBackgroundSession()'),
+      foregroundService.indexOf('private fun serviceRestartMode()'),
+    )
+    const terminalStopBody = foregroundService.slice(
+      foregroundService.indexOf('private fun stopAfterTerminalFailure'),
+      foregroundService.indexOf('private fun stopForegroundAndRemoveNotification'),
+    )
+    const audioFocusBody = foregroundService.slice(
+      foregroundService.indexOf('private val audioFocusListener'),
+      foregroundService.indexOf('override fun onCreate()'),
+    )
+    const permanentFocusLossBody = audioFocusBody.slice(
+      audioFocusBody.indexOf('AudioManager.AUDIOFOCUS_LOSS -> {'),
+      audioFocusBody.indexOf('AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,'),
+    )
+    const stopActionBody = onStartBody.slice(
+      onStartBody.indexOf('if (intent?.action == ACTION_STOP)'),
+      onStartBody.indexOf('if (intent?.action == ACTION_FINISH)'),
+    )
+    const finishActionBody = onStartBody.slice(
+      onStartBody.indexOf('if (intent?.action == ACTION_FINISH)'),
+      onStartBody.indexOf('val persistedBackgroundRequest'),
+    )
+    const pluginStopBody = plugin.slice(
+      plugin.indexOf('fun stopVoiceForegroundService(invoke: Invoke)'),
+      plugin.indexOf('fun finishVoiceForegroundService(invoke: Invoke)'),
+    )
+
+    expect(onStartBody).toContain('val explicitBackgroundStart = intent?.action == ACTION_START_BACKGROUND')
+    expect(onStartBody).toContain('val stickyRestart = intent == null && persistedBackgroundRequest')
+    expect(onStartBody).toContain('if (intent == null && !stickyRestart)')
+    expect(onStartBody).toContain('val durableBackgroundSession = explicitBackgroundStart || stickyRestart ||')
+    expect(onStartBody).toContain(
+      'val backgroundSession = durableBackgroundSession || intent?.action == ACTION_START_ASSISTANT',
+    )
+    expect(onStartBody).toContain('if (durableBackgroundSession && !enableDurableBackgroundSession())')
+    expect(onStartBody).toContain('return serviceRestartMode()')
+    const competingBackgroundStartBody = onStartBody.slice(
+      onStartBody.indexOf('if (explicitBackgroundStart && !backgroundSessionActive)'),
+      onStartBody.indexOf(
+        'if (explicitBackgroundStart && !enableDurableBackgroundSession())',
+        onStartBody.indexOf('if (explicitBackgroundStart && !backgroundSessionActive)'),
+      ),
+    )
+    expect(competingBackgroundStartBody).toContain(
+      'if (explicitBackgroundStart && !backgroundSessionActive)',
+    )
+    expect(competingBackgroundStartBody).toContain('return serviceRestartMode()')
+    expect(competingBackgroundStartBody).not.toContain('stopAfterTerminalFailure')
+    expect(competingBackgroundStartBody).not.toContain('invalidateNativeVoiceInitialization')
+    expect(onStartBody).not.toContain('START_STICKY')
+    expect(restartModeBody).toContain(
+      'if (backgroundSessionRequested()) START_STICKY else START_NOT_STICKY',
+    )
+    expect(durableStartBody.indexOf('acquireBackgroundWakeLock()')).toBeLessThan(
+      durableStartBody.indexOf('persistBackgroundSessionRequested(true)'),
+    )
+    expect(stopActionBody).toContain('stopAfterTerminalFailure()')
+    expect(finishActionBody).toContain('stopAfterTerminalFailure(startId)')
+    expect(finishActionBody).toContain('finishNativeSession()')
+    expect(terminalStopBody).toContain('clearBackgroundSessionPersistence()')
+    expect(terminalStopBody).toContain('stopForegroundAndRemoveNotification()')
+    expect(permanentFocusLossBody).toContain('captureError = "audio_focus_lost"')
+    expect(permanentFocusLossBody).toContain('releaseNativeVoiceResourcesAsync()')
+    expect(permanentFocusLossBody).toContain(
+      'captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)',
+    )
+    expect(permanentFocusLossBody).toContain('stopAfterTerminalFailure()')
+    expect(permanentFocusLossBody).not.toContain('durableBackgroundSession')
+    expect(pluginStopBody).toContain('action = AuroraVoiceForegroundService.ACTION_STOP')
+    expect(pluginStopBody).toContain('activity.startService(stopIntent)')
+    expect(pluginStopBody).not.toContain('activity.stopService(')
+    expect(pluginStartBody).toContain('status.getBoolean("running")')
+    expect(pluginStartBody).toContain('!status.getBoolean("backgroundSessionActive")')
+    expect(pluginStartBody).toContain('ret.put("started", false)')
+    expect(pluginStartBody).toContain('ret.put("reason", "foreground_voice_busy")')
+    expect(foregroundService).not.toContain('override fun onTrimMemory')
   })
 
   it('keeps status polling non-authoritative and initializes verified voice sessions off the main thread', () => {
@@ -249,12 +350,14 @@ describe('Android native voice route policy', () => {
       foregroundService.indexOf('override fun onBind'),
     )
     expect(onDestroyBody).toContain('destroyed = true')
+    expect(onDestroyBody).toContain('releaseBackgroundWakeLock()')
     expect(onDestroyBody).toContain('invalidateNativeVoiceInitialization()')
     expect(onDestroyBody).toContain('releaseNativeVoiceResourcesAsync()')
     expect(onDestroyBody).not.toContain('capture?.close()')
     expect(onDestroyBody).not.toContain('stopNativeSession()')
     expect(onDestroyBody).toContain('captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)')
     expect(onDestroyBody).not.toContain('captureSnapshot = emptySnapshot(captureError)')
+    expect(onDestroyBody).not.toContain('clearBackgroundSessionPersistence()')
 
     expect(foregroundService).toContain('ThreadPoolExecutor(')
     expect(foregroundService).toContain('"aurora-voice-runtime-lifecycle"')
@@ -274,6 +377,7 @@ describe('Android native voice route policy', () => {
     expect(closeResourcesBody).toContain('nativeSession?.close()')
     expect(releaseBody).toContain('nativeLifecycleExecutor.execute')
     expect(releaseBody).not.toContain('Thread(')
+    expect(releaseBody).not.toContain('clearBackgroundSessionPersistence()')
     for (const detach of [
       'capture = null',
       'playback = null',
@@ -359,7 +463,7 @@ describe('Android native voice route policy', () => {
     expect(finishedBody).toContain('auroraVoiceRuntimeError(')
     expect(finishedBody).toContain('isRecoverableBackgroundTurn(errorCode)')
     expect(finishedBody).toContain('rearmBackgroundSession(nativeSession, stats)')
-    expect(finishedBody).toContain('stopSelf()')
+    expect(finishedBody).toContain('stopAfterTerminalFailure()')
     expect(rearmBody).toContain('nativeLifecycleExecutor.execute')
     expect(rearmBody).toContain('nativeSession.clearIngress()')
     expect(rearmBody).toContain('nativeSession.startBackground()')
@@ -412,6 +516,93 @@ describe('Android native voice route policy', () => {
     expect(nativeCapture).toContain('pub fn push_latest(')
   })
 
+  it('limits deterministic live PCM injection to debuggable packages and the production ingress queue', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const rust = repoText('apps/aurora-tauri/src-tauri/src/lib.rs')
+    const permission = repoText(permissionPath)
+    const buildManifest = repoText('apps/aurora-tauri/src-tauri/build.rs')
+    const injectionBody = plugin.slice(
+      plugin.indexOf('fun injectVoicePcmForLiveTest(invoke: Invoke)'),
+      plugin.indexOf('fun voicePackCatalogStatus(invoke: Invoke)'),
+    )
+    const captureInjectionBody = foregroundService.slice(
+      foregroundService.indexOf('fun injectPcmForTest(samples: ShortArray): Int'),
+      foregroundService.indexOf(
+        'private fun fail(code: String)',
+        foregroundService.indexOf('fun injectPcmForTest(samples: ShortArray): Int'),
+      ),
+    )
+    const readLoopBody = foregroundService.slice(
+      foregroundService.indexOf('private fun readLoop(frameCapacity: Int)'),
+      foregroundService.indexOf('fun injectPcmForTest(samples: ShortArray): Int'),
+    )
+    const armIngressBody = captureInjectionBody.slice(
+      captureInjectionBody.indexOf('fun armLiveTestIngressForTest(): Boolean'),
+      captureInjectionBody.indexOf('private fun acquireOrRenewLiveTestIngressLocked()'),
+    )
+
+    expect(injectionBody.indexOf('ApplicationInfo.FLAG_DEBUGGABLE')).toBeLessThan(
+      injectionBody.indexOf('invoke.parseArgs(AndroidVoiceLiveTestPcmArgs::class.java)'),
+    )
+    expect(injectionBody).toContain('if (args.armIngress)')
+    expect(injectionBody).toContain('AuroraVoiceForegroundService.armPcmIngressForTest()')
+    expect(injectionBody.indexOf('if (args.armIngress)')).toBeLessThan(
+      injectionBody.indexOf('Base64.decode(args.pcmBase64, Base64.NO_WRAP)'),
+    )
+    expect(injectionBody).toContain('VOICE_LIVE_TEST_PCM_MAX_BYTES')
+    expect(injectionBody).toContain('Base64.decode(args.pcmBase64, Base64.NO_WRAP)')
+    expect(injectionBody).toContain('bytes.size % 2 != 0')
+    expect(injectionBody).toContain('ByteOrder.LITTLE_ENDIAN')
+    expect(injectionBody).toContain('AuroraVoiceForegroundService.injectPcmForTest(samples)')
+    expect(captureInjectionBody).toContain('samples.size > VOICE_CAPTURE_FRAME_SAMPLES')
+    expect(captureInjectionBody).toContain('synchronized(sequenceGuard)')
+    expect(captureInjectionBody).toContain('voiceRuntimeAcceptsMicrophoneInput(stats)')
+    expect(captureInjectionBody.indexOf('voiceRuntimeAcceptsMicrophoneInput(stats)')).toBeLessThan(
+      captureInjectionBody.indexOf('acquireOrRenewLiveTestIngressLocked()'),
+    )
+    expect(captureInjectionBody).toContain('if (!acquireOrRenewLiveTestIngressLocked())')
+    expect(captureInjectionBody).toContain('pushSequencedPcmLocked(samples, samples.size)')
+    expect(captureInjectionBody).not.toContain('if (pushResult != 0) liveTestIngressLeaseUntilMillis = 0L')
+    expect(captureInjectionBody).not.toContain('microphoneSignalDetected = true')
+    expect(readLoopBody).toContain('microphoneSignalDetected = true')
+    expect(readLoopBody).toContain('pushMicrophonePcm(buffer, read)')
+    expect(captureInjectionBody).toContain('if (liveTestOwnsIngressLocked(runtimeStats))')
+    expect(captureInjectionBody.indexOf('liveTestOwnsIngressLocked(runtimeStats)')).toBeLessThan(
+      captureInjectionBody.indexOf('pushSequencedPcmLocked(samples, sampleCount)'),
+    )
+    expect(foregroundService).toContain('synchronized(sequenceGuard)')
+    expect(foregroundService).toContain(
+      'private const val VOICE_LIVE_TEST_INGRESS_MAX_HOLD_MILLIS = 120_000L',
+    )
+    expect(captureInjectionBody).toContain('voiceRuntimeAcceptsMicrophoneInput(stats)')
+    expect(captureInjectionBody).toContain('if (!ownsIngress) {')
+    expect(captureInjectionBody).toContain('liveTestIngressLeaseUntilMillis = 0L')
+    expect(captureInjectionBody).toContain('LiveTestIngressLeaseState.AVAILABLE')
+    expect(captureInjectionBody).toContain('LiveTestIngressLeaseState.OWNED')
+    expect(captureInjectionBody).toContain('LiveTestIngressLeaseState.RELEASED')
+    expect(captureInjectionBody).toContain('if (!liveTestOwnsIngressLocked(stats)) return false')
+    expect(captureInjectionBody).toContain('liveTestIngressCompletedTurnsAtArm = completedTurns')
+    expect(armIngressBody).toContain('val armed = synchronized(sequenceGuard)')
+    expect(armIngressBody).toContain('if (!armed) publishSnapshot()')
+    expect(armIngressBody.indexOf('if (!armed) publishSnapshot()')).toBeLessThan(
+      armIngressBody.indexOf('return armed'),
+    )
+    expect(captureInjectionBody).toContain('VOICE_STATS_COMPLETED_TURNS_INDEX')
+    expect(captureInjectionBody).not.toContain(
+      'voiceRuntimeAcceptsMicrophoneInput(stats)\n        if (!ownsIngress)',
+    )
+    expect(foregroundService).toContain('liveTestIngressInitiallyArmed = initiallyArmed')
+    expect(foregroundService).toContain('private var pendingLiveTestIngressArm = false')
+    const liveTestPermission = repoText(liveTestPermissionPath)
+    expect(permission).not.toContain('aurora_android_voice_live_test_inject_pcm')
+    expect(liveTestPermission).toContain('aurora_android_voice_live_test_inject_pcm')
+    for (const source of [rust, liveTestPermission, buildManifest]) {
+      expect(source).toContain('aurora_android_voice_live_test_inject_pcm')
+    }
+    expect(rust).toContain('"injectVoicePcmForLiveTest"')
+  })
+
   it('accepts microphone frames only while the runtime is listening and clears ingress before rearm', () => {
     const foregroundService = repoText(voiceStorePath)
     const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
@@ -429,12 +620,12 @@ describe('Android native voice route policy', () => {
     expect(foregroundService).toContain('private fun voiceRuntimeAcceptsMicrophoneInput(stats: LongArray): Boolean')
     expect(readLoopBody).toContain('val runtimeStats = bridge.stats()')
     expect(readLoopBody).toContain('if (!voiceRuntimeAcceptsMicrophoneInput(runtimeStats))')
-    expect(readLoopBody).toContain('publishSnapshot(runtimeStats)')
+    expect(readLoopBody).toContain('pushMicrophonePcm(buffer, read)')
     expect(readLoopBody.indexOf('voiceRuntimeAcceptsMicrophoneInput(runtimeStats)')).toBeLessThan(
-      readLoopBody.indexOf('bridge.pushPcm(buffer, read, currentSequence)'),
+      readLoopBody.indexOf('pushSequencedPcmLocked(samples, sampleCount)'),
     )
-    expect(readLoopBody).toContain('0 -> sequence = currentSequence + 1L')
-    expect(readLoopBody).not.toContain('sequence = currentSequence + 1L\n                        when (result)')
+    expect(readLoopBody).toContain('0 -> Unit')
+    expect(readLoopBody).toContain('if (result == 0) sequence = currentSequence + 1L')
     expect(foregroundService).toContain('fun clearIngress(): Boolean')
     expect(foregroundService).toContain('private external fun nativeClearIngress(handle: Long): Int')
     expect(androidAudio).toContain('AuroraNativeVoiceSessionBridge_nativeClearIngress')
@@ -444,6 +635,7 @@ describe('Android native voice route policy', () => {
     expect(rearmBody.indexOf('nativeSession.clearIngress()')).toBeLessThan(
       rearmBody.indexOf('nativeSession.startBackground()'),
     )
+    expect(foregroundService).toContain('runtimePhase = "idle"')
   })
 
   it('advertises Android local speech only after exact installed pack and route readiness', () => {
@@ -580,6 +772,9 @@ describe('Android native voice route policy', () => {
     ]) {
       expect(foregroundStatusBody).toContain(`ret.put("${statusField}", capture.${statusField})`)
     }
+    expect(foregroundStatusBody).toContain(
+      'ret.put("microphoneSignalDetected", capture.microphoneSignalDetected)',
+    )
     expect(foregroundService).toContain('private const val VOICE_STATS_RUNTIME_ACTIVE_INDEX = 5')
     expect(foregroundService).toContain('private const val VOICE_STATS_RUNTIME_PHASE_INDEX = 6')
     expect(foregroundService).toContain('private const val VOICE_STATS_SESSION_GENERATION_INDEX = 7')
@@ -832,5 +1027,63 @@ describe('Android native voice route policy', () => {
     }
     expect(validatorBody).toContain('validateOptionalJsonLong(record, "createdAtMs")')
     expect(validatorBody).toContain('validateOptionalJsonLong(record, "expiresAtMs", requirePositive = true)')
+  })
+
+  it('honors explicit Pocket reference mode instead of forcing every pockettts pack to need a user profile', () => {
+    const plugin = repoText(kotlinPath)
+    const service = repoText(voiceStorePath)
+    const androidAudio = repoText('apps/aurora-tauri/src-tauri/src/android_audio.rs')
+    const helper = repoText(speechPackPath)
+    const helperBody = helper.slice(
+      helper.indexOf('internal fun auroraTtsReferenceRequired'),
+      helper.indexOf('internal fun auroraVoicePackReferenceAudioMode'),
+    )
+
+    expect(androidAudio).toContain('TtsVoiceCatalog::runtime()')
+    expect(androidAudio).toContain('entry.requires_reference_profile()')
+    expect(androidAudio).toContain('catalog_reference_audio_mode_label()')
+    expect(helperBody).toContain('"internal" -> false')
+    expect(helperBody).toContain('"profile" -> true')
+    expect(helperBody).toContain('requiresReferenceAudio || modelFamily == "pockettts"')
+    expect(plugin).toContain('auroraTtsReferenceRequired(')
+    expect(plugin).toContain('entry.referenceAudioMode')
+    expect(service).toContain('auroraTtsReferenceRequired(')
+    expect(service).toContain('entry.referenceAudioMode')
+    expect(plugin).not.toContain('entry.requiresReferenceAudio || entry.modelFamily == "pockettts"')
+    expect(service).not.toContain('!entry.requiresReferenceAudio && entry.modelFamily != "pockettts"')
+  })
+
+  it('stores and loads Android audio-only clone profiles without written text', () => {
+    const plugin = repoText(kotlinPath)
+    const service = repoText(voiceStorePath)
+    const helper = repoText(speechPackPath)
+    const helperBody = helper.slice(
+      helper.indexOf('internal fun auroraTtsReferenceAudioReady'),
+      helper.indexOf('internal fun auroraTtsReferenceRequired'),
+    )
+    const pluginStoreBody = plugin.slice(
+      plugin.indexOf('private fun storeTtsReferenceSelection'),
+      plugin.indexOf('private fun clearTtsReferenceSelection'),
+    )
+    const pluginLoadBody = plugin.slice(
+      plugin.indexOf('private fun ttsReferenceSelection()'),
+      plugin.indexOf('private fun storeTtsReferenceSelection'),
+    )
+    const serviceLoadBody = service.slice(
+      service.indexOf('private fun ttsReferenceSelection()'),
+      service.indexOf('private fun parseReferenceSamples(raw: String?)'),
+    )
+
+    expect(helperBody).toContain('id.isNotBlank() && sampleRateHz > 0 && samples.isNotEmpty()')
+    expect(helperBody).toContain('auroraTtsReferenceAudioReady(id, sampleRateHz, samples)')
+    expect(helperBody).not.toContain('text.isNotBlank()')
+    expect(pluginStoreBody).toContain('if (!auroraTtsReferenceAudioReady(id, sampleRateHz, samples)) return false')
+    expect(pluginStoreBody).not.toContain('text.isBlank() || sampleRateHz')
+    expect(pluginLoadBody).toContain('auroraTtsReferenceSelectionOrNull(')
+    expect(pluginLoadBody).not.toContain('text.isNotBlank()')
+    expect(pluginLoadBody).not.toContain('profileText.isNotBlank()')
+    expect(serviceLoadBody).toContain('auroraTtsReferenceSelectionOrNull(')
+    expect(serviceLoadBody).not.toContain('text.isNotBlank()')
+    expect(serviceLoadBody).not.toContain('profileText.isNotBlank()')
   })
 })

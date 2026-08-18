@@ -38,6 +38,8 @@ from app.services.gateway.webrtc.peer_protocol import (  # noqa: E402
     CAP_FRAGMENTATION_V1,
     CAP_PROVIDER_LEASE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+    DEFAULT_PEER_CAPABILITIES,
+    KNOWN_PEER_CAPABILITIES,
     PeerProtocolLimits,
     build_protocol_hello,
     fragment_message,
@@ -435,13 +437,11 @@ def _peer_protocol_vectors() -> dict[str, Any]:
         incomplete_ttl_seconds=5.0,
         max_fragments=32,
     )
+    # Built from the shared default rather than a hand-written list, so this
+    # vector actually asserts that both implementations default identically.
     local_hello = build_protocol_hello(
         role="hybrid",
-        capabilities=(
-            CAP_FRAGMENTATION_V1,
-            CAP_BACKPRESSURE_V1,
-            CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
-        ),
+        capabilities=DEFAULT_PEER_CAPABILITIES,
         limits=limits,
     )
     consumer_hello = build_protocol_hello(
@@ -507,6 +507,11 @@ def _peer_protocol_vectors() -> dict[str, Any]:
             CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
             CAP_CONSUMER_ONLY_V1,
         ],
+        # Both implementations assert against these so the two default sets
+        # cannot drift. TypeScript previously omitted provider_lease_v1, which
+        # silently disabled the peer-host manifest response.
+        "default_peer_capabilities": list(DEFAULT_PEER_CAPABILITIES),
+        "known_peer_capabilities": sorted(KNOWN_PEER_CAPABILITIES),
         "limits": limits.as_wire(),
         "local_hello": local_hello,
         "consumer_hello": consumer_hello,

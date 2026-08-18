@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import { coverageConfig } from '../../vitest.coverage.mjs'
 
 // Deterministic unified version for tests: the plain repo-root VERSION value,
 // never a branch-derived dev label.
@@ -20,5 +21,6 @@ export default defineConfig({
     hookTimeout: 20_000,
     slowTestThreshold: 1_000,
     retry: 0,
+    coverage: coverageConfig(),
   },
 })

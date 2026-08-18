@@ -2,6 +2,7 @@ import type { z } from 'zod/v4'
 
 import { AuroraError } from './errors.js'
 import {
+  AURORA_BACKEND_CONTRACT_VERSION,
   backendContractEnvelopeDescriptorByTopic,
   backendContractEventDescriptorByTopic,
   backendContractMethodDescriptorById,
@@ -19,6 +20,8 @@ type GeneratedDescriptorMap = typeof backendContractMethodDescriptorById
 type GeneratedEventDescriptorMap = typeof backendContractEventDescriptorByTopic
 type GeneratedEnvelopeDescriptorMap = typeof backendContractEnvelopeDescriptorByTopic
 type GeneratedSchemaMap = typeof backendContractSchemaById
+
+export { AURORA_BACKEND_CONTRACT_VERSION }
 
 export type GeneratedBackendMethodId = keyof GeneratedDescriptorMap
 export type GeneratedBackendMethodDescriptor<TMethodId extends GeneratedBackendMethodId> =

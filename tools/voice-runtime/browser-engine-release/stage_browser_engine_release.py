@@ -21,7 +21,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = REPO_ROOT / "tools/voice-runtime/phase4_manifest.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / ".artifacts/voice-runtime/browser-engine-release"
-SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.4"
+SHERPA_SOURCE_ID = "sherpa-onnx-source-v1.13.5"
 
 FORBIDDEN_SUFFIXES = {
     ".bin",
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--source-root",
         type=Path,
-        help="Extracted sherpa-onnx v1.13.4 tree with neutral WASM build outputs.",
+        help="Extracted sherpa-onnx v1.13.5 tree with neutral WASM build outputs.",
     )
     parser.add_argument(
         "--tts-artifact-root",
@@ -234,17 +234,36 @@ def ensure_source_archive(
     return archive
 
 
+def _extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str) -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    helper = Path(__file__).resolve().parents[1] / "sherpa-patches" / "apply_sherpa_patches.py"
+    spec = spec_from_file_location("aurora_apply_sherpa_patches", helper)
+    if spec is None or spec.loader is None:
+        raise ReleaseError("unable to load pinned source extractor")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    # The archive digest/size were verified before this call. Omit the two
+    # stale absolute symlinks in upstream's unused Go example; never extract
+    # an entry whose target escapes the staging root.
+    module.extract_pinned_source_tar(
+        archive,
+        dest,
+        mode=mode,
+        omit_escaping_symlinks=True,
+    )
+
+
 def extract_source_archive(archive: Path, output_root: Path) -> Path:
-    source_root = output_root / "source" / "sherpa-onnx-1.13.4"
+    source_root = output_root / "source" / "sherpa-onnx-1.13.5"
     if source_root.exists():
         return source_root
     with tempfile.TemporaryDirectory(prefix="aurora-sherpa-src-") as tmp_name:
         tmp = Path(tmp_name)
-        with tarfile.open(archive, "r:gz") as tar:
-            tar.extractall(tmp, filter="data")
-        extracted = tmp / "sherpa-onnx-1.13.4"
+        _extract_pinned_source_tar(archive, tmp, mode="r:gz")
+        extracted = tmp / "sherpa-onnx-1.13.5"
         if not extracted.is_dir():
-            raise ReleaseError("source archive did not extract sherpa-onnx-1.13.4")
+            raise ReleaseError("source archive did not extract sherpa-onnx-1.13.5")
         source_root.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(extracted), source_root)
     return source_root

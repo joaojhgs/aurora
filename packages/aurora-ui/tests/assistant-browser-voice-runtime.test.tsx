@@ -1084,6 +1084,51 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(grantedMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: true })
   })
 
+  it('refreshes native mobile hands-free readiness when wake assets become ready', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    let backgroundAvailable = false
+    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
+      backgroundAvailable
+        ? nativeMobileStatus('idle')
+        : nativeMobileStatus('unavailable')
+    ))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const render = (surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>) => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={surfaceProfile}
+          nativeMobileVoice={nativeMobileVoice}
+          nativeAvailable
+          nativePlatform="android"
+        />
+      )
+    }
+
+    await act(async () => {
+      render(nativeMobileSurface())
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Open route details')
+    expect(findButtonByText(container, 'Hands-free').hasAttribute('disabled')).toBe(true)
+
+    backgroundAvailable = true
+    await act(async () => {
+      render(nativeMobileBackgroundSurface())
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(findButtonByText(container, 'Hands-free').hasAttribute('disabled')).toBe(false))
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
+  })
+
   it('routes native mobile hands-free control through the background port and preserves it when hidden', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
@@ -1110,6 +1155,58 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
   })
 
+  it('waits for native mobile background capture before marking hands-free active', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    let startRequested = false
+    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
+      startRequested = true
+      return nativeMobileStatus('processing')
+    })
+    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
+      startRequested
+        ? nativeMobileStatus('listening', true)
+        : nativeMobileStatus('idle')
+    ))
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Open route details')
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus.mock.calls.length).toBeGreaterThan(1))
+    expect(findButtonByText(container, 'Stop hands-free')).toBeTruthy()
+  })
+
+  it('keeps hands-free inactive when native background capture is not confirmed', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    let startRequested = false
+    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
+      startRequested = true
+      return nativeMobileStatus('processing')
+    })
+    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
+      startRequested
+        ? nativeMobileStatus('unavailable')
+        : nativeMobileStatus('idle')
+    ))
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Open route details')
+    await clickButtonByText(container, 'Hands-free')
+    await vi.waitFor(() => expect(nativeMobileVoice.stopBackground).toHaveBeenCalledTimes(1))
+    expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
+    expect(container.textContent).toContain('Hands-free voice could not start. Check microphone access on this device.')
+  })
+
   it('keeps local native mobile hands-free independent from connected speech consent and selection', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
@@ -1122,7 +1219,7 @@ describe('Assistant hosted browser voice runtime', () => {
       voiceRoutes,
       captureStatus: 'idle',
       consentGranted: false,
-      nativeMobileBackgroundWakeReady: true,
+      nativeMobileBackgroundWakeSupported: true,
     })
 
     expect(model.controls.find((control) => control.id === 'background-wake')).toMatchObject({
@@ -1313,7 +1410,7 @@ describe('Assistant hosted browser voice runtime', () => {
       surfaceProfile: hostedSurface(),
       captureStatus: 'idle',
       consentGranted: false,
-      nativeMobileBackgroundWakeReady: true,
+      nativeMobileBackgroundWakeSupported: true,
     })
 
     const background = model.controls.find((control) => control.id === 'background-wake')

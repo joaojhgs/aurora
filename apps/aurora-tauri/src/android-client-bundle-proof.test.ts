@@ -143,7 +143,7 @@ describeIfNode('Android client bundle artifact proof', () => {
     const report = readFileSync(context.prepareReportPath, 'utf8')
 
     expect(config).toContain('aurora-android-thin')
-    expect(config).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config).toContain("connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(config).not.toContain('https://gateway.example.invalid')
     expect(config).not.toContain('wss://signaling.example.invalid')
     expect(config).toContain('"externalBin": []')
@@ -159,13 +159,54 @@ describeIfNode('Android client bundle artifact proof', () => {
 
     const config = JSON.parse(readFileSync(context.configPath, 'utf8'))
     const report = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
-    expect(config.app.security.csp).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(config.app.security.csp).toContain("connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(report).toMatchObject({
       bundleMode: 'android-client',
       connectionMode: 'runtime-configurable',
       gatewayOrigin: null,
       signalingOrigin: null,
       runtimeConfiguredEndpoints: true,
+    })
+  })
+
+  it('grants PCM injection only in the dedicated Android voice live-test overlay', () => {
+    const context = createAndroidClientProofContext()
+    prepareAndroidClient(context)
+
+    const productionConfig = JSON.parse(readFileSync(context.configPath, 'utf8'))
+    const productionReport = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
+    expect(productionConfig.app.security.capabilities).toEqual([
+      'aurora-android-thin',
+      'aurora-mobile-mesh',
+    ])
+    expect(productionReport).toMatchObject({
+      bundleMode: 'android-client',
+      voiceLiveTest: false,
+      expectedCapabilities: ['aurora-android-thin', 'aurora-mobile-mesh'],
+    })
+
+    prepareAndroidClient(context, { AURORA_TAURI_ANDROID_VOICE_LIVE_TEST: '1' })
+    const liveConfig = JSON.parse(readFileSync(context.configPath, 'utf8'))
+    const liveReport = JSON.parse(readFileSync(context.prepareReportPath, 'utf8'))
+    expect(liveConfig.app.security.capabilities).toEqual([
+      'aurora-android-thin',
+      'aurora-mobile-mesh',
+      {
+        identifier: 'aurora-android-voice-live-e2e-capability',
+        description: 'Debug-only capability for the maintained Android native voice live test.',
+        windows: ['main'],
+        platforms: ['android'],
+        permissions: ['aurora-android-voice-live-e2e'],
+      },
+    ])
+    expect(liveReport).toMatchObject({
+      bundleMode: 'android-client-voice-live-test',
+      voiceLiveTest: true,
+      expectedCapabilities: [
+        'aurora-android-thin',
+        'aurora-mobile-mesh',
+        'aurora-android-voice-live-e2e-capability',
+      ],
     })
   })
 
@@ -539,6 +580,7 @@ if (argv[0] === 'build:frontend:android-client') {
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+      'android.permission.WAKE_LOCK',
       'android.permission.ACCESS_NETWORK_STATE',
       'android.permission.USE_BIOMETRIC',
     ]) {
@@ -752,6 +794,9 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(packageJson.scripts['android:preflight:ci']).toContain('android:sync-native-plugin')
     expect(packageJson.scripts['android:preflight:strict']).toContain('android:sync-native-plugin')
     expect(packageJson.scripts['android:build:client:apk']).toBe('node ./scripts/build-android-client-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:voice-live:apk']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind apk --voice-live-test',
+    )
     expect(packageJson.scripts['android:build:thin:apk']).toBe('pnpm android:build:client:apk')
     expect(packageJson.scripts['android:build:client:apk:arm64']).toBe(
       'node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64',
@@ -768,6 +813,8 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(buildSource).toContain('android-client-${kind}-build-provenance.json')
     expect(buildSource).toContain("run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])")
     expect(buildSource).toContain("const target = readOption('--target')")
+    expect(buildSource).toContain("const voiceLiveTest = args.includes('--voice-live-test')")
+    expect(buildSource).toContain('AURORA_TAURI_ANDROID_VOICE_LIVE_TEST: voiceLiveTest')
     expect(buildSource).toContain("target: target ?? 'universal'")
     expect(buildSource).toContain("const defaultAndroidTargets = ['aarch64', 'x86_64']")
     expect(buildSource).toContain("buildArgs.push('--target', ...targets)")

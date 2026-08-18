@@ -10,12 +10,51 @@ describe('browser voice catalog', () => {
   it('exports every metadata-only speech and TTS catalog entry', () => {
     const summary = auroraBrowserVoiceCatalogSummary()
 
-    expect(summary.speechEntries).toBe(21)
-    expect(summary.ttsEntries).toBe(537)
+    expect(summary.speechEntries).toBe(19)
+    expect(summary.ttsEntries).toBe(539)
     expect(summary.speechLanguages).toContain('en')
     expect(summary.ttsLanguages).toContain('en-us')
-    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(537)
+    expect(summary.ttsLanguages).toContain('fr-fr')
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts' })).toHaveLength(539)
     expect(listAuroraBrowserVoiceCatalogEntries({ task: 'stt' })).toHaveLength(12)
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'kws' }).map((entry) => entry.id)).toEqual([
+      'kws:zipformer:gigaspeech',
+      'kws:zipformer:wenetspeech',
+      'kws:zipformer:zh-en-2025'
+    ])
+  })
+
+  it('lists overlay English and French packs on the browser download path', () => {
+    const summary = auroraBrowserVoiceCatalogSummary()
+    const english = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:aurora-pockettts-en-2026-04')
+    const french = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:aurora-pockettts-fr-24l')
+    const official = findAuroraBrowserVoiceCatalogEntry('standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26')
+
+    expect(english?.languages).toEqual(['en-us'])
+    expect(french?.languages).toEqual(['fr-fr'])
+    expect(summary.ttsLanguages).toEqual(expect.arrayContaining(['en-us', 'fr-fr']))
+    expect(listAuroraBrowserVoiceCatalogEntries({ task: 'tts', language: 'fr-fr' }).map((entry) => entry.id))
+      .toContain('standard:pockettts:aurora-pockettts-fr-24l')
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]).toMatchObject({
+      family: 'pockettts',
+      config: { referenceAudioMode: 'internal' }
+    })
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.map((file) => file.role)).toEqual(expect.arrayContaining([
+      'pocketProtocol',
+      'bosBeforeVoice',
+      'fixedVoiceState'
+    ]))
+    expect(english?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
+    expect(french?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).toMatchObject({
+      referenceAudioMode: 'internal'
+    })
+    expect(french?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.map((file) => file.role)).toEqual(expect.arrayContaining([
+      'pocketProtocol',
+      'bosBeforeVoice',
+      'fixedVoiceState'
+    ]))
+    expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.config).not.toHaveProperty('referenceAudioMode')
+    expect(official?.toModelPackManifest().variants[0]?.model_bindings?.[0]?.files.some((file) => file.role === 'referenceAudio')).toBe(false)
   })
 
   it('creates an archive install descriptor for selected upstream metadata', () => {

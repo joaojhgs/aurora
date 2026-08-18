@@ -504,7 +504,7 @@ public final class AuroraNativePlugin: Plugin {
         "backgroundSessionEndsWithSystemLimits": true,
         "alwaysOnWake": false,
         "nativeTurnTransportAvailable": transportReady.available,
-        "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
+        "nativeTurnTransportReason": AuroraNativePlugin.nullableString(transportReady.reason),
         "activePackId": transportReady.activePackId,
         "packCatalogCount": transportReady.packCatalogCount,
         "packCatalogReady": transportReady.packCatalogReady,
@@ -545,7 +545,9 @@ public final class AuroraNativePlugin: Plugin {
         return
       }
       do {
-        if let existing = self.voiceSession, existing.status()?.active == false {
+        if let existing = self.voiceSession,
+           let status = existing.status(),
+           status.active == 0 {
           self.voiceSession = nil
           self.voiceSessionGeneration = nil
           self.voiceSessionBackground = false
@@ -861,7 +863,7 @@ public final class AuroraNativePlugin: Plugin {
         "alwaysOnWake": false,
         "wakeAfterForceTermination": false,
         "nativeTurnTransportAvailable": transportReady.available,
-        "nativeTurnTransportReason": transportReady.reason ?? NSNull(),
+        "nativeTurnTransportReason": AuroraNativePlugin.nullableString(transportReady.reason),
         "activePackId": transportReady.activePackId,
         "packCatalogCount": transportReady.packCatalogCount,
         "packCatalogReady": transportReady.packCatalogReady,
@@ -1276,7 +1278,7 @@ public final class AuroraNativePlugin: Plugin {
           ? "ios_voice_catalog_ready_but_required_packs_missing"
           : "backend_model_catalog_and_device_model_proof_required"
       )
-    [
+    return [
       "platform": "ios",
       "providerId": "native:mobile-local-light",
       "available": available,
@@ -1284,7 +1286,7 @@ public final class AuroraNativePlugin: Plugin {
       "modelRuntimeProvider": requestable,
       "backendModelCatalogRequired": true,
       "hardwareAcceleration": "unknown",
-      "modelId": activeModelId ?? NSNull(),
+      "modelId": AuroraNativePlugin.nullableString(activeModelId),
       "modelPresent": modelPresent,
       "permissionGranted": true,
       "state": state,

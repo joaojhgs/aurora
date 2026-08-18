@@ -1775,7 +1775,11 @@ class ConfigManager:
                 continue
             d = config
             for key in keys[:-1]:
-                d = d.setdefault(key, {})
+                child = d.get(key)
+                if not isinstance(child, dict):
+                    child = {}
+                    d[key] = child
+                d = child
             d[keys[-1]] = resolved
         return config
 

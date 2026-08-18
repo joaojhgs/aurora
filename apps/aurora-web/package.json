@@ -25,7 +25,8 @@
     "test:browser:voice": "pnpm --dir ../.. --filter @aurora/voice-web run build && pnpm exec playwright test --config tests/playwright/assistant-browser-voice.playwright.config.ts",
     "build:release-dependencies": "pnpm --dir ../.. --filter @aurora/ui build",
     "package:unsigned": "pnpm build:release-dependencies && pnpm build && node scripts/package-web-release.mjs && pnpm verify:package:unsigned",
-    "verify:package:unsigned": "node scripts/assert-web-release-artifact-clean.mjs"
+    "verify:package:unsigned": "node scripts/assert-web-release-artifact-clean.mjs",
+    "test:coverage": "vitest run --environment node --coverage"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
@@ -38,6 +39,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "4.1.9",
     "jsdom": "^27.4.0",
     "typescript": "5.7.3",
     "vitest": "^4.0.16"

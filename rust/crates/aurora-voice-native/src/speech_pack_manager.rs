@@ -227,7 +227,7 @@ impl SpeechPackManager {
     where
         F: FnMut(SpeechPackInstallProgress),
     {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?
@@ -381,7 +381,7 @@ impl SpeechPackManager {
 
     /// Return durable installed voices whose bindings still verify on disk.
     pub fn list_installed_voices(&self) -> Result<Vec<InstalledSpeechPack>, SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
         let mut state = read_state(&self.config.root)?;
         let mut changed = false;
@@ -474,7 +474,7 @@ impl SpeechPackManager {
     /// their model files. Callers may use this for non-authoritative UI status;
     /// runtime creation must still resolve and verify the selected bindings.
     pub fn recorded_pack_ids(&self) -> Result<Vec<String>, SpeechPackError> {
-        let voice_catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let voice_catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let model_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
         let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
         let state = read_state(&self.config.root)?;
@@ -501,7 +501,7 @@ impl SpeechPackManager {
         &self,
         voice_id: &str,
     ) -> Result<SpeechPackBindings, SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?;
@@ -546,7 +546,7 @@ impl SpeechPackManager {
 
     /// Remove one selected voice install and its digest-addressed cache when unused.
     pub fn remove_voice(&self, voice_id: &str) -> Result<(), SpeechPackError> {
-        let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let entry = catalog
             .voice(voice_id)
             .ok_or(SpeechPackError::UnknownVoice)?;
@@ -901,7 +901,7 @@ fn tts_task_binding(
     entry: &TtsCatalogEntry,
     extracted_root: &Path,
 ) -> Result<TaskPackBinding, SpeechPackError> {
-    let catalog = TtsVoiceCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+    let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
     TaskPackBinding::from_tts_catalog_entry(
         catalog,
         entry,
@@ -1509,6 +1509,16 @@ fn required_tts_file_bindings(
                     .clone()
                     .ok_or(SpeechPackError::InvalidArchive)?,
             );
+            for (file_id, relative) in [
+                ("reference-audio", &entry.bindings.reference_audio),
+                ("pocket-protocol", &entry.bindings.pocket_protocol),
+                ("bos-before-voice", &entry.bindings.bos_before_voice),
+                ("fixed-voice-state", &entry.bindings.fixed_voice_state),
+            ] {
+                if let Some(relative) = relative {
+                    bindings.insert(file_id.to_owned(), relative.clone());
+                }
+            }
         }
         _ => return Err(SpeechPackError::InvalidArchive),
     }
@@ -2099,7 +2109,7 @@ mod tests {
     const VOICE_ID: &str = "standard:piper:en_us-ljspeech-medium";
     const STT_MODEL_ID: &str = "stt:whisper:tiny.en";
     const VAD_MODEL_ID: &str = "vad:silero:current-int8";
-    const KWS_MODEL_ID: &str = "kws:zipformer:gigaspeech-mobile";
+    const KWS_MODEL_ID: &str = "kws:zipformer:gigaspeech";
 
     struct OneShotServer {
         url: Url,
@@ -2877,6 +2887,21 @@ mod tests {
             Err(SpeechPackError::Cancelled)
         );
         assert!(manager.list_installed_voices().expect("list").is_empty());
+    }
+
+    #[test]
+    fn fixed_pockettts_pack_requires_exact_state_sidecars_without_reference_audio() {
+        let catalog = TtsVoiceCatalog::runtime().expect("runtime catalog");
+        let entry = catalog
+            .voice("standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("fixed PocketTTS voice");
+        let bindings = required_tts_file_bindings(entry).expect("fixed pack bindings");
+
+        assert_eq!(bindings.len(), 11);
+        for file_id in ["pocket-protocol", "bos-before-voice", "fixed-voice-state"] {
+            assert!(bindings.contains_key(file_id), "missing {file_id}");
+        }
+        assert!(!bindings.contains_key("reference-audio"));
     }
 
     #[tokio::test]

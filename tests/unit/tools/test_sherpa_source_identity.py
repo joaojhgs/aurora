@@ -39,7 +39,7 @@ def write_fixture(tmp_path: Path, expected_commit: str = "1" * 40) -> tuple[Path
             {
                 "artifacts": [
                     {
-                        "id": "sherpa-onnx-source-v1.13.4",
+                        "id": "sherpa-onnx-source-v1.13.5",
                         "archive_path": "sources/sherpa.tar.gz",
                         "extraction_path": "sources/extracted/sherpa",
                         "size_bytes": archive.stat().st_size,
@@ -104,6 +104,67 @@ def test_wrapper_rejects_mutated_extracted_tree(tmp_path: Path) -> None:
 
     with pytest.raises(wrapper.SourceIdentityError, match="does not match the pinned archive"):
         wrapper.verify_source_identity(manifest, artifact_root, source_root)
+
+
+def test_patched_tree_allows_only_the_two_pinned_escaping_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_SHERPA_PATCHED_FILES", {})
+    regular = ("file", "1", hashlib.sha256(b"x").hexdigest())
+    archive_records = {
+        "CMakeLists.txt": regular,
+        **{
+            relative: ("symlink", target)
+            for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+        },
+    }
+    source_records = {"CMakeLists.txt": regular}
+
+    _, entry_count = wrapper._verify_patched_tree(archive_records, source_records, tmp_path)
+
+    assert entry_count == 1
+
+
+def test_patched_tree_rejects_a_retained_escaping_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_SHERPA_PATCHED_FILES", {})
+    archive_records = {
+        relative: ("symlink", target)
+        for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+    }
+    retained_path = next(iter(archive_records))
+    source_records = {retained_path: archive_records[retained_path]}
+
+    with pytest.raises(wrapper.SourceIdentityError, match="unsafe_link"):
+        wrapper._verify_patched_tree(archive_records, source_records, tmp_path)
+
+
+def test_patched_tree_rejects_changed_omitted_symlink_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wrapper = load_wrapper()
+    monkeypatch.setattr(wrapper, "AURORA_SHERPA_PATCHED_FILES", {})
+    archive_records = {
+        relative: ("symlink", target)
+        for relative, target in wrapper.OMITTED_PINNED_UPSTREAM_SYMLINKS.items()
+    }
+    changed_path = next(iter(archive_records))
+    archive_records[changed_path] = ("symlink", "/unexpected/upstream/target")
+
+    with pytest.raises(wrapper.SourceIdentityError, match="omitted sherpa symlink changed"):
+        wrapper._verify_patched_tree(archive_records, {}, tmp_path)
+
+
+def test_patched_tree_manifest_includes_verified_macos_ort_metadata() -> None:
+    wrapper = load_wrapper()
+
+    assert (
+        wrapper.AURORA_SHERPA_PATCHED_FILES["cmake/onnxruntime-osx-arm64-static.cmake"]
+        == "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e"
+    )
 
 
 def test_wrapper_rejects_cmake_source_mismatch(tmp_path: Path) -> None:

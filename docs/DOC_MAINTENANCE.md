@@ -38,8 +38,8 @@ Use these homes instead:
 
 | Artifact type | Location |
 | --- | --- |
-| Agent/runtime state and ultragoal ledgers | `.omx/` |
-| Preserved planning artifacts | `.omx/plans/` |
+| Agent/runtime state and ultragoal ledgers | local ignored `.omx/` |
+| Temporary planning artifacts | local ignored `.omx/plans/` |
 | Human-readable historical provenance | `docs/archive/` |
 | Regeneratable reports | local `.artifacts/`, package `reports/`, or CI artifacts |
 

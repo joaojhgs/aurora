@@ -18,6 +18,9 @@ on:
       - ".github/workflows/sdk-backend-contract-conformance.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   sdk-backend-contract-conformance:
     name: Generate inventory and validate SDK contract fixtures

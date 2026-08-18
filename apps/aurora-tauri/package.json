@@ -31,6 +31,7 @@
     "android:build:apk:split": "pnpm android:sync-native-plugin && pnpm tauri android build --apk --split-per-abi",
     "android:build:aab": "pnpm android:sync-native-plugin && pnpm tauri android build --aab",
     "android:smoke": "node ./scripts/android-emulator-smoke-runner.mjs",
+    "android:voice:live": "node ./scripts/android-voice-live-smoke.mjs",
     "android:webrtc:interop": "node ./scripts/run-android-webrtc-interop.mjs",
     "android:webrtc:webview": "vitest run --environment node tests/android/android-python-webrtc.e2e.test.ts",
     "android:webrtc:mobile-browser": "vitest run --environment node tests/android/android-browser-python-webrtc.e2e.test.ts",
@@ -101,6 +102,7 @@
     "android:prepare:client": "node ./scripts/prepare-android-client-bundle.mjs",
     "android:prepare:thin": "pnpm android:prepare:client",
     "android:build:client:apk": "node ./scripts/build-android-client-bundle.mjs --kind apk",
+    "android:build:voice-live:apk": "node ./scripts/build-android-client-bundle.mjs --kind apk --voice-live-test",
     "android:build:thin:apk": "pnpm android:build:client:apk",
     "android:build:client:apk:arm64": "node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64",
     "android:build:thin:apk:arm64": "pnpm android:build:client:apk:arm64",
@@ -118,7 +120,8 @@
     "build:frontend:android-thin": "pnpm build:frontend:android-client",
     "build:frontend:ios-client": "node ./scripts/build-ios-client-frontend.mjs",
     "build:frontend:ios-thin": "pnpm build:frontend:ios-client",
-    "android:sync-native-plugin": "node ./scripts/install-android-native-plugin.mjs"
+    "android:sync-native-plugin": "node ./scripts/install-android-native-plugin.mjs",
+    "test:coverage": "vitest run --environment jsdom --no-file-parallelism src --coverage"
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
@@ -136,6 +139,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.1",
+    "@vitest/coverage-v8": "4.1.9",
     "jsdom": "^27.3.0",
     "typescript": "5.7.3",
     "vite": "^7.2.7",

@@ -169,13 +169,70 @@ function inspectRecognizedContainer(path, rel, archiveDepth) {
     inspectAppImage(path, rel)
     return
   }
+  if (extension === '.dmg') {
+    inspectDmgInstaller(path, rel)
+    return
+  }
   if (extension === '.rpm') {
     addFailure('installer-inspection-unavailable', `installer:${rel}`, 'RPM inspection requires rpm2cpio and cpio; unavailable in the Node-core scanner path')
     return
   }
-  if (['.dmg', '.msi', '.exe'].includes(extension)) {
-    addFailure('installer-inspection-unsupported', `installer:${rel}`, `${extension} installer inspection is not available on this host; do not treat this artifact as policy-cleared`)
+  if (['.msi', '.exe'].includes(extension)) {
+    inspectWindowsInstaller(path, rel, extension, archiveDepth)
   }
+}
+
+function inspectDmgInstaller(path, rel) {
+  if (process.platform !== 'darwin') {
+    addFailure('installer-inspection-unsupported', `installer:${rel}`, '.dmg installer inspection requires macOS hdiutil; do not treat this artifact as policy-cleared')
+    return
+  }
+
+  const mountRoot = mkdtempSync(join(tmpdir(), 'aurora-native-voice-dmg-'))
+  const mountPoint = join(mountRoot, 'volume')
+  mkdirSync(mountPoint)
+  let attached = false
+  let detached = false
+
+  try {
+    execFileSync(
+      'hdiutil',
+      ['attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', mountPoint, path],
+      { encoding: 'utf8', timeout: 120_000 },
+    )
+    attached = true
+  } catch (error) {
+    addFailure('installer-inspection', `installer:${rel}`, `failed to mount DMG installer read-only: ${errorMessage(error)}`)
+  }
+
+  if (attached) {
+    try {
+      report.checkedInstallers += 1
+      scanExtractedTree(mountPoint, `dmg:${rel}`)
+    } catch (error) {
+      addFailure('installer-inspection', `installer:${rel}`, `failed to inspect mounted DMG installer: ${errorMessage(error)}`)
+    } finally {
+      try {
+        execFileSync('hdiutil', ['detach', mountPoint], { encoding: 'utf8', timeout: 30_000 })
+        detached = true
+      } catch (detachError) {
+        try {
+          execFileSync('hdiutil', ['detach', '-force', mountPoint], { encoding: 'utf8', timeout: 30_000 })
+          detached = true
+        } catch (forceDetachError) {
+          addFailure(
+            'installer-cleanup',
+            `installer:${rel}`,
+            `failed to detach inspected DMG mount: ${errorMessage(forceDetachError)}; initial detach: ${errorMessage(detachError)}`,
+          )
+        }
+      }
+    }
+  }
+
+  // Delete only after hdiutil confirms that the exact temporary mount is detached.
+  // If cleanup fails, retain the mount root and fail policy verification explicitly.
+  if (!attached || detached) rmSync(mountRoot, { recursive: true, force: true })
 }
 
 function inspectDebInstaller(path, rel) {
@@ -206,7 +263,43 @@ function inspectAppImage(path, rel) {
   }
 }
 
-function scanExtractedTree(root, prefix) {
+function inspectWindowsInstaller(path, rel, extension, archiveDepth) {
+  if (process.platform !== 'win32') {
+    addFailure('installer-inspection-unsupported', `installer:${rel}`, `${extension} installer inspection requires Windows 7-Zip; do not treat this artifact as policy-cleared`)
+    return
+  }
+  if (archiveDepth >= MAX_ARCHIVE_DEPTH) {
+    addFailure('archive-depth-limit', `installer:${rel}`, `nested installer depth exceeds ${MAX_ARCHIVE_DEPTH}`)
+    return
+  }
+
+  const extractDir = mkdtempSync(join(tmpdir(), 'aurora-native-voice-windows-installer-'))
+  const format = extension === '.msi' ? 'msi' : 'nsis'
+  try {
+    execFileSync(
+      windowsSevenZipExecutable(),
+      ['x', '-y', '-bd', '-bb0', `-o${extractDir}`, path],
+      { encoding: 'utf8', timeout: 120_000, windowsHide: true },
+    )
+    report.checkedInstallers += 1
+    scanExtractedTree(extractDir, `${format}:${rel}`, archiveDepth + 1)
+  } catch (error) {
+    addFailure('installer-inspection', `installer:${rel}`, `failed to extract ${format.toUpperCase()} installer with 7-Zip: ${errorMessage(error)}`)
+  } finally {
+    rmSync(extractDir, { recursive: true, force: true })
+  }
+}
+
+function windowsSevenZipExecutable() {
+  if (process.env.AURORA_7Z_PATH) return process.env.AURORA_7Z_PATH
+  if (process.env.ProgramFiles) {
+    const installed = join(process.env.ProgramFiles, '7-Zip', '7z.exe')
+    if (existsSync(installed)) return installed
+  }
+  return '7z'
+}
+
+function scanExtractedTree(root, prefix, archiveDepth = 0) {
   for (const extracted of walkFilesystem(root)) {
     const rel = normalizePath(relative(root, extracted))
     const stat = lstatSync(extracted)
@@ -219,6 +312,7 @@ function scanExtractedTree(root, prefix) {
       } catch {}
       checkPath(rel, location)
       if (target !== '<unreadable>' && isContainedSymlink(root, extracted, target)) continue
+      if (isAllowedDmgApplicationsSymlink(prefix, rel, target)) continue
       checkPath(target, `${location}->${redacted(target)}`)
       addFailure('symlink-unsupported', location, `symbolic links are not allowed in release artifacts; target=${redacted(target)}`)
       continue
@@ -227,9 +321,13 @@ function scanExtractedTree(root, prefix) {
     report.checkedFiles += 1
     checkPath(rel, location)
     recordApprovedNativeVoiceLibrary(rel)
-    inspectRecognizedContainer(extracted, `${prefix}/${rel}`, 0)
+    inspectRecognizedContainer(extracted, `${prefix}/${rel}`, archiveDepth)
     if (shouldScanText(extracted)) checkText(readFileSync(extracted), location)
   }
+}
+
+function isAllowedDmgApplicationsSymlink(prefix, rel, target) {
+  return prefix.startsWith('dmg:') && rel === 'Applications' && target === '/Applications'
 }
 
 function isContainedSymlink(root, linkPath, target) {
@@ -455,8 +553,9 @@ function ensureReadable(buffer, offset, length, label) {
 
 function installerExtension(path) {
   if (/\.AppImage$/i.test(path)) return '.AppImage'
-  if (/(\bsetup\b|\binstall(er)?\b|nsis).*\.exe$/i.test(path)) return '.exe'
+  if (/(\bsetup\b|\binstall(er)?\b|nsis).*\.exe$/i.test(basename(path))) return '.exe'
   const extension = extname(path).toLowerCase()
+  if (extension === '.exe') return ''
   if (recognizedInstallerExtensions.has(extension)) return extension
   return extension
 }

@@ -216,9 +216,16 @@ async def _wait_for_config_service(bus: BullMQBus, proc: subprocess.Popen[str]) 
             timeout=1.0,
             origin="integration-test",
         )
-        if result.ok:
-            return
-        last_error = result.error or ""
+        if result.ok and isinstance(result.data, dict):
+            config = result.data.get("config")
+            if isinstance(config, dict) and {
+                "primary_language",
+                "voice_language",
+            }.issubset(config):
+                return
+            last_error = "Config.Get returned an incomplete system configuration"
+        else:
+            last_error = result.error or ""
         await asyncio.sleep(0.15)
     raise AssertionError(f"ConfigService did not become ready: {last_error}")
 
@@ -232,7 +239,11 @@ async def _get_section(bus: BullMQBus, section: str | None = None) -> dict[str, 
     )
     assert result.ok, result.error
     assert isinstance(result.data, dict)
-    return cast(dict[str, Any], result.data["config"])
+    config = result.data.get("config")
+    assert isinstance(config, dict) and config, (
+        f"Config.Get returned an empty or malformed section: {section}"
+    )
+    return cast(dict[str, Any], config)
 
 
 async def _set_config(bus: BullMQBus, key_path: str, value: Any) -> dict[str, Any]:
@@ -314,7 +325,7 @@ def _piper_config(config: dict[str, Any]) -> dict[str, Any]:
         (
             _config_with_tts({}),
             {},
-            "voice_models/en_US-lessac-medium.onnx",
+            None,
         ),
     ],
     ids=[
@@ -331,7 +342,7 @@ async def test_tts_piper_precedence_crosses_config_process_boundary(
     clean_process_env: None,
     payload: dict[str, Any],
     env: dict[str, str],
-    expected_model_path: str,
+    expected_model_path: str | None,
 ) -> None:
     """TTS/Piper precedence is preserved across ConfigService and BullMQ."""
     config_path = tmp_path / "config.json"
@@ -427,6 +438,7 @@ async def test_legacy_speech_config_load_does_not_rewrite_source_file(
         "model_config_file_path": "legacy.onnx.json",
         "model_sample_rate": 16000,
         "executable_path": "/opt/legacy-piper",
+        "cache_dir": "voice_models/piper",
     }
     assert config_path.read_text(encoding="utf-8") == original
 

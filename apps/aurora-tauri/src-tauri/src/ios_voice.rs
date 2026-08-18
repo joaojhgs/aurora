@@ -127,6 +127,9 @@ struct AuroraIosEmbeddedCatalogEntry {
     compatible_platforms: Vec<String>,
     compatible_architectures: Vec<String>,
     model_family: String,
+    requires_reference_audio: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_audio_mode: Option<String>,
     model_files: Vec<AuroraIosEmbeddedCatalogModelFile>,
     sample_rate_hz: u32,
     frame_size: u32,
@@ -153,6 +156,39 @@ unsafe fn bounded_string(value: *const c_char, max_bytes: usize) -> Option<Strin
         return None;
     }
     std::str::from_utf8(bytes).ok().map(ToOwned::to_owned)
+}
+
+fn ios_tts_reference_from_optional_fields(
+    path: Option<String>,
+    sha256: Option<String>,
+    size_bytes: u64,
+    sample_rate: u32,
+    text: Option<String>,
+    revision: Option<String>,
+) -> Option<Option<IosTtsReferenceBinding>> {
+    match (path, sha256, size_bytes, sample_rate, text, revision) {
+        (Some(path), Some(sha256), size_bytes, sample_rate, text, Some(revision))
+            if size_bytes > 0 && sample_rate > 0 =>
+        {
+            Some(Some(
+                IosTtsReferenceBinding::new(
+                    path,
+                    sha256,
+                    size_bytes,
+                    sample_rate,
+                    text.unwrap_or_default(),
+                    revision,
+                )
+                .ok()?,
+            ))
+        }
+        (None, None, 0, 0, text, None)
+            if text.as_deref().map(str::trim).is_none_or(str::is_empty) =>
+        {
+            Some(None)
+        }
+        _ => None,
+    }
 }
 
 fn command_error_code(error: IosVoiceSessionCommandError) -> i32 {
@@ -219,7 +255,7 @@ fn resolved_voice_pack_payload(
     root: &Path,
     bindings: SpeechPackBindings,
 ) -> AuroraIosResolvedVoicePack {
-    let catalog = TtsVoiceCatalog::embedded().ok();
+    let catalog = TtsVoiceCatalog::runtime().ok();
     let entry = catalog.and_then(|catalog| catalog.voice(&bindings.voice_id));
     let files = bindings
         .files
@@ -308,12 +344,14 @@ fn embedded_catalog_json() -> Option<String> {
             compatible_platforms: vec!["ios".to_owned()],
             compatible_architectures: vec!["arm64".to_owned(), "x86_64".to_owned()],
             model_family: entry.model_family.clone(),
+            requires_reference_audio: false,
+            reference_audio_mode: None,
             model_files: Vec::new(),
             sample_rate_hz: 16_000,
             frame_size: 512,
         });
     }
-    let tts_catalog = TtsVoiceCatalog::embedded().ok()?;
+    let tts_catalog = TtsVoiceCatalog::runtime().ok()?;
     for entry in &tts_catalog.entries {
         entries.push(AuroraIosEmbeddedCatalogEntry {
             pack_id: entry.voice_id.clone(),
@@ -332,6 +370,10 @@ fn embedded_catalog_json() -> Option<String> {
             compatible_platforms: vec!["ios".to_owned()],
             compatible_architectures: vec!["arm64".to_owned(), "x86_64".to_owned()],
             model_family: entry.model_family.clone(),
+            requires_reference_audio: entry.requires_reference_profile(),
+            reference_audio_mode: entry
+                .catalog_reference_audio_mode_label()
+                .map(str::to_string),
             model_files: Vec::new(),
             sample_rate_hz: entry.sample_rate_hz.unwrap_or(16_000),
             frame_size: 512,
@@ -395,7 +437,7 @@ fn resolve_pack_json(root: String, pack_id: String, task: PackTask) -> Option<St
 
 fn catalog_contains_pack(pack_id: &str, task: PackTask) -> bool {
     if task == PackTask::Tts {
-        TtsVoiceCatalog::embedded()
+        TtsVoiceCatalog::runtime()
             .ok()
             .and_then(|catalog| catalog.voice(pack_id))
             .is_some()
@@ -442,32 +484,14 @@ unsafe fn parse_pack_bindings(
         let reference_audio_sha256 = unsafe { bounded_string(binding.reference_audio_sha256, 64) };
         let reference_text = unsafe { bounded_string(binding.reference_text, 1024) };
         let reference_revision = unsafe { bounded_string(binding.reference_revision, 128) };
-        let tts_reference = match (
+        let tts_reference = ios_tts_reference_from_optional_fields(
             reference_audio_path,
             reference_audio_sha256,
             binding.reference_audio_size_bytes,
             binding.reference_audio_sample_rate_hz,
             reference_text,
             reference_revision,
-        ) {
-            (Some(path), Some(sha256), size_bytes, sample_rate, Some(text), Some(revision))
-                if size_bytes > 0 && sample_rate > 0 =>
-            {
-                Some(
-                    IosTtsReferenceBinding::new(
-                        path,
-                        sha256,
-                        size_bytes,
-                        sample_rate,
-                        text,
-                        revision,
-                    )
-                    .ok()?,
-                )
-            }
-            (None, None, 0, 0, None, None) => None,
-            _ => return None,
-        };
+        )?;
         let files: Vec<AuroraIosVoiceTaskPackFileJson> = serde_json::from_str(&files_json).ok()?;
         let files = files
             .into_iter()
@@ -829,5 +853,114 @@ mod tests {
         let parsed = unsafe { parse_pack_bindings(dangling, usize::MAX) };
 
         assert!(parsed.is_none());
+    }
+
+    #[test]
+    fn runtime_catalog_lists_public_overlay_without_user_profile() {
+        let payload = embedded_catalog_json().expect("runtime catalog");
+        let entries: Vec<serde_json::Value> = serde_json::from_str(&payload).expect("catalog json");
+        let english = entries
+            .iter()
+            .find(|entry| entry["packId"] == "standard:pockettts:aurora-pockettts-en-2026-04")
+            .expect("public english");
+        let french = entries
+            .iter()
+            .find(|entry| entry["packId"] == "standard:pockettts:aurora-pockettts-fr-24l")
+            .expect("public french");
+        let official = entries
+            .iter()
+            .find(|entry| {
+                entry["packId"] == "standard:pockettts:sherpa-onnx-pocket-tts-int8-2026-01-26"
+            })
+            .expect("clone-capable english");
+        assert_eq!(english["requiresReferenceAudio"], false);
+        assert_eq!(english["referenceAudioMode"], "internal");
+        assert_eq!(french["requiresReferenceAudio"], false);
+        assert_eq!(french["referenceAudioMode"], "internal");
+        assert_eq!(official["requiresReferenceAudio"], true);
+        assert_eq!(official["referenceAudioMode"], "profile");
+        assert!(catalog_contains_pack(
+            "standard:pockettts:aurora-pockettts-en-2026-04",
+            PackTask::Tts
+        ));
+        assert!(catalog_contains_pack(
+            "standard:pockettts:aurora-pockettts-fr-24l",
+            PackTask::Tts
+        ));
+    }
+
+    fn test_reference_sha256() -> String {
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_owned()
+    }
+
+    #[test]
+    fn ios_tts_reference_from_optional_fields_allows_empty_text() {
+        let binding = ios_tts_reference_from_optional_fields(
+            Some("/tmp/ref.wav".to_owned()),
+            Some(test_reference_sha256()),
+            12,
+            16_000,
+            None,
+            Some("rev-1".to_owned()),
+        )
+        .expect("parsed")
+        .expect("present");
+        assert_eq!(binding.reference_text(), "");
+        assert_eq!(binding.reference_text_for_sherpa(), None);
+
+        let blank = ios_tts_reference_from_optional_fields(
+            Some("/tmp/ref.wav".to_owned()),
+            Some(test_reference_sha256()),
+            12,
+            16_000,
+            Some("   ".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .expect("parsed")
+        .expect("present");
+        assert_eq!(blank.reference_text(), "");
+        assert_eq!(blank.reference_text_for_sherpa(), None);
+    }
+
+    #[test]
+    fn ios_tts_reference_from_optional_fields_preserves_legacy_text() {
+        let binding = ios_tts_reference_from_optional_fields(
+            Some("/tmp/ref.wav".to_owned()),
+            Some(test_reference_sha256()),
+            12,
+            16_000,
+            Some("Hello Aurora".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .expect("parsed")
+        .expect("present");
+        assert_eq!(binding.reference_text(), "Hello Aurora");
+        assert_eq!(binding.reference_text_for_sherpa(), Some("Hello Aurora"));
+    }
+
+    #[test]
+    fn ios_tts_reference_from_optional_fields_requires_audio_and_revision() {
+        assert!(ios_tts_reference_from_optional_fields(
+            None,
+            None,
+            0,
+            0,
+            Some("Hello Aurora".to_owned()),
+            Some("rev-1".to_owned()),
+        )
+        .is_none());
+        assert!(ios_tts_reference_from_optional_fields(
+            Some("/tmp/ref.wav".to_owned()),
+            Some(test_reference_sha256()),
+            12,
+            16_000,
+            None,
+            None,
+        )
+        .is_none());
+        assert_eq!(
+            ios_tts_reference_from_optional_fields(None, None, 0, 0, None, None),
+            Some(None)
+        );
     }
 }

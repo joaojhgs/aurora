@@ -262,6 +262,15 @@ struct AndroidVoiceForegroundServiceStartRequest {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct AndroidVoiceLiveTestPcmRequest {
+    #[serde(default)]
+    pcm_base64: String,
+    #[serde(default)]
+    arm_ingress: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct AndroidVoicePackCatalogSetRequest {
     catalog_json: String,
 }
@@ -370,6 +379,8 @@ struct NativeSpeechPackCatalogEntry {
     runtime_revision: String,
     model_family: String,
     requires_reference_audio: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reference_audio_mode: Option<String>,
     voice_id: Option<String>,
     voice_revision: Option<String>,
     reference_profile_id: Option<String>,
@@ -2105,6 +2116,31 @@ async fn aurora_android_voice_foreground_service_start(
 }
 
 #[tauri::command]
+async fn aurora_android_voice_live_test_inject_pcm(
+    request: AndroidVoiceLiveTestPcmRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        run_android_plugin_command(
+            native,
+            "injectVoicePcmForLiveTest",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Android live voice PCM injection is only available to debuggable Android packages"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
 async fn aurora_android_voice_foreground_service_finish(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
@@ -2428,21 +2464,19 @@ async fn aurora_ios_voice_pack_remove(
     }
 }
 
-#[cfg(target_os = "ios")]
-fn set_ios_tts_reference_if_present(
-    native: &State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-    task: NativeSpeechPackTask,
+#[cfg(any(target_os = "ios", test))]
+fn optional_native_tts_reference_text(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+#[cfg(any(target_os = "ios", test))]
+fn ios_tts_reference_set_payload(
     pack_id: &str,
     reference: &NativeSpeechReferenceProfileRequest,
-) -> Result<(), AuroraCommandError> {
-    if task != NativeSpeechPackTask::Tts || !reference.has_any_value() {
-        return Ok(());
-    }
-    let text = reference
-        .reference_text
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
+) -> Result<Value, AuroraCommandError> {
     let revision = reference
         .reference_revision
         .as_deref()
@@ -2456,22 +2490,33 @@ fn set_ios_tts_reference_if_present(
         .as_deref()
         .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
     let audio_base64 = native_reference_wav_base64(sample_rate_hz, samples)?;
+    Ok(json!({
+        "packId": pack_id,
+        "audioBase64": audio_base64,
+        "referenceText": optional_native_tts_reference_text(reference.reference_text.as_deref()),
+        "sampleRateHz": sample_rate_hz,
+        "revision": revision,
+    }))
+}
+
+#[cfg(target_os = "ios")]
+fn set_ios_tts_reference_if_present(
+    native: &State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    task: NativeSpeechPackTask,
+    pack_id: &str,
+    reference: &NativeSpeechReferenceProfileRequest,
+) -> Result<(), AuroraCommandError> {
+    if task != NativeSpeechPackTask::Tts || !reference.has_any_value() {
+        return Ok(());
+    }
+    let payload = ios_tts_reference_set_payload(pack_id, reference)?;
     let handle = native.handle.as_ref().ok_or_else(|| {
         AuroraCommandError::AuroraMobileNativePlugin(
             "Aurora iOS native plugin handle was not registered".to_string(),
         )
     })?;
     handle
-        .run_mobile_plugin::<Value>(
-            "voiceTTSReferenceSet",
-            json!({
-                "packId": pack_id,
-                "audioBase64": audio_base64,
-                "referenceText": text,
-                "sampleRateHz": sample_rate_hz,
-                "revision": revision,
-            }),
-        )
+        .run_mobile_plugin::<Value>("voiceTTSReferenceSet", payload)
         .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))?;
     Ok(())
 }
@@ -2610,47 +2655,44 @@ async fn aurora_native_speech_pack_activate(
         }
         #[cfg(desktop)]
         if request.task == NativeSpeechPackTask::Tts {
-            let catalog = TtsVoiceCatalog::embedded().map_err(|_| {
+            let catalog = TtsVoiceCatalog::runtime().map_err(|_| {
                 AuroraCommandError::UnsupportedFeature("Speech catalog is unavailable".to_string())
             })?;
             let voice = catalog
                 .voice(&request.pack_id)
                 .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-            match voice.model_family.as_str() {
-                "pockettts" => {
-                    let reference_id = request
-                        .reference
-                        .reference_id
-                        .clone()
-                        .filter(|value| !value.trim().is_empty())
-                        .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-                    let sample_rate_hz = request
-                        .reference
-                        .reference_sample_rate_hz
-                        .and_then(|value| i32::try_from(value).ok())
-                        .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-                    let samples = request
-                        .reference
-                        .reference_samples
-                        .clone()
-                        .filter(|value| !value.is_empty())
-                        .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-                    native_voice::store_desktop_tts_reference_profile(
-                        &app,
-                        reference_id,
-                        request.pack_id.clone(),
-                        sample_rate_hz,
-                        samples,
-                        request.reference.reference_text.clone(),
-                        request.reference.reference_revision.clone(),
-                    )
-                    .map_err(|_| AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-                }
-                "vits_piper" if request.reference.has_any_value() => {
-                    return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid);
-                }
-                "vits_piper" => {}
-                _ => return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid),
+            if voice.requires_reference_profile() {
+                let reference_id = request
+                    .reference
+                    .reference_id
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
+                let sample_rate_hz = request
+                    .reference
+                    .reference_sample_rate_hz
+                    .and_then(|value| i32::try_from(value).ok())
+                    .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
+                let samples = request
+                    .reference
+                    .reference_samples
+                    .clone()
+                    .filter(|value| !value.is_empty())
+                    .ok_or(AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
+                native_voice::store_desktop_tts_reference_profile(
+                    &app,
+                    reference_id,
+                    request.pack_id.clone(),
+                    sample_rate_hz,
+                    samples,
+                    request.reference.reference_text.clone(),
+                    request.reference.reference_revision.clone(),
+                )
+                .map_err(|_| AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
+            } else if voice.model_family == "vits_piper" && request.reference.has_any_value() {
+                return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid);
+            } else if voice.model_family != "vits_piper" && voice.model_family != "pockettts" {
+                return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid);
             }
         }
         let mut active = native_speech_pack_active_slots(&app)?;
@@ -5613,7 +5655,7 @@ fn native_speech_pack_catalog(
         let mut languages = Vec::new();
         let mut packs = Vec::new();
         if request.task.is_none() || request.task == Some(NativeSpeechPackTask::Tts) {
-            let catalog = TtsVoiceCatalog::embedded().map_err(|_| {
+            let catalog = TtsVoiceCatalog::runtime().map_err(|_| {
                 AuroraCommandError::UnsupportedFeature("Speech catalog is unavailable".to_string())
             })?;
             languages.extend(catalog.languages.clone());
@@ -5648,7 +5690,10 @@ fn native_speech_pack_catalog(
                     revision: catalog.revision().to_string(),
                     runtime_revision: entry.engine.clone(),
                     model_family: entry.model_family.clone(),
-                    requires_reference_audio: entry.model_family == "pockettts",
+                    requires_reference_audio: entry.requires_reference_profile(),
+                    reference_audio_mode: entry
+                        .catalog_reference_audio_mode_label()
+                        .map(str::to_string),
                     voice_id: Some(entry.voice_id.clone()),
                     voice_revision: Some(catalog.revision().to_string()),
                     reference_profile_id: None,
@@ -5703,6 +5748,7 @@ fn native_speech_pack_catalog(
                     runtime_revision: entry.engine.clone(),
                     model_family: entry.model_family.clone(),
                     requires_reference_audio: false,
+                    reference_audio_mode: None,
                     voice_id: None,
                     voice_revision: None,
                     reference_profile_id: None,
@@ -7628,14 +7674,35 @@ fn gateway_request_url(
     path: Option<&str>,
     method: &str,
 ) -> Result<Url, AuroraCommandError> {
-    if let Some(path) = path {
-        return base
-            .join(path.trim_start_matches('/'))
-            .map_err(|error| AuroraCommandError::Gateway(error.to_string()));
+    let relative = if let Some(path) = path {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(AuroraCommandError::Gateway("gateway path is empty".into()));
+        }
+        if trimmed.contains("://") || trimmed.starts_with("//") {
+            return Err(AuroraCommandError::Gateway(
+                "gateway path must be relative".into(),
+            ));
+        }
+        trimmed.trim_start_matches('/').to_string()
+    } else {
+        format!("api/methods/{}", method.replace('.', "/"))
+    };
+    let joined = base
+        .join(&relative)
+        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
+    if !same_http_origin(base, &joined) {
+        return Err(AuroraCommandError::Gateway(
+            "gateway path must stay on the configured origin".into(),
+        ));
     }
-    let route = method.replace('.', "/");
-    base.join(&format!("api/methods/{route}"))
-        .map_err(|error| AuroraCommandError::Gateway(error.to_string()))
+    Ok(joined)
+}
+
+fn same_http_origin(left: &Url, right: &Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host() == right.host()
+        && left.port_or_known_default() == right.port_or_known_default()
 }
 
 fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
@@ -8656,6 +8723,8 @@ pub fn run() {
                     eprintln!("aurora deep-link scheme registration failed: {error}");
                 }
             }
+            #[cfg(desktop)]
+            eprintln!("aurora_tauri_shell_ready platform=desktop");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -8697,6 +8766,7 @@ pub fn run() {
             aurora_android_webview_microphone_permission_decision,
             aurora_android_voice_foreground_service_status,
             aurora_android_voice_foreground_service_start,
+            aurora_android_voice_live_test_inject_pcm,
             aurora_android_voice_foreground_service_finish,
             aurora_android_voice_foreground_service_cancel,
             aurora_android_voice_pack_catalog_status,
@@ -10689,6 +10759,34 @@ mod tests {
     }
 
     #[test]
+    fn gateway_request_url_rejects_absolute_and_protocol_relative_overrides() {
+        let base = Url::parse("http://127.0.0.1:8000/").unwrap();
+        assert_eq!(
+            gateway_request_url(&base, None, "Gateway.GetRegistry").unwrap().as_str(),
+            "http://127.0.0.1:8000/api/methods/Gateway/GetRegistry"
+        );
+        assert_eq!(
+            gateway_request_url(&base, Some("/health"), "Gateway.GetRegistry")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:8000/health"
+        );
+        assert!(gateway_request_url(
+            &base,
+            Some("https://evil.example/steal"),
+            "Gateway.GetRegistry"
+        )
+        .is_err());
+        assert!(gateway_request_url(&base, Some("//evil.example/steal"), "Gateway.GetRegistry").is_err());
+        assert!(gateway_request_url(
+            &base,
+            Some("http://evil.example/steal"),
+            "Gateway.GetRegistry"
+        )
+        .is_err());
+    }
+
+    #[test]
     fn tauri_csp_has_loopback_only_defaults_and_no_remote_wildcards_or_samples() {
         let config: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         let csp = config["app"]["security"]["csp"].as_str().unwrap();
@@ -11016,6 +11114,117 @@ mod tests {
     }
 
     #[test]
+    fn native_mobile_speech_pack_requests_allow_audio_only_reference() {
+        let download = serde_json::to_value(NativeMobileSpeechPackDownloadRequest {
+            pack_id: "pockettts.en".to_string(),
+            task: NativeSpeechPackTask::Tts,
+            force_download: false,
+            activate: true,
+            reference: NativeSpeechReferenceProfileRequest {
+                reference_id: Some("voice-1".to_string()),
+                reference_audio_uri: None,
+                reference_text: None,
+                reference_revision: Some("sha256-reference".to_string()),
+                reference_sample_rate_hz: Some(16_000),
+                reference_samples: Some(vec![0.0, 0.25, -0.25]),
+            },
+        })
+        .unwrap();
+
+        assert_eq!(download["referenceId"], "voice-1");
+        assert_eq!(download["referenceRevision"], "sha256-reference");
+        assert_eq!(download["referenceSampleRateHz"], 16_000);
+        assert_eq!(download["referenceSamples"], json!([0.0, 0.25, -0.25]));
+        assert!(download["referenceText"].is_null());
+        assert_eq!(optional_native_tts_reference_text(None), None);
+        assert_eq!(optional_native_tts_reference_text(Some("   ")), None);
+        assert_eq!(
+            optional_native_tts_reference_text(Some("Hello Aurora")),
+            Some("Hello Aurora".to_string())
+        );
+    }
+
+    #[test]
+    fn ios_tts_reference_set_payload_allows_audio_only_and_legacy_text() {
+        let audio_only = ios_tts_reference_set_payload(
+            "pockettts.en",
+            &NativeSpeechReferenceProfileRequest {
+                reference_id: Some("voice-1".to_string()),
+                reference_audio_uri: None,
+                reference_text: None,
+                reference_revision: Some("rev-1".to_string()),
+                reference_sample_rate_hz: Some(16_000),
+                reference_samples: Some(vec![0.0, 0.25, -0.25]),
+            },
+        )
+        .expect("audio-only payload");
+        assert_eq!(audio_only["packId"], "pockettts.en");
+        assert_eq!(audio_only["referenceText"], json!(null));
+        assert_eq!(audio_only["revision"], "rev-1");
+        assert_eq!(audio_only["sampleRateHz"], 16_000);
+        assert!(audio_only["audioBase64"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+
+        let blank_text = ios_tts_reference_set_payload(
+            "pockettts.en",
+            &NativeSpeechReferenceProfileRequest {
+                reference_id: Some("voice-1".to_string()),
+                reference_audio_uri: None,
+                reference_text: Some("   ".to_string()),
+                reference_revision: Some("rev-1".to_string()),
+                reference_sample_rate_hz: Some(16_000),
+                reference_samples: Some(vec![0.0, 0.25, -0.25]),
+            },
+        )
+        .expect("blank text payload");
+        assert_eq!(blank_text["referenceText"], json!(null));
+
+        let legacy = ios_tts_reference_set_payload(
+            "pockettts.en",
+            &NativeSpeechReferenceProfileRequest {
+                reference_id: Some("voice-1".to_string()),
+                reference_audio_uri: None,
+                reference_text: Some("Hello Aurora".to_string()),
+                reference_revision: Some("rev-1".to_string()),
+                reference_sample_rate_hz: Some(16_000),
+                reference_samples: Some(vec![0.0, 0.25, -0.25]),
+            },
+        )
+        .expect("legacy text payload");
+        assert_eq!(legacy["referenceText"], "Hello Aurora");
+
+        assert!(matches!(
+            ios_tts_reference_set_payload(
+                "pockettts.en",
+                &NativeSpeechReferenceProfileRequest {
+                    reference_id: Some("voice-1".to_string()),
+                    reference_audio_uri: None,
+                    reference_text: None,
+                    reference_revision: None,
+                    reference_sample_rate_hz: Some(16_000),
+                    reference_samples: Some(vec![0.0, 0.25, -0.25]),
+                },
+            ),
+            Err(AuroraCommandError::NativeSpeechPackSelectionInvalid)
+        ));
+        assert!(matches!(
+            ios_tts_reference_set_payload(
+                "pockettts.en",
+                &NativeSpeechReferenceProfileRequest {
+                    reference_id: Some("voice-1".to_string()),
+                    reference_audio_uri: None,
+                    reference_text: Some("Hello Aurora".to_string()),
+                    reference_revision: Some("rev-1".to_string()),
+                    reference_sample_rate_hz: Some(16_000),
+                    reference_samples: None,
+                },
+            ),
+            Err(AuroraCommandError::NativeSpeechPackSelectionInvalid)
+        ));
+    }
+
+    #[test]
     fn native_reference_wav_is_bounded_mono_pcm16() {
         let encoded = native_reference_wav_base64(16_000, &[0.0, 0.5, -0.5]).unwrap();
         let wav = STANDARD.decode(encoded).unwrap();
@@ -11063,6 +11272,7 @@ mod tests {
                 runtime_revision: "engine-revision".to_string(),
                 model_family: "silero_vad".to_string(),
                 requires_reference_audio: false,
+                reference_audio_mode: None,
                 voice_id: None,
                 voice_revision: None,
                 reference_profile_id: None,
@@ -11081,6 +11291,7 @@ mod tests {
                 runtime_revision: "engine-revision".to_string(),
                 model_family: "zipformer".to_string(),
                 requires_reference_audio: false,
+                reference_audio_mode: None,
                 voice_id: None,
                 voice_revision: None,
                 reference_profile_id: None,
@@ -11099,6 +11310,7 @@ mod tests {
                 runtime_revision: "engine-revision".to_string(),
                 model_family: "whisper".to_string(),
                 requires_reference_audio: false,
+                reference_audio_mode: None,
                 voice_id: None,
                 voice_revision: None,
                 reference_profile_id: None,
@@ -11117,6 +11329,7 @@ mod tests {
                 runtime_revision: "engine-revision".to_string(),
                 model_family: "vits_piper".to_string(),
                 requires_reference_audio: false,
+                reference_audio_mode: None,
                 voice_id: Some("tts.ready".to_string()),
                 voice_revision: Some("catalog-revision".to_string()),
                 reference_profile_id: None,
@@ -11320,9 +11533,12 @@ mod tests {
             "AudioTrack.Builder()",
             "audio_record_read_failed",
             "requestAudioFocus",
-            "onTrimMemory",
             "onTaskRemoved",
             "AUDIOFOCUS_LOSS_TRANSIENT",
+            "START_STICKY",
+            "PowerManager.PARTIAL_WAKE_LOCK",
+            "backgroundSessionRequested",
+            "stopAfterTerminalFailure",
         ] {
             assert!(
                 service.contains(required),
@@ -11394,15 +11610,19 @@ mod tests {
         }
         for command in [
             "startVoiceForegroundService",
+            "injectVoicePcmForLiveTest",
             "finishVoiceForegroundService",
             "stopVoiceForegroundService",
         ] {
             assert!(plugin.contains(command), "{command}");
         }
         assert!(plugin.contains("AndroidVoiceForegroundServiceStartArgs"));
+        assert!(plugin.contains("AndroidVoiceLiveTestPcmArgs"));
+        assert!(plugin.contains("ApplicationInfo.FLAG_DEBUGGABLE"));
         assert!(plugin.contains("backgroundSession"));
         assert!(plugin.contains("ACTION_START_BACKGROUND"));
         assert!(rust_source.contains("AndroidVoiceForegroundServiceStartRequest"));
+        assert!(rust_source.contains("AndroidVoiceLiveTestPcmRequest"));
         assert!(rust_source.contains("AndroidVoicePackCatalogSetRequest"));
         assert!(rust_source.contains("NativeMobileSpeechPackDownloadRequest"));
         assert!(rust_source.contains("AndroidVoicePackDownloadStatusRequest"));
@@ -11411,6 +11631,7 @@ mod tests {
         assert!(rust_source.contains("serde_json::to_value(&request)"));
         for command in [
             "aurora_android_voice_foreground_service_start",
+            "aurora_android_voice_live_test_inject_pcm",
             "aurora_android_voice_foreground_service_finish",
             "aurora_android_voice_foreground_service_cancel",
             "aurora_android_voice_pack_catalog_status",
@@ -11422,9 +11643,11 @@ mod tests {
         ] {
             assert!(rust_source.contains(command), "{command}");
         }
+        let build_manifest = include_str!("../build.rs");
+        assert!(build_manifest.contains("aurora_android_voice_live_test_inject_pcm"));
         assert!(plugin.contains("backendAudioEvidenceRequired"));
-        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD)"));
-        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS)"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD,"));
+        assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS,"));
         assert!(service.contains("background_voice_unavailable"));
         for required in [
             "VoiceInteractionSessionService",

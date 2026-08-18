@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 function repoText(path: string) {
-  return readFileSync(resolve(repoRoot, path), 'utf8')
+  return readFileSync(resolve(repoRoot, path), 'utf8').replace(/\r\n?/g, '\n')
 }
 
 function workflowJobNames(workflowText: string): string[] {
@@ -95,6 +95,53 @@ describe('Tauri CI native evidence contract', () => {
     }
   })
 
+  it('stages the pinned patched Sherpa runtime before desktop and iOS native builds', () => {
+    const desktopWorkflow = repoText('.github/workflows/tauri-desktop.yml')
+    const iosWorkflow = repoText('.github/workflows/tauri-ios.yml')
+    const iosReleaseWorkflow = repoText('.github/workflows/tauri-ios-release.yml')
+    const builder = repoText('tools/voice-runtime/build_sherpa_native.py')
+    const sherpaSysBuild = repoText('rust/crates/aurora-voice-sherpa-sys/build.rs')
+
+    expect(builder).toContain('SHERPA_VERSION = "1.13.5"')
+    expect(builder).toContain('ORT_VERSION = "1.27.1"')
+    expect(builder).toContain('"--allow-aurora-pockettts-patches"')
+    expect(builder).toContain('"-DBUILD_SHARED_LIBS=OFF"')
+    expect(builder).toContain('"-DSHERPA_ONNX_ENABLE_TTS=ON"')
+
+    for (const target of [
+      'x86_64-unknown-linux-gnu',
+      'aarch64-apple-darwin',
+      'x86_64-pc-windows-msvc',
+    ]) {
+      expect(desktopWorkflow).toContain(`target: ${target}`)
+    }
+    expect(desktopWorkflow).toContain('python tools/voice-runtime/build_sherpa_native.py')
+    expect(desktopWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(desktopWorkflow).toContain('actions/upload-artifact@v4')
+    expect(desktopWorkflow).toContain('actions/download-artifact@v4')
+
+    expect(iosWorkflow).toContain('--target aarch64-apple-ios-sim')
+    expect(iosWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME')
+    expect(iosWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosReleaseWorkflow).toContain('--target aarch64-apple-ios')
+    expect(iosReleaseWorkflow).toContain('AURORA_SHERPA_ONNX_LINK_KIND=static')
+    expect(iosReleaseWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME')
+    expect(iosReleaseWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static')
+
+    expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_LINK_KIND')
+    expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR')
+    expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND')
+    expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR')
+    expect(sherpaSysBuild).toContain('CARGO_{variable}')
+    expect(sherpaSysBuild).toContain('unsupported Android target arch')
+    expect(sherpaSysBuild).toContain('println!("cargo:rustc-link-lib=static={library}")')
+    expect(builder).toContain('stage_ios_ort_archive(plan, ios_ort_binary, destination)')
+    expect(builder).toContain('"xcrun",')
+    expect(builder).toContain('"lipo",')
+    expect(sherpaSysBuild).toContain('Android Sherpa packaging requires the patched shared runtime')
+  })
+
   it('keeps the Linux Tauri smoke script from being only jsdom/web route tests', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
 
@@ -120,12 +167,15 @@ describe('Tauri CI native evidence contract', () => {
     expect(desktopWorkflow).toContain('cargo check')
     expect(desktopWorkflow).toContain('xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke')
     expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"')
+    expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY: "0"')
+    expect(desktopWorkflow).toContain('AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS: "[tauri],aurora_tauri_shell_ready platform=desktop"')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/tauri-dev-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui eventstream:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/eventstream-smoke.json')
     expect(desktopWorkflow).toContain('pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke')
     expect(desktopWorkflow).toContain('apps/aurora-tauri/reports/sidecar-runtime-smoke.json')
     expect(desktopWorkflow).toContain('if-no-files-found: warn')
+    expect(tauriLib).toContain('aurora_tauri_shell_ready platform=desktop')
     expect(tauriLib).toContain('.transparent(true)')
     expect(cargoManifest).toContain('"macos-private-api"')
     expect(tauriConfig).toContain('"macOSPrivateApi": true')
@@ -327,12 +377,26 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:frontend:ios-client']).toBe('node ./scripts/build-ios-client-frontend.mjs')
     expect(packageJson.scripts['build:frontend:ios-thin']).toBe('pnpm build:frontend:ios-client')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:preflight:ci')
+    expect(androidWorkflow).toContain('tools/voice-runtime/build_sherpa_android.sh')
+    expect(androidWorkflow).toContain('AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR=')
+    expect(androidWorkflow).toContain('AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=')
+    expect(androidWorkflow.indexOf('tools/voice-runtime/build_sherpa_android.sh')).toBeLessThan(
+      androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64'),
+    )
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64')
     expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk\n')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')
     expect(androidWorkflow).toContain('Retain Android client smoke APK')
+    expect(androidWorkflow).toContain('mapfile -t SMOKE_APKS < <(')
+    expect(androidWorkflow).toContain("-path '*/x86_64/debug/*.apk'")
+    expect(androidWorkflow).toContain("-path '*/universal/debug/*.apk'")
+    expect(androidWorkflow).toContain('if [ "${#SMOKE_APKS[@]}" -ne 1 ]; then')
+    expect(androidWorkflow).toContain('cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk')
+    expect(androidWorkflow).not.toContain(
+      'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk',
+    )
     expect(androidWorkflow).toContain('apps/aurora-tauri/reports/android-client-smoke.apk')
     expect(androidWorkflow.indexOf('Retain Android client smoke APK')).toBeLessThan(
       androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:aab'),
@@ -369,7 +433,12 @@ describe('Tauri CI native evidence contract', () => {
       'aurora.android_webrtc_interop.aggregate.v1',
     )
     expect(androidSmoke).toContain('function launchApp')
-    expect(androidSmoke).toContain("['shell', 'am', 'start', '-n', `${appId}/.MainActivity`]")
+    expect(androidSmoke).toContain("['shell', 'am', 'force-stop', appId]")
+    const explicitActivityLaunch = "['shell', 'am', 'start', '-W', '-n', `${appId}/.MainActivity`]"
+    const launcherFallback = "['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1']"
+    expect(androidSmoke).toContain(explicitActivityLaunch)
+    expect(androidSmoke).toContain(launcherFallback)
+    expect(androidSmoke.indexOf(explicitActivityLaunch)).toBeLessThan(androidSmoke.indexOf(launcherFallback))
     expect(androidSmoke).toContain("adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true })")
     expect(androidSmoke).toContain('function isPidofNoProcessResult')
     expect(androidSmoke).toContain('result.status === 1')
@@ -524,6 +593,42 @@ describe('Tauri CI native evidence contract', () => {
     expect(swiftPlugin).toContain('"deepLinksAvailable": true')
     expect(swiftPlugin).toContain('"ios.deepLinks": "available"')
     expect(swiftPlugin).toContain('.filter { ($0["support"] as? String) == "supported-path" }')
+  })
+
+  it('keeps iOS native plugin sources compatible with current Swift importer contracts', () => {
+    const cargoManifest = repoText('apps/aurora-tauri/src-tauri/Cargo.toml')
+    const packManager = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoicePackManager.swift',
+    )
+    const sessionHost = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraIOSVoiceSessionHost.swift',
+    )
+    const plugin = repoText(
+      'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift',
+    )
+
+    const iosDependencies = cargoManifest.match(
+      /\[target\.'cfg\(target_os = "ios"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
+    )?.[1] ?? ''
+    expect(iosDependencies).toContain('aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }')
+    expect(iosDependencies).toContain('aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }')
+    expect(iosDependencies).toContain('aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }')
+
+    expect(packManager).toContain('import CAuroraIOSVoiceBridge')
+    expect(packManager).toMatch(/ai_addrlen: 0,[\s\S]*ai_canonname: nil,[\s\S]*ai_addr: nil,/)
+    expect(packManager).toContain('var mutableURL = url')
+    expect(packManager).toContain('try mutableURL.setResourceValues(values)')
+    expect(sessionHost).toMatch(/public convenience init\(\n    gateway: String,/)
+    expect(sessionHost).toContain('Notification.Name.NSProcessInfoPowerStateDidChange')
+    expect(sessionHost).not.toContain('ProcessInfo.powerStateDidChangeNotification')
+    expect(plugin).toContain('let status = existing.status()')
+    expect(plugin).toContain('status.active == 0')
+    expect(plugin).toContain(
+      '"nativeTurnTransportReason": AuroraNativePlugin.nullableString(transportReady.reason)',
+    )
+    expect(plugin).not.toContain('transportReady.reason ?? NSNull()')
+    expect(plugin).toMatch(/private static func localLightInferenceStatusPayload[\s\S]*return \[/)
+    expect(plugin).toContain('"modelId": AuroraNativePlugin.nullableString(activeModelId)')
   })
 
   it('keeps user-facing pending iOS readiness copy free of verifier wording', () => {
@@ -728,6 +833,7 @@ describe('Tauri CI native evidence contract', () => {
       'android.permission.ACCESS_NETWORK_STATE',
       'android.permission.RECORD_AUDIO',
       'android.permission.MODIFY_AUDIO_SETTINGS',
+      'android.permission.WAKE_LOCK',
     ]) {
       expect(androidManifest).toContain(permission)
     }
@@ -790,7 +896,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['build:bundle:desktop-thin']).toBe('pnpm build:bundle:desktop-client')
     expect(packageJson.scripts['build:bundle:desktop-thin']).not.toContain('prepare-thin-bundle.mjs')
     expect(packageJson.scripts['build:bundle:desktop-thin']).not.toContain('prepare-sidecar')
-    expect(prepareClient).toContain("const connectSrc = [\"'self'\", 'http:', 'https:', 'ws:', 'wss:']")
+    expect(prepareClient).toContain("const connectSrc = [\"'self'\", 'http://ipc.localhost', 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']")
     expect(prepareClient).toContain("capabilities: ['aurora-thin']")
     expect(prepareClient).toContain("connectionMode: 'runtime-configurable'")
     expect(prepareThin).toContain("await import('./prepare-client-bundle.mjs')")
@@ -808,6 +914,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(nativePolicy).toContain('archive-entry-path')
     expect(nativePolicy).toContain('symlink-unsupported')
     expect(nativePolicy).toContain('installer-inspection-unsupported')
+    expect(nativePolicy).toContain("['attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint'")
+    expect(nativePolicy).toContain("execFileSync('hdiutil', ['detach', mountPoint]")
+    expect(nativePolicy).toContain("execFileSync('hdiutil', ['detach', '-force', mountPoint]")
     expect(assertThin).toContain("await import('./assert-client-bundle-clean.mjs')")
     expect(thinCapability).toContain('aurora-thin-profile')
     expect(thinCapability).toContain('aurora-thin-peer-credentials')
@@ -818,7 +927,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(thinCapability).not.toContain('aurora-local-file')
     expect(thinCapability).not.toContain('aurora-audio-bridge')
     expect(clientConfig).toContain('aurora-thin')
-    expect(clientConfig).toContain("connect-src 'self' http: https: ws: wss:")
+    expect(clientConfig).toContain("connect-src 'self' http://ipc.localhost http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:")
     expect(clientConfig).not.toContain('wss://signaling.example.invalid')
     expect(clientConfig).not.toContain('https://gateway.example.invalid')
     expect(clientConfig).not.toContain('binaries/aurora-sidecar')
