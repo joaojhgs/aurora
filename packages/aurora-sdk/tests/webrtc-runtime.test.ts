@@ -1049,20 +1049,34 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     let finishApproval!: () => void
     const delayedApproval = new Promise<void>((resolve) => { finishApproval = resolve })
     const session = { confirmSas: vi.fn(() => delayedApproval) }
+    // Seed the peer through the registry's own API rather than poking a
+    // projected setter: an entry exists because a peer was registered, which
+    // is the only way one is created in production either.
     const controller = harness.runtime.peer as unknown as {
-      session: typeof session | null
-      pendingPairing: Record<string, unknown> | null
+      registry: {
+        add(entry: Record<string, unknown>): { pendingPairing: Record<string, unknown> | null; session: unknown }
+        remove(entry: unknown): void
+      }
     }
-    controller.session = session
-    controller.pendingPairing = {
-      pairingSessionId: 'pairing-old',
-      verificationCode: '11112222',
-      remoteStablePeerId: 'peer-remote',
-      remoteNodeName: 'Remote node'
-    }
+    const entry = controller.registry.add({
+      key: 'peer-remote',
+      peerId: 'peer-remote',
+      profile: profile({ mode: 'webrtc-only' }),
+      session,
+      signaling: null,
+      bridge: null,
+      keyMaterial: null,
+      localProtocolHello: null,
+      pendingPairing: {
+        pairingSessionId: 'pairing-old',
+        verificationCode: '11112222',
+        remoteStablePeerId: 'peer-remote',
+        remoteNodeName: 'Remote node'
+      }
+    })
 
     const approval = harness.runtime.peer.confirmPairing('pairing-old')
-    controller.pendingPairing = {
+    entry.pendingPairing = {
       pairingSessionId: 'pairing-new',
       verificationCode: '33334444',
       remoteStablePeerId: 'peer-remote',
@@ -1071,8 +1085,8 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     finishApproval()
     await approval
 
-    expect(controller.pendingPairing).toMatchObject({ pairingSessionId: 'pairing-new' })
-    controller.session = null
+    expect(entry.pendingPairing).toMatchObject({ pairingSessionId: 'pairing-new' })
+    entry.session = null
     await harness.runtime.close()
   })
 

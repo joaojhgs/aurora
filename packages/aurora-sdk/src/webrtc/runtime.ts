@@ -506,42 +506,18 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   }
 
   /**
-   * Single-peer projection of the registry. The runtime holds one entry per
-   * stable peer id; these accessors read and seed the entry the single-peer
-   * snapshot derives from, so the pre-registry single-peer surface behaves
-   * exactly as it did before. Multi-peer callers use the roster instead.
+   * Single-peer projection of the registry: the entry the derived single-peer
+   * snapshot reads from. Read-only on purpose — an entry is created by
+   * connecting a peer, never as a side effect of an assignment, so the roster
+   * can never hold a peer nothing ever connected to. Multi-peer callers use
+   * the roster instead.
    */
   private get session(): WebRtcPeerSession | null {
     return this.currentEntry()?.session ?? null
   }
 
-  private set session(session: WebRtcPeerSession | null) {
-    this.projectedEntry().session = session
-  }
-
   private get pendingPairing(): PairingSasResult | null {
     return this.currentEntry()?.pendingPairing ?? null
-  }
-
-  private set pendingPairing(pairing: PairingSasResult | null) {
-    this.projectedEntry().pendingPairing = pairing
-  }
-
-  private projectedEntry(): MeshPeerSessionEntry {
-    const current = this.currentEntry()
-    if (current) return current
-    const profile = this.requiredProfile()
-    return this.registry.add({
-      key: profile.expectedStablePeerId ?? 'pending:primary',
-      peerId: profile.expectedStablePeerId,
-      profile,
-      session: null,
-      signaling: null,
-      bridge: null,
-      keyMaterial: null,
-      localProtocolHello: null,
-      pendingPairing: null
-    })
   }
 
   private requiredProfile(): WebRtcPeerConnectionProfile {
