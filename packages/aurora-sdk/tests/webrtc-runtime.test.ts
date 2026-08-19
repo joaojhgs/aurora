@@ -2145,3 +2145,260 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     await harness.runtime.close()
   })
 })
+
+import { PEER_ALREADY_REGISTERED_REASON } from '../src/webrtc/peer-registry.js'
+
+interface RuntimeRosterEntry {
+  peerId: string
+  primary: boolean
+  nodeName?: string
+  snapshot: { state: string; pendingPairing?: { sessionId: string; verificationCode: string } }
+}
+
+interface RuntimePeerRegistry {
+  roster(): { peers: RuntimeRosterEntry[]; primaryPeerId?: string; updatedAt: string }
+  subscribeRoster(listener: (roster: { peers: RuntimeRosterEntry[]; primaryPeerId?: string }) => void): () => void
+  connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void>
+  disconnectPeer(peerId: string, reason?: string): Promise<void>
+}
+
+interface MultiPeerHarness {
+  runtime: BrowserWebRtcRuntime
+  registry: RuntimePeerRegistry
+  store: MemoryPeerCredentialStore
+  signalings: RuntimeFakeSignaling[]
+  connections: RuntimeFakePeerConnection[]
+}
+
+function meshPeerProfile(peerId: string | undefined, signalingPeerId: string, nodeName: string): WebRtcPeerConnectionProfile {
+  const next = profile({ mode: 'webrtc-only', expectedSignalingPeerId: signalingPeerId, nodeName })
+  if (peerId === undefined) delete (next as { expectedStablePeerId?: string }).expectedStablePeerId
+  else next.expectedStablePeerId = peerId
+  return next
+}
+
+function makeMultiPeerHarness(localSignalingIds: string[]): MultiPeerHarness {
+  const signalings: RuntimeFakeSignaling[] = []
+  const connections: RuntimeFakePeerConnection[] = []
+  const store = new MemoryPeerCredentialStore()
+  const queuedLocalIds = [...localSignalingIds]
+  let rpc = 0
+  const runtime = createBrowserWebRtcAuroraRuntime({
+    mode: 'webrtc-only',
+    localStablePeerId: 'local-stable',
+    localNodeName: 'Thin Shell',
+    credentialStore: store,
+    pairingConnectPoll: { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, rpcTimeoutMs: 1_000 },
+    signalingFactory: () => {
+      const next = new RuntimeFakeSignaling()
+      signalings.push(next)
+      return next as any
+    },
+    createPeerConnection: () => {
+      const next = new RuntimeFakePeerConnection('offer-sdp', 'answer-sdp')
+      connections.push(next)
+      return next
+    },
+    scryptDeriver: async () => new Uint8Array(32).fill(7),
+    randomId: () => queuedLocalIds.shift() ?? `rpc-${rpc++}`,
+    windowLocation: secureLocation
+  })
+  return { runtime, registry: runtime.peer as unknown as RuntimePeerRegistry, store, signalings, connections }
+}
+
+async function saveMeshPeerCredential(
+  harness: MultiPeerHarness,
+  peerId: string,
+  localSignalingId: string,
+  remoteSignalingId: string
+): Promise<void> {
+  await harness.store.save(peerId, {
+    tokenId: `token-row-${peerId}`,
+    claimantPeerId: 'local-stable',
+    verifierPeerId: peerId,
+    claimantSignalingPeerId: localSignalingId,
+    verifierSignalingPeerId: remoteSignalingId,
+    roomName: 'room-1',
+    rawBearerToken: `saved-token-${peerId}`
+  })
+}
+
+async function openMeshPeerChannel(
+  harness: MultiPeerHarness,
+  index: number,
+  peerId: string,
+  remoteSignalingId: string
+): Promise<RuntimeFakeChannel> {
+  const signaling = harness.signalings[index] as RuntimeFakeSignaling
+  signaling.emit({ channel: 'presence', from: remoteSignalingId, stablePeerId: peerId, envelope: { type: 'presence', stable_peer_id: peerId } })
+  await flushRuntime()
+  signaling.emit({ channel: 'answer', from: remoteSignalingId, stablePeerId: peerId, envelope: { type: 'answer', sdp: 'answer-sdp' } })
+  await flushRuntime()
+  const channel = (harness.connections[index] as RuntimeFakePeerConnection).channels[0] as RuntimeFakeChannel
+  channel.open()
+  await flushRuntime()
+  return channel
+}
+
+async function authorizeMeshPeer(
+  harness: MultiPeerHarness,
+  index: number,
+  peerId: string,
+  localSignalingId: string,
+  remoteSignalingId: string
+): Promise<RuntimeFakeChannel> {
+  const channel = await openMeshPeerChannel(harness, index, peerId, remoteSignalingId)
+  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: localSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
+  channel.receive(await encodeInbound({
+    type: 'mesh_auth_challenge_v1',
+    challenge: 'a'.repeat(64),
+    channel_binding: binding,
+    claimant_peer_id: 'local-stable',
+    verifier_peer_id: peerId,
+    claimant_signaling_peer_id: localSignalingId,
+    verifier_signaling_peer_id: remoteSignalingId,
+    room_name: 'room-1'
+  }))
+  expect(await decodeSent(channel, 0)).toMatchObject({ type: 'mesh_auth_proof_v1', verifier_peer_id: peerId })
+  channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] })))
+  await waitForSent(channel, 2)
+  return channel
+}
+
+async function driveMeshSasPrompt(
+  harness: MultiPeerHarness,
+  index: number,
+  peerId: string,
+  localSignalingId: string,
+  remoteSignalingId: string,
+  nodeName: string
+): Promise<{ channel: RuntimeFakeChannel; remoteSas: Awaited<ReturnType<PairingSasHandshake['acceptReveal']>> }> {
+  const channel = await openMeshPeerChannel(harness, index, peerId, remoteSignalingId)
+  const localCommit = await decodeSent(channel, 0)
+  expect(localCommit.type).toBe('pairing_v2_commit')
+  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: localSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
+  const remote = new PairingSasHandshake({
+    channelBindingSha256: binding,
+    localIdentity: pairingIdentity({ role: 'answerer', stablePeerId: peerId, signalingPeerId: remoteSignalingId, nodeName }),
+    expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: localSignalingId, nodeName: 'Thin Shell' })
+  })
+  remote.acceptCommit(localCommit)
+  channel.receive(await encodeInbound(await remote.commitMessage()))
+  await flushRuntime()
+  const localReveal = await decodeSent(channel, 1)
+  expect(localReveal.type).toBe('pairing_v2_reveal')
+  const remoteSas = await remote.acceptReveal(localReveal)
+  channel.receive(await encodeInbound(remote.revealMessage()))
+  await waitForSent(channel, 3)
+  return { channel, remoteSas }
+}
+
+describe('browser WebRTC runtime peer registry', {
+  timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
+}, () => {
+  it('holds two authorized sessions at once and derives the single-peer snapshot from the primary', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha', 'peer-beta'])
+
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+
+    const roster = harness.registry.roster()
+    expect(roster.peers.map((entry) => [entry.peerId, entry.snapshot.state])).toEqual([
+      ['peer-alpha', 'authorized'],
+      ['peer-beta', 'authorized']
+    ])
+    expect(roster.primaryPeerId).toBe('peer-alpha')
+    expect(roster.peers.filter((entry) => entry.primary).map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+    // The single-peer snapshot stays a derived view of the primary entry.
+    expect(harness.runtime.peer.snapshot()).toMatchObject({
+      state: 'authorized',
+      expectedStablePeerId: 'peer-alpha',
+      connectedStablePeerId: 'peer-alpha',
+      nodeName: 'Alpha node'
+    })
+
+    await harness.runtime.close()
+    expect(harness.registry.roster().peers).toEqual([])
+  })
+
+  it('keeps pairing state independent per peer and drops only the rejected one', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+
+    const alpha = await driveMeshSasPrompt(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha', 'Alpha node')
+    const beta = await driveMeshSasPrompt(harness, 1, 'peer-beta', 'a-beta', 'z-beta', 'Beta node')
+    expect(alpha.remoteSas.pairingSessionId).not.toBe(beta.remoteSas.pairingSessionId)
+
+    const prompts = new Map(harness.registry.roster().peers.map((entry) => [entry.peerId, entry.snapshot.pendingPairing]))
+    expect(prompts.get('peer-alpha')).toMatchObject({ sessionId: alpha.remoteSas.pairingSessionId, verificationCode: alpha.remoteSas.verificationCode })
+    expect(prompts.get('peer-beta')).toMatchObject({ sessionId: beta.remoteSas.pairingSessionId, verificationCode: beta.remoteSas.verificationCode })
+    // No entry is authorized yet, so the derived view follows the newest entry.
+    expect(harness.runtime.peer.snapshot().pendingPairing).toMatchObject({ sessionId: beta.remoteSas.pairingSessionId })
+
+    await harness.runtime.peer.rejectPairing(beta.remoteSas.pairingSessionId)
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+    expect(harness.runtime.peer.snapshot().pendingPairing).toMatchObject({ sessionId: alpha.remoteSas.pairingSessionId })
+
+    await harness.runtime.close()
+  })
+
+  it('refuses a second session for a stable peer id the registry already holds', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-clone'])
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+
+    await expect(harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-clone', 'Alpha clone')))
+      .rejects.toMatchObject({
+        code: 'validation',
+        detail: { reason_code: PEER_ALREADY_REGISTERED_REASON, peer_id: 'peer-alpha' }
+      })
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+    // The refusal lands before any second signaling client or transport exists.
+    expect(harness.signalings).toHaveLength(1)
+
+    await harness.runtime.close()
+  })
+
+  it('refuses a known stable identity that presents on a second transport', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-ghost'])
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await openMeshPeerChannel(harness, 0, 'peer-alpha', 'z-alpha')
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+
+    // A second transport with no invited stable id announces itself as peer-alpha.
+    await harness.registry.connectPeer(meshPeerProfile(undefined, 'z-ghost', 'Alpha node'))
+    expect(harness.registry.roster().peers).toHaveLength(2)
+    const ghostSignaling = harness.signalings[1] as RuntimeFakeSignaling
+    ghostSignaling.emit({ channel: 'presence', from: 'z-ghost', stablePeerId: 'peer-alpha', envelope: { type: 'presence', stable_peer_id: 'peer-alpha' } })
+    await flushRuntime()
+
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+    expect(harness.runtime.peer.snapshot().lastRedactedError).toMatchObject({ code: 'webrtc_peer_already_connected' })
+
+    await harness.runtime.close()
+  })
+
+  it('drops one peer without disturbing the rest of the registry', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+
+    await harness.registry.disconnectPeer('peer-alpha', 'forgotten')
+    const roster = harness.registry.roster()
+    expect(roster.peers.map((entry) => [entry.peerId, entry.snapshot.state])).toEqual([['peer-beta', 'authorized']])
+    expect(roster.primaryPeerId).toBe('peer-beta')
+    expect(harness.runtime.meshTransport).toBeDefined()
+
+    await harness.runtime.close()
+  })
+})

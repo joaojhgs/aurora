@@ -214,6 +214,17 @@ export type {
 
 
 export {
+  MeshPeerSessionRegistry,
+  PEER_ALREADY_REGISTERED_REASON,
+  peerAlreadyRegisteredError
+} from './peer-registry.js'
+export type {
+  MeshPeerRegistryController,
+  MeshPeerRosterEntry,
+  MeshPeerRosterSnapshot
+} from './peer-registry.js'
+
+export {
   createBrowserWebRtcAuroraRuntime
 } from './runtime.js'
 export type {

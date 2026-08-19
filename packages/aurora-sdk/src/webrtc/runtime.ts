@@ -55,6 +55,12 @@ import {
   type SignalingMessage
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
+import {
+  MeshPeerSessionRegistry,
+  type MeshPeerRegistryController,
+  type MeshPeerRosterSnapshot,
+  type MeshPeerSessionEntry
+} from './peer-registry.js'
 import type { AuthenticatedPeerContext, WebRtcPeerHost } from '../peer-host/index.js'
 import type { PeerAuthorityResolver, PeerPairingIssuer, PeerRelationshipSelector } from '../peer-host/authority.js'
 import type {
@@ -231,25 +237,22 @@ class WebRtcPreferredTransport implements AuroraTransport {
 
 }
 
-class WebRtcPeerConnectionController implements PeerConnectionController {
+class WebRtcPeerConnectionController implements PeerConnectionController, MeshPeerRegistryController {
   private readonly listeners = new Set<(snapshot: PeerConnectionSnapshot) => void>()
+  private readonly rosterListeners = new Set<(roster: MeshPeerRosterSnapshot) => void>()
   private readonly diagnostics: RedactedPeerDiagnostic[] = []
   private readonly mode: AuroraConnectionMode
   private readonly fixedProfile: WebRtcPeerConnectionProfile | undefined
   private readonly credentialStore: InternalPeerCredentialStore | undefined
   private readonly visibilityDocument: BrowserWebRtcRuntimeOptions['visibilityDocument']
   private readonly options: BrowserWebRtcRuntimeOptions<unknown>
-  private session: WebRtcPeerSession | null = null
-  private signaling: MqttWebSocketSignalingClient | null = null
-  private bridge: WebRtcMeshPeerBridge | null = null
+  // One entry per stable peer id: session, signaling port, bridge, pairing
+  // state. The single-peer snapshot below is a derived view over this map.
+  private readonly registry = new MeshPeerSessionRegistry()
   meshTransport: MeshP2PTransport | null = null
-  private pendingPairing: PairingSasResult | null = null
-  private keyMaterial: RoomKeys | null = null
-  private activeProfile: WebRtcPeerConnectionProfile | null = null
-  private lastSnapshot: PeerConnectionSnapshot
+  private primaryEntry: MeshPeerSessionEntry | null = null
   private removeVisibilityListener: (() => void) | undefined
   private establishedAuthorizedRoute = false
-  private activeLocalProtocolHello: Record<string, unknown> | null = null
 
   constructor(
     mode: AuroraConnectionMode,
@@ -263,13 +266,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     this.credentialStore = credentialStore
     this.visibilityDocument = visibilityDocument
     this.options = options
-    this.lastSnapshot = this.snapshotFromSession(null, profile)
     this.installVisibilityHook()
   }
 
   snapshot(): PeerConnectionSnapshot {
-    this.lastSnapshot = this.snapshotFromSession(this.session?.getSnapshot() ?? null, this.activeProfile ?? this.fixedProfile)
-    return { ...this.lastSnapshot, protocolCapabilities: [...this.lastSnapshot.protocolCapabilities] }
+    const snapshot = this.snapshotForEntry(this.currentEntry())
+    return { ...snapshot, protocolCapabilities: [...snapshot.protocolCapabilities] }
   }
 
   subscribe(listener: (snapshot: PeerConnectionSnapshot) => void): () => void {
@@ -278,22 +280,67 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     return () => this.listeners.delete(listener)
   }
 
+  roster(): MeshPeerRosterSnapshot {
+    // `primary` is the entry the single-peer snapshot and the default mesh
+    // route derive from, so the roster and that derived view never disagree.
+    const primary = this.currentEntry()
+    const peers = this.registry.list().map((entry) => {
+      const context = entry.session?.getSnapshot().authenticatedPeerContext
+      return {
+        peerId: entry.peerId ?? entry.key,
+        primary: entry === primary,
+        ...(entry.profile.nodeName !== undefined ? { nodeName: entry.profile.nodeName } : {}),
+        ...(context !== undefined ? { authenticatedPeerContext: context } : {}),
+        snapshot: this.snapshotForEntry(entry)
+      }
+    })
+    return {
+      peers,
+      ...(primary?.peerId !== undefined ? { primaryPeerId: primary.peerId } : {}),
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void): () => void {
+    this.rosterListeners.add(listener)
+    listener(this.roster())
+    return () => this.rosterListeners.delete(listener)
+  }
+
   async connect(profile: WebRtcPeerConnectionProfile = this.requiredProfile()): Promise<void> {
     await this.disconnect('superseded connection')
+    await this.connectPeer(profile)
+  }
+
+  async connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void> {
     assertSecureRuntime(profile, this.options)
     assertPeerConnectionRuntimeAvailable(this.options)
     const localSignalingId = this.options.randomId?.() ?? randomBrowserId()
+    const entry: MeshPeerSessionEntry = {
+      key: profile.expectedStablePeerId ?? `pending:${localSignalingId}`,
+      peerId: profile.expectedStablePeerId,
+      profile,
+      session: null,
+      signaling: null,
+      bridge: null,
+      keyMaterial: null,
+      localProtocolHello: null,
+      pendingPairing: null
+    }
+    // One stable id, one session: a known identity presenting on a second
+    // transport is refused here rather than quietly superseding the first.
+    this.registry.add(entry)
     if (this.options.initialCredentials) {
       for (const credential of this.options.initialCredentials) {
         await this.credentialStore?.save(credential.verifierPeerId, credential)
       }
     }
-    const keys = await deriveRoomKeysFromProfile(profile, this.options)
-    this.keyMaterial = keys
     try {
+      const keys = await deriveRoomKeysFromProfile(profile, this.options)
+      entry.keyMaterial = keys
       const appLayerE2eeEnabled = resolveAppLayerE2eeEnabled(profile, this.options)
       const localProtocolHello = buildLocalProtocolHello(this.options)
-      this.activeLocalProtocolHello = localProtocolHello
+      entry.localProtocolHello = localProtocolHello
       const crypto: MqttSealOpen = {
         seal: (value) => encodeJsonPayload(value, { key: keys.kSig }).then((out) => out.payload),
         open: (payload) => decodeJsonPayload(payload, { key: keys.kSig, encrypted: true })
@@ -322,7 +369,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
         localStablePeerId: this.options.localStablePeerId ?? localSignalingId,
         localNodeName: this.options.localNodeName ?? 'Aurora thin client',
         onPairing: (pairing) => {
-          this.pendingPairing = pairing
+          entry.pendingPairing = pairing
           this.emit()
         },
         onDiagnostic: (code, message) => this.recordDiagnostic(code, message),
@@ -353,35 +400,36 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       if (profile.expectedStablePeerId !== undefined) sessionOptions.expectedRemoteStableId = profile.expectedStablePeerId
       if (this.options.random !== undefined) sessionOptions.random = this.options.random
       const session = new WebRtcPeerSession(sessionOptions)
-      this.session = session
-      this.signaling = signaling
-      this.activeProfile = profile
-      session.subscribe((snapshot) => this.handleSessionSnapshot(snapshot, profile))
+      entry.session = session
+      entry.signaling = signaling
+      session.subscribe((snapshot) => this.handleSessionSnapshot(entry, snapshot))
       await session.start()
     } catch (error) {
-      this.activeLocalProtocolHello = null
-      this.zeroKeyMaterial()
+      entry.localProtocolHello = null
+      zeroEntryKeyMaterial(entry)
+      if (entry.session === null) this.registry.remove(entry)
       throw error
     }
   }
 
   async confirmPairing(sessionId: string, approval?: PeerPairingApproval): Promise<void> {
-    const pending = this.pendingPairing
-    if (!pending || pending.pairingSessionId !== sessionId) throw new AuroraError({ code: 'validation', message: 'No matching WebRTC pairing session is pending.' })
-    const session = this.session
+    const entry = this.registry.list().find((candidate) => candidate.pendingPairing?.pairingSessionId === sessionId)
+    const pending = entry?.pendingPairing
+    if (!entry || !pending) throw new AuroraError({ code: 'validation', message: 'No matching WebRTC pairing session is pending.' })
+    const session = entry.session
     if (!session) throw new AuroraError({ code: 'unavailable_service', message: 'The WebRTC pairing session is unavailable.' })
     await session.confirmSas(pending.verificationCode, approval)
-    if (this.session === session && this.pendingPairing?.pairingSessionId === sessionId) {
-      this.pendingPairing = null
+    if (entry.session === session && entry.pendingPairing?.pairingSessionId === sessionId) {
+      entry.pendingPairing = null
       this.emit()
     }
   }
 
   async rejectPairing(sessionId: string): Promise<void> {
-    const pending = this.pendingPairing
-    if (!pending || pending.pairingSessionId !== sessionId) throw new AuroraError({ code: 'validation', message: 'No matching WebRTC pairing session is pending.' })
-    this.pendingPairing = null
-    await this.disconnect('pairing rejected')
+    const entry = this.registry.list().find((candidate) => candidate.pendingPairing?.pairingSessionId === sessionId)
+    if (!entry) throw new AuroraError({ code: 'validation', message: 'No matching WebRTC pairing session is pending.' })
+    entry.pendingPairing = null
+    await this.closeEntry(entry, 'pairing rejected')
   }
 
   async getSelectedCandidatePairEvidence() {
@@ -389,39 +437,102 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
   }
 
   async disconnect(reason = 'disconnect'): Promise<void> {
-    this.removeVisibilityListener?.()
-    this.removeVisibilityListener = undefined
-    this.bridge?.close(reason)
-    this.bridge = null
+    this.releaseVisibilityHook()
+    const entries = this.registry.clear()
+    this.primaryEntry = null
     this.meshTransport = null
-    const session = this.session
-    this.session = null
-    const signaling = this.signaling
-    this.signaling = null
-    this.pendingPairing = null
-    this.activeProfile = null
-    this.activeLocalProtocolHello = null
-    this.zeroKeyMaterial()
-    if (session) await session.close()
-    else if (signaling) await signaling.close(reason)
-    this.handleSessionSnapshot(null, this.fixedProfile)
+    const closing = entries.map((entry) => this.detachEntry(entry, reason))
+    for (const close of closing) await close()
+    this.emit()
+  }
+
+  async disconnectPeer(peerId: string, reason = 'disconnect'): Promise<void> {
+    const entry = this.registry.findByPeerId(peerId) ?? this.registry.list().find((candidate) => candidate.key === peerId)
+    if (!entry) return
+    await this.closeEntry(entry, reason)
   }
 
   isAuthorized(): boolean {
-    return this.session?.getSnapshot().authorized === true
+    return this.registry.list().some((entry) => entry.session?.getSnapshot().authorized === true)
   }
 
   hasEstablishedAuthorizedRoute(): boolean {
     return this.establishedAuthorizedRoute
   }
 
+  private async closeEntry(entry: MeshPeerSessionEntry, reason: string): Promise<void> {
+    if (!this.registry.remove(entry)) return
+    if (this.primaryEntry === entry) this.primaryEntry = null
+    const close = this.detachEntry(entry, reason)
+    this.refreshMeshTransport()
+    if (this.registry.size === 0) this.releaseVisibilityHook()
+    await close()
+    this.emit()
+  }
 
-  private zeroKeyMaterial(): void {
-    if (!this.keyMaterial) return
-    zeroBytes(this.keyMaterial.k0)
-    zeroBytes(this.keyMaterial.kSig)
-    zeroBytes(this.keyMaterial.kData)
-    this.keyMaterial = null
+  /**
+   * Drop an entry's transport state synchronously and hand back the async close
+   * so no snapshot emitted while the session shuts down can resurrect it.
+   */
+  private detachEntry(entry: MeshPeerSessionEntry, reason: string): () => Promise<void> {
+    entry.bridge?.close(reason)
+    entry.bridge = null
+    const session = entry.session
+    entry.session = null
+    const signaling = entry.signaling
+    entry.signaling = null
+    entry.pendingPairing = null
+    entry.localProtocolHello = null
+    zeroEntryKeyMaterial(entry)
+    return async () => {
+      if (session) await session.close()
+      else if (signaling) await signaling.close(reason)
+    }
+  }
+
+  private currentEntry(): MeshPeerSessionEntry | null {
+    if (this.primaryEntry && this.registry.has(this.primaryEntry)) return this.primaryEntry
+    const entries = this.registry.list()
+    return entries[entries.length - 1] ?? null
+  }
+
+  /**
+   * Single-peer projection of the registry. The runtime holds one entry per
+   * stable peer id; these accessors read and seed the entry the single-peer
+   * snapshot derives from, so the pre-registry single-peer surface behaves
+   * exactly as it did before. Multi-peer callers use the roster instead.
+   */
+  private get session(): WebRtcPeerSession | null {
+    return this.currentEntry()?.session ?? null
+  }
+
+  private set session(session: WebRtcPeerSession | null) {
+    this.projectedEntry().session = session
+  }
+
+  private get pendingPairing(): PairingSasResult | null {
+    return this.currentEntry()?.pendingPairing ?? null
+  }
+
+  private set pendingPairing(pairing: PairingSasResult | null) {
+    this.projectedEntry().pendingPairing = pairing
+  }
+
+  private projectedEntry(): MeshPeerSessionEntry {
+    const current = this.currentEntry()
+    if (current) return current
+    const profile = this.requiredProfile()
+    return this.registry.add({
+      key: profile.expectedStablePeerId ?? 'pending:primary',
+      peerId: profile.expectedStablePeerId,
+      profile,
+      session: null,
+      signaling: null,
+      bridge: null,
+      keyMaterial: null,
+      localProtocolHello: null,
+      pendingPairing: null
+    })
   }
 
   private requiredProfile(): WebRtcPeerConnectionProfile {
@@ -429,26 +540,43 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     return this.fixedProfile
   }
 
-  private handleSessionSnapshot(snapshot: PeerSessionSnapshot | null, profile: WebRtcPeerConnectionProfile | undefined): void {
-    if (snapshot && ['failed', 'closed', 'idle', 'needs-invite', 'disabled'].includes(snapshot.state)) {
-      this.pendingPairing = null
+  private handleSessionSnapshot(entry: MeshPeerSessionEntry, snapshot: PeerSessionSnapshot | null): void {
+    if (this.registry.has(entry)) {
+      if (snapshot && ['failed', 'closed', 'idle', 'needs-invite', 'disabled'].includes(snapshot.state)) {
+        entry.pendingPairing = null
+      }
+      if (snapshot && snapshot.state === 'reconnecting' && entry.pendingPairing) {
+        this.recordDiagnostic('webrtc_reconnect_active', 'Direct device pairing continues while this connection retries.')
+      }
+      if (snapshot?.remoteStableId !== undefined && entry.peerId !== snapshot.remoteStableId && !this.bindEntryPeerId(entry, snapshot.remoteStableId)) {
+        return
+      }
+      if (snapshot?.authorized && entry.peerId !== undefined && !entry.bridge && entry.session) {
+        this.installAuthorizedBridge(entry)
+      }
     }
-    if (snapshot && snapshot.state === 'reconnecting' && this.pendingPairing) {
-      this.recordDiagnostic('webrtc_reconnect_active', 'Direct device pairing continues while this connection retries.')
-    }
-    if (snapshot?.authorized && profile?.expectedStablePeerId && !this.meshTransport && this.session) {
-      this.installAuthorizedBridge(this.session, profile)
-    }
-    this.lastSnapshot = this.snapshotFromSession(snapshot, profile)
     this.emit()
   }
 
+  /** Returns false when the stable id is already held by another live session. */
+  private bindEntryPeerId(entry: MeshPeerSessionEntry, peerId: string): boolean {
+    try {
+      this.registry.bindPeerId(entry, peerId)
+      return true
+    } catch {
+      this.recordDiagnostic('webrtc_peer_already_connected', 'That device already has a connection here; the second one was refused.')
+      void this.closeEntry(entry, 'stable peer id already connected')
+      return false
+    }
+  }
 
-  private installAuthorizedBridge(session: WebRtcPeerSession, profile: WebRtcPeerConnectionProfile): void {
-    if (!profile.expectedStablePeerId) return
+  private installAuthorizedBridge(entry: MeshPeerSessionEntry): void {
+    const session = entry.session
+    const remotePeerId = entry.peerId
+    if (!session || remotePeerId === undefined) return
     const bridgeOptions = {
       session,
-      remotePeerId: profile.expectedStablePeerId,
+      remotePeerId,
       localPeerRole: this.options.nodeRole === 'mesh-node' ? 'hybrid' as const : 'consumer' as const,
       // Required: buildWebRtcManifestAck binds recipient_projection_evidence to
       // this peer and fails closed without it. The bridge otherwise falls back
@@ -456,21 +584,33 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       // so every projection manifest would be rejected as "recipient unbound".
       ...(this.options.localStablePeerId ? { localPeerId: this.options.localStablePeerId } : {}),
       ...(this.options.peerHost ? { peerHost: this.options.peerHost } : {}),
-      ...(this.activeLocalProtocolHello
-        ? { localProtocolHello: this.activeLocalProtocolHello }
+      ...(entry.localProtocolHello
+        ? { localProtocolHello: entry.localProtocolHello }
         : {})
     }
-    this.bridge = new WebRtcMeshPeerBridge(bridgeOptions)
+    entry.bridge = new WebRtcMeshPeerBridge(bridgeOptions)
+    this.establishedAuthorizedRoute = true
+    this.refreshMeshTransport()
+    this.recordDiagnostic('webrtc_mesh_authorized', 'WebRTC mesh transport authorized')
+  }
+
+  /** Keep one transport pointed at the primary peer while the roster changes. */
+  private refreshMeshTransport(): void {
+    if (this.primaryEntry && this.registry.has(this.primaryEntry) && this.primaryEntry.bridge && this.meshTransport) return
+    const primary = this.registry.list().find((entry) => entry.bridge !== null && entry.peerId !== undefined) ?? null
+    this.primaryEntry = primary
+    if (!primary?.bridge || primary.peerId === undefined) {
+      this.meshTransport = null
+      return
+    }
     const meshOptions = {
-      bridge: this.bridge,
-      defaultPeerId: profile.expectedStablePeerId
+      bridge: primary.bridge,
+      defaultPeerId: primary.peerId
     } as import('../mesh.js').MeshP2PTransportOptions
     if (this.options.routeResolver !== undefined) meshOptions.routeResolver = this.options.routeResolver
     if (this.options.defaultTimeoutMs !== undefined) meshOptions.defaultTimeoutMs = this.options.defaultTimeoutMs
     if (this.options.fallbackPeerIds !== undefined) meshOptions.fallbackPeerIds = this.options.fallbackPeerIds
     this.meshTransport = new MeshP2PTransport(meshOptions)
-    this.establishedAuthorizedRoute = true
-    this.recordDiagnostic('webrtc_mesh_authorized', 'WebRTC mesh transport authorized')
   }
 
   noteFallback(code: string, method: string): void {
@@ -481,8 +621,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     this.recordDiagnostic(code, `WebRTC preferred route unavailable for ${method}`)
   }
 
-  private snapshotFromSession(snapshot: PeerSessionSnapshot | null, profile: WebRtcPeerConnectionProfile | undefined): PeerConnectionSnapshot {
-    const bridgeDiagnostics = this.bridge?.getDiagnostics?.()
+  private snapshotForEntry(entry: MeshPeerSessionEntry | null): PeerConnectionSnapshot {
+    const snapshot = entry?.session?.getSnapshot() ?? null
+    const profile = entry?.profile ?? this.fixedProfile
+    const bridgeDiagnostics = entry?.bridge?.getDiagnostics?.()
+    const signalingSnapshot = entry?.signaling?.snapshot()
+    const pendingPairing = entry?.pendingPairing ?? null
     const lastDiagnostic = this.diagnostics[this.diagnostics.length - 1]
     const visibleDiagnostic = snapshot?.authorized && lastDiagnostic?.code === 'webrtc_peer_not_connected'
       ? [...this.diagnostics].reverse().find((item) => item.code === 'webrtc_mesh_authorized') ?? lastDiagnostic
@@ -495,10 +639,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       connectedSignalingPeerId: snapshot?.remoteSignalingId,
       negotiationRole: snapshot?.role,
       nodeName: profile?.nodeName,
-      selectedSignalingBrokerOrigin: this.signaling?.snapshot().selectedBrokerOrigin,
+      selectedSignalingBrokerOrigin: signalingSnapshot?.selectedBrokerOrigin,
       icePathCategory: snapshot?.icePath ?? 'unknown',
       protocolCapabilities: bridgeDiagnostics?.remoteProtocolCapabilities ?? [],
-      reconnectCount: snapshot?.reconnectAttempts ?? this.signaling?.snapshot().reconnectCount ?? 0,
+      reconnectCount: snapshot?.reconnectAttempts ?? signalingSnapshot?.reconnectCount ?? 0,
       pendingCallCount: bridgeDiagnostics?.pendingCallCount ?? 0,
       pendingStreamCount: bridgeDiagnostics?.pendingStreamCount ?? 0,
       pendingSubscriptionCount: bridgeDiagnostics?.pendingSubscriptionCount ?? 0,
@@ -508,7 +652,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
       receivedFragmentCount: bridgeDiagnostics?.receivedFragmentCount ?? 0,
       lastRedactedError: snapshot?.lastError ? diagnostic('session_error', snapshot.lastError) : visibleDiagnostic,
       updatedAt: new Date().toISOString(),
-      ...(this.pendingPairing ? { pendingPairing: { sessionId: this.pendingPairing.pairingSessionId, verificationCode: this.pendingPairing.verificationCode, remoteStablePeerId: this.pendingPairing.remoteStablePeerId, remoteNodeName: this.pendingPairing.remoteNodeName } } : {})
+      ...(pendingPairing ? { pendingPairing: { sessionId: pendingPairing.pairingSessionId, verificationCode: pendingPairing.verificationCode, remoteStablePeerId: pendingPairing.remoteStablePeerId, remoteNodeName: pendingPairing.remoteNodeName } } : {})
     } as PeerConnectionSnapshot
   }
 
@@ -527,9 +671,29 @@ class WebRtcPeerConnectionController implements PeerConnectionController {
     this.removeVisibilityListener = () => this.visibilityDocument?.removeEventListener('visibilitychange', handler)
   }
 
-  private emit(): void {
-    for (const listener of [...this.listeners]) listener(this.snapshot())
+  private releaseVisibilityHook(): void {
+    this.removeVisibilityListener?.()
+    this.removeVisibilityListener = undefined
   }
+
+  private emit(): void {
+    if (this.listeners.size > 0) {
+      const snapshot = this.snapshot()
+      for (const listener of [...this.listeners]) listener(snapshot)
+    }
+    if (this.rosterListeners.size > 0) {
+      const roster = this.roster()
+      for (const listener of [...this.rosterListeners]) listener(roster)
+    }
+  }
+}
+
+function zeroEntryKeyMaterial(entry: MeshPeerSessionEntry): void {
+  if (!entry.keyMaterial) return
+  zeroBytes(entry.keyMaterial.k0)
+  zeroBytes(entry.keyMaterial.kSig)
+  zeroBytes(entry.keyMaterial.kData)
+  entry.keyMaterial = null
 }
 
 class RuntimeSignalingPort implements PeerSessionSignalingPort {
