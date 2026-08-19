@@ -524,14 +524,14 @@ pub struct PeerRevocationEvent {
 /// Injected rather than assumed. TypeScript reaches for `globalThis.crypto`;
 /// Rust makes the platform binding explicit so the same core runs under WASM,
 /// Tauri and tests.
-pub trait RandomSource {
+pub trait RandomSource: Send + Sync {
     /// Fill `length` bytes.
     fn random_bytes(&self, length: usize) -> Vec<u8>;
 }
 
 impl<F> RandomSource for F
 where
-    F: Fn(usize) -> Vec<u8>,
+    F: Fn(usize) -> Vec<u8> + Send + Sync,
 {
     fn random_bytes(&self, length: usize) -> Vec<u8> {
         self(length)
@@ -539,8 +539,8 @@ where
 }
 
 /// Persistence for the verifier half of inbound credentials.
-#[async_trait(?Send)]
-pub trait InboundCredentialVerifierStore {
+#[async_trait]
+pub trait InboundCredentialVerifierStore: Send {
     /// Read a live verifier, or `None` when absent, expired or revoked.
     async fn get_verifier(
         &self,
@@ -564,8 +564,8 @@ pub trait InboundCredentialVerifierStore {
 }
 
 /// Persistence for grants.
-#[async_trait(?Send)]
-pub trait PeerGrantRepository {
+#[async_trait]
+pub trait PeerGrantRepository: Send {
     /// Write a grant.
     async fn upsert_grant(&mut self, grant: LocalPeerGrantV1) -> AuthorityResult<()>;
     /// Decide whether any live grant covers the request.
@@ -657,8 +657,8 @@ pub struct ReconnectChallengeConsumeResult {
 }
 
 /// The single-use reconnect challenge guard.
-#[async_trait(?Send)]
-pub trait ReconnectChallengeStore {
+#[async_trait]
+pub trait ReconnectChallengeStore: Send {
     /// Mint a challenge for a relationship on a transport.
     async fn issue_challenge(
         &mut self,
@@ -683,15 +683,15 @@ pub trait ReconnectChallengeStore {
 }
 
 /// Where audit rows go.
-#[async_trait(?Send)]
-pub trait PeerAuditSink {
+#[async_trait]
+pub trait PeerAuditSink: Send {
     /// Record one row.
     async fn record(&mut self, record: LocalPeerAuditRecord) -> AuthorityResult<()>;
 }
 
 /// Where revocations go.
-#[async_trait(?Send)]
-pub trait PeerRevocationBroadcaster {
+#[async_trait]
+pub trait PeerRevocationBroadcaster: Send {
     /// Publish one revocation.
     async fn publish(&mut self, event: PeerRevocationEvent) -> AuthorityResult<()>;
 }
@@ -704,7 +704,7 @@ pub trait PeerRevocationBroadcaster {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DenyAllInboundCredentialVerifierStore;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl InboundCredentialVerifierStore for DenyAllInboundCredentialVerifierStore {
     async fn get_verifier(
         &self,
@@ -738,7 +738,7 @@ impl InboundCredentialVerifierStore for DenyAllInboundCredentialVerifierStore {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DenyAllPeerGrantRepository;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerGrantRepository for DenyAllPeerGrantRepository {
     async fn upsert_grant(&mut self, _grant: LocalPeerGrantV1) -> AuthorityResult<()> {
         Ok(())
@@ -771,7 +771,7 @@ impl PeerGrantRepository for DenyAllPeerGrantRepository {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopReconnectChallengeStore;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ReconnectChallengeStore for NoopReconnectChallengeStore {
     async fn issue_challenge(
         &mut self,
@@ -810,7 +810,7 @@ impl ReconnectChallengeStore for NoopReconnectChallengeStore {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopPeerAuditSink;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerAuditSink for NoopPeerAuditSink {
     async fn record(&mut self, _record: LocalPeerAuditRecord) -> AuthorityResult<()> {
         Ok(())
@@ -821,7 +821,7 @@ impl PeerAuditSink for NoopPeerAuditSink {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoopPeerRevocationBroadcaster;
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerRevocationBroadcaster for NoopPeerRevocationBroadcaster {
     async fn publish(&mut self, _event: PeerRevocationEvent) -> AuthorityResult<()> {
         Ok(())
@@ -846,7 +846,7 @@ impl MemoryInboundCredentialVerifierStore {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl InboundCredentialVerifierStore for MemoryInboundCredentialVerifierStore {
     async fn get_verifier(
         &self,
@@ -915,7 +915,7 @@ impl MemoryPeerGrantRepository {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerGrantRepository for MemoryPeerGrantRepository {
     async fn upsert_grant(&mut self, grant: LocalPeerGrantV1) -> AuthorityResult<()> {
         validate_grant(&grant)?;
@@ -1032,7 +1032,7 @@ impl MemoryReconnectChallengeStore {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl ReconnectChallengeStore for MemoryReconnectChallengeStore {
     async fn issue_challenge(
         &mut self,
@@ -1154,7 +1154,7 @@ pub struct MemoryPeerAuditSink {
     pub records: Vec<LocalPeerAuditRecord>,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerAuditSink for MemoryPeerAuditSink {
     async fn record(&mut self, record: LocalPeerAuditRecord) -> AuthorityResult<()> {
         self.records.push(record);
@@ -1169,7 +1169,7 @@ pub struct MemoryPeerRevocationBroadcaster {
     pub events: Vec<PeerRevocationEvent>,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl PeerRevocationBroadcaster for MemoryPeerRevocationBroadcaster {
     async fn publish(&mut self, event: PeerRevocationEvent) -> AuthorityResult<()> {
         self.events.push(event);
@@ -1182,20 +1182,22 @@ impl PeerRevocationBroadcaster for MemoryPeerRevocationBroadcaster {
 // ---------------------------------------------------------------------------
 
 /// Request to mint a reconnect challenge.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct IssueReconnectChallengeRequest {
     /// Who the challenge is for.
     pub identity: PeerRelationshipIdentity,
     /// The transport it is bound to.
     pub transport: ReconnectTransportAttestation,
     /// Issue instant.
+    #[serde(rename = "nowMs")]
     pub now_ms: i64,
 }
 
 /// Request to check a reconnect proof.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct VerifyReconnectProofRequest {
     /// Hex proof presented by the claimant.
+    #[serde(rename = "proofHex")]
     pub proof_hex: String,
     /// The relationship being claimed.
     pub selector: PeerRelationshipSelector,
@@ -1204,6 +1206,7 @@ pub struct VerifyReconnectProofRequest {
     /// The challenge being answered.
     pub challenge: String,
     /// Verification instant.
+    #[serde(rename = "nowMs")]
     pub now_ms: i64,
 }
 

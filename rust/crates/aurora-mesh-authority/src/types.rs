@@ -373,7 +373,7 @@ pub struct PeerHostManifestAuthorityRequest {
 /// The R0 boundary note promises W1 and R3 that this interface is what they
 /// ask through, so its shape is the contract this crate satisfies:
 /// `PeerHostAuthorizationStore` in `peer-host/types.ts`.
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 pub trait PeerHostAuthorizationStore {
     /// May this peer call this method right now?
     async fn authorize(

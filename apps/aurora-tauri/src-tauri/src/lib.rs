@@ -64,6 +64,7 @@ static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
     ) -> *mut aurora_voice_native::IosVoiceSession = ios_voice::aurora_ios_voice_session_new;
 mod local_data_native;
 mod native_voice;
+mod mesh_authority;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
@@ -8663,6 +8664,7 @@ pub fn run() {
         .manage(NativeVoiceState::default())
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
+        .manage(mesh_authority::MeshAuthorityState::default())
         .setup(move |app| {
             #[cfg(desktop)]
             {
@@ -8822,6 +8824,14 @@ pub fn run() {
             aurora_local_data_envelope_encrypt,
             aurora_local_data_envelope_decrypt,
             aurora_local_data_envelope_rotate,
+            mesh_authority::aurora_mesh_authority_hydrate,
+            mesh_authority::aurora_mesh_authority_authorize,
+            mesh_authority::aurora_mesh_authority_snapshot_manifest,
+            mesh_authority::aurora_mesh_authority_issue_reconnect_challenge,
+            mesh_authority::aurora_mesh_authority_verify_reconnect_proof,
+            mesh_authority::aurora_mesh_authority_list_active_grants,
+            mesh_authority::aurora_mesh_authority_replace_grant,
+            mesh_authority::aurora_mesh_authority_revoke_peer_authority,
             aurora_ios_secure_storage_status,
             aurora_ios_voice_credential_set,
             aurora_ios_voice_credential_status,

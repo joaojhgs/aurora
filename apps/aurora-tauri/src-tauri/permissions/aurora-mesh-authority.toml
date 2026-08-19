@@ -1,0 +1,13 @@
+[[permission]]
+identifier = "aurora-mesh-authority"
+description = "Allow the thin shell to ask the Rust mesh authority whether a peer may call a method, to hydrate it from durable storage at session start, and to manage or revoke what a peer is allowed. The authority is keyed by peer identity and holds no transport state; no bearer token or verifier hash crosses this boundary."
+commands.allow = [
+  "aurora_mesh_authority_hydrate",
+  "aurora_mesh_authority_authorize",
+  "aurora_mesh_authority_snapshot_manifest",
+  "aurora_mesh_authority_issue_reconnect_challenge",
+  "aurora_mesh_authority_verify_reconnect_proof",
+  "aurora_mesh_authority_list_active_grants",
+  "aurora_mesh_authority_replace_grant",
+  "aurora_mesh_authority_revoke_peer_authority"
+]

@@ -45,7 +45,7 @@ pub mod store_reason {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DenyAllPeerHostAuthorizationStore;
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl PeerHostAuthorizationStore for DenyAllPeerHostAuthorizationStore {
     async fn authorize(
         &mut self,
@@ -106,7 +106,7 @@ impl SessionPeerHostAuthorizationStore {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
     async fn authorize(
         &mut self,
@@ -221,7 +221,7 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
 }
 
 /// Maps a grant to the product permission labels it implies.
-pub type GrantedPermissionsForGrant = Box<dyn Fn(&LocalPeerGrantV1) -> Vec<String>>;
+pub type GrantedPermissionsForGrant = Box<dyn Fn(&LocalPeerGrantV1) -> Vec<String> + Send + Sync>;
 
 /// Decides through the durable [`PeerAuthorityResolver`].
 ///
@@ -279,7 +279,7 @@ where
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl<V, G, C, A> PeerHostAuthorizationStore for PeerAuthorityHostAuthorizationStore<V, G, C, A>
 where
     V: InboundCredentialVerifierStore,

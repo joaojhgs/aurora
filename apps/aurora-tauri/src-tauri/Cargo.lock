@@ -421,11 +421,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-mesh-authority"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "aurora-contracts",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "aurora-tauri"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
+ "aurora-mesh-authority",
  "aurora-voice-core",
  "aurora-voice-engine",
  "aurora-voice-ios-bridge",
@@ -5315,6 +5331,17 @@ dependencies = [
  "serde",
  "serde_core",
  "typeid",
+]
+
+[[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]

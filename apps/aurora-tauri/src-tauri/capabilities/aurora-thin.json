@@ -16,6 +16,7 @@
     "aurora-thin-peer-credentials",
     "aurora-inbound-verifier-storage",
     "aurora-local-data-storage",
+    "aurora-mesh-authority",
     "aurora-local-data-envelope-crypto",
     "aurora-assistant-provider",
     "aurora-native-webrtc",

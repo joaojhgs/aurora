@@ -940,16 +940,16 @@ async fn a_credential_without_a_grant_authorizes_nothing() {
 /// peer B's.
 #[tokio::test]
 async fn reconnect_challenges_are_single_use_per_peer() {
-    struct Counter(std::cell::Cell<u8>);
+    struct Counter(std::sync::atomic::AtomicU8);
     impl RandomSource for Counter {
         fn random_bytes(&self, length: usize) -> Vec<u8> {
-            let value = self.0.get();
-            self.0.set(value + 1);
+            let value = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             vec![value; length]
         }
     }
 
-    let mut store = MemoryReconnectChallengeStore::new(Box::new(Counter(std::cell::Cell::new(1))));
+    let mut store =
+        MemoryReconnectChallengeStore::new(Box::new(Counter(std::sync::atomic::AtomicU8::new(1))));
     let transport = ReconnectTransportAttestation {
         channel_binding: "b".repeat(64),
         claimant_signaling_peer_id: "sig-a".to_owned(),

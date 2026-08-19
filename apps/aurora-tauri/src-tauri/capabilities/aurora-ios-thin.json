@@ -19,6 +19,7 @@
     "aurora-thin-profile",
     "aurora-thin-peer-credentials",
     "aurora-local-data-storage",
+    "aurora-mesh-authority",
     "aurora-local-data-envelope-crypto",
     "aurora-notifications",
     "aurora-dialogs",

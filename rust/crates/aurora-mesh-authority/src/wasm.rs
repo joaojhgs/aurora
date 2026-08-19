@@ -140,22 +140,11 @@ impl MeshAuthority {
         &mut self,
         request: JsValue,
     ) -> Result<JsValue, JsValue> {
-        #[derive(serde::Deserialize)]
-        struct Request {
-            identity: crate::authority::PeerRelationshipIdentity,
-            transport: crate::authority::ReconnectTransportAttestation,
-            #[serde(rename = "nowMs")]
-            now_ms: i64,
-        }
-        let request: Request = from_js(request)?;
+        let request: IssueReconnectChallengeRequest = from_js(request)?;
         let record = self
             .store
             .resolver_mut()
-            .issue_reconnect_challenge(&IssueReconnectChallengeRequest {
-                identity: request.identity,
-                transport: request.transport,
-                now_ms: request.now_ms,
-            })
+            .issue_reconnect_challenge(&request)
             .await
             .map_err(to_error)?;
         to_js(&record)
@@ -164,27 +153,11 @@ impl MeshAuthority {
     /// Check a reconnect proof and, on success, mint the authenticated context.
     #[wasm_bindgen(js_name = verifyReconnectProof)]
     pub async fn verify_reconnect_proof(&mut self, request: JsValue) -> Result<JsValue, JsValue> {
-        #[derive(serde::Deserialize)]
-        struct Request {
-            #[serde(rename = "proofHex")]
-            proof_hex: String,
-            selector: PeerRelationshipSelector,
-            transport: crate::authority::ReconnectTransportAttestation,
-            challenge: String,
-            #[serde(rename = "nowMs")]
-            now_ms: i64,
-        }
-        let request: Request = from_js(request)?;
+        let request: VerifyReconnectProofRequest = from_js(request)?;
         let result = self
             .store
             .resolver_mut()
-            .verify_reconnect_proof(&VerifyReconnectProofRequest {
-                proof_hex: request.proof_hex,
-                selector: request.selector,
-                transport: request.transport,
-                challenge: request.challenge,
-                now_ms: request.now_ms,
-            })
+            .verify_reconnect_proof(&request)
             .await
             .map_err(to_error)?;
         to_js(&result)

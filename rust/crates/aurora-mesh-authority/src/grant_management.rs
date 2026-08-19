@@ -268,14 +268,14 @@ pub struct PeerGrantSummary {
 }
 
 /// Mints grant identifiers.
-pub trait GrantIdSource {
+pub trait GrantIdSource: Send + Sync {
     /// Produce a fresh identifier, or `None` when no secure source exists.
     fn next_grant_id(&self) -> Option<String>;
 }
 
 impl<F> GrantIdSource for F
 where
-    F: Fn() -> Option<String>,
+    F: Fn() -> Option<String> + Send + Sync,
 {
     fn next_grant_id(&self) -> Option<String> {
         self()
