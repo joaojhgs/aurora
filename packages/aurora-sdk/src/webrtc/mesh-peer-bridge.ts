@@ -1166,9 +1166,10 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
    *
    * That is the intended shape for the remote-console role, where the shell
    * talks to its home node over WebRTC just as it would over HTTP. For the
-   * mesh-node role the shell should redirect between peers the way the Python
-   * RoutingTable does; until a per-peer session registry exists, this bridge
-   * refuses cross-peer routing instead of silently ignoring it, and
+   * mesh-node role the shell redirects between peers through
+   * `MeshPeerBridgeRouter`, which owns one bridge per peer in the session
+   * registry and dispatches on `request.peerId`. This bridge still refuses
+   * cross-peer routing instead of silently ignoring it, and
    * MeshRpcRequest.candidates is carried but never consulted.
    */
   private assertPeer(peerId: string): void {

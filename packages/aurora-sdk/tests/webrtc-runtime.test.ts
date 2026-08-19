@@ -2402,3 +2402,74 @@ describe('browser WebRTC runtime peer registry', {
     await harness.runtime.close()
   })
 })
+
+import { PEER_NOT_REGISTERED_REASON } from '../src/webrtc/mesh-bridge-router.js'
+
+async function waitForCallFrame(channel: RuntimeFakeChannel, method: string): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+  for (;;) {
+    for (let index = 0; index < channel.sent.length; index += 1) {
+      const frame = await decodeSent(channel, index)
+      if (frame.type === 'call' && frame.method === method) return frame
+    }
+    if (Date.now() > deadline) throw new Error(`No ${method} call frame was sent`)
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+}
+
+describe('browser WebRTC runtime mesh bridge router', {
+  timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
+}, () => {
+  it('answers a request naming the second peer on that peer while the first stays connected', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    const alpha = await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const beta = await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+    const alphaFrameCount = alpha.sent.length
+
+    const mesh = harness.runtime.meshTransport
+    expect(mesh).toBeDefined()
+    const pending = mesh!.request<{ answered_by: string }>({
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: { selector: { peer_id: 'peer-beta' } }
+    })
+    const call = await waitForCallFrame(beta, 'Gateway.GetRegistry')
+    beta.receive(await encodeInbound({ type: 'result', id: call.id, correlation_id: call.id, result: { answered_by: 'peer-beta' } }))
+
+    const response = await pending
+    expect(response.data).toEqual({ answered_by: 'peer-beta' })
+    expect(response.audit).toMatchObject({ targetPeerId: 'peer-beta', transport: 'mesh' })
+    // The default route still points at the primary, and peer A saw no traffic.
+    expect(alpha.sent).toHaveLength(alphaFrameCount)
+
+    await harness.runtime.close()
+  })
+
+  it('fails an unroutable peer id with a typed registry error rather than a bare throw', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+
+    const mesh = harness.runtime.meshTransport
+    expect(mesh).toBeDefined()
+    await expect(mesh!.request({
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: { selector: { peer_id: 'peer-ghost' } }
+    })).rejects.toMatchObject({
+      code: 'unavailable_service',
+      detail: { reason_code: PEER_NOT_REGISTERED_REASON, peer_id: 'peer-ghost', reachable_peer_ids: ['peer-alpha'] }
+    })
+    await expect(mesh!.getManifest('peer-ghost')).rejects.toMatchObject({
+      code: 'unavailable_service',
+      detail: { reason_code: PEER_NOT_REGISTERED_REASON, peer_id: 'peer-ghost' }
+    })
+
+    await harness.runtime.close()
+  })
+})

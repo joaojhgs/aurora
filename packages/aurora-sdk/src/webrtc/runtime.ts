@@ -55,6 +55,7 @@ import {
   type SignalingMessage
 } from './peer-session.js'
 import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
+import { MeshPeerBridgeRouter } from './mesh-bridge-router.js'
 import {
   MeshPeerSessionRegistry,
   type MeshPeerRegistryController,
@@ -249,6 +250,14 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   // One entry per stable peer id: session, signaling port, bridge, pairing
   // state. The single-peer snapshot below is a derived view over this map.
   private readonly registry = new MeshPeerSessionRegistry()
+  // Dispatches every mesh RPC on the peer id the caller named, so one transport
+  // reaches the whole registry instead of a single `defaultPeerId`.
+  private readonly bridgeRouter = new MeshPeerBridgeRouter({
+    resolve: (peerId) => this.registry.findByPeerId(peerId)?.bridge ?? undefined,
+    reachablePeerIds: () => this.registry.list().flatMap(
+      (entry) => (entry.bridge !== null && entry.peerId !== undefined ? [entry.peerId] : [])
+    )
+  })
   meshTransport: MeshP2PTransport | null = null
   private primaryEntry: MeshPeerSessionEntry | null = null
   private removeVisibilityListener: (() => void) | undefined
@@ -604,7 +613,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       return
     }
     const meshOptions = {
-      bridge: primary.bridge,
+      bridge: this.bridgeRouter,
       defaultPeerId: primary.peerId
     } as import('../mesh.js').MeshP2PTransportOptions
     if (this.options.routeResolver !== undefined) meshOptions.routeResolver = this.options.routeResolver

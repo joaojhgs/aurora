@@ -214,6 +214,13 @@ export type {
 
 
 export {
+  MeshPeerBridgeRouter,
+  PEER_NOT_REGISTERED_REASON,
+  peerNotRegisteredError
+} from './mesh-bridge-router.js'
+export type { MeshPeerBridgeRouterOptions } from './mesh-bridge-router.js'
+
+export {
   MeshPeerSessionRegistry,
   PEER_ALREADY_REGISTERED_REASON,
   peerAlreadyRegisteredError
