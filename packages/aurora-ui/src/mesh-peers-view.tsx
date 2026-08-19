@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '#components/ui/tabs'
 import { Textarea } from '#components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '#components/ui/toggle-group'
 import { PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
-import { decodeMeshInvite, encodeMeshInviteUrl, meshInviteSummary } from './mesh-invite'
+import { decodeMeshInvite, encodeMeshInviteUrl, meshInviteSummary, MESH_INVITE_VERSION_V2 } from './mesh-invite'
 import {
   getAuroraSurfaceProfile,
   runtimeModeFromTransportKind,
@@ -3030,9 +3030,9 @@ function ConnectPeerDialog({ open, inviteUrl, inviteReadiness, inviteImport, ini
                       </Button>
                     ) : null}
                   </div>
-                  <Textarea id="mesh-join-invite" className="min-h-16 break-all font-mono text-[11px]" placeholder="aurora://mesh/invite?i=amv1.…" value={joinText} disabled={inviteImport.pending} onChange={(event) => setJoinText(event.currentTarget.value.trim())} />
+                  <Textarea id="mesh-join-invite" className="min-h-16 break-all font-mono text-[11px]" placeholder="aurora://mesh/invite?i=amv2.…" value={joinText} disabled={inviteImport.pending} onChange={(event) => setJoinText(event.currentTarget.value.trim())} />
                   {scanError ? <p className="text-sm text-destructive">{meshSafeErrorTitle(scanError)}</p> : null}
-                  {joinText && !joinInvite ? <p className="text-sm text-muted-foreground">Not a recognizable Aurora mesh invite yet. Paste the full link or the amv1 token.</p> : null}
+                  {joinText && !joinInvite ? <p className="text-sm text-muted-foreground">Not a recognizable Aurora mesh invite yet. Paste the full invite link or the invite code.</p> : null}
                 </div>
                 {joinSummary ? (
                   <div className="grid gap-2 sm:grid-cols-3">
@@ -3421,10 +3421,14 @@ export function buildMeshInvitePayload(snapshot: MeshPeersSnapshot): JsonObject 
   if (!inviteConfig) throw new Error('Admin-gated mesh invite credentials are unavailable.')
   const payload: JsonObject = {
     kind: 'aurora.mesh.invite',
-    version: 1,
+    version: MESH_INVITE_VERSION_V2,
     generated_at: new Date().toISOString(),
+    // The invite is for the mesh, not for one device. `origin_peer_id` names the
+    // device that shared it so Connect can pre-select it; it does not restrict
+    // which devices the invite can reach. Older `amv1` invites carried this as
+    // `node.peer_id`, which did restrict it, and is read as a hint on decode.
+    origin_peer_id: snapshot.localPeerId,
     node: {
-      peer_id: snapshot.localPeerId,
       node_name: configString(fields, 'services.gateway.mesh_network.node_name') || snapshot.localNodeName,
     },
     mesh: {

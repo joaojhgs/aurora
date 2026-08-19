@@ -14,7 +14,11 @@ from typing import Any
 WEBRTC_THIN_PROTOCOL_VERSION = 1
 WEBRTC_THIN_CAPABILITY_VERSION = 1
 PAIRING_PROTOCOL_VERSION = 2
-INVITE_FORMAT_VERSION = "amv1"
+# The invite generation this build emits.
+INVITE_FORMAT_VERSION = "amv2"
+# Every invite generation that is still decoded.  Decoding stays wider than
+# emitting, permanently: ``amv1`` links already in the wild must keep opening.
+SUPPORTED_INVITE_FORMAT_VERSIONS = ("amv1", "amv2")
 DATA_CHANNEL_LABEL = "aurora-rpc"
 
 SCRYPT_PARAMETERS = MappingProxyType(
@@ -105,6 +109,7 @@ WEBRTC_THIN_PROTOCOL_CAPABILITIES = MappingProxyType(
         "capability_version": WEBRTC_THIN_CAPABILITY_VERSION,
         "pairing_protocol_version": PAIRING_PROTOCOL_VERSION,
         "invite_format": INVITE_FORMAT_VERSION,
+        "supported_invite_formats": list(SUPPORTED_INVITE_FORMAT_VERSIONS),
         "data_channel_label": DATA_CHANNEL_LABEL,
         "signaling": {
             "mqtt_v5": True,

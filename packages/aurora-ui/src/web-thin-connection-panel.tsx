@@ -684,7 +684,7 @@ export function HomeNodeConnectionPanel({
             id="webthin-invite"
             value={inviteText}
             onChange={(event) => setInviteText(event.currentTarget.value)}
-            placeholder="Paste aurora://mesh/invite?... or amv1.…"
+            placeholder="Paste aurora://mesh/invite?... or amv2.…"
             rows={4}
             spellCheck={false}
             className="aui-webthin-invite-textarea font-mono text-xs"

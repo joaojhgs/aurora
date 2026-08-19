@@ -1,7 +1,8 @@
 import { extractMeshInviteToken, getAuroraSurfaceProfile } from '@aurora/ui'
 
 /**
- * Deep-link and QR-scan glue for mesh invites (`aurora://mesh/invite?i=amv1.…`).
+ * Deep-link and QR-scan glue for mesh invites (`aurora://mesh/invite?i=amv2.…`, and the
+ * older `amv1.` generation, which stays decodable forever).
  *
  * Both Tauri plugins are imported dynamically so the same bundle keeps working in the
  * browser/mock shells where the Tauri IPC bridge is absent.

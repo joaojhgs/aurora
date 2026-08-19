@@ -552,8 +552,39 @@ def _invite_vector() -> dict[str, Any]:
         },
         "pairing": {"code": "123456", "expires_at": "2026-07-25T00:10:00Z"},
     }
+    return _encode_invite(payload, "amv1")
+
+
+def _invite_vector_v2() -> dict[str, Any]:
+    """The mesh-wide invite.
+
+    ``amv1`` named one device in ``node.peer_id`` and the runtime bound a session to
+    exactly that peer.  ``amv2`` carries the room, the brokers, the room secret and an
+    ``origin_peer_id`` naming the device that issued the invite: a pre-selection in
+    Connect, not a restriction.
+    """
+
+    payload = {
+        "kind": "aurora.mesh.invite",
+        "version": 2,
+        "generated_at": "2026-07-25T00:00:00Z",
+        "origin_peer_id": "stable-offer",
+        "node": {"node_name": "Fixture Offerer"},
+        "signaling": {
+            "provider": "mqtt",
+            "mqtt_brokers": ["wss://mqtt.example.test/mqtt"],
+            "app_id": "aurora-fixture",
+            "room": "lab-room",
+            "room_password": "synthetic-fixture-password",
+        },
+        "pairing": {"code": "123456", "expires_at": "2026-07-25T00:10:00Z"},
+    }
+    return _encode_invite(payload, "amv2")
+
+
+def _encode_invite(payload: dict[str, Any], prefix: str) -> dict[str, Any]:
     invite_json = _canonical_json(payload)
-    token = "amv1." + _b64url(invite_json.encode("utf-8"))
+    token = f"{prefix}." + _b64url(invite_json.encode("utf-8"))
     return {
         "payload": payload,
         "json": invite_json,
@@ -599,6 +630,7 @@ def build_fixture() -> dict[str, Any]:
         "rpc_frames": _rpc_vectors(),
         "peer_protocol": _peer_protocol_vectors(),
         "invite": _invite_vector(),
+        "invite_v2": _invite_vector_v2(),
     }
 
 

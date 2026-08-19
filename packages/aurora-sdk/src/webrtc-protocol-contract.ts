@@ -8,7 +8,13 @@
 export const WEBRTC_THIN_PROTOCOL_VERSION = 1 as const
 export const WEBRTC_THIN_CAPABILITY_VERSION = 1 as const
 export const PAIRING_PROTOCOL_VERSION = 2 as const
-export const INVITE_FORMAT_VERSION = 'amv1' as const
+/** The invite generation this build emits. */
+export const INVITE_FORMAT_VERSION = 'amv2' as const
+/**
+ * Every invite generation that is still decoded. Decoding stays wider than emitting,
+ * permanently: `amv1` links already in the wild must keep opening.
+ */
+export const SUPPORTED_INVITE_FORMAT_VERSIONS = Object.freeze(['amv1', 'amv2'] as const)
 export const DATA_CHANNEL_LABEL = 'aurora-rpc' as const
 
 export const SCRYPT_PARAMETERS = Object.freeze({
@@ -72,6 +78,7 @@ export const WEBRTC_THIN_PROTOCOL_CAPABILITIES = Object.freeze({
   capabilityVersion: WEBRTC_THIN_CAPABILITY_VERSION,
   pairingProtocolVersion: PAIRING_PROTOCOL_VERSION,
   inviteFormat: INVITE_FORMAT_VERSION,
+  supportedInviteFormats: SUPPORTED_INVITE_FORMAT_VERSIONS,
   dataChannelLabel: DATA_CHANNEL_LABEL,
   signaling: Object.freeze({
     mqttV5: true,
