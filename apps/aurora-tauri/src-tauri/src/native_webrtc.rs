@@ -4,10 +4,65 @@ use tauri::{AppHandle, State};
 
 const NATIVE_WEBRTC_EVENT: &str = "aurora://native-webrtc";
 
+/// Largest single data-channel message SCTP will carry here.
+///
+/// Measured on the interop lane: 65,535 round-trips, 65,536 sends but never
+/// comes back, 131,072 fails outright. Aurora fragments at 16 KB, so its own
+/// traffic sits far below this; the ceiling is the guard for anything that
+/// reaches the channel without going through fragmentation, which would
+/// otherwise disappear instead of failing.
+///
+/// `apps/aurora-tauri/src/native-webrtc.ts` carries the same number and rejects
+/// before the IPC hop, so this is the backstop rather than the only check.
+pub const NATIVE_WEBRTC_MAX_MESSAGE_BYTES: usize = 65_535;
+
+/// Typed failures from the data-channel send path.
+///
+/// Serialized to the webview as `{ "code": ... }` so a caller can branch on the
+/// cause rather than matching on a message that is free to be reworded.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, thiserror::Error)]
+#[serde(
+    tag = "code",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NativeWebRtcSendError {
+    #[error(
+        "native WebRTC message of {byte_length} bytes exceeds the \
+         {max_byte_length}-byte single-message ceiling"
+    )]
+    MessageTooLarge {
+        byte_length: usize,
+        max_byte_length: usize,
+    },
+    #[error("native WebRTC binary payload is not valid base64")]
+    InvalidBase64Payload,
+    #[error("native WebRTC data channel is unavailable")]
+    ChannelUnavailable,
+    /// Produced only by the not-compiled-in command arm, so on any platform that
+    /// does compile the transport nothing constructs it. It stays in the enum
+    /// regardless: the webview sees one error shape everywhere.
+    #[cfg_attr(aurora_native_webrtc, allow(dead_code))]
+    #[error("native WebRTC transport is not compiled in for this platform")]
+    NotSupported,
+}
+
+/// Rejects a message the transport cannot carry, before it is handed to SCTP.
+#[cfg_attr(not(aurora_native_webrtc), allow(dead_code))]
+fn ensure_within_message_ceiling(byte_length: usize) -> Result<(), NativeWebRtcSendError> {
+    if byte_length > NATIVE_WEBRTC_MAX_MESSAGE_BYTES {
+        return Err(NativeWebRtcSendError::MessageTooLarge {
+            byte_length,
+            max_byte_length: NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
+        });
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 pub struct NativeWebRtcState {
-    #[cfg(target_os = "linux")]
-    inner: std::sync::Arc<linux::NativeWebRtcStore>,
+    #[cfg(aurora_native_webrtc)]
+    inner: std::sync::Arc<native::NativeWebRtcStore>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,14 +224,14 @@ pub async fn aurora_native_webrtc_create(
     state: State<'_, NativeWebRtcState>,
     request: NativeWebRtcCreateRequest,
 ) -> Result<NativeWebRtcCreateResponse, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::create_peer_connection(app, &state.inner, request).await;
+        return native::create_peer_connection(app, &state.inner, request).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (app, state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -185,14 +240,14 @@ pub async fn aurora_native_webrtc_create_offer(
     state: State<'_, NativeWebRtcState>,
     request: NativePeerIdRequest,
 ) -> Result<NativeSessionDescription, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::create_offer(&state.inner, request.peer_connection_id).await;
+        return native::create_offer(&state.inner, request.peer_connection_id).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -201,14 +256,14 @@ pub async fn aurora_native_webrtc_create_answer(
     state: State<'_, NativeWebRtcState>,
     request: NativePeerIdRequest,
 ) -> Result<NativeSessionDescription, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::create_answer(&state.inner, request.peer_connection_id).await;
+        return native::create_answer(&state.inner, request.peer_connection_id).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -217,19 +272,19 @@ pub async fn aurora_native_webrtc_set_local_description(
     state: State<'_, NativeWebRtcState>,
     request: NativeDescriptionRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::set_local_description(
+        return native::set_local_description(
             &state.inner,
             request.peer_connection_id,
             request.description,
         )
         .await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -238,19 +293,19 @@ pub async fn aurora_native_webrtc_set_remote_description(
     state: State<'_, NativeWebRtcState>,
     request: NativeDescriptionRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::set_remote_description(
+        return native::set_remote_description(
             &state.inner,
             request.peer_connection_id,
             request.description,
         )
         .await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -259,19 +314,19 @@ pub async fn aurora_native_webrtc_add_ice_candidate(
     state: State<'_, NativeWebRtcState>,
     request: NativeIceCandidateRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::add_ice_candidate(
+        return native::add_ice_candidate(
             &state.inner,
             request.peer_connection_id,
             request.candidate,
         )
         .await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -281,14 +336,14 @@ pub async fn aurora_native_webrtc_create_data_channel(
     state: State<'_, NativeWebRtcState>,
     request: NativeCreateDataChannelRequest,
 ) -> Result<NativeDataChannelResponse, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::create_data_channel(app, &state.inner, request).await;
+        return native::create_data_channel(app, &state.inner, request).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (app, state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -297,15 +352,15 @@ pub async fn aurora_native_webrtc_data_channel_send(
     app: AppHandle,
     state: State<'_, NativeWebRtcState>,
     request: NativeDataChannelSendRequest,
-) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+) -> Result<(), NativeWebRtcSendError> {
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::send_data_channel(app, &state.inner, request).await;
+        return native::send_data_channel(app, &state.inner, request).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (app, state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err(NativeWebRtcSendError::NotSupported)
     }
 }
 
@@ -314,14 +369,14 @@ pub async fn aurora_native_webrtc_data_channel_close(
     state: State<'_, NativeWebRtcState>,
     request: NativeDataChannelIdRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::close_data_channel(&state.inner, request.data_channel_id).await;
+        return native::close_data_channel(&state.inner, request.data_channel_id).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -330,19 +385,19 @@ pub async fn aurora_native_webrtc_set_data_channel_buffered_amount_low_threshold
     state: State<'_, NativeWebRtcState>,
     request: NativeDataChannelBufferedAmountLowThresholdRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::set_data_channel_buffered_amount_low_threshold(
+        return native::set_data_channel_buffered_amount_low_threshold(
             &state.inner,
             request.data_channel_id,
             request.buffered_amount_low_threshold,
         )
         .await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -351,14 +406,14 @@ pub async fn aurora_native_webrtc_get_stats(
     state: State<'_, NativeWebRtcState>,
     request: NativePeerIdRequest,
 ) -> Result<Value, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::get_stats(&state.inner, request.peer_connection_id).await;
+        return native::get_stats(&state.inner, request.peer_connection_id).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
@@ -367,23 +422,24 @@ pub async fn aurora_native_webrtc_close(
     state: State<'_, NativeWebRtcState>,
     request: NativePeerIdRequest,
 ) -> Result<(), String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(aurora_native_webrtc)]
     {
-        return linux::close_peer_connection(&state.inner, request.peer_connection_id).await;
+        return native::close_peer_connection(&state.inner, request.peer_connection_id).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (state, request);
-        Err("native WebRTC fallback is only available on Linux".to_string())
+        Err("native WebRTC transport is not compiled in for this platform".to_string())
     }
 }
 
-#[cfg(target_os = "linux")]
-mod linux {
+#[cfg(aurora_native_webrtc)]
+mod native {
     use super::{
-        NativeCreateDataChannelRequest, NativeDataChannelResponse, NativeDataChannelSendRequest,
-        NativeIceCandidate, NativeSessionDescription, NativeWebRtcCreateRequest,
-        NativeWebRtcCreateResponse, NativeWebRtcEventPayload, NATIVE_WEBRTC_EVENT,
+        ensure_within_message_ceiling, NativeCreateDataChannelRequest, NativeDataChannelResponse,
+        NativeDataChannelSendRequest, NativeIceCandidate, NativeSessionDescription,
+        NativeWebRtcCreateRequest, NativeWebRtcCreateResponse, NativeWebRtcEventPayload,
+        NativeWebRtcSendError, NATIVE_WEBRTC_EVENT,
     };
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
     use bytes::Bytes;
@@ -566,18 +622,26 @@ mod linux {
         app: AppHandle,
         store: &Arc<NativeWebRtcStore>,
         request: NativeDataChannelSendRequest,
-    ) -> Result<(), String> {
+    ) -> Result<(), NativeWebRtcSendError> {
         let (peer_connection_id, channel, send_lock) =
-            data_channel_with_send_lock(store, request.data_channel_id).await?;
+            data_channel_with_send_lock(store, request.data_channel_id)
+                .await
+                .map_err(|_| NativeWebRtcSendError::ChannelUnavailable)?;
         let payload = if request.binary {
             NativeSendPayload::Binary(
                 BASE64
                     .decode(request.payload.as_bytes())
-                    .map_err(|_| "native WebRTC binary payload is not valid base64".to_string())?,
+                    .map_err(|_| NativeWebRtcSendError::InvalidBase64Payload)?,
             )
         } else {
             NativeSendPayload::Text(request.payload)
         };
+        // Decoded length, not the base64 length: the ceiling is what SCTP will
+        // carry, and an oversize message otherwise leaves without ever arriving.
+        ensure_within_message_ceiling(match &payload {
+            NativeSendPayload::Binary(bytes) => bytes.len(),
+            NativeSendPayload::Text(text) => text.len(),
+        })?;
         let data_channel_id = request.data_channel_id;
         tauri::async_runtime::spawn(async move {
             let _send_guard = send_lock.lock().await;
@@ -1127,5 +1191,85 @@ mod linux {
             assert!(!serialized.contains("192.0.2.10"));
             assert!(!serialized.contains("49152"));
         }
+    }
+}
+
+#[cfg(test)]
+mod message_ceiling_tests {
+    use super::{
+        ensure_within_message_ceiling, NativeWebRtcSendError, NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn the_ceiling_is_the_measured_one() {
+        // 65,535 round-trips on the interop lane; 65,536 does not. Changing this
+        // number means re-running scripts/webrtc_native_interop.sh, not guessing.
+        assert_eq!(NATIVE_WEBRTC_MAX_MESSAGE_BYTES, 65_535);
+    }
+
+    #[test]
+    fn a_message_at_the_ceiling_is_accepted() {
+        assert_eq!(ensure_within_message_ceiling(65_535), Ok(()));
+    }
+
+    #[test]
+    fn a_message_over_the_ceiling_is_rejected_with_the_typed_error() {
+        assert_eq!(
+            ensure_within_message_ceiling(65_536),
+            Err(NativeWebRtcSendError::MessageTooLarge {
+                byte_length: 65_536,
+                max_byte_length: 65_535,
+            }),
+        );
+    }
+
+    #[test]
+    fn aurora_fragment_sized_traffic_stays_well_clear() {
+        // fragment_payload_bytes is 16 KB, so nothing that goes through
+        // fragmentation can reach the ceiling.
+        assert_eq!(ensure_within_message_ceiling(16 * 1024), Ok(()));
+    }
+
+    #[test]
+    fn the_rejection_reaches_the_webview_as_a_branchable_code() {
+        let error = ensure_within_message_ceiling(131_072)
+            .expect_err("a 131,072-byte message must not be accepted");
+        assert_eq!(
+            serde_json::to_value(&error).expect("send error should serialize"),
+            json!({
+                "code": "messageTooLarge",
+                "byteLength": 131_072,
+                "maxByteLength": 65_535
+            }),
+        );
+    }
+
+    #[test]
+    fn every_send_failure_is_distinguishable_by_code() {
+        let codes = [
+            NativeWebRtcSendError::MessageTooLarge {
+                byte_length: 65_536,
+                max_byte_length: 65_535,
+            },
+            NativeWebRtcSendError::InvalidBase64Payload,
+            NativeWebRtcSendError::ChannelUnavailable,
+            NativeWebRtcSendError::NotSupported,
+        ]
+        .map(|error| {
+            serde_json::to_value(&error).expect("send error should serialize")["code"]
+                .as_str()
+                .expect("every variant should carry a code")
+                .to_string()
+        });
+        assert_eq!(
+            codes.to_vec(),
+            vec![
+                "messageTooLarge",
+                "invalidBase64Payload",
+                "channelUnavailable",
+                "notSupported",
+            ],
+        );
     }
 }

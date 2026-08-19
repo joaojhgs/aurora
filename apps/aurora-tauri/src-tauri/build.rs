@@ -1,4 +1,14 @@
+/// Platforms that compile the native WebRTC transport in `src/native_webrtc.rs`.
+///
+/// Kept identical to the `[target.'cfg(any(...))'.dependencies]` block in
+/// `Cargo.toml` that brings in `webrtc` and `bytes` — a platform in one list and
+/// not the other either loses the transport silently or fails to build. Anything
+/// outside this list still compiles; it gets the not-supported command arms.
+const NATIVE_WEBRTC_TARGET_OS: [&str; 5] = ["linux", "macos", "windows", "android", "ios"];
+
 fn main() {
+    emit_native_webrtc_cfg();
+
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios") {
         link_ios_aurora_native_plugin().expect("failed to link Aurora iOS native plugin");
     }
@@ -76,6 +86,17 @@ fn main() {
         ]),
     ))
     .expect("failed to build Aurora Tauri manifest");
+}
+
+/// Turns the platform list above into the single `aurora_native_webrtc` cfg that
+/// `src/native_webrtc.rs` gates on, so the source carries one readable name
+/// instead of repeating a five-way `target_os` expression at every command.
+fn emit_native_webrtc_cfg() {
+    println!("cargo::rustc-check-cfg=cfg(aurora_native_webrtc)");
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if NATIVE_WEBRTC_TARGET_OS.contains(&target_os.as_str()) {
+        println!("cargo::rustc-cfg=aurora_native_webrtc");
+    }
 }
 
 #[cfg(target_os = "macos")]

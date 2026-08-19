@@ -50,7 +50,11 @@ keyring = { version = "3.6", default-features = false, features = ["apple-native
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+# Native WebRTC transport (src/native_webrtc.rs). Every platform that runs the
+# Rust transport, in one cfg rather than one block per target. build.rs turns the
+# same list into the `aurora_native_webrtc` cfg the source gates on — change the
+# two together.
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios"))'.dependencies]
 bytes = "1"
 webrtc = "0.11.0"
 
