@@ -1055,6 +1055,7 @@ function browserWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
     mesh_node_runtime_v1: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_MESH_NODE_RUNTIME_V1),
     local_tool_provider_v1: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_LOCAL_TOOL_PROVIDER_V1),
     lightweight_orchestrator_v1: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1),
+    native_webrtc_transport_v1: enabledUnlessExplicitlyFalse(process.env.NEXT_PUBLIC_AURORA_NATIVE_WEBRTC_TRANSPORT_V1),
   }
 }
 

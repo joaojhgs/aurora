@@ -319,6 +319,7 @@ function rolloutFlags() {
     mesh_node_runtime_v1: true,
     local_tool_provider_v1: true,
     lightweight_orchestrator_v1: true,
+    native_webrtc_transport_v1: true,
   }
 }
 
