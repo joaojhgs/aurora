@@ -39,6 +39,49 @@ describe('mesh member vs admin interactivity', () => {
     expect(resolveSessionIsAdmin(undefined)).toBe(false)
   })
 
+  it('offers a local forget on the device that owns its node state and warns when only this side was cleared', async () => {
+    const snapshot = await approvedMeshSnapshot()
+    const onForgetPeer = vi.fn()
+    const peer = snapshot.peers[0]!
+    const { container, unmount } = render(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={meshRoute()}
+        sessionIsAdmin={false}
+        ownsLocalNodeState
+        canManageLocalServiceConfiguration={false}
+        onForgetPeer={onForgetPeer}
+        forgetWarning={`${peer.nodeName} was removed from this device only.`}
+        thinPeerSnapshot={offlineThinPeer()}
+      />,
+    )
+
+    const details = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Details',
+    )
+    expect(details).toBeDefined()
+    await act(async () => {
+      details!.click()
+    })
+    await flush()
+
+    const forget = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Forget this device',
+    )
+    expect(forget).toBeDefined()
+    // An offline peer must still be forgettable from this device.
+    expect(forget!.hasAttribute('disabled')).toBe(false)
+    expect(document.body.textContent).toContain('was removed from this device only.')
+
+    await act(async () => {
+      forget!.click()
+    })
+    expect(onForgetPeer).toHaveBeenCalledTimes(1)
+    expect(onForgetPeer.mock.calls[0]![0]).toMatchObject({ peerId: peer.peerId })
+    expect(container).toBeTruthy()
+    unmount()
+  })
+
   it('keeps Mesh in member navigation', () => {
     const snapshot = snapshotFromGraph(
       'http',

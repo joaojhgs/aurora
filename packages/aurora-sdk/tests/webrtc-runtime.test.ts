@@ -2087,4 +2087,61 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     expect(harness.runtime.meshTransport).toBeUndefined()
     await harness.runtime.close()
   })
+
+  it('falls back to fresh pairing when the remote answers a reconnect challenge with a pairing commit', async () => {
+    const verifierStore = new MemoryInboundCredentialVerifierStore()
+    const issuer = new PeerPairingIssuer({
+      verifierStore,
+      randomBytes: () => new Uint8Array(32).fill(15),
+      now: () => 100
+    })
+    await issuer.issue({
+      tokenId: 'token-row-remote',
+      claimantPeerId: 'peer-remote',
+      verifierPeerId: 'local-stable',
+      roomName: 'room-1'
+    })
+    const resolver = new PeerAuthorityResolver({
+      verifierStore,
+      grantRepository: new MemoryPeerGrantRepository(),
+      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(16) })
+    })
+    const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
+
+    await harness.runtime.peer.connect(harness.runtimeProfile)
+    harness.signaling.emit({ channel: 'presence', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'presence', stable_peer_id: 'peer-remote' } })
+    await flushRuntime()
+    harness.signaling.emit({ channel: 'answer', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'answer', sdp: 'answer-sdp' } })
+    await flushRuntime()
+    const channel = harness.pc.channels[0] as RuntimeFakeChannel
+    channel.open()
+    const challenge = await decodeSent(channel, 0)
+    expect(challenge.type).toBe('mesh_auth_challenge_v1')
+    expect(harness.runtime.peer.snapshot().state).toBe('reconnect-authenticating')
+
+    // The remote no longer holds a credential for us, so instead of a proof it
+    // opens a fresh SAS pairing. The saved approval is unusable, but the
+    // transport must survive and re-pair rather than terminate.
+    const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: 'a-local', answererSignalingId: 'z-remote', offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
+    const remote = new PairingSasHandshake({
+      channelBindingSha256: binding,
+      localIdentity: pairingIdentity({ role: 'answerer', stablePeerId: 'peer-remote', signalingPeerId: 'z-remote', nodeName: 'Remote node' }),
+      expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: 'a-local', nodeName: 'Thin Shell' })
+    })
+    channel.receive(await encodeInbound(await remote.commitMessage()))
+    await flushRuntime()
+
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+
+    // The saved approval is unusable, but the transport must survive and
+    // re-pair instead of terminating or stalling in reconnect.
+    const frames = await Promise.all(channel.sent.map((_, index) => decodeSent(channel, index)))
+    expect(frames.map((frame) => frame.type)).toEqual([
+      'mesh_auth_challenge_v1',
+      'pairing_v2_commit',
+      'pairing_v2_reveal'
+    ])
+    expect(harness.runtime.peer.snapshot().state).toBe('awaiting-sas-confirmation')
+    await harness.runtime.close()
+  })
 })

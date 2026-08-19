@@ -1070,6 +1070,46 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.snapshot().diagnostic).toBeUndefined()
   })
 
+  it('forgets a saved device locally and drops the live session', async () => {
+    const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized', expectedStablePeerId: 'peer-remote' })
+    const credentialStore = new MemoryPeerCredentialStore()
+    await credentialStore.save('peer-remote', {
+      tokenId: 'token-row-local',
+      claimantPeerId: 'local-stable',
+      verifierPeerId: 'peer-remote',
+      claimantSignalingPeerId: 'a-local',
+      verifierSignalingPeerId: 'z-remote',
+      roomName: 'room-1',
+      rawBearerToken: 'saved-local-token',
+    })
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false, credentialStore })
+
+    const result = await controller.forgetSavedPeer()
+
+    expect(result).toMatchObject({ peerId: 'peer-remote', cleared: true })
+    expect(result.failureReason).toBeUndefined()
+    expect(await credentialStore.get('peer-remote')).toBeUndefined()
+    expect(peer.disconnectedReasons).toContain('forget saved device')
+  })
+
+  it('forgets a saved device without throwing when the local store cannot remove it', async () => {
+    const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized', expectedStablePeerId: 'peer-remote' })
+    const credentialStore = Object.assign(new MemoryPeerCredentialStore(), {
+      remove: vi.fn(async () => {
+        throw new Error('bearer token secret store is unavailable')
+      }),
+    })
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false, credentialStore })
+
+    const result = await controller.forgetSavedPeer()
+
+    expect(result.cleared).toBe(false)
+    expect(result.failureReason).toBeTruthy()
+    // Product-safe: the stored bearer must never reach a user-visible reason.
+    expect(result.failureReason).not.toMatch(/bearer token secret/i)
+    expect(peer.disconnectedReasons).toContain('forget saved device')
+  })
+
   it('keeps WebRTC peer sessions connected when the thin-shell document is hidden', async () => {
     const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized' })
     const listeners = new Map<string, Set<() => void>>()

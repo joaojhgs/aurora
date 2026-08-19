@@ -106,6 +106,16 @@ export interface BrowserThinRuntimeConfig {
   createDemoClient?: () => AuroraClient
 }
 
+/** Outcome of dropping this surface's saved approval for the connected device. */
+export interface BrowserForgetSavedPeerResult {
+  /** Saved device this surface forgot, when one was configured. */
+  peerId: string | null
+  /** True when the local approval is gone; false leaves the saved approval in place. */
+  cleared: boolean
+  /** Product-safe reason the local approval could not be removed. */
+  failureReason?: string
+}
+
 export type BrowserThinNodeRole = NonNullable<BrowserThinRuntimeConfig['nodeRole']>
 
 export interface BrowserWebThinRuntime {
@@ -601,6 +611,43 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     await this.peer?.disconnect(reason)
     if (reason === 'runtime closed') await this.credentialStore?.close()
     this.emit()
+  }
+
+  /**
+   * Drop this surface's saved approval for the connected device.
+   *
+   * Forgetting is deliberately local-first: the saved credential is removed
+   * even when the other device is unreachable, so a one-sided approval can
+   * never strand this surface in a permanent "connecting" state. Callers ask
+   * the other device to drop its own side separately and treat that as
+   * best-effort; failure there is reported, never thrown.
+   */
+  async forgetSavedPeer(): Promise<BrowserForgetSavedPeerResult> {
+    const peerId = this.peer?.snapshot()?.expectedStablePeerId ?? this.sdkSnapshot?.expectedStablePeerId ?? null
+    let cleared = false
+    let failureReason: string | undefined
+    try {
+      if (peerId) {
+        await this.credentialStore?.remove(peerId)
+      } else {
+        await this.credentialStore?.clear()
+      }
+      cleared = true
+    } catch (error) {
+      failureReason = productDiagnosticFromError(error)
+        ?? 'The saved approval for this device could not be removed.'
+    }
+    // A live session still holds the approval in memory; drop it so the next
+    // attempt starts from a clean pairing instead of replaying a stale proof.
+    try {
+      await this.disconnect('forget saved device')
+    } catch {
+      // Disconnect is a cleanup step; a failure here must not hide the result.
+    }
+    this.emit()
+    const result: BrowserForgetSavedPeerResult = { peerId, cleared }
+    if (failureReason !== undefined) result.failureReason = failureReason
+    return result
   }
 
   markFallback(reason: string): void {

@@ -217,6 +217,11 @@ export interface MeshPeersViewProps {
   onApprovePeer?: (peer: MeshPeerRow) => void
   onDenyPeer?: (peer: MeshPeerRow) => void
   onRemovePeer?: (peer: MeshPeerRow) => void
+  /** Drop this device's saved approval for a peer; remote removal is best effort. */
+  onForgetPeer?: (peer: MeshPeerRow) => void
+  forgetPendingPeerId?: string | null
+  /** Product-safe notice when forgetting only removed this device's side. */
+  forgetWarning?: string | null
   onConfigChange?: (changes: MeshConfigChange[]) => void
   onSaveScopes?: (peer: MeshPeerRow, permissions: string[]) => void
   onScanQr?: () => Promise<string | null>
@@ -615,6 +620,47 @@ export function MeshPeersResource({
     [client.admin, homeServerConfigLocked, loadPeers, permissions, revokeToken],
   )
 
+  const [forgetPendingPeerId, setForgetPendingPeerId] = useState<string | null>(null)
+  const [forgetWarning, setForgetWarning] = useState<string | null>(null)
+
+  const forgetPeer = useCallback(
+    async (peer: MeshPeerRow) => {
+      if (!thinPeer) return
+      setForgetPendingPeerId(peer.peerId)
+      setForgetWarning(null)
+      // Ask the other device to drop its side first, while the connection can
+      // still carry the request. This stays best effort on purpose: an offline
+      // or refusing device must never stop this device from forgetting its own
+      // saved approval, because a one-sided approval is what strands pairing.
+      let remoteForgotten = false
+      if (peer.connectionStatus === 'connected' && peer.removeAction) {
+        try {
+          await client.admin.execute(peer.removeAction)
+          remoteForgotten = true
+        } catch {
+          remoteForgotten = false
+        }
+      }
+      const result = await thinPeer.forgetSavedPeer()
+      setForgetPendingPeerId(null)
+      if (!result.cleared) {
+        setForgetWarning(
+          result.failureReason ?? 'The saved approval for this device could not be removed.',
+        )
+      } else if (!remoteForgotten) {
+        setForgetWarning(
+          `${peer.nodeName} was removed from this device only. It may still list this device until you remove it there as well.`,
+        )
+      }
+      try {
+        await loadPeers()
+      } catch {
+        // The saved approval is already gone; a refresh failure is not a forget failure.
+      }
+    },
+    [client.admin, loadPeers, thinPeer],
+  )
+
   const runConfigChange = useCallback(
     async (changes: MeshConfigChange[]) => {
       if (changes.length === 0) return
@@ -809,6 +855,9 @@ export function MeshPeersResource({
       thinPeerSnapshot={thinPeerSnapshot}
       thinPeerEvidence={thinPeerEvidence}
       thinPeerMutationError={thinPeerMutationError}
+      forgetPendingPeerId={forgetPendingPeerId}
+      forgetWarning={forgetWarning}
+      {...(thinPeer ? { onForgetPeer: (peer: MeshPeerRow) => void forgetPeer(peer) } : {})}
       onConfirmThinPairing={confirmThinPairing}
       onRejectThinPairing={(sessionId) => void rejectThinPairing(sessionId)}
       onReconnectThinPeer={() => void reconnectThinPeer()}
@@ -1455,6 +1504,9 @@ export function MeshPeersView({
   onApprovePeer,
   onDenyPeer,
   onRemovePeer,
+  onForgetPeer,
+  forgetPendingPeerId,
+  forgetWarning,
   onConfigChange,
   onSaveScopes,
   onScanQr,
@@ -1653,6 +1705,9 @@ export function MeshPeersView({
         thinPeerEvidence={thinPeerEvidence}
         open={Boolean(detailsPeer)}
         onOpenChange={(open) => !open && setDetailsPeerId(null)}
+        forgetPending={Boolean(detailsPeer && forgetPendingPeerId === detailsPeer.peerId)}
+        forgetWarning={forgetWarning ?? null}
+        {...(onForgetPeer ? { onForget: onForgetPeer } : {})}
       />
       <RequestReviewDialog
         peer={reviewPeer}
@@ -2328,6 +2383,9 @@ function PeerDetailSheet({
   thinPeerEvidence,
   open,
   onOpenChange,
+  onForget,
+  forgetPending,
+  forgetWarning,
 }: {
   peer: MeshPeerRow | null
   session: MeshLiveSessionRow | null
@@ -2335,6 +2393,9 @@ function PeerDetailSheet({
   thinPeerEvidence: SelectedCandidatePairEvidence | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onForget?: (peer: MeshPeerRow) => void
+  forgetPending?: boolean
+  forgetWarning?: string | null
 }) {
   const directSnapshot = peer && thinPeerSnapshot && (
     thinPeerSnapshot.expectedStablePeerId === peer.peerId
@@ -2426,6 +2487,27 @@ function PeerDetailSheet({
                 <DetailItem label="App compatibility" value={peer.compatibility} />
               </CardContent>
             </Card>
+          </div>
+        ) : null}
+        {onForget && peer ? (
+          <div className="space-y-2 border-t pt-4">
+            <p className="text-sm text-muted-foreground">
+              Forgetting removes this device's saved approval for {peer.nodeName}. The other device is
+              asked to remove its own approval too, but only if it is reachable right now.
+            </p>
+            {forgetWarning ? (
+              <p role="status" className="text-sm font-medium text-amber-600 dark:text-amber-500">
+                {forgetWarning}
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={Boolean(forgetPending)}
+              onClick={() => onForget(peer)}
+            >
+              {forgetPending ? 'Forgetting…' : 'Forget this device'}
+            </Button>
           </div>
         ) : null}
         <SheetFooter>
