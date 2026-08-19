@@ -11,9 +11,9 @@ import type { JsonObject } from '@aurora/client'
  *
  * Two token generations exist, and both are decoded forever:
  *
- * - `amv1.` — the original. Its `node.peer_id` named the single device the invite let you
+ * - `amv1.`: the original. Its `node.peer_id` named the single device the invite let you
  *   reach, which is why the runtime bound a session to exactly that peer.
- * - `amv2.` — current. The invite is for the **mesh**, not for one device: it carries the
+ * - `amv2.`: current. The invite is for the **mesh**, not for one device: it carries the
  *   room, the brokers, the room secret and an `origin_peer_id` naming the device that issued
  *   it. The origin is pre-selected in Connect and is a starting point, not a restriction.
  *
@@ -49,10 +49,10 @@ export interface MeshInvitePairing {
 /**
  * Where an invite's origin device id came from.
  *
- * `origin` — an `amv2.` invite said so explicitly.
- * `legacy-hint` — an `amv1.` invite's `node.peer_id`, which named the only reachable device
+ * `origin`: an `amv2.` invite said so explicitly.
+ * `legacy-hint`: an `amv1.` invite's `node.peer_id`, which named the only reachable device
  *   under the old rules and is now read as a suggestion.
- * `none` — the invite named no device; the mesh is joined without a pre-selection.
+ * `none`: the invite named no device; the mesh is joined without a pre-selection.
  */
 export type MeshInviteOriginSource = 'origin' | 'legacy-hint' | 'none'
 

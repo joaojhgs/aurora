@@ -68,7 +68,7 @@ export interface AuroraSurfaceProfile {
   /**
    * Whether this surface can route WebRTC through Aurora's own Rust transport
    * instead of the WebView's RTCPeerConnection: a native shell on a platform
-   * that compiles the transport in (linux, macos, windows, android, ios — see
+   * that compiles the transport in (linux, macos, windows, android, ios; see
    * `apps/aurora-tauri/src-tauri/Cargo.toml`). A browser tab never has it.
    */
   supportsNativeWebRtcBridge: boolean
