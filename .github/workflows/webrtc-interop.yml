@@ -123,12 +123,16 @@ jobs:
       - name: Install Python peer dependencies
         run: uv sync --frozen
 
-      # Guards the mobile port: the native stack must keep building for Android
-      # even while the transport itself is still Linux-desktop only.
+      # Guards the mobile port: the native stack has to keep building for
+      # Android, which is now a platform the transport actually ships to.
       - name: Check the native WebRTC stack for Android
         run: cargo check --manifest-path tests/e2e/webrtc_native_interop/peer/Cargo.toml --target aarch64-linux-android
 
+      # All three lanes gate. The DTLS named-curve fix that used to keep the
+      # browser lanes informational ships vendored in
+      # apps/aurora-tauri/src-tauri/vendor/webrtc-dtls.
       - name: Run native transport interop lanes
         env:
           AURORA_NATIVE_INTEROP_PYTHON: python3
+          AURORA_NATIVE_INTEROP_REQUIRE_BROWSER: 1
         run: scripts/webrtc_native_interop.sh

@@ -8,11 +8,13 @@
 #   chromium-direct   a browser peer, host candidates
 #   chromium-mdns     a browser peer, default mDNS-obfuscated candidates
 #
-# Browser lanes are informational by default: webrtc-dtls 0.10 aborts the
-# handshake with ErrInvalidNamedCurve against current Chromium because it adopts
-# the peer's first offered curve without checking support. See
-# tests/e2e/webrtc_native_interop/README.md. Set
-# AURORA_NATIVE_INTEROP_REQUIRE_BROWSER=1 once that fix ships to make them gating.
+# CI runs all three as gating with AURORA_NATIVE_INTEROP_REQUIRE_BROWSER=1. The
+# browser lanes used to be informational because webrtc-dtls 0.10 aborted the
+# handshake with ErrInvalidNamedCurve against current Chromium; that fix now
+# ships vendored, so a browser-lane failure here is a real regression rather
+# than the known bug. Leaving the variable unset keeps them informational, which
+# is only useful when bisecting the transport itself. See
+# tests/e2e/webrtc_native_interop/README.md.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
