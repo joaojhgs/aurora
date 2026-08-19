@@ -86,6 +86,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-mesh-authority"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "aurora-contracts",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.19",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "aurora-voice-core"
 version = "0.1.0"
 dependencies = [
