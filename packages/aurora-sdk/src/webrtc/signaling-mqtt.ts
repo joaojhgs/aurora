@@ -1,5 +1,7 @@
 import mqtt from 'mqtt'
 
+import { SignalingSessionAllowlist } from './signaling-allowlist.js'
+
 /** MQTT-over-WebSocket signaling for Aurora WebRTC thin clients.
  *
  * This module is intentionally kept behind the dedicated SDK WebRTC subpath.
@@ -41,6 +43,16 @@ export interface MqttSignalingMessage {
   stablePeerId?: string | undefined
   envelope: MqttSignalingEnvelope
   raw: Uint8Array
+}
+
+/** One peer observed announcing itself in the room. Discovery, not authority. */
+export interface MqttSignalingPresence {
+  signalingPeerId: string
+  stablePeerId?: string | undefined
+  nodeName?: string | undefined
+  /** True when the announcement is a departure rather than an arrival. */
+  departed: boolean
+  envelope: MqttSignalingEnvelope
 }
 
 export interface MqttSignalingDiagnostics {
@@ -108,6 +120,12 @@ export interface MqttSignalingOptions {
   allowInsecureLoopback?: boolean
   expectedStablePeerId?: string
   expectedSignalingPeerId?: string
+  /**
+   * Per-session allowlist deciding which peer may drive this session. Supply the
+   * session's own allowlist to keep discovery and session binding separable; if
+   * it is omitted one is derived from the expected identities above.
+   */
+  allowlist?: SignalingSessionAllowlist
   maxPayloadBytes?: number
   connectTimeoutMs?: number
   reconnect?: {
@@ -232,7 +250,9 @@ export class MqttWebSocketSignalingClient {
   readonly signalingPeerId: string
   private readonly options: MqttSignalingOptions
   private readonly root: string
+  readonly allowlist: SignalingSessionAllowlist
   private readonly handlers = new Set<(message: MqttSignalingMessage) => void | Promise<void>>()
+  private readonly presenceObservers = new Set<(presence: MqttSignalingPresence) => void>()
   private readonly diagnosticsState: MqttSignalingDiagnostics = { attempts: [], reconnectCount: 0 }
   private client: MqttClientLike | null = null
   private room: MqttSignalingRoom | undefined
@@ -248,6 +268,10 @@ export class MqttWebSocketSignalingClient {
     this.options = options
     this.root = options.topicRoot ?? DEFAULT_TOPIC_ROOT
     this.signalingPeerId = options.randomId?.() ?? randomSignalingPeerId()
+    this.allowlist = options.allowlist ?? new SignalingSessionAllowlist({
+      expectedStablePeerId: options.expectedStablePeerId,
+      expectedSignalingPeerId: options.expectedSignalingPeerId
+    })
   }
 
   snapshot(): MqttSignalingClientSnapshot {
@@ -275,6 +299,16 @@ export class MqttWebSocketSignalingClient {
   onMessage(handler: (message: MqttSignalingMessage) => void | Promise<void>): () => void {
     this.handlers.add(handler)
     return () => this.handlers.delete(handler)
+  }
+
+  /**
+   * Observe every peer announcing itself in the room, including peers this
+   * session will never talk to. This is the discovery channel the roster is
+   * built from; it grants nothing.
+   */
+  onPresence(observer: (presence: MqttSignalingPresence) => void): () => void {
+    this.presenceObservers.add(observer)
+    return () => this.presenceObservers.delete(observer)
   }
 
   async connect(room: Omit<MqttSignalingRoom, 'signalingPeerId'> & { signalingPeerId?: string }): Promise<void> {
@@ -496,11 +530,27 @@ export class MqttWebSocketSignalingClient {
     const from = safeString(envelope.from ?? envelope.peer_id)
     if (!from || from === this.room.signalingPeerId) return
     const stablePeerId = safeString(envelope.stable_peer_id)
-    if (this.options.expectedSignalingPeerId && from !== this.options.expectedSignalingPeerId) return
-    if (this.options.expectedStablePeerId && stablePeerId !== this.options.expectedStablePeerId) return
+    // Discovery first: every peer that announces itself in the room is
+    // observable, so a three-node room reports three devices. Being observed
+    // is not permission to drive a session — the allowlist below decides that.
+    if (channel === 'presence') this.observePresence(from, stablePeerId, envelope)
+    if (!this.allowlist.admits({ channel, from, stablePeerId })) return
     const message: MqttSignalingMessage = { channel, topic, from, envelope, raw: payload }
     if (stablePeerId !== undefined) message.stablePeerId = stablePeerId
     for (const handler of [...this.handlers]) await handler(message)
+  }
+
+  private observePresence(from: string, stablePeerId: string | undefined, envelope: MqttSignalingEnvelope): void {
+    if (this.presenceObservers.size === 0) return
+    const presence: MqttSignalingPresence = {
+      signalingPeerId: from,
+      departed: envelope.type === 'presence_departed',
+      envelope
+    }
+    if (stablePeerId !== undefined) presence.stablePeerId = stablePeerId
+    const nodeName = safeString(envelope.node_name, 128)
+    if (nodeName !== undefined) presence.nodeName = nodeName
+    for (const observer of [...this.presenceObservers]) observer(presence)
   }
 
   private envelopeMatches(channel: SignalingChannel, envelope: MqttSignalingEnvelope): boolean {

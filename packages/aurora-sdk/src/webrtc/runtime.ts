@@ -26,8 +26,10 @@ import {
   MqttWebSocketSignalingClient,
   type MqttSealOpen,
   type MqttSignalingOptions,
+  type MqttSignalingPresence,
   type MqttSignalingRoom
 } from './signaling-mqtt.js'
+import { SignalingSessionAllowlist } from './signaling-allowlist.js'
 import {
   PairingProtocolError,
   PairingSasHandshake,
@@ -58,6 +60,7 @@ import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import { MeshPeerBridgeRouter } from './mesh-bridge-router.js'
 import {
   MeshPeerSessionRegistry,
+  type MeshDiscoveredPeer,
   type MeshPeerRegistryController,
   type MeshPeerRosterSnapshot,
   type MeshPeerSessionEntry
@@ -238,6 +241,32 @@ class WebRtcPreferredTransport implements AuroraTransport {
 
 }
 
+/** A peer this device has seen announce itself in the room. */
+interface ObservedRoomPeer {
+  readonly signalingPeerId: string
+  readonly stablePeerId?: string | undefined
+  readonly nodeName?: string | undefined
+  readonly lastSeenAt: string
+}
+
+/** States where the session has a live channel with the peer it negotiated with. */
+const ESTABLISHED_SESSION_STATES = new Set<PeerSessionSnapshot['state']>([
+  'channel-open',
+  'pairing-required',
+  'reconnect-authenticating',
+  'awaiting-sas-confirmation',
+  'authorized'
+])
+
+/** States where the session is back to looking for its peer and may rebind. */
+const UNBOUND_SESSION_STATES = new Set<PeerSessionSnapshot['state']>([
+  'signaling-connecting',
+  'discovering-peer',
+  'reconnecting',
+  'closed',
+  'failed'
+])
+
 class WebRtcPeerConnectionController implements PeerConnectionController, MeshPeerRegistryController {
   private readonly listeners = new Set<(snapshot: PeerConnectionSnapshot) => void>()
   private readonly rosterListeners = new Set<(roster: MeshPeerRosterSnapshot) => void>()
@@ -258,6 +287,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       (entry) => (entry.bridge !== null && entry.peerId !== undefined ? [entry.peerId] : [])
     )
   })
+  // Everyone observed announcing themselves in the room, keyed by signaling
+  // identity. Discovery only: an observed peer is a candidate to connect to,
+  // never an authorized one.
+  private readonly observedPeers = new Map<string, ObservedRoomPeer>()
   meshTransport: MeshP2PTransport | null = null
   private primaryEntry: MeshPeerSessionEntry | null = null
   private removeVisibilityListener: (() => void) | undefined
@@ -305,9 +338,57 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     })
     return {
       peers,
+      discovered: this.discoveredPeers(),
       ...(primary?.peerId !== undefined ? { primaryPeerId: primary.peerId } : {}),
       updatedAt: new Date().toISOString()
     }
+  }
+
+  /** Everyone seen in the room, whether or not this device connected to them. */
+  private discoveredPeers(): readonly MeshDiscoveredPeer[] {
+    return [...this.observedPeers.values()].map((observed) => ({
+      peerId: observed.stablePeerId ?? observed.signalingPeerId,
+      ...(observed.stablePeerId !== undefined ? { stablePeerId: observed.stablePeerId } : {}),
+      signalingPeerId: observed.signalingPeerId,
+      ...(observed.nodeName !== undefined ? { nodeName: observed.nodeName } : {}),
+      connected: this.registry.list().some((entry) => entry.session !== null
+        && entry.peerId === observed.stablePeerId
+        && entry.allowlist.signalingPeerId === observed.signalingPeerId),
+      lastSeenAt: observed.lastSeenAt
+    }))
+  }
+
+  private observeRoomPresence(presence: MqttSignalingPresence): void {
+    const key = presence.stablePeerId ?? presence.signalingPeerId
+    // A device that already holds an established session is described by that
+    // session. Whoever announces its identity next does not get to rename it,
+    // reset its last-seen time, or announce its departure on its behalf.
+    if (this.presenceIsImpersonatingEstablishedPeer(presence)) return
+    if (presence.departed) {
+      if (this.observedPeers.get(key)?.signalingPeerId !== presence.signalingPeerId) return
+      this.observedPeers.delete(key)
+      this.emit()
+      return
+    }
+    const observed: ObservedRoomPeer = {
+      signalingPeerId: presence.signalingPeerId,
+      ...(presence.stablePeerId !== undefined ? { stablePeerId: presence.stablePeerId } : {}),
+      ...(presence.nodeName !== undefined ? { nodeName: presence.nodeName } : {}),
+      lastSeenAt: new Date().toISOString()
+    }
+    const previous = this.observedPeers.get(key)
+    this.observedPeers.set(key, observed)
+    if (previous?.signalingPeerId === observed.signalingPeerId
+      && previous.stablePeerId === observed.stablePeerId
+      && previous.nodeName === observed.nodeName) return
+    this.emit()
+  }
+
+  private presenceIsImpersonatingEstablishedPeer(presence: MqttSignalingPresence): boolean {
+    if (presence.stablePeerId === undefined) return false
+    const entry = this.registry.findByPeerId(presence.stablePeerId)
+    if (entry === undefined || !entry.allowlist.established) return false
+    return entry.allowlist.signalingPeerId !== presence.signalingPeerId
   }
 
   subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void): () => void {
@@ -331,6 +412,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       profile,
       session: null,
       signaling: null,
+      // The per-session allowlist that replaces the flat signaling filter: this
+      // session accepts signaling only from the peer it belongs to.
+      allowlist: new SignalingSessionAllowlist({
+        expectedStablePeerId: profile.expectedStablePeerId,
+        expectedSignalingPeerId: profile.expectedSignalingPeerId
+      }),
       bridge: null,
       keyMaterial: null,
       localProtocolHello: null,
@@ -362,7 +449,9 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       if (profile.allowInsecureLoopbackSignaling !== undefined) signalingOptions.allowInsecureLoopback = profile.allowInsecureLoopbackSignaling
       if (profile.expectedStablePeerId !== undefined) signalingOptions.expectedStablePeerId = profile.expectedStablePeerId
       if (profile.expectedSignalingPeerId !== undefined) signalingOptions.expectedSignalingPeerId = profile.expectedSignalingPeerId
+      signalingOptions.allowlist = entry.allowlist
       const signaling = (this.options.signalingFactory ?? ((nextOptions) => new MqttWebSocketSignalingClient(nextOptions)))(signalingOptions)
+      signaling.onPresence?.((presence) => this.observeRoomPresence(presence))
       const signalingRoom: MqttSignalingRoom = {
         appId: profile.appId,
         room: profile.room,
@@ -447,6 +536,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
 
   async disconnect(reason = 'disconnect'): Promise<void> {
     this.releaseVisibilityHook()
+    this.observedPeers.clear()
     const entries = this.registry.clear()
     this.primaryEntry = null
     this.meshTransport = null
@@ -474,7 +564,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     if (this.primaryEntry === entry) this.primaryEntry = null
     const close = this.detachEntry(entry, reason)
     this.refreshMeshTransport()
-    if (this.registry.size === 0) this.releaseVisibilityHook()
+    if (this.registry.size === 0) {
+      // Nothing is watching the room any more, so nothing is being discovered.
+      this.observedPeers.clear()
+      this.releaseVisibilityHook()
+    }
     await close()
     this.emit()
   }
@@ -527,6 +621,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
 
   private handleSessionSnapshot(entry: MeshPeerSessionEntry, snapshot: PeerSessionSnapshot | null): void {
     if (this.registry.has(entry)) {
+      this.syncAllowlistBinding(entry, snapshot)
       if (snapshot && ['failed', 'closed', 'idle', 'needs-invite', 'disabled'].includes(snapshot.state)) {
         entry.pendingPairing = null
       }
@@ -659,6 +754,22 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   private releaseVisibilityHook(): void {
     this.removeVisibilityListener?.()
     this.removeVisibilityListener = undefined
+  }
+
+  /**
+   * Keep the per-session allowlist in step with the session it guards. Once the
+   * channel is open the session is pinned to the peer it negotiated with, so a
+   * forged announcement claiming that peer's identity cannot move the binding.
+   * A session that has fallen back to discovery releases the pin, which is how
+   * a peer that genuinely restarted gets to rebind.
+   */
+  private syncAllowlistBinding(entry: MeshPeerSessionEntry, snapshot: PeerSessionSnapshot | null): void {
+    if (snapshot === null) return
+    if (ESTABLISHED_SESSION_STATES.has(snapshot.state)) {
+      entry.allowlist.establish(snapshot.remoteSignalingId)
+      return
+    }
+    if (UNBOUND_SESSION_STATES.has(snapshot.state)) entry.allowlist.release()
   }
 
   private emit(): void {

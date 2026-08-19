@@ -18,6 +18,7 @@ import type { RoomKeys } from './crypto.js'
 import type { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import type { PairingSasResult } from './pairing.js'
 import type { WebRtcPeerSession } from './peer-session.js'
+import type { SignalingSessionAllowlist } from './signaling-allowlist.js'
 import type { MqttWebSocketSignalingClient } from './signaling-mqtt.js'
 import type { PeerConnectionSnapshot, WebRtcPeerConnectionProfile } from './types.js'
 
@@ -41,6 +42,8 @@ export interface MeshPeerSessionEntry {
   readonly profile: WebRtcPeerConnectionProfile
   session: WebRtcPeerSession | null
   signaling: MqttWebSocketSignalingClient | null
+  /** Which peer may drive this session. Presence widens; the session pins. */
+  readonly allowlist: SignalingSessionAllowlist
   bridge: WebRtcMeshPeerBridge | null
   keyMaterial: RoomKeys | null
   localProtocolHello: Record<string, unknown> | null
@@ -60,8 +63,26 @@ export interface MeshPeerRosterEntry {
   readonly snapshot: PeerConnectionSnapshot
 }
 
+/**
+ * A device seen announcing itself in the room. Discovery only: a discovered
+ * peer is a candidate to connect to, never an authorized one. Every peer still
+ * needs its own pairing and explicit approval before it can do anything.
+ */
+export interface MeshDiscoveredPeer {
+  /** Stable identity when the peer named one, otherwise its signaling identity. */
+  readonly peerId: string
+  readonly stablePeerId?: string | undefined
+  readonly signalingPeerId: string
+  readonly nodeName?: string | undefined
+  /** True when this device already holds a session with the peer. */
+  readonly connected: boolean
+  readonly lastSeenAt: string
+}
+
 export interface MeshPeerRosterSnapshot {
   readonly peers: readonly MeshPeerRosterEntry[]
+  /** Everyone observed in the room, whether or not this device connected to them. */
+  readonly discovered: readonly MeshDiscoveredPeer[]
   readonly primaryPeerId?: string | undefined
   readonly updatedAt: string
 }

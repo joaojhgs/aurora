@@ -196,10 +196,21 @@ export type {
   MqttSignalingDiagnostics,
   MqttSignalingEnvelope,
   MqttSignalingMessage,
+  MqttSignalingPresence,
   MqttSignalingRoom,
   MqttSignalingOptions,
   SignalingChannel as MqttSignalingChannel
 } from './signaling-mqtt.js'
+
+export {
+  SIGNALING_PEER_NOT_ALLOWLISTED_REASON,
+  SignalingSessionAllowlist
+} from './signaling-allowlist.js'
+export type {
+  SignalingAllowlistCandidate,
+  SignalingSessionAllowlistOptions,
+  SignalingSessionAllowlistSnapshot
+} from './signaling-allowlist.js'
 
 
 export {
@@ -226,6 +237,7 @@ export {
   peerAlreadyRegisteredError
 } from './peer-registry.js'
 export type {
+  MeshDiscoveredPeer,
   MeshPeerRegistryController,
   MeshPeerRosterEntry,
   MeshPeerRosterSnapshot
