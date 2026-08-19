@@ -69,3 +69,10 @@ jni = "0.21"
 
 [dev-dependencies]
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
+
+# webrtc 0.11 pins webrtc-dtls ^0.10.0, which cannot answer a browser that leads
+# its supported groups with a post-quantum hybrid. Vendored with the 0.12
+# named-curve selection backported, until that reaches a 0.10.x release.
+# Provenance and removal conditions: vendor/webrtc-dtls/README.aurora.md.
+[patch.crates-io]
+webrtc-dtls = { path = "vendor/webrtc-dtls" }
