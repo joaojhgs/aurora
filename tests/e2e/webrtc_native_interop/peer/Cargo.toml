@@ -1,0 +1,19 @@
+# Standalone on purpose: this pulls the whole webrtc-rs tree, so it must not
+# join the rust/ workspace and slow every other Rust build.
+[workspace]
+
+[package]
+name = "aurora-webrtc-interop-peer"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Native webrtc-rs peer used to verify data-channel interop against aiortc and browsers"
+publish = false
+
+[dependencies]
+webrtc = "0.11.0"
+bytes = "1"
+serde_json = "1"
+env_logger = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "io-std", "io-util", "time"] }

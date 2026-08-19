@@ -26,6 +26,9 @@ on:
       - "scripts/hosted_peer_e2e.sh"
       - "scripts/hosted_thin_shell_e2e.sh"
       - "scripts/webrtc_interop*"
+      - "scripts/webrtc_native_interop.sh"
+      - "tests/e2e/webrtc_native_interop/**"
+      - "apps/aurora-tauri/src-tauri/src/native_webrtc.rs"
       - "package.json"
       - "pnpm-lock.yaml"
       - "docker-compose.webrtc-interop.yml"
@@ -88,3 +91,44 @@ jobs:
             reports/hosted-mesh-node/
             reports/hosted-peer/
           if-no-files-found: warn
+
+  native-transport-interop:
+    name: Native webrtc-rs transport interop
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Python peer dependencies
+        run: uv sync --frozen
+
+      # Guards the mobile port: the native stack must keep building for Android
+      # even while the transport itself is still Linux-desktop only.
+      - name: Check the native WebRTC stack for Android
+        run: cargo check --manifest-path tests/e2e/webrtc_native_interop/peer/Cargo.toml --target aarch64-linux-android
+
+      - name: Run native transport interop lanes
+        env:
+          AURORA_NATIVE_INTEROP_PYTHON: python3
+        run: scripts/webrtc_native_interop.sh
