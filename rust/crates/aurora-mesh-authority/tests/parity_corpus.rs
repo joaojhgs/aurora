@@ -12,12 +12,11 @@
 use std::path::PathBuf;
 
 use aurora_mesh_authority::authority::{
-    AuthenticatedPeerContext, InboundCredentialVerifierStore, IssueReconnectChallengeRequest,
-    LocalPeerGrantV1, MemoryPeerAuditSink, MemoryPeerGrantRepository,
-    MemoryInboundCredentialVerifierStore, MemoryReconnectChallengeStore, PeerAuthorityResolver,
-    PeerGrantRepository, PeerGrantResolutionRequest, PeerRelationshipIdentity,
-    PeerRelationshipSelector, RandomSource, ReconnectChallengeStore,
-    ReconnectTransportAttestation,
+    AuthenticatedPeerContext, InboundCredentialVerifierStore, LocalPeerGrantV1,
+    MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink, MemoryPeerGrantRepository,
+    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
+    PeerGrantResolutionRequest, PeerRelationshipIdentity, PeerRelationshipSelector, RandomSource,
+    ReconnectChallengeStore, ReconnectTransportAttestation,
 };
 use aurora_mesh_authority::authorization::{
     PeerAuthorityHostAuthorizationStore, SessionPeerHostAuthorizationStore,
@@ -106,10 +105,7 @@ fn grants_of(case: &Value) -> Vec<LocalPeerGrantV1> {
 }
 
 fn expected_str(expected: &Value, key: &str) -> Option<String> {
-    expected
-        .get(key)
-        .and_then(Value::as_str)
-        .map(str::to_owned)
+    expected.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
 fn expected_i64(expected: &Value, key: &str) -> Option<i64> {
@@ -152,7 +148,10 @@ fn corpus_declares_the_schema_and_is_synthetic() {
         document.get("schema").and_then(Value::as_str),
         Some("aurora.mesh.authority.parity_vectors.v1")
     );
-    assert_eq!(document.get("synthetic").and_then(Value::as_bool), Some(true));
+    assert_eq!(
+        document.get("synthetic").and_then(Value::as_bool),
+        Some(true)
+    );
 }
 
 #[test]
@@ -184,7 +183,10 @@ fn error_codes_keep_their_http_shape() {
             "{key} drifted"
         );
     };
-    expect("schemaValidationFailed", error_code::SCHEMA_VALIDATION_FAILED);
+    expect(
+        "schemaValidationFailed",
+        error_code::SCHEMA_VALIDATION_FAILED,
+    );
     expect("notAuthorized", error_code::NOT_AUTHORIZED);
     expect("requestCancelled", error_code::REQUEST_CANCELLED);
     expect("handlerFailed", error_code::HANDLER_FAILED);
@@ -269,7 +271,9 @@ fn reconnect_proof_vectors_match() {
         );
         assert_eq!(
             ok,
-            case.get("expected").and_then(Value::as_bool).expect("expected"),
+            case.get("expected")
+                .and_then(Value::as_bool)
+                .expect("expected"),
             "{name}: verification diverged"
         );
     }
@@ -301,11 +305,16 @@ async fn grant_resolution_matches() {
 
         assert_eq!(
             decision.allowed,
-            expected.get("allowed").and_then(Value::as_bool).expect("allowed"),
+            expected
+                .get("allowed")
+                .and_then(Value::as_bool)
+                .expect("allowed"),
             "{name}: allowed diverged"
         );
         assert_eq!(
-            decision.reason_code.map(|reason| reason.as_str().to_owned()),
+            decision
+                .reason_code
+                .map(|reason| reason.as_str().to_owned()),
             expected_str(expected, "reasonCode"),
             "{name}: reasonCode diverged"
         );
@@ -350,7 +359,10 @@ fn assert_decision(
 ) {
     assert_eq!(
         decision.allowed,
-        expected.get("allowed").and_then(Value::as_bool).expect("allowed"),
+        expected
+            .get("allowed")
+            .and_then(Value::as_bool)
+            .expect("allowed"),
         "{name}: allowed diverged"
     );
     assert_eq!(
@@ -378,10 +390,13 @@ async fn session_authorization_matches() {
 
     for case in vectors {
         let name = case_name(case);
-        let mut store =
-            SessionPeerHostAuthorizationStore::new(grants_of(case)).expect("corpus grants are valid");
+        let mut store = SessionPeerHostAuthorizationStore::new(grants_of(case))
+            .expect("corpus grants are valid");
         let request = authorize_request(case, case.get("request").expect("case has a request"));
-        let decision = store.authorize(&request).await.expect("session store never fails");
+        let decision = store
+            .authorize(&request)
+            .await
+            .expect("session store never fails");
         assert_decision(&name, &decision, case.get("expected").expect("expected"));
     }
 }
@@ -406,13 +421,19 @@ async fn authority_store(
 async fn authority_authorization_matches() {
     let document = corpus();
     let vectors = cases(section(&document, "authorityAuthorize"), "cases");
-    assert!(!vectors.is_empty(), "corpus has no authority authorize cases");
+    assert!(
+        !vectors.is_empty(),
+        "corpus has no authority authorize cases"
+    );
 
     for case in vectors {
         let name = case_name(case);
         let mut store = authority_store(&grants_of(case)).await;
         let request = authorize_request(case, case.get("request").expect("case has a request"));
-        let decision = store.authorize(&request).await.expect("authority store never fails");
+        let decision = store
+            .authorize(&request)
+            .await
+            .expect("authority store never fails");
         assert_decision(&name, &decision, case.get("expected").expect("expected"));
     }
 }
@@ -424,8 +445,8 @@ async fn manifest_snapshots_match() {
 
     for case in cases(node, "session") {
         let name = case_name(case);
-        let mut store =
-            SessionPeerHostAuthorizationStore::new(grants_of(case)).expect("corpus grants are valid");
+        let mut store = SessionPeerHostAuthorizationStore::new(grants_of(case))
+            .expect("corpus grants are valid");
         let request_node = case.get("request").expect("case has a request");
         let snapshot = store
             .snapshot_manifest_authority(&PeerHostManifestAuthorityRequest {
@@ -514,7 +535,10 @@ async fn reconnect_challenge_replay_guard_matches() {
     let document = corpus();
     let node = section(&document, "reconnectChallenge");
     let vectors = cases(node, "cases");
-    assert!(!vectors.is_empty(), "corpus has no reconnect challenge cases");
+    assert!(
+        !vectors.is_empty(),
+        "corpus has no reconnect challenge cases"
+    );
 
     let challenge_bytes_hex = node
         .get("challengeBytesHex")
@@ -545,7 +569,10 @@ async fn reconnect_challenge_replay_guard_matches() {
             .and_then(Value::as_array)
             .expect("case has steps")
         {
-            let action = step.get("action").and_then(Value::as_str).unwrap_or("consume");
+            let action = step
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or("consume");
             if action == "reject" {
                 store
                     .reject_challenges(&identity, now_ms(step))
@@ -596,8 +623,8 @@ fn grant_selection_normalization_matches() {
         let outcome = normalize_selection(&selection, now_ms(case), DEFAULT_MAX_EXPIRY_WINDOW_MS);
 
         if expected.get("ok").and_then(Value::as_bool) == Some(true) {
-            let normalized = outcome
-                .unwrap_or_else(|error| panic!("{name}: expected an allow, got {error}"));
+            let normalized =
+                outcome.unwrap_or_else(|error| panic!("{name}: expected an allow, got {error}"));
             let want = expected.get("normalized").expect("normalized");
             assert_eq!(
                 Some(normalized.allowed_method_ids),
@@ -649,7 +676,8 @@ fn execution_policy_matches() {
     let node = section(&document, "executionPolicy");
 
     assert_eq!(
-        node.pointer("/defaults/serviceVersion").and_then(Value::as_str),
+        node.pointer("/defaults/serviceVersion")
+            .and_then(Value::as_str),
         Some(AURORA_BACKEND_CONTRACT_VERSION),
         "advertised contract version drifted"
     );
@@ -744,7 +772,11 @@ fn tts_emission_validator_matches() {
                     let error = outcome
                         .err()
                         .unwrap_or_else(|| panic!("{name}[{index}]: expected a refusal"));
-                    assert_eq!(error.to_string(), message, "{name}[{index}]: refusal copy diverged");
+                    assert_eq!(
+                        error.to_string(),
+                        message,
+                        "{name}[{index}]: refusal copy diverged"
+                    );
                 }
             }
         }
@@ -847,18 +879,20 @@ async fn a_credential_without_a_grant_authorizes_nothing() {
         room_name: "lab-room".to_owned(),
     };
     verifiers
-        .upsert_verifier(aurora_mesh_authority::authority::LocalPeerCredentialVerifierV1 {
-            version: 1,
-            token_id: selector.token_id.clone(),
-            claimant_peer_id: selector.claimant_peer_id.clone(),
-            verifier_peer_id: selector.verifier_peer_id.clone(),
-            room_name: selector.room_name.clone(),
-            token_hash_hex: "a".repeat(64),
-            created_at_ms: 1_000,
-            expires_at_ms: None,
-            revoked_at_ms: None,
-            credential_revision: 1,
-        })
+        .upsert_verifier(
+            aurora_mesh_authority::authority::LocalPeerCredentialVerifierV1 {
+                version: 1,
+                token_id: selector.token_id.clone(),
+                claimant_peer_id: selector.claimant_peer_id.clone(),
+                verifier_peer_id: selector.verifier_peer_id.clone(),
+                room_name: selector.room_name.clone(),
+                token_hash_hex: "a".repeat(64),
+                created_at_ms: 1_000,
+                expires_at_ms: None,
+                revoked_at_ms: None,
+                credential_revision: 1,
+            },
+        )
         .await
         .expect("verifier is valid");
 
@@ -892,7 +926,10 @@ async fn a_credential_without_a_grant_authorizes_nothing() {
         })
         .await
         .expect("authority store never fails");
-    assert!(!decision.allowed, "a paired peer with no grant was authorized");
+    assert!(
+        !decision.allowed,
+        "a paired peer with no grant was authorized"
+    );
     assert_eq!(decision.reason_code.as_deref(), Some("grant_not_found"));
 }
 
