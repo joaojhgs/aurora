@@ -271,7 +271,9 @@ describe('settings surface filtering', () => {
   it('shows Overlay & shortcuts on desktop Tauri and hides it on web and mobile', async () => {
     const desktop = await renderSettings(snapshotFor(nativeCapabilityManifestFixture, 'tauri-local'), {})
     expect(desktop.container.textContent).toContain('Overlay & shortcuts')
-    expect(desktop.container.textContent).toContain('Overlay and shortcuts are not available to change here yet.')
+    expect(desktop.container.textContent).toContain('Show overlay')
+    expect(desktop.container.textContent).toContain('Keyboard shortcut')
+    expect(desktop.container.textContent).not.toContain('Overlay and shortcuts are not available to change here yet.')
     await desktop.unmount()
 
     const web = await renderSettings(snapshotFor(null, 'http'), {})
@@ -384,6 +386,8 @@ describe('per-role settings and nav layouts', () => {
     expect(container.textContent).toContain('Settings')
     expect(container.textContent).not.toContain('Operate · admin only')
     expect(container.textContent).toContain('Overlay & shortcuts')
+    expect(container.textContent).toContain('Show overlay')
+    expect(container.textContent).toContain('Keyboard shortcut')
     expect(container.textContent).toContain('Voice on this device')
     expect(container.textContent).toContain('This device can share features with approved Aurora devices.')
     expect(container.querySelector('#settings-this-device-title')?.textContent).toBe('This device')

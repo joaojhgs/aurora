@@ -55,6 +55,8 @@ import {
   thinConnectionProfileWithManualAddress,
   type AuroraNavItem,
   type AuroraOwlLoaderStageId,
+  type AuroraDesktopOverlayPreferences,
+  type AuroraLocalSpeechLanguagePrefs,
   type AuroraLocalSpeechSelectionProfile,
   type AuroraShellSnapshot,
   type RouteAvailability,
@@ -681,12 +683,26 @@ export function AuroraTauriApp({
   );
 
   const saveLocalSpeechSelection = useCallback(
-    (selection: AuroraLocalSpeechSelectionProfile) =>
+    (
+      selection: AuroraLocalSpeechSelectionProfile,
+      languages?: AuroraLocalSpeechLanguagePrefs,
+    ) =>
       rebuildThinRuntime((controller) => {
         if (!controller.updateActiveLocalSpeechSelection) {
           return Promise.resolve(controller.document);
         }
-        return controller.updateActiveLocalSpeechSelection(selection);
+        return controller.updateActiveLocalSpeechSelection(selection, languages);
+      }),
+    [rebuildThinRuntime],
+  );
+
+  const saveDesktopOverlay = useCallback(
+    (overlay: AuroraDesktopOverlayPreferences) =>
+      rebuildThinRuntime((controller) => {
+        if (!controller.updateActiveDesktopOverlay) {
+          return Promise.resolve(controller.document);
+        }
+        return controller.updateActiveDesktopOverlay(overlay);
       }),
     [rebuildThinRuntime],
   );
@@ -1059,6 +1075,7 @@ export function AuroraTauriApp({
     saveThinProfile,
     selectThinProfile,
     saveLocalSpeechSelection,
+    saveDesktopOverlay,
     requestNativeAccess,
   };
 
@@ -1555,6 +1572,10 @@ interface NativeContext {
   selectThinProfile: (profileId: string) => Promise<void>;
   saveLocalSpeechSelection: (
     selection: AuroraLocalSpeechSelectionProfile,
+    languages?: AuroraLocalSpeechLanguagePrefs,
+  ) => Promise<void>;
+  saveDesktopOverlay: (
+    overlay: AuroraDesktopOverlayPreferences,
   ) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
@@ -2001,6 +2022,7 @@ function TauriSettingsPage({
         surfaceProfile={nativeContext.surfaceProfile}
         localSpeechCatalog={nativeContext.localSpeechCatalog ?? null}
         onLocalSpeechSelectionConfirmed={nativeContext.saveLocalSpeechSelection}
+        onDesktopOverlayConfirmed={nativeContext.saveDesktopOverlay}
         sessionIsAdmin={client.auth.snapshot().isAdmin}
         onRequestNativeAccess={nativeContext.requestNativeAccess}
         onNavigate={navigate}
@@ -2448,23 +2470,35 @@ function surfaceTitle(nativeContext: NativeContext): string {
   return "Connected Aurora device";
 }
 
+let thinInviteFromUrlCache: { invite: string; pathKey: string } | null = null;
+
+export function resetThinInviteFromUrlCacheForTests(): void {
+  thinInviteFromUrlCache = null;
+}
+
 function initialThinInviteFromUrl(): string | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
   const hashParams = new URLSearchParams(
     url.hash.startsWith("#") ? url.hash.slice(1) : url.hash,
   );
-  const invite = hashParams.get("invite");
-  if (!invite) return null;
-  hashParams.delete("invite");
-  const nextHash = hashParams.toString();
-  window.history.replaceState(
-    window.history.state,
-    "",
-    `${url.pathname}${url.search}${nextHash ? `#${nextHash}` : ""}`,
-  );
-  return invite;
+  const live = hashParams.get("invite");
+  const pathKey = `${url.pathname}${url.search}`;
+  if (live) {
+    thinInviteFromUrlCache = { invite: live, pathKey };
+    hashParams.delete("invite");
+    const nextHash = hashParams.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${nextHash ? `#${nextHash}` : ""}`,
+    );
+    return live;
+  }
+  if (thinInviteFromUrlCache?.pathKey === pathKey) return thinInviteFromUrlCache.invite;
+  return null;
 }
+
 export function runtimeModeLabel(mode: string): string {
   if (mode === "mock") return "Local mode";
   if (mode === "desktop-local") return "Local on this computer";

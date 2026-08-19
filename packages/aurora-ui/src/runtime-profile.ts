@@ -79,6 +79,76 @@ export type AuroraLocalSpeechSelectionProfile = Partial<Record<
   wakePhrase?: AuroraLocalWakePhraseSelection | undefined
 }
 
+export const DEFAULT_LOCAL_PRIMARY_LANGUAGE = 'en'
+export const AUTO_LOCAL_VOICE_LANGUAGE = 'auto'
+
+const SPEECH_LANGUAGE_TAG_RE = /^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$/u
+
+/** Device language prefs mirroring server `system.primary_language` / `system.voice_language`. */
+export interface AuroraLocalSpeechLanguagePrefs {
+  primaryLanguage?: string | undefined
+  voiceLanguage?: string | undefined
+}
+
+export type AuroraLocalSpeechPreferencesSave = (
+  selection: AuroraLocalSpeechSelectionProfile,
+  languages?: AuroraLocalSpeechLanguagePrefs,
+) => void | Promise<void>
+
+export interface AuroraLocalSpeechLanguagePolicy {
+  primaryLanguage: string
+  voiceLanguage: string
+  modelLanguage: string
+}
+
+export const DEFAULT_DESKTOP_OVERLAY_HOTKEY = 'CommandOrControl+K'
+export const DEFAULT_DESKTOP_OVERLAY_AUTO_CLOSE_DELAY_MS = 1200
+
+export interface AuroraDesktopOverlayPreferences {
+  enabled: boolean
+  voiceEnabled: boolean
+  textHotkey: string
+  autoCloseDelayMs: number
+}
+
+export type AuroraDesktopOverlaySave = (
+  overlay: AuroraDesktopOverlayPreferences,
+) => void | Promise<void>
+
+export function defaultDesktopOverlayPreferences(): AuroraDesktopOverlayPreferences {
+  return {
+    enabled: true,
+    voiceEnabled: true,
+    textHotkey: DEFAULT_DESKTOP_OVERLAY_HOTKEY,
+    autoCloseDelayMs: DEFAULT_DESKTOP_OVERLAY_AUTO_CLOSE_DELAY_MS,
+  }
+}
+
+export function resolveDesktopOverlayPreferences(
+  value: Partial<AuroraDesktopOverlayPreferences> | null | undefined,
+): AuroraDesktopOverlayPreferences {
+  const defaults = defaultDesktopOverlayPreferences()
+  return {
+    enabled: typeof value?.enabled === 'boolean' ? value.enabled : defaults.enabled,
+    voiceEnabled: typeof value?.voiceEnabled === 'boolean' ? value.voiceEnabled : defaults.voiceEnabled,
+    textHotkey: normalizeDesktopOverlayHotkey(value?.textHotkey) ?? defaults.textHotkey,
+    autoCloseDelayMs: normalizeDesktopOverlayDelayMs(value?.autoCloseDelayMs) ?? defaults.autoCloseDelayMs,
+  }
+}
+
+export function mergeLocalNodeDesktopOverlay(
+  localNode: AuroraLocalNodeProfile,
+  overlay: Partial<AuroraDesktopOverlayPreferences>,
+): AuroraLocalNodeProfile {
+  return {
+    ...localNode,
+    desktopOverlay: resolveDesktopOverlayPreferences({
+      ...localNode.desktopOverlay,
+      ...overlay,
+    }),
+  }
+}
+
 export interface AuroraHomeConnectionProfile {
   mode: AuroraConnectionMode
   gatewayUrl?: string | undefined
@@ -96,10 +166,16 @@ export interface AuroraLocalNodeProfile {
   nodeName: string
   stablePeerId: string
   enabledCapabilityPacks: AuroraCapabilityPack[]
+  /** BCP 47 tag used when one device language is required. Default `en`. */
+  primaryLanguage?: string | undefined
+  /** `auto` or a BCP 47 tag that pins listening and speaking. Default `auto`. */
+  voiceLanguage?: string | undefined
   /** Last known non-ready state; the voice engine remains the execution authority. */
   localSpeechPackState?: AuroraLocalSpeechPackState | undefined
   /** Exact selected local speech assets; operational readiness remains engine-owned. */
   localSpeechSelection?: AuroraLocalSpeechSelectionProfile | undefined
+  /** Desktop overlay and shortcut prefs for this device; never server config. */
+  desktopOverlay?: AuroraDesktopOverlayPreferences | undefined
   meshMembership?: AuroraMeshMembershipProfile | undefined
 }
 
@@ -155,6 +231,47 @@ export function activeRuntimeProfile(
 ): AuroraRuntimeProfileV2 | undefined {
   if (!document?.activeProfileId) return undefined
   return document.profiles.find((profile) => profile.id === document.activeProfileId)
+}
+
+export function resolveLocalSpeechLanguagePolicy(
+  primaryLanguage: string | null | undefined,
+  voiceLanguage: string | null | undefined,
+): AuroraLocalSpeechLanguagePolicy {
+  const primary = normalizeOptionalSpeechLanguage(primaryLanguage, false)
+    ?? DEFAULT_LOCAL_PRIMARY_LANGUAGE
+  const voice = normalizeOptionalSpeechLanguage(voiceLanguage, true)
+    ?? AUTO_LOCAL_VOICE_LANGUAGE
+  return {
+    primaryLanguage: primary,
+    voiceLanguage: voice,
+    modelLanguage: voice === AUTO_LOCAL_VOICE_LANGUAGE ? primary : voice,
+  }
+}
+
+export function localSpeechSelectionHasAssetPatch(
+  selection: AuroraLocalSpeechSelectionProfile | null | undefined,
+): boolean {
+  if (!selection) return false
+  return Boolean(selection.vad || selection.kws || selection.stt || selection.tts || selection.wakePhrase)
+}
+
+export function mergeLocalNodeSpeechPreferences(
+  localNode: AuroraLocalNodeProfile,
+  selection?: AuroraLocalSpeechSelectionProfile,
+  languages?: AuroraLocalSpeechLanguagePrefs,
+): AuroraLocalNodeProfile {
+  const localSpeechSelection = localSpeechSelectionHasAssetPatch(selection)
+    ? {
+        ...(localNode.localSpeechSelection ?? {}),
+        ...selection,
+      }
+    : localNode.localSpeechSelection
+  return {
+    ...localNode,
+    ...(localSpeechSelection ? { localSpeechSelection } : {}),
+    ...(languages?.primaryLanguage !== undefined ? { primaryLanguage: languages.primaryLanguage } : {}),
+    ...(languages?.voiceLanguage !== undefined ? { voiceLanguage: languages.voiceLanguage } : {}),
+  }
 }
 
 export function isRuntimeProfileConfigured(
@@ -378,8 +495,11 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
   const nodeName = requiredText(value.nodeName, 'node name', 160)
   const stablePeerId = requiredText(value.stablePeerId, 'stable peer id', 160)
   const enabledCapabilityPacks = sanitizeCapabilityPacks(value.enabledCapabilityPacks)
+  const primaryLanguage = sanitizeStoredSpeechLanguage(value.primaryLanguage, 'primary language', false)
+  const voiceLanguage = sanitizeStoredSpeechLanguage(value.voiceLanguage, 'voice language', true)
   const localSpeechPackState = sanitizeLocalSpeechPackState(value.localSpeechPackState)
   const localSpeechSelection = sanitizeLocalSpeechSelection(value.localSpeechSelection)
+  const desktopOverlay = sanitizeStoredDesktopOverlay(value.desktopOverlay)
   const meshMembership = value.meshMembership === undefined
     ? undefined
     : sanitizeMeshMembership(value.meshMembership)
@@ -393,8 +513,11 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
     nodeName,
     stablePeerId,
     enabledCapabilityPacks,
+    ...(primaryLanguage ? { primaryLanguage } : {}),
+    ...(voiceLanguage ? { voiceLanguage } : {}),
     ...(localSpeechPackState ? { localSpeechPackState } : {}),
     ...(localSpeechSelection ? { localSpeechSelection } : {}),
+    ...(desktopOverlay ? { desktopOverlay } : {}),
     ...(meshMembership ? { meshMembership } : {}),
   }
 }
@@ -658,6 +781,92 @@ function requiredLocaleText(value: unknown, label: string): string {
     throw new Error(`Runtime profile ${label} is invalid`)
   }
   return text
+}
+
+function sanitizeStoredSpeechLanguage(
+  value: unknown,
+  label: string,
+  allowAuto: boolean,
+): string | undefined {
+  if (value === undefined) return undefined
+  const normalized = normalizeOptionalSpeechLanguage(value, allowAuto)
+  if (!normalized) throw new Error(`Runtime profile ${label} is invalid`)
+  return normalized
+}
+
+function normalizeOptionalSpeechLanguage(value: unknown, allowAuto: boolean): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim().toLowerCase().replaceAll('_', '-')
+  if (!normalized) return undefined
+  if (normalized === AUTO_LOCAL_VOICE_LANGUAGE) {
+    return allowAuto ? AUTO_LOCAL_VOICE_LANGUAGE : undefined
+  }
+  if (normalized.length < 2 || normalized.length > 255) return undefined
+  if (!SPEECH_LANGUAGE_TAG_RE.test(normalized)) return undefined
+  return normalized
+}
+
+function sanitizeStoredDesktopOverlay(value: unknown): AuroraDesktopOverlayPreferences | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error('Runtime profile overlay settings are invalid')
+  const allowed = new Set(['enabled', 'voiceEnabled', 'textHotkey', 'autoCloseDelayMs'])
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error('Runtime profile overlay settings field is invalid')
+  }
+  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') {
+    throw new Error('Runtime profile overlay settings are invalid')
+  }
+  if (value.voiceEnabled !== undefined && typeof value.voiceEnabled !== 'boolean') {
+    throw new Error('Runtime profile overlay settings are invalid')
+  }
+  const textHotkey = value.textHotkey === undefined
+    ? undefined
+    : normalizeDesktopOverlayHotkey(value.textHotkey)
+  if (value.textHotkey !== undefined && !textHotkey) {
+    throw new Error('Runtime profile overlay shortcut is invalid')
+  }
+  const autoCloseDelayMs = value.autoCloseDelayMs === undefined
+    ? undefined
+    : normalizeDesktopOverlayDelayMs(value.autoCloseDelayMs)
+  if (value.autoCloseDelayMs !== undefined && autoCloseDelayMs === undefined) {
+    throw new Error('Runtime profile overlay hide delay is invalid')
+  }
+  return resolveDesktopOverlayPreferences({
+    ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
+    ...(typeof value.voiceEnabled === 'boolean' ? { voiceEnabled: value.voiceEnabled } : {}),
+    ...(textHotkey ? { textHotkey } : {}),
+    ...(autoCloseDelayMs !== undefined ? { autoCloseDelayMs } : {}),
+  })
+}
+
+export function normalizeDesktopOverlayHotkey(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const compact = value.trim().replace(/\s+/gu, '')
+  if (!compact || compact.length > 64) return undefined
+  const parts = compact.split('+').filter((part) => part.length > 0)
+  if (parts.length < 2) return undefined
+  const key = parts.at(-1)
+  const modifiers = parts.slice(0, -1).map((part) => {
+    const token = part.toLowerCase()
+    if (token === 'commandorcontrol' || token === 'cmdorctrl' || token === 'ctrl' || token === 'control') {
+      return 'CommandOrControl'
+    }
+    if (token === 'command' || token === 'cmd' || token === 'meta' || token === 'super') {
+      return 'Command'
+    }
+    if (token === 'alt' || token === 'option') return 'Alt'
+    if (token === 'shift') return 'Shift'
+    return null
+  })
+  if (!key || !/^[A-Za-z0-9]$/u.test(key) || modifiers.some((part) => part === null)) return undefined
+  const uniqueModifiers = [...new Set(modifiers.filter((part): part is string => part !== null))]
+  return `${uniqueModifiers.join('+')}+${key.toUpperCase()}`
+}
+
+function normalizeDesktopOverlayDelayMs(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 60_000) return undefined
+  return Math.round(value)
 }
 
 function requiredPhraseText(value: unknown, label: string, maxLength: number): string {

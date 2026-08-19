@@ -6,7 +6,11 @@ import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { SettingsPermissionsView } from './settings-permissions-view'
 import { VoiceSettingsView } from './voice-settings-view'
 import { getAuroraSurfaceProfile, shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
-import type { AuroraRuntimeProfileV2 } from './runtime-profile'
+import type {
+  AuroraDesktopOverlaySave,
+  AuroraLocalSpeechPreferencesSave,
+  AuroraRuntimeProfileV2,
+} from './runtime-profile'
 import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 
 /** @deprecated Settings is a single This-device page; retained so existing hosts keep compiling. */
@@ -24,7 +28,8 @@ export interface SettingsViewProps {
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
   localSpeechCatalog?: AuroraLocalSpeechCatalogPort | null | undefined
-  onLocalSpeechSelectionConfirmed?: ((selection: NonNullable<AuroraRuntimeProfileV2['localNode']['localSpeechSelection']>) => void | Promise<void>) | undefined
+  onLocalSpeechSelectionConfirmed?: AuroraLocalSpeechPreferencesSave | undefined
+  onDesktopOverlayConfirmed?: AuroraDesktopOverlaySave | undefined
   /** @deprecated Ignored: Settings is local-only and does not branch on admin. */
   sessionIsAdmin?: boolean | undefined
   onRequestNativeAccess?: ((permissionId: string) => Promise<void> | void) | undefined
@@ -40,6 +45,7 @@ export function SettingsView({
   surfaceProfile = null,
   localSpeechCatalog = null,
   onLocalSpeechSelectionConfirmed,
+  onDesktopOverlayConfirmed,
   onRequestNativeAccess,
   onNavigate,
   connectionRoleContent
@@ -67,6 +73,7 @@ export function SettingsView({
         onRequestNativeAccess={onRequestNativeAccess}
         onNavigate={onNavigate}
         connectionRoleContent={connectionRoleContent}
+        onDesktopOverlayConfirmed={onDesktopOverlayConfirmed}
       />
       {showLocalVoiceEditor ? (
         <VoiceSettingsView

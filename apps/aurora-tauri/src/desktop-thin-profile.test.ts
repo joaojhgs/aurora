@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
   encodeMeshInviteToken,
+  serializeRuntimeProfileDocument,
   type BrowserWebThinRuntime,
   type BrowserWebRtcSnapshot,
 } from '@aurora/ui'
@@ -44,6 +45,7 @@ import {
   ANDROID_NATIVE_PLUGIN_NAME,
   createTauriPeerCredentialCommandInvoker,
   installAndroidLifecyclePolicy,
+  loadAuroraDesktopOverlayPreferences,
   parseThinProfileDocument,
   serializeThinProfileDocument,
   TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS,
@@ -55,7 +57,7 @@ import {
   type AuroraThinProfileDocument,
 } from './aurora-client'
 import type { TauriMeshNodeServices } from './tauri-mesh-node-services'
-import { rebuildAuroraThinRuntime } from './tauri-app'
+import { rebuildAuroraThinRuntime, resetThinInviteFromUrlCacheForTests } from './tauri-app'
 
 const profile: AuroraThinConnectionProfile = {
   id: 'office',
@@ -249,6 +251,7 @@ describe('desktop-thin live connection profiles', () => {
     tauriCoreMock.addPluginListener.mockClear()
     tauriCoreMock.pluginListeners.splice(0)
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__
+    resetThinInviteFromUrlCacheForTests()
   })
 
   it('loads the packaged profile asynchronously before creating the live runtime', async () => {
@@ -1486,6 +1489,61 @@ describe('desktop-thin live connection profiles', () => {
       claimant_peer_id: 'android-peer',
       room_name: 'android-room',
     })
+  })
+
+  it('loads overlay prefs from this-device profile instead of server config', async () => {
+    const stored = {
+      ...runtimeDocument,
+      profiles: [{
+        ...runtimeDocument.profiles[0]!,
+        localNode: {
+          ...runtimeDocument.profiles[0]!.localNode,
+          desktopOverlay: {
+            enabled: false,
+            voiceEnabled: true,
+            textHotkey: 'Ctrl+J',
+            autoCloseDelayMs: 2500,
+          },
+        },
+      }],
+    }
+    tauriCoreMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'aurora_thin_profile_get') {
+        return { value: serializeRuntimeProfileDocument(stored) }
+      }
+      throw new Error(`unexpected invoke ${command}`)
+    })
+
+    const result = await loadAuroraDesktopOverlayPreferences()
+    expect(result.loaded).toBe(true)
+    expect(result.config).toEqual({
+      enabled: false,
+      voiceEnabled: true,
+      textHotkey: 'CommandOrControl+J',
+      autoCloseDelayMs: 2500,
+    })
+    expect(tauriCoreMock.invoke).toHaveBeenCalledWith('aurora_thin_profile_get')
+    expect(tauriCoreMock.invoke.mock.calls.some(([command]) => command === 'Config.Get' || String(command).includes('config'))).toBe(false)
+  })
+
+  it('applies default overlay prefs when this-device profile is empty and retries when the store is unavailable', async () => {
+    tauriCoreMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'aurora_thin_profile_get') return { value: null }
+      throw new Error(`unexpected invoke ${command}`)
+    })
+    const empty = await loadAuroraDesktopOverlayPreferences()
+    expect(empty.loaded).toBe(true)
+    expect(empty.config).toEqual({
+      enabled: true,
+      voiceEnabled: true,
+      textHotkey: 'CommandOrControl+K',
+      autoCloseDelayMs: 1200,
+    })
+
+    tauriCoreMock.invoke.mockRejectedValueOnce(new Error('profile store unavailable'))
+    const missing = await loadAuroraDesktopOverlayPreferences()
+    expect(missing.loaded).toBe(false)
+    expect(missing.config.textHotkey).toBe('CommandOrControl+K')
   })
 
 })

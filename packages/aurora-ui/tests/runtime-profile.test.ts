@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyRuntimeProfileDocument,
   isRuntimeProfileConfigured,
+  mergeLocalNodeDesktopOverlay,
+  mergeLocalNodeSpeechPreferences,
   migrateThinProfileDocumentToRuntime,
   parseRuntimeProfileDocument,
+  resolveLocalSpeechLanguagePolicy,
   runtimeProfileDocumentToThinDocument,
   sanitizeRuntimeProfile,
   sanitizeRuntimeProfileDocument,
@@ -283,6 +286,128 @@ describe('runtime profile document', () => {
     expect(parsed?.profiles[0]?.localNode.localSpeechPackState).toBe('downloading')
     expect(parsed?.profiles[0]?.localNode.localSpeechSelection).toEqual(profile.localNode.localSpeechSelection)
     expect(isRuntimeProfileConfigured(parsed?.profiles[0])).toBe(true)
+  })
+
+  it('round-trips this-device primary and voice language independently from speech packs', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    const profile: AuroraRuntimeProfileV2 = {
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        primaryLanguage: 'pt-BR',
+        voiceLanguage: 'AUTO',
+      },
+    }
+
+    const parsed = parseRuntimeProfileDocument(serializeRuntimeProfileDocument({
+      ...migrated,
+      profiles: [profile],
+    }))
+    expect(parsed?.profiles[0]?.localNode.primaryLanguage).toBe('pt-br')
+    expect(parsed?.profiles[0]?.localNode.voiceLanguage).toBe('auto')
+    expect(parsed?.profiles[0]?.localNode.localSpeechSelection).toBeUndefined()
+    expect(resolveLocalSpeechLanguagePolicy('pt-br', 'auto')).toEqual({
+      primaryLanguage: 'pt-br',
+      voiceLanguage: 'auto',
+      modelLanguage: 'pt-br',
+    })
+    expect(resolveLocalSpeechLanguagePolicy('en', 'de')).toEqual({
+      primaryLanguage: 'en',
+      voiceLanguage: 'de',
+      modelLanguage: 'de',
+    })
+    expect(mergeLocalNodeSpeechPreferences(profile.localNode, {}, {
+      primaryLanguage: 'de',
+      voiceLanguage: 'fr',
+    })).toEqual({
+      ...profile.localNode,
+      primaryLanguage: 'de',
+      voiceLanguage: 'fr',
+    })
+    expect(() => sanitizeRuntimeProfile({
+      ...profile,
+      localNode: {
+        ...profile.localNode,
+        primaryLanguage: 'auto',
+      },
+    })).toThrow(/primary language/u)
+    expect(() => sanitizeRuntimeProfile({
+      ...profile,
+      localNode: {
+        ...profile.localNode,
+        voiceLanguage: 'not a language',
+      },
+    })).toThrow(/voice language/u)
+  })
+
+  it('round-trips this-device overlay and shortcut prefs without server config', () => {
+    const migrated = migrateThinProfileDocumentToRuntime(v1Document)
+    const profile: AuroraRuntimeProfileV2 = {
+      ...migrated.profiles[0]!,
+      localNode: {
+        ...migrated.profiles[0]!.localNode,
+        desktopOverlay: {
+          enabled: false,
+          voiceEnabled: true,
+          textHotkey: 'Ctrl+J',
+          autoCloseDelayMs: 2500,
+        },
+      },
+    }
+
+    const parsed = parseRuntimeProfileDocument(serializeRuntimeProfileDocument({
+      ...migrated,
+      profiles: [profile],
+    }))
+    expect(parsed?.profiles[0]?.localNode.desktopOverlay).toEqual({
+      enabled: false,
+      voiceEnabled: true,
+      textHotkey: 'CommandOrControl+J',
+      autoCloseDelayMs: 2500,
+    })
+    expect(mergeLocalNodeDesktopOverlay(profile.localNode, {
+      enabled: true,
+      textHotkey: 'Alt+K',
+    })).toEqual({
+      ...profile.localNode,
+      desktopOverlay: {
+        enabled: true,
+        voiceEnabled: true,
+        textHotkey: 'Alt+K',
+        autoCloseDelayMs: 2500,
+      },
+    })
+    expect(parseRuntimeProfileDocument(serializeRuntimeProfileDocument({
+      ...migrated,
+      profiles: [{
+        ...migrated.profiles[0]!,
+        localNode: migrated.profiles[0]!.localNode,
+      }],
+    }))?.profiles[0]?.localNode.desktopOverlay).toBeUndefined()
+    expect(() => sanitizeRuntimeProfile({
+      ...profile,
+      localNode: {
+        ...profile.localNode,
+        desktopOverlay: {
+          enabled: true,
+          voiceEnabled: true,
+          textHotkey: 'K',
+          autoCloseDelayMs: 1200,
+        },
+      },
+    })).toThrow(/overlay shortcut/u)
+    expect(() => sanitizeRuntimeProfile({
+      ...profile,
+      localNode: {
+        ...profile.localNode,
+        desktopOverlay: {
+          enabled: true,
+          voiceEnabled: true,
+          textHotkey: 'CommandOrControl+K',
+          autoCloseDelayMs: 90_000,
+        },
+      },
+    })).toThrow(/overlay hide delay/u)
   })
 
   it('rejects malformed local speech selections without rejecting old profile documents', () => {

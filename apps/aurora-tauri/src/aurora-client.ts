@@ -16,7 +16,7 @@ import {
   type ToolingProjectionToolInfo,
 } from "@aurora/client";
 import { addPluginListener, invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
   activeRuntimeProfile,
@@ -28,6 +28,9 @@ import {
   getAuroraSurfaceProfile,
   isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
+  localSpeechSelectionHasAssetPatch,
+  mergeLocalNodeDesktopOverlay,
+  mergeLocalNodeSpeechPreferences,
   migrateThinProfileDocumentToRuntime,
   migrateThinProfileToRuntimeProfile,
   parseRuntimeProfileDocument,
@@ -35,12 +38,15 @@ import {
   parseWebRtcInvite,
   runtimeProfileToThinConnectionProfile,
   sanitizeThinConnectionProfile,
+  resolveDesktopOverlayPreferences,
   sanitizeRuntimeProfile,
   sanitizeRuntimeProfileDocument,
   serializeRuntimeProfileDocument,
   serializeThinProfileDocument as serializeSharedThinProfileDocument,
   surfaceSupportsRuntimeTier,
   type AuroraNodeMode,
+  type AuroraDesktopOverlayPreferences,
+  type AuroraLocalSpeechLanguagePrefs,
   type AuroraLocalSpeechSelectionProfile,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
@@ -92,6 +98,7 @@ import {
   type TauriNativeSpeechCatalogPort,
 } from "./native-speech-catalog";
 
+export const AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT = "aurora://desktop-overlay-settings";
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
 
 const TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const;
@@ -161,6 +168,9 @@ export interface AuroraTauriRuntime {
   overlayUnregisterHotkey?: () => Promise<AuroraOverlayCommandStatus | null>;
   listenOverlayMode?: (
     handler: AuroraOverlayModeListener,
+  ) => Promise<() => void>;
+  listenDesktopOverlaySettings?: (
+    handler: (overlay: AuroraDesktopOverlayPreferences) => void,
   ) => Promise<() => void>;
   shutdown: () => Promise<void>;
 }
@@ -247,6 +257,10 @@ export interface AuroraThinProfileController {
   selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
   updateActiveLocalSpeechSelection?: (
     selection: AuroraLocalSpeechSelectionProfile,
+    languages?: AuroraLocalSpeechLanguagePrefs,
+  ) => Promise<AuroraThinProfileDocument>;
+  updateActiveDesktopOverlay?: (
+    overlay: AuroraDesktopOverlayPreferences,
   ) => Promise<AuroraThinProfileDocument>;
   recreateRuntime?: () => Promise<AuroraTauriRuntime>;
   createRuntime: (
@@ -1299,6 +1313,7 @@ function tauriOverlayControls(): Pick<
   | "overlayRegisterHotkey"
   | "overlayUnregisterHotkey"
   | "listenOverlayMode"
+  | "listenDesktopOverlaySettings"
 > {
   return {
     overlayShow: (mode) =>
@@ -1318,6 +1333,11 @@ function tauriOverlayControls(): Pick<
       listen<unknown>("aurora://overlay-mode", (event) =>
         handler(event.payload),
       ),
+    listenDesktopOverlaySettings: (handler) =>
+      listen<AuroraDesktopOverlayPreferences>(
+        AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT,
+        (event) => handler(event.payload),
+      ),
   };
 }
 
@@ -1334,6 +1354,7 @@ function noopOverlayControls(
   | "overlayRegisterHotkey"
   | "overlayUnregisterHotkey"
   | "listenOverlayMode"
+  | "listenDesktopOverlaySettings"
 > {
   const unavailable = {
     ok: false,
@@ -1368,7 +1389,38 @@ function noopOverlayControls(
     }),
     overlayUnregisterHotkey: async () => ({ ...unavailable, mode: "hidden" }),
     listenOverlayMode: async () => () => undefined,
+    listenDesktopOverlaySettings: async () => () => undefined,
   };
+}
+
+export async function loadAuroraDesktopOverlayPreferences(): Promise<{
+  config: AuroraDesktopOverlayPreferences
+  loaded: boolean
+}> {
+  try {
+    const result = await invoke<{ value?: string | null }>("aurora_thin_profile_get");
+    const document = parseRuntimeProfileDocument(result.value);
+    const profile = activeRuntimeProfile(document);
+    return {
+      config: resolveDesktopOverlayPreferences(profile?.localNode.desktopOverlay),
+      loaded: true,
+    };
+  } catch {
+    return {
+      config: resolveDesktopOverlayPreferences(undefined),
+      loaded: false,
+    };
+  }
+}
+
+async function emitDesktopOverlaySettings(
+  overlay: AuroraDesktopOverlayPreferences,
+): Promise<void> {
+  try {
+    await emit(AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT, overlay);
+  } catch {
+    // Overlay window refresh is best-effort; the next profile load still applies.
+  }
 }
 
 async function invokeOverlayCommand(
@@ -1722,7 +1774,7 @@ function createRuntimeBackedThinProfileController(
       controller.document = currentThinDocument;
       return currentThinDocument;
     },
-    updateActiveLocalSpeechSelection: async (selection) => {
+    updateActiveLocalSpeechSelection: async (selection, languages) => {
       if (!currentRuntimeDocument.activeProfileId) {
         throw new Error("Runtime profile does not exist");
       }
@@ -1731,19 +1783,20 @@ function createRuntimeBackedThinProfileController(
       const profiles = currentRuntimeDocument.profiles.map((profile) => {
         if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
         found = true;
-        const localSpeechSelection = {
-          ...(profile.localNode.localSpeechSelection ?? {}),
-          ...selection,
-        };
-        if (profile.nodeMode === "mesh-node") {
-          activationSelection = localSpeechSelection;
+        const localNode = mergeLocalNodeSpeechPreferences(
+          profile.localNode,
+          selection,
+          languages,
+        );
+        if (
+          profile.nodeMode === "mesh-node"
+          && localSpeechSelectionHasAssetPatch(selection)
+        ) {
+          activationSelection = localNode.localSpeechSelection ?? {};
         }
         return sanitizeRuntimeProfile({
           ...profile,
-          localNode: {
-            ...profile.localNode,
-            localSpeechSelection,
-          },
+          localNode,
         }, {
           allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
         });
@@ -1761,6 +1814,37 @@ function createRuntimeBackedThinProfileController(
       currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
       controller.runtimeDocument = currentRuntimeDocument;
       controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    updateActiveDesktopOverlay: async (overlay) => {
+      if (!currentRuntimeDocument.activeProfileId) {
+        throw new Error("Runtime profile does not exist");
+      }
+      let found = false;
+      let nextOverlay: AuroraDesktopOverlayPreferences | null = null;
+      const profiles = currentRuntimeDocument.profiles.map((profile) => {
+        if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
+        found = true;
+        const localNode = mergeLocalNodeDesktopOverlay(profile.localNode, overlay);
+        nextOverlay = localNode.desktopOverlay ?? resolveDesktopOverlayPreferences(overlay);
+        return sanitizeRuntimeProfile({
+          ...profile,
+          localNode,
+        }, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        });
+      });
+      if (!found) throw new Error("Runtime profile does not exist");
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles,
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      if (nextOverlay) await emitDesktopOverlaySettings(nextOverlay);
       return currentThinDocument;
     },
     recreateRuntime: () =>
@@ -1894,12 +1978,24 @@ function runtimeProfileFromThinProfile({
 function preservedLocalSpeechFields(
   existingProfile: AuroraRuntimeProfileV2 | undefined,
   packageCapabilities: AuroraTauriPackageCapabilities,
-): Pick<AuroraRuntimeProfileV2["localNode"], "localSpeechPackState" | "localSpeechSelection"> {
+): Pick<
+  AuroraRuntimeProfileV2["localNode"],
+  "localSpeechPackState" | "localSpeechSelection" | "primaryLanguage" | "voiceLanguage" | "desktopOverlay"
+> {
   if (!existingProfile) return {};
   const sanitized = sanitizeRuntimeProfile(existingProfile, {
     allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
   });
   return {
+    ...(sanitized.localNode.primaryLanguage
+      ? { primaryLanguage: sanitized.localNode.primaryLanguage }
+      : {}),
+    ...(sanitized.localNode.voiceLanguage
+      ? { voiceLanguage: sanitized.localNode.voiceLanguage }
+      : {}),
+    ...(sanitized.localNode.desktopOverlay
+      ? { desktopOverlay: sanitized.localNode.desktopOverlay }
+      : {}),
     ...(sanitized.localNode.localSpeechPackState
       ? { localSpeechPackState: sanitized.localNode.localSpeechPackState }
       : {}),

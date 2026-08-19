@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AssistantStreamUpdate, AuroraEvent, VoiceRuntimeEvent } from '@aurora/client'
 import type { AuroraOverlayLevel, AuroraVoiceOverlayState } from '@aurora/ui'
 import { describe, expect, it } from 'vitest'
@@ -75,6 +77,14 @@ function voiceEvent(overrides: Partial<VoiceRuntimeEvent>): VoiceRuntimeEvent {
 }
 
 describe('Aurora overlay TTS speaking lifecycle', () => {
+  it('loads overlay settings from this device instead of server config', () => {
+    const source = readFileSync(join(process.cwd(), 'src/overlay-app.tsx'), 'utf8')
+    expect(source).toContain('loadAuroraDesktopOverlayPreferences')
+    expect(source).toContain('listenDesktopOverlaySettings')
+    expect(source).not.toContain('config.get')
+    expect(source).not.toContain('watchConfig')
+    expect(source).not.toContain('ui.desktop_overlay')
+  })
   it('subscribes to direct TTS lifecycle and audio chunk selectors', () => {
     expect(TTS_EVENT_TOPICS).toContain('TTS.Started')
     expect(TTS_EVENT_TOPICS).toContain('TTS.Resumed')

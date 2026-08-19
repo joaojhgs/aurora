@@ -60,6 +60,7 @@ import {
 import {
   AuroraTauriApp,
   rebuildAuroraThinRuntime,
+  resetThinInviteFromUrlCacheForTests,
   routeForPath,
   tauriRouteRegistryRouteIds,
   type AuroraTauriRuntime,
@@ -1331,6 +1332,7 @@ describe("Aurora Tauri runtime wrapper", () => {
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     window.history.replaceState({}, "", "/");
+    resetThinInviteFromUrlCacheForTests();
   });
 
   it("recomposes a saved runtime profile so first-run native services are available immediately", async () => {
@@ -1455,6 +1457,96 @@ describe("Aurora Tauri runtime wrapper", () => {
     });
     expect(saved.profiles[0]?.nodeMode).toBe("mesh-node");
     expect(saved.profiles[0]?.runtimeTier).toBe("lightweight-ts");
+    await runtime.dispose();
+  });
+
+  it("persists this-device language prefs without reactivating speech packs", async () => {
+    const profile = meshRuntimeProfile({
+      localNode: {
+        ...meshRuntimeProfile().localNode,
+        localSpeechSelection: {
+          stt: {
+            packId: "whisper.tiny.en",
+            packRevision: "stt-rev-1",
+          },
+        },
+      },
+    });
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    });
+    const activateLocalSpeechPacks = vi.fn(async () => undefined);
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+      localSpeechPackActivator: activateLocalSpeechPacks,
+    });
+
+    await runtime.thinProfileController?.updateActiveLocalSpeechSelection?.(
+      {},
+      { primaryLanguage: "de", voiceLanguage: "auto" },
+    );
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.localNode.primaryLanguage).toBe("de");
+    expect(saved.profiles[0]?.localNode.voiceLanguage).toBe("auto");
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      stt: {
+        packId: "whisper.tiny.en",
+        packRevision: "stt-rev-1",
+      },
+    });
+    expect(activateLocalSpeechPacks).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
+  it("persists this-device overlay prefs without reactivating speech packs", async () => {
+    const profile = meshRuntimeProfile({
+      localNode: {
+        ...meshRuntimeProfile().localNode,
+        localSpeechSelection: {
+          stt: {
+            packId: "whisper.tiny.en",
+            packRevision: "stt-rev-1",
+          },
+        },
+      },
+    });
+    const store = createMemoryRuntimeProfileStore({
+      version: 2,
+      activeProfileId: profile.id,
+      profiles: [profile],
+    });
+    const activateLocalSpeechPacks = vi.fn(async () => undefined);
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: await store.load(),
+      localSpeechPackActivator: activateLocalSpeechPacks,
+    });
+
+    await runtime.thinProfileController?.updateActiveDesktopOverlay?.({
+      enabled: false,
+      voiceEnabled: true,
+      textHotkey: "Ctrl+J",
+      autoCloseDelayMs: 2500,
+    });
+
+    const saved = await store.load();
+    expect(saved.profiles[0]?.localNode.desktopOverlay).toEqual({
+      enabled: false,
+      voiceEnabled: true,
+      textHotkey: "CommandOrControl+J",
+      autoCloseDelayMs: 2500,
+    });
+    expect(saved.profiles[0]?.localNode.localSpeechSelection).toEqual({
+      stt: {
+        packId: "whisper.tiny.en",
+        packRevision: "stt-rev-1",
+      },
+    });
+    expect(activateLocalSpeechPacks).not.toHaveBeenCalled();
     await runtime.dispose();
   });
 

@@ -1,11 +1,19 @@
-import { AuroraOverlayShell, type AuroraOverlayLevel, type AuroraOverlayMessage, type AuroraOverlayMode, type AuroraVoiceOverlayState } from '@aurora/ui'
+import {
+  AuroraOverlayShell,
+  defaultDesktopOverlayPreferences,
+  resolveDesktopOverlayPreferences,
+  type AuroraDesktopOverlayPreferences,
+  type AuroraOverlayLevel,
+  type AuroraOverlayMessage,
+  type AuroraOverlayMode,
+  type AuroraVoiceOverlayState,
+} from '@aurora/ui'
 import { normalizeVoiceRuntimeEvent, type AssistantStreamUpdate, type AuroraEvent, type AuroraEventSubscription, type VoiceRuntimeEvent } from '@aurora/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import owlSrc from './assets/aurora-owl.png'
-import { createAuroraTauriRuntime } from './aurora-client'
+import { createAuroraTauriRuntime, loadAuroraDesktopOverlayPreferences } from './aurora-client'
 
-const DEFAULT_HOTKEY = 'CommandOrControl+K'
 const ERROR_HIDE_MS = 1_800
 const CONFIG_RETRY_MS = 1_000
 const INPUT_FALLBACK_LEVEL = 0.16
@@ -19,21 +27,9 @@ function passthroughForOverlayMode(mode: AuroraOverlayMode): boolean {
   return mode === 'hidden'
 }
 
-type OverlayConfig = {
-  enabled: boolean
-  voiceEnabled: boolean
-  textHotkey: string
-  autoCloseDelayMs: number
-}
+type OverlayConfig = AuroraDesktopOverlayPreferences
 
-type OverlayConfigLoadResult = { config: OverlayConfig; loaded: boolean }
-
-const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
-  enabled: true,
-  voiceEnabled: true,
-  textHotkey: DEFAULT_HOTKEY,
-  autoCloseDelayMs: 1_200
-}
+const DEFAULT_OVERLAY_CONFIG: OverlayConfig = defaultDesktopOverlayPreferences()
 
 const EXPLICIT_VOICE_INPUT_REASONS = new Set([
   'wakeword',
@@ -155,7 +151,7 @@ export function AuroraOverlayApp() {
     }
 
     const reloadAndApplyConfig = async (retryIfUnavailable: boolean) => {
-      const result = await loadOverlayConfig(runtime.client)
+      const result = await loadAuroraDesktopOverlayPreferences()
       if (disposed) return
       clearRetryTimer()
       if (result.loaded) {
@@ -173,38 +169,28 @@ export function AuroraOverlayApp() {
       disposed = true
       clearRetryTimer()
     }
-  }, [applyLoadedOverlayConfig, runtime])
+  }, [applyLoadedOverlayConfig])
 
   useEffect(() => {
     let disposed = false
-    const controller = new AbortController()
-    const subscription = runtime.client.events.watchConfig<Record<string, unknown>>({
-      kinds: ['config.updated', 'config.reload'],
-      signal: controller.signal
-    })
-
-    const reloadAndApplyConfig = async () => {
-      const result = await loadOverlayConfig(runtime.client)
-      if (!disposed && result.loaded) applyLoadedOverlayConfig(result.config)
-    }
-
-    void (async () => {
-      try {
-        for await (const event of subscription) {
-          if (disposed) return
-          if (shouldReloadOverlayConfig(event)) {
-            void reloadAndApplyConfig()
-          }
-        }
-      } catch (error) {
-        if (!disposed && !controller.signal.aborted) console.warn('Aurora overlay config watch failed', error)
+    let unsubscribe: (() => void) | null = null
+    const listenDesktopOverlaySettings = runtime.listenDesktopOverlaySettings ?? (async () => () => undefined)
+    listenDesktopOverlaySettings((overlay) => {
+      if (disposed) return
+      applyLoadedOverlayConfig(resolveDesktopOverlayPreferences(overlay))
+    }).then((dispose) => {
+      if (disposed) {
+        dispose()
+      } else {
+        unsubscribe = dispose
       }
-    })()
+    }).catch(() => {
+      unsubscribe = null
+    })
 
     return () => {
       disposed = true
-      controller.abort()
-      subscription.close('overlay-config-watch-unmount')
+      unsubscribe?.()
       setOverlayPassthrough(true)
       clearHideTimer()
       messageAbortRef.current?.abort()
@@ -1059,46 +1045,6 @@ function normalizeVoiceInputReason(reason: string): string {
   return reason.trim().toLowerCase().replace(/[\s_.-]+/g, '')
 }
 
-function shouldReloadOverlayConfig(event: { kind?: string; topic?: string | null; busTopic?: string | null; payload?: unknown }): boolean {
-  if (event.kind === 'config.reload') return true
-  const topic = event.topic ?? event.busTopic
-  if (topic && topic !== 'Config.Updated' && topic !== 'config.updated') return false
-  if (event.kind && event.kind !== 'config.updated') return true
-
-  const payload = readObject(event.payload)
-  if (!payload) return true
-
-  const candidateKeys = [
-    payload.key_path,
-    payload.keyPath,
-    payload.key,
-    payload.path,
-    payload.section,
-    payload.config_section,
-    payload.configSection
-  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-
-  const affectedSections = readStringArray(payload.affected_sections) ?? readStringArray(payload.affectedSections)
-  if (affectedSections) candidateKeys.push(...affectedSections)
-
-  if (candidateKeys.length === 0) return true
-  return candidateKeys.some(isOverlayConfigPath)
-}
-
-function isOverlayConfigPath(path: string): boolean {
-  const normalized = path.trim()
-  return normalized === 'ui'
-    || normalized === 'ui.desktop_overlay'
-    || normalized.startsWith('ui.desktop_overlay.')
-    || 'ui.desktop_overlay'.startsWith(`${normalized}.`)
-}
-
-function readStringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null
-  const strings = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-  return strings.length > 0 ? strings : null
-}
-
 function firstDefinedPayloadValue(payload: Record<string, unknown>, ...keys: string[]): unknown {
   for (const key of keys) {
     const value = payload[key]
@@ -1167,42 +1113,7 @@ function readBooleanValue(payload: Record<string, unknown>, ...keys: string[]): 
   return null
 }
 
-async function loadOverlayConfig(client: ReturnType<typeof createAuroraTauriRuntime>['client']): Promise<OverlayConfigLoadResult> {
-  try {
-    const response = await client.config.get({ section: 'ui' })
-    if (!response.ok) return { config: DEFAULT_OVERLAY_CONFIG, loaded: false }
-    const config = readObject(response.data.config)
-    if (!config) return { config: DEFAULT_OVERLAY_CONFIG, loaded: false }
-    const ui = readObject(config.ui) ?? config
-    const desktopOverlay = readObject(ui.desktop_overlay)
-    if (!desktopOverlay) return { config: DEFAULT_OVERLAY_CONFIG, loaded: true }
-    return {
-      config: {
-        enabled: readBoolean(desktopOverlay?.enabled, DEFAULT_OVERLAY_CONFIG.enabled),
-        voiceEnabled: readBoolean(desktopOverlay?.voice_overlay_enabled, DEFAULT_OVERLAY_CONFIG.voiceEnabled),
-        textHotkey: readString(desktopOverlay?.text_hotkey, DEFAULT_OVERLAY_CONFIG.textHotkey),
-        autoCloseDelayMs: readNonNegativeNumber(desktopOverlay?.auto_close_delay_ms, DEFAULT_OVERLAY_CONFIG.autoCloseDelayMs)
-      },
-      loaded: true
-    }
-  } catch (error) {
-    console.warn('Aurora overlay config unavailable; retrying before registering hotkey', error)
-    return { config: DEFAULT_OVERLAY_CONFIG, loaded: false }
-  }
-}
-
 function readObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
 
-function readBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback
-}
-
-function readString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : fallback
-}
-
-function readNonNegativeNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
-}
