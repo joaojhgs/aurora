@@ -51,6 +51,7 @@ import {
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
   type AuroraRuntimeTier,
+  type AuroraSurfaceProfile,
   type ParsedWebRtcInvite,
   type ThinConnectionProfile,
   type ThinProfileDocument,
@@ -100,6 +101,30 @@ import {
 
 export const AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT = "aurora://desktop-overlay-settings";
 export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
+
+/**
+ * Whether this shell should carry WebRTC over Aurora's own Rust transport
+ * instead of the WebView's RTCPeerConnection.
+ *
+ * `supportsNativeWebRtcBridge` says the transport is compiled in for this
+ * surface; the WebView having no RTCPeerConnection of its own is what makes it
+ * the only way through, which is the desktop-thin case on WebKitGTK.
+ * `native_webrtc_transport_v1` sits above both as the kill switch — off, and
+ * every surface goes back to the WebView primitive, falling through to HTTP
+ * where the WebView has no RTCPeerConnection at all.
+ */
+export function usesNativeWebRtcPrimitive({
+  rolloutFlags,
+  surfaceProfile,
+  hasWebViewPeerConnection = typeof globalThis.RTCPeerConnection === "function",
+}: {
+  rolloutFlags: Pick<AuroraWebRtcRolloutFlags, "native_webrtc_transport_v1">;
+  surfaceProfile: Pick<AuroraSurfaceProfile, "supportsNativeWebRtcBridge">;
+  hasWebViewPeerConnection?: boolean;
+}): boolean {
+  if (!rolloutFlags.native_webrtc_transport_v1) return false;
+  return surfaceProfile.supportsNativeWebRtcBridge && !hasWebViewPeerConnection;
+}
 
 const TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const;
 
@@ -1203,10 +1228,11 @@ function createTauriWebThinRuntime({
 }): BrowserWebThinRuntime {
   let runtime: BrowserWebThinRuntime;
   const surfaceProfile = currentAuroraSurfaceProfile();
-  const usesNativePeerConnection =
-    isDesktopTauriRuntime() &&
-    surfaceProfile.supportsNativeWebRtcBridge &&
-    typeof globalThis.RTCPeerConnection !== "function";
+  const rolloutFlags = tauriWebRtcRolloutFlags();
+  const usesNativePeerConnection = usesNativeWebRtcPrimitive({
+    rolloutFlags,
+    surfaceProfile,
+  });
   runtime = createBrowserWebThinRuntime({
     mode,
     nodeRole: meshNodeServices?.enabled ? "mesh-node" : "remote-console",
@@ -1215,7 +1241,7 @@ function createTauriWebThinRuntime({
     signalingUrl,
     profile: webrtcProfile,
     inviteText,
-    rolloutFlags: tauriWebRtcRolloutFlags(),
+    rolloutFlags,
     credentialStore:
       isDesktopTauriRuntime() ||
       isAndroidTauriRuntime() ||
@@ -2345,6 +2371,9 @@ function tauriWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
     ),
     lightweight_orchestrator_v1: enabledUnlessExplicitlyFalse(
       import.meta.env.VITE_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1,
+    ),
+    native_webrtc_transport_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_NATIVE_WEBRTC_TRANSPORT_V1,
     ),
   };
 }

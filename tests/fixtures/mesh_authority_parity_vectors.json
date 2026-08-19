@@ -1,0 +1,3388 @@
+{
+  "authorityAuthorize": {
+    "cases": [
+      {
+        "expected": {
+          "allowed": true,
+          "grantRevision": 3,
+          "grantedMethodIds": [
+            "Tooling.GetTools"
+          ]
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "allows_authenticated_peer_with_a_covering_grant",
+        "note": "",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "peer_not_authenticated"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_an_unauthenticated_caller",
+        "note": "No proof, no decision \u2014 and no leak of whether a grant exists.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "selector_mismatch"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_a_context_belonging_to_another_peer",
+        "note": "Invariant: authority contexts never cross peers. Peer B's proven context presented on a frame claiming to be peer A is refused before the resolver is consulted at all.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-b",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "method_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_an_uncovered_method",
+        "note": "Escalation attempt.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.ExecuteTool",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_revoked"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_a_revoked_grant",
+        "note": "",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_a_room_the_grant_does_not_cover",
+        "note": "Invariant: room membership is not authority.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "other-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      }
+    ]
+  },
+  "constants": {
+    "authorityDecisionReasons": [
+      "capability_not_granted",
+      "credential_expired",
+      "credential_not_found",
+      "credential_revoked",
+      "grant_expired",
+      "grant_not_found",
+      "grant_revoked",
+      "grant_store_unreadable",
+      "method_not_granted",
+      "resource_not_granted",
+      "tool_not_granted"
+    ],
+    "challengeStatuses": [
+      "accepted",
+      "expired",
+      "not_found",
+      "rejected",
+      "replay",
+      "selector_mismatch",
+      "transport_mismatch"
+    ],
+    "challengeTtlMs": 20000,
+    "errorCodes": {
+      "handlerFailed": 500,
+      "notAuthorized": 403,
+      "requestCancelled": 499,
+      "requestTimeout": 504,
+      "schemaValidationFailed": 400
+    },
+    "grantManagementErrorCodes": [
+      "invalid_expiry",
+      "invalid_selection",
+      "invalid_selector",
+      "repository_unavailable",
+      "secure_random_unavailable"
+    ],
+    "maxExpiryWindowMs": 31622400000,
+    "reasonCodes": [
+      "handler_failed",
+      "lease_expired",
+      "peer_authority_revoked",
+      "request_cancelled",
+      "request_timeout",
+      "schema_validation_failed"
+    ],
+    "reconnectDomain": "aurora.mesh.reconnect-proof.v1\u0000"
+  },
+  "executionPolicy": {
+    "blockedMethods": [
+      {
+        "expectedError": "gateway route inspection cannot be registered as a peer-host service",
+        "hostile": true,
+        "methodId": "Gateway.ExplainRoute",
+        "name": "gateway_route_inspection",
+        "note": "Route inspection would expose the node's internal routing to a remote peer."
+      },
+      {
+        "expectedError": "continuous audio capture cannot be hosted across devices",
+        "hostile": true,
+        "methodId": "WakeWord.ProcessAudio",
+        "name": "wake_word_audio"
+      },
+      {
+        "expectedError": "continuous audio capture cannot be hosted across devices",
+        "hostile": true,
+        "methodId": "Transcription.ProcessAudio",
+        "name": "transcription_audio"
+      }
+    ],
+    "defaults": {
+      "maxConcurrent": 10,
+      "maxEventBytes": 65536,
+      "maxRequestBytes": 262144,
+      "maxTtlSeconds": 120,
+      "serviceVersion": "1.0.0",
+      "timeoutMs": 30000,
+      "toolingProviderCapabilities": [
+        "tool_discovery",
+        "tool_execution"
+      ]
+    },
+    "events": [
+      {
+        "expected": {
+          "maxEventBytes": 65536,
+          "maxTtlSeconds": 120,
+          "module": "TTS",
+          "name": "AudioChunk",
+          "orderedEventGroup": "tts_text_stream",
+          "outputSchemaId": "TTS.AudioChunk.event.TTSAudioChunkEvent",
+          "requiredPermissions": [
+            "TTS.use"
+          ],
+          "topic": "TTS.AudioChunk"
+        },
+        "hostile": false,
+        "name": "tts_audio_chunk",
+        "topic": "TTS.AudioChunk"
+      }
+    ],
+    "methods": [
+      {
+        "expected": {
+          "busTopic": "Tooling.GetTools",
+          "callableFeatureIds": [
+            "catalog_discovery"
+          ],
+          "exposure": "both",
+          "inputSchemaId": "Tooling.GetTools.input.ToolingGetToolsRequest",
+          "maxConcurrent": 10,
+          "maxRequestBytes": 262144,
+          "methodId": "Tooling.GetTools",
+          "methodType": "unary",
+          "module": "Tooling",
+          "name": "GetTools",
+          "outputSchemaId": "Tooling.GetTools.output.ToolingGetToolsResponse",
+          "projectionMethodType": "use",
+          "requiredPermissions": [
+            "Tooling.GetTools"
+          ],
+          "serviceCapabilities": [
+            "tool_discovery",
+            "tool_execution"
+          ],
+          "serviceVersion": "1.0.0",
+          "summary": "",
+          "timeoutMs": 30000
+        },
+        "hostile": false,
+        "methodId": "Tooling.GetTools",
+        "name": "tooling_get_tools"
+      },
+      {
+        "expected": {
+          "busTopic": "Tooling.ExecuteTool",
+          "callableFeatureIds": [
+            "execution"
+          ],
+          "exposure": "both",
+          "inputSchemaId": "Tooling.ExecuteTool.input.ToolingExecuteToolRequest",
+          "maxConcurrent": 10,
+          "maxRequestBytes": 262144,
+          "methodId": "Tooling.ExecuteTool",
+          "methodType": "unary",
+          "module": "Tooling",
+          "name": "ExecuteTool",
+          "outputSchemaId": "Tooling.ExecuteTool.output.ToolingExecuteToolResponse",
+          "projectionMethodType": "use",
+          "requiredPermissions": [
+            "Tooling.ExecuteTool"
+          ],
+          "serviceCapabilities": [
+            "tool_discovery",
+            "tool_execution"
+          ],
+          "serviceVersion": "1.0.0",
+          "summary": "",
+          "timeoutMs": 30000
+        },
+        "hostile": false,
+        "methodId": "Tooling.ExecuteTool",
+        "name": "tooling_execute_tool"
+      },
+      {
+        "expected": {
+          "busTopic": "TTS.ListVoices",
+          "callableFeatureIds": [
+            "speech_voice_discovery"
+          ],
+          "exposure": "both",
+          "inputSchemaId": "TTS.ListVoices.input.TTSListVoicesRequest",
+          "maxConcurrent": 10,
+          "maxRequestBytes": 262144,
+          "methodId": "TTS.ListVoices",
+          "methodType": "unary",
+          "module": "TTS",
+          "name": "ListVoices",
+          "outputSchemaId": "TTS.ListVoices.output.TTSListVoicesResponse",
+          "projectionMethodType": "use",
+          "requiredPermissions": [
+            "TTS.use"
+          ],
+          "serviceCapabilities": [],
+          "serviceVersion": "1.0.0",
+          "summary": "",
+          "timeoutMs": 30000
+        },
+        "hostile": false,
+        "methodId": "TTS.ListVoices",
+        "name": "non_tooling_method_advertises_no_provider_capabilities"
+      }
+    ]
+  },
+  "generated_by": "scripts/generate_mesh_authority_fixtures.py",
+  "grantResolution": {
+    "cases": [
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-live"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "method_granted",
+        "note": "The ordinary allow.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "method_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "method_not_granted",
+        "note": "Escalation: a grant for one method must not answer for another.",
+        "request": {
+          "methodId": "Tooling.ExecuteTool",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_expired"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-expired",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_expired",
+        "note": "Expiry is evaluated against nowMs, inclusive.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_expired"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 2000,
+            "grantId": "grant-edge",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_expiring_exactly_now_is_expired",
+        "note": "expiresAtMs <= nowMs, not <.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_revoked"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_revoked",
+        "note": "Revoked authority denies even a covered method.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-b",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_for_another_peer_is_invisible",
+        "note": "Invariant: authority contexts never cross peers.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-other-room",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "other-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_in_another_room_is_invisible",
+        "note": "Invariant: room membership is not authority.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-token-b",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_under_another_token_is_invisible",
+        "note": "A grant is bound to the credential it was issued against.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "tool_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "tool_not_granted",
+        "note": "Coverage is checked member by member, in declaration order.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "capability_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-tools",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "capability_not_granted",
+        "note": "",
+        "request": {
+          "capabilityPackId": "pack.notes",
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "resource_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-caps",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "resource_not_granted",
+        "note": "",
+        "request": {
+          "capabilityPackId": "pack.notes",
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "resourceScope": "notes/2024",
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-full"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-full",
+            "grantRevision": 1,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "full_coverage_allows",
+        "note": "",
+        "request": {
+          "capabilityPackId": "pack.notes",
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "resourceScope": "notes/2024",
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-old"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-old",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "TTS.ListVoices"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1500,
+            "grantId": "grant-new",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "newest_revision_is_tried_first_then_older_covers",
+        "note": "Candidates sort by revision desc, then createdAt desc, then id asc.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-older"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1800,
+            "grantId": "grant-newest",
+            "grantRevision": 3,
+            "resourceScopes": [],
+            "revokedAtMs": 1900,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1500,
+            "grantId": "grant-older",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "revoked_newest_does_not_shadow_live_older",
+        "note": "A revoked candidate records its reason and keeps looking.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_revoked"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-r1",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-r2",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "all_candidates_revoked_reports_revoked",
+        "note": "The last blocking reason wins, not the first.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [],
+        "hostile": true,
+        "name": "no_grants_at_all",
+        "note": "",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-live"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "bare_relationship_check_allows_any_live_grant",
+        "note": "With nothing to cover, any live grant answers. Used by revocation.",
+        "request": {
+          "nowMs": 2000,
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          }
+        }
+      }
+    ]
+  },
+  "grantSelection": {
+    "cases": [
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [
+              "TTS.ListVoices",
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "resourceScopes": []
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "sorts_and_de_duplicates",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "TTS.ListVoices",
+            "Tooling.GetTools",
+            "TTS.ListVoices"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "resourceScopes": []
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "trims_surrounding_whitespace",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "  Tooling.GetTools  "
+          ]
+        }
+      },
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "resourceScopes": []
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "execute_tool_is_not_an_execution_word",
+        "note": "The execution matcher is anchored to whole separator-delimited components, so ExecuteTool passes while shell.exec does not. Pinned because an over-matching transliteration would silently break sharing.",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling.ExecuteTool"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [
+              "shell"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "resourceScopes": []
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "shell_alone_is_not_an_execution_word",
+        "note": "`shell` is only refused as a resource scheme, not as an identifier component.",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "shell"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "resourceScopes": [
+              "notes/2024"
+            ]
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "accepts_a_bounded_resource_scope",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "notes/2024"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "normalized": {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "expiresAtMs": 2001,
+            "resourceScopes": []
+          },
+          "ok": true
+        },
+        "hostile": false,
+        "name": "accepts_an_expiry_inside_the_window",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling.GetTools"
+          ],
+          "expiresAtMs": 2001
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Choose at least one item to share",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "empty_selection",
+        "note": "Sharing nothing is not a way to share.",
+        "nowMs": 2000,
+        "selection": {}
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid method selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "wildcard",
+        "note": "Escalation: a wildcard would grant everything the node can ever do.",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "*"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "path_traversal",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "notes/../../etc"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "absolute_path",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "/etc/passwd"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "home_relative_path",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "~/.ssh"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "windows_separator",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "notes\\2024"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid method selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "unsafe_characters",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling GetTools"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid method selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "secret_name_token",
+        "note": "Names that read as secret material never become grant members.",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Auth.token"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid capability selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "secret_name_bearer",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "capabilityPackIds": [
+            "Bearer"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid capability selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "secret_name_private_key",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "capabilityPackIds": [
+            "private-key"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid tool selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "execution_shell_exec",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedToolContractIds": [
+            "shell.exec"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid tool selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "execution_process_spawn",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedToolContractIds": [
+            "process.spawn"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid tool selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "execution_sudo",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedToolContractIds": [
+            "sudo"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid tool selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "execution_sh_component",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedToolContractIds": [
+            "bin/sh"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "resource_sql_scheme",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "sql:users"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "resource_sqlite_scheme_bare",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "sqlite"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "resource_select_word",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "data.select"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid resource selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "resource_drop_word",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "resourceScopes": [
+            "notes/drop/2024"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Invalid method selection",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "oversized_identifier",
+        "note": "Malformed and oversized input is refused, not truncated.",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_selection",
+          "message": "Too many method selections",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "too_many_items",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Method.M0",
+            "Method.M1",
+            "Method.M2",
+            "Method.M3",
+            "Method.M4",
+            "Method.M5",
+            "Method.M6",
+            "Method.M7",
+            "Method.M8",
+            "Method.M9",
+            "Method.M10",
+            "Method.M11",
+            "Method.M12",
+            "Method.M13",
+            "Method.M14",
+            "Method.M15",
+            "Method.M16",
+            "Method.M17",
+            "Method.M18",
+            "Method.M19",
+            "Method.M20",
+            "Method.M21",
+            "Method.M22",
+            "Method.M23",
+            "Method.M24",
+            "Method.M25",
+            "Method.M26",
+            "Method.M27",
+            "Method.M28",
+            "Method.M29",
+            "Method.M30",
+            "Method.M31",
+            "Method.M32",
+            "Method.M33",
+            "Method.M34",
+            "Method.M35",
+            "Method.M36",
+            "Method.M37",
+            "Method.M38",
+            "Method.M39",
+            "Method.M40",
+            "Method.M41",
+            "Method.M42",
+            "Method.M43",
+            "Method.M44",
+            "Method.M45",
+            "Method.M46",
+            "Method.M47",
+            "Method.M48",
+            "Method.M49",
+            "Method.M50",
+            "Method.M51",
+            "Method.M52",
+            "Method.M53",
+            "Method.M54",
+            "Method.M55",
+            "Method.M56",
+            "Method.M57",
+            "Method.M58",
+            "Method.M59",
+            "Method.M60",
+            "Method.M61",
+            "Method.M62",
+            "Method.M63",
+            "Method.M64",
+            "Method.M65",
+            "Method.M66",
+            "Method.M67",
+            "Method.M68",
+            "Method.M69",
+            "Method.M70",
+            "Method.M71",
+            "Method.M72",
+            "Method.M73",
+            "Method.M74",
+            "Method.M75",
+            "Method.M76",
+            "Method.M77",
+            "Method.M78",
+            "Method.M79",
+            "Method.M80",
+            "Method.M81",
+            "Method.M82",
+            "Method.M83",
+            "Method.M84",
+            "Method.M85",
+            "Method.M86",
+            "Method.M87",
+            "Method.M88",
+            "Method.M89",
+            "Method.M90",
+            "Method.M91",
+            "Method.M92",
+            "Method.M93",
+            "Method.M94",
+            "Method.M95",
+            "Method.M96",
+            "Method.M97",
+            "Method.M98",
+            "Method.M99",
+            "Method.M100",
+            "Method.M101",
+            "Method.M102",
+            "Method.M103",
+            "Method.M104",
+            "Method.M105",
+            "Method.M106",
+            "Method.M107",
+            "Method.M108",
+            "Method.M109",
+            "Method.M110",
+            "Method.M111",
+            "Method.M112",
+            "Method.M113",
+            "Method.M114",
+            "Method.M115",
+            "Method.M116",
+            "Method.M117",
+            "Method.M118",
+            "Method.M119",
+            "Method.M120",
+            "Method.M121",
+            "Method.M122",
+            "Method.M123",
+            "Method.M124",
+            "Method.M125",
+            "Method.M126",
+            "Method.M127",
+            "Method.M128"
+          ]
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_expiry",
+          "message": "Sharing expiry is invalid",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "expiry_in_the_past",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling.GetTools"
+          ],
+          "expiresAtMs": 1999
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_expiry",
+          "message": "Sharing expiry is invalid",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "expiry_exactly_now",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling.GetTools"
+          ],
+          "expiresAtMs": 2000
+        }
+      },
+      {
+        "expected": {
+          "code": "invalid_expiry",
+          "message": "Sharing expiry is invalid",
+          "ok": false
+        },
+        "hostile": true,
+        "name": "expiry_beyond_the_window",
+        "note": "",
+        "nowMs": 2000,
+        "selection": {
+          "allowedMethodIds": [
+            "Tooling.GetTools"
+          ],
+          "expiresAtMs": 31622402001
+        }
+      }
+    ]
+  },
+  "manifestSnapshot": {
+    "authority": [
+      {
+        "expected": {
+          "authGrantRevision": 5,
+          "authGrantState": "active",
+          "grantedMethodIds": [
+            "TTS.ListVoices",
+            "Tooling.GetTools"
+          ],
+          "grantedPermissions": [],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-a",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "TTS.ListVoices"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-b",
+            "grantRevision": 5,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "aggregates_live_grants_for_the_proven_peer",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "authGrantRevision": 0,
+          "authGrantState": "unknown",
+          "grantedMethodIds": [],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-a",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "advertises_nothing_without_a_proven_identity",
+        "request": {
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "authGrantRevision": 0,
+          "authGrantState": "unknown",
+          "grantedMethodIds": [],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-a",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "advertises_nothing_when_the_context_is_another_peers",
+        "note": "Invariant: authority contexts never cross peers.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-b",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      }
+    ],
+    "session": [
+      {
+        "expected": {
+          "authGrantRevision": 5,
+          "authGrantState": "active",
+          "grantedMethodIds": [
+            "TTS.ListVoices",
+            "Tooling.GetTools"
+          ],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-a",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "TTS.ListVoices",
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-b",
+            "grantRevision": 5,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Orchestrator.Interrupt"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked",
+            "grantRevision": 9,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "aggregates_live_grants",
+        "note": "A revoked grant contributes neither a method nor a revision.",
+        "request": {
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "authGrantRevision": 0,
+          "authGrantState": "unknown",
+          "grantedMethodIds": [],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked",
+            "grantRevision": 9,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "reports_unknown_with_nothing_live",
+        "request": {
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "authGrantRevision": 0,
+          "authGrantState": "unknown",
+          "grantedMethodIds": [],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-b",
+            "grantRevision": 4,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "another_peers_grants_are_not_advertised",
+        "note": "Invariant: authority contexts never cross peers.",
+        "request": {
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      }
+    ]
+  },
+  "note": "Shared parity corpus for the mesh authority. Consumed by rust/crates/aurora-mesh-authority/tests/parity_corpus.rs and packages/aurora-sdk/tests/mesh-authority-parity-vectors.test.ts. No real credentials: every token, room and peer id here is synthetic.",
+  "reconnectChallenge": {
+    "cases": [
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "single_use_per_peer",
+        "note": "Invariant: reconnect challenges stay single-use per peer. The second presentation of a consumed challenge is a replay, not a second chance.",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "accepted",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "replay",
+            "nowMs": 1200,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "replay",
+            "nowMs": 1300,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "selector_mismatch_outranks_replay",
+        "note": "A consumed challenge presented by a different peer reports the mismatch, not the replay.",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "accepted",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "selector_mismatch",
+            "nowMs": 1200,
+            "selector": {
+              "claimantPeerId": "peer-b",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "transport_mismatch",
+        "note": "A challenge is bound to the transport it was issued on.",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "transport_mismatch",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "another_room_is_a_selector_mismatch",
+        "note": "Invariant: room membership is not authority.",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "selector_mismatch",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "other-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "expires_after_exactly_twenty_seconds",
+        "note": "expiresAtMs <= nowMs, so the boundary instant is already expired.",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "expired",
+            "nowMs": 21000,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": false,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "still_live_one_millisecond_before_expiry",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "accepted",
+            "nowMs": 20999,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "unissued_challenge_is_not_found",
+        "steps": [
+          {
+            "action": "consume",
+            "challenge": "9999999999999999999999999999999999999999999999999999999999999999",
+            "expectedStatus": "not_found",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      },
+      {
+        "hostile": true,
+        "issue": {
+          "identity": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "verifierPeerId": "peer-host"
+          },
+          "nowMs": 1000,
+          "transport": {
+            "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "claimantSignalingPeerId": "sig-a",
+            "verifierSignalingPeerId": "sig-host"
+          }
+        },
+        "name": "revocation_rejects_outstanding_challenges",
+        "note": "Forgetting a peer invalidates every challenge it could still answer.",
+        "steps": [
+          {
+            "action": "reject",
+            "nowMs": 1050
+          },
+          {
+            "action": "consume",
+            "challenge": "ISSUED",
+            "expectedStatus": "rejected",
+            "nowMs": 1100,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          }
+        ]
+      }
+    ],
+    "challengeBytesHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "ttlMs": 20000
+  },
+  "reconnectProof": {
+    "cases": [
+      {
+        "bearerToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expectedMessageHex": "6175726f72612e6d6573682e7265636f6e6e6563742d70726f6f662e7631007b226368616c6c656e6765223a2231313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131222c226368616e6e656c5f62696e64696e67223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22636c61696d616e745f706565725f6964223a22706565722d61222c22726f6f6d5f6e616d65223a226c61622d726f6f6d222c22746f6b656e5f6964223a22746f6b656e2d61222c2276657269666965725f706565725f6964223a22706565722d686f7374222c2276657273696f6e223a317d",
+        "expectedProofHex": "02fdb500a25bc06737c660af46043c29a89076e92ef69bb2760b13724f8b6fae",
+        "expectedTokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "name": "ascii_selector",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "bearerToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expectedMessageHex": "6175726f72612e6d6573682e7265636f6e6e6563742d70726f6f662e7631007b226368616c6c656e6765223a2231313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131222c226368616e6e656c5f62696e64696e67223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262222c22636c61696d616e745f706565725f6964223a22706565722d61222c22726f6f6d5f6e616d65223a226361665c75303065392d5c75643833645c7564653030222c22746f6b656e5f6964223a22746f6b656e2d61222c2276657269666965725f706565725f6964223a22706565722d686f7374222c2276657273696f6e223a317d",
+        "expectedProofHex": "d0a8711f3846c7e2ed6e10b38ca9ba98696bbf59da3e2163747b23c603126298",
+        "expectedTokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "name": "non_ascii_room_is_escaped",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "caf\u00e9-\ud83d\ude00",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      }
+    ],
+    "verify": [
+      {
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expected": true,
+        "hostile": false,
+        "name": "accepts_matching_proof",
+        "proofHex": "02fdb500a25bc06737c660af46043c29a89076e92ef69bb2760b13724f8b6fae",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "challenge": "9999999999999999999999999999999999999999999999999999999999999999",
+        "expected": false,
+        "hostile": true,
+        "name": "rejects_proof_for_another_challenge",
+        "proofHex": "02fdb500a25bc06737c660af46043c29a89076e92ef69bb2760b13724f8b6fae",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expected": false,
+        "hostile": true,
+        "name": "rejects_proof_bound_to_another_channel",
+        "proofHex": "02fdb500a25bc06737c660af46043c29a89076e92ef69bb2760b13724f8b6fae",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expected": false,
+        "hostile": true,
+        "name": "rejects_proof_replayed_for_another_peer",
+        "proofHex": "02fdb500a25bc06737c660af46043c29a89076e92ef69bb2760b13724f8b6fae",
+        "selector": {
+          "claimantPeerId": "peer-b",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expected": false,
+        "hostile": true,
+        "name": "rejects_malformed_hex",
+        "proofHex": "not-hex",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      },
+      {
+        "challenge": "1111111111111111111111111111111111111111111111111111111111111111",
+        "expected": false,
+        "hostile": true,
+        "name": "rejects_short_proof",
+        "proofHex": "abababababababababababababababab",
+        "selector": {
+          "claimantPeerId": "peer-a",
+          "roomName": "lab-room",
+          "tokenId": "token-a",
+          "verifierPeerId": "peer-host"
+        },
+        "tokenHashHex": "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+        "transport": {
+          "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "claimantSignalingPeerId": "sig-a",
+          "verifierSignalingPeerId": "sig-host"
+        }
+      }
+    ]
+  },
+  "schema": "aurora.mesh.authority.parity_vectors.v1",
+  "sessionAuthorize": {
+    "cases": [
+      {
+        "expected": {
+          "allowed": true,
+          "grantRevision": 4,
+          "grantedMethodIds": [
+            "TTS.ListVoices",
+            "Tooling.GetTools"
+          ]
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools",
+              "TTS.ListVoices"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-live",
+            "grantRevision": 4,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "allows_covered_method",
+        "note": "grantedMethodIds is sorted and de-duplicated.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantRevision": 1,
+          "grantedMethodIds": [
+            "TTS.ListVoices",
+            "Tooling.GetTools"
+          ]
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools",
+              "Tooling.GetTools",
+              "TTS.ListVoices"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-dupes",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "de_duplicates_granted_methods",
+        "note": "",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "grantRevision": 7,
+          "reasonCode": "grant_revoked"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked",
+            "grantRevision": 7,
+            "resourceScopes": [],
+            "revokedAtMs": 1500,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_revoked_before_checking_the_method",
+        "note": "Revocation short-circuits: a revoked grant denies even for a method it never carried.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "grantRevision": 5,
+          "reasonCode": "grant_expired"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-expired",
+            "grantRevision": 5,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "denies_expired_before_checking_the_method",
+        "note": "",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "grantRevision": 1,
+          "reasonCode": "grant_expired"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-first",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-second",
+            "grantRevision": 9,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "insertion_order_decides_which_grant_answers",
+        "note": "The store returns on the first match in insertion order, so an expired grant inserted first denies a request a later live grant would allow. Pinned because a hash map would make it non-deterministic.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-b",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_for_another_peer_is_skipped",
+        "note": "Invariant: authority contexts never cross peers.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-token-b",
+            "grantRevision": 1,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_under_another_token_is_skipped_when_authenticated",
+        "note": "The token filter applies only when the caller proved an identity.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantRevision": 2,
+          "grantedMethodIds": [
+            "Tooling.GetTools"
+          ]
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-token-b",
+            "grantRevision": 2,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "grant_under_another_token_is_visible_without_a_context",
+        "note": "Without an authenticated context this store filters on claimant alone. That is why the peer host uses PeerAuthorityHostAuthorizationStore in production and this one only inside a proven session.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "TTS.ListVoices"
+            ],
+            "allowedToolContractIds": [],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-other",
+            "grantRevision": 6,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "uncovered_method_reports_no_revision",
+        "note": "TypeScript raises bestRevision immediately before returning an allow, so the grant_not_found fallback never carries a revision. Pinned as written.",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "grant_not_found"
+        },
+        "grants": [],
+        "hostile": true,
+        "name": "no_grants_at_all",
+        "note": "",
+        "request": {
+          "methodId": "Tooling.GetTools",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      }
+    ]
+  },
+  "synthetic": true,
+  "ttsEmission": {
+    "cases": [
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 1,
+              "source_sequence": 1,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "",
+              "duration_ms": 0,
+              "is_final": true,
+              "sequence": 2,
+              "source_sequence": null,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": false,
+        "name": "ordered_stream_to_final"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 1,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": false,
+        "name": "repeated_source_sequence_is_allowed",
+        "note": "Two audio chunks may come from one source segment."
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": "TTS audio event sequence is not monotonic",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 2,
+              "source_sequence": 1,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "sequence_gap"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": "TTS audio event sequence is not monotonic",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "replayed_sequence"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "",
+              "duration_ms": 0,
+              "is_final": true,
+              "sequence": 1,
+              "source_sequence": null,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": "TTS audio event sequence is not monotonic",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 2,
+              "source_sequence": 1,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "emission_after_the_final_marker",
+        "note": "A closed stream cannot be reopened by the provider."
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          },
+          {
+            "expectedError": "TTS audio event source sequence is not ordered",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 1,
+              "source_sequence": 2,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "source_sequence_skips"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event source sequence is not ordered",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 1,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "first_source_sequence_must_be_zero"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event source sequence is required",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": null,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "non_final_chunk_without_a_source_sequence"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event final marker is invalid",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 0,
+              "is_final": true,
+              "sequence": 0,
+              "source_sequence": null,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "final_marker_carrying_audio"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event final marker is invalid",
+            "payload": {
+              "audio_data": "",
+              "duration_ms": 20.0,
+              "is_final": true,
+              "sequence": 0,
+              "source_sequence": null,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "final_marker_with_a_duration"
+      },
+      {
+        "correlationId": "corr-1",
+        "events": [
+          {
+            "expectedError": "TTS audio event correlation does not match payload",
+            "payload": {
+              "audio_data": "AAAA",
+              "correlation_id": "corr-2",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "correlation_mismatch",
+        "note": "A provider must not fan its stream into another caller's correlation."
+      },
+      {
+        "correlationId": "corr-1",
+        "events": [
+          {
+            "expectedError": null,
+            "payload": {
+              "audio_data": "AAAA",
+              "correlation_id": "corr-1",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": false,
+        "name": "correlation_match"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event stream_id is not a bounded identifier",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "oversized_stream_id"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event stream_id is not a bounded identifier",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": ""
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "empty_stream_id"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event sequence is invalid",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": -1,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "negative_sequence"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event sequence is invalid",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0.5,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "fractional_sequence"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event terminal fields are invalid",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": "yes",
+              "sequence": 0,
+              "source_sequence": 0,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "boolean_is_final"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event source sequence is invalid",
+            "payload": {
+              "audio_data": "AAAA",
+              "duration_ms": 20.0,
+              "is_final": false,
+              "sequence": 0,
+              "source_sequence": 1.5,
+              "stream_id": "stream-1"
+            }
+          }
+        ],
+        "hostile": true,
+        "name": "fractional_source_sequence"
+      },
+      {
+        "correlationId": null,
+        "events": [
+          {
+            "expectedError": "TTS audio event must be an object",
+            "payload": "not-an-object"
+          }
+        ],
+        "hostile": true,
+        "name": "payload_is_not_an_object"
+      }
+    ]
+  }
+}

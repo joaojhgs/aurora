@@ -65,7 +65,12 @@ export interface AuroraSurfaceProfile {
   supportsMobileNative: boolean
   supportsIosOnly: boolean
   supportsAndroidOnly: boolean
-  /** Aurora's native RTCPeerConnection bridge is currently packaged only on Linux desktop. */
+  /**
+   * Whether this surface can route WebRTC through Aurora's own Rust transport
+   * instead of the WebView's RTCPeerConnection: a native shell on a platform
+   * that compiles the transport in (linux, macos, windows, android, ios — see
+   * `apps/aurora-tauri/src-tauri/Cargo.toml`). A browser tab never has it.
+   */
   supportsNativeWebRtcBridge: boolean
   isWebThin: boolean
   supportsWebRtcThin: boolean
@@ -178,9 +183,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
 
   const physicalKind: AuroraSurfaceKind = physicalSurfaceKind(legacyKind)
   const isDesktop = legacyKind === 'desktop-local' || legacyKind === 'desktop-thin'
-  const supportsNativeWebRtcBridge = isDesktop && usesNativeShell && (
-    nativeSaysLinux || userAgentSaysLinux
-  )
+  const supportsNativeWebRtcBridge = usesNativeShell && (isDesktop || nativeAndroid || nativeIos)
   const isWebThin = legacyKind === 'web' || legacyKind === 'desktop-thin' || (isMobile && (transportKind === 'http' || usesWebRtcTransport))
   const supportsWebRtcThin = isWebThin || isMobile
   const prefersWebRtcTransport = usesWebRtcTransport

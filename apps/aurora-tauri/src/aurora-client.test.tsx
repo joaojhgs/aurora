@@ -27,6 +27,7 @@ import {
   getProductionRouteOracle,
   loadingShellSnapshot,
   encodeMeshInviteToken,
+  normalizeAuroraWebRtcRolloutFlags,
   webRtcProfileFromInvite,
   type BrowserWebRtcSnapshot,
   type AuroraRuntimeProfileV2,
@@ -55,6 +56,7 @@ import {
   createMemoryRuntimeProfileStore,
   createAuroraTauriRuntime,
   loadTauriRemoteAssistantTools,
+  usesNativeWebRtcPrimitive,
   type AuroraThinConnectionProfile,
 } from "./aurora-client";
 import {
@@ -4910,5 +4912,62 @@ describe("Tauri CI/E2E route gates", () => {
       await act(async () => browser.root.unmount());
       browser.container.remove();
     }
+  });
+});
+
+describe("native WebRTC transport rollout flag", () => {
+  const nativeShell = { supportsNativeWebRtcBridge: true };
+  const hostedPage = { supportsNativeWebRtcBridge: false };
+
+  it("turns the native transport off from the one flag", () => {
+    // On a shell whose WebView has no RTCPeerConnection, the Rust transport is
+    // the only way through — which is exactly where a kill switch has to bite.
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: true },
+        surfaceProfile: nativeShell,
+        hasWebViewPeerConnection: false,
+      }),
+    ).toBe(true);
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: false },
+        surfaceProfile: nativeShell,
+        hasWebViewPeerConnection: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps the WebView primitive where the shell already has one", () => {
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: true },
+        surfaceProfile: nativeShell,
+        hasWebViewPeerConnection: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("never reaches for a transport the surface does not compile in", () => {
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: true },
+        surfaceProfile: hostedPage,
+        hasWebViewPeerConnection: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("defaults the flag on, and off only for an explicit false", () => {
+    expect(
+      normalizeAuroraWebRtcRolloutFlags({}).native_webrtc_transport_v1,
+    ).toBe(true);
+    expect(
+      normalizeAuroraWebRtcRolloutFlags(undefined).native_webrtc_transport_v1,
+    ).toBe(true);
+    expect(
+      normalizeAuroraWebRtcRolloutFlags({ native_webrtc_transport_v1: false })
+        .native_webrtc_transport_v1,
+    ).toBe(false);
   });
 });

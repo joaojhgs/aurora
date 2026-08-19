@@ -10,6 +10,65 @@ import type {
 
 const NATIVE_WEBRTC_EVENT = "aurora://native-webrtc";
 
+/**
+ * Largest single message the native transport will carry.
+ *
+ * Measured on the interop lane: 65,535 round-trips, 65,536 does not. Kept in
+ * step with NATIVE_WEBRTC_MAX_MESSAGE_BYTES in
+ * `apps/aurora-tauri/src-tauri/src/native_webrtc.rs`, which rejects the same
+ * size independently — this side rejects first so an oversize message never
+ * costs an IPC hop, and the Rust side catches anything that gets past here.
+ *
+ * Aurora fragments at 16 KB, so its own traffic is nowhere near this. The guard
+ * is for whatever reaches the channel without going through fragmentation,
+ * which would otherwise be sent and simply never arrive.
+ */
+export const NATIVE_WEBRTC_MAX_MESSAGE_BYTES = 65_535;
+
+/**
+ * A single message too large for the transport to carry.
+ *
+ * Extends TypeError because that is what a browser RTCDataChannel throws for an
+ * oversize send, and this channel stands in for one. `code` distinguishes it
+ * from every other TypeError a caller might catch.
+ */
+export class NativeWebRtcMessageTooLargeError extends TypeError {
+  readonly code = "messageTooLarge";
+
+  constructor(
+    readonly byteLength: number,
+    readonly maxByteLength: number = NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
+  ) {
+    super(
+      `native WebRTC message of ${byteLength} bytes exceeds the ` +
+        `${maxByteLength}-byte single-message ceiling`,
+    );
+    this.name = "NativeWebRtcMessageTooLargeError";
+  }
+}
+
+/**
+ * Restores the typed error from the Rust send command's `{ code }` rejection,
+ * so a caller sees the same class whichever side rejected.
+ */
+function nativeSendFailure(error: unknown): unknown {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    (error as { code?: unknown }).code !== "messageTooLarge"
+  ) {
+    return error;
+  }
+  const { byteLength, maxByteLength } = error as {
+    byteLength?: number;
+    maxByteLength?: number;
+  };
+  return new NativeWebRtcMessageTooLargeError(
+    byteLength ?? 0,
+    maxByteLength ?? NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
+  );
+}
+
 type NativeInvoke = <T>(
   command: string,
   args?: Record<string, unknown>,
@@ -484,6 +543,9 @@ class TauriNativeDataChannel implements DataChannelLike {
       );
     }
     const byteLength = payloadByteLength(data);
+    if (byteLength > NATIVE_WEBRTC_MAX_MESSAGE_BYTES) {
+      throw new NativeWebRtcMessageTooLargeError(byteLength);
+    }
     this.pendingIpcBytes += byteLength;
     const request =
       typeof data === "string"
@@ -513,7 +575,7 @@ class TauriNativeDataChannel implements DataChannelLike {
       }
     });
     this.sendQueue = send.catch((error) => {
-      this.fail(error);
+      this.fail(nativeSendFailure(error));
     });
   }
 

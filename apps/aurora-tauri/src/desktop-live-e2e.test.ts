@@ -63,24 +63,26 @@ describe("desktop live E2E WebView hook", () => {
     }
   });
 
-  it("never selects the Linux native WebRTC bridge on another desktop OS", () => {
+  it("falls back to the browser primitive only where the native transport is unavailable", () => {
     const userAgent = vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
     );
     try {
+      // A surface with no native transport behind it still has to use the
+      // WebView primitive, and has nothing to fall back to without one.
       expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, true, false)).toBe("browser-rtcpeerconnection");
       expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false, false)).toThrow(
-        "requires browser RTCPeerConnection on non-Linux desktop platforms",
+        "requires browser RTCPeerConnection where the native transport is unavailable",
       );
       expect(() => resolveDesktopLivePeerConnectionPrimitive({
         ...liveEnv,
         VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "1",
       }, true, false)).toThrow(
-        "requires browser RTCPeerConnection on non-Linux desktop platforms",
+        "requires browser RTCPeerConnection where the native transport is unavailable",
       );
-      expect(() => resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toThrow(
-        "requires browser RTCPeerConnection on non-Linux desktop platforms",
-      );
+      // macOS reaches the native transport now that it is no longer Linux-only,
+      // so the derived surface no longer refuses it.
+      expect(resolveDesktopLivePeerConnectionPrimitive(liveEnv, false)).toBe("tauri-native-webrtc");
     } finally {
       userAgent.mockRestore();
     }

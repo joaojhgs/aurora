@@ -52,6 +52,13 @@ export interface AuroraWebRtcRolloutFlags {
   mesh_node_runtime_v1: boolean
   local_tool_provider_v1: boolean
   lightweight_orchestrator_v1: boolean
+  /**
+   * Route WebRTC through Aurora's own Rust transport on shells that compile it
+   * in, rather than through the WebView's RTCPeerConnection. Turning this off is
+   * the kill switch: every surface goes back to the WebView primitive, and to
+   * the HTTP fallback where the WebView has no RTCPeerConnection at all.
+   */
+  native_webrtc_transport_v1: boolean
 }
 
 export const DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS: Readonly<AuroraWebRtcRolloutFlags> = Object.freeze({
@@ -62,6 +69,7 @@ export const DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS: Readonly<AuroraWebRtcRolloutFl
   mesh_node_runtime_v1: true,
   local_tool_provider_v1: true,
   lightweight_orchestrator_v1: true,
+  native_webrtc_transport_v1: true,
 })
 
 export interface BrowserThinRuntimeConfig {
@@ -883,6 +891,9 @@ export function normalizeAuroraWebRtcRolloutFlags(
     lightweight_orchestrator_v1:
       value?.lightweight_orchestrator_v1
       ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.lightweight_orchestrator_v1,
+    native_webrtc_transport_v1:
+      value?.native_webrtc_transport_v1
+      ?? DEFAULT_AURORA_WEBRTC_ROLLOUT_FLAGS.native_webrtc_transport_v1,
   }
 }
 

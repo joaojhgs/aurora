@@ -5,6 +5,8 @@ import type {
 } from "@aurora/client/webrtc";
 import {
   createTauriNativePeerConnectionFactory,
+  NativeWebRtcMessageTooLargeError,
+  NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
   type TauriNativeWebRtcBridge,
 } from "./native-webrtc";
 
@@ -17,12 +19,19 @@ class FakeNativeWebRtcBridge implements TauriNativeWebRtcBridge {
     | ((event: { payload: Record<string, unknown> }) => void)
     | undefined;
   beforeDataChannelResponse: (() => void) | undefined;
+  failSendWith: unknown | undefined;
 
   async invoke<T>(
     command: string,
     args?: Record<string, unknown>,
   ): Promise<T> {
     this.calls.push({ command, args });
+    if (
+      command === "aurora_native_webrtc_data_channel_send" &&
+      this.failSendWith !== undefined
+    ) {
+      throw this.failSendWith;
+    }
     switch (command) {
       case "aurora_native_webrtc_create":
         return {
@@ -267,6 +276,99 @@ describe("Tauri native WebRTC fallback", () => {
     expect(messaged).toHaveBeenCalledWith({
       data: "early-encrypted-frame",
     });
+  });
+
+  it("rejects a message above the transport ceiling instead of losing it", async () => {
+    const bridge = new FakeNativeWebRtcBridge();
+    const peer = createTauriNativePeerConnectionFactory(bridge)({});
+    const channel = peer.createDataChannel("aurora-rpc");
+    await peer.createOffer();
+    bridge.emit({
+      type: "dataChannelOpen",
+      peerConnectionId: 7,
+      dataChannelId: 8,
+    });
+    expect(channel.readyState).toBe("open");
+
+    // Measured, not chosen: 65,535 round-trips and 65,536 does not, so the
+    // boundary is the assertion rather than the rough magnitude.
+    expect(NATIVE_WEBRTC_MAX_MESSAGE_BYTES).toBe(65_535);
+    const sendsBefore = bridge.calls.filter(
+      ({ command }) => command === "aurora_native_webrtc_data_channel_send",
+    ).length;
+
+    expect(() => channel.send("a".repeat(65_536))).toThrow(
+      NativeWebRtcMessageTooLargeError,
+    );
+    try {
+      channel.send(new Uint8Array(131_072));
+      expect.unreachable("an oversize binary send must not be accepted");
+    } catch (error) {
+      expect(error).toBeInstanceOf(NativeWebRtcMessageTooLargeError);
+      // A browser RTCDataChannel throws a TypeError for this, and this channel
+      // stands in for one.
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as NativeWebRtcMessageTooLargeError).code).toBe(
+        "messageTooLarge",
+      );
+      expect((error as NativeWebRtcMessageTooLargeError).byteLength).toBe(
+        131_072,
+      );
+      expect((error as NativeWebRtcMessageTooLargeError).maxByteLength).toBe(
+        65_535,
+      );
+    }
+
+    // Nothing reached the transport, and the refusal did not leave the channel
+    // accounting for bytes it never sent.
+    expect(
+      bridge.calls.filter(
+        ({ command }) => command === "aurora_native_webrtc_data_channel_send",
+      ),
+    ).toHaveLength(sendsBefore);
+    expect(channel.bufferedAmount).toBe(0);
+
+    // A message exactly at the ceiling still goes.
+    channel.send("a".repeat(65_535));
+    await vi.waitFor(() => {
+      expect(
+        bridge.calls.filter(
+          ({ command }) => command === "aurora_native_webrtc_data_channel_send",
+        ),
+      ).toHaveLength(sendsBefore + 1);
+    });
+  });
+
+  it("surfaces the Rust ceiling rejection as the same typed error", async () => {
+    const bridge = new FakeNativeWebRtcBridge();
+    bridge.failSendWith = {
+      code: "messageTooLarge",
+      byteLength: 70_000,
+      maxByteLength: 65_535,
+    };
+    const peer = createTauriNativePeerConnectionFactory(bridge)({});
+    const channel = peer.createDataChannel("aurora-rpc");
+    const errored = vi.fn();
+    channel.onerror = errored;
+    await peer.createOffer();
+    bridge.emit({
+      type: "dataChannelOpen",
+      peerConnectionId: 7,
+      dataChannelId: 8,
+    });
+
+    // Under the ceiling on this side, so it reaches Rust, which is the backstop
+    // for anything the TypeScript guard cannot see.
+    channel.send("frame");
+    await vi.waitFor(() => {
+      expect(errored).toHaveBeenCalled();
+    });
+    const error = errored.mock.calls[0]?.[0];
+    expect(error).toBeInstanceOf(NativeWebRtcMessageTooLargeError);
+    expect((error as NativeWebRtcMessageTooLargeError).byteLength).toBe(70_000);
+    expect((error as NativeWebRtcMessageTooLargeError).maxByteLength).toBe(
+      65_535,
+    );
   });
 
   it("uses the native factory only as the PeerConnection primitive", () => {

@@ -243,7 +243,7 @@ export function resolveDesktopLivePeerConnectionPrimitive(
   const nativeForced = isDesktopLiveNativeWebRtcForced(env);
   if (!supportsNativeWebRtcBridge && (nativeForced || !hasBrowserRtcPeerConnection)) {
     throw new Error(
-      "Desktop live E2E requires browser RTCPeerConnection on non-Linux desktop platforms",
+      "Desktop live E2E requires browser RTCPeerConnection where the native transport is unavailable",
     );
   }
   return nativeForced || !hasBrowserRtcPeerConnection

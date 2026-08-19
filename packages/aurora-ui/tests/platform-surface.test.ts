@@ -93,7 +93,7 @@ describe('Aurora surface profile regression coverage', () => {
     expect(profile.canManageLocalServiceConfiguration).toBe(true)
   })
 
-  it('limits the native WebRTC bridge to Linux desktop shells', () => {
+  it('gives the native WebRTC bridge to every native shell, and to no browser tab', () => {
     const linux = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-thin',
       transportKind: 'webrtc-only',
@@ -109,16 +109,32 @@ describe('Aurora surface profile regression coverage', () => {
       transportKind: 'webrtc-only',
       userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36',
     })
+    const ios = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+    })
     const hostedLinux = getAuroraSurfaceProfile({
       runtimeMode: 'web-thin',
       transportKind: 'webrtc-only',
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
     })
+    const hostedAndroid = getAuroraSurfaceProfile({
+      runtimeMode: 'web-thin',
+      transportKind: 'webrtc-only',
+      userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36',
+    })
 
+    // Every platform below compiles the Rust transport, so the shell is the
+    // whole question — being on Linux stopped being part of it.
     expect(linux.supportsNativeWebRtcBridge).toBe(true)
-    expect(macos.supportsNativeWebRtcBridge).toBe(false)
-    expect(android.supportsNativeWebRtcBridge).toBe(false)
+    expect(macos.supportsNativeWebRtcBridge).toBe(true)
+    expect(android.supportsNativeWebRtcBridge).toBe(true)
+    expect(ios.supportsNativeWebRtcBridge).toBe(true)
+    // A hosted page has a WebView RTCPeerConnection and no Rust behind it,
+    // whatever platform it is running on.
     expect(hostedLinux.supportsNativeWebRtcBridge).toBe(false)
+    expect(hostedAndroid.supportsNativeWebRtcBridge).toBe(false)
   })
 
   it('keeps voice ownership centralized by surface capabilities', () => {
