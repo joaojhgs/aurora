@@ -546,6 +546,10 @@ describe('browser WebRTC thin-shell runtime', () => {
 
       expect(runtimeOptions).toHaveLength(6)
       expect(runtimeOptions[0]?.nodeRole).toBe('mesh-node')
+      // A device that is part of a mesh may hold several; connecting to an
+      // Aurora stays on one at a time by policy, not by shape.
+      expect(runtimeOptions[0]?.peerConnectionPolicy).toBe('mesh')
+      expect(runtimeOptions[1]?.peerConnectionPolicy).toBe('connect')
       expect(runtimeOptions[0]?.peerAuthorityResolver).toBe(peerAuthorityResolver)
       expect(runtimeOptions[0]?.peerPairingIssuer).toBe(peerPairingIssuer)
       expect(runtimeOptions[1]?.nodeRole).toBe('remote-console')

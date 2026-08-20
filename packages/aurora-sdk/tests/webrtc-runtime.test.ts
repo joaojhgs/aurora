@@ -2160,7 +2160,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 })
 
-import { PEER_ALREADY_REGISTERED_REASON } from '../src/webrtc/peer-registry.js'
+import { CONNECT_IS_SINGLE_PEER_REASON, PEER_ALREADY_REGISTERED_REASON } from '../src/webrtc/peer-registry.js'
 
 interface RuntimeRosterEntry {
   peerId: string
@@ -2170,6 +2170,7 @@ interface RuntimeRosterEntry {
 }
 
 interface RuntimePeerRegistry {
+  connectionPolicy(): 'connect' | 'mesh'
   roster(): { peers: RuntimeRosterEntry[]; primaryPeerId?: string; updatedAt: string }
   subscribeRoster(listener: (roster: { peers: RuntimeRosterEntry[]; primaryPeerId?: string }) => void): () => void
   connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void>
@@ -2191,7 +2192,10 @@ function meshPeerProfile(peerId: string | undefined, signalingPeerId: string, no
   return next
 }
 
-function makeMultiPeerHarness(localSignalingIds: string[]): MultiPeerHarness {
+function makeMultiPeerHarness(
+  localSignalingIds: string[],
+  peerConnectionPolicy?: 'connect' | 'mesh',
+): MultiPeerHarness {
   const signalings: RuntimeFakeSignaling[] = []
   const connections: RuntimeFakePeerConnection[] = []
   const store = new MemoryPeerCredentialStore()
@@ -2215,6 +2219,7 @@ function makeMultiPeerHarness(localSignalingIds: string[]): MultiPeerHarness {
     },
     scryptDeriver: async () => new Uint8Array(32).fill(7),
     randomId: () => queuedLocalIds.shift() ?? `rpc-${rpc++}`,
+    ...(peerConnectionPolicy !== undefined ? { peerConnectionPolicy } : {}),
     windowLocation: secureLocation
   })
   return { runtime, registry: runtime.peer as unknown as RuntimePeerRegistry, store, signalings, connections }
@@ -2339,6 +2344,31 @@ describe('browser WebRTC runtime peer registry', {
 
     await harness.runtime.close()
     expect(harness.registry.roster().peers).toEqual([])
+  })
+
+  it('keeps a Connect surface on one device by policy while the same registry holds a mesh', async () => {
+    const connectOnly = makeMultiPeerHarness(['a-alpha', 'a-beta'], 'connect')
+    expect(connectOnly.registry.connectionPolicy()).toBe('connect')
+    await connectOnly.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+
+    await expect(connectOnly.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node')))
+      .rejects.toMatchObject({ detail: { reason_code: CONNECT_IS_SINGLE_PEER_REASON, peer_id: 'peer-beta' } })
+    // The refusal is a policy decision, so the device already connected is left alone.
+    expect(connectOnly.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+
+    // Dropping the one it holds frees the surface to connect a different device.
+    await connectOnly.registry.disconnectPeer('peer-alpha', 'switching devices')
+    await connectOnly.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    expect(connectOnly.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-beta'])
+    await connectOnly.runtime.close()
+
+    // Nothing structural stops several: the same registry holds a mesh.
+    const mesh = makeMultiPeerHarness(['a-alpha', 'a-beta'], 'mesh')
+    expect(mesh.registry.connectionPolicy()).toBe('mesh')
+    await mesh.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await mesh.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    expect(mesh.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha', 'peer-beta'])
+    await mesh.runtime.close()
   })
 
   it('keeps pairing state independent per peer and drops only the rejected one', async () => {

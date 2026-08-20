@@ -61,6 +61,7 @@ import { MeshPeerBridgeRouter } from './mesh-bridge-router.js'
 import {
   MeshPeerSessionRegistry,
   type MeshDiscoveredPeer,
+  type MeshPeerConnectionPolicy,
   type MeshPeerRegistryController,
   type MeshPeerRosterSnapshot,
   type MeshPeerSessionEntry
@@ -102,6 +103,12 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   profile?: WebRtcPeerConnectionProfile | undefined
   localStablePeerId?: string | undefined
   localNodeName?: string | undefined
+  /**
+   * How many devices this surface may hold at once. Connect surfaces stay on
+   * one Aurora at a time by policy; a mesh surface holds several through the
+   * same registry.
+   */
+  peerConnectionPolicy?: MeshPeerConnectionPolicy | undefined
   routeResolver?: MeshRouteResolver | ((request: AuroraTransportRequest) => Promise<MeshRouteResolution> | MeshRouteResolution)
   defaultTimeoutMs?: number | undefined
   fallbackPeerIds?: string[] | undefined
@@ -278,7 +285,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   private readonly options: BrowserWebRtcRuntimeOptions<unknown>
   // One entry per stable peer id: session, signaling port, bridge, pairing
   // state. The single-peer snapshot below is a derived view over this map.
-  private readonly registry = new MeshPeerSessionRegistry()
+  private readonly registry: MeshPeerSessionRegistry
   // Dispatches every mesh RPC on the peer id the caller named, so one transport
   // reaches the whole registry instead of a single `defaultPeerId`.
   private readonly bridgeRouter = new MeshPeerBridgeRouter({
@@ -308,6 +315,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     this.credentialStore = credentialStore
     this.visibilityDocument = visibilityDocument
     this.options = options
+    // The single-device Connect restriction is one policy check the registry
+    // applies, not a shape the registry is stuck in.
+    this.registry = new MeshPeerSessionRegistry(
+      options.peerConnectionPolicy !== undefined ? { policy: options.peerConnectionPolicy } : {}
+    )
     this.installVisibilityHook()
   }
 
@@ -395,6 +407,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     this.rosterListeners.add(listener)
     listener(this.roster())
     return () => this.rosterListeners.delete(listener)
+  }
+
+  connectionPolicy(): MeshPeerConnectionPolicy {
+    return this.registry.connectionPolicy
   }
 
   async connect(profile: WebRtcPeerConnectionProfile = this.requiredProfile()): Promise<void> {

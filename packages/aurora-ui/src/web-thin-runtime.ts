@@ -326,6 +326,9 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     sdkRuntime = createBrowserWebRtcAuroraRuntime<AuroraClient>({
       mode,
       nodeRole: activeNodeRole,
+      // Connecting to an Aurora stays on one device at a time on purpose; a
+      // device that is part of a mesh holds several through the same registry.
+      peerConnectionPolicy: activeNodeRole === 'mesh-node' ? 'mesh' : 'connect',
       ...(http ? { http } : {}),
       ...(activeProfile ? { profile: activeProfile } : {}),
       ...(localToolProviderEnabled && config.peerHost ? { peerHost: config.peerHost } : {}),

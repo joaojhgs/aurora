@@ -232,12 +232,15 @@ export {
 export type { MeshPeerBridgeRouterOptions } from './mesh-bridge-router.js'
 
 export {
+  CONNECT_IS_SINGLE_PEER_REASON,
   MeshPeerSessionRegistry,
   PEER_ALREADY_REGISTERED_REASON,
+  connectIsSinglePeerError,
   peerAlreadyRegisteredError
 } from './peer-registry.js'
 export type {
   MeshDiscoveredPeer,
+  MeshPeerConnectionPolicy,
   MeshPeerRegistryController,
   MeshPeerRosterEntry,
   MeshPeerRosterSnapshot
