@@ -33,7 +33,7 @@ const VOICE_TEST_ARCHIVE = {
   model: 'en_GB-cori-medium.onnx',
   config: 'en_GB-cori-medium.onnx.json',
 }
-const ANDROID_VOICE_SERVICE = 'dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService'
+const ANDROID_VOICE_SERVICE = 'dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService'
 const ANDROID_VOICE_STOP_ACTION = 'dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE'
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const WORKSPACE_ROOT = resolve(APP_ROOT, '../..')
@@ -1122,7 +1122,7 @@ async function exerciseScreenOffAndDoze(context) {
 
 function serviceIsVisible(context) {
   const output = adbOutput(context, ['shell', 'dumpsys', 'activity', 'services', context.appId], { allowFailure: true })
-  return output.includes('AuroraVoiceForegroundService')
+  return output.includes('AuroraRuntimeForegroundService')
 }
 
 function notificationIsVisible(context) {
@@ -1211,7 +1211,7 @@ function collectDiagnostics(context) {
   if (!context?.adb || !context?.serial) return { unavailable: true }
   const logcat = adbOutput(context, ['logcat', '-d', '-t', '600'], { allowFailure: true })
     .split(/\r?\n/u)
-    .filter((line) => /AuroraNativePlugin|AuroraVoiceForegroundService|RustStdoutStderr|AndroidRuntime|dev\.aurora\.desktop/iu.test(line))
+    .filter((line) => /AuroraNativePlugin|AuroraRuntimeForegroundService|RustStdoutStderr|AndroidRuntime|dev\.aurora\.desktop/iu.test(line))
     .slice(-160)
     .join('\n')
   return {
@@ -1247,7 +1247,7 @@ function findApk() {
 function apkFreshnessInputs() {
   return [
     'scripts/install-android-native-plugin.mjs',
-    'src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceForegroundService.kt',
+    'src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraRuntimeForegroundService.kt',
     'src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
     'src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
     'src-tauri/build.rs',

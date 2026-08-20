@@ -10,6 +10,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioFocusRequest
@@ -42,8 +43,8 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
-private const val AURORA_VOICE_CHANNEL_ID = "aurora_voice_capture"
-private const val AURORA_VOICE_NOTIFICATION_ID = 4203
+private const val AURORA_RUNTIME_CHANNEL_ID = "aurora_voice_capture"
+private const val AURORA_RUNTIME_NOTIFICATION_ID = 4203
 private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
@@ -837,7 +838,85 @@ private class AuroraAudioCapture(
     }
 }
 
-class AuroraVoiceForegroundService : Service() {
+/**
+ * Why one Aurora foreground service instance is currently alive.
+ *
+ * Aurora keeps exactly one runtime service and exactly one entry in the
+ * notification shade. Every subsystem that needs the process kept awake
+ * acquires its own reason and releases it when it is finished; the service
+ * starts on the first acquisition and stops after the last release.
+ */
+enum class AuroraRuntimeForegroundReason(val id: String) {
+    /** Microphone capture and the local speech session that consumes it. */
+    VOICE("voice"),
+
+    /** A held connection to one of the user's other devices. */
+    DEVICE_LINK("device_link"),
+}
+
+/**
+ * Reference-counted foreground reasons shared by voice capture and held device
+ * connections.
+ *
+ * The ledger is process-scoped and every mutation is serialised, so several
+ * subsystems may acquire and release concurrently without either losing a hold
+ * or leaving the service running with nothing to do. Counts are clamped at zero
+ * so an unbalanced release can never drive the ledger negative and strand the
+ * service in the shade.
+ */
+object AuroraRuntimeForegroundLedger {
+    private val guard = Any()
+    private val counts = HashMap<AuroraRuntimeForegroundReason, Int>()
+
+    /** Increments [reason] and returns the number of holds now outstanding for it. */
+    fun acquire(reason: AuroraRuntimeForegroundReason): Int = synchronized(guard) {
+        val next = (counts[reason] ?: 0) + 1
+        counts[reason] = next
+        next
+    }
+
+    /**
+     * Takes the first hold on [reason] and reports whether this call took it.
+     * Used by singleton reasons such as voice capture, where repeated start
+     * commands describe the same one session rather than a second holder.
+     */
+    fun acquireOnce(reason: AuroraRuntimeForegroundReason): Boolean = synchronized(guard) {
+        if ((counts[reason] ?: 0) > 0) return@synchronized false
+        counts[reason] = 1
+        true
+    }
+
+    /** Decrements [reason] and returns the number of holds still outstanding for it. */
+    fun release(reason: AuroraRuntimeForegroundReason): Int = synchronized(guard) {
+        val next = (counts[reason] ?: 0) - 1
+        if (next <= 0) {
+            counts.remove(reason)
+            0
+        } else {
+            counts[reason] = next
+            next
+        }
+    }
+
+    /** Drops every outstanding hold on [reason] at once. */
+    fun clear(reason: AuroraRuntimeForegroundReason): Unit = synchronized(guard) {
+        counts.remove(reason)
+        Unit
+    }
+
+    fun holds(reason: AuroraRuntimeForegroundReason): Int = synchronized(guard) { counts[reason] ?: 0 }
+
+    fun isHeld(reason: AuroraRuntimeForegroundReason): Boolean = holds(reason) > 0
+
+    /** The reasons with at least one outstanding hold, in declaration order. */
+    fun activeReasons(): Set<AuroraRuntimeForegroundReason> = synchronized(guard) {
+        AuroraRuntimeForegroundReason.values().filterTo(LinkedHashSet()) { (counts[it] ?: 0) > 0 }
+    }
+
+    fun anyHeld(): Boolean = synchronized(guard) { counts.values.any { it > 0 } }
+}
+
+class AuroraRuntimeForegroundService : Service() {
     private var capture: AuroraAudioCapture? = null
     private var playback: AuroraAudioPlayback? = null
     private var session: AuroraNativeVoiceSessionBridge? = null
@@ -920,6 +999,10 @@ class AuroraVoiceForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_SYNC_REASONS) {
+            syncForegroundReasons(startId)
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             stopAfterTerminalFailure()
             return START_NOT_STICKY
@@ -950,9 +1033,8 @@ class AuroraVoiceForegroundService : Service() {
             (backgroundSessionActive && backgroundSessionRequested())
         val backgroundSession = durableBackgroundSession || intent?.action == ACTION_START_ASSISTANT
         running = true
-        val startingNotificationText = "Starting microphone…"
-        lastNotificationText.set(startingNotificationText)
-        startForeground(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification(startingNotificationText))
+        AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.VOICE)
+        enterForeground("Starting microphone…")
         if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
             captureError = "background_voice_unavailable"
             stopAfterTerminalFailure(startId)
@@ -1000,7 +1082,10 @@ class AuroraVoiceForegroundService : Service() {
         ) {
             return false
         }
-        if (!hasPostNotificationsPermission() || !canPostNotifications()) return false
+        // A denied notification permission degrades the shade entry and is
+        // reported as such; it never blocks or ends a session the user asked
+        // for, so readiness does not depend on canPostNotifications().
+        notificationsSuppressed = !canPostNotifications()
         val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
         val installedPackIds = recordedInstalledPackIds()
         val referenceSelectionReady = ttsReferenceSelection() != null
@@ -1411,6 +1496,7 @@ class AuroraVoiceForegroundService : Service() {
     override fun onDestroy() {
         destroyed = true
         if (activeInstance === this) activeInstance = null
+        AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
         releaseBackgroundWakeLock()
         backgroundSessionActive = false
         invalidateNativeVoiceInitialization()
@@ -1710,29 +1796,108 @@ class AuroraVoiceForegroundService : Service() {
 
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {
         if (!running) return
-        val text = if (snapshot.captureActive) {
-            "Microphone is active. Tap Stop to end."
-        } else {
-            "Voice controls are unavailable."
-        }
+        val text = notificationTextFor(AuroraRuntimeForegroundLedger.activeReasons(), snapshot)
         if (lastNotificationText.getAndSet(text) == text) return
+        notificationsSuppressed = !canPostNotifications()
+        // The one Aurora entry cannot reach the shade when the user has turned
+        // notifications off. The session keeps running and the degraded state
+        // is reported through the status surface instead.
+        if (notificationsSuppressed) return
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(AURORA_VOICE_NOTIFICATION_ID, foregroundNotification(text))
+        manager.notify(AURORA_RUNTIME_NOTIFICATION_ID, foregroundNotification(text))
+    }
+
+    /**
+     * The single Aurora notification describes the whole set of reasons the
+     * service is alive, so voice and a held device connection never produce two
+     * entries in the shade.
+     */
+    private fun notificationTextFor(
+        reasons: Set<AuroraRuntimeForegroundReason>,
+        snapshot: AuroraVoiceCaptureSnapshot,
+    ): String {
+        val voice = AuroraRuntimeForegroundReason.VOICE in reasons
+        val deviceLink = AuroraRuntimeForegroundReason.DEVICE_LINK in reasons
+        return when {
+            voice && deviceLink && snapshot.captureActive ->
+                "Microphone is active and your other devices stay connected. Tap Stop to end."
+            voice && deviceLink -> "Your other devices stay connected."
+            voice && snapshot.captureActive -> "Microphone is active. Tap Stop to end."
+            voice -> "Voice controls are unavailable."
+            deviceLink -> "Your other devices stay connected."
+            else -> "Aurora is finishing up."
+        }
+    }
+
+    /**
+     * Enters or refreshes the foreground state with the service types the
+     * current reasons actually justify. The microphone type is claimed only
+     * once its permission is granted, so the connected-device type alone keeps
+     * the service legal while voice is still being checked or torn down.
+     */
+    private fun enterForeground(text: String) {
+        lastNotificationText.set(text)
+        val notification = foregroundNotification(text)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                AURORA_RUNTIME_NOTIFICATION_ID,
+                notification,
+                foregroundServiceTypes(AuroraRuntimeForegroundLedger.activeReasons()),
+            )
+        } else {
+            startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification)
+        }
+        notificationsSuppressed = !canPostNotifications()
+    }
+
+    private fun foregroundServiceTypes(reasons: Set<AuroraRuntimeForegroundReason>): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+        var types = 0
+        if (AuroraRuntimeForegroundReason.VOICE in reasons &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        ) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        }
+        if (AuroraRuntimeForegroundReason.DEVICE_LINK in reasons) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        }
+        if (types == 0) types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        return types
+    }
+
+    /**
+     * Brings the single notification and the declared service types back in
+     * line with the reason ledger, and releases the service once nothing holds
+     * it any more.
+     */
+    private fun syncForegroundReasons(startId: Int? = null) {
+        val reasons = AuroraRuntimeForegroundLedger.activeReasons()
+        if (reasons.isNotEmpty()) {
+            running = true
+            enterForeground(notificationTextFor(reasons, captureSnapshot))
+            return
+        }
+        if (capture != null || session != null || initializationInFlight.get()) return
+        // A start command must reach the foreground before the service may stop,
+        // even when the reason that started it was released first.
+        runCatching { enterForeground(notificationTextFor(reasons, captureSnapshot)) }
+        stopForegroundAndRemoveNotification()
+        if (startId == null) stopSelf() else stopSelfResult(startId)
     }
 
     private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
-            AURORA_VOICE_CHANNEL_ID,
-            "Aurora voice capture",
+            AURORA_RUNTIME_CHANNEL_ID,
+            "Aurora",
             NotificationManager.IMPORTANCE_LOW,
         )
-        channel.description = "Shows when Aurora is using the microphone in the foreground."
+        channel.description = "Shows when Aurora is listening or keeping your other devices connected."
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun foregroundNotification(text: String): Notification {
-        val stopIntent = Intent(this, AuroraVoiceForegroundService::class.java).apply { action = ACTION_STOP }
+        val stopIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply { action = ACTION_STOP }
         val stopPendingIntent = PendingIntent.getService(
             this,
             4204,
@@ -1740,18 +1905,22 @@ class AuroraVoiceForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, AURORA_VOICE_CHANNEL_ID)
+            Notification.Builder(this, AURORA_RUNTIME_CHANNEL_ID)
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
-        return builder
+        builder
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Aurora voice controls")
+            .setContentTitle("Aurora")
             .setContentText(text)
             .setOngoing(true)
-            .addAction(Notification.Action.Builder(null, "Stop", stopPendingIntent).build())
-            .build()
+        // Stop ends the microphone session, so it is offered only while one is
+        // the reason Aurora is running.
+        if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)) {
+            builder.addAction(Notification.Action.Builder(null, "Stop", stopPendingIntent).build())
+        }
+        return builder.build()
     }
 
     private fun backgroundSessionRequested(): Boolean =
@@ -1813,10 +1982,22 @@ class AuroraVoiceForegroundService : Service() {
     private fun serviceRestartMode(): Int =
         if (backgroundSessionRequested()) START_STICKY else START_NOT_STICKY
 
+    /**
+     * Ends the voice reason for keeping the service alive. The service itself
+     * only stops once nothing else holds it, so a held device connection keeps
+     * the one Aurora entry in place instead of Aurora gaining a second one.
+     */
     private fun stopAfterTerminalFailure(startId: Int? = null) {
         clearBackgroundSessionPersistence()
         backgroundSessionActive = false
         invalidateNativeVoiceInitialization()
+        AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
+        val remaining = AuroraRuntimeForegroundLedger.activeReasons()
+        if (remaining.isNotEmpty()) {
+            lastNotificationText.set(null)
+            enterForeground(notificationTextFor(remaining, captureSnapshot))
+            return
+        }
         stopForegroundAndRemoveNotification()
         if (startId == null) stopSelf() else stopSelfResult(startId)
     }
@@ -1831,7 +2012,7 @@ class AuroraVoiceForegroundService : Service() {
             }
         }
         runCatching {
-            getSystemService(NotificationManager::class.java).cancel(AURORA_VOICE_NOTIFICATION_ID)
+            getSystemService(NotificationManager::class.java).cancel(AURORA_RUNTIME_NOTIFICATION_ID)
         }
         lastNotificationText.set(null)
     }
@@ -1841,10 +2022,52 @@ class AuroraVoiceForegroundService : Service() {
         const val ACTION_FINISH = "dev.aurora.tauri.nativeplugin.action.FINISH_VOICE_CAPTURE"
         const val ACTION_START_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.START_BACKGROUND_VOICE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
+        const val ACTION_SYNC_REASONS = "dev.aurora.tauri.nativeplugin.action.SYNC_FOREGROUND_REASONS"
 
         @Volatile
         var running: Boolean = false
             private set
+
+        /**
+         * True while Aurora is running but its one shade entry cannot be shown
+         * because the user turned notifications off. Sessions keep running; the
+         * degraded state is surfaced to the product instead of ending them.
+         */
+        @Volatile
+        var notificationsSuppressed: Boolean = false
+            private set
+
+        /**
+         * Takes a hold on the one Aurora foreground service for a connected
+         * device, starting it if this is the first reason. Every hold must be
+         * matched by exactly one [releaseDeviceLink].
+         */
+        fun holdDeviceLink(context: Context) {
+            AuroraRuntimeForegroundLedger.acquire(AuroraRuntimeForegroundReason.DEVICE_LINK)
+            val intent = Intent(context, AuroraRuntimeForegroundService::class.java).apply {
+                action = ACTION_SYNC_REASONS
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        /** Drops one connected-device hold, stopping the service if it was the last reason. */
+        fun releaseDeviceLink(context: Context) {
+            AuroraRuntimeForegroundLedger.release(AuroraRuntimeForegroundReason.DEVICE_LINK)
+            if (!running) return
+            context.startService(
+                Intent(context, AuroraRuntimeForegroundService::class.java).apply {
+                    action = ACTION_SYNC_REASONS
+                },
+            )
+        }
+
+        /** The reasons currently keeping the one Aurora service alive. */
+        fun activeForegroundReasonIds(): List<String> =
+            AuroraRuntimeForegroundLedger.activeReasons().map { it.id }
 
         @Volatile
         var captureError: String? = null
@@ -1859,7 +2082,7 @@ class AuroraVoiceForegroundService : Service() {
             private set
 
         @Volatile
-        private var activeInstance: AuroraVoiceForegroundService? = null
+        private var activeInstance: AuroraRuntimeForegroundService? = null
 
         private val liveTestIngressArmGuard = Any()
         private var pendingLiveTestIngressArm = false

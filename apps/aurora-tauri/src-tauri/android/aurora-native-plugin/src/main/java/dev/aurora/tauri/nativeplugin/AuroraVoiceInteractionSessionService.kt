@@ -27,8 +27,8 @@ private class AuroraVoiceInteractionSession(
             hide()
             return
         }
-        val intent = Intent(this@AuroraVoiceInteractionSession.context, AuroraVoiceForegroundService::class.java).apply {
-            action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT
+        val intent = Intent(this@AuroraVoiceInteractionSession.context, AuroraRuntimeForegroundService::class.java).apply {
+            action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT
         }
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

@@ -11497,7 +11497,7 @@ mod tests {
     #[test]
     fn android_voice_service_owns_audiorecord_and_rust_queue_with_visible_stop() {
         let service = include_str!(
-            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceForegroundService.kt"
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraRuntimeForegroundService.kt"
         );
         let plugin = include_str!(
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"

@@ -580,6 +580,7 @@ if (argv[0] === 'build:frontend:android-client') {
       'android.permission.POST_NOTIFICATIONS',
       'android.permission.FOREGROUND_SERVICE',
       'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+      'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE',
       'android.permission.WAKE_LOCK',
       'android.permission.ACCESS_NETWORK_STATE',
       'android.permission.USE_BIOMETRIC',
@@ -587,7 +588,7 @@ if (argv[0] === 'build:frontend:android-client') {
       expect(syncSource).toContain(permission)
     }
     for (const component of [
-      'AuroraVoiceForegroundService',
+      'AuroraRuntimeForegroundService',
       'AuroraVoiceInteractionService',
       'AuroraVoiceInteractionSessionService',
       'AuroraAssistActivity',

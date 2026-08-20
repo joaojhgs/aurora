@@ -260,6 +260,7 @@ function mergePluginManifest(content) {
     '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />',
+    '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />',
     '    <uses-permission android:name="android.permission.WAKE_LOCK" />',
     '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
     '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />',
@@ -329,7 +330,7 @@ function mergePluginManifest(content) {
   // manifest. Remove stale Aurora-owned component declarations first so this
   // remains idempotent as component metadata evolves.
   for (const [tag, className] of [
-    ['service', 'dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService'],
+    ['service', 'dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService'],
     ['service', 'dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService'],
     ['service', 'dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionSessionService'],
     ['activity', 'dev.aurora.tauri.nativeplugin.AuroraAssistActivity'],
@@ -342,10 +343,10 @@ function mergePluginManifest(content) {
 
   const nativeComponents = `
         <service
-            android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService"
+            android:name="dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|connectedDevice" />
 
         <service
             android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService"

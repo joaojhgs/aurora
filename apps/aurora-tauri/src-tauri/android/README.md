@@ -2,13 +2,14 @@
 
 This directory holds the Android side of the future Aurora Tauri mobile plugin. It follows the official Tauri 2 mobile plugin shape: Kotlin native code extends `app.tauri.plugin.Plugin`, is annotated with `@TauriPlugin`, and exposes methods annotated with `@Command`.
 
-The plugin reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge and now contains the native foreground voice path: Kotlin owns AudioRecord/AudioTrack and lifecycle controls while the Rust voice session owns bounded PCM, generations, typed Gateway routing, cancellation, and redacted status. Product capabilities remain evidence-gated until Android OS, emulator, and physical-device checks pass.
+The plugin reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge and now contains the native foreground path: one reference-counted `AuroraRuntimeForegroundService` carries both microphone capture and held device connections behind a single notification, Kotlin owns AudioRecord/AudioTrack and lifecycle controls while the Rust voice session owns bounded PCM, generations, typed Gateway routing, cancellation, and redacted status. Product capabilities remain evidence-gated until Android OS, emulator, and physical-device checks pass.
 
 `pnpm android:sync-native-plugin` copies this source into the generated Tauri
 Android app and applies the canonical Aurora manifest fragments. The app
 declares `INTERNET`, `ACCESS_NETWORK_STATE`, `RECORD_AUDIO`,
 `MODIFY_AUDIO_SETTINGS`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`,
-`FOREGROUND_SERVICE_MICROPHONE`, and `USE_BIOMETRIC`; the official barcode
+`FOREGROUND_SERVICE_MICROPHONE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, and
+`USE_BIOMETRIC`; the official barcode
 scanner plugin contributes `CAMERA` and `VIBRATE`. The Android thin build also
 selects `aurora-mobile-mesh`, which authorizes the scanner's permission and scan
 commands. Dangerous camera/microphone/notification grants still remain

@@ -581,8 +581,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
 
-        val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
-            if (args.backgroundSession) action = AuroraVoiceForegroundService.ACTION_START_BACKGROUND
+        val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
+            if (args.backgroundSession) action = AuroraRuntimeForegroundService.ACTION_START_BACKGROUND
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startForegroundService(intent)
@@ -607,7 +607,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
         val args = invoke.parseArgs(AndroidVoiceLiveTestPcmArgs::class.java)
         if (args.armIngress) {
-            val armed = AuroraVoiceForegroundService.armPcmIngressForTest()
+            val armed = AuroraRuntimeForegroundService.armPcmIngressForTest()
             ret.put("accepted", armed)
             ret.put("reason", if (armed) "pcm_ingress_armed" else "voice_session_not_accepting_audio")
             invoke.resolve(ret)
@@ -628,7 +628,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val shortBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val samples = ShortArray(shortBuffer.remaining())
         shortBuffer.get(samples)
-        val result = AuroraVoiceForegroundService.injectPcmForTest(samples)
+        val result = AuroraRuntimeForegroundService.injectPcmForTest(samples)
         ret.put("accepted", result == 0)
         ret.put(
             "reason",
@@ -947,10 +947,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun stopVoiceForegroundService(invoke: Invoke) {
-        val stopIntent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
-            action = AuroraVoiceForegroundService.ACTION_STOP
+        val stopIntent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
+            action = AuroraRuntimeForegroundService.ACTION_STOP
         }
-        val stopped = if (AuroraVoiceForegroundService.running) {
+        val stopped = if (AuroraRuntimeForegroundService.running) {
             activity.startService(stopIntent)
             true
         } else {
@@ -965,10 +965,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun finishVoiceForegroundService(invoke: Invoke) {
-        val intent = Intent(activity, AuroraVoiceForegroundService::class.java).apply {
-            action = AuroraVoiceForegroundService.ACTION_FINISH
+        val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
+            action = AuroraRuntimeForegroundService.ACTION_FINISH
         }
-        val delivered = if (AuroraVoiceForegroundService.running) {
+        val delivered = if (AuroraRuntimeForegroundService.running) {
             activity.startService(intent)
             true
         } else {
@@ -2592,7 +2592,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         foregroundServiceReady: Boolean = hasForegroundServiceMicrophonePermission() && microphoneGranted,
     ): JSObject {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
-            (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE))
+            (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)) &&
+            (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE))
         val nativeRouteReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
         val installedPackIds = recordedInstalledPackIds()
         val referenceSelectionReady = ttsReferenceSelection() != null
@@ -2604,13 +2605,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             isActivePackReady(AuroraSpeechPackTask.KWS, installedPackIds, referenceSelectionReady) &&
             wakePhraseSelection() != null
         val notificationReady = canPostNotifications()
-        val startable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && nativeRouteReady
-        val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && notificationReady && backgroundRuntimeReady
+        // A denied notification permission degrades the one Aurora shade entry;
+        // it never blocks starting, and it never ends a running session.
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady && nativeRouteReady
+        val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && backgroundRuntimeReady
         val ret = JSObject()
         ret.put("platform", "android")
-        ret.put("running", AuroraVoiceForegroundService.running)
-        ret.put("backgroundSessionActive", AuroraVoiceForegroundService.backgroundSessionActive)
-        val capture = AuroraVoiceForegroundService.captureSnapshot
+        ret.put("running", AuroraRuntimeForegroundService.running)
+        ret.put("backgroundSessionActive", AuroraRuntimeForegroundService.backgroundSessionActive)
+        val capture = AuroraRuntimeForegroundService.captureSnapshot
         ret.put("captureActive", capture.captureActive)
         ret.put("microphoneSignalDetected", capture.microphoneSignalDetected)
         ret.put("captureBackend", "android-audiorecord-rust-queue")
@@ -2631,6 +2634,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("microphoneGranted", microphoneGranted)
         ret.put("notificationsGranted", notificationsGranted)
         ret.put("notificationReady", notificationReady)
+        ret.put("notificationsSuppressed", !notificationReady || AuroraRuntimeForegroundService.notificationsSuppressed)
+        ret.put("foregroundReasons", org.json.JSONArray(AuroraRuntimeForegroundService.activeForegroundReasonIds()))
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
         ret.put("nativeSessionReady", nativeRouteReady)
@@ -3088,8 +3093,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     private fun lifecycleStatusObject(phase: String? = null): JSObject {
-        val backgroundWakeword = AuroraVoiceForegroundService.running &&
-            AuroraVoiceForegroundService.backgroundSessionActive
+        val backgroundWakeword = AuroraRuntimeForegroundService.running &&
+            AuroraRuntimeForegroundService.backgroundSessionActive
         val ret = JSObject()
         ret.put("platform", "android")
         if (phase != null) ret.put("phase", phase)
@@ -3609,7 +3614,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val originAllowed = isTrustedMicOrigin(args.origin, args.configuredHttpsOrigins.ifEmpty { configuredMicOrigins })
         val runtimeGranted = hasRuntimePermission(Manifest.permission.RECORD_AUDIO)
         val active = args.foreground && args.focused && foreground && focused
-        val nativeServiceOwnsMic = AuroraVoiceForegroundService.running || AuroraVoiceForegroundService.captureSnapshot.captureActive
+        val nativeServiceOwnsMic = AuroraRuntimeForegroundService.running || AuroraRuntimeForegroundService.captureSnapshot.captureActive
         val granted = resourceAllowed && originAllowed && runtimeGranted && active && !nativeServiceOwnsMic
         val ret = JSObject()
         ret.put("grant", granted)

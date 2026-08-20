@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -19,10 +20,10 @@
         android:networkSecurityConfig="@xml/aurora_network_security_config"
         android:usesCleartextTraffic="false">
         <service
-            android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceForegroundService"
+            android:name="dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|connectedDevice" />
 
         <service
             android:name="dev.aurora.tauri.nativeplugin.AuroraVoiceInteractionService"

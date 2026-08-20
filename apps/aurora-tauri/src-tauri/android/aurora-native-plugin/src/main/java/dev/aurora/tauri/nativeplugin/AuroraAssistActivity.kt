@@ -15,8 +15,8 @@ class AuroraAssistActivity : Activity() {
             finish()
             return
         }
-        val serviceIntent = Intent(this, AuroraVoiceForegroundService::class.java).apply {
-            action = AuroraVoiceForegroundService.ACTION_START_ASSISTANT
+        val serviceIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply {
+            action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
