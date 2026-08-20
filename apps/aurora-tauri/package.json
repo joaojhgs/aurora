@@ -35,6 +35,7 @@
     "android:webrtc:interop": "node ./scripts/run-android-webrtc-interop.mjs",
     "android:webrtc:webview": "vitest run --environment node tests/android/android-python-webrtc.e2e.test.ts",
     "android:webrtc:mobile-browser": "vitest run --environment node tests/android/android-browser-python-webrtc.e2e.test.ts",
+    "android:background:measure": "node ./scripts/android-background-measurement.mjs",
     "android:preflight": "pnpm android:sync-native-plugin && node ./scripts/android-preflight.mjs",
     "android:preflight:strict": "pnpm android:sync-native-plugin && node ./scripts/android-preflight.mjs --strict",
     "android:preflight:ci": "pnpm android:sync-native-plugin && node ./scripts/android-preflight.mjs --require-android-project",
