@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { grantListResolver, scriptedResolver } from './helpers/authority-doubles.js'
 
 import {
   LocalToolExecutionPolicy,
@@ -9,10 +10,6 @@ import {
   type LocalToolExecutionContext
 } from '../src/local-tools/index.js'
 import {
-  MemoryInboundCredentialVerifierStore,
-  MemoryPeerAuditSink,
-  MemoryPeerGrantRepository,
-  PeerAuthorityResolver,
   type AuthenticatedPeerContext,
   type PeerHostCallContext,
   type ProviderLocalPeerCredentialVerifierV1,
@@ -144,10 +141,12 @@ describe('local Tooling authority policy ports', () => {
   })
 
   it('fails closed to structured policy denial when the resolver or grant repository throws', async () => {
-    const throwingRepository = new ThrowingPeerGrantRepository()
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository: throwingRepository
+    // The authority is unreachable. What this asserts is that the *policy*
+    // fails closed into a structured denial rather than throwing or allowing.
+    const resolver = scriptedResolver({
+      resolveGrant: () => {
+        throw new Error('repository unavailable')
+      }
     })
     const registry = registryWithHandler()
     const policy = new LocalToolExecutionPolicy({
@@ -190,13 +189,8 @@ describe('local Tooling authority policy ports', () => {
   it('keeps raw bearer material and verifier hashes out of policy responses and audits', async () => {
     const rawBearer = 'raw-bearer-secret-value'
     const verifierHash = 'c'.repeat(64)
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    await verifierStore.upsertVerifier(verifier(verifierHash))
-    const auditSink = new MemoryPeerAuditSink()
     const localAudit: unknown[] = []
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({ verifierStore, grantRepository, auditSink })
+    const resolver = grantListResolver([grant()])
     const registry = registryWithHandler()
     const policy = new LocalToolExecutionPolicy({
       providerPeerId: 'provider',
@@ -216,7 +210,10 @@ describe('local Tooling authority policy ports', () => {
       { tool_name: 'echo', arguments: { text: 'hello', bearer: rawBearer } },
       context({ permissions: ['Tooling.ExecuteTool', 'Echo.Use'], authenticatedPeerContext })
     )
-    const serialized = JSON.stringify({ response, localAudit, authorityAudit: auditSink.records })
+    // The authority's own audit rows are Rust's after R2 and are covered by the
+    // crate's tests; what this asserts is that nothing secret reaches the
+    // response or the local tool audit on the way back out.
+    const serialized = JSON.stringify({ response, localAudit })
 
     expect(response).toMatchObject({ ok: true, status: 'success' })
     expect(serialized).not.toContain(rawBearer)
@@ -231,12 +228,7 @@ async function providerWithGrant(
     readonly observeHandlerContext?: (context: LocalToolExecutionContext) => void
   } = {}
 ) {
-  const grantRepository = new MemoryPeerGrantRepository()
-  await grantRepository.upsertGrant(localGrant)
-  const resolver = new PeerAuthorityResolver({
-    verifierStore: new MemoryInboundCredentialVerifierStore(),
-    grantRepository
-  })
+  const resolver = grantListResolver([localGrant])
   const basePorts = createPeerAuthorityLocalToolPolicyPorts({ resolver, providerPeerId: 'provider' })
   const policy = new LocalToolExecutionPolicy({
     providerPeerId: 'provider',
@@ -322,8 +314,3 @@ function context(input: {
   }
 }
 
-class ThrowingPeerGrantRepository extends MemoryPeerGrantRepository {
-  override async resolveGrant(_request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
-    throw new Error('repository unavailable')
-  }
-}

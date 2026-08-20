@@ -20,7 +20,7 @@ import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
 import { buildWebRtcManifestAck, parseWebRtcMeshManifest } from './manifest.js'
 import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type ProviderLeaseFrame, type CapacityUpdateFrame } from './protocol.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
-import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
+import type { AuthenticatedPeerContext } from '../peer-host/authority-types.js'
 
 export interface WebRtcMeshPeerBridgeOptions {
   session: Pick<WebRtcPeerSession, 'sendFrame' | 'subscribeFrames' | 'subscribe' | 'getSnapshot'>

@@ -6,7 +6,7 @@ import type {
   ToolingSourceClass,
   ToolingTrustTier
 } from '../types.js'
-import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
+import type { AuthenticatedPeerContext } from '../peer-host/authority-types.js'
 import {
   localToolProjectionIdentity,
   parseLocalToolDescriptorV1,

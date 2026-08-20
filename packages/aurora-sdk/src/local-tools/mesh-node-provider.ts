@@ -1,14 +1,13 @@
 import { TOOLING_METHODS } from '../descriptors.js'
 import {
-  DenyAllPeerHostAuthorizationStore,
-  PeerAuthorityHostAuthorizationStore,
   PeerHostContractRegistry,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
-  type LocalPeerGrantV1,
+  type PeerHostAuthorizationStore,
   type PeerHostOptions
 } from '../peer-host/index.js'
-import type { PeerAuthorityResolver } from '../peer-host/authority.js'
+import { DenyAllPeerHostAuthorizationStore } from '../peer-host/rust-authorization-store.js'
+import type { PeerAuthorityResolverPort } from '../peer-host/authority-types.js'
 import { createPeerAuthorityLocalToolPolicyPorts } from './authority-policy.js'
 import type { LocalToolExportDecisionPort } from './export-catalog.js'
 import type { LocalToolApprovalDecisionPort } from './durable-feature-sharing.js'
@@ -29,7 +28,12 @@ export interface MeshNodeLocalToolProviderOptions {
   readonly localPeerId: string
   readonly nodeName: string
   readonly registry: LocalToolRegistry
-  readonly authorityResolver?: PeerAuthorityResolver | undefined
+  readonly authorityResolver?: PeerAuthorityResolverPort | undefined
+  /**
+   * The authority this provider asks. Built by the composition root over Tauri
+   * IPC or WebAssembly; there is no TypeScript implementation to fall back to.
+   */
+  readonly authorizationStore?: PeerHostAuthorizationStore | undefined
   readonly exportDecision?: LocalToolExportDecisionPort | undefined
   readonly audit?: LocalToolAuditPort | undefined
   readonly cursorSecret?: Uint8Array | string | undefined
@@ -109,10 +113,8 @@ export function createMeshNodeLocalToolProvider(
     localPeerId: options.localPeerId,
     nodeName: options.nodeName,
     registry: peerHostRegistry,
-    authorizationStore: enabled && options.authorityResolver
-      ? new PeerAuthorityHostAuthorizationStore(options.authorityResolver, {
-          grantedPermissionsForGrant: (grant) => permissionsForGrantedTools(options.registry, grant)
-        })
+    authorizationStore: enabled && options.authorizationStore !== undefined
+      ? withGrantedToolPermissions(options.authorizationStore, options.registry)
       : new DenyAllPeerHostAuthorizationStore(),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.randomId ? { randomId: options.randomId } : {}),
@@ -138,8 +140,57 @@ function isUsableCursorSecret(secret: Uint8Array | string | undefined): boolean 
   return secret instanceof Uint8Array && secret.byteLength >= MIN_CURSOR_SECRET_BYTES
 }
 
-function permissionsForGrantedTools(registry: LocalToolRegistry, grant: LocalPeerGrantV1): string[] {
-  const grantedToolIds = new Set(grant.allowedToolContractIds)
+/**
+ * Add the permission labels a decision's granted tool contracts imply.
+ *
+ * The authority reports which tool contracts a grant carries; only this
+ * composition knows the local tool registry that maps them to permissions, so
+ * the projection lives here rather than in the authority or the shell. It reads
+ * the decision and never widens it: an unauthorized call stays unauthorized, and
+ * a tool the authority did not grant contributes nothing.
+ */
+function withGrantedToolPermissions(
+  store: PeerHostAuthorizationStore,
+  registry: LocalToolRegistry
+): PeerHostAuthorizationStore {
+  return {
+    async authorize(request) {
+      const decision = await store.authorize(request)
+      if (!decision.allowed || decision.grantedToolContractIds === undefined) return decision
+      return {
+        ...decision,
+        grantedPermissions: permissionsForGrantedTools(registry, decision.grantedToolContractIds)
+      }
+    },
+    async snapshotManifestAuthority(request) {
+      const snapshot = await store.snapshotManifestAuthority?.(request) ?? {
+        ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}),
+        grantedMethodIds: [],
+        authGrantRevision: 0,
+        authGrantState: 'unknown' as const
+      }
+      if (snapshot.grantedToolContractIds === undefined) return snapshot
+      return {
+        ...snapshot,
+        grantedPermissions: permissionsForGrantedTools(registry, snapshot.grantedToolContractIds)
+      }
+    }
+  }
+}
+
+/**
+ * Project granted tool contracts into product permission labels.
+ *
+ * The authority reports which tool contracts a grant carries; this maps them
+ * through the local tool registry, which is TypeScript data the authority does
+ * not hold. It reads the decision and never widens it — a tool the authority
+ * did not grant contributes no permission.
+ */
+export function permissionsForGrantedTools(
+  registry: LocalToolRegistry,
+  grantedToolContractIds: readonly string[]
+): string[] {
+  const grantedToolIds = new Set(grantedToolContractIds)
   return [...new Set(registry.list()
     .filter((tool) => grantedToolIds.has(tool.descriptor.toolContractId))
     .flatMap((tool) => tool.descriptor.requiredPermissions))]

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod/v4'
+import { allowMethods } from './helpers/authority-doubles.js'
 
 import { AuroraClient } from '../src/client.js'
 import { MeshP2PTransport } from '../src/mesh.js'
@@ -11,18 +12,16 @@ import {
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   PeerHostContractRegistry,
   PeerProtocolLimits,
-  SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   WebRtcMeshPeerBridge,
   buildProtocolHello,
   createToolingPeerHostRegistry,
   createWebRtcMeshTransport,
   fragmentMessage,
-  type LocalPeerGrantV1,
   type PeerHostCallContext,
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
-import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
+import type { AuthenticatedPeerContext } from '../src/peer-host/authority-types.js'
 
 class FakeSession {
   sent: unknown[] = []
@@ -74,20 +73,16 @@ function hello(): unknown {
   })
 }
 
-function localGrant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
-  return {
-    version: 1,
-    grantId: 'grant-1',
-    tokenId: 'token-1',
-    claimantPeerId: 'peer-a',
-    allowedMethodIds: ['Tooling.GetTools'],
-    allowedToolContractIds: [],
-    capabilityPackIds: [],
-    resourceScopes: [],
-    createdAtMs: 1,
-    grantRevision: 1,
-    ...patch
-  }
+/**
+ * The authority these bridge tests run against.
+ *
+ * After R2 the authority is Rust; a bridge test states which methods are
+ * allowed rather than seeding a grant into a TypeScript engine that no longer
+ * exists. Grant semantics are covered by the shared corpus at
+ * `tests/fixtures/mesh_authority_parity_vectors.json`.
+ */
+function localAuthority(methodIds: readonly string[] = ['Tooling.GetTools']) {
+  return allowMethods({ claimantPeerId: 'peer-a', methodIds, grantRevision: 1 })
 }
 
 function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): AuthenticatedPeerContext {
@@ -272,9 +267,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        localGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ExecuteTool'] })
-      ]),
+      authorizationStore: localAuthority(['Tooling.GetTools', 'Tooling.ExecuteTool']),
       clock: () => 1000,
       randomId: (() => { let i = 0; return () => `execute-epoch-${++i}` })()
     })
@@ -845,7 +838,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -886,7 +879,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-auth'
     })
@@ -925,7 +918,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: (() => { let index = 0; return () => `epoch-auth-${++index}` })()
     })
@@ -1030,7 +1023,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-stale'
     })
@@ -1075,7 +1068,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: (() => { let i = 0; return () => `epoch-${++i}` })()
     })
@@ -1119,7 +1112,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-old'
     })
@@ -1148,7 +1141,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-bounded'
     })
@@ -1192,7 +1185,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: (() => { let now = 1000; return () => now += 20_000 })(),
       randomId: (() => { let i = 0; return () => `epoch-${++i}` })()
     })
@@ -1241,7 +1234,7 @@ describe('WebRtcMeshPeerBridge', () => {
           prepareExecution: async () => { throw new Error('not implemented') },
           executeTool: async () => { throw new Error('not implemented') }
         }),
-        authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+        authorizationStore: localAuthority(),
         clock: () => Date.now(),
         randomId: (() => { let epoch = 0; return () => `epoch-${++epoch}` })()
       })
@@ -1393,7 +1386,7 @@ describe('WebRtcMeshPeerBridge', () => {
           prepareExecution: async () => { throw new Error('not implemented') },
           executeTool: async () => { throw new Error('not implemented') }
         }),
-        authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+        authorizationStore: localAuthority(),
         clock: () => Date.now(),
         randomId: () => 'epoch-real'
       })
@@ -1453,7 +1446,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'epoch-manifest-reject'
     })
@@ -1488,7 +1481,7 @@ describe('WebRtcMeshPeerBridge', () => {
         prepareExecution: async () => { throw new Error('not implemented') },
         executeTool: async () => { throw new Error('not implemented') }
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant()]),
+      authorizationStore: localAuthority(),
       clock: () => 1000,
       randomId: () => 'redacted-ref'
     })
@@ -1529,7 +1522,7 @@ describe('WebRtcMeshPeerBridge', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry: subscriptionRegistry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([localGrant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      authorizationStore: localAuthority(['Tooling.ProjectionInvalidated']),
       clock: () => 1000,
       randomId: () => 'sub-ref'
     })

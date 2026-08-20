@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { allowMethods } from './helpers/authority-doubles.js'
 
 import {
   PeerHostContractRegistry,
-  SessionPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   generatedPeerHostEventDescriptor,
@@ -10,7 +10,6 @@ import {
   registerGeneratedPeerHostEvent,
   registerGeneratedPeerHostMethod,
   type CallFrame,
-  type LocalPeerGrantV1,
   type ToolingPeerHostHandlers
 } from '../src/webrtc/index.js'
 
@@ -32,19 +31,16 @@ const TTS_MANAGEMENT_METHOD_IDS = [
   'TTS.ImportVoiceProfile'
 ] as const
 
-function peerGrant(allowedMethodIds: readonly string[]): LocalPeerGrantV1 {
-  return {
-    version: 1,
-    grantId: 'generated-contract-grant',
-    tokenId: 'generated-contract-token',
-    claimantPeerId: 'peer-a',
-    allowedMethodIds,
-    allowedToolContractIds: [],
-    capabilityPackIds: [],
-    resourceScopes: [],
-    createdAtMs: 1,
-    grantRevision: 3
-  }
+/**
+ * The authority these tests run against.
+ *
+ * After R2 the authority is Rust; a peer-host test states the decision it wants
+ * rather than seeding a grant into a TypeScript engine that no longer exists.
+ * The grant rules themselves are covered by the shared corpus at
+ * `tests/fixtures/mesh_authority_parity_vectors.json`.
+ */
+function peerAuthority(allowedMethodIds: readonly string[]) {
+  return allowMethods({ claimantPeerId: 'peer-a', methodIds: allowedMethodIds, grantRevision: 3 })
 }
 
 function compatibleAck(manifest: Record<string, unknown>): Record<string, unknown> {
@@ -191,9 +187,7 @@ describe('generated peer-host registration', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        peerGrant(['Tooling.GetTools', ...TTS_MANAGEMENT_METHOD_IDS])
-      ]),
+      authorizationStore: peerAuthority(['Tooling.GetTools', ...TTS_MANAGEMENT_METHOD_IDS]),
       clock: () => 1_000,
       randomId: () => 'generated-contract-epoch'
     })
@@ -389,9 +383,7 @@ describe('generated peer-host registration', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        peerGrant(['TTS.Synthesize'])
-      ]),
+      authorizationStore: peerAuthority(['TTS.Synthesize']),
       clock: () => 1_000,
       randomId: () => 'tts-use-only-epoch'
     })
@@ -451,9 +443,7 @@ describe('generated peer-host registration', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        peerGrant(['TTS.UpdateVoiceProfile'])
-      ]),
+      authorizationStore: peerAuthority(['TTS.UpdateVoiceProfile']),
       clock: () => 1_000,
       randomId: () => 'tts-idempotency-epoch'
     })

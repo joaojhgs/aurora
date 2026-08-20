@@ -173,6 +173,115 @@ pub async fn aurora_mesh_authority_verify_reconnect_proof(
     to_value(&result)
 }
 
+/// Take the audit rows recorded since the last drain, oldest first.
+///
+/// The authority records who asked for what and what it answered; persisting
+/// those rows is the shell's job, because the durable store is TypeScript's.
+/// Draining rather than streaming keeps the authority free of a sink it would
+/// have to hold open.
+#[tauri::command]
+pub async fn aurora_mesh_authority_drain_audit(
+    state: tauri::State<'_, MeshAuthorityState>,
+) -> Result<Value, String> {
+    let mut authority = state.0.lock().await;
+    let records = std::mem::take(&mut authority.resolver_mut().audit_sink.records);
+    to_value(&records)
+}
+
+/// Evaluate a grant across any of the four coverage dimensions.
+///
+/// The local tool execution policy asks about tool contracts, capability packs
+/// and resource scopes as well as methods; without this it would have to decide
+/// coverage itself, which is the drift R2 exists to prevent.
+#[tauri::command]
+pub async fn aurora_mesh_authority_resolve_grant(
+    state: tauri::State<'_, MeshAuthorityState>,
+    context: aurora_mesh_authority::authority::AuthenticatedPeerContext,
+    dimensions: aurora_mesh_authority::authority::GrantDimensions,
+    now_ms: i64,
+) -> Result<Value, String> {
+    let mut authority = state.0.lock().await;
+    let decision = authority
+        .resolver_mut()
+        .resolve_grant_dimensions(&context, &dimensions, now_ms)
+        .await
+        .map_err(to_error)?;
+    to_value(&decision)
+}
+
+/// Mint a bearer credential for a relationship at pairing time.
+#[tauri::command]
+pub async fn aurora_mesh_authority_issue_pairing_credential(
+    state: tauri::State<'_, MeshAuthorityState>,
+    selector: PeerRelationshipSelector,
+    expires_at_ms: Option<i64>,
+    now_ms: i64,
+) -> Result<Value, String> {
+    let mut authority = state.0.lock().await;
+    let resolver = authority.resolver_mut();
+    let mut issuer = aurora_mesh_authority::authority::PeerPairingIssuer::new(
+        std::mem::take(&mut resolver.verifier_store),
+        std::mem::take(&mut resolver.audit_sink),
+        Box::new(OsRandomSource),
+    );
+    let issued = issuer
+        .issue(
+            &selector,
+            &aurora_mesh_authority::authority::PeerPairingIssueOptions {
+                expires_at_ms,
+                feature_ids: None,
+            },
+            now_ms,
+        )
+        .await;
+    let (verifier_store, audit_sink) = issuer.into_ports();
+    let resolver = authority.resolver_mut();
+    resolver.verifier_store = verifier_store;
+    resolver.audit_sink = audit_sink;
+    to_value(&issued.map_err(to_error)?)
+}
+
+/// Undo a pairing the flow abandoned.
+#[tauri::command]
+pub async fn aurora_mesh_authority_rollback_pairing_credential(
+    state: tauri::State<'_, MeshAuthorityState>,
+    selector: PeerRelationshipSelector,
+) -> Result<(), String> {
+    let mut authority = state.0.lock().await;
+    authority
+        .resolver_mut()
+        .verifier_store
+        .delete_verifier(&selector)
+        .await
+        .map_err(to_error)
+}
+
+/// Every grant row held for a relationship, for durable persistence.
+#[tauri::command]
+pub async fn aurora_mesh_authority_export_grants(
+    state: tauri::State<'_, MeshAuthorityState>,
+    selector: PeerRelationshipSelector,
+) -> Result<Value, String> {
+    let mut authority = state.0.lock().await;
+    let rows = authority.resolver_mut().grant_repository.export_grants(&selector);
+    to_value(&rows)
+}
+
+/// Withdraw every grant for a relationship.
+#[tauri::command]
+pub async fn aurora_mesh_authority_revoke_sharing(
+    state: tauri::State<'_, MeshAuthorityState>,
+    selector: PeerRelationshipSelector,
+    now_ms: i64,
+) -> Result<Value, String> {
+    let mut authority = state.0.lock().await;
+    let repository = std::mem::take(&mut authority.resolver_mut().grant_repository);
+    let mut manager = PeerGrantManager::new(repository);
+    let summaries = manager.revoke_sharing(&selector, now_ms).await;
+    authority.resolver_mut().grant_repository = manager.into_repository();
+    to_value(&summaries.map_err(to_error)?)
+}
+
 /// Every live grant for a relationship, as the sharing settings render it.
 #[tauri::command]
 pub async fn aurora_mesh_authority_list_active_grants(

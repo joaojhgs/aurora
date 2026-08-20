@@ -163,6 +163,74 @@ impl MeshAuthority {
         to_js(&result)
     }
 
+    /// Evaluate a grant across any of the four coverage dimensions.
+    ///
+    /// The local tool execution policy asks about tool contracts, capability
+    /// packs and resource scopes as well as methods; without this it would have
+    /// to decide coverage itself, which is the drift R2 exists to prevent.
+    #[wasm_bindgen(js_name = resolveGrant)]
+    pub async fn resolve_grant(
+        &mut self,
+        context: JsValue,
+        dimensions: JsValue,
+        now_ms: f64,
+    ) -> Result<JsValue, JsValue> {
+        let context: crate::authority::AuthenticatedPeerContext = from_js(context)?;
+        let dimensions: crate::authority::GrantDimensions = from_js(dimensions)?;
+        let decision = self
+            .store
+            .resolver_mut()
+            .resolve_grant_dimensions(&context, &dimensions, now_ms as i64)
+            .await
+            .map_err(to_error)?;
+        to_js(&decision)
+    }
+
+    /// Mint a bearer credential for a relationship at pairing time.
+    #[wasm_bindgen(js_name = issuePairingCredential)]
+    pub async fn issue_pairing_credential(
+        &mut self,
+        selector: JsValue,
+        expires_at_ms: Option<f64>,
+        now_ms: f64,
+    ) -> Result<JsValue, JsValue> {
+        let selector: PeerRelationshipSelector = from_js(selector)?;
+        let resolver = self.store.resolver_mut();
+        let mut issuer = crate::authority::PeerPairingIssuer::new(
+            std::mem::take(&mut resolver.verifier_store),
+            std::mem::take(&mut resolver.audit_sink),
+            Box::new(JsRandomSource),
+        );
+        let issued = issuer
+            .issue(
+                &selector,
+                &crate::authority::PeerPairingIssueOptions {
+                    expires_at_ms: expires_at_ms.map(|value| value as i64),
+                    feature_ids: None,
+                },
+                now_ms as i64,
+            )
+            .await;
+        let (verifier_store, audit_sink) = issuer.into_ports();
+        let resolver = self.store.resolver_mut();
+        resolver.verifier_store = verifier_store;
+        resolver.audit_sink = audit_sink;
+        to_js(&issued.map_err(to_error)?)
+    }
+
+    /// Undo a pairing the flow abandoned.
+    #[wasm_bindgen(js_name = rollbackPairingCredential)]
+    pub async fn rollback_pairing_credential(&mut self, selector: JsValue) -> Result<(), JsValue> {
+        let selector: PeerRelationshipSelector = from_js(selector)?;
+        use crate::authority::InboundCredentialVerifierStore;
+        self.store
+            .resolver_mut()
+            .verifier_store
+            .delete_verifier(&selector)
+            .await
+            .map_err(to_error)
+    }
+
     /// The question the peer host asks on every inbound call.
     #[wasm_bindgen]
     pub async fn authorize(&mut self, request: JsValue) -> Result<JsValue, JsValue> {
@@ -224,6 +292,37 @@ impl MeshAuthority {
             .map_err(to_error);
         self.store.resolver_mut().grant_repository = manager.into_repository();
         to_js(&summary?)
+    }
+
+    /// The live credential verifier for a relationship, if there is one.
+    ///
+    /// A read, not a decision: the shell asks it to answer "do I already have a
+    /// credential for this peer" without having to keep a second copy.
+    #[wasm_bindgen(js_name = getVerifier)]
+    pub async fn get_verifier(&self, selector: JsValue, now_ms: f64) -> Result<JsValue, JsValue> {
+        use crate::authority::InboundCredentialVerifierStore;
+        let selector: PeerRelationshipSelector = from_js(selector)?;
+        let verifier = self
+            .store
+            .resolver()
+            .verifier_store
+            .get_verifier(&selector, now_ms as i64)
+            .await
+            .map_err(to_error)?;
+        to_js(&verifier)
+    }
+
+    /// Every grant row held for a relationship, for durable persistence.
+    #[wasm_bindgen(js_name = exportGrants)]
+    pub fn export_grants(&self, selector: JsValue) -> Result<JsValue, JsValue> {
+        let selector: PeerRelationshipSelector = from_js(selector)?;
+        to_js(
+            &self
+                .store
+                .resolver()
+                .grant_repository
+                .export_grants(&selector),
+        )
     }
 
     /// Withdraw every grant for a relationship.

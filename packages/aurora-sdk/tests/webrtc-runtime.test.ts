@@ -2,15 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AuroraClient, AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, type AuroraStreamRequest, createEventSubscription } from '../src/index.js'
 import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
-import {
-  MemoryInboundCredentialVerifierStore,
-  MemoryPeerGrantRepository,
-  MemoryReconnectChallengeStore,
-  PeerAuthorityResolver,
-  PeerPairingIssuer,
-  type PeerRelationshipSelector,
-  createReconnectProofForBearer
-} from '../src/peer-host/authority.js'
+import type { PeerAuthorityResolverPort, PeerRelationshipSelector } from '../src/peer-host/authority-types.js'
+import { scriptedResolver } from './helpers/authority-doubles.js'
+import { createTestAuthority } from './helpers/wasm-authority.js'
 
 const secureLocation = { protocol: 'https:', hostname: 'app.example.test' }
 
@@ -668,7 +662,7 @@ function makeRuntimeHarness(options: {
   credentialStore?: MemoryPeerCredentialStore
   localProtocolCapabilities?: readonly string[]
   appLayerE2eeAllowed?: boolean
-  peerAuthorityResolver?: PeerAuthorityResolver
+  peerAuthorityResolver?: PeerAuthorityResolverPort
   peerPairingIssuer?: NonNullable<Parameters<typeof createBrowserWebRtcAuroraRuntime>[0]['peerPairingIssuer']>
 } = {}): RuntimeHarness {
   const signaling = new RuntimeFakeSignaling()
@@ -737,12 +731,8 @@ async function prepareDurableInboundCredential(): Promise<{
   issuedToken: string
   issuedTokenId: string
 }> {
-  const verifierStore = new MemoryInboundCredentialVerifierStore()
-  const pairingIssuer = new PeerPairingIssuer({
-    verifierStore,
-    randomBytes: () => new Uint8Array(32).fill(21),
-    now: () => 200
-  })
+  const authority = await createTestAuthority(() => 200)
+  const pairingIssuer = authority.pairingIssuer
   const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerPairingIssuer: pairingIssuer })
   const { channel, remoteSas, pairingStart } = await prepareSasPairing(harness)
   channel.receive(await encodeInbound({ type: 'result', id: pairingStart.id, result: { code: 'opaque-handle', pairing_session_id: remoteSas.pairingSessionId, verification_code: remoteSas.verificationCode } }))
@@ -1197,12 +1187,8 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('does not authorize a mesh node until both pairing directions complete', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const pairingIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(19),
-      now: () => 200
-    })
+    const authority = await createTestAuthority(() => 200)
+    const pairingIssuer = authority.pairingIssuer
     const harness = makeRuntimeHarness({
       mode: 'webrtc-only',
       peerPairingIssuer: pairingIssuer,
@@ -1512,23 +1498,15 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('issues verifier-side tokenless reconnect challenges and accepts full-selector proofs with context', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const issuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(15),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const issuer = authority.pairingIssuer
     const issued = await issuer.issue({
       tokenId: 'token-row-remote',
       claimantPeerId: 'peer-remote',
       verifierPeerId: 'local-stable',
       roomName: 'room-1'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(16) })
-    })
+    const resolver = authority.resolver
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
 
     await harness.runtime.peer.connect(harness.runtimeProfile)
@@ -1541,7 +1519,6 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     const challenge = await decodeSent(channel, 0)
     expect(challenge).toMatchObject({
       type: 'mesh_auth_challenge_v1',
-      challenge: '10'.repeat(32),
       claimant_peer_id: 'peer-remote',
       verifier_peer_id: 'local-stable',
       claimant_signaling_peer_id: 'z-remote',
@@ -1553,7 +1530,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     const framesBeforeProof = await Promise.all(channel.sent.map((_, index) => decodeSent(channel, index)))
     expect(framesBeforeProof.some((frame) => frame.type === 'pairing_v2_commit')).toBe(false)
     expect(harness.runtime.peer.snapshot().state).toBe('reconnect-authenticating')
-    const proof = await createReconnectProofForBearer(
+    const proof = await authority.reconnectProof(
       issued.bearerToken,
       issued.verifier,
       {
@@ -1584,23 +1561,15 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('waits for reciprocal reconnect acknowledgement before exposing a bilateral mesh session', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const issuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(31),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const issuer = authority.pairingIssuer
     const inbound = await issuer.issue({
       tokenId: 'token-row-remote',
       claimantPeerId: 'peer-remote',
       verifierPeerId: 'local-stable',
       roomName: 'room-1'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(32) })
-    })
+    const resolver = authority.resolver
     const credentialStore = new MemoryPeerCredentialStore()
     await credentialStore.save('peer-remote', {
       tokenId: 'token-row-local',
@@ -1639,7 +1608,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     }))
     await waitForSent(channel, 2)
 
-    const remoteProof = await createReconnectProofForBearer(
+    const remoteProof = await authority.reconnectProof(
       inbound.bearerToken,
       inbound.verifier,
       {
@@ -1680,23 +1649,15 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('keeps a completed local approval after a verified reconnect proof without prompting or rotating that direction', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const issuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(25),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const issuer = authority.pairingIssuer
     const issued = await issuer.issue({
       tokenId: 'token-row-remote',
       claimantPeerId: 'peer-remote',
       verifierPeerId: 'local-stable',
       roomName: 'room-1'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(26) })
-    })
+    const resolver = authority.resolver
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
 
     await harness.runtime.peer.connect(harness.runtimeProfile)
@@ -1707,7 +1668,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     const channel = harness.pc.channels[0] as RuntimeFakeChannel
     channel.open()
     const challenge = await decodeSent(channel, 0)
-    const proof = await createReconnectProofForBearer(
+    const proof = await authority.reconnectProof(
       issued.bearerToken,
       issued.verifier,
       {
@@ -1782,9 +1743,10 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('fails closed with redacted diagnostics when verifier reconnect challenge issuance is unavailable', async () => {
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository: new MemoryPeerGrantRepository()
+    const resolver = scriptedResolver({
+      issueReconnectChallenge: () => {
+        throw new Error('Reconnect challenge store is unavailable')
+      }
     })
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
     const diagnosticCodes: string[] = []
@@ -1814,12 +1776,8 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('falls back to fresh SAS pairing when a saved reconnect credential was removed', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(19) })
-    })
+    const authority = await createTestAuthority()
+    const resolver = authority.resolver
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
 
     await harness.runtime.peer.connect(harness.runtimeProfile)
@@ -1859,23 +1817,15 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     ['room', (frame: Record<string, unknown>) => { frame.room_name = 'room-other' }],
     ['channel binding', (frame: Record<string, unknown>) => { frame.channel_binding = 'b'.repeat(64) }]
   ] as const)('fails closed for hostile verifier reconnect proof with %s mismatch', async (_name, mutate) => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const issuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(18),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const issuer = authority.pairingIssuer
     const issued = await issuer.issue({
       tokenId: 'token-row-remote',
       claimantPeerId: 'peer-remote',
       verifierPeerId: 'local-stable',
       roomName: 'room-1'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(19) })
-    })
+    const resolver = authority.resolver
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
 
     await harness.runtime.peer.connect(harness.runtimeProfile)
@@ -1886,7 +1836,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     const channel = harness.pc.channels[0] as RuntimeFakeChannel
     channel.open()
     const challenge = await decodeSent(channel, 0)
-    const proof = await createReconnectProofForBearer(
+    const proof = await authority.reconnectProof(
       issued.bearerToken,
       issued.verifier,
       {
@@ -1918,12 +1868,8 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('durably issues inbound PairingExchange verifier hashes and fresh auth yields context', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const basePairingIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(17),
-      now: () => 200
-    })
+    const authority = await createTestAuthority(() => 200)
+    const basePairingIssuer = authority.pairingIssuer
     const pairingIssuer = {
       issue: vi.fn(async (...args: Parameters<typeof basePairingIssuer.issue>) => ({
         ...await basePairingIssuer.issue(...args),
@@ -1973,12 +1919,12 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       expect.objectContaining({ claimantPeerId: 'peer-remote', verifierPeerId: 'local-stable' }),
       { featureIds: ['aurora.local.native.get_device_status.v1'] }
     )
-    const verifier = await verifierStore.getVerifier({
-      tokenId: issuedTokenId,
-      claimantPeerId: 'peer-remote',
-      verifierPeerId: 'local-stable',
-      roomName: 'room-1'
-    }, 201)
+    // The verifier now lives inside the Rust authority, so it is read from what
+    // the issuer handed back rather than out of a TypeScript store. The point of
+    // the assertion is unchanged: what is kept is a hash, and the raw bearer
+    // token is not.
+    const verifier = (await issueCredential.mock.results.at(-1)?.value)?.verifier
+    expect(verifier?.tokenId).toBe(issuedTokenId)
     expect(verifier?.tokenHashHex).toMatch(/^[0-9a-f]{64}$/u)
     expect(JSON.stringify(verifier)).not.toContain(issuedToken)
     channel.receive(await encodeInbound({
@@ -2103,23 +2049,15 @@ describe('browser WebRTC runtime Python gateway auth interop', {
   })
 
   it('falls back to fresh pairing when the remote answers a reconnect challenge with a pairing commit', async () => {
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const issuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(15),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const issuer = authority.pairingIssuer
     await issuer.issue({
       tokenId: 'token-row-remote',
       claimantPeerId: 'peer-remote',
       verifierPeerId: 'local-stable',
       roomName: 'room-1'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new MemoryReconnectChallengeStore({ randomBytes: () => new Uint8Array(32).fill(16) })
-    })
+    const resolver = authority.resolver
     const harness = makeRuntimeHarness({ mode: 'webrtc-only', peerAuthorityResolver: resolver })
 
     await harness.runtime.peer.connect(harness.runtimeProfile)

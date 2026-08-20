@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { allowMethods } from './helpers/authority-doubles.js'
 
 import { AuroraClient, MeshP2PTransport } from '../src/index.js'
 import type { AuroraEvent } from '../src/types.js'
@@ -7,14 +8,12 @@ import {
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   PeerHostContractRegistry,
   PeerProtocolLimits,
-  SessionPeerHostAuthorizationStore,
   WebRtcMeshPeerBridge,
   WebRtcPeerHost,
   buildProtocolHello,
   generatedPeerHostEventDescriptor,
   generatedPeerHostMethodDescriptor,
   type GeneratedPeerHostEventHandler,
-  type LocalPeerGrantV1,
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
 
@@ -511,23 +510,15 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       .registerEvent(generatedPeerHostEventDescriptor('TTS.AudioChunk', (context) => {
         providerContext = context
       }))
-    const providerGrant: LocalPeerGrantV1 = {
-      version: 1,
-      grantId: 'fragmented-audio-grant',
-      tokenId: 'fragmented-audio-token',
+    const providerAuthority = allowMethods({
       claimantPeerId: 'peer-remote',
-      allowedMethodIds: ['TTS.Synthesize', 'TTS.AudioChunk'],
-      allowedToolContractIds: [],
-      capabilityPackIds: [],
-      resourceScopes: [],
-      createdAtMs: 1,
-      grantRevision: 1
-    }
+      methodIds: ['TTS.Synthesize', 'TTS.AudioChunk']
+    })
     const providerHost = new WebRtcPeerHost({
       localPeerId: 'local-provider',
       nodeName: 'Provider',
       registry: providerRegistry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([providerGrant]),
+      authorizationStore: providerAuthority,
       clock: () => 1000,
       randomId: () => 'provider-epoch'
     })

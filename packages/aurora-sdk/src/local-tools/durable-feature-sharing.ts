@@ -5,8 +5,8 @@ import {
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord
 } from '../local-data/index.js'
-import type { IssuedPeerBearerCredential, PeerPairingIssueOptions, PeerRelationshipSelector } from '../peer-host/authority.js'
-import { PeerGrantManager, type PeerGrantSummary } from '../peer-host/grant-management.js'
+import type { IssuedPeerBearerCredential, PeerPairingIssueOptions, PeerRelationshipSelector } from '../peer-host/authority-types.js'
+import type { PeerGrantManagerPort, PeerGrantSummary } from '../peer-host/authority-types.js'
 import type { ToolingProjectionToolInfo } from '../types.js'
 import { MESH_NODE_TOOLING_METHOD_IDS } from './mesh-node-provider.js'
 import type { LocalToolExportDecisionPort, LocalToolProjectionContext } from './export-catalog.js'
@@ -137,7 +137,7 @@ export interface TrustedPeerRelationshipRegistry {
 export interface DurableFeatureSharingControllerOptions {
   readonly registry: LocalToolRegistry
   readonly session: LocalDataSession
-  readonly grantManager: PeerGrantManager
+  readonly grantManager: PeerGrantManagerPort
   readonly localVerifierPeerId: string
   readonly roomName: string
   readonly crypto?: EnvelopeCryptoPort | undefined
@@ -244,7 +244,7 @@ export class TrackingPeerPairingIssuer implements PeerPairingIssuerLike {
 export class DurableFeatureSharingController implements LocalFeatureSharingPort, LocalToolApprovalPolicyPort, LocalToolExportDecisionPort, TrustedPeerRelationshipRegistry {
   private readonly registry: LocalToolRegistry
   private readonly session: LocalDataSession
-  private readonly grantManager: PeerGrantManager
+  private readonly grantManager: PeerGrantManagerPort
   private readonly localVerifierPeerId: string
   private readonly roomName: string
   private readonly crypto: EnvelopeCryptoPort | null

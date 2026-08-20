@@ -1,50 +1,46 @@
+export { PeerRevocationHub } from './revocation-hub.js'
+export { createReconnectProofForBearer } from './reconnect-proof.js'
 export {
+  createDurableHydrationLoader,
   DenyAllPeerHostAuthorizationStore,
-  PeerAuthorityHostAuthorizationStore,
-  SessionPeerHostAuthorizationStore
-} from './authorization.js'
-export {
-  DenyAllInboundCredentialVerifierStore,
-  DenyAllPeerGrantRepository,
-  MemoryInboundCredentialVerifierStore,
-  MemoryPeerAuditSink,
-  MemoryPeerGrantRepository,
-  MemoryPeerRevocationBroadcaster,
-  MemoryPeerRevocationController,
-  MemoryReconnectChallengeStore,
-  NoopPeerAuditSink,
-  NoopPeerRevocationBroadcaster,
-  NoopReconnectChallengeStore,
-  PeerAuthorityResolver,
-  PeerPairingIssuer,
-  createReconnectProofForBearer
-} from './authority.js'
-export {
-  EncryptedPeerGrantRepository,
-  LocalDataPeerAuditSink,
-  SecureInboundCredentialVerifierStore,
-  inboundVerifierSecretKey
-} from './local-data-authority-adapters.js'
-export {
-  PeerGrantManagementError,
-  PeerGrantManager
-} from './grant-management.js'
+  RustPeerHostAuthorizationStore,
+  createTauriAuthorityPort,
+  createWasmAuthorityPort,
+  MESH_AUTHORITY_COMMANDS
+} from './rust-authorization-store.js'
+export type {
+  GrantedPermissionsProjection,
+  RustAuthorityHydration,
+  RustAuthorityHydrationLoader,
+  RustAuthorityPort,
+  WasmAuthorityLike
+} from './rust-authorization-store.js'
 export type {
   AuthenticatedPeerContext,
+  GrantDimensions,
   InboundCredentialVerifierStore,
   IssuedPeerBearerCredential,
+  IssueReconnectChallengeRequest,
   LocalPeerApprovalRequest,
   LocalPeerAuditAction,
   LocalPeerAuditRecord,
+  LocalPeerCredentialVerifierV1,
   LocalPeerCredentialVerifierV1 as ProviderLocalPeerCredentialVerifierV1,
+  LocalPeerGrantV1,
   LocalPeerGrantV1 as ProviderLocalPeerGrantV1,
   PeerAuthorityDecision,
   PeerAuthorityDecisionReason,
-  PeerAuthorityResolverOptions,
+  PeerAuthorityResolverPort,
+  PeerAuditSink,
+  PeerGrantManagementErrorCode,
+  PeerGrantManagerPort,
   PeerGrantRepository,
   PeerGrantResolutionRequest,
+  PeerGrantSelection,
+  PeerGrantSummary,
+  PeerPairingIssueOptions,
+  PeerPairingIssuerPort,
   PeerRelationshipIdentity,
-  PeerPairingIssuerOptions,
   PeerRelationshipSelector,
   PeerRevocationBroadcaster,
   PeerRevocationController,
@@ -52,24 +48,22 @@ export type {
   ReconnectChallengeConsumeResult,
   ReconnectChallengeConsumeStatus,
   ReconnectChallengeRecord,
-  ReconnectChallengeStore,
   ReconnectTransportAttestation,
-  IssueReconnectChallengeRequest,
   VerifyReconnectProofRequest,
   VerifyReconnectProofResult
-} from './authority.js'
+} from './authority-types.js'
+export {
+  EncryptedPeerGrantRepository,
+  LocalDataPeerAuditSink,
+  SecureInboundCredentialVerifierStore,
+  inboundVerifierSecretKey
+} from './local-data-authority-adapters.js'
 export type {
   EncryptedPeerGrantRepositoryOptions,
   InboundVerifierSecretStoragePort,
   LocalDataPeerAuditSinkOptions,
   SecureInboundCredentialVerifierStoreOptions
 } from './local-data-authority-adapters.js'
-export type {
-  PeerGrantManagementErrorCode,
-  PeerGrantManagerOptions,
-  PeerGrantSelection,
-  PeerGrantSummary
-} from './grant-management.js'
 export {
   PeerHostContractRegistry,
   createToolingPeerHostRegistry,
@@ -94,8 +88,7 @@ export {
 } from './provider-lease.js'
 export { WebRtcPeerHost } from './webrtc-peer-host.js'
 export type {
-  LocalPeerCredentialVerifierV1,
-  LocalPeerGrantV1,
+  PeerHostManifestAuthoritySnapshot,
   PeerHostAuthorizationDecision,
   PeerHostAuthorizationStore,
   PeerHostAuthorizeRequest,

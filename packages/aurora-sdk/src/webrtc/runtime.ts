@@ -67,7 +67,7 @@ import {
   type MeshPeerSessionEntry
 } from './peer-registry.js'
 import type { AuthenticatedPeerContext, WebRtcPeerHost } from '../peer-host/index.js'
-import type { PeerAuthorityResolver, PeerPairingIssuer, PeerRelationshipSelector } from '../peer-host/authority.js'
+import type { PeerAuthorityResolverPort, PeerPairingIssuerPort, PeerRelationshipSelector } from '../peer-host/authority-types.js'
 import type {
   AuroraConnectionMode,
   PeerPairingApproval,
@@ -124,8 +124,8 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
   scryptWorkerFactory?: ScryptWorkerFactory | undefined
   localProtocolCapabilities?: readonly string[] | undefined
   peerHost?: WebRtcPeerHost | undefined
-  peerAuthorityResolver?: PeerAuthorityResolver | undefined
-  peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue' | 'rollback'> | undefined
+  peerAuthorityResolver?: PeerAuthorityResolverPort | undefined
+  peerPairingIssuer?: PeerPairingIssuerPort | undefined
   appLayerE2eeAllowed?: boolean | undefined
   allowInsecureLoopback?: boolean | undefined
   pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
@@ -886,8 +886,8 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     onDiagnostic(code: string, message: string): void
     randomId?: (() => string) | undefined
     pairingConnectPoll?: Partial<PairingConnectPollOptions> | undefined
-    peerAuthorityResolver?: PeerAuthorityResolver | undefined
-    peerPairingIssuer?: Pick<PeerPairingIssuer, 'issue' | 'rollback'> | undefined
+    peerAuthorityResolver?: PeerAuthorityResolverPort | undefined
+    peerPairingIssuer?: PeerPairingIssuerPort | undefined
   }) {
     this.pairingConnectPoll = { ...DEFAULT_PAIRING_CONNECT_POLL, ...options.pairingConnectPoll }
   }

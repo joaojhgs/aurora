@@ -13,7 +13,7 @@
  */
 
 import { AuroraError } from '../errors.js'
-import type { AuthenticatedPeerContext } from '../peer-host/authority.js'
+import type { AuthenticatedPeerContext } from '../peer-host/authority-types.js'
 import type { RoomKeys } from './crypto.js'
 import type { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import type { PairingSasResult } from './pairing.js'

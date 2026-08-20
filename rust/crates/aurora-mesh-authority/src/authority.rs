@@ -913,6 +913,24 @@ impl MemoryPeerGrantRepository {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Every grant held for a relationship, revoked and expired rows included.
+    ///
+    /// `list_recipient_grants` deliberately hides anything that is no longer
+    /// live, which is right for a decision and wrong for persistence: a caller
+    /// writing these back to durable storage has to record the revocation too,
+    /// or a revoked grant returns from the dead on the next hydrate.
+    #[must_use]
+    pub fn export_grants(&self, selector: &PeerRelationshipSelector) -> Vec<LocalPeerGrantV1> {
+        let mut rows: Vec<LocalPeerGrantV1> = self
+            .grants
+            .values()
+            .filter(|grant| selector_equals(&grant.selector(), selector))
+            .cloned()
+            .collect();
+        rows.sort_by(compare_grants_owned);
+        rows
+    }
 }
 
 #[async_trait]
@@ -1181,6 +1199,35 @@ impl PeerRevocationBroadcaster for MemoryPeerRevocationBroadcaster {
 // Resolver, issuer, revocation controller
 // ---------------------------------------------------------------------------
 
+/// The four coverage dimensions a caller may ask a grant about.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GrantDimensions {
+    /// Method to be called.
+    #[serde(rename = "methodId", default, skip_serializing_if = "Option::is_none")]
+    pub method_id: Option<String>,
+    /// Tool contract to be reached.
+    #[serde(
+        rename = "toolContractId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tool_contract_id: Option<String>,
+    /// Capability pack to be used.
+    #[serde(
+        rename = "capabilityPackId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub capability_pack_id: Option<String>,
+    /// Resource scope to be touched.
+    #[serde(
+        rename = "resourceScope",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub resource_scope: Option<String>,
+}
+
 /// Request to mint a reconnect challenge.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct IssueReconnectChallengeRequest {
@@ -1405,12 +1452,35 @@ where
         method_id: Option<&str>,
         now_ms: i64,
     ) -> AuthorityResult<PeerAuthorityDecision> {
+        self.resolve_grant_dimensions(
+            context,
+            &GrantDimensions {
+                method_id: method_id.map(str::to_owned),
+                ..GrantDimensions::default()
+            },
+            now_ms,
+        )
+        .await
+    }
+
+    /// Evaluate a grant across any of the four coverage dimensions.
+    ///
+    /// The local tool policy asks about tool contracts, capability packs and
+    /// resource scopes as well as methods, so the seam has to carry all four or
+    /// the caller ends up re-deciding coverage itself.
+    pub async fn resolve_grant_dimensions(
+        &mut self,
+        context: &AuthenticatedPeerContext,
+        dimensions: &GrantDimensions,
+        now_ms: i64,
+    ) -> AuthorityResult<PeerAuthorityDecision> {
+        let method_id = dimensions.method_id.clone();
         let request = PeerGrantResolutionRequest {
             selector: context.selector.clone(),
-            method_id: method_id.map(str::to_owned),
-            tool_contract_id: None,
-            capability_pack_id: None,
-            resource_scope: None,
+            method_id: dimensions.method_id.clone(),
+            tool_contract_id: dimensions.tool_contract_id.clone(),
+            capability_pack_id: dimensions.capability_pack_id.clone(),
+            resource_scope: dimensions.resource_scope.clone(),
             now_ms,
         };
         let decision = self.grant_repository.resolve_grant(&request).await?;
@@ -1427,7 +1497,7 @@ where
         record.reason_code = decision
             .reason_code
             .map(|reason| reason.as_str().to_owned());
-        record.method_id = method_id.map(str::to_owned);
+        record.method_id = method_id;
         record.connection_epoch = context.connection_epoch.clone();
         self.audit_sink.record(record).await?;
         Ok(decision)
@@ -1486,15 +1556,18 @@ where
 }
 
 /// Result of minting a bearer credential.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct IssuedPeerBearerCredential {
     /// Credential identity.
+    #[serde(rename = "tokenId")]
     pub token_id: String,
     /// The raw bearer token — held only long enough to hand to the peer.
+    #[serde(rename = "bearerToken")]
     pub bearer_token: String,
     /// The stored half.
     pub verifier: LocalPeerCredentialVerifierV1,
     /// Product permission labels derived from the features shared at pairing.
+    #[serde(rename = "grantedPermissions", skip_serializing_if = "Option::is_none")]
     pub granted_permissions: Option<Vec<String>>,
 }
 
@@ -1577,6 +1650,11 @@ where
     pub async fn rollback(&mut self, selector: &PeerRelationshipSelector) -> AuthorityResult<()> {
         validate_selector(selector)?;
         self.verifier_store.delete_verifier(selector).await
+    }
+
+    /// Hand the ports back, so a caller that lent them can take them home.
+    pub fn into_ports(self) -> (V, A) {
+        (self.verifier_store, self.audit_sink)
     }
 }
 

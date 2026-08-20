@@ -59,7 +59,8 @@ export type {
 } from './authority-policy.js'
 export {
   MESH_NODE_TOOLING_METHOD_IDS,
-  createMeshNodeLocalToolProvider
+  createMeshNodeLocalToolProvider,
+  permissionsForGrantedTools
 } from './mesh-node-provider.js'
 export type {
   MeshNodeLocalToolProviderComposition,

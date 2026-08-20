@@ -63,7 +63,7 @@ describe('WebRTC package boundary', () => {
       const mod = await import('../src/webrtc/index.js')
       expect(mod.PAIRING_PROTOCOL_VERSION).toBe(2)
       expect(typeof mod.MqttWebSocketSignalingClient).toBe('function')
-      expect(typeof mod.PeerGrantManager).toBe('function')
+      expect(typeof mod.RustPeerHostAuthorizationStore).toBe('function')
       expect(typeof mod.WebRtcPeerSession).toBe('function')
     } finally {
       if (oldWindow !== undefined) (globalThis as Record<string, unknown>).window = oldWindow

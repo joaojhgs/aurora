@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4'
 
 import type { CallableFeatureContract, JsonObject } from '../types.js'
-import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './authority.js'
+import type { AuthenticatedPeerContext, PeerRevocationBroadcaster } from './authority-types.js'
 
 export type PeerHostMethodType = 'unary' | 'stream' | 'event'
 export type PeerHostProjectionMethodType = 'use' | 'manage'
@@ -123,12 +123,27 @@ export interface PeerHostAuthorizationDecision {
   readonly grantRevision?: number
   readonly grantedMethodIds?: readonly string[]
   readonly grantedPermissions?: readonly string[]
+  /**
+   * Tool contracts the covering grant carries.
+   *
+   * Reported by the authority, projected into permission labels by the caller —
+   * the mapping needs the local tool registry, which the authority does not
+   * hold.
+   */
+  readonly grantedToolContractIds?: readonly string[]
 }
 
 export interface PeerHostManifestAuthoritySnapshot {
   readonly recipientPeerId?: string
   readonly grantedMethodIds: readonly string[]
   readonly grantedPermissions?: readonly string[]
+  /**
+   * Tool contracts the live grants carry.
+   *
+   * Reported by the authority, projected into permission labels by the caller
+   * that owns the local tool registry.
+   */
+  readonly grantedToolContractIds?: readonly string[]
   readonly authGrantRevision: number
   readonly authGrantState: 'unknown' | 'pending' | 'active' | 'revoked'
 }

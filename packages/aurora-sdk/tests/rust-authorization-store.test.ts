@@ -47,10 +47,26 @@ const AUTHORIZE_REQUEST = {
   nowMs: 2_000
 }
 
+/** The parts of the authority a given test does not exercise. */
+const unusedWasmSurface = {
+  resolveGrant: async () => { throw new Error('not used') },
+  issueReconnectChallenge: async () => { throw new Error('not used') },
+  verifyReconnectProof: async () => { throw new Error('not used') },
+  issuePairingCredential: async () => { throw new Error('not used') },
+  rollbackPairingCredential: async () => undefined,
+  listActiveGrants: async () => [],
+  replaceGrant: async () => { throw new Error('not used') },
+  revokeSharing: async () => [],
+  revokePeerAuthority: async () => { throw new Error('not used') },
+  drainAuditRecords: () => [],
+  exportGrants: () => []
+}
+
 describe('Rust-backed peer host authorization store', () => {
   it('satisfies the PeerHostAuthorizationStore seam', () => {
     const store: PeerHostAuthorizationStore = new RustPeerHostAuthorizationStore(
       createWasmAuthorityPort({
+        ...unusedWasmSurface,
         hydrate: async () => undefined,
         authorize: async () => ({ allowed: false, reasonCode: 'grant_not_found' }),
         snapshotManifestAuthority: async () => ({
@@ -110,6 +126,7 @@ describe('Rust-backed peer host authorization store', () => {
     const seen: unknown[] = []
     const store = new RustPeerHostAuthorizationStore(
       createWasmAuthorityPort({
+        ...unusedWasmSurface,
         hydrate: async (verifiers, grants) => {
           seen.push({ verifiers, grants })
         },
@@ -134,6 +151,7 @@ describe('Rust-backed peer host authorization store', () => {
   it('holds no grant of its own', () => {
     const store = new RustPeerHostAuthorizationStore(
       createWasmAuthorityPort({
+        ...unusedWasmSurface,
         hydrate: async () => undefined,
         authorize: async () => ({ allowed: true }),
         snapshotManifestAuthority: async () => ({
@@ -143,8 +161,18 @@ describe('Rust-backed peer host authorization store', () => {
         })
       })
     )
-    // The store is a transport for the question and the answer. If it ever
-    // grows a grant cache, R2's "one authority" claim stops being true.
-    expect(Object.keys(store)).toEqual(['port'])
+    // The store is a transport for the question and the answer. Its only state
+    // is the set of relationships it has already replayed into the authority —
+    // selector keys, never a grant and never a decision. If a field ever holds
+    // an answer, R2's "one authority" claim stops being true, so the field list
+    // is pinned rather than sampled.
+    expect(Object.keys(store).sort()).toEqual([
+      'auditSink',
+      'hydrated',
+      'loadHydration',
+      'port',
+      'projectPermissions'
+    ])
+    expect((store as unknown as { hydrated: Set<string> }).hydrated.size).toBe(0)
   })
 })

@@ -3,11 +3,8 @@ import { z } from 'zod/v4'
 
 import { MemoryLocalDataBackend } from '../src/local-data/index.js'
 import {
-  MemoryPeerGrantRepository,
-  MemoryPeerRevocationBroadcaster,
-  PeerAuthorityResolver,
   PeerHostContractRegistry,
-  SessionPeerHostAuthorizationStore,
+  PeerRevocationHub,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   generatedPeerHostEventDescriptor,
@@ -17,43 +14,29 @@ import {
   type PeerHostAuthorizationStore,
   type PeerHostCallContext
 } from '../src/webrtc/index.js'
-import { PeerAuthorityHostAuthorizationStore } from '../src/peer-host/authorization.js'
-import { DenyAllInboundCredentialVerifierStore, NoopReconnectChallengeStore, type AuthenticatedPeerContext, type LocalPeerGrantV1 as AuthorityGrant, type PeerRevocationBroadcaster } from '../src/peer-host/authority.js'
+import type {
+  AuthenticatedPeerContext,
+  LocalPeerAuditRecord,
+  PeerRevocationBroadcaster
+} from '../src/peer-host/authority-types.js'
+import { RustPeerHostAuthorizationStore } from '../src/peer-host/rust-authorization-store.js'
 import { LocalDataPeerAuditSink } from '../src/peer-host/local-data-authority-adapters.js'
+import { allowMethods, mutableAuthorizationStore, scriptedAuthorizationStore } from './helpers/authority-doubles.js'
 
-function grant(patch: Partial<LocalPeerGrantV1> = {}): LocalPeerGrantV1 {
-  return {
-    version: 1,
-    grantId: 'grant-1',
-    tokenId: 'token-1',
-    claimantPeerId: 'peer-a',
-    allowedMethodIds: ['Tooling.GetTools'],
-    allowedToolContractIds: [],
-    capabilityPackIds: [],
-    resourceScopes: [],
-    createdAtMs: 1,
-    grantRevision: 1,
-    ...patch
-  }
+/**
+ * The authority these host tests run against.
+ *
+ * R2 left exactly one authority and it is Rust
+ * (`rust/crates/aurora-mesh-authority`). A peer-host test is about what the
+ * *host* does with a decision — dispatch it, refuse it, cancel it — so it states
+ * the decision rather than seeding a grant into a TypeScript engine that no
+ * longer exists. Grant semantics live in the shared corpus at
+ * `tests/fixtures/mesh_authority_parity_vectors.json`.
+ */
+function authority(methodIds: readonly string[] = ['Tooling.GetTools']) {
+  return allowMethods({ claimantPeerId: 'peer-a', methodIds, grantRevision: 1 })
 }
 
-function authorityGrant(patch: Partial<AuthorityGrant> = {}): AuthorityGrant {
-  return {
-    version: 1,
-    grantId: 'authority-grant-1',
-    tokenId: 'token-1',
-    claimantPeerId: 'peer-a',
-    verifierPeerId: 'local-peer',
-    roomName: 'room-a',
-    allowedMethodIds: ['Tooling.GetTools'],
-    allowedToolContractIds: [],
-    capabilityPackIds: [],
-    resourceScopes: [],
-    createdAtMs: 1,
-    grantRevision: 7,
-    ...patch
-  }
-}
 
 function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): AuthenticatedPeerContext {
   return {
@@ -76,7 +59,7 @@ function authenticatedContext(patch: Partial<AuthenticatedPeerContext> = {}): Au
 
 async function host(
   handler: GeneratedPeerHostMethodHandler<'Tooling.GetTools'> = vi.fn(async () => ({ count: 0, tools: [] })),
-  store: PeerHostAuthorizationStore = new SessionPeerHostAuthorizationStore([grant()]),
+  store: PeerHostAuthorizationStore = authority(),
   manifestContext?: AuthenticatedPeerContext
 ) {
   const registry = createToolingPeerHostRegistry({
@@ -186,19 +169,12 @@ async function authorityHost(options: {
   })
   registry.parseInput = (_method, value) => value
   registry.parseOutput = (_method, value) => value
-  const grants = new MemoryPeerGrantRepository()
-  await grants.upsertGrant(authorityGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] }))
-  const resolver = new PeerAuthorityResolver({
-    verifierStore: new DenyAllInboundCredentialVerifierStore(),
-    grantRepository: grants,
-    challengeStore: new NoopReconnectChallengeStore()
-  })
-  const broadcaster = options.broadcaster ?? new MemoryPeerRevocationBroadcaster()
+  const broadcaster = options.broadcaster ?? new PeerRevocationHub()
   const peerHost = new WebRtcPeerHost({
     localPeerId: 'local-peer',
     nodeName: 'Local',
     registry,
-    authorizationStore: new PeerAuthorityHostAuthorizationStore(resolver),
+    authorizationStore: authority(['Tooling.GetTools', 'Tooling.ProjectionInvalidated']),
     revocationBroadcaster: broadcaster,
     clock: () => 1000,
     randomId: () => 'epoch-1'
@@ -258,7 +234,7 @@ describe('WebRtcPeerHost', () => {
         requiredPermissions: ['Tooling.GetTools'],
         handler: async () => ({ count: 0, tools: [] })
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+      authorizationStore: authority(),
       clock: () => 1000,
       randomId: () => 'epoch-identity'
     })
@@ -330,99 +306,67 @@ describe('WebRtcPeerHost', () => {
     }
   })
 
-  it('writes a redacted epoch-bearing audit row for authority manifest evaluation', async () => {
+  it('persists the authority audit rows it drains into durable local data', async () => {
+    // The Rust authority records who asked for what and what it answered; the
+    // durable store stays TypeScript's, so the rows cross the seam. This asserts
+    // the crossing, and that nothing secret rides along with it.
     const backend = new MemoryLocalDataBackend()
     const session = await backend.open('profile-1', 'node-1')
-    const grants = new MemoryPeerGrantRepository()
-    await grants.upsertGrant(authorityGrant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: grants,
-      challengeStore: new NoopReconnectChallengeStore(),
-      auditSink: new LocalDataPeerAuditSink({
-        auditRepository: session.localAudit,
-        profileId: 'profile-1',
-        localNodeId: 'node-1',
-        randomId: () => 'audit-manifest'
-      })
+    const auditSink = new LocalDataPeerAuditSink({
+      auditRepository: session.localAudit,
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      randomId: () => 'audit-manifest'
     })
-
-    await host(
-      vi.fn(async () => ({ count: 0, tools: [] })),
-      new PeerAuthorityHostAuthorizationStore(resolver),
-      authenticatedContext()
+    const drained: LocalPeerAuditRecord[] = [{
+      action: 'manifest.snapshot',
+      selector: authenticatedContext().selector,
+      decision: 'accepted',
+      connectionEpoch: 'epoch-1',
+      authorityState: 'active',
+      createdAtMs: 1_000,
+      redacted: true,
+      redactedFields: ['bearerToken', 'tokenHashHex', 'proofHex']
+    }]
+    const store = new RustPeerHostAuthorizationStore(
+      {
+        hydrate: async () => undefined,
+        resolveGrant: async () => ({ allowed: true }),
+        issueReconnectChallenge: async () => { throw new Error('not used') },
+        verifyReconnectProof: async () => { throw new Error('not used') },
+        issuePairingCredential: async () => { throw new Error('not used') },
+        rollbackPairingCredential: async () => undefined,
+        listActiveGrants: async () => [],
+        replaceGrant: async () => { throw new Error('not used') },
+        revokeSharing: async () => [],
+        revokePeerAuthority: async () => { throw new Error('not used') },
+        authorize: async () => ({ allowed: true, grantedMethodIds: ['Tooling.GetTools'] }),
+        snapshotManifestAuthority: async () => ({
+          recipientPeerId: 'peer-a',
+          grantedMethodIds: ['Tooling.GetTools'],
+          authGrantRevision: 1,
+          authGrantState: 'active' as const
+        }),
+        drainAuditRecords: async () => drained.splice(0, drained.length),
+        exportGrants: async () => []
+      },
+      undefined,
+      undefined,
+      auditSink
     )
+
+    await store.snapshotManifestAuthority({ remotePeerId: 'peer-a', nowMs: 1_000 })
 
     await expect(session.localAudit.listAudit()).resolves.toEqual([
       expect.objectContaining({
         id: 'audit-manifest',
         peerId: 'peer-a',
         action: 'manifest.snapshot',
-        decision: 'accepted',
-        connectionEpoch: 'epoch-1',
-        correlationId: 'manifest:epoch-1',
-        redactedDetailJson: expect.objectContaining({
-          redacted: true,
-          secretsRedacted: true,
-          authorityState: 'active'
-        })
+        decision: 'accepted'
       })
     ])
-    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
-  })
-
-  it('records a redacted rejected manifest snapshot when no active grant exists', async () => {
-    const backend = new MemoryLocalDataBackend()
-    const session = await backend.open('profile-1', 'node-1')
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: new MemoryPeerGrantRepository(),
-      challengeStore: new NoopReconnectChallengeStore(),
-      auditSink: new LocalDataPeerAuditSink({
-        auditRepository: session.localAudit,
-        profileId: 'profile-1',
-        localNodeId: 'node-1',
-        randomId: () => 'audit-manifest-rejected'
-      })
-    })
-
-    const registry = createToolingPeerHostRegistry({
-      getTools: async () => ({ count: 0, tools: [] }),
-      getExportCatalog: async () => { throw new Error('not implemented') },
-      prepareExecution: async () => { throw new Error('not implemented') },
-      executeTool: async () => { throw new Error('not implemented') }
-    })
-    const peerHost = new WebRtcPeerHost({
-      localPeerId: 'local-peer',
-      nodeName: 'Local',
-      registry,
-      authorizationStore: new PeerAuthorityHostAuthorizationStore(resolver),
-      clock: () => 1000,
-      randomId: () => 'epoch-1'
-    })
-    peerHost.attach({ sendFrame: async () => undefined })
-    await peerHost.startEpoch('peer-a', authenticatedContext())
-
-    await expect(session.localAudit.listAudit()).resolves.toEqual([
-      expect.objectContaining({
-        id: 'audit-manifest-rejected',
-        peerId: 'peer-a',
-        action: 'manifest.snapshot',
-        decision: 'rejected',
-        resultStatus: 'rejected',
-        connectionEpoch: 'epoch-1',
-        correlationId: 'manifest:epoch-1',
-        redactedDetailJson: expect.objectContaining({
-          redacted: true,
-          secretsRedacted: true,
-          reasonCode: 'grant_not_found',
-          authorityState: 'unknown'
-        })
-      })
-    ])
-    expect(JSON.stringify(await session.localAudit.listAudit())).not.toMatch(
-      /peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u
-    )
+    expect(JSON.stringify(await session.localAudit.listAudit()))
+      .not.toMatch(/peer-verifier|room-a|tokenHashHex|proofHex|bearer|[a-f0-9]{64}/u)
   })
 
   it('keeps generated Tooling registry permissions aligned for export catalog reads', () => {
@@ -482,7 +426,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] })]),
+      authorizationStore: authority(['Tooling.GetTools', 'Tooling.ProjectionInvalidated']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -543,9 +487,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        grant({ allowedMethodIds: ['Tooling.GetTools'] })
-      ]),
+      authorizationStore: authority(['Tooling.GetTools']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -578,8 +520,8 @@ describe('WebRtcPeerHost', () => {
 
   it('never dispatches malformed, oversized, unauthorized, expired, or revoked calls', async () => {
     const handler = vi.fn(async () => ({ count: 0, tools: [] }))
-    const expired = new SessionPeerHostAuthorizationStore([grant({ grantId: 'expiring-grant', expiresAtMs: 5_000 })])
-    const revoked = new SessionPeerHostAuthorizationStore([grant({ grantId: 'revokable-grant' })])
+    const expired = mutableAuthorizationStore({ claimantPeerId: 'peer-a', methodIds: ['Tooling.GetTools'] })
+    const revoked = mutableAuthorizationStore({ claimantPeerId: 'peer-a', methodIds: ['Tooling.GetTools'] })
 
     const malformed = await host(handler)
     await malformed.peerHost.handleCall({
@@ -599,9 +541,12 @@ describe('WebRtcPeerHost', () => {
       identity: { caller_peer_id: 'peer-a', effective_perms: ['Tooling.GetTools'] }
     }, 'peer-a')
 
-    const unauthorizedStore = new SessionPeerHostAuthorizationStore([grant()])
+    const unauthorizedStore = mutableAuthorizationStore({
+      claimantPeerId: 'peer-a',
+      methodIds: ['Tooling.GetTools']
+    })
     const unauthorized = await host(handler, unauthorizedStore)
-    unauthorizedStore.clear()
+    unauthorizedStore.deny('grant_not_found')
     await unauthorized.peerHost.handleCall({
       type: 'call',
       id: 'unauthorized',
@@ -611,7 +556,7 @@ describe('WebRtcPeerHost', () => {
     }, 'peer-a')
 
     const expiredHost = await host(handler, expired)
-    expired.upsertGrant(grant({ grantId: 'expiring-grant', expiresAtMs: 500 }))
+    expired.deny('grant_expired')
     await expiredHost.peerHost.handleCall({
       type: 'call',
       id: 'expired',
@@ -621,7 +566,7 @@ describe('WebRtcPeerHost', () => {
     }, 'peer-a')
 
     const revokedHost = await host(handler, revoked)
-    revoked.revokeGrant('revokable-grant', 500)
+    revoked.deny('grant_revoked')
     await revokedHost.peerHost.handleCall({
       type: 'call',
       id: 'revoked',
@@ -666,7 +611,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] })]),
+      authorizationStore: authority(['Tooling.GetTools', 'Tooling.ProjectionInvalidated']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -765,9 +710,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
-      ]),
+      authorizationStore: authority(['Tooling.GetTools', 'TTS.AudioChunk']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -846,7 +789,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+      authorizationStore: authority(),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -864,20 +807,20 @@ describe('WebRtcPeerHost', () => {
       expect.objectContaining({ type: 'subscribe_rejected', id: 'unauthorized', reason: 'grant_not_found' })
     ]))
 
-    const expiredSubStore = new SessionPeerHostAuthorizationStore([grant({ grantId: 'sub-grant', allowedMethodIds: ['Tooling.ProjectionInvalidated'], expiresAtMs: 5_000 })])
-    const revokedSubStore = new SessionPeerHostAuthorizationStore([grant({ grantId: 'sub-grant', allowedMethodIds: ['Tooling.ProjectionInvalidated'] })])
+    const expiredSubStore = mutableAuthorizationStore({ claimantPeerId: 'peer-a', methodIds: ['Tooling.ProjectionInvalidated'] })
+    const revokedSubStore = mutableAuthorizationStore({ claimantPeerId: 'peer-a', methodIds: ['Tooling.ProjectionInvalidated'] })
     for (const { id, store, reason, expire } of [
       {
         id: 'expired-sub',
         store: expiredSubStore,
         reason: 'grant_expired',
-        expire: () => expiredSubStore.upsertGrant(grant({ grantId: 'sub-grant', allowedMethodIds: ['Tooling.ProjectionInvalidated'], expiresAtMs: 500 }))
+        expire: () => expiredSubStore.deny('grant_expired')
       },
       {
         id: 'revoked-sub',
         store: revokedSubStore,
         reason: 'grant_revoked',
-        expire: () => revokedSubStore.revokeGrant('sub-grant', 500)
+        expire: () => revokedSubStore.deny('grant_revoked')
       }
     ] as const) {
       const blocked = new WebRtcPeerHost({
@@ -932,7 +875,7 @@ describe('WebRtcPeerHost', () => {
         requiredPermissions: [],
         handler: opened
       }),
-      authorizationStore: new SessionPeerHostAuthorizationStore([grant({ allowedMethodIds: ['Tooling.ProjectionInvalidated'] })]),
+      authorizationStore: authority(['Tooling.ProjectionInvalidated']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -967,9 +910,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
-      ]),
+      authorizationStore: authority(['Tooling.GetTools', 'TTS.AudioChunk']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -1071,9 +1012,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
-      ]),
+      authorizationStore: authority(['Tooling.GetTools', 'TTS.AudioChunk']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -1127,9 +1066,7 @@ describe('WebRtcPeerHost', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new SessionPeerHostAuthorizationStore([
-        grant({ allowedMethodIds: ['Tooling.GetTools', 'TTS.AudioChunk'] })
-      ]),
+      authorizationStore: authority(['Tooling.GetTools', 'TTS.AudioChunk']),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -1172,13 +1109,6 @@ describe('WebRtcPeerHost', () => {
   })
 
   it('uses authenticated authority context instead of forged caller identity or effective permissions', async () => {
-    const grants = new MemoryPeerGrantRepository()
-    await grants.upsertGrant(authorityGrant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: grants,
-      challengeStore: new NoopReconnectChallengeStore()
-    })
     const handler = vi.fn(async (_input: unknown, context: PeerHostCallContext) => {
       expect(context.identity).toMatchObject({
         callerPeerId: 'peer-a',
@@ -1189,7 +1119,11 @@ describe('WebRtcPeerHost', () => {
       expect(context.authenticatedPeerContext?.connectionEpoch).toBe('epoch-1')
       return { count: 0, tools: [] }
     })
-    const { peerHost, sent } = await host(handler, new PeerAuthorityHostAuthorizationStore(resolver), authenticatedContext())
+    const { peerHost, sent } = await host(
+      handler,
+      allowMethods({ claimantPeerId: 'peer-a', methodIds: ['Tooling.GetTools'], grantRevision: 7 }),
+      authenticatedContext()
+    )
 
     await peerHost.handleCall({
       type: 'call',
@@ -1296,18 +1230,12 @@ describe('WebRtcPeerHost', () => {
         return { close }
       }
     })
-    const grants = new MemoryPeerGrantRepository()
-    await grants.upsertGrant(authorityGrant({ allowedMethodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'] }))
-    const broadcaster = new MemoryPeerRevocationBroadcaster()
+    const broadcaster = new PeerRevocationHub()
     const peerHost = new WebRtcPeerHost({
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: new PeerAuthorityHostAuthorizationStore(new PeerAuthorityResolver({
-        verifierStore: new DenyAllInboundCredentialVerifierStore(),
-        grantRepository: grants,
-        challengeStore: new NoopReconnectChallengeStore()
-      })),
+      authorizationStore: authority(['Tooling.GetTools', 'Tooling.ProjectionInvalidated']),
       revocationBroadcaster: broadcaster,
       clock: () => 1000,
       randomId: () => 'epoch-1'
@@ -1396,15 +1324,25 @@ describe('WebRtcPeerHost', () => {
   })
 
   it('denies authority-backed provider calls without authenticated context or matching selector', async () => {
-    const grants = new MemoryPeerGrantRepository()
-    await grants.upsertGrant(authorityGrant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: grants,
-      challengeStore: new NoopReconnectChallengeStore()
-    })
+    // The two denials themselves are the authority's, and the shared corpus
+    // pins them (`denies_an_unauthenticated_caller`,
+    // `denies_a_context_belonging_to_another_peer`). What this asserts is the
+    // *host* half: that each one becomes a 403 carrying the reason verbatim.
+    const authorityBacked = scriptedAuthorizationStore((request) => {
+      const context = request.authenticatedPeerContext
+      if (context === undefined) return { allowed: false, reasonCode: 'peer_not_authenticated' }
+      if (context.selector.claimantPeerId !== request.remotePeerId) {
+        return { allowed: false, reasonCode: 'selector_mismatch' }
+      }
+      return { allowed: true, grantedMethodIds: ['Tooling.GetTools'] }
+    }, (request) => ({
+      ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}),
+      grantedMethodIds: ['Tooling.GetTools'],
+      authGrantRevision: 1,
+      authGrantState: 'active' as const
+    }))
     const handler = vi.fn(async () => ({ count: 0, tools: [] }))
-    const missing = await host(handler, new PeerAuthorityHostAuthorizationStore(resolver), authenticatedContext())
+    const missing = await host(handler, authorityBacked, authenticatedContext())
     await missing.peerHost.handleCall({
       type: 'call',
       id: 'no-context',
@@ -1413,7 +1351,7 @@ describe('WebRtcPeerHost', () => {
       identity: { caller_peer_id: 'peer-a', effective_perms: ['*'] }
     }, 'peer-a')
 
-    const mismatch = await host(handler, new PeerAuthorityHostAuthorizationStore(resolver), authenticatedContext())
+    const mismatch = await host(handler, authorityBacked, authenticatedContext())
     await mismatch.peerHost.handleCall({
       type: 'call',
       id: 'selector-mismatch',
@@ -1483,7 +1421,7 @@ describe('WebRtcPeerHost', () => {
         localPeerId: 'local-peer',
         nodeName: 'Local',
         registry,
-        authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+        authorizationStore: authority(),
         clock: () => Date.now(),
         randomId: () => 'timeout-ref'
       })
@@ -1530,7 +1468,7 @@ describe('WebRtcPeerHost', () => {
         localPeerId: 'local-peer',
         nodeName: 'Local',
         registry: streamRegistry,
-        authorizationStore: new SessionPeerHostAuthorizationStore([grant()]),
+        authorizationStore: authority(),
         clock: () => Date.now(),
         randomId: () => 'stream-timeout-ref'
       })

@@ -5,7 +5,7 @@ import { AuroraValidationError } from '../validation/index.js'
 import { bytesToHex, canonicalJson } from '../webrtc/encoding.js'
 import type { CallFrame, SubscribeFrame } from '../webrtc/protocol.js'
 import { ProviderLeaseController } from './provider-lease.js'
-import type { AuthenticatedPeerContext, PeerRevocationEvent, PeerRelationshipSelector } from './authority.js'
+import type { AuthenticatedPeerContext, PeerRevocationEvent, PeerRelationshipSelector } from './authority-types.js'
 import type {
   PeerHostCallContext,
   PeerHostAuthorizationDecision,

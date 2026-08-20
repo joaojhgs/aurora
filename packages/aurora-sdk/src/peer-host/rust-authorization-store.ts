@@ -6,7 +6,31 @@ import type {
   PeerHostAuthorizeRequest,
   PeerHostManifestAuthoritySnapshot
 } from './types.js'
-import type { AuthenticatedPeerContext, LocalPeerCredentialVerifierV1, LocalPeerGrantV1 } from './authority.js'
+import type {
+  AuthenticatedPeerContext,
+  GrantDimensions,
+  InboundCredentialVerifierStore,
+  IssuedPeerBearerCredential,
+  PeerAuditSink,
+  IssueReconnectChallengeRequest,
+  LocalPeerCredentialVerifierV1,
+  LocalPeerGrantV1,
+  PeerAuthorityDecision,
+  PeerAuthorityResolverPort,
+  PeerGrantManagerPort,
+  PeerGrantRepository,
+  PeerGrantSelection,
+  PeerGrantSummary,
+  PeerPairingIssueOptions,
+  PeerPairingIssuerPort,
+  LocalPeerAuditRecord,
+  PeerRelationshipSelector,
+  PeerRevocationController,
+  PeerRevocationEvent,
+  ReconnectChallengeRecord,
+  VerifyReconnectProofRequest,
+  VerifyReconnectProofResult
+} from './authority-types.js'
 
 /**
  * The `PeerHostAuthorizationStore` backed by the Rust mesh authority.
@@ -29,15 +53,81 @@ import type { AuthenticatedPeerContext, LocalPeerCredentialVerifierV1, LocalPeer
  * at session start through {@link RustPeerHostAuthorizationStore.hydrate}.
  */
 
+/**
+ * Refuses everything.
+ *
+ * Not an authority implementation — the *absence* of one. It exists so a
+ * composition that has no authority wired fails closed instead of failing open,
+ * and it decides nothing: there is no grant to consult and no state to hold.
+ */
+export class DenyAllPeerHostAuthorizationStore implements PeerHostAuthorizationStore {
+  async authorize(): Promise<PeerHostAuthorizationDecision> {
+    return { allowed: false, reasonCode: 'authorization_store_unavailable' }
+  }
+}
+
 /** What the authority needs replayed into it before it can answer. */
 export interface RustAuthorityHydration {
   readonly verifiers: readonly LocalPeerCredentialVerifierV1[]
   readonly grants: readonly LocalPeerGrantV1[]
 }
 
+/**
+ * Projects a decision's granted tool contracts into product permission labels.
+ *
+ * The mapping needs the local tool registry, which is TypeScript data the
+ * authority has no business holding — so the authority reports what is granted
+ * and this projects the labels. It reads the decision; it never widens it.
+ */
+export type GrantedPermissionsProjection = (grantedToolContractIds: readonly string[]) => readonly string[]
+
+/**
+ * Loads one relationship's durable rows so the authority can answer about it.
+ *
+ * The durable adapters are keyed per relationship, and so is the authority, so
+ * hydration is lazy: the rows for a peer are replayed the first time a question
+ * is asked about that peer, not eagerly for every peer the device has ever
+ * paired with.
+ */
+export type RustAuthorityHydrationLoader = (
+  selector: PeerRelationshipSelector
+) => Promise<RustAuthorityHydration>
+
 /** The subset of the Rust authority this store dispatches to. */
 export interface RustAuthorityPort {
   hydrate(hydration: RustAuthorityHydration): Promise<void>
+  resolveGrant(
+    context: AuthenticatedPeerContext,
+    dimensions: GrantDimensions & { readonly nowMs: number }
+  ): Promise<PeerAuthorityDecision>
+  issueReconnectChallenge(
+    request: IssueReconnectChallengeRequest
+  ): Promise<ReconnectChallengeRecord>
+  verifyReconnectProof(request: VerifyReconnectProofRequest): Promise<VerifyReconnectProofResult>
+  issuePairingCredential(
+    selector: PeerRelationshipSelector,
+    options: PeerPairingIssueOptions,
+    nowMs: number
+  ): Promise<IssuedPeerBearerCredential>
+  rollbackPairingCredential(selector: PeerRelationshipSelector): Promise<void>
+  listActiveGrants(
+    selector: PeerRelationshipSelector,
+    nowMs: number
+  ): Promise<readonly PeerGrantSummary[]>
+  replaceGrant(
+    selector: PeerRelationshipSelector,
+    selection: PeerGrantSelection,
+    nowMs: number
+  ): Promise<PeerGrantSummary>
+  revokeSharing(
+    selector: PeerRelationshipSelector,
+    nowMs: number
+  ): Promise<readonly PeerGrantSummary[]>
+  revokePeerAuthority(
+    selector: PeerRelationshipSelector,
+    reasonCode: string,
+    revokedAtMs: number
+  ): Promise<PeerRevocationEvent>
   authorize(request: PeerHostAuthorizeRequest): Promise<PeerHostAuthorizationDecision>
   snapshotManifestAuthority(request: {
     readonly remotePeerId?: string
@@ -45,6 +135,8 @@ export interface RustAuthorityPort {
     readonly nowMs: number
     readonly correlationId?: string
   }): Promise<PeerHostManifestAuthoritySnapshot>
+  drainAuditRecords(): Promise<readonly LocalPeerAuditRecord[]>
+  exportGrants(selector: PeerRelationshipSelector): Promise<readonly LocalPeerGrantV1[]>
 }
 
 /** Tauri command names. Typed constants, never literals at a call site. */
@@ -56,7 +148,13 @@ export const MESH_AUTHORITY_COMMANDS = Object.freeze({
   verifyReconnectProof: 'aurora_mesh_authority_verify_reconnect_proof',
   listActiveGrants: 'aurora_mesh_authority_list_active_grants',
   replaceGrant: 'aurora_mesh_authority_replace_grant',
-  revokePeerAuthority: 'aurora_mesh_authority_revoke_peer_authority'
+  revokePeerAuthority: 'aurora_mesh_authority_revoke_peer_authority',
+  resolveGrant: 'aurora_mesh_authority_resolve_grant',
+  issuePairingCredential: 'aurora_mesh_authority_issue_pairing_credential',
+  rollbackPairingCredential: 'aurora_mesh_authority_rollback_pairing_credential',
+  revokeSharing: 'aurora_mesh_authority_revoke_sharing',
+  drainAudit: 'aurora_mesh_authority_drain_audit',
+  exportGrants: 'aurora_mesh_authority_export_grants'
 } as const)
 
 /** Dispatch to the native authority over Tauri IPC. */
@@ -76,6 +174,69 @@ export function createTauriAuthorityPort(invoke: TauriInvoke): RustAuthorityPort
       return (await invoke(MESH_AUTHORITY_COMMANDS.snapshotManifest, {
         request
       })) as PeerHostManifestAuthoritySnapshot
+    },
+    async resolveGrant(context, dimensions) {
+      const { nowMs, ...rest } = dimensions
+      return (await invoke(MESH_AUTHORITY_COMMANDS.resolveGrant, {
+        context,
+        dimensions: rest,
+        nowMs
+      })) as PeerAuthorityDecision
+    },
+    async issueReconnectChallenge(request) {
+      return (await invoke(
+        MESH_AUTHORITY_COMMANDS.issueReconnectChallenge,
+        { request }
+      )) as ReconnectChallengeRecord
+    },
+    async verifyReconnectProof(request) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.verifyReconnectProof, {
+        request
+      })) as VerifyReconnectProofResult
+    },
+    async issuePairingCredential(selector, options, nowMs) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.issuePairingCredential, {
+        selector,
+        expiresAtMs: options.expiresAtMs ?? null,
+        nowMs
+      })) as IssuedPeerBearerCredential
+    },
+    async rollbackPairingCredential(selector) {
+      await invoke(MESH_AUTHORITY_COMMANDS.rollbackPairingCredential, { selector })
+    },
+    async listActiveGrants(selector, nowMs) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.listActiveGrants, {
+        selector,
+        nowMs
+      })) as readonly PeerGrantSummary[]
+    },
+    async replaceGrant(selector, selection, nowMs) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.replaceGrant, {
+        selector,
+        selection,
+        nowMs
+      })) as PeerGrantSummary
+    },
+    async revokeSharing(selector, nowMs) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.revokeSharing, {
+        selector,
+        nowMs
+      })) as readonly PeerGrantSummary[]
+    },
+    async revokePeerAuthority(selector, reasonCode, revokedAtMs) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.revokePeerAuthority, {
+        selector,
+        reasonCode,
+        revokedAtMs
+      })) as PeerRevocationEvent
+    },
+    async drainAuditRecords() {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.drainAudit)) as readonly LocalPeerAuditRecord[]
+    },
+    async exportGrants(selector) {
+      return (await invoke(MESH_AUTHORITY_COMMANDS.exportGrants, {
+        selector
+      })) as readonly LocalPeerGrantV1[]
     }
   }
 }
@@ -98,10 +259,54 @@ export interface WasmAuthorityLike {
     readonly nowMs: number
     readonly correlationId?: string
   }): Promise<PeerHostManifestAuthoritySnapshot>
+  resolveGrant(
+    context: AuthenticatedPeerContext,
+    dimensions: GrantDimensions,
+    nowMs: number
+  ): Promise<PeerAuthorityDecision>
+  issueReconnectChallenge(request: IssueReconnectChallengeRequest): Promise<ReconnectChallengeRecord>
+  verifyReconnectProof(request: VerifyReconnectProofRequest): Promise<VerifyReconnectProofResult>
+  issuePairingCredential(
+    selector: PeerRelationshipSelector,
+    expiresAtMs: number | undefined,
+    nowMs: number
+  ): Promise<IssuedPeerBearerCredential>
+  rollbackPairingCredential(selector: PeerRelationshipSelector): Promise<void>
+  listActiveGrants(
+    selector: PeerRelationshipSelector,
+    nowMs: number
+  ): Promise<readonly PeerGrantSummary[]>
+  replaceGrant(
+    selector: PeerRelationshipSelector,
+    selection: PeerGrantSelection,
+    nowMs: number,
+    grantId: string
+  ): Promise<PeerGrantSummary>
+  revokeSharing(
+    selector: PeerRelationshipSelector,
+    nowMs: number
+  ): Promise<readonly PeerGrantSummary[]>
+  revokePeerAuthority(
+    selector: PeerRelationshipSelector,
+    reasonCode: string,
+    revokedAtMs: number
+  ): Promise<PeerRevocationEvent>
+  drainAuditRecords(): readonly LocalPeerAuditRecord[]
+  exportGrants(selector: PeerRelationshipSelector): readonly LocalPeerGrantV1[]
 }
 
-/** Dispatch to the WebAssembly authority. */
-export function createWasmAuthorityPort(authority: WasmAuthorityLike): RustAuthorityPort {
+/**
+ * Dispatch to the WebAssembly authority.
+ *
+ * `newGrantId` supplies the identifier a fresh grant is minted under. The
+ * authority refuses to invent one — a grant id must come from a secure source
+ * the platform owns, which is the same rule the TypeScript implementation
+ * followed when it reached for `globalThis.crypto`.
+ */
+export function createWasmAuthorityPort(
+  authority: WasmAuthorityLike,
+  newGrantId: () => string = defaultGrantId
+): RustAuthorityPort {
   return {
     async hydrate(hydration) {
       await authority.hydrate(hydration.verifiers, hydration.grants)
@@ -111,8 +316,53 @@ export function createWasmAuthorityPort(authority: WasmAuthorityLike): RustAutho
     },
     async snapshotManifestAuthority(request) {
       return await authority.snapshotManifestAuthority(request)
+    },
+    async resolveGrant(context, dimensions) {
+      const { nowMs, ...rest } = dimensions
+      return await authority.resolveGrant(context, rest, nowMs)
+    },
+    async issueReconnectChallenge(request) {
+      return await authority.issueReconnectChallenge(request)
+    },
+    async verifyReconnectProof(request) {
+      return await authority.verifyReconnectProof(request)
+    },
+    async issuePairingCredential(selector, options, nowMs) {
+      return await authority.issuePairingCredential(selector, options.expiresAtMs, nowMs)
+    },
+    async rollbackPairingCredential(selector) {
+      await authority.rollbackPairingCredential(selector)
+    },
+    async listActiveGrants(selector, nowMs) {
+      return await authority.listActiveGrants(selector, nowMs)
+    },
+    async replaceGrant(selector, selection, nowMs) {
+      return await authority.replaceGrant(selector, selection, nowMs, newGrantId())
+    },
+    async revokeSharing(selector, nowMs) {
+      return await authority.revokeSharing(selector, nowMs)
+    },
+    async revokePeerAuthority(selector, reasonCode, revokedAtMs) {
+      return await authority.revokePeerAuthority(selector, reasonCode, revokedAtMs)
+    },
+    async drainAuditRecords() {
+      return authority.drainAuditRecords()
+    },
+    async exportGrants(selector) {
+      return authority.exportGrants(selector)
     }
   }
+}
+
+function defaultGrantId(): string {
+  const crypto = globalThis.crypto
+  if (typeof crypto?.randomUUID === 'function') return `grant-${crypto.randomUUID()}`
+  if (typeof crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return `grant-${[...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`
+  }
+  throw new Error('Sharing cannot start without secure random IDs')
 }
 
 /**
@@ -123,7 +373,52 @@ export function createWasmAuthorityPort(authority: WasmAuthorityLike): RustAutho
  * implementation.
  */
 export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStore {
-  constructor(private readonly port: RustAuthorityPort) {}
+  private readonly hydrated = new Set<string>()
+
+  constructor(
+    private readonly port: RustAuthorityPort,
+    private readonly projectPermissions?: GrantedPermissionsProjection,
+    private readonly loadHydration?: RustAuthorityHydrationLoader,
+    private readonly auditSink?: PeerAuditSink
+  ) {}
+
+  /**
+   * Move the authority's audit rows into durable storage.
+   *
+   * The authority records who asked for what and what it answered; the durable
+   * store is TypeScript's, so the rows are drained across the seam after each
+   * question. A storage failure must not turn a denial into an allow, so it is
+   * swallowed here and the decision stands on its own.
+   */
+  private async drainAudit(): Promise<void> {
+    if (this.auditSink === undefined) return
+    try {
+      for (const record of await this.port.drainAuditRecords()) {
+        await this.auditSink.record(record)
+      }
+    } catch {
+      // Losing an audit row must not change a decision.
+    }
+  }
+
+  /**
+   * Replay a relationship's durable rows the first time it is asked about.
+   *
+   * A failure here is deliberately not swallowed into an allow: the caller sees
+   * the error and the authority answers nothing rather than answering blind.
+   */
+  private async ensureHydrated(selector?: PeerRelationshipSelector): Promise<void> {
+    if (this.loadHydration === undefined || selector === undefined) return
+    const key = JSON.stringify([
+      selector.tokenId,
+      selector.claimantPeerId,
+      selector.verifierPeerId,
+      selector.roomName
+    ])
+    if (this.hydrated.has(key)) return
+    this.hydrated.add(key)
+    await this.port.hydrate(await this.loadHydration(selector))
+  }
 
   /** Replay durable verifiers and grants into the authority at session start. */
   async hydrate(hydration: RustAuthorityHydration): Promise<void> {
@@ -131,7 +426,16 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
   }
 
   async authorize(request: PeerHostAuthorizeRequest): Promise<PeerHostAuthorizationDecision> {
-    return await this.port.authorize(request)
+    await this.ensureHydrated(request.authenticatedPeerContext?.selector)
+    const decision = await this.port.authorize(request)
+    await this.drainAudit()
+    if (this.projectPermissions === undefined || decision.grantedToolContractIds === undefined) {
+      return decision
+    }
+    return {
+      ...decision,
+      grantedPermissions: this.projectPermissions(decision.grantedToolContractIds)
+    }
   }
 
   async snapshotManifestAuthority(request: {
@@ -140,6 +444,117 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
     readonly nowMs: number
     readonly correlationId?: string
   }): Promise<PeerHostManifestAuthoritySnapshot> {
-    return await this.port.snapshotManifestAuthority(request)
+    await this.ensureHydrated(request.authenticatedPeerContext?.selector)
+    const snapshot = await this.port.snapshotManifestAuthority(request)
+    await this.drainAudit()
+    return snapshot
+  }
+
+  /** The resolver seam, answered by the same authority. */
+  asResolverPort(): PeerAuthorityResolverPort {
+    return {
+      issueReconnectChallenge: async (request) =>
+        await this.port.issueReconnectChallenge(request),
+      verifyReconnectProof: async (request) => {
+        await this.ensureHydrated(request.selector)
+        return await this.port.verifyReconnectProof(request)
+      },
+      resolveGrant: async (context, request) => {
+        await this.ensureHydrated(context.selector)
+        return await this.port.resolveGrant(context, request)
+      }
+    }
+  }
+
+  /** The pairing issuer seam, answered by the same authority. */
+  asPairingIssuerPort(now: () => number = Date.now): PeerPairingIssuerPort {
+    return {
+      issue: async (selector, options = {}) =>
+        await this.port.issuePairingCredential(selector, options, now()),
+      rollback: async (selector) => {
+        await this.port.rollbackPairingCredential(selector)
+      }
+    }
+  }
+
+  /**
+   * The revocation seam, answered by the same authority.
+   *
+   * The decision is Rust's; `hub` only delivers the resulting event to live
+   * subscribers so an in-flight request can be cancelled.
+   */
+  asRevocationControllerPort(
+    hub: { publish(event: PeerRevocationEvent): Promise<void> },
+    now: () => number = Date.now
+  ): PeerRevocationController {
+    return {
+      revoke: async (selector, reasonCode = 'peer_authority_revoked', revokedAtMs = now()) => {
+        await this.ensureHydrated(selector)
+        const event = await this.port.revokePeerAuthority(selector, reasonCode, revokedAtMs)
+        await hub.publish(event)
+        return event
+      }
+    }
+  }
+
+  /**
+   * The sharing-settings seam, answered by the same authority.
+   *
+   * `persist` writes the authority's resulting grant rows back to durable
+   * storage. Without it a sharing change would survive only until the process
+   * ends, because the authority holds its rows in memory by design — durable
+   * storage stayed TypeScript's, so the write-back has to happen here.
+   */
+  asGrantManagerPort(
+    now: () => number = Date.now,
+    persist?: PeerGrantRepository
+  ): PeerGrantManagerPort {
+    const writeBack = async (selector: PeerRelationshipSelector): Promise<void> => {
+      if (persist === undefined) return
+      for (const grant of await this.port.exportGrants(selector)) {
+        await persist.upsertGrant(grant)
+      }
+    }
+    return {
+      listActiveGrants: async (selector) => {
+        await this.ensureHydrated(selector)
+        return await this.port.listActiveGrants(selector, now())
+      },
+      replaceGrant: async (selector, selection) => {
+        await this.ensureHydrated(selector)
+        const summary = await this.port.replaceGrant(selector, selection, now())
+        await writeBack(selector)
+        return summary
+      },
+      revokeSharing: async (selector) => {
+        await this.ensureHydrated(selector)
+        const summaries = await this.port.revokeSharing(selector, now())
+        await writeBack(selector)
+        return summaries
+      }
+    }
+  }
+}
+
+/**
+ * Read a relationship's durable rows out of the storage adapters.
+ *
+ * This is the whole of what `local-data-authority-adapters.ts` does after R2:
+ * it stores and it reads back. It decides nothing.
+ */
+export function createDurableHydrationLoader(options: {
+  readonly verifierStore: InboundCredentialVerifierStore
+  readonly grantRepository: PeerGrantRepository
+  readonly now?: () => number
+}): RustAuthorityHydrationLoader {
+  const now = options.now ?? Date.now
+  return async (selector) => {
+    const nowMs = now()
+    const verifier = await options.verifierStore.getVerifier(selector, nowMs)
+    const grants = await options.grantRepository.listRecipientGrants(selector, nowMs)
+    return {
+      verifiers: verifier === undefined ? [] : [verifier],
+      grants: [...grants]
+    }
   }
 }

@@ -17,7 +17,7 @@ import {
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   parseProtocolHello
 } from '../src/webrtc/peer-protocol.js'
-import type { AuthenticatedPeerContext } from '../src/peer-host/authority.js'
+import type { AuthenticatedPeerContext } from '../src/peer-host/authority-types.js'
 
 class FakeTimers {
   next = 1

@@ -15,12 +15,13 @@ import type {
 import {
   EncryptedPeerGrantRepository,
   LocalDataPeerAuditSink,
-  MemoryPeerRevocationBroadcaster,
-  MemoryPeerRevocationController,
-  MemoryReconnectChallengeStore,
-  PeerAuthorityResolver,
-  PeerGrantManager,
-  PeerPairingIssuer,
+  PeerRevocationHub,
+  RustPeerHostAuthorizationStore,
+  createDurableHydrationLoader,
+  createTauriAuthorityPort,
+  type PeerAuthorityResolverPort,
+  type PeerGrantManagerPort,
+  type PeerRevocationController,
   SecureInboundCredentialVerifierStore,
   type InboundVerifierSecretStoragePort,
   type PeerGrantRepository,
@@ -103,13 +104,13 @@ export interface EnabledTauriMeshNodeServices {
   readonly verifierStore: SecureInboundCredentialVerifierStore;
   readonly grantRepository: PeerGrantRepository;
   readonly auditSink: LocalDataPeerAuditSink;
-  readonly challengeStore: MemoryReconnectChallengeStore;
-  readonly authorityResolver: PeerAuthorityResolver;
+  readonly authorizationStore: RustPeerHostAuthorizationStore;
+  readonly authorityResolver: PeerAuthorityResolverPort;
   readonly pairingIssuer: PeerPairingIssuerLike;
   readonly localFeatureSharing: LocalFeatureSharingPort;
-  readonly revocationBroadcaster: MemoryPeerRevocationBroadcaster;
-  readonly revocationController: MemoryPeerRevocationController;
-  readonly grantManager: PeerGrantManager;
+  readonly revocationBroadcaster: PeerRevocationHub;
+  readonly revocationController: PeerRevocationController;
+  readonly grantManager: PeerGrantManagerPort;
   readonly localToolRegistry: LocalToolRegistry;
   readonly localToolProvider: MeshNodeLocalToolProviderComposition;
   readonly localToolApprovals: ProviderLocalApprovalControllerPort;
@@ -233,33 +234,36 @@ export async function createTauriMeshNodeServices(
       ...(options.now ? { now: options.now } : {}),
     });
     const randomBytes = options.randomBytes ?? secureRandomBytes;
-    const challengeStore = new MemoryReconnectChallengeStore({ randomBytes });
-    const authorityResolver = new PeerAuthorityResolver({
-      verifierStore,
-      grantRepository,
-      challengeStore,
+    if (!invokeCommand) {
+      throw new Error("Tauri mesh authority commands are unavailable");
+    }
+    // After R2 the authority is Rust. TypeScript keeps the durable adapters and
+    // replays a relationship's rows into the authority the first time it is
+    // asked about that peer; it does not decide anything itself. See
+    // `docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md` section 1.
+    const authorizationStore = new RustPeerHostAuthorizationStore(
+      createTauriAuthorityPort(invokeCommand),
+      // The tool-to-permission projection lives in the provider composition,
+      // which is the only place that knows the local tool registry.
+      undefined,
+      createDurableHydrationLoader({
+        verifierStore,
+        grantRepository,
+        ...(options.now ? { now: options.now } : {}),
+      }),
+      // The authority records what it decided; persisting those rows stays here,
+      // because the durable store is TypeScript's.
       auditSink,
-    });
-    const basePairingIssuer = new PeerPairingIssuer({
-      verifierStore,
-      auditSink,
-      randomBytes,
-      ...(options.now ? { now: options.now } : {}),
-    });
-    const revocationBroadcaster = new MemoryPeerRevocationBroadcaster();
-    const revocationController = new MemoryPeerRevocationController({
-      verifierStore,
-      grantRepository,
-      challengeStore,
-      auditSink,
-      broadcaster: revocationBroadcaster,
-      ...(options.now ? { now: options.now } : {}),
-    });
-    const grantManager = new PeerGrantManager({
-      repository: grantRepository,
-      ...(options.now ? { now: options.now } : {}),
-      ...(options.randomId ? { randomId: options.randomId } : {}),
-    });
+    );
+    const nowMs = options.now ?? (() => Date.now());
+    const authorityResolver = authorizationStore.asResolverPort();
+    const basePairingIssuer = authorizationStore.asPairingIssuerPort(nowMs);
+    const revocationBroadcaster = new PeerRevocationHub();
+    const revocationController = authorizationStore.asRevocationControllerPort(
+      revocationBroadcaster,
+      nowMs,
+    );
+    const grantManager = authorizationStore.asGrantManagerPort(nowMs, grantRepository);
     const localFeatureSharing = new DurableFeatureSharingController({
       registry,
       session,
@@ -339,7 +343,7 @@ export async function createTauriMeshNodeServices(
       verifierStore,
       grantRepository,
       auditSink,
-      challengeStore,
+      authorizationStore,
       authorityResolver,
       pairingIssuer,
       localFeatureSharing,

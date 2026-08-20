@@ -267,6 +267,18 @@ pub struct PeerHostAuthorizationDecision {
         skip_serializing_if = "Option::is_none"
     )]
     pub granted_permissions: Option<Vec<String>>,
+    /// Tool contracts the grant carries, sorted and de-duplicated.
+    ///
+    /// Reported rather than interpreted. Mapping a tool contract to a product
+    /// permission label needs the local tool registry, which is TypeScript data
+    /// the authority has no business holding — so the authority says what is
+    /// granted and the caller projects the labels.
+    #[serde(
+        rename = "grantedToolContractIds",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub granted_tool_contract_ids: Option<Vec<String>>,
 }
 
 impl PeerHostAuthorizationDecision {
@@ -279,6 +291,7 @@ impl PeerHostAuthorizationDecision {
             grant_revision: None,
             granted_method_ids: None,
             granted_permissions: None,
+            granted_tool_contract_ids: None,
         }
     }
 }
@@ -331,6 +344,16 @@ pub struct PeerHostManifestAuthoritySnapshot {
         skip_serializing_if = "Option::is_none"
     )]
     pub granted_permissions: Option<Vec<String>>,
+    /// Tool contracts the live grants carry, sorted and de-duplicated.
+    ///
+    /// Reported, not interpreted — see the same field on
+    /// [`PeerHostAuthorizationDecision`].
+    #[serde(
+        rename = "grantedToolContractIds",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub granted_tool_contract_ids: Option<Vec<String>>,
     /// Highest live grant revision.
     #[serde(rename = "authGrantRevision")]
     pub auth_grant_revision: i64,
@@ -394,6 +417,7 @@ pub trait PeerHostAuthorizationStore {
             recipient_peer_id: request.remote_peer_id.clone(),
             granted_method_ids: Vec::new(),
             granted_permissions: None,
+            granted_tool_contract_ids: None,
             auth_grant_revision: 0,
             auth_grant_state: PeerHostAuthGrantState::Unknown,
         })

@@ -18,6 +18,11 @@ import type {
   PeerHostSubscriptionHandle
 } from './types.js'
 
+// These mirror `rust/crates/aurora-mesh-authority/src/contract_registry.rs`.
+// Rust is the authority on execution policy; these are the values the projected
+// descriptor is *built* with so a handler can run locally, and the shared parity
+// corpus (`tests/fixtures/mesh_authority_parity_vectors.json`) asserts both
+// languages carry the same numbers. If they ever diverge, that corpus fails.
 const DEFAULT_METHOD_BYTES = 256 * 1024
 const DEFAULT_EVENT_BYTES = 64 * 1024
 const DEFAULT_TIMEOUT_MS = 30_000

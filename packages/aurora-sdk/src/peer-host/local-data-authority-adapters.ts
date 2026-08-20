@@ -20,7 +20,7 @@ import type {
   PeerGrantResolutionRequest,
   PeerRelationshipIdentity,
   PeerRelationshipSelector
-} from './authority.js'
+} from './authority-types.js'
 
 const MAX_ID_LENGTH = 256
 const MAX_ROOM_LENGTH = 512

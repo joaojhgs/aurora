@@ -14,7 +14,8 @@ import {
 } from "@aurora/client/local-tools";
 import {
   MemoryPeerCredentialStore,
-  SessionPeerHostAuthorizationStore,
+  RustPeerHostAuthorizationStore,
+  createTauriAuthorityPort,
   WebRtcPeerHost,
   createBrowserWebRtcAuroraRuntime,
   createToolingPeerHostRegistry,
@@ -928,6 +929,19 @@ function hasConflictingProviderReadinessEnvelope(value: Record<string, unknown>)
       semanticCode !== "unavailable_service");
 }
 
+type DesktopLiveInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+function resolveDesktopLiveInvoke(): DesktopLiveInvoke {
+  const tauri = (globalThis as {
+    __TAURI__?: { core?: { invoke?: DesktopLiveInvoke }; invoke?: DesktopLiveInvoke };
+  }).__TAURI__;
+  const invoke = tauri?.core?.invoke ?? tauri?.invoke;
+  if (!invoke) {
+    throw new Error("Desktop live E2E requires the Tauri invoke bridge");
+  }
+  return invoke;
+}
+
 function canonicalReasonCode(value: unknown): string | null {
   return isRecord(value) && typeof value.reason_code === "string"
     ? value.reason_code
@@ -1058,25 +1072,38 @@ function createAc18BrowserLocalToolProvider(
     localPeerId: config.localStablePeerId,
     nodeName: "Aurora desktop live E2E",
     registry: createToolingPeerHostRegistry(provider),
-    authorizationStore: new SessionPeerHostAuthorizationStore([
-      {
-        version: 1,
-        grantId: "ac18-python-gateway-grant",
-        tokenId: "interop-token-row",
-        claimantPeerId: config.expectedStablePeerId,
-        allowedMethodIds: [
-          "Tooling.GetTools",
-          "Tooling.GetExportCatalog",
-          "Tooling.PrepareExecution",
-          "Tooling.ExecuteTool",
+    authorizationStore: new RustPeerHostAuthorizationStore(
+      createTauriAuthorityPort(resolveDesktopLiveInvoke()),
+      undefined,
+      // The harness seeds one grant for one peer. It is replayed into the Rust
+      // authority rather than answered by a TypeScript stand-in: R2 leaves
+      // exactly one implementation, and an E2E lane that used a second one
+      // would stop testing the thing that ships.
+      async () => ({
+        verifiers: [],
+        grants: [
+          {
+            version: 1 as const,
+            grantId: "ac18-python-gateway-grant",
+            tokenId: "interop-token-row",
+            claimantPeerId: config.expectedStablePeerId,
+            verifierPeerId: config.localStablePeerId,
+            roomName: config.room,
+            allowedMethodIds: [
+              "Tooling.GetTools",
+              "Tooling.GetExportCatalog",
+              "Tooling.PrepareExecution",
+              "Tooling.ExecuteTool",
+            ],
+            allowedToolContractIds: [toolContractId],
+            capabilityPackIds: ["interop.browser.echo"],
+            resourceScopes: ["interop.browser.echo"],
+            createdAtMs: 1,
+            grantRevision: 1,
+          },
         ],
-        allowedToolContractIds: [toolContractId],
-        capabilityPackIds: ["interop.browser.echo"],
-        resourceScopes: ["interop.browser.echo"],
-        createdAtMs: 1,
-        grantRevision: 1,
-      },
-    ]),
+      }),
+    ),
     randomId: () => `ac18-epoch-${config.lane}`,
     defaultTimeoutMs: config.timeoutMs,
   });

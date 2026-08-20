@@ -128,6 +128,7 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
                     grant_revision: Some(grant.grant_revision),
                     granted_method_ids: None,
                     granted_permissions: None,
+                    granted_tool_contract_ids: None,
                 });
             }
             if grant.expires_at_ms.is_some_and(|at| at <= request.now_ms) {
@@ -137,6 +138,7 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
                     grant_revision: Some(grant.grant_revision),
                     granted_method_ids: None,
                     granted_permissions: None,
+                    granted_tool_contract_ids: None,
                 });
             }
             if !grant.allowed_method_ids.contains(&request.method_id) {
@@ -148,6 +150,7 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
                 grant_revision: Some(grant.grant_revision),
                 granted_method_ids: Some(sorted_unique(&grant.allowed_method_ids)),
                 granted_permissions: None,
+                granted_tool_contract_ids: Some(sorted_unique(&grant.allowed_tool_contract_ids)),
             });
         }
         // TypeScript raises `bestRevision` immediately before returning an
@@ -161,6 +164,7 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
             grant_revision: None,
             granted_method_ids: None,
             granted_permissions: None,
+            granted_tool_contract_ids: None,
         })
     }
 
@@ -215,6 +219,12 @@ impl PeerHostAuthorizationStore for SessionPeerHostAuthorizationStore {
             },
             granted_method_ids,
             granted_permissions: None,
+            granted_tool_contract_ids: Some(sorted_unique(
+                &live
+                    .iter()
+                    .flat_map(|grant| grant.allowed_tool_contract_ids.clone())
+                    .collect::<Vec<String>>(),
+            )),
             auth_grant_revision,
         })
     }
@@ -320,6 +330,10 @@ where
                 .as_ref()
                 .map(|grant| sorted_unique(&grant.allowed_method_ids)),
             granted_permissions,
+            granted_tool_contract_ids: decision
+                .grant
+                .as_ref()
+                .map(|grant| sorted_unique(&grant.allowed_tool_contract_ids)),
         })
     }
 
@@ -332,6 +346,7 @@ where
                 recipient_peer_id: request.remote_peer_id.clone(),
                 granted_method_ids: Vec::new(),
                 granted_permissions: None,
+                granted_tool_contract_ids: None,
                 auth_grant_revision: 0,
                 auth_grant_state: PeerHostAuthGrantState::Unknown,
             });
@@ -342,6 +357,7 @@ where
                     recipient_peer_id: Some(remote_peer_id.clone()),
                     granted_method_ids: Vec::new(),
                     granted_permissions: None,
+                    granted_tool_contract_ids: None,
                     auth_grant_revision: 0,
                     auth_grant_state: PeerHostAuthGrantState::Unknown,
                 });
@@ -387,6 +403,12 @@ where
             },
             granted_method_ids,
             granted_permissions: Some(granted_permissions),
+            granted_tool_contract_ids: Some(sorted_unique(
+                &active
+                    .iter()
+                    .flat_map(|grant| grant.allowed_tool_contract_ids.clone())
+                    .collect::<Vec<String>>(),
+            )),
             auth_grant_revision,
         })
     }

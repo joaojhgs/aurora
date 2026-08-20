@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { allowMethods, authorityFromGrants, scriptedResolver } from './helpers/authority-doubles.js'
 
 import {
   LocalToolRegistry,
@@ -9,9 +10,6 @@ import {
   type LocalToolExecutionContext
 } from '../src/local-tools/index.js'
 import {
-  MemoryInboundCredentialVerifierStore,
-  MemoryPeerGrantRepository,
-  PeerAuthorityResolver,
   type AuthenticatedPeerContext,
   type PeerAuthorityDecision,
   type PeerGrantResolutionRequest,
@@ -117,18 +115,14 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('fails closed when export or audit ports are missing even if authority grants exist', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
     const base = {
       nodeMode: 'mesh-node' as const,
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEcho(),
       authorityResolver: resolver,
+      authorizationStore,
       cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
       randomId: () => 'epoch-1'
@@ -148,18 +142,14 @@ describe('mesh-node local Tooling provider composition', () => {
 
   it('does not instantiate local provider methods for remote-console or unspecified modes', async () => {
     for (const nodeMode of ['remote-console', undefined] as const) {
-      const grantRepository = new MemoryPeerGrantRepository()
-      await grantRepository.upsertGrant(grant())
-      const resolver = new PeerAuthorityResolver({
-        verifierStore: new MemoryInboundCredentialVerifierStore(),
-        grantRepository
-      })
+      const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
       const composition = createMeshNodeLocalToolProvider({
         ...(nodeMode !== undefined ? { nodeMode } : {}),
         localPeerId: 'provider',
         nodeName: 'Provider',
         registry: registryWithEcho(),
         authorityResolver: resolver,
+      authorizationStore,
         exportDecision: { isShared: () => true },
         audit: () => undefined,
         cursorSecret: 'cursor-secret-1234',
@@ -176,12 +166,7 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('advertises and executes only through authenticated grants plus explicit export sharing', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
     const audits: unknown[] = []
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
@@ -189,6 +174,7 @@ describe('mesh-node local Tooling provider composition', () => {
       nodeName: 'Provider',
       registry: registryWithEcho(),
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: (record) => { audits.push(record) },
       cursorSecret: 'cursor-secret-1234',
@@ -244,12 +230,7 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('passes the local owner approval policy into the provider execution gate', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
     const registry = registryWithEcho()
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
@@ -257,6 +238,7 @@ describe('mesh-node local Tooling provider composition', () => {
       nodeName: 'Provider',
       registry,
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
       approvalPolicy: {
@@ -282,18 +264,14 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('executes granted local tools through the real peer-host call path', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEchoAndSensitiveTool(),
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
       cursorSecret: 'cursor-secret-1234',
@@ -354,16 +332,21 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('fails closed to structured denial when authority grant resolution throws', async () => {
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository: new ThrowingPeerGrantRepository()
+    // The authority is unreachable; the composition must still deny in a
+    // structured way rather than throw or allow.
+    const resolver = scriptedResolver({
+      resolveGrant: () => {
+        throw new Error('repository unavailable')
+      }
     })
+    const authorizationStore = allowMethods({ claimantPeerId: 'peer-a', methodIds: [] })
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithEcho(),
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
       cursorSecret: 'cursor-secret-1234',
@@ -385,22 +368,18 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('requires local approval tokens for sensitive tools and rejects token replay', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant({
+    const { resolver, authorizationStore } = authorityFromGrants([grant({
       allowedToolContractIds: ['native.share_text'],
       capabilityPackIds: ['aurora.browser.share'],
       resourceScopes: ['native.share']
-    }))
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    })], 'peer-a')
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: registryWithSensitiveTool(),
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
       cursorSecret: 'cursor-secret-1234',
@@ -430,18 +409,14 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('keeps empty registries out of manifests and omits raw native escape hatches', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
     const composition = createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
       localPeerId: 'provider',
       nodeName: 'Provider',
       registry: new LocalToolRegistry({ stablePeerId: 'provider' }),
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: { isShared: () => true },
       audit: () => undefined,
       cursorSecret: 'cursor-secret-1234',
@@ -462,12 +437,7 @@ describe('mesh-node local Tooling provider composition', () => {
   })
 
   it('does not enable production provider methods without a pagination cursor secret', async () => {
-    const grantRepository = new MemoryPeerGrantRepository()
-    await grantRepository.upsertGrant(grant())
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new MemoryInboundCredentialVerifierStore(),
-      grantRepository
-    })
+    const { resolver, authorizationStore } = authorityFromGrants([grant()], 'peer-a')
 
     for (const cursorSecret of [undefined, 'short'] as const) {
       const composition = createMeshNodeLocalToolProvider({
@@ -476,6 +446,7 @@ describe('mesh-node local Tooling provider composition', () => {
         nodeName: 'Provider',
         registry: registryWithEcho(),
         authorityResolver: resolver,
+      authorizationStore,
         exportDecision: { isShared: () => true },
         audit: () => undefined,
         ...(cursorSecret !== undefined ? { cursorSecret } : {}),
@@ -610,8 +581,3 @@ function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string
   }
 }
 
-class ThrowingPeerGrantRepository extends MemoryPeerGrantRepository {
-  override async resolveGrant(_request: PeerGrantResolutionRequest): Promise<PeerAuthorityDecision> {
-    throw new Error('repository unavailable')
-  }
-}

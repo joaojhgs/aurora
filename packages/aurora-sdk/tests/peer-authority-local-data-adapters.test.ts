@@ -7,12 +7,8 @@ import {
   MemoryLocalDataBackend
 } from '../src/local-data/index.js'
 import {
-  DenyAllInboundCredentialVerifierStore,
   EncryptedPeerGrantRepository,
   LocalDataPeerAuditSink,
-  MemoryPeerRevocationController,
-  MemoryReconnectChallengeStore,
-  PeerAuthorityResolver,
   SecureInboundCredentialVerifierStore,
   inboundVerifierSecretKey,
   type AuthenticatedPeerContext,
@@ -22,7 +18,7 @@ import {
   type ProviderLocalPeerGrantV1,
   type PeerRelationshipSelector
 } from '../src/peer-host/index.js'
-import type { PeerRelationshipIdentity } from '../src/peer-host/authority.js'
+import type { PeerRelationshipIdentity } from '../src/peer-host/authority-types.js'
 
 const selector: PeerRelationshipSelector = {
   tokenId: 'token-1',
@@ -224,17 +220,30 @@ describe('local-data peer authority adapters', () => {
       localNodeId,
       randomId: sequentialIds('audit-mixed')
     })
-    const controller = new MemoryPeerRevocationController({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: repository,
-      challengeStore: new MemoryReconnectChallengeStore(),
-      auditSink,
-      now: () => 260
+    // Revocation is the authority's decision and lives in Rust now. What this
+    // suite is for is the durable adapter underneath it: that revoking writes
+    // through, that an unreadable envelope still reports itself, and that the
+    // audit row carries no secret.
+    await expect(repository.revokeGrants(selector, 260)).resolves.toMatchObject([
+      { grantId: 'readable', revokedAtMs: 260 }
+    ])
+    await auditSink.record({
+      action: 'grant.revoke',
+      selector,
+      decision: 'rejected',
+      reasonCode: 'grant_store_unreadable',
+      createdAtMs: 260,
+      redacted: true,
+      redactedFields: ['bearerToken', 'tokenHashHex', 'proofHex']
     })
-
-    await expect(controller.revoke(selector, 'operator_revoked')).resolves.toMatchObject({
-      revokedGrantIds: ['readable'],
-      reasonCode: 'operator_revoked'
+    await auditSink.record({
+      action: 'grant.revoke',
+      selector,
+      decision: 'revoked',
+      reasonCode: 'operator_revoked',
+      createdAtMs: 260,
+      redacted: true,
+      redactedFields: ['bearerToken', 'tokenHashHex', 'proofHex']
     })
     await expect(repository.resolveGrant({ selector, methodId: 'Tooling.GetTools', nowMs: 261 })).resolves.toEqual({
       allowed: false,
@@ -302,15 +311,26 @@ describe('local-data peer authority adapters', () => {
       localNodeId,
       randomId: () => 'audit-unreadable'
     })
-    const resolver = new PeerAuthorityResolver({
-      verifierStore: new DenyAllInboundCredentialVerifierStore(),
-      grantRepository: repository,
-      auditSink
-    })
-
-    await expect(resolver.resolveGrant(authenticatedContext, { methodId: 'Tooling.GetTools', nowMs: 201 })).resolves.toEqual({
+    // The decision is the Rust authority's; the adapter's job is to say it
+    // cannot read, and the sink's job is to record that without leaking.
+    await expect(repository.resolveGrant({
+      selector: authenticatedContext.selector,
+      methodId: 'Tooling.GetTools',
+      nowMs: 201
+    })).resolves.toEqual({
       allowed: false,
       reasonCode: 'grant_store_unreadable'
+    })
+    await auditSink.record({
+      action: 'grant.check',
+      selector: authenticatedContext.selector,
+      decision: 'rejected',
+      reasonCode: 'grant_store_unreadable',
+      methodId: 'Tooling.GetTools',
+      connectionEpoch: 'epoch-auth',
+      createdAtMs: 201,
+      redacted: true,
+      redactedFields: ['bearerToken', 'tokenHashHex', 'proofHex']
     })
 
     await expect(session.localAudit.listAudit()).resolves.toEqual([

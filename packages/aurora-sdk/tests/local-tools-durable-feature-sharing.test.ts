@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createTestAuthority } from './helpers/wasm-authority.js'
+import type { PeerGrantManagerPort } from '../src/peer-host/authority-types.js'
 
 import {
   type EncryptedDataEnvelopeV1,
@@ -10,11 +12,8 @@ import {
 } from '../src/local-data/index.js'
 import {
   EncryptedPeerGrantRepository,
-  MemoryInboundCredentialVerifierStore,
-  PeerPairingIssuer,
   type PeerRelationshipSelector
 } from '../src/peer-host/index.js'
-import { PeerGrantManager } from '../src/peer-host/grant-management.js'
 import {
   DurableFeatureSharingController,
   DurableFeatureSharingError,
@@ -280,12 +279,9 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const authority = await createTestAuthority(() => 100)
     const issuer = new TrackingPeerPairingIssuer({
-      delegate: new PeerPairingIssuer({
-        verifierStore: new MemoryInboundCredentialVerifierStore(),
-        randomBytes: () => new Uint8Array(32).fill(8),
-        now: () => 100
-      }),
+      delegate: authority.pairingIssuer,
       registry: fixture.controller,
       labelForSelector: () => 'Phone'
     })
@@ -313,12 +309,9 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
+    const authority = await createTestAuthority(() => 100)
     const issuer = new TrackingPeerPairingIssuer({
-      delegate: new PeerPairingIssuer({
-        verifierStore: new MemoryInboundCredentialVerifierStore(),
-        randomBytes: () => new Uint8Array(32).fill(9),
-        now: () => 100
-      }),
+      delegate: authority.pairingIssuer,
       registry: fixture.controller,
       labelForSelector: () => 'Phone'
     })
@@ -341,12 +334,8 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const baseIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(10),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const baseIssuer = authority.pairingIssuer
     const rollback = vi.spyOn(baseIssuer, 'rollback')
     vi.spyOn(fixture.grantManager, 'replaceGrant').mockRejectedValueOnce(new Error('grant write failed'))
     const issuer = new TrackingPeerPairingIssuer({
@@ -358,7 +347,7 @@ describe('durable local feature sharing controller', () => {
     await expect(issuer.issue(selector, { featureIds: [descriptor.toolContractId] })).rejects.toMatchObject({
       code: 'sharing_unavailable'
     })
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
     expect((await fixture.controller.load()).approvedDevices).toEqual([])
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
@@ -380,12 +369,8 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const baseIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(11),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const baseIssuer = authority.pairingIssuer
     const issuer = new TrackingPeerPairingIssuer({
       delegate: baseIssuer,
       registry: fixture.controller,
@@ -395,8 +380,8 @@ describe('durable local feature sharing controller', () => {
     await issuer.issue(selector, { featureIds: [descriptor.toolContractId] })
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -411,12 +396,8 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const baseIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(12),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const baseIssuer = authority.pairingIssuer
     const issuer = new TrackingPeerPairingIssuer({
       delegate: baseIssuer,
       registry: fixture.controller,
@@ -431,8 +412,8 @@ describe('durable local feature sharing controller', () => {
       'old verifier deletion failed'
     )
 
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeDefined()
-    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -444,8 +425,8 @@ describe('durable local feature sharing controller', () => {
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -460,12 +441,8 @@ describe('durable local feature sharing controller', () => {
     const fixture = await controllerFixture()
     await fixture.controller.load()
     await fixture.controller.setFeatureEnabled(descriptor.toolContractId, true)
-    const verifierStore = new MemoryInboundCredentialVerifierStore()
-    const baseIssuer = new PeerPairingIssuer({
-      verifierStore,
-      randomBytes: () => new Uint8Array(32).fill(13),
-      now: () => 100
-    })
+    const authority = await createTestAuthority(() => 100)
+    const baseIssuer = authority.pairingIssuer
     const issuer = new TrackingPeerPairingIssuer({
       delegate: baseIssuer,
       registry: fixture.controller,
@@ -479,15 +456,15 @@ describe('durable local feature sharing controller', () => {
       code: 'sharing_unavailable'
     })
 
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(verifierStore.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(verifierStore.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -589,7 +566,7 @@ describe('durable local feature sharing controller', () => {
       listActiveGrants: async () => { throw new Error('grant store unavailable') },
       replaceGrant: fixture.grantManager.replaceGrant.bind(fixture.grantManager),
       revokeSharing: fixture.grantManager.revokeSharing.bind(fixture.grantManager)
-    } as unknown as PeerGrantManager
+    } as unknown as PeerGrantManagerPort
     const loadingController = new DurableFeatureSharingController(controllerOptions(fixture.session, fixture.registry, throwingGrantManager))
     loadingController.registerTrustedRelationship(selector, 'Phone')
     const loadListener = vi.fn()
@@ -715,12 +692,11 @@ async function controllerFixture() {
     profileId,
     localNodeId
   })
+  // The real authority decides what sharing means; the encrypted repository is
+  // still where the resulting rows land, which is what these tests assert.
   let grantSequence = 0
-  const grantManager = new PeerGrantManager({
-    repository,
-    now: () => 1_000,
-    randomId: () => `grant-${++grantSequence}`
-  })
+  const authority = await createTestAuthority(() => 1_000, () => `grant-${++grantSequence}`)
+  const grantManager = authority.grantManager(() => 1_000, repository)
   const controller = new DurableFeatureSharingController(controllerOptions(session, registry, grantManager, crypto))
   return { backend, session, registry, crypto, repository, grantManager, controller }
 }
@@ -728,7 +704,7 @@ async function controllerFixture() {
 function controllerOptions(
   session: LocalDataSession,
   registry: LocalToolRegistry,
-  grantManager: PeerGrantManager,
+  grantManager: PeerGrantManagerPort,
   crypto?: EnvelopeCryptoPort
 ) {
   return {

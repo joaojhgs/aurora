@@ -1,9 +1,9 @@
-import type { AuthenticatedPeerContext, PeerAuthorityResolver } from '../peer-host/authority.js'
+import type { AuthenticatedPeerContext, PeerAuthorityResolverPort } from '../peer-host/authority-types.js'
 import type { LocalToolPolicyPorts } from './execution-policy.js'
 import type { LocalToolExecutionContext } from './tool-registry.js'
 
 export interface PeerAuthorityLocalToolPolicyPortsOptions {
-  readonly resolver: PeerAuthorityResolver
+  readonly resolver: PeerAuthorityResolverPort
   readonly providerPeerId: string
 }
 
