@@ -44,9 +44,11 @@ import type { RouteAvailability } from './shell-data'
 import {
   isBrowserWebRtcConfigured,
   isBrowserWebRtcConnected,
+  type BrowserDiscoveredDevice,
   type BrowserWebRtcPeerController,
   type BrowserWebRtcSnapshot,
 } from './web-thin-runtime'
+import { discoveredDeviceStateLabel } from './web-thin-connection-panel'
 
 export type MeshPeersLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'service-unavailable' | 'error'
 
@@ -231,6 +233,11 @@ export interface MeshPeersViewProps {
   thinPeerSnapshot?: BrowserWebRtcSnapshot | null
   thinPeerEvidence?: SelectedCandidatePairEvidence | null
   thinPeerMutationError?: string | null
+  /**
+   * Set up one more device from the ones found in this Aurora. Several devices
+   * can be connected at once here; Connect stays on one on purpose.
+   */
+  onConnectDiscoveredDevice?: (peerId: string) => void | Promise<void>
   onConfirmThinPairing?: (sessionId: string, approval: PeerPairingApproval) => void | Promise<void>
   onRejectThinPairing?: (sessionId: string) => void
   onReconnectThinPeer?: () => void
@@ -1497,6 +1504,7 @@ export function MeshPeersView({
   thinPeerSnapshot = null,
   thinPeerEvidence = null,
   thinPeerMutationError = null,
+  onConnectDiscoveredDevice,
   initialInviteText = null,
   onPermissionsChange,
   onRevokeTokenChange,
@@ -1677,6 +1685,11 @@ export function MeshPeersView({
       ) : null}
 
       <PendingRequestsTable peers={pendingRequests} pendingPeerId={pendingPeerId} onReview={setReviewRequestId} />
+      <DiscoveredDevicesCard
+        devices={thinPeerSnapshot?.discoveredDevices ?? []}
+        knownPeerIds={snapshot.peers.map((peer) => peer.peerId)}
+        {...(onConnectDiscoveredDevice ? { onConnect: onConnectDiscoveredDevice } : {})}
+      />
       {homeServerConfigLocked ? (
         <p className="text-xs text-muted-foreground">{PRODUCT_COPY.mesh.adminSharingLocked}</p>
       ) : null}
@@ -2111,6 +2124,60 @@ function MeshSummaryCards({ snapshot, pendingPeers }: { snapshot: MeshPeersSnaps
         </Card>
       ))}
     </div>
+  )
+}
+
+/**
+ * Devices seen in this Aurora that this device has not set up yet.
+ *
+ * Being here means a device announced itself, nothing more: every one of them
+ * still needs its code confirmed and its approval given before it can do
+ * anything. Several can be set up from here; the single-device restriction
+ * belongs to Connect, not to this screen.
+ */
+function DiscoveredDevicesCard({
+  devices,
+  knownPeerIds,
+  onConnect,
+}: {
+  devices: readonly BrowserDiscoveredDevice[]
+  knownPeerIds: readonly string[]
+  onConnect?: (peerId: string) => void | Promise<void>
+}) {
+  const known = new Set(knownPeerIds)
+  const available = devices.filter((device) => !known.has(device.peerId))
+  if (available.length === 0) return null
+  return (
+    <Card aria-label="Devices in this Aurora">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Network className="size-4" aria-hidden /> Devices in this Aurora
+        </CardTitle>
+        <CardDescription>
+          Found nearby and not set up here yet. Add as many as you need.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {available.map((device) => (
+          <div
+            key={device.peerId}
+            className="flex items-center justify-between gap-3 rounded-lg border border-border/80 p-2.5"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{device.deviceName}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                Code {device.shortCode} · {discoveredDeviceStateLabel(device.state)}
+              </p>
+            </div>
+            {onConnect && device.state !== 'connected' ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => void onConnect(device.peerId)}>
+                Set up
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 

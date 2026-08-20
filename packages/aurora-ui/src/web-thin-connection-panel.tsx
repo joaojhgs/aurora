@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, FileUp, Link2, LockKeyhole, Network, QrCod
 import {
   isBrowserWebRtcConfigured,
   parseWebRtcInvite,
+  type BrowserDiscoveredDeviceState,
   type BrowserWebRtcPeerController,
   type BrowserWebRtcSnapshot,
   type AuroraThinConnectionMode,
@@ -107,6 +108,13 @@ export function HomeNodeConnectionPanel({
   const invite = useMemo(() => decodeMeshInvite(normalizedInviteText), [normalizedInviteText])
   const parsedInvite = useMemo(() => parseWebRtcInvite(normalizedInviteText), [normalizedInviteText])
   const summary = invite ? meshInviteSummary(invite) : null
+  const originDeviceId = summary?.origin.peerId ?? null
+  const [chosenDeviceId, setChosenDeviceId] = useState<string | null>(null)
+  const discoveredDevices = snapshot.discoveredDevices ?? []
+  // The invite is for the whole Aurora, and the device that sent it is where a
+  // person starts. It is a pre-selection, so any other device found can be
+  // picked instead.
+  const selectedDeviceId = chosenDeviceId ?? originDeviceId
   const mixedContentWarning = hostedMixedContentWarning(
     surface.kind,
     draftProfile,
@@ -165,6 +173,9 @@ export function HomeNodeConnectionPanel({
   useEffect(() => {
     setDraftProfile(profile ?? defaultProfileForSurface(surface))
   }, [profile, surface])
+  useEffect(() => {
+    setChosenDeviceId(null)
+  }, [originDeviceId])
 
   const connectInvite = async () => {
     if (!invite) {
@@ -189,6 +200,7 @@ export function HomeNodeConnectionPanel({
       const nextMode = currentProfile.mode === 'http-only'
         ? (currentProfile.gatewayUrl.trim() ? 'webrtc-preferred' : 'webrtc-only')
         : currentProfile.mode
+      const chosenDevice = discoveredDevices.find((device) => device.peerId === selectedDeviceId)
       const nextProfile: WebThinConnectionProfile = {
         ...currentProfile,
         mode: nextMode,
@@ -199,6 +211,8 @@ export function HomeNodeConnectionPanel({
           signalingBrokers: currentProfile.signalingUrl.trim()
             ? [currentProfile.signalingUrl.trim()]
             : webRtcProfile.signalingBrokers,
+          ...(selectedDeviceId ? { expectedStablePeerId: selectedDeviceId } : {}),
+          ...(chosenDevice ? { nodeName: chosenDevice.deviceName } : {}),
         },
       }
       await onSaveProfile?.(nextProfile, {
@@ -484,6 +498,43 @@ export function HomeNodeConnectionPanel({
                   {summary.room} · {summary.brokerCount} connection option
                   {summary.brokerCount === 1 ? '' : 's'}
                 </p>
+              </div>
+            </div>
+          ) : null}
+
+          {discoveredDevices.length > 0 ? (
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
+              <p className="text-sm font-medium">Devices in this Aurora</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Choose the device to start with. You can add more later.
+              </p>
+              <div className="mt-3 flex flex-col gap-2" role="radiogroup" aria-label="Devices in this Aurora">
+                {discoveredDevices.map((device) => {
+                  const chosen = device.peerId === selectedDeviceId
+                  return (
+                    <button
+                      key={device.peerId}
+                      type="button"
+                      role="radio"
+                      aria-checked={chosen}
+                      onClick={() => setChosenDeviceId(device.peerId)}
+                      disabled={invitePending}
+                      className={`flex items-center justify-between gap-3 rounded-lg border p-2.5 text-left ${
+                        chosen ? 'border-primary bg-primary/5' : 'border-border/80'
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{device.deviceName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          Code {device.shortCode} · {discoveredDeviceStateLabel(device.state)}
+                        </span>
+                      </span>
+                      {device.peerId === originDeviceId ? (
+                        <Badge variant="outline" className="shrink-0">From your invite</Badge>
+                      ) : null}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ) : null}
@@ -789,6 +840,15 @@ export function HomeNodeConnectionPanel({
       </CardFooter>
     </Card>
   )
+}
+
+/** Product copy for how far along a device is on this surface. */
+export function discoveredDeviceStateLabel(state: BrowserDiscoveredDeviceState): string {
+  if (state === 'connected') return 'Connected'
+  if (state === 'confirm-code') return 'Confirm the code on both devices'
+  if (state === 'connecting') return 'Connecting'
+  if (state === 'known') return 'Set up on this device'
+  return 'Not set up yet'
 }
 
 export const WebThinConnectionPanel = HomeNodeConnectionPanel

@@ -16,7 +16,10 @@ import {
   createBrowserWebRtcAuroraRuntime,
   type BrowserWebRtcRuntime,
   type BrowserWebRtcRuntimeOptions,
+  type MeshDiscoveredPeer,
   type MeshPeerCredentialRecord,
+  type MeshPeerRegistryController,
+  type MeshPeerRosterSnapshot,
   type WebRtcPeerCredentialStore,
   type PeerConnectionController,
   type PeerConnectionSnapshot,
@@ -24,11 +27,12 @@ import {
   type WebRtcPeerConnectionProfile,
   type WebRtcPeerHost,
 } from '@aurora/client/webrtc'
-import { decodeMeshInvite, meshInviteSummary } from './mesh-invite'
+import { decodeMeshInvite, meshInviteOrigin, meshInviteSummary } from './mesh-invite'
 import { LocalNodeLifecycleController } from './local-node-lifecycle'
 import { getAuroraSurfaceProfile, type AuroraLocalSpeechEngineCapabilities, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraCapabilityPack } from './runtime-profile'
 import type { BrowserPeerPersistenceStatus, BrowserWebRtcCredentialStore } from './browser-peer-persistence'
+import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
 export type { AuroraThinConnectionMode } from './connection-mode'
 import type { AuroraThinConnectionMode } from './connection-mode'
 
@@ -148,8 +152,35 @@ export interface BrowserRuntimeFeatureState {
   localSpeechPack: AuroraSurfaceProfile['localSpeechPack']
 }
 
+/**
+ * How far along a discovered device is on this surface.
+ *
+ * `connected`: set up and in use right now.
+ * `confirm-code`: waiting for someone to compare the code on both devices.
+ * `connecting`: this device is reaching it.
+ * `known`: set up here before, not in use right now.
+ * `new`: seen in this Aurora, never set up on this device.
+ */
+export type BrowserDiscoveredDeviceState = 'connected' | 'confirm-code' | 'connecting' | 'known' | 'new'
+
+/**
+ * A device seen in the same Aurora. Discovery only; a device on this list is
+ * something a person can choose to set up, never something already trusted.
+ */
+export interface BrowserDiscoveredDevice {
+  /** Identity used to address the device. Never rendered as-is. */
+  peerId: string
+  /** Name the device announced, already reduced to product-safe copy. */
+  deviceName: string
+  /** Four characters a person can read out to tell two devices apart. */
+  shortCode: string
+  state: BrowserDiscoveredDeviceState
+}
+
 export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
   status: BrowserWebRtcStatus
+  /** Every device seen in this Aurora, whether or not it is set up here. */
+  discoveredDevices?: readonly BrowserDiscoveredDevice[] | undefined
   fallbackReason?: string | undefined
   diagnostic?: string | undefined
   pairingSessionId?: string | undefined
@@ -164,6 +195,8 @@ export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
 }
 
 type BrowserSnapshotListener = (snapshot: BrowserWebRtcSnapshot) => void
+/** The multi-device half of the controller, present once a session registry exists. */
+type RegistryCapablePeerController = PeerConnectionController & Partial<MeshPeerRegistryController>
 type SelectedCandidatePairEvidence = Awaited<ReturnType<PeerConnectionController['getSelectedCandidatePairEvidence']>>
 type LocalProviderLifecyclePort = {
   resumeLocalProvider(): void | Promise<void>
@@ -455,7 +488,10 @@ function resolveActiveNodeRole(
 
 export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly listeners = new Set<BrowserSnapshotListener>()
-  private readonly peer: PeerConnectionController | null
+  private readonly peer: RegistryCapablePeerController | null
+  /** Devices this surface has already been set up with, filled in as they are seen. */
+  private readonly knownDeviceIds = new Set<string>()
+  private readonly deviceLookupsInFlight = new Set<string>()
   private readonly mode: AuroraThinConnectionMode
   private readonly httpFallback: boolean
   private readonly creationError: unknown
@@ -475,7 +511,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private removeVisibilityListeners: (() => void) | undefined
   private readonly visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']
 
-  constructor(peer: PeerConnectionController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
+  constructor(peer: RegistryCapablePeerController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
     this.peer = peer
     this.mode = mode
     this.httpFallback = options.httpFallback
@@ -525,6 +561,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       receivedFragmentCount: sdk?.receivedFragmentCount ?? 0,
       updatedAt: sdk?.updatedAt ?? new Date().toISOString(),
       status: statusFromSnapshot(sdk, this.mode, this.creationError, this.disabledReason, this.fallbackReason, this.disconnected, this.attemptedConnect),
+      discoveredDevices: this.discoveredDevices(),
       secureContext: isSecureBrowserContext(
         this.config.windowLocation,
         this.config.trustsNativeWebViewOrigin,
@@ -555,6 +592,82 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.listeners.add(listener)
     listener(this.snapshot())
     return () => this.listeners.delete(listener)
+  }
+
+  /**
+   * Every device seen in this Aurora, named and coded so a person can tell two
+   * of them apart, with how far along each one is on this surface.
+   */
+  discoveredDevices(): readonly BrowserDiscoveredDevice[] {
+    const roster = this.peer?.roster?.()
+    if (!roster) return []
+    return roster.discovered.map((device) => ({
+      peerId: device.peerId,
+      deviceName: discoveredDeviceName(device),
+      shortCode: deviceShortCode(device.peerId),
+      state: this.discoveredDeviceState(device, roster),
+    }))
+  }
+
+  /** Add a device without disturbing the ones already set up. */
+  async connectDevice(profile: WebRtcPeerConnectionProfile): Promise<void> {
+    if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
+    const peer = this.peer
+    if (!peer?.connectPeer) throw new AuroraError({ code: 'unavailable_service', message: CONNECTION_UNAVAILABLE_COPY })
+    this.connectionDiagnostic = undefined
+    this.attemptedConnect = true
+    this.disconnected = false
+    try {
+      await peer.connectPeer(profile)
+    } catch (error) {
+      this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
+      this.emit()
+      throw productSafeAuroraError(error)
+    }
+  }
+
+  /** Drop one device, leaving every other connection in place. */
+  async disconnectDevice(peerId: string, reason = 'disconnect'): Promise<void> {
+    const peer = this.peer
+    if (!peer?.disconnectPeer) return
+    await peer.disconnectPeer(peerId, reason)
+    this.emit()
+  }
+
+  private discoveredDeviceState(
+    device: MeshDiscoveredPeer,
+    roster: MeshPeerRosterSnapshot,
+  ): BrowserDiscoveredDeviceState {
+    const session = roster.peers.find((entry) => entry.peerId === device.peerId)
+    if (session) {
+      if (session.snapshot.state === 'authorized') return 'connected'
+      if (session.snapshot.pendingPairing) return 'confirm-code'
+      return 'connecting'
+    }
+    if (this.knownDeviceIds.has(device.peerId)) return 'known'
+    void this.rememberKnownDevice(device.peerId)
+    return 'new'
+  }
+
+  /**
+   * Ask the vault once whether this surface has been set up with a device
+   * before. The answer only ever moves a row from "new" to "set up here", so a
+   * pending lookup shows the more cautious of the two.
+   */
+  private async rememberKnownDevice(peerId: string): Promise<void> {
+    if (!this.credentialStore?.get || this.deviceLookupsInFlight.has(peerId)) return
+    this.deviceLookupsInFlight.add(peerId)
+    try {
+      const stored = await this.credentialStore.get(peerId)
+      if (stored && !this.knownDeviceIds.has(peerId)) {
+        this.knownDeviceIds.add(peerId)
+        this.emit()
+      }
+    } catch {
+      // A vault that cannot answer leaves the device shown as not set up yet.
+    } finally {
+      this.deviceLookupsInFlight.delete(peerId)
+    }
   }
 
   importInvite(inviteText: string): WebRtcPeerConnectionProfile {
@@ -940,8 +1053,10 @@ export function parseWebRtcInvite(
     turnServers: stringArray(webrtc.turn_servers),
     requireAppLayerE2ee: booleanValue(webrtc.app_layer_e2ee, true),
   }
-  const expectedStablePeerId = stringValue(node.peer_id)
-  if (expectedStablePeerId) profile.expectedStablePeerId = expectedStablePeerId
+  // The invite is for the whole Aurora; the device that issued it is where a
+  // person starts, so it is pre-selected rather than made the only option.
+  const originPeerId = meshInviteOrigin(invite).peerId
+  if (originPeerId) profile.expectedStablePeerId = originPeerId
   const expectedNodeName = stringValue(node.node_name)
   if (expectedNodeName) profile.nodeName = expectedNodeName
   if (config.production !== undefined) profile.production = config.production
@@ -956,6 +1071,24 @@ export function parseWebRtcInvite(
     }
   }
   return { profile, roomSecret: roomPassword }
+}
+
+/** Product-safe name for a discovered device, never its identity. */
+function discoveredDeviceName(device: MeshDiscoveredPeer): string {
+  const announced = device.nodeName?.trim().replace(/\s+/gu, ' ') ?? ''
+  if (!announced || findForbiddenProductionCopyTerms(announced).length > 0) return 'Aurora device'
+  return announced
+}
+
+/**
+ * Four characters a person can read out loud to tell two devices apart. It is
+ * derived from the device identity but is not that identity: it is short,
+ * stable, and safe to show next to a name.
+ */
+function deviceShortCode(peerId: string): string {
+  const letters = peerId.replace(/[^A-Za-z0-9]/gu, '').toUpperCase()
+  if (letters.length >= 4) return letters.slice(-4)
+  return letters.padStart(4, '0')
 }
 
 function memoryRoomSecretRef(room: string): string {
