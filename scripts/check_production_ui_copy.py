@@ -15,6 +15,16 @@ DEFAULT_PATHS = (
     "apps/aurora-tauri/src",
 )
 
+# These modules are developer-only execution surfaces that live beside the
+# production applications. Keep exclusions exact so new production files are
+# scanned by default.
+DEFAULT_EXCLUDED_PATHS = frozenset(
+    {
+        "apps/aurora-tauri/src/desktop-live-e2e.ts",
+        "apps/aurora-web/app/debug-ui-picker.tsx",
+    }
+)
+
 FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("raw-render-expression", re.compile(r"\braw-render-expression\b", re.I)),
     ("admin-action", re.compile(r"\bAdminAction\b", re.I)),
@@ -152,9 +162,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo_root = pathlib.Path(args.repo_root).resolve()
+    using_default_paths = not args.paths
     paths = [repo_root / path for path in (args.paths or DEFAULT_PATHS)]
     findings: list[Finding] = []
     for path in expand_paths(paths):
+        if using_default_paths and repo_relative_path(path, repo_root) in DEFAULT_EXCLUDED_PATHS:
+            continue
         findings.extend(scan_file(path, repo_root))
 
     if findings:

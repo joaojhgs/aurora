@@ -585,7 +585,7 @@ export function VoiceSettingsView({
         await loadManagedProfiles('Refresh available voice settings')
       }
     } catch (error) {
-      setTransferMessage(cloneTransferErrorCopy(error, importOutcomeCopy('rejected')))
+      setTransferMessage(productCloneTransferErrorCopy(error, importOutcomeCopy('rejected')))
     } finally {
       setPendingActionKey(null)
     }
@@ -704,7 +704,7 @@ export function VoiceSettingsView({
       setReferenceFile(null)
       setMutationMessage('Voice sample saved.')
     } catch (error) {
-      setMutationMessage(referenceSampleErrorCopy(error))
+      setMutationMessage(productReferenceSampleErrorCopy(error))
     } finally {
       setPendingActionKey(null)
     }
@@ -1957,7 +1957,7 @@ function languageCatalogUnavailableCopy(): string {
   return 'Language options could not be loaded. Review access and try again.'
 }
 
-function referenceSampleErrorCopy(error: unknown): string {
+function productReferenceSampleErrorCopy(error: unknown): string {
   const message = error instanceof Error ? error.message : ''
   if (message === 'voice_sample_format') return 'Use a mono 16-bit WAV file.'
   if (message === 'voice_sample_rate') return 'Use a WAV file between 8 kHz and 48 kHz.'
@@ -2016,7 +2016,7 @@ function importOutcomeCopy(status: ImportStatus): string {
   return 'Voice file was not added. Try again.'
 }
 
-function cloneTransferErrorCopy(error: unknown, backup: string): string {
+function productCloneTransferErrorCopy(error: unknown, backup: string): string {
   if (error instanceof Error && error.message === 'voice_file_invalid') {
     return 'Choose a valid Aurora voice file.'
   }

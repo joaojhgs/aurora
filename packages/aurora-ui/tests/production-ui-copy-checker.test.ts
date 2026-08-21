@@ -10,6 +10,10 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const checker = join(repoRoot, 'scripts/check_production_ui_copy.py')
 
 describe('production UI copy checker', () => {
+  it('passes the repository production surfaces with default exclusions', () => {
+    expect(runCheckerDefault().ok).toBe(true)
+  })
+
   it('handles empty attributes, comments, and URLs without false positives', () => {
     const dir = fixtureDir()
     const file = join(dir, 'safe-render.tsx')
@@ -360,6 +364,16 @@ function fixtureDir(): string {
 function runChecker(path: string): { ok: boolean; stderr: string } {
   try {
     execFileSync('python', [checker, path], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return { ok: true, stderr: '' }
+  } catch (error) {
+    const failure = error as { stderr?: string }
+    return { ok: false, stderr: failure.stderr ?? '' }
+  }
+}
+
+function runCheckerDefault(): { ok: boolean; stderr: string } {
+  try {
+    execFileSync('python', [checker], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
     return { ok: true, stderr: '' }
   } catch (error) {
     const failure = error as { stderr?: string }
