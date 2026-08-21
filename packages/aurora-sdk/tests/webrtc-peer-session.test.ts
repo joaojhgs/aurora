@@ -1449,6 +1449,56 @@ describe('WebRtcPeerSession', () => {
     expect(parsed.capabilities).toEqual(new Set([CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_CONSUMER_ONLY_V1]))
   })
 
+  it('replays a protocol hello buffered while reconnect proof authentication is pending', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    const reconnect = deferred<true>()
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth: {
+        tryReconnect: vi.fn(() => reconnect.promise),
+        handleFrame: vi.fn(async () => undefined)
+      }
+    })
+    const frames: unknown[] = []
+    session.subscribeFrames((frame) => frames.push(frame))
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'a', envelope: { type: 'offer', sdp: 'offer' } })
+    await flush()
+    const channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc.remoteChannel(channel)
+    channel.open()
+    await flush()
+    expect(session.getSnapshot().state).toBe('reconnect-authenticating')
+
+    const remoteHello = {
+      type: 'protocol_hello',
+      v: 1,
+      role: 'hybrid',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+      limits: {
+        fragment_payload_bytes: 16384,
+        max_logical_bytes: 8388608,
+        max_peer_aggregate_bytes: 16777216,
+        incomplete_ttl_seconds: 30,
+        max_fragments: 4096
+      }
+    }
+    channel.onmessage?.({ data: JSON.stringify(remoteHello) })
+    await flush()
+    expect(frames).toEqual([])
+
+    reconnect.resolve(true)
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+    expect(frames).toEqual([remoteHello])
+  })
+
 
   it('sends local protocol hello once per accepted data channel auth epoch across reconnect', async () => {
     const timers = new FakeTimers()

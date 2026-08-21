@@ -1019,7 +1019,10 @@ export class WebRtcPeerSession {
 
   private async applyReconnectResult(result: PeerSessionAuthFrameResult): Promise<void> {
     if (result === true || (typeof result === 'object' && result !== null && result.authenticated === true)) {
-      await this.completeAuthentication(undefined, typeof result === 'object' && result !== null ? result.authenticatedPeerContext : undefined)
+      await this.completeAuthentication(
+        this.pendingRemoteProtocolHello,
+        typeof result === 'object' && result !== null ? result.authenticatedPeerContext : undefined
+      )
       return
     }
     if (typeof result === 'object' && result !== null && (result.denied === true || result.terminal === true)) {

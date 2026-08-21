@@ -106,7 +106,7 @@ type SubscribeAck = {
 }
 
 type AsyncDispatchFailure = {
-  operation: 'inbound_call' | 'inbound_subscribe' | 'inbound_unsubscribe' | 'manifest_ack' | 'manifest_response' | 'provider_epoch_start'
+  operation: 'inbound_call' | 'inbound_subscribe' | 'inbound_unsubscribe' | 'manifest_ack' | 'manifest_request' | 'manifest_response' | 'provider_epoch_start'
   reason: 'bridge_closed' | 'send_failed' | 'handler_failed'
 }
 
@@ -174,6 +174,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly remoteCapacity = new Map<string, { module: string; available: number; maxConcurrent: number; activeCalls: number }>()
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
   private readonly startedAuthorityEpochKeys = new Set<string>()
+  private remoteManifestRecoveryScheduled = false
   private unsubscribeFrames: (() => void) | undefined
   private unsubscribeSession: (() => void) | undefined
 
@@ -717,6 +718,39 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
     this.maybeStartPeerHostEpoch()
+    this.scheduleRemoteManifestRecovery()
+  }
+
+  /**
+   * Recover a provider manifest that arrived while this endpoint was still
+   * authenticating and therefore had no application-frame listener yet.
+   *
+   * Provider-lease peers remain fail-closed until their manifest is ACKed. A
+   * reconnect can authorize each endpoint a few milliseconds apart, so the
+   * faster endpoint's unsolicited manifest may legitimately precede bridge
+   * installation on the slower endpoint. Defer one turn to let an in-flight
+   * manifest win; otherwise request a fresh copy instead of leaving the
+   * provider permanently unavailable for that connection epoch.
+   */
+  private scheduleRemoteManifestRecovery(): void {
+    if (
+      this.remoteManifestRecoveryScheduled
+      || !this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)
+    ) return
+    this.remoteManifestRecoveryScheduled = true
+    queueMicrotask(() => {
+      this.remoteManifestRecoveryScheduled = false
+      if (
+        this.closed
+        || !this.remoteProtocol?.capabilities.has(CAP_PROVIDER_LEASE_V1)
+        || this.manifest !== null
+        || this.incomingManifestAck !== null
+      ) return
+      this.observeAsyncDispatch(
+        'manifest_request',
+        this.sendLogicalFrame({ type: 'manifest_request' })
+      )
+    })
   }
 
   private maybeStartPeerHostEpoch(): void {

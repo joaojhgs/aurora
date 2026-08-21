@@ -712,6 +712,46 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(second).resolves.toMatchObject({ peerId: 'peer-a', nodeName: 'Peer B' })
   })
 
+  it('requests a fresh provider manifest when the unsolicited reconnect manifest preceded bridge readiness', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
+
+    session.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [
+        CAP_FRAGMENTATION_V1,
+        CAP_BACKPRESSURE_V1,
+        CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+        CAP_PROVIDER_LEASE_V1
+      ]
+    }))
+    await flush()
+
+    expect(session.sent.filter((frame) => (frame as any).type === 'manifest_request')).toHaveLength(1)
+
+    session.emit({
+      type: 'manifest',
+      peer_id: 'peer-a',
+      node_name: 'Peer A',
+      shared_services: [{ module: 'gateway', methods: ['Gateway.GetRegistry'], capabilities: [] }]
+    })
+    await flush()
+    session.emit({
+      type: 'provider_lease',
+      peer_id: 'peer-a',
+      connection_epoch: 'epoch-1',
+      availability_revision: 1,
+      issued_at_ms: 1000,
+      expires_at_ms: 61_000,
+      available: true
+    })
+
+    await expect(bridge.getManifest('peer-a')).resolves.toMatchObject({
+      peerId: 'peer-a',
+      nodeName: 'Peer A'
+    })
+  })
+
   it('waits for the lease that follows an unsolicited manifest without requesting a duplicate manifest', async () => {
     const session = new FakeSession()
     const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', timeoutMs: 1000 })
@@ -1058,7 +1098,7 @@ describe('WebRtcMeshPeerBridge', () => {
     expect(peerHost.startEpoch).toHaveBeenCalledTimes(1)
     expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(0)
     expect(bridge.getDiagnostics()).toMatchObject({
-      asyncDispatchFailureCount: 1,
+      asyncDispatchFailureCount: 2,
       lastAsyncDispatchFailure: { operation: 'provider_epoch_start', reason: 'send_failed' }
     })
 
@@ -1271,14 +1311,14 @@ describe('WebRtcMeshPeerBridge', () => {
 
     session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_PROVIDER_LEASE_V1] }))
     await flush()
-    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest'])
+    expect(session.sent.filter((frame) => (frame as any).type !== 'manifest_request').map((frame) => (frame as any).type)).toEqual(['manifest'])
 
     session.emit(ackFromLatestSentManifest(session))
     await flush()
-    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease'])
+    expect(session.sent.filter((frame) => (frame as any).type !== 'manifest_request').map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease'])
 
     await peerHost.renewLocalProvider()
-    expect(session.sent.map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease', 'provider_lease'])
+    expect(session.sent.filter((frame) => (frame as any).type !== 'manifest_request').map((frame) => (frame as any).type)).toEqual(['manifest', 'provider_lease', 'provider_lease'])
 
     await peerHost.suspendLocalProvider('page_hidden')
     expect(session.sent.at(-1)).toMatchObject({ type: 'provider_unavailable', reason_code: 'page_hidden' })
