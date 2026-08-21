@@ -31,7 +31,12 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "aurora.mesh.authority.parity_vectors.v1"
-OUTPUT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "mesh_authority_parity_vectors.json"
+OUTPUT = (
+    Path(__file__).resolve().parents[1]
+    / "tests"
+    / "fixtures"
+    / "mesh_authority_parity_vectors.json"
+)
 
 RECONNECT_DOMAIN = b"aurora.mesh.reconnect-proof.v1\0"
 CHALLENGE_TTL_MS = 20_000
@@ -343,7 +348,9 @@ def grant_resolution_section() -> dict[str, Any]:
             case(
                 "capability_not_granted",
                 hostile=True,
-                grants=[grant("grant-tools", methods=["Tooling.GetTools"], tools=["tool.calendar"])],
+                grants=[
+                    grant("grant-tools", methods=["Tooling.GetTools"], tools=["tool.calendar"])
+                ],
                 request={
                     "selector": selector(),
                     "methodId": "Tooling.GetTools",
@@ -403,7 +410,9 @@ def grant_resolution_section() -> dict[str, Any]:
                 "newest_revision_is_tried_first_then_older_covers",
                 hostile=False,
                 grants=[
-                    grant("grant-old", methods=["Tooling.GetTools"], revision=1, created_at_ms=1_000),
+                    grant(
+                        "grant-old", methods=["Tooling.GetTools"], revision=1, created_at_ms=1_000
+                    ),
                     grant("grant-new", methods=["TTS.ListVoices"], revision=2, created_at_ms=1_500),
                 ],
                 request={"selector": selector(), "methodId": "Tooling.GetTools", "nowMs": 2_000},
@@ -421,7 +430,9 @@ def grant_resolution_section() -> dict[str, Any]:
                         created_at_ms=1_800,
                         revoked_at_ms=1_900,
                     ),
-                    grant("grant-older", methods=["Tooling.GetTools"], revision=2, created_at_ms=1_500),
+                    grant(
+                        "grant-older", methods=["Tooling.GetTools"], revision=2, created_at_ms=1_500
+                    ),
                 ],
                 request={"selector": selector(), "methodId": "Tooling.GetTools", "nowMs": 2_000},
                 expected={"allowed": True, "grantId": "grant-older"},
@@ -431,8 +442,12 @@ def grant_resolution_section() -> dict[str, Any]:
                 "all_candidates_revoked_reports_revoked",
                 hostile=True,
                 grants=[
-                    grant("grant-r1", methods=["Tooling.GetTools"], revision=2, revoked_at_ms=1_500),
-                    grant("grant-r2", methods=["Tooling.GetTools"], revision=1, revoked_at_ms=1_500),
+                    grant(
+                        "grant-r1", methods=["Tooling.GetTools"], revision=2, revoked_at_ms=1_500
+                    ),
+                    grant(
+                        "grant-r2", methods=["Tooling.GetTools"], revision=1, revoked_at_ms=1_500
+                    ),
                 ],
                 request={"selector": selector(), "methodId": "Tooling.GetTools", "nowMs": 2_000},
                 expected={"allowed": False, "reasonCode": "grant_revoked"},
@@ -496,7 +511,9 @@ def session_authorize_section() -> dict[str, Any]:
             case(
                 "allows_covered_method",
                 hostile=False,
-                grants=[grant("grant-live", methods=["Tooling.GetTools", "TTS.ListVoices"], revision=4)],
+                grants=[
+                    grant("grant-live", methods=["Tooling.GetTools", "TTS.ListVoices"], revision=4)
+                ],
                 request={"remotePeerId": PEER_A, "methodId": "Tooling.GetTools", "nowMs": 2_000},
                 expected={
                     "allowed": True,
@@ -576,7 +593,11 @@ def session_authorize_section() -> dict[str, Any]:
             case(
                 "grant_under_another_token_is_visible_without_a_context",
                 hostile=True,
-                grants=[grant("grant-token-b", methods=["Tooling.GetTools"], token_id=TOKEN_B, revision=2)],
+                grants=[
+                    grant(
+                        "grant-token-b", methods=["Tooling.GetTools"], token_id=TOKEN_B, revision=2
+                    )
+                ],
                 request={"remotePeerId": PEER_A, "methodId": "Tooling.GetTools", "nowMs": 2_000},
                 expected={
                     "allowed": True,
@@ -735,7 +756,12 @@ def manifest_snapshot_section() -> dict[str, Any]:
                 "grants": [
                     grant("grant-a", methods=["Tooling.GetTools"], revision=2),
                     grant("grant-b", methods=["TTS.ListVoices", "Tooling.GetTools"], revision=5),
-                    grant("grant-revoked", methods=["Orchestrator.Interrupt"], revision=9, revoked_at_ms=1_500),
+                    grant(
+                        "grant-revoked",
+                        methods=["Orchestrator.Interrupt"],
+                        revision=9,
+                        revoked_at_ms=1_500,
+                    ),
                 ],
                 "request": {"remotePeerId": PEER_A, "nowMs": 2_000},
                 "expected": {
@@ -749,7 +775,14 @@ def manifest_snapshot_section() -> dict[str, Any]:
             {
                 "name": "reports_unknown_with_nothing_live",
                 "hostile": True,
-                "grants": [grant("grant-revoked", methods=["Tooling.GetTools"], revision=9, revoked_at_ms=1_500)],
+                "grants": [
+                    grant(
+                        "grant-revoked",
+                        methods=["Tooling.GetTools"],
+                        revision=9,
+                        revoked_at_ms=1_500,
+                    )
+                ],
                 "request": {"remotePeerId": PEER_A, "nowMs": 2_000},
                 "expected": {
                     "recipientPeerId": PEER_A,
@@ -761,7 +794,9 @@ def manifest_snapshot_section() -> dict[str, Any]:
             {
                 "name": "another_peers_grants_are_not_advertised",
                 "hostile": True,
-                "grants": [grant("grant-b", methods=["Tooling.GetTools"], claimant=PEER_B, revision=4)],
+                "grants": [
+                    grant("grant-b", methods=["Tooling.GetTools"], claimant=PEER_B, revision=4)
+                ],
                 "request": {"remotePeerId": PEER_A, "nowMs": 2_000},
                 "expected": {
                     "recipientPeerId": PEER_A,
@@ -928,7 +963,9 @@ def reconnect_challenge_section() -> dict[str, Any]:
                 "hostile": False,
                 "issue": issued,
                 "steps": [
-                    step(challenge="ISSUED", now_ms=1_000 + CHALLENGE_TTL_MS - 1, expected="accepted"),
+                    step(
+                        challenge="ISSUED", now_ms=1_000 + CHALLENGE_TTL_MS - 1, expected="accepted"
+                    ),
                 ],
             },
             {
@@ -959,7 +996,9 @@ def reconnect_challenge_section() -> dict[str, Any]:
 
 
 def grant_selection_section() -> dict[str, Any]:
-    def ok(name: str, selection: dict[str, Any], normalized: dict[str, Any], *, note: str = "") -> dict[str, Any]:
+    def ok(
+        name: str, selection: dict[str, Any], normalized: dict[str, Any], *, note: str = ""
+    ) -> dict[str, Any]:
         return {
             "name": name,
             "hostile": False,
@@ -969,7 +1008,9 @@ def grant_selection_section() -> dict[str, Any]:
             "expected": {"ok": True, "normalized": normalized},
         }
 
-    def refused(name: str, selection: dict[str, Any], code: str, message: str, *, note: str = "") -> dict[str, Any]:
+    def refused(
+        name: str, selection: dict[str, Any], code: str, message: str, *, note: str = ""
+    ) -> dict[str, Any]:
         return {
             "name": name,
             "hostile": True,
@@ -1392,7 +1433,11 @@ def tts_emission_section() -> dict[str, Any]:
                     {"payload": tts_chunk(sequence=0, source_sequence=0), "expectedError": None},
                     {
                         "payload": tts_chunk(
-                            sequence=1, source_sequence=None, is_final=True, audio_data="", duration_ms=0
+                            sequence=1,
+                            source_sequence=None,
+                            is_final=True,
+                            audio_data="",
+                            duration_ms=0,
                         ),
                         "expectedError": None,
                     },
@@ -1444,7 +1489,11 @@ def tts_emission_section() -> dict[str, Any]:
                 "events": [
                     {
                         "payload": tts_chunk(
-                            sequence=0, source_sequence=None, is_final=True, audio_data="AAAA", duration_ms=0
+                            sequence=0,
+                            source_sequence=None,
+                            is_final=True,
+                            audio_data="AAAA",
+                            duration_ms=0,
                         ),
                         "expectedError": "TTS audio event final marker is invalid",
                     }
@@ -1457,7 +1506,11 @@ def tts_emission_section() -> dict[str, Any]:
                 "events": [
                     {
                         "payload": tts_chunk(
-                            sequence=0, source_sequence=None, is_final=True, audio_data="", duration_ms=20.0
+                            sequence=0,
+                            source_sequence=None,
+                            is_final=True,
+                            audio_data="",
+                            duration_ms=20.0,
                         ),
                         "expectedError": "TTS audio event final marker is invalid",
                     }
@@ -1469,7 +1522,9 @@ def tts_emission_section() -> dict[str, Any]:
                 "correlationId": "corr-1",
                 "events": [
                     {
-                        "payload": tts_chunk(sequence=0, source_sequence=0, correlation_id="corr-2"),
+                        "payload": tts_chunk(
+                            sequence=0, source_sequence=0, correlation_id="corr-2"
+                        ),
                         "expectedError": "TTS audio event correlation does not match payload",
                     }
                 ],
@@ -1481,7 +1536,9 @@ def tts_emission_section() -> dict[str, Any]:
                 "correlationId": "corr-1",
                 "events": [
                     {
-                        "payload": tts_chunk(sequence=0, source_sequence=0, correlation_id="corr-1"),
+                        "payload": tts_chunk(
+                            sequence=0, source_sequence=0, correlation_id="corr-1"
+                        ),
                         "expectedError": None,
                     }
                 ],
@@ -1557,7 +1614,10 @@ def tts_emission_section() -> dict[str, Any]:
                 "hostile": True,
                 "correlationId": None,
                 "events": [
-                    {"payload": "not-an-object", "expectedError": "TTS audio event must be an object"}
+                    {
+                        "payload": "not-an-object",
+                        "expectedError": "TTS audio event must be an object",
+                    }
                 ],
             },
         ]
@@ -1649,7 +1709,9 @@ def main() -> None:
             continue
         for group in section.values():
             if isinstance(group, list):
-                hostile += sum(1 for case in group if isinstance(case, dict) and case.get("hostile"))
+                hostile += sum(
+                    1 for case in group if isinstance(case, dict) and case.get("hostile")
+                )
     print(f"wrote {OUTPUT} ({hostile} hostile cases)")
 
 

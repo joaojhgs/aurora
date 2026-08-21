@@ -8,6 +8,7 @@ peer can assert byte equality and ordering.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import sys
 
@@ -35,9 +36,7 @@ async def main(binary: str) -> int:
         line = raw.decode().strip()
         if line.startswith("OFFER "):
             offer = json.loads(line[len("OFFER ") :])
-            await pc.setRemoteDescription(
-                RTCSessionDescription(sdp=offer["sdp"], type="offer")
-            )
+            await pc.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type="offer"))
             await pc.setLocalDescription(await pc.createAnswer())
             payload = json.dumps({"type": "answer", "sdp": pc.localDescription.sdp})
             proc.stdin.write(f"ANSWER {payload}\n".encode())
@@ -47,10 +46,8 @@ async def main(binary: str) -> int:
             break
 
     await pc.close()
-    try:
+    with contextlib.suppress(ProcessLookupError):
         proc.kill()
-    except ProcessLookupError:
-        pass
 
     if result is None:
         print(json.dumps({"lane": "aiortc", "pass": False, "error": "no result"}))
