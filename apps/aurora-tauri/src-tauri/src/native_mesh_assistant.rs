@@ -203,7 +203,7 @@ impl TauriNativeMeshAssistantTransport {
         loop {
             match self
                 .mesh_state
-                .begin_native_assistant_call(
+                .begin_native_assistant_call_or_wait(
                     preferred_peer_id,
                     method_id,
                     request_id,
@@ -211,19 +211,8 @@ impl TauriNativeMeshAssistantTransport {
                 )
                 .await
             {
-                Ok(pending) => return Ok(pending),
-                Err(TransportError::UnknownMethod) => {
-                    let unresolved = match preferred_peer_id {
-                        Some(peer_id) if require_advertised_method => {
-                            self.mesh_state
-                                .native_assistant_methods_unresolved(peer_id, method_id)
-                                .await
-                        }
-                        _ => false,
-                    };
-                    if !unresolved {
-                        return Err(TransportError::UnknownMethod);
-                    }
+                Ok(Some(pending)) => return Ok(pending),
+                Ok(None) => {
                     if cancellation.is_cancelled() {
                         return Err(TransportError::Cancelled);
                     }
@@ -450,25 +439,15 @@ mod tests {
         block_on(async {
             let mesh_state = MeshSessionState::default();
             mesh_state
-                .test_bind_native_assistant_peer_at(
-                    "peer-a",
-                    42,
-                    &[],
-                    true,
-                    None,
-                    0,
-                    false,
-                )
+                .test_bind_native_assistant_peer_at("peer-a", 42, &[], true, None, 0, false)
                 .await;
             let sender = Arc::new(RecordingSender::default());
             let mut transport = TauriNativeMeshAssistantTransport {
                 mesh_state: mesh_state.clone(),
                 sender: sender.clone(),
                 options: NativeMeshAssistantTransportOptions::new(
-                    aurora_voice_native::NativeMeshAssistantRoute::new(Some(
-                        "peer-a".to_owned(),
-                    ))
-                    .expect("route"),
+                    aurora_voice_native::NativeMeshAssistantRoute::new(Some("peer-a".to_owned()))
+                        .expect("route"),
                     aurora_voice_native::TransportLimits {
                         request_timeout: Duration::from_millis(250),
                         ..Default::default()
@@ -514,6 +493,73 @@ mod tests {
                         &json!({
                             "type": "result",
                             "id": "request-delayed-manifest",
+                            "result": {"text": "ready"}
+                        }),
+                    )
+                    .await
+            );
+            assert_eq!(response.await.expect("response"), json!({"text": "ready"}));
+        });
+    }
+
+    #[test]
+    fn invoke_without_preferred_peer_waits_for_single_peer_manifest() {
+        block_on(async {
+            let mesh_state = MeshSessionState::default();
+            mesh_state
+                .test_bind_native_assistant_peer_at("peer-a", 42, &[], true, None, 0, false)
+                .await;
+            let sender = Arc::new(RecordingSender::default());
+            let mut transport = TauriNativeMeshAssistantTransport {
+                mesh_state: mesh_state.clone(),
+                sender: sender.clone(),
+                options: NativeMeshAssistantTransportOptions::new(
+                    aurora_voice_native::NativeMeshAssistantRoute::new(None).expect("route"),
+                    aurora_voice_native::TransportLimits {
+                        request_timeout: Duration::from_millis(250),
+                        ..Default::default()
+                    },
+                )
+                .expect("options"),
+                active_peer_id: None,
+            };
+            let payload = json!({"text": "hello"});
+            let response = transport.invoke(
+                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                "request-auto-manifest",
+                "idem-auto-manifest",
+                &payload,
+                Duration::from_millis(250),
+                CancellationToken::new(),
+                None,
+                true,
+            );
+            tokio::pin!(response);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            assert!(sender.frames.lock().expect("frames").is_empty());
+
+            mesh_state
+                .test_bind_native_assistant_peer_at(
+                    "peer-a",
+                    42,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                    10,
+                    true,
+                )
+                .await;
+            tokio::select! {
+                result = &mut response => panic!("invoke finished before response: {result:?}"),
+                _ = wait_for_frame_count(&sender, 1) => {}
+            }
+            assert!(
+                mesh_state
+                    .test_settle_native_assistant_response(
+                        "peer-a",
+                        &json!({
+                            "type": "result",
+                            "id": "request-auto-manifest",
                             "result": {"text": "ready"}
                         }),
                     )

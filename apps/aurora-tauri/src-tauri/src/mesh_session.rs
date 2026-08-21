@@ -376,12 +376,10 @@ impl MeshSessionInner {
                 .peer_bindings
                 .get(peer_id)
                 .ok_or(TransportError::InvalidConfiguration)?;
-            if required_method_id
-                .is_some_and(|method_id| {
-                    !binding.manifest_methods_ready
-                        || !binding.advertised_method_ids.contains(method_id)
-                })
-            {
+            if required_method_id.is_some_and(|method_id| {
+                !binding.manifest_methods_ready
+                    || !binding.advertised_method_ids.contains(method_id)
+            }) {
                 return Err(TransportError::UnknownMethod);
             }
             return Ok((peer_id.to_owned(), binding.clone()));
@@ -412,17 +410,39 @@ impl MeshSessionInner {
         Err(TransportError::InvalidConfiguration)
     }
 
-    fn native_assistant_methods_unresolved(&self, peer_id: &str, _method_id: &str) -> bool {
-        self.peer_bindings
-            .get(peer_id)
-            .is_some_and(|binding| !binding.manifest_methods_ready)
+    fn native_assistant_manifest_pending(
+        &self,
+        preferred_peer_id: Option<&str>,
+        required_method_id: Option<&str>,
+    ) -> bool {
+        let Some(required_method_id) = required_method_id else {
+            return false;
+        };
+        if let Some(peer_id) = preferred_peer_id {
+            return self
+                .peer_bindings
+                .get(peer_id)
+                .is_some_and(|binding| !binding.manifest_methods_ready);
+        }
+
+        let has_ready_candidate = self.peer_bindings.values().any(|binding| {
+            binding.manifest_methods_ready
+                && binding.advertised_method_ids.contains(required_method_id)
+        });
+        !has_ready_candidate
+            && self
+                .peer_bindings
+                .values()
+                .any(|binding| !binding.manifest_methods_ready)
     }
 
     fn bind_channel_to_peer(&mut self, peer_id: &str, data_channel_id: u64, now_ms: i64) {
         self.prune_expiring_markers(now_ms);
-        self.channel_peers.insert(data_channel_id, peer_id.to_owned());
-        if let Some(previous_channel_id) =
-            self.peer_channels.insert(peer_id.to_owned(), data_channel_id)
+        self.channel_peers
+            .insert(data_channel_id, peer_id.to_owned());
+        if let Some(previous_channel_id) = self
+            .peer_channels
+            .insert(peer_id.to_owned(), data_channel_id)
         {
             if previous_channel_id != data_channel_id {
                 self.channel_peers.remove(&previous_channel_id);
@@ -575,10 +595,7 @@ fn stale_channel_should_swallow(expected_peer_id: &str, frame: &Value) -> bool {
         .is_none_or(|peer_id| peer_id == expected_peer_id)
 }
 
-fn prune_abandoned_marker_map(
-    map: &mut HashMap<(String, String), ExpiringMarker>,
-    max_len: usize,
-) {
+fn prune_abandoned_marker_map(map: &mut HashMap<(String, String), ExpiringMarker>, max_len: usize) {
     if map.len() <= max_len {
         return;
     }
@@ -746,6 +763,43 @@ impl MeshSessionState {
         )
     }
 
+    pub async fn begin_native_assistant_call_or_wait(
+        &self,
+        preferred_peer_id: Option<&str>,
+        method_id: &str,
+        request_id: &str,
+        require_advertised_method: bool,
+    ) -> Result<Option<NativeAssistantPendingCall>, TransportError> {
+        let mut inner = self.inner.lock().await;
+        let request_id_in_use = inner
+            .native_assistant_pending
+            .keys()
+            .any(|(_, pending_request_id)| pending_request_id == request_id);
+        let manifest_pending = !request_id_in_use
+            && inner.native_assistant_manifest_pending(
+                preferred_peer_id,
+                require_advertised_method.then_some(method_id),
+            );
+        match inner.begin_native_assistant_call(
+            preferred_peer_id,
+            method_id,
+            request_id,
+            require_advertised_method,
+        ) {
+            Ok(pending) => Ok(Some(pending)),
+            Err(error)
+                if manifest_pending
+                    && matches!(
+                        error,
+                        TransportError::UnknownMethod | TransportError::InvalidConfiguration
+                    ) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     pub async fn cancel_native_assistant_call(&self, peer_id: &str, request_id: &str) {
         let mut inner = self.inner.lock().await;
         inner.remove_native_assistant_call(peer_id, request_id);
@@ -754,11 +808,6 @@ impl MeshSessionState {
     pub async fn abandon_native_assistant_call(&self, peer_id: &str, request_id: &str) {
         let mut inner = self.inner.lock().await;
         inner.abandon_native_assistant_call(peer_id, request_id, current_time_ms());
-    }
-
-    pub async fn native_assistant_methods_unresolved(&self, peer_id: &str, method_id: &str) -> bool {
-        let inner = self.inner.lock().await;
-        inner.native_assistant_methods_unresolved(peer_id, method_id)
     }
 
     #[cfg(test)]
