@@ -1609,7 +1609,7 @@ mod tests {
     use super::*;
     use aurora_voice_core::AssistantTurnNamespace;
 
-    static MESH_TEST_GUARD: Mutex<()> = Mutex::new(());
+    static MESH_TEST_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[derive(Default)]
     struct MeshTestState {
@@ -1870,7 +1870,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn mesh_assistant_turn_uses_registered_factory_and_typed_external_input() {
-        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        let _guard = MESH_TEST_GUARD.lock().await;
         clear_native_mesh_assistant_transport_factory();
         let turn = assistant_request(31, "hello mesh");
         let state = Arc::new(Mutex::new(MeshTestState {
@@ -1922,7 +1922,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn mesh_assistant_turn_cancels_active_turn_after_invalid_response() {
-        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        let _guard = MESH_TEST_GUARD.lock().await;
         clear_native_mesh_assistant_transport_factory();
         let turn = assistant_request(32, "bad mesh");
         let mut invalid_response = assistant_response_value_for(&turn, "wrong id");
@@ -1968,7 +1968,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn mesh_failed_interrupt_keeps_active_turn_retryable() {
-        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        let _guard = MESH_TEST_GUARD.lock().await;
         clear_native_mesh_assistant_transport_factory();
         let turn = assistant_request(34, "retry mesh interrupt");
         let mut invalid_response = assistant_response_value_for(&turn, "wrong id");
@@ -2005,9 +2005,10 @@ mod tests {
         SpeechTransport::cancel_session(&mut transport, Generation(34))
             .await
             .expect("retry interrupt succeeds");
-        let state = state.lock().expect("mesh state");
-        assert_eq!(state.interrupts.len(), 2);
-        drop(state);
+        {
+            let state = state.lock().expect("mesh state");
+            assert_eq!(state.interrupts.len(), 2);
+        }
         assert_eq!(
             SpeechTransport::cancel_session(&mut transport, Generation(34)).await,
             Err(VoiceCoreError::TransportFault {
@@ -2019,7 +2020,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn mesh_assistant_turn_maps_timeout_without_leaking_payloads() {
-        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        let _guard = MESH_TEST_GUARD.lock().await;
         clear_native_mesh_assistant_transport_factory();
         let turn = assistant_request(33, "slow mesh");
         let state = Arc::new(Mutex::new(MeshTestState {
@@ -2054,9 +2055,9 @@ mod tests {
         clear_native_mesh_assistant_transport_factory();
     }
 
-    #[test]
-    fn mesh_assistant_route_rejects_invalid_preferred_peer_and_missing_factory() {
-        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+    #[tokio::test(flavor = "current_thread")]
+    async fn mesh_assistant_route_rejects_invalid_preferred_peer_and_missing_factory() {
+        let _guard = MESH_TEST_GUARD.lock().await;
         clear_native_mesh_assistant_transport_factory();
         assert!(NativeMeshAssistantRoute::new(Some("bad peer".to_owned())).is_err());
         let route = NativeMeshAssistantRoute::new(Some("peer.ok".to_owned())).expect("route");
