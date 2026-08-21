@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "aurora-native-webrtc"
-description = "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
+description = "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
 commands.allow = [
   "aurora_native_webrtc_create",
   "aurora_native_webrtc_create_offer",

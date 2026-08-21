@@ -742,6 +742,16 @@ describe('Tauri CI native evidence contract', () => {
     const thinCapability = repoText(
       'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json',
     )
+    const nativeWebRtcCapabilities = [
+      'aurora-main.json',
+      'aurora-thin.json',
+      'aurora-android-thin.json',
+      'aurora-ios-baseline.json',
+      'aurora-ios-thin.json',
+    ].map((name) => ({
+      name,
+      value: repoText(`apps/aurora-tauri/src-tauri/capabilities/${name}`),
+    }))
     const nativeWebRtcPermission = repoText(
       'apps/aurora-tauri/src-tauri/permissions/aurora-native-webrtc.toml',
     )
@@ -814,6 +824,12 @@ describe('Tauri CI native evidence contract', () => {
     expect(cargo).not.toContain(`[target.'cfg(target_os = "linux")'.dependencies]`)
     expect(cargo).not.toContain('webkit2gtk =')
     expect(thinCapability).toContain('"aurora-native-webrtc"')
+    for (const capability of nativeWebRtcCapabilities) {
+      expect(
+        capability.value,
+        `${capability.name} must grant the Rust WebRTC commands selected by its native shell`,
+      ).toContain('"aurora-native-webrtc"')
+    }
     expect(nativeWebRtcPermission).toContain(
       'aurora_native_webrtc_create',
     )

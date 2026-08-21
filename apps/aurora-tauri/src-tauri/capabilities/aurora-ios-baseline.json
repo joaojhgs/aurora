@@ -16,6 +16,7 @@
     "aurora-local-data-storage",
     "aurora-mesh-authority",
     "aurora-mesh-session",
+    "aurora-native-webrtc",
     "aurora-local-data-envelope-crypto",
     "aurora-native-permissions",
     "aurora-notifications",

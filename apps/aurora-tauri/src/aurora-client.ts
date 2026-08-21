@@ -119,8 +119,10 @@ export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
  * instead of the WebView's RTCPeerConnection.
  *
  * `supportsNativeWebRtcBridge` says the transport is compiled in for this
- * surface; the WebView having no RTCPeerConnection of its own is what makes it
- * the only way through, which is the desktop-thin case on WebKitGTK.
+ * surface. Mobile native shells select it even when their WebView also exposes
+ * RTCPeerConnection, because the Rust session owns background liveness and
+ * bounded tool serving. Desktop shells retain the browser primitive when it is
+ * available and use Rust as the WebKitGTK fallback.
  * `native_webrtc_transport_v1` sits above both as the kill switch — off, and
  * every surface goes back to the WebView primitive, falling through to HTTP
  * where the WebView has no RTCPeerConnection at all.
@@ -131,11 +133,17 @@ export function usesNativeWebRtcPrimitive({
   hasWebViewPeerConnection = typeof globalThis.RTCPeerConnection === "function",
 }: {
   rolloutFlags: Pick<AuroraWebRtcRolloutFlags, "native_webrtc_transport_v1">;
-  surfaceProfile: Pick<AuroraSurfaceProfile, "supportsNativeWebRtcBridge">;
+  surfaceProfile: Pick<
+    AuroraSurfaceProfile,
+    "isMobile" | "supportsNativeWebRtcBridge"
+  >;
   hasWebViewPeerConnection?: boolean;
 }): boolean {
   if (!rolloutFlags.native_webrtc_transport_v1) return false;
-  return surfaceProfile.supportsNativeWebRtcBridge && !hasWebViewPeerConnection;
+  return (
+    surfaceProfile.supportsNativeWebRtcBridge &&
+    (surfaceProfile.isMobile || !hasWebViewPeerConnection)
+  );
 }
 
 export function reportMeshSessionCleanupFailure(

@@ -5281,8 +5281,18 @@ describe("Tauri CI/E2E route gates", () => {
 });
 
 describe("native WebRTC transport rollout flag", () => {
-  const nativeShell = { supportsNativeWebRtcBridge: true };
-  const hostedPage = { supportsNativeWebRtcBridge: false };
+  const desktopNativeShell = {
+    isMobile: false,
+    supportsNativeWebRtcBridge: true,
+  };
+  const mobileNativeShell = {
+    isMobile: true,
+    supportsNativeWebRtcBridge: true,
+  };
+  const hostedPage = {
+    isMobile: false,
+    supportsNativeWebRtcBridge: false,
+  };
 
   it("turns the native transport off from the one flag", () => {
     // On a shell whose WebView has no RTCPeerConnection, the Rust transport is
@@ -5290,24 +5300,44 @@ describe("native WebRTC transport rollout flag", () => {
     expect(
       usesNativeWebRtcPrimitive({
         rolloutFlags: { native_webrtc_transport_v1: true },
-        surfaceProfile: nativeShell,
+        surfaceProfile: desktopNativeShell,
         hasWebViewPeerConnection: false,
       }),
     ).toBe(true);
     expect(
       usesNativeWebRtcPrimitive({
         rolloutFlags: { native_webrtc_transport_v1: false },
-        surfaceProfile: nativeShell,
+        surfaceProfile: desktopNativeShell,
         hasWebViewPeerConnection: false,
       }),
     ).toBe(false);
   });
 
-  it("keeps the WebView primitive where the shell already has one", () => {
+  it("keeps the WebView primitive on desktop where the shell already has one", () => {
     expect(
       usesNativeWebRtcPrimitive({
         rolloutFlags: { native_webrtc_transport_v1: true },
-        surfaceProfile: nativeShell,
+        surfaceProfile: desktopNativeShell,
+        hasWebViewPeerConnection: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("uses the native primitive on mobile even when the WebView has one", () => {
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: true },
+        surfaceProfile: mobileNativeShell,
+        hasWebViewPeerConnection: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps the mobile rollback switch authoritative", () => {
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: false },
+        surfaceProfile: mobileNativeShell,
         hasWebViewPeerConnection: true,
       }),
     ).toBe(false);
