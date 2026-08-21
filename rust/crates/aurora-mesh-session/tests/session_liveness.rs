@@ -14,12 +14,12 @@ use aurora_mesh_authority::authority::{
 };
 use aurora_mesh_authority::types::PeerHostAuthorizationDecision;
 use aurora_mesh_session::{
-    background_executable_methods, background_execution_for, frames_served_by_rust_today,
-    inbound_frame_ownership, is_pairing_frame, BackgroundCapability, BackgroundExecution,
-    CallOutcome, FrameOwner, InboundDisposition, MeshSessionError, MeshSessionRegistry,
-    SurfaceLifecycle, INBOUND_FRAME_OWNERSHIP, MAX_QUEUED_FRAMES_PER_PEER,
-    ORCHESTRATION_DEFERRED_CODE, ORCHESTRATION_DEFERRED_MESSAGE, ORCHESTRATION_DEFERRED_REASON,
-    RETRY_WHEN_PEER_FOREGROUND,
+    background_executable_methods, background_execution_for, execute_background_tooling_call,
+    frames_served_by_rust_today, inbound_frame_ownership, is_pairing_frame, BackgroundCapability,
+    BackgroundToolingProviderContext, CallOutcome, FrameOwner, InboundDisposition,
+    MeshSessionError, MeshSessionRegistry, SurfaceLifecycle, INBOUND_FRAME_OWNERSHIP,
+    MAX_QUEUED_FRAMES_PER_PEER, ORCHESTRATION_DEFERRED_CODE, ORCHESTRATION_DEFERRED_MESSAGE,
+    ORCHESTRATION_DEFERRED_REASON, RETRY_WHEN_PEER_FOREGROUND,
 };
 use serde_json::{json, Value};
 
@@ -79,6 +79,40 @@ fn allowed() -> PeerHostAuthorizationDecision {
         allowed: true,
         granted_method_ids: Some(vec!["Tooling.GetTools".to_owned()]),
         ..PeerHostAuthorizationDecision::default()
+    }
+}
+
+fn allowed_method_with_tools(
+    method: &str,
+    tool_contract_ids: &[&str],
+) -> PeerHostAuthorizationDecision {
+    PeerHostAuthorizationDecision {
+        allowed: true,
+        grant_revision: Some(11),
+        granted_method_ids: Some(vec![method.to_owned()]),
+        granted_tool_contract_ids: Some(
+            tool_contract_ids
+                .iter()
+                .map(|contract_id| (*contract_id).to_owned())
+                .collect(),
+        ),
+        ..PeerHostAuthorizationDecision::default()
+    }
+}
+
+fn native_context() -> BackgroundToolingProviderContext {
+    BackgroundToolingProviderContext {
+        provider_peer_id: "aurora-local-provider".to_owned(),
+        provider_service_instance_id: "local:aurora-local-provider:Tooling".to_owned(),
+        native_manifest: json!({
+            "platform": "linux",
+            "capabilities": {
+                "aurora.nativeCapabilityManifest": true,
+                "aurora.notificationsStatus": true,
+                "aurora.notificationsSend": false
+            },
+            "secretsRedacted": true
+        }),
     }
 }
 
@@ -192,7 +226,7 @@ fn an_inbound_call_is_authorized_in_both_lifecycles_before_anything_else() {
 
 #[test]
 fn a_denied_call_is_denied_identically_in_the_background() {
-    let frame = call_frame("c-1", "Tooling.RequestApproval");
+    let frame = call_frame("c-1", "Tooling.ExecuteTool");
     let denial = PeerHostAuthorizationDecision::denied("grant_expired");
 
     let mut foreground = registry_with(&[PEER_A]);
@@ -237,7 +271,7 @@ fn deferral_is_decided_after_authorization_so_it_leaks_no_grant() {
     // while the webview is frozen. If the deferral were decided before
     // authorization both would hear the same thing, and the answer would tell
     // an unauthorized caller that a grant exists for someone.
-    let frame = call_frame("c-1", "Tooling.RequestApproval");
+    let frame = call_frame("c-1", "Tooling.ExecuteTool");
     let mut registry = registry_with(&[PEER_A, PEER_B]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
 
@@ -274,7 +308,7 @@ fn an_authorized_call_needing_the_orchestrator_defers_with_the_section_6_body() 
     let mut registry = registry_with(&[PEER_A]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
     let InboundDisposition::Authorize(pending) = registry
-        .accept_inbound(PEER_A, &call_frame("c-9", "Tooling.RequestApproval"), 5_000)
+        .accept_inbound(PEER_A, &call_frame("c-9", "Tooling.ExecuteTool"), 5_000)
         .expect("bound peer")
     else {
         panic!("expected an authorization hop");
@@ -305,29 +339,6 @@ fn an_authorized_call_needing_the_orchestrator_defers_with_the_section_6_body() 
 }
 
 #[test]
-fn an_authorized_background_tooling_call_uses_the_native_executor() {
-    let mut registry = registry_with(&[PEER_A]);
-    registry.set_lifecycle(SurfaceLifecycle::Background);
-    let InboundDisposition::Authorize(pending) = registry
-        .accept_inbound(PEER_A, &call_frame("c-8", "Tooling.ExecuteTool"), 5_000)
-        .expect("bound peer")
-    else {
-        panic!("expected an authorization hop");
-    };
-
-    assert_eq!(
-        registry
-            .settle_call(&pending, &allowed())
-            .expect("bound peer"),
-        CallOutcome::Serve {
-            execution: BackgroundExecution::ExecuteTool,
-            call_id: "c-8".to_owned()
-        },
-        "background-safe native tooling calls are answered while the webview sleeps"
-    );
-}
-
-#[test]
 fn an_authorized_call_in_the_foreground_goes_to_the_orchestrator() {
     let mut registry = registry_with(&[PEER_A]);
     let InboundDisposition::Authorize(pending) = registry
@@ -345,6 +356,202 @@ fn an_authorized_call_in_the_foreground_goes_to_the_orchestrator() {
             call_id: "c-2".to_owned()
         },
         "nothing defers while the orchestrator is awake"
+    );
+}
+
+#[test]
+fn a_backgrounded_tooling_call_serves_the_bounded_native_catalog() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &call_frame("c-tools", "Tooling.GetTools"), 5_000)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.GetTools",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+
+    assert!(matches!(
+        registry
+            .settle_call(&pending, &decision)
+            .expect("bound peer"),
+        CallOutcome::Serve { .. }
+    ));
+    let frame = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("contract-valid catalog");
+
+    assert_eq!(frame["type"], json!("result"));
+    assert_eq!(frame["result"]["count"], json!(1));
+    assert_eq!(
+        frame["result"]["tools"][0]["tool_contract_id"],
+        json!("aurora.local.native.get_device_status.v1")
+    );
+    assert_eq!(
+        frame["result"]["tools"][0]["provider_peer_id"],
+        json!("aurora-local-provider")
+    );
+}
+
+#[test]
+fn a_backgrounded_export_catalog_uses_sdk_canonical_projection_hashes() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(
+            PEER_A,
+            &call_frame("c-export", "Tooling.GetExportCatalog"),
+            5_000,
+        )
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.GetExportCatalog",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+
+    let frame = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("contract-valid export catalog");
+    let result = &frame["result"];
+
+    assert_eq!(
+        result["projection_revision"],
+        json!("501c3e2c3e341b80ffaff76c566f1c36fc4369d5d0af6c5c9ab6c7b74cd317e5")
+    );
+    assert_eq!(
+        result["projection_digest"],
+        json!("9ad51599ef087b4d905ff0623c0ffd352e363fee93726e383695759dde1ca507")
+    );
+    assert_eq!(result["final_checksum"], result["projection_digest"]);
+    assert_eq!(
+        result["page_hash"],
+        json!("2856a37168e7a72c218cc89a2cef471f83f97cbe04da6c31d9d82d5dc0a486fb")
+    );
+}
+
+#[test]
+fn a_backgrounded_execute_tool_call_rejects_ungranted_or_spoofed_tool_claims() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let frame = json!({
+        "type": "call",
+        "id": "c-denied",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "aurora.local.native.get_device_status.v1",
+            "arguments": {},
+            "caller_peer_id": "spoofed-peer",
+            "caller_permissions": ["*", "Native.GetDeviceStatus"],
+        },
+        "identity": {
+            "callerPeerId": "spoofed-peer",
+            "effectivePermissions": ["*", "Native.GetDeviceStatus"]
+        }
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &frame, 5_000)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools("Tooling.ExecuteTool", &[]);
+
+    assert!(matches!(
+        registry
+            .settle_call(&pending, &decision)
+            .expect("bound peer"),
+        CallOutcome::Serve { .. }
+    ));
+    let answer = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed denial");
+
+    assert_eq!(pending.authorize.identity.caller_peer_id, PEER_A);
+    assert_eq!(answer["result"]["ok"], json!(false));
+    assert_eq!(answer["result"]["status"], json!("denied"));
+    assert_eq!(answer["result"]["error_code"], json!("tool_not_granted"));
+}
+
+#[test]
+fn background_prepare_and_execute_validate_arguments_and_output_shape() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let bad_args = json!({
+        "type": "call",
+        "id": "c-prepare",
+        "method": "Tooling.PrepareExecution",
+        "params": {
+            "tool_name": "native.get_device_status",
+            "arguments": { "extra": true },
+            "approval_token": "not-accepted"
+        }
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &bad_args, 5_000)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.PrepareExecution",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+    let prepared = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed prepare denial");
+    assert_eq!(prepared["result"]["ok"], json!(false));
+    assert_eq!(
+        prepared["result"]["policy_decision"]["reason"],
+        json!("approval_not_supported")
+    );
+
+    let execute = json!({
+        "type": "call",
+        "id": "c-execute",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "native.get_device_status",
+            "arguments": {}
+        }
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &execute, 5_100)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.ExecuteTool",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+    let successful = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed execution success");
+    assert_eq!(successful["result"]["ok"], json!(true));
+    assert_eq!(successful["result"]["status"], json!("success"));
+    assert_eq!(successful["result"]["data"]["platform"], json!("linux"));
+    assert_eq!(successful["result"]["data"]["online"], json!(true));
+    assert_eq!(
+        successful["result"]["args_hash"],
+        json!("44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a")
+    );
+    assert_eq!(
+        successful["result"]["policy_decision_id"],
+        json!("a4833b03832be7d4b326c53bf57893cd4697450aa2fe3caf404c98793a2c0cd5")
+    );
+
+    let invalid_context = BackgroundToolingProviderContext {
+        native_manifest: json!({ "capabilities": {} }),
+        ..native_context()
+    };
+    let failed = execute_background_tooling_call(&pending, &decision, &invalid_context)
+        .expect("typed execution failure");
+    assert_eq!(failed["result"]["ok"], json!(false));
+    assert_eq!(failed["result"]["status"], json!("failed"));
+    assert_eq!(
+        failed["result"]["error_code"],
+        json!("native_manifest_invalid")
     );
 }
 
@@ -447,6 +654,7 @@ fn queued_frames_drain_in_arrival_order_on_resume() {
     }
 
     let drained = registry.set_lifecycle(SurfaceLifecycle::Foreground);
+    assert_eq!(registry.lifecycle(), SurfaceLifecycle::Resuming);
     assert_eq!(drained.len(), 1);
     let (peer_id, frames) = &drained[0];
     assert_eq!(peer_id, PEER_A);
@@ -471,25 +679,39 @@ fn queued_frames_drain_in_arrival_order_on_resume() {
         0,
         "draining empties the queue so a second resume does not replay it"
     );
+    assert!(registry.finish_resume().is_empty());
+    assert_eq!(registry.lifecycle(), SurfaceLifecycle::Foreground);
 }
 
 #[test]
-fn resuming_dispatches_nothing_new_before_the_backlog_is_handed_over() {
+fn resuming_queues_arrivals_until_an_acknowledged_empty_drain() {
     let mut registry = registry_with(&[PEER_A]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
     registry
         .accept_inbound(PEER_A, &json!({ "type": "event", "id": "e-1" }), 1_000)
         .expect("bound peer");
 
-    // The drain is the return value of the lifecycle change itself, so a caller
-    // physically cannot dispatch a newly arrived frame before it has the
-    // backlog in hand.
     let drained = registry.set_lifecycle(SurfaceLifecycle::Foreground);
     assert_eq!(drained.len(), 1);
     assert_eq!(drained[0].1.len(), 1);
+    assert_eq!(registry.lifecycle(), SurfaceLifecycle::Resuming);
 
     let disposition = registry
         .accept_inbound(PEER_A, &json!({ "type": "event", "id": "e-2" }), 2_000)
+        .expect("bound peer");
+    assert_eq!(disposition, InboundDisposition::Queued { depth: 1 });
+
+    let second_drain = registry.finish_resume();
+    assert_eq!(second_drain.len(), 1);
+    assert_eq!(second_drain[0].1.len(), 1);
+    assert_eq!(second_drain[0].1[0].frame["id"], "e-2");
+    assert_eq!(registry.lifecycle(), SurfaceLifecycle::Resuming);
+
+    assert!(registry.finish_resume().is_empty());
+    assert_eq!(registry.lifecycle(), SurfaceLifecycle::Foreground);
+
+    let disposition = registry
+        .accept_inbound(PEER_A, &json!({ "type": "event", "id": "e-3" }), 3_000)
         .expect("bound peer");
     assert_eq!(disposition, InboundDisposition::Dispatch);
 }
@@ -685,6 +907,7 @@ fn the_same_registry_serves_both_lifecycles() {
     registry.set_lifecycle(SurfaceLifecycle::Background);
     let background = registry.accept_inbound(PEER_A, &ping, 2).expect("bound");
     let drained = registry.set_lifecycle(SurfaceLifecycle::Foreground);
+    assert!(registry.finish_resume().is_empty());
     let resumed = registry.accept_inbound(PEER_A, &ping, 3).expect("bound");
 
     assert_eq!(foreground, background);
@@ -854,21 +1077,37 @@ fn rust_answers_exactly_the_frames_this_build_implements() {
 }
 
 #[test]
-fn tooling_meta_methods_have_background_executors() {
-    let methods = [
+fn only_the_tooling_meta_methods_have_bounded_native_background_executors() {
+    assert_eq!(
+        background_executable_methods(),
+        vec![
+            "Tooling.GetTools",
+            "Tooling.GetExportCatalog",
+            "Tooling.PrepareExecution",
+            "Tooling.ExecuteTool",
+        ]
+    );
+    for method in [
         "Tooling.GetTools",
         "Tooling.GetExportCatalog",
         "Tooling.PrepareExecution",
         "Tooling.ExecuteTool",
-    ];
-    assert_eq!(background_executable_methods(), methods);
-    for method in methods {
+    ] {
         assert!(
             background_execution_for(method).is_some(),
-            "{method} must stay answerable while the webview is frozen"
+            "{method} must stay wired to the bounded native background executor"
         );
     }
-    assert!(background_execution_for("Tooling.RequestApproval").is_none());
+    for method in [
+        "TTS.Request",
+        "Orchestrator.ExternalUserInput",
+        "Pairing.Start",
+    ] {
+        assert!(
+            background_execution_for(method).is_none(),
+            "{method} must not gain a native background executor by accident"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

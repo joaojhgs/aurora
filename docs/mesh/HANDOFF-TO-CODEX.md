@@ -112,19 +112,17 @@ produced, since a flag check would fake this.
   `AuroraAssistActivity` and the voice interaction services already exist; the join is missing.
   Scope to one path per the plan.
 
-## Known gaps that are recorded, not hidden
+## Known limits and remaining gaps that are recorded, not hidden
 
-These are real and deliberately visible. Do not treat them as done.
+These are real and deliberately visible. Do not widen them without changing the implementation.
 
-1. **A backgrounded phone does not yet serve tools.** R3 built the deferral half correctly, but
-   `background_execution_for()` returns `None` for every method and the executor enum is empty.
-   The mesh exposes exactly four methods (`Tooling.GetTools`, `Tooling.GetExportCatalog`,
-   `Tooling.PrepareExecution`, `Tooling.ExecuteTool`, from `createToolingPeerHostRegistry`) and
-   all four are implemented by the TypeScript local tool provider. The authorization half does
-   hold — the deferral is decided after authorization, so an unauthorized peer gets the same
-   denial in both lifecycles. Closing this needs Rust to hold a tool catalog, which R2
-   deliberately avoided; it belongs to the wider settled decision that *tool dispatch moves to
-   Rust*. Written up in the boundary note under "Implementation status after R3".
+1. **M6 closes the background Tooling gap only for one bounded native tool.**
+   `background_execution_for()` now covers `Tooling.GetTools`, `Tooling.GetExportCatalog`,
+   `Tooling.PrepareExecution` and `Tooling.ExecuteTool`, but the Rust catalog intentionally exposes
+   only `aurora.local.native.get_device_status.v1` / `native.get_device_status`. It is read-only,
+   takes no arguments, requires no confirmation, and is served only when the authority grants both
+   the Tooling method id and that tool contract id. The full TypeScript local tool provider remains
+   foreground-only.
 2. **`frames_served_by_rust_today()` returns only `["call", "ping"]`.** R0 §3's table assigns far
    more to Rust. Everything else is still `mesh-peer-bridge.ts`, queued in the per-peer FIFO when
    TypeScript sleeps. A test fails if the list and the table drift apart.

@@ -115,42 +115,37 @@ the webview frozen, and to TypeScript if answering it needs a human or the orche
 Frames marked "Background? no" are not *refused* while backgrounded — they are **deferred** with the
 typed response in §6. A frozen webview must never look like a peer that went away.
 
-### Implementation status after R3
+### Implementation status after M6
 
-The table above is the settled destination, not a description of the tree. R3 moved two rows:
-`ping`/`pong` and inbound `call`. `frames_served_by_rust_today()` in `aurora-mesh-session`
-returns exactly `["call", "ping"]`, and a test fails if that list and the ownership table drift
-apart. Everything else the table assigns to Rust — fragmentation, `protocol_hello`, manifest,
-provider lease, subscriptions, reconnect auth — is still `mesh-peer-bridge.ts`, dispatched when
-TypeScript is awake and queued in the per-peer FIFO when it is not.
+The table above is the settled destination, not a description of the whole tree. R3 moved two
+rows: `ping`/`pong` and inbound `call`. `frames_served_by_rust_today()` in
+`aurora-mesh-session` returns exactly `["call", "ping"]`, and a test fails if that list and the
+ownership table drift apart. Everything else the table assigns to Rust — fragmentation,
+`protocol_hello`, manifest, provider lease, subscriptions, reconnect auth — is still
+`mesh-peer-bridge.ts`, dispatched when TypeScript is awake and queued in the per-peer FIFO when
+it is not.
 
-There is a second, sharper gap inside the row R3 did move. Rust receives an inbound `call`,
-asks the authority, and answers — but it can only ever answer with the deferral. The mesh
-exposes exactly four methods (`Tooling.GetTools`, `Tooling.GetExportCatalog`,
-`Tooling.PrepareExecution`, `Tooling.ExecuteTool`, from `createToolingPeerHostRegistry`), and
-all four are implemented by the TypeScript local tool provider — the tool registry, the approval
-controller, the export decision, the audit sink. None can be finished against the
-`aurora_local_data_*` commands, so `background_execution_for()` returns `None` for every method
-and the executor enum is empty.
+M6 closes the R3 tool-serving gap for a deliberately bounded native subset. Rust can execute the
+four Tooling meta methods (`Tooling.GetTools`, `Tooling.GetExportCatalog`,
+`Tooling.PrepareExecution`, `Tooling.ExecuteTool`) while the WebView is frozen, but the catalog it
+projects contains only `aurora.local.native.get_device_status.v1` / `native.get_device_status`.
+That tool is read-only, takes no arguments, requires no confirmation, and returns bounded native
+status from the platform capability manifest. Foreground calls still go to the TypeScript local
+tool provider and its full registry.
 
-That is §6 rule 2 applied honestly rather than skipped, and the authorization half of R3's
-acceptance genuinely holds: an unauthorized peer gets the same denial backgrounded as it would
-in foreground, because the deferral is decided after authorization. But the settled decision
-that a backgrounded phone **serves tools** is not yet true — today it defers all of them.
-
-Closing that needs an architectural decision this note should not pre-empt: for Rust to answer
-`Tooling.GetTools` it would have to hold a tool catalog, and R2 deliberately kept registry data
-out of the authority so the caller owning the local tool registry projects permission labels
-itself. Serving tools in the background therefore belongs to the wider settled decision that
-*tool dispatch and authorization move to Rust*, of which R2 delivered authorization. It is
-larger than R3 and is recorded here rather than left to be discovered.
+The security boundary remains the same: Rust asks the authority first, then serves, defers or
+denies. A background Tooling method serves only when the decision grants the method id and the
+native status tool contract id. Caller-supplied peer ids, permission labels, arguments and
+confirmation tokens are ignored or rejected by schema-validated responses.
 
 ### Ordering guarantee
 
 Rust holds one FIFO queue per peer for frames it has accepted but cannot complete without
-TypeScript. On resume the queue drains **in arrival order** before any new frame is dispatched.
-R3's acceptance criterion — "drains queued frames in order on resume with no re-pairing" — is a test
-against this queue, not an aspiration.
+TypeScript. Resume is a two-phase handoff: the shell enters `resuming`, delivers a drain batch, and
+then acknowledges each delivered batch with a follow-up drain call. Rust keeps queuing arrivals
+during `resuming`; only an acknowledged empty drain moves the surface to `foreground`, where new
+frames dispatch directly again. R3's acceptance criterion — "drains queued frames in order on resume
+with no re-pairing" — is a test against this queue, not an aspiration.
 
 ---
 

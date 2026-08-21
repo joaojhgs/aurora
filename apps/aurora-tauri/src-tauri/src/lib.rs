@@ -2775,7 +2775,7 @@ async fn aurora_android_native_plugin_payload(
     }
 }
 
-async fn native_capability_manifest_value(
+pub(crate) async fn native_capability_manifest_value(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
@@ -8817,6 +8817,7 @@ pub fn run() {
             mesh_session::aurora_mesh_session_bind,
             mesh_session::aurora_mesh_session_unbind,
             mesh_session::aurora_mesh_session_set_lifecycle,
+            mesh_session::aurora_mesh_session_finish_resume,
             mesh_session::aurora_mesh_session_snapshot,
             aurora_local_data_open,
             aurora_local_data_status,

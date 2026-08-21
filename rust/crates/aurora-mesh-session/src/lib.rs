@@ -41,8 +41,8 @@ pub use ownership::{
     FrameOwner, FrameOwnership, INBOUND_FRAME_OWNERSHIP, PAIRING_FRAME_TYPES,
 };
 pub use session::{
-    background_executable_methods, background_execution_for, pong_frame, BackgroundExecution,
-    CallOutcome, DeviceLinkAction, DeviceLinkLedger, InboundDisposition, MeshPeerSession,
-    MeshSessionError, MeshSessionRegistry, PendingCall, QueuedFrame, SurfaceLifecycle,
-    MAX_QUEUED_FRAMES_PER_PEER,
+    background_executable_methods, background_execution_for, execute_background_tooling_call,
+    pong_frame, BackgroundExecution, BackgroundToolingProviderContext, CallOutcome,
+    DeviceLinkAction, DeviceLinkLedger, InboundDisposition, MeshPeerSession, MeshSessionError,
+    MeshSessionRegistry, PendingCall, QueuedFrame, SurfaceLifecycle, MAX_QUEUED_FRAMES_PER_PEER,
 };

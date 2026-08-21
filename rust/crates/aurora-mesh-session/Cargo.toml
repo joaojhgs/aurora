@@ -10,9 +10,11 @@ description = "Mesh session liveness and background frame serving: ownership, pe
 crate-type = ["rlib"]
 
 [dependencies]
+aurora-contracts = { path = "../aurora-contracts" }
 aurora-mesh-authority = { path = "../aurora-mesh-authority" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 
 [lints]
