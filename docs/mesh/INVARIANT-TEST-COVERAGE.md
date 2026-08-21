@@ -19,7 +19,7 @@ the same thing:
 | 4 | Reconnect challenges stay single-use per peer | Rust authority challenge store | `reconnect_challenges_are_single_use_per_peer`, `reconnect_challenge_replay_guard_matches` | read-and-run |
 | 5 | Authority contexts never cross peers | Rust authority, keyed by peer identity, holds no transport state | `never lets an authority context cross peers` (WASM), `authority_holds_no_transport_state` (Rust corpus) | read-and-run |
 | 6 | One Aurora in the notification shade | `AuroraRuntimeForegroundLedger`, reference-counted reasons | `android-runtime-foreground-service.test.ts` (5 tests) | **mutation-confirmed** |
-| 7 | Runtime is chosen by platform, never by lifecycle | R3's session ownership | — | **pending (M6/R3 in flight)** |
+| 7 | Runtime is chosen by platform, never by lifecycle | `aurora-mesh-session` registry | `ping_is_answered_the_same_way_in_both_lifecycles` (Rust), which cites the invariant in its failure message | read-and-run |
 | 8 | Shedding a peer is distinguishable from losing one and costs no re-pair | R6's budget + the "going away, keep my credential" signal | — | **pending (M7/R6 not built)** |
 | 9 | Product copy stays product copy | `product-copy-forbidden-terms.ts` + rendered-copy tests | forbidden-term sweeps across mesh, onboarding and foreground-service copy | **mutation-confirmed** |
 
@@ -40,11 +40,13 @@ transport failed the product-copy assertion. Both restored.
 
 ## Where the remaining two stand
 
-**#7** is R3's, currently being implemented. The property is that a native shell uses the Rust
-session in foreground and background alike — no implementation swap keyed on lifecycle. The
-test has to fail if someone adds a "background mode" that selects a different runtime, which
-means asserting on which implementation is *selected*, not on behaviour that happens to match
-in both.
+**#7** landed with R3. `ping_is_answered_the_same_way_in_both_lifecycles` drives the same
+registry through `SurfaceLifecycle::Foreground` and `Background` and asserts the answer does
+not change shape. Worth noting what that does and does not prove: it pins that *behaviour* is
+lifecycle-independent, which is the observable half. It does not assert on which implementation
+is selected, so a future "background mode" that swapped runtimes but happened to produce an
+identical pong would still pass. Adequate today because there is only one implementation; it
+should be tightened if a second ever appears.
 
 **#8** is R6's, in M7, and is not built. It needs the contract change first: an explicit
 "going away, keep my credential" signal so Python distinguishes intentional absence from a lost
@@ -54,8 +56,8 @@ cross-language fixtures.
 
 ## Reading this honestly
 
-Six of nine are enforced and covered, three of those mutation-confirmed. Two are pending on
-work that has not landed. The read-and-run rows are real tests asserting real effects, but they
+Seven of nine are enforced and covered, three of those mutation-confirmed. One is pending on
+work that has not landed (#8, R6's). The read-and-run rows are real tests asserting real effects, but they
 have not been proven to bite; **#3, #4 and #5 in particular guard impersonation, replay and
 cross-peer authority leakage, and deserve mutation confirmation before this work is considered
 finished.** They were not mutation-tested here only because the files involved were held by an
