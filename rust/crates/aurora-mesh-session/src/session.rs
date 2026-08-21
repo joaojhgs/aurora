@@ -649,3 +649,63 @@ fn inbound_identity(frame: &Value, peer_id: &str) -> PeerHostIdentity {
             .cloned(),
     }
 }
+
+/// Whether the one Aurora foreground service is being held open for a device
+/// connection, and what has to change to keep that true.
+///
+/// R4 built a reference-counted ledger inside the Android service, shared by
+/// voice and mesh so there is one service and one entry in the notification
+/// shade. R3 is its first mesh caller. This is the small piece of that
+/// decision that is worth testing without an Android runtime: given how many
+/// sessions are held, does this process need to take a hold, drop one, or do
+/// nothing?
+///
+/// It is deliberately idempotent. It takes at most one hold and releases at
+/// most one, so a session that flaps cannot run the service's reference count
+/// away from the number of sessions that actually exist -- which would either
+/// strand the notification in the shade forever or drop the hold while a
+/// session is still being served.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DeviceLinkLedger {
+    held: bool,
+}
+
+/// What the caller must do to the foreground service's device-link reason.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeviceLinkAction {
+    /// Take the connected-device reason, starting the service if it is the first.
+    Hold,
+    /// Drop it, stopping the service if it was the last reason.
+    Release,
+}
+
+impl DeviceLinkLedger {
+    /// A ledger holding nothing.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether this process currently holds the device-link reason.
+    #[must_use]
+    pub fn is_held(self) -> bool {
+        self.held
+    }
+
+    /// Reconcile the hold against the number of sessions being served.
+    ///
+    /// Returns what the caller must do, or nothing when the hold already
+    /// matches reality.
+    pub fn sync(&mut self, session_count: usize) -> Option<DeviceLinkAction> {
+        let wanted = session_count > 0;
+        if wanted == self.held {
+            return None;
+        }
+        self.held = wanted;
+        Some(if wanted {
+            DeviceLinkAction::Hold
+        } else {
+            DeviceLinkAction::Release
+        })
+    }
+}

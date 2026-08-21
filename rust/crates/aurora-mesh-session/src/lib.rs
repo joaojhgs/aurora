@@ -42,6 +42,7 @@ pub use ownership::{
 };
 pub use session::{
     background_executable_methods, background_execution_for, pong_frame, BackgroundExecution,
+    DeviceLinkAction, DeviceLinkLedger,
     CallOutcome, InboundDisposition, MeshPeerSession, MeshSessionError, MeshSessionRegistry,
     PendingCall, QueuedFrame, SurfaceLifecycle, MAX_QUEUED_FRAMES_PER_PEER,
 };

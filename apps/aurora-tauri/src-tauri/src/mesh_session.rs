@@ -32,8 +32,8 @@ use std::sync::Arc;
 
 use aurora_mesh_authority::types::PeerHostAuthorizeRequest;
 use aurora_mesh_session::{
-    CallOutcome, InboundDisposition, MeshSessionRegistry, PendingCall, QueuedFrame,
-    SurfaceLifecycle,
+    CallOutcome, DeviceLinkAction, DeviceLinkLedger, InboundDisposition, MeshSessionRegistry,
+    PendingCall, QueuedFrame, SurfaceLifecycle,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -68,7 +68,10 @@ struct MeshSessionInner {
     /// Reverse of `channels`, so an answer can find its way back out.
     peer_channels: HashMap<String, u64>,
     /// Whether this process currently holds the R4 connected-device reason.
-    device_link_held: bool,
+    ///
+    /// The decision is `aurora-mesh-session`'s and is tested there; this only
+    /// carries it out.
+    device_link: DeviceLinkLedger,
 }
 
 #[derive(Debug, Deserialize)]
@@ -215,17 +218,12 @@ impl MeshSessionInner {
     /// one, so a flapping session cannot run the reference count away from the
     /// number of sessions that exist.
     fn sync_device_link(&mut self, app: &AppHandle) -> bool {
-        let wanted = !self.registry.is_empty();
-        if wanted == self.device_link_held {
-            return self.device_link_held;
+        match self.device_link.sync(self.registry.len()) {
+            Some(DeviceLinkAction::Hold) => hold_device_link(app),
+            Some(DeviceLinkAction::Release) => release_device_link(app),
+            None => {}
         }
-        if wanted {
-            hold_device_link(app);
-        } else {
-            release_device_link(app);
-        }
-        self.device_link_held = wanted;
-        self.device_link_held
+        self.device_link.is_held()
     }
 }
 

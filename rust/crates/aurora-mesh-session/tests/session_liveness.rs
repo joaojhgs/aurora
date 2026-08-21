@@ -944,3 +944,73 @@ fn signaling_frames_are_reconnect_only_and_first_contact_stays_in_typescript() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// One Aurora in the notification shade
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_first_session_takes_the_device_link_and_the_last_one_releases_it() {
+    use aurora_mesh_session::{DeviceLinkAction, DeviceLinkLedger};
+
+    let mut ledger = DeviceLinkLedger::new();
+    assert!(!ledger.is_held());
+
+    assert_eq!(ledger.sync(1), Some(DeviceLinkAction::Hold));
+    assert!(ledger.is_held());
+
+    // A second and third session are the same one hold. Taking another would
+    // run the service's reference count away from the number of sessions and
+    // strand the notification in the shade.
+    assert_eq!(ledger.sync(2), None);
+    assert_eq!(ledger.sync(3), None);
+    assert_eq!(ledger.sync(2), None);
+    assert!(ledger.is_held());
+
+    assert_eq!(ledger.sync(0), Some(DeviceLinkAction::Release));
+    assert!(!ledger.is_held());
+
+    // And releasing again releases nothing, so an unbalanced call cannot drop
+    // a hold that voice is relying on.
+    assert_eq!(ledger.sync(0), None);
+}
+
+#[test]
+fn a_flapping_session_does_not_leak_holds() {
+    use aurora_mesh_session::{DeviceLinkAction, DeviceLinkLedger};
+
+    let mut ledger = DeviceLinkLedger::new();
+    let mut holds = 0_i32;
+    for count in [1, 0, 1, 1, 0, 0, 1, 2, 0] {
+        match ledger.sync(count) {
+            Some(DeviceLinkAction::Hold) => holds += 1,
+            Some(DeviceLinkAction::Release) => holds -= 1,
+            None => {}
+        }
+        assert!((0..=1).contains(&holds), "holds left the 0..1 range: {holds}");
+    }
+    assert_eq!(holds, 0, "every hold was matched by exactly one release");
+    assert!(!ledger.is_held());
+}
+
+#[test]
+fn the_device_link_follows_the_registry_and_not_the_lifecycle() {
+    use aurora_mesh_session::{DeviceLinkAction, DeviceLinkLedger};
+
+    // Going into the background must not drop the hold: the background is
+    // precisely when the process needs to stay alive to keep answering.
+    let mut registry = registry_with(&[PEER_A]);
+    let mut ledger = DeviceLinkLedger::new();
+    assert_eq!(ledger.sync(registry.len()), Some(DeviceLinkAction::Hold));
+
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    assert_eq!(ledger.sync(registry.len()), None);
+    assert!(ledger.is_held());
+
+    registry.set_lifecycle(SurfaceLifecycle::Foreground);
+    assert_eq!(ledger.sync(registry.len()), None);
+    assert!(ledger.is_held());
+
+    registry.unbind(PEER_A);
+    assert_eq!(ledger.sync(registry.len()), Some(DeviceLinkAction::Release));
+}
