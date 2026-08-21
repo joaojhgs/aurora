@@ -78,6 +78,7 @@ describe("Tauri mesh node services", () => {
       backend,
       crypto: new FakeEnvelopeCrypto(),
       verifierSecretStorage: new MemorySecretStorage(),
+      invokeCommand: fakeAuthorityInvoke(sequentialIds("id")),
       randomBytes: randomBytes(7),
       randomId: sequentialIds("id"),
       now: () => 1_000,
@@ -163,6 +164,7 @@ describe("Tauri mesh node services", () => {
       backend: new FakeLocalDataBackend(),
       crypto: new FakeEnvelopeCrypto(),
       verifierSecretStorage: new MemorySecretStorage(),
+      invokeCommand: fakeAuthorityInvoke(sequentialIds("id")),
       randomBytes: randomBytes(11),
       randomId: sequentialIds("id"),
       now: () => 1_000,
@@ -262,6 +264,7 @@ describe("Tauri mesh node services", () => {
       backend,
       crypto: new FakeEnvelopeCrypto(),
       verifierSecretStorage: new MemorySecretStorage(),
+      invokeCommand: fakeAuthorityInvoke(sequentialIds("id")),
       randomBytes: randomBytes(9),
       randomId: sequentialIds("id"),
       now: () => nowMs,
@@ -425,6 +428,7 @@ async function createEnabledServices(
     backend: new FakeLocalDataBackend(),
     crypto: new FakeEnvelopeCrypto(),
     verifierSecretStorage: new MemorySecretStorage(),
+    invokeCommand: fakeAuthorityInvoke(sequentialIds("id")),
     randomBytes: randomBytes(3),
     randomId: sequentialIds("id"),
     now,
@@ -759,6 +763,171 @@ function peerHostCallContext(methodId: string, receivedAtMs: number): PeerHostCa
     signal: new AbortController().signal,
     receivedAtMs,
     deadlineAtMs: receivedAtMs + 1_000,
+  };
+}
+
+function fakeAuthorityInvoke(newId: () => string) {
+  const grants = new Map<string, {
+    grantId: string;
+    tokenId: string;
+    claimantPeerId: string;
+    verifierPeerId: string;
+    roomName: string;
+    allowedMethodIds: string[];
+    allowedToolContractIds: string[];
+    capabilityPackIds: string[];
+    resourceScopes: string[];
+    createdAtMs: number;
+    expiresAtMs?: number;
+    revokedAtMs?: number;
+    grantRevision: number;
+  }>();
+  const keyFor = (input: PeerRelationshipSelector) =>
+    `${input.tokenId}:${input.claimantPeerId}:${input.verifierPeerId}:${input.roomName}`;
+  const summarize = (
+    grant: (typeof grants extends Map<string, infer T> ? T : never),
+    nowMs: number,
+  ) => ({
+    ...grant,
+    sharingState:
+      grant.revokedAtMs !== undefined && nowMs > grant.revokedAtMs
+        ? "revoked"
+        : grant.expiresAtMs !== undefined && nowMs >= grant.expiresAtMs
+          ? "expired"
+          : "active",
+    secretFieldsRedacted: true,
+    redactedFields: ["secret"],
+  });
+  return async (command: string, args?: Record<string, unknown>) => {
+    if (command === "aurora_mesh_authority_hydrate") return undefined;
+    if (command === "aurora_mesh_authority_drain_audit") return [];
+    if (command === "aurora_mesh_authority_snapshot_manifest") {
+      return {
+        authorityRevision: {
+          catalogRevision: 1,
+          exportPolicyRevision: 1,
+          authGrantRevision: 1,
+          manifestRevision: 1,
+          switchRevision: 1,
+          protocolRevision: 1,
+        },
+      };
+    }
+    if (command === "aurora_mesh_authority_authorize") {
+      return {
+        allowed: true,
+        reasonCode: "allowed",
+        grantedToolContractIds: [AURORA_NATIVE_TOOL_IDS.getDeviceStatus],
+      };
+    }
+    if (command === "aurora_mesh_authority_list_active_grants") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      const nowMs = Number(args?.nowMs ?? 0);
+      return [...grants.values()]
+        .filter((grant) => keyFor(grant) === keyFor(selectorArg))
+        .filter((grant) => grant.revokedAtMs === undefined || nowMs <= grant.revokedAtMs)
+        .filter((grant) => grant.expiresAtMs === undefined || nowMs < grant.expiresAtMs)
+        .map((grant) => summarize(grant, nowMs));
+    }
+    if (command === "aurora_mesh_authority_replace_grant") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      const selection = args?.selection as {
+        allowedMethodIds?: string[];
+        allowedToolContractIds?: string[];
+        capabilityPackIds?: string[];
+        resourceScopes?: string[];
+        expiresAtMs?: number;
+      };
+      const nowMs = Number(args?.nowMs ?? 0);
+      const grant = {
+        version: 1,
+        grantId: newId(),
+        tokenId: selectorArg.tokenId,
+        claimantPeerId: selectorArg.claimantPeerId,
+        verifierPeerId: selectorArg.verifierPeerId,
+        roomName: selectorArg.roomName,
+        allowedMethodIds: [...(selection.allowedMethodIds ?? [])],
+        allowedToolContractIds: [...(selection.allowedToolContractIds ?? [])],
+        capabilityPackIds: [...(selection.capabilityPackIds ?? [])],
+        resourceScopes: [...(selection.resourceScopes ?? [])],
+        createdAtMs: nowMs,
+        ...(selection.expiresAtMs !== undefined
+          ? { expiresAtMs: selection.expiresAtMs }
+          : {}),
+        grantRevision: 1,
+      };
+      grants.set(keyFor(selectorArg), grant);
+      return summarize(grant, nowMs);
+    }
+    if (command === "aurora_mesh_authority_export_grants") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      return [...grants.values()].filter(
+        (grant) => keyFor(grant) === keyFor(selectorArg),
+      );
+    }
+    if (command === "aurora_mesh_authority_revoke_peer_authority") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      const revokedAtMs = Number(args?.revokedAtMs ?? 0);
+      const revokedGrantIds: string[] = [];
+      for (const [key, grant] of grants.entries()) {
+        if (key !== keyFor(selectorArg)) continue;
+        grant.revokedAtMs = revokedAtMs;
+        grant.grantRevision += 1;
+        revokedGrantIds.push(grant.grantId);
+      }
+      return {
+        selector: selectorArg,
+        reasonCode: String(args?.reasonCode ?? "peer_authority_revoked"),
+        revokedAtMs,
+        revokedGrantIds,
+        redacted: true,
+      };
+    }
+    if (command === "aurora_mesh_authority_revoke_sharing") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      const nowMs = Number(args?.nowMs ?? 0);
+      const summaries = [];
+      for (const [key, grant] of grants.entries()) {
+        if (key !== keyFor(selectorArg)) continue;
+        grant.revokedAtMs = nowMs;
+        grant.grantRevision += 1;
+        summaries.push(summarize(grant, nowMs));
+      }
+      return summaries;
+    }
+    if (command === "aurora_mesh_authority_issue_pairing_credential") {
+      return {
+        selector: args?.selector,
+        bearerToken: "redacted-test-token",
+        expiresAtMs: args?.expiresAtMs ?? null,
+        issuedAtMs: args?.nowMs ?? 0,
+        redacted: true,
+      };
+    }
+    if (command === "aurora_mesh_authority_rollback_pairing_credential") {
+      return undefined;
+    }
+    if (command === "aurora_mesh_authority_resolve_grant") {
+      return {
+        allowed: true,
+        reason: "allowed",
+        grant: null,
+        grantRevision: 1,
+        matchedGrantIds: [],
+      };
+    }
+    if (command === "aurora_mesh_authority_issue_reconnect_challenge") {
+      return {
+        challengeId: newId(),
+        challengeNonce: "nonce",
+        expiresAtMs: 2_000,
+        issuedAtMs: 1_000,
+      };
+    }
+    if (command === "aurora_mesh_authority_verify_reconnect_proof") {
+      return { ok: true, credentialRevision: 1 };
+    }
+    throw new Error(`unexpected authority command ${command}`);
   };
 }
 

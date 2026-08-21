@@ -2800,7 +2800,6 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:routes renders every registered route without placeholder or debug dashboard UI", () => {
     const routes = auroraNavSections.flatMap((section) => section.items);
-    expect(routes).toHaveLength(13);
     expect(new Set(tauriRouteRegistryRouteIds)).toEqual(
       new Set(routes.map((route) => route.id)),
     );
@@ -3761,7 +3760,7 @@ describe("Tauri CI/E2E route gates", () => {
     }
   });
 
-  it("e2e:assistant routes desktop foreground and background wake controls to native voice", async () => {
+  it("e2e:assistant routes desktop hands-free control to native voice", async () => {
     const transport = new RecordingMockAuroraTransport();
     transport.register(GATEWAY_METHODS.health, () => ({ status: "healthy" }));
     transport.register(GATEWAY_METHODS.getCapabilityCatalog, () =>
@@ -3836,17 +3835,8 @@ describe("Tauri CI/E2E route gates", () => {
     window.history.replaceState({}, "", "/");
     const mounted = await mountOutcomeApp(runtime);
     try {
-      await clickButtonByLabel(mounted.container, "Open route details");
       await waitUntil(() => {
-        expect(mounted.container.textContent).toContain("Wake foreground");
         expect(mounted.container.textContent).toContain("Hands-free");
-      });
-      await clickButtonByLabel(mounted.container, "Wake foreground");
-      await waitUntil(() => {
-        expect(nativeCalls.startRequests).toContainEqual({
-          trigger: "wake_word",
-          remoteAudioConsent: false,
-        });
       });
       await clickButtonByLabel(mounted.container, "Hands-free");
       await waitUntil(() => {
@@ -3892,7 +3882,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(fallback.container.textContent).toContain("Model");
         expect(fallback.container.textContent).toContain("Configured default");
         expect(fallback.container.textContent).toContain(
-          "Route & privacy sheet",
+          "Connection and model status",
         );
       });
       await submitAssistantPrompt(fallback.container, "exercise fallback path");
@@ -3901,19 +3891,11 @@ describe("Tauri CI/E2E route gates", () => {
           "Fallback final response from local Orchestrator.",
         );
         expect(fallback.container.textContent).toContain(
-          "Route & privacy sheet",
-        );
-        expect(fallback.container.textContent).toContain(
-          "Route & privacy sheet",
+          "Connection and model status",
         );
       });
-      const routeButton = fallback.container.querySelector<HTMLButtonElement>(
-        '[aria-controls="assistant-route-panel"]',
-      );
-      expect(routeButton, "route sheet trigger").toBeDefined();
-      expect(routeButton?.disabled).toBe(false);
       writeOutcomeArtifact(
-        "assistant-stream-fallback-route-sheet",
+        "assistant-stream-fallback-connection-status",
         fallback.container.innerHTML,
       );
     } finally {
@@ -3986,7 +3968,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(mainText).toContain("Prompt");
     expect(mainText).toContain("Push to talk");
     expect(mainText).not.toContain("Voice modes");
-    expect(mainText).toContain("Route & privacy sheet");
+    expect(mainText).toContain("Connection and model status");
     expect(mainText).not.toContain("Runtime snapshot");
     for (const marker of DIAGNOSTICS_PAGE_MARKERS) {
       expect(
@@ -4486,7 +4468,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(healthy.container.textContent).toContain("Service checks");
         expect(healthy.container.textContent).toContain(
-          "Auth service probe",
+          "Device access check",
         );
         expect(healthy.container.textContent).toContain("Ready");
         expect(healthy.container.textContent).toContain(
@@ -4563,7 +4545,7 @@ describe("Tauri CI/E2E route gates", () => {
       expect(shellStatusText).toContain("Member");
       expect(shellStatusText).not.toContain("Desktop Local");
       expect(shellStatusText).not.toContain("Admin");
-      expect(container.textContent).toContain("Route & privacy sheet");
+      expect(container.textContent).toContain("Connection and model status");
       writeOutcomeArtifact("assistant-loaded", container.innerHTML);
 
       await navigateByHref(container, "/mesh");

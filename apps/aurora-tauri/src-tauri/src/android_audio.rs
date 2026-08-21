@@ -2,9 +2,9 @@
 
 use aurora_voice_native::{
     AndroidAssistantRouteMode, AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult,
-    AndroidTtsReferenceProfile, AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
-    CancellationToken, SpeechCatalogTask, SpeechModelCatalog, SpeechPackManager,
-    SpeechPackManagerConfig, TtsVoiceCatalog,
+    AndroidTtsReferenceProfile, AndroidVoiceSession, AndroidVoiceSessionCommandError,
+    AndroidVoiceSessionConfig, CancellationToken, SpeechCatalogTask, SpeechModelCatalog,
+    SpeechPackManager, SpeechPackManagerConfig, TtsVoiceCatalog,
 };
 use jni::objects::{JClass, JFloatArray, JShortArray, JString};
 use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray, jstring};
@@ -577,9 +577,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let Ok(config) =
-        AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0)
-            .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
+    let Ok(config) = AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0)
+        .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
     else {
         return 0;
     };
@@ -656,8 +655,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         optional_string_from_jni(&mut env, wake_phrase_text),
         optional_string_from_jni(&mut env, wake_phrase_revision),
     )
-    .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
-    else {
+    .with_assistant_route(assistant_route_mode, preferred_stable_peer_id) else {
         return 0;
     };
     let reference_text = optional_string_from_jni(&mut env, tts_reference_text);

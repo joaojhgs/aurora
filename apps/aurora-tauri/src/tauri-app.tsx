@@ -159,24 +159,24 @@ const primaryTauriRouteIds = [
   "admin",
   "services",
   "access",
+  "config",
   "tokens",
   "backups",
   "scheduler",
   "audit",
+  "spoken-replies",
   "settings",
   "models",
 ] as const;
 
 const embeddedTauriRouteIds = [
   "devices",
-  "config",
   "contracts",
   "plugins",
   "pairing",
   "diagnostics",
   "data",
   "native",
-  "spoken-replies",
   "onboarding",
 ] as const;
 

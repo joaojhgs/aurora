@@ -522,7 +522,7 @@ describe("Tauri native desktop voice port", () => {
     );
     expect(source).toContain("nativeVoice={nativeContext.nativeVoice}");
     expect(source).toContain("localSpeechCatalog: runtime.localSpeechCatalog");
-    expect(source).toContain("localSpeechCatalog={nativeContext.localSpeechCatalog}");
+    expect(source).toContain("localSpeechCatalog={nativeContext.localSpeechCatalog ?? null}");
   });
 
   it("keeps native voice behind the aurora-client bridge injection boundary", () => {

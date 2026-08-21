@@ -91,7 +91,7 @@ describe('Tauri dev local sidecar bootstrap contract', () => {
       /THIN|desktop-thin|WEBRTC_THIN_CLIENT|prepare-sidecar|AURORA_TAURI_SIDECAR_/,
     )
     expect(tauriPackage.scripts['dev:desktop-thin']).toBe('pnpm dev:desktop-client')
-    expect(webPackage.scripts['dev:web']).toContain('next dev')
+    expect(webPackage.scripts['dev:web']).toContain('dev-ui-launch.mjs debug')
     expect(webPackage.scripts['dev:web']).not.toMatch(/THIN|WEBRTC_THIN_CLIENT/)
     expect(webPackage.scripts['dev:web-thin']).toBe('pnpm dev:web')
     expect(wrapper).toContain(

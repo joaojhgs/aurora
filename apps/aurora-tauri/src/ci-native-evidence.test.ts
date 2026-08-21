@@ -610,7 +610,10 @@ describe('Tauri CI native evidence contract', () => {
     const iosDependencies = cargoManifest.match(
       /\[target\.'cfg\(target_os = "ios"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
     )?.[1] ?? ''
-    expect(iosDependencies).toContain('aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }')
+    const commonDependencies = cargoManifest.match(
+      /\[dependencies\]([\s\S]*?)(?=\n\[|$)/,
+    )?.[1] ?? ''
+    expect(commonDependencies).toContain('aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }')
     expect(iosDependencies).toContain('aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }')
     expect(iosDependencies).toContain('aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }')
 
