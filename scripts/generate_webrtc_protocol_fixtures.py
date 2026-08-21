@@ -41,9 +41,11 @@ from app.services.gateway.webrtc.peer_protocol import (  # noqa: E402
     DEFAULT_PEER_CAPABILITIES,
     KNOWN_PEER_CAPABILITIES,
     PeerProtocolLimits,
+    build_mesh_peer_standby,
     build_protocol_hello,
     fragment_message,
     negotiate_protocol,
+    parse_mesh_peer_standby_frame,
 )
 from app.services.gateway.webrtc.protocol_contract import protocol_descriptor  # noqa: E402
 from app.services.gateway.webrtc.signaling.mqtt_client import MQTTSignaling  # noqa: E402
@@ -500,6 +502,12 @@ def _peer_protocol_vectors() -> dict[str, Any]:
             "reason_code": "consumer_only_peer",
         },
     }
+    standby = build_mesh_peer_standby(
+        peer_id="stable-answer",
+        reason_code="surface_suspended",
+        resume_expected=True,
+    )
+    parsed_standby = parse_mesh_peer_standby_frame(standby)
     return {
         "capability_names": [
             CAP_FRAGMENTATION_V1,
@@ -532,6 +540,16 @@ def _peer_protocol_vectors() -> dict[str, Any]:
         "consumer_only": {
             "call": {"frame": consumer_only_call, "json": _compact_json(consumer_only_call)},
             "error": {"frame": consumer_only_error, "json": json.dumps(consumer_only_error)},
+        },
+        "standby": {
+            "frame": standby,
+            "json": _compact_json(standby),
+            "parsed": {
+                "type": parsed_standby.type,
+                "peer_id": parsed_standby.peer_id,
+                "reason_code": parsed_standby.reason_code,
+                "resume_expected": parsed_standby.resume_expected,
+            },
         },
         "provider_lease_numbers": _provider_lease_number_vectors(),
     }

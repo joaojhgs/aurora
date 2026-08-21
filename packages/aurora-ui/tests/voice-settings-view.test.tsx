@@ -2195,6 +2195,11 @@ function browserCatalogSurfaceProfile(): NonNullable<VoiceSettingsViewProps['sur
       usesBrowserVoiceRuntime: true,
       detail: 'Speech choices can be added on this device.',
     },
+    meshPeerBudget: {
+      foregroundPeerLimit: null,
+      backgroundPeerLimit: null,
+      backgroundStandbyReason: 'connection_budget',
+    },
   }
 }
 

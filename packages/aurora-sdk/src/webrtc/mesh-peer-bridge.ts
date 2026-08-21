@@ -18,7 +18,7 @@ import {
 } from './peer-protocol.js'
 import type { WebRtcPeerSession, PeerSessionSnapshot } from './peer-session.js'
 import { buildWebRtcManifestAck, parseWebRtcMeshManifest } from './manifest.js'
-import { DEFAULT_PARSER_LIMITS, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type ProviderLeaseFrame, type CapacityUpdateFrame } from './protocol.js'
+import { DEFAULT_PARSER_LIMITS, MESH_PEER_STANDBY_TYPE, buildMeshPeerStandbyFrame, parseWebRtcFrame, type AuroraProtocolFrame, type ManifestAckFrame, type MeshPeerStandbyFrame, type MeshPeerStandbyReason, type ProviderLeaseFrame, type CapacityUpdateFrame } from './protocol.js'
 import type { WebRtcPeerHost } from '../peer-host/index.js'
 import type { AuthenticatedPeerContext } from '../peer-host/authority-types.js'
 
@@ -35,6 +35,11 @@ export interface WebRtcMeshPeerBridgeOptions {
   manifestParser?: (frame: unknown, expectedPeerId: string) => MeshPeerManifest
   clock?: () => number
   peerHost?: WebRtcPeerHost
+  /**
+   * The remote peer said it is standing down deliberately and keeping its
+   * credential. Not a loss: the caller must not forget the peer or re-pair it.
+   */
+  onPeerStandby?: (frame: MeshPeerStandbyFrame) => void
 }
 
 export interface WebRtcMeshTransportOptions extends Omit<MeshP2PTransportOptions, 'bridge'> {
@@ -135,6 +140,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly manifestParser: ((frame: unknown, expectedPeerId: string) => MeshPeerManifest) | undefined
   private readonly clock: () => number
   private readonly peerHost: WebRtcPeerHost | undefined
+  private readonly onPeerStandby: WebRtcMeshPeerBridgeOptions['onPeerStandby']
   private readonly pending = new Map<string, PendingRpc>()
   private readonly pendingSubscribes = new Map<string, PendingSubscribe>()
   private readonly pendingManifests = new Map<string, PendingManifest>()
@@ -192,6 +198,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.manifestParser = options.manifestParser ?? ((frame, expectedPeerId) => parseWebRtcMeshManifest(assertRecord(frame, 'manifest frame'), expectedPeerId))
     this.clock = options.clock ?? (() => Date.now() / 1000)
     this.peerHost = options.peerHost
+    this.onPeerStandby = options.onPeerStandby
     this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
     // Keyed by this bridge's peer. One host serves every peer, so an unkeyed
     // attach let whichever bridge was built last own the only sender and carry
@@ -690,6 +697,12 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       case 'capacity_update':
         this.handleCapacityUpdate(frame as unknown as CapacityUpdateFrame)
         return
+      case MESH_PEER_STANDBY_TYPE:
+        // A deliberate departure, not a loss. Reported and nothing else: the
+        // credential stays, the roster keeps the row, and coming back is a
+        // reconnect rather than a pairing.
+        this.onPeerStandby?.(frame as unknown as MeshPeerStandbyFrame)
+        return
       default:
         return
     }
@@ -1104,6 +1117,27 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       this.clearTimer(this.remoteLeaseTimer)
       this.remoteLeaseTimer = null
     }
+  }
+
+  /**
+   * Announce that this device is standing down on purpose and keeping its
+   * credential.
+   *
+   * Sent before the session closes, so the peer left behind never has to infer
+   * intent from silence: silence is what a lost peer produces, and after
+   * `stale_peer_timeout_s` it reads as loss. Best-effort by construction — the
+   * channel may already be going away, and a shed that fails to announce
+   * itself degrades to exactly the behaviour that existed before R6.
+   */
+  async sendPeerStandby(reasonCode: MeshPeerStandbyReason, options: { resumeExpected?: boolean } = {}): Promise<void> {
+    const localPeerId = this.localPeerId
+    if (localPeerId === undefined) return
+    const frame = buildMeshPeerStandbyFrame({
+      peerId: localPeerId,
+      reasonCode,
+      ...(options.resumeExpected !== undefined ? { resumeExpected: options.resumeExpected } : {})
+    })
+    await this.sendLogicalFrame(frame as unknown as Record<string, unknown>)
   }
 
   private async sendLogicalFrame(frame: Record<string, unknown>, signal?: AbortSignal): Promise<void> {

@@ -693,6 +693,7 @@ fn the_frame_ownership_table_matches_the_boundary_note() {
         ("capacity_update", FrameOwner::Rust, BackgroundCapability::Yes),
         ("presence", FrameOwner::Rust, BackgroundCapability::Yes),
         ("presence_departed", FrameOwner::Rust, BackgroundCapability::Yes),
+        ("mesh_peer_standby_v1", FrameOwner::Rust, BackgroundCapability::Yes),
         ("offer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),
         ("answer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),
         ("candidate", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),

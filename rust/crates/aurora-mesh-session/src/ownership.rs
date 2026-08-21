@@ -125,6 +125,11 @@ pub const INBOUND_FRAME_OWNERSHIP: &[FrameOwnership] = &[
     // Roster observation, projected into TypeScript for the UI.
     row("presence", FrameOwner::Rust, BackgroundCapability::Yes, false),
     row("presence_departed", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    // R6's deliberate departure. A roster observation like `presence_departed`,
+    // and Rust-owned for the same reason: the peer left behind must learn that
+    // this absence was announced even while its own webview is frozen, because
+    // silence is what a lost peer produces too.
+    row("mesh_peer_standby_v1", FrameOwner::Rust, BackgroundCapability::Yes, false),
     // Rust on reconnect, TypeScript on first contact — section 5.
     row("offer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly, false),
     row("answer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly, false),

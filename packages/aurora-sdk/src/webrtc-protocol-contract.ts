@@ -59,9 +59,13 @@ export const SUBSCRIPTION_FRAME_TYPES = Object.freeze([
   'subscribe', 'subscribed', 'subscribe_rejected', 'unsubscribe', 'unsubscribed'
 ] as const)
 
+// `mesh_peer_standby_v1` is R6's "going away, keep my credential" signal. A peer
+// shed to stay inside a connection budget is not a lost peer, and silence cannot
+// tell the two apart: after `stale_peer_timeout_s` silence reads as loss.
 export const MESH_CONTROL_FRAME_TYPES = Object.freeze([
   'protocol_hello', 'fragment', 'manifest', 'manifest_request', 'manifest_ack',
-  'provider_lease', 'provider_unavailable', 'capacity_update', 'mesh_event', 'ping', 'pong'
+  'provider_lease', 'provider_unavailable', 'capacity_update', 'mesh_event',
+  'mesh_peer_standby_v1', 'ping', 'pong'
 ] as const)
 
 export const SESSION_FRAME_TYPES = Object.freeze([
@@ -102,6 +106,10 @@ export const WEBRTC_THIN_PROTOCOL_CAPABILITIES = Object.freeze({
     backpressure: true,
     scopedEventSubscriptions: true,
     consumerOnlyPeer: true
+  }),
+  mesh: Object.freeze({
+    // A deliberate departure is announced, not inferred from silence.
+    peerStandbySignal: true
   }),
   pairing: Object.freeze({
     commitRevealSasV2: true,

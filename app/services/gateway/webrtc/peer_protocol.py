@@ -44,6 +44,28 @@ DEFAULT_PEER_CAPABILITIES = (
 PEER_PROTOCOL_VERSION = 1
 PROTOCOL_HELLO_TYPE = "protocol_hello"
 FRAGMENT_FRAME_TYPE = "fragment"
+
+# R6's "going away, keep my credential" signal.
+#
+# A peer shed to stay inside a connection budget is not a peer that was lost.
+# It leaves deliberately, it keeps its credential, and coming back must not
+# cost a re-pair.  Silence cannot say that: silence is what a lost peer also
+# produces, and after ``stale_peer_timeout_s`` the registry marks it stale.
+# Nor can ``provider_unavailable`` say it, which means something else entirely
+# (the provider is gone; stop routing to it).  So the intent gets its own
+# typed frame and its own peer status.
+MESH_PEER_STANDBY_TYPE = "mesh_peer_standby_v1"
+# Why a peer stood down.  Machine-readable, never product copy.
+MESH_PEER_STANDBY_REASON_CODES = frozenset(
+    {
+        # Shed to stay inside the surface's connection budget (R6).
+        "connection_budget",
+        # The operating system suspended the surface (R7's iOS path).
+        "surface_suspended",
+        # A person disconnected this device on purpose.
+        "user_requested",
+    }
+)
 PEER_ROLES = frozenset({"provider", "consumer", "hybrid"})
 PeerRole = Literal["provider", "consumer", "hybrid"]
 
@@ -91,6 +113,28 @@ class ProviderLeaseFrame:
         if self.type == "provider_unavailable":
             return False
         return self.available is not False
+
+
+@dataclass(frozen=True, slots=True)
+class MeshPeerStandbyFrame:
+    """A peer announcing a deliberate departure that keeps its credential.
+
+    ``resume_expected`` is a new optional field rather than a meaning loaded
+    onto an existing one, following the precedent R3 set with ``retry_when``
+    on the deferral body: additive, so a peer that has never heard of it still
+    reads a well-formed departure notice and behaves sanely.
+    """
+
+    type: Literal["mesh_peer_standby_v1"]
+    peer_id: str
+    reason_code: str
+    resume_expected: bool | None = None
+
+    @property
+    def resumes(self) -> bool:
+        """Whether the sender expects to come back on this credential."""
+
+        return self.resume_expected is not False
 
 
 @dataclass(frozen=True)
@@ -368,6 +412,48 @@ def parse_provider_lease_frame(frame: Mapping[str, Any]) -> ProviderLeaseFrame:
     if parsed.expires_at_ms < parsed.issued_at_ms:
         raise PeerProtocolError("provider lease expires before issue time")
     return parsed
+
+
+def build_mesh_peer_standby(
+    *,
+    peer_id: str,
+    reason_code: str,
+    resume_expected: bool | None = None,
+) -> dict[str, Any]:
+    """Build the frame a peer sends when it stands down on purpose."""
+
+    frame: dict[str, Any] = {
+        "type": MESH_PEER_STANDBY_TYPE,
+        "peer_id": _require_identifier(peer_id, "peer_id"),
+        "reason_code": _require_standby_reason_code(reason_code),
+    }
+    if resume_expected is not None:
+        frame["resume_expected"] = _require_optional_bool(resume_expected, "resume_expected")
+    return frame
+
+
+def parse_mesh_peer_standby_frame(frame: Mapping[str, Any]) -> MeshPeerStandbyFrame:
+    """Parse a standby announcement using the TypeScript wire bounds."""
+
+    if not isinstance(frame, Mapping):
+        raise PeerProtocolError("mesh peer standby frame must be an object")
+    if frame.get("type") != MESH_PEER_STANDBY_TYPE:
+        raise PeerProtocolError("unsupported mesh peer standby frame")
+    return MeshPeerStandbyFrame(
+        type=MESH_PEER_STANDBY_TYPE,
+        peer_id=_require_identifier(frame.get("peer_id"), "peer_id"),
+        reason_code=_require_standby_reason_code(frame.get("reason_code")),
+        resume_expected=_require_optional_bool(frame["resume_expected"], "resume_expected")
+        if "resume_expected" in frame
+        else None,
+    )
+
+
+def _require_standby_reason_code(value: Any) -> str:
+    reason_code = _require_bounded_string(value, "reason_code", _MAX_REASON_CODE_LENGTH)
+    if reason_code not in MESH_PEER_STANDBY_REASON_CODES:
+        raise PeerProtocolError("reason_code is not a known standby reason")
+    return reason_code
 
 
 def _b64url_encode(data: bytes) -> str:

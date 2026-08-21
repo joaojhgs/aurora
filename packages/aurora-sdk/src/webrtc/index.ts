@@ -94,9 +94,13 @@ export type {
 
 export {
   DEFAULT_PARSER_LIMITS,
+  MESH_PEER_STANDBY_REASONS,
+  MESH_PEER_STANDBY_TYPE,
   WebRtcProtocolParseError,
+  buildMeshPeerStandbyFrame,
   buildSubscribeFrame,
   buildUnsubscribeFrame,
+  meshPeerStandbyResumes,
   parseWebRtcFrame,
   parseWebRtcJsonFrame
 } from './protocol.js'
@@ -115,6 +119,9 @@ export type {
   ChunkFrame,
   ErrorFrame,
   EventFrame,
+  MeshLifecycleFrameType,
+  MeshPeerStandbyFrame,
+  MeshPeerStandbyReason,
   OfferFrame,
   PairingCommitFrame,
   PairingFrameType,
@@ -240,10 +247,14 @@ export {
 } from './peer-registry.js'
 export type {
   MeshDiscoveredPeer,
+  MeshPeerConnectionBudget,
   MeshPeerConnectionPolicy,
+  MeshPeerLifecycleState,
+  MeshPeerPriorityUpdate,
   MeshPeerRegistryController,
   MeshPeerRosterEntry,
-  MeshPeerRosterSnapshot
+  MeshPeerRosterSnapshot,
+  MeshPeerStandbyState
 } from './peer-registry.js'
 
 export {

@@ -26,6 +26,9 @@ export interface MeshPeerBridgeRouterOptions {
   resolve(peerId: string): MeshPeerBridge | undefined
   /** Stable peer ids currently reachable, reported in the unroutable error detail. */
   reachablePeerIds?: () => readonly string[]
+  /** Optional local retention signals; they must not affect routing authority. */
+  onRouteStart?: (peerId: string) => void
+  onRouteEnd?: (peerId: string) => void
 }
 
 export function peerNotRegisteredError(peerId: string, reachablePeerIds: readonly string[]): AuroraError {
@@ -44,7 +47,13 @@ export class MeshPeerBridgeRouter implements MeshPeerBridge {
   constructor(private readonly options: MeshPeerBridgeRouterOptions) {}
 
   async call<TPayload = unknown>(request: MeshRpcRequest<TPayload>): Promise<MeshRpcResponse<unknown>> {
-    return await this.route(request.peerId).call<TPayload>(request) as MeshRpcResponse<unknown>
+    const bridge = this.route(request.peerId)
+    this.options.onRouteStart?.(request.peerId)
+    try {
+      return await bridge.call<TPayload>(request) as MeshRpcResponse<unknown>
+    } finally {
+      this.options.onRouteEnd?.(request.peerId)
+    }
   }
 
   streamCall<TChunk = unknown, TPayload = unknown>(request: MeshRpcRequest<TPayload>): AsyncIterable<TChunk> {
@@ -57,7 +66,7 @@ export class MeshPeerBridgeRouter implements MeshPeerBridge {
         busTopic: request.busTopic
       })
     }
-    return bridge.streamCall<TChunk, TPayload>(request)
+    return this.trackAsyncIterable(request.peerId, () => bridge.streamCall!(request))
   }
 
   subscribe<TEventPayload = unknown>(request: MeshStreamRpcRequest): MeshEventSource<TEventPayload> {
@@ -69,7 +78,9 @@ export class MeshPeerBridgeRouter implements MeshPeerBridge {
         detail: { stream: request.stream, topics: request.topics }
       })
     }
-    return bridge.subscribe<TEventPayload>(request) as AsyncMeshEventSource<TEventPayload>
+    const source = bridge.subscribe<TEventPayload>(request) as AsyncMeshEventSource<TEventPayload>
+    this.options.onRouteStart?.(request.peerId)
+    return this.trackStartedSource(request.peerId, source, request.signal)
   }
 
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {
@@ -80,12 +91,64 @@ export class MeshPeerBridgeRouter implements MeshPeerBridge {
         message: 'Mesh peer manifest lookup is not supported by this bridge.'
       })
     }
-    return await bridge.getManifest(peerId)
+    this.options.onRouteStart?.(peerId)
+    try {
+      return await bridge.getManifest(peerId)
+    } finally {
+      this.options.onRouteEnd?.(peerId)
+    }
   }
 
   private route(peerId: string): MeshPeerBridge {
     const bridge = peerId ? this.options.resolve(peerId) : undefined
     if (!bridge) throw peerNotRegisteredError(peerId, this.options.reachablePeerIds?.() ?? [])
     return bridge
+  }
+
+  private async *trackAsyncIterable<T>(peerId: string, create: () => AsyncIterable<T>): AsyncIterable<T> {
+    this.options.onRouteStart?.(peerId)
+    try {
+      for await (const value of create()) yield value
+    } finally {
+      this.options.onRouteEnd?.(peerId)
+    }
+  }
+
+  private trackStartedSource<T>(
+    peerId: string,
+    source: AsyncMeshEventSource<T>,
+    signal?: AbortSignal,
+  ): AsyncMeshEventSource<T> {
+    let ended = false
+    let removeAbortListener = (): void => {}
+    const endRoute = (): void => {
+      if (ended) return
+      ended = true
+      removeAbortListener()
+      this.options.onRouteEnd?.(peerId)
+    }
+    if (signal?.aborted) {
+      endRoute()
+    } else if (signal) {
+      signal.addEventListener('abort', endRoute, { once: true })
+      removeAbortListener = () => signal.removeEventListener('abort', endRoute)
+    }
+    const tracked = this.trackStartedIterable(source, endRoute)
+    return source.ready === undefined
+      ? tracked
+      : Object.assign(tracked, {
+          ready: source.ready.catch((error: unknown) => {
+            endRoute()
+            throw error
+          })
+        })
+  }
+
+  private async *trackStartedIterable<T>(source: AsyncIterable<T>, endRoute: () => void): AsyncIterable<T> {
+    try {
+      for await (const value of source) yield value
+    } finally {
+      endRoute()
+    }
   }
 }

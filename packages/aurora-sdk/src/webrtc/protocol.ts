@@ -12,6 +12,7 @@ export type SubscriptionFrameType = 'subscribe' | 'subscribed' | 'subscribe_reje
 export type SignalingFrameType = 'presence' | 'presence_departed' | 'offer' | 'answer' | 'candidate' | 'mesh_event'
 export type PairingFrameType = 'pairing_v2_commit' | 'pairing_v2_reveal' | 'pairing_v2_terminal'
 export type AuthFrameType = 'auth' | 'reauth' | 'mesh_auth_challenge_v1' | 'mesh_auth_proof_v1' | 'manifest' | 'manifest_request' | 'manifest_ack' | 'provider_lease' | 'provider_unavailable' | 'ping' | 'pong'
+export type MeshLifecycleFrameType = 'mesh_peer_standby_v1'
 
 export interface CallFrame {
   type: 'call'
@@ -92,6 +93,66 @@ export interface CapacityUpdateFrame {
   max_concurrent: number
 }
 
+/** Wire type of R6's "going away, keep my credential" signal. */
+export const MESH_PEER_STANDBY_TYPE = 'mesh_peer_standby_v1' as const
+
+/**
+ * Why a peer stood down. Machine-readable; product copy lives elsewhere.
+ *
+ * `connection_budget` is R6's shed, `surface_suspended` is R7's iOS path, and
+ * `user_requested` is a person disconnecting a device on purpose. All three
+ * mean the same thing to the peer left behind: this absence is deliberate, the
+ * credential stays valid, and coming back is a reconnect rather than a pairing.
+ */
+export type MeshPeerStandbyReason = 'connection_budget' | 'surface_suspended' | 'user_requested'
+
+export const MESH_PEER_STANDBY_REASONS: readonly MeshPeerStandbyReason[] = Object.freeze([
+  'connection_budget',
+  'surface_suspended',
+  'user_requested'
+] as const)
+
+/**
+ * A peer announcing a deliberate departure that keeps its credential.
+ *
+ * Silence cannot carry this: silence is exactly what a lost peer produces, and
+ * Python marks a peer stale after `stale_peer_timeout_s` without a pong.
+ * `provider_unavailable` cannot carry it either — that says the provider is
+ * gone and the caller should stop routing to it, which is a different claim.
+ *
+ * `resume_expected` is a new optional field rather than a meaning loaded onto
+ * an existing one, following the precedent R3 set with `retry_when` on the
+ * deferral body: additive, so a peer that has never heard of it still reads a
+ * well-formed departure notice.
+ */
+export interface MeshPeerStandbyFrame {
+  type: 'mesh_peer_standby_v1'
+  /** Stable id of the peer that is standing down. */
+  peer_id: string
+  reason_code: MeshPeerStandbyReason
+  resume_expected?: boolean
+}
+
+/** Build the frame a peer sends when it stands down on purpose. */
+export function buildMeshPeerStandbyFrame(input: {
+  peerId: string
+  reasonCode: MeshPeerStandbyReason
+  resumeExpected?: boolean
+}): MeshPeerStandbyFrame {
+  const frame: MeshPeerStandbyFrame = {
+    type: MESH_PEER_STANDBY_TYPE,
+    peer_id: requireId(input.peerId) as string,
+    reason_code: requireStandbyReason(input.reasonCode)
+  }
+  if (input.resumeExpected !== undefined) frame.resume_expected = requireBoolean(input.resumeExpected, 'resume_expected')
+  return frame
+}
+
+/** Whether a standby announcement says the peer means to come back. */
+export function meshPeerStandbyResumes(frame: MeshPeerStandbyFrame): boolean {
+  return frame.resume_expected !== false
+}
+
 export interface ManifestAckFrame {
   type: 'manifest_ack'
   compatible_services: string[]
@@ -113,7 +174,8 @@ export type AuroraSubscriptionFrame = SubscribeFrame | SubscribedFrame | Subscri
 export type AuroraSignalingFrame = OfferFrame | AnswerFrame | CandidateFrame | PresenceFrame
 export type AuroraPairingFrame = PairingCommitFrame | PairingRevealFrame | PairingTerminalFrame
 export type AuroraAuthFrame = MeshAuthChallengeFrame | MeshAuthProofFrame | ProviderLeaseFrame | ManifestAckFrame
-export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | CapacityUpdateFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
+export type AuroraMeshLifecycleFrame = MeshPeerStandbyFrame
+export type AuroraProtocolFrame = AuroraRpcFrame | AuroraSubscriptionFrame | AuroraSignalingFrame | AuroraPairingFrame | AuroraAuthFrame | AuroraMeshLifecycleFrame | CapacityUpdateFrame | ProtocolHello | FragmentFrame | Record<string, unknown>
 
 export class WebRtcProtocolParseError extends Error {
   constructor(message: string) {
@@ -200,6 +262,7 @@ export function parseWebRtcFrame(frame: unknown, limits: Partial<ParserLimits> =
     case 'provider_lease':
     case 'provider_unavailable': return parseProviderLease(object, type)
     case 'capacity_update': return parseCapacityUpdate(object)
+    case MESH_PEER_STANDBY_TYPE: return parseMeshPeerStandby(object)
     case PROTOCOL_HELLO_TYPE: return parseProtocolHello(object)
     case FRAGMENT_FRAME_TYPE: return parseFragmentMetadata(object)
     default:
@@ -643,6 +706,24 @@ function requireBase64Url(value: unknown, field: string, maxLength: number): str
 
 function requireExactVersion2(value: unknown): void {
   if (value !== 2) throw new WebRtcProtocolParseError('pairing v2 frame requires version 2')
+}
+
+function parseMeshPeerStandby(object: Record<string, unknown>): MeshPeerStandbyFrame {
+  const frame: MeshPeerStandbyFrame = {
+    type: MESH_PEER_STANDBY_TYPE,
+    peer_id: requireId(object.peer_id) as string,
+    reason_code: requireStandbyReason(object.reason_code)
+  }
+  if (object.resume_expected !== undefined) frame.resume_expected = requireBoolean(object.resume_expected, 'resume_expected')
+  return frame
+}
+
+function requireStandbyReason(value: unknown): MeshPeerStandbyReason {
+  const reason = requireString(value, 'reason_code', 128)
+  if (!MESH_PEER_STANDBY_REASONS.includes(reason as MeshPeerStandbyReason)) {
+    throw new WebRtcProtocolParseError('reason_code is not a known standby reason')
+  }
+  return reason as MeshPeerStandbyReason
 }
 
 function parseCapacityUpdate(object: Record<string, unknown>): CapacityUpdateFrame {

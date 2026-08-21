@@ -60,12 +60,16 @@ import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import { MeshPeerBridgeRouter } from './mesh-bridge-router.js'
 import {
   MeshPeerSessionRegistry,
+  type MeshPeerConnectionBudget,
   type MeshDiscoveredPeer,
   type MeshPeerConnectionPolicy,
+  type MeshPeerLifecycleState,
+  type MeshPeerPriorityUpdate,
   type MeshPeerRegistryController,
   type MeshPeerRosterSnapshot,
   type MeshPeerSessionEntry
 } from './peer-registry.js'
+import type { MeshPeerStandbyFrame, MeshPeerStandbyReason } from './protocol.js'
 import type { AuthenticatedPeerContext, WebRtcPeerHost } from '../peer-host/index.js'
 import type { PeerAuthorityResolverPort, PeerPairingIssuerPort, PeerRelationshipSelector } from '../peer-host/authority-types.js'
 import type {
@@ -109,6 +113,7 @@ export interface BrowserWebRtcRuntimeOptions<TClient = AuroraClient> {
    * same registry.
    */
   peerConnectionPolicy?: MeshPeerConnectionPolicy | undefined
+  peerConnectionBudget?: MeshPeerConnectionBudget | undefined
   routeResolver?: MeshRouteResolver | ((request: AuroraTransportRequest) => Promise<MeshRouteResolution> | MeshRouteResolution)
   defaultTimeoutMs?: number | undefined
   fallbackPeerIds?: string[] | undefined
@@ -278,6 +283,8 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   private readonly listeners = new Set<(snapshot: PeerConnectionSnapshot) => void>()
   private readonly rosterListeners = new Set<(roster: MeshPeerRosterSnapshot) => void>()
   private readonly diagnostics: RedactedPeerDiagnostic[] = []
+  /** Standby rows retained until a resumed transport is authorized. */
+  private readonly resumeFallbacks = new Map<MeshPeerSessionEntry, MeshPeerSessionEntry>()
   private readonly mode: AuroraConnectionMode
   private readonly fixedProfile: WebRtcPeerConnectionProfile | undefined
   private readonly credentialStore: InternalPeerCredentialStore | undefined
@@ -292,7 +299,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     resolve: (peerId) => this.registry.findByPeerId(peerId)?.bridge ?? undefined,
     reachablePeerIds: () => this.registry.list().flatMap(
       (entry) => (entry.bridge !== null && entry.peerId !== undefined ? [entry.peerId] : [])
-    )
+    ),
+    onRouteStart: (peerId) => this.registry.beginPeerRoute(peerId),
+    onRouteEnd: (peerId) => {
+      this.registry.endPeerRoute(peerId)
+      void this.applyConnectionBudget()
+    }
   })
   // Everyone observed announcing themselves in the room, keyed by signaling
   // identity. Discovery only: an observed peer is a candidate to connect to,
@@ -302,6 +314,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   private primaryEntry: MeshPeerSessionEntry | null = null
   private removeVisibilityListener: (() => void) | undefined
   private establishedAuthorizedRoute = false
+  private lifecycleState: MeshPeerLifecycleState = 'foreground'
 
   constructor(
     mode: AuroraConnectionMode,
@@ -318,7 +331,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     // The single-device Connect restriction is one policy check the registry
     // applies, not a shape the registry is stuck in.
     this.registry = new MeshPeerSessionRegistry(
-      options.peerConnectionPolicy !== undefined ? { policy: options.peerConnectionPolicy } : {}
+      {
+        ...(options.peerConnectionPolicy !== undefined ? { policy: options.peerConnectionPolicy } : {}),
+        ...(options.peerConnectionBudget !== undefined ? { budget: options.peerConnectionBudget } : {})
+      }
     )
     this.installVisibilityHook()
   }
@@ -345,6 +361,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
         primary: entry === primary,
         ...(entry.profile.nodeName !== undefined ? { nodeName: entry.profile.nodeName } : {}),
         ...(context !== undefined ? { authenticatedPeerContext: context } : {}),
+        ...(entry.standby !== null ? { standby: entry.standby } : {}),
         snapshot: this.snapshotForEntry(entry)
       }
     })
@@ -413,6 +430,15 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     return this.registry.connectionPolicy
   }
 
+  setPeerPriority(peerId: string, priority: MeshPeerPriorityUpdate): void {
+    this.registry.setPeerPriority(peerId, priority)
+    void this.applyConnectionBudget()
+  }
+
+  notePeerUsed(peerId: string): void {
+    this.registry.notePeerUsed(peerId)
+  }
+
   async connect(profile: WebRtcPeerConnectionProfile = this.requiredProfile()): Promise<void> {
     await this.disconnect('superseded connection')
     await this.connectPeer(profile)
@@ -421,7 +447,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   async connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void> {
     assertSecureRuntime(profile, this.options)
     assertPeerConnectionRuntimeAvailable(this.options)
+    const rememberedStandby = profile.expectedStablePeerId === undefined
+      ? undefined
+      : this.registry.takeStandby(profile.expectedStablePeerId)
     const localSignalingId = this.options.randomId?.() ?? randomBrowserId()
+    const now = Date.now()
     const entry: MeshPeerSessionEntry = {
       key: profile.expectedStablePeerId ?? `pending:${localSignalingId}`,
       peerId: profile.expectedStablePeerId,
@@ -437,11 +467,20 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       bridge: null,
       keyMaterial: null,
       localProtocolHello: null,
-      pendingPairing: null
+      pendingPairing: null,
+      budget: {
+        userPinned: rememberedStandby?.budget.userPinned ?? false,
+        dependedUpon: rememberedStandby?.budget.dependedUpon ?? false,
+        activeRouteCount: 0,
+        lastUsedAtMs: now,
+        connectedAtMs: rememberedStandby?.budget.connectedAtMs ?? now
+      },
+      standby: null
     }
     // One stable id, one session: a known identity presenting on a second
     // transport is refused here rather than quietly superseding the first.
     this.registry.add(entry)
+    if (rememberedStandby) this.resumeFallbacks.set(entry, rememberedStandby)
     if (this.options.initialCredentials) {
       for (const credential of this.options.initialCredentials) {
         await this.credentialStore?.save(credential.verifierPeerId, credential)
@@ -519,9 +558,20 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       session.subscribe((snapshot) => this.handleSessionSnapshot(entry, snapshot))
       await session.start()
     } catch (error) {
-      entry.localProtocolHello = null
-      zeroEntryKeyMaterial(entry)
-      if (entry.session === null) this.registry.remove(entry)
+      this.resumeFallbacks.delete(entry)
+      this.registry.remove(entry)
+      if (this.primaryEntry === entry) this.primaryEntry = null
+      const close = this.detachEntry(entry, 'connection failed')
+      if (rememberedStandby && !this.registry.has(rememberedStandby)) {
+        this.registry.add(rememberedStandby)
+      }
+      this.refreshMeshTransport()
+      try {
+        await close()
+      } catch (cleanupError) {
+        this.recordDiagnostic('webrtc_peer_connect_cleanup_failed', diagnosticMessage(cleanupError))
+      }
+      this.emit()
       throw error
     }
   }
@@ -554,6 +604,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     this.releaseVisibilityHook()
     this.observedPeers.clear()
     const entries = this.registry.clear()
+    this.resumeFallbacks.clear()
     this.primaryEntry = null
     this.meshTransport = null
     const closing = entries.map((entry) => this.detachEntry(entry, reason))
@@ -567,6 +618,15 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     await this.closeEntry(entry, reason)
   }
 
+  async applyConnectionBudget(reasonCode?: MeshPeerStandbyReason): Promise<void> {
+    const resolvedReason = reasonCode
+      ?? (this.lifecycleState === 'background' ? this.registry.backgroundStandbyReason() : 'connection_budget')
+    const overBudget = this.registry.overBudgetEntries(this.lifecycleState)
+    for (const entry of overBudget) {
+      await this.standbyAndCloseEntry(entry, resolvedReason)
+    }
+  }
+
   isAuthorized(): boolean {
     return this.registry.list().some((entry) => entry.session?.getSnapshot().authorized === true)
   }
@@ -576,6 +636,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   }
 
   private async closeEntry(entry: MeshPeerSessionEntry, reason: string): Promise<void> {
+    this.resumeFallbacks.delete(entry)
     if (!this.registry.remove(entry)) return
     if (this.primaryEntry === entry) this.primaryEntry = null
     const close = this.detachEntry(entry, reason)
@@ -585,6 +646,26 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       this.observedPeers.clear()
       this.releaseVisibilityHook()
     }
+    await close()
+    this.emit()
+  }
+
+  private async standbyAndCloseEntry(entry: MeshPeerSessionEntry, reasonCode: MeshPeerStandbyReason): Promise<void> {
+    if (!this.registry.has(entry)) return
+    try {
+      await entry.bridge?.sendPeerStandby(reasonCode, { resumeExpected: true })
+    } catch (error) {
+      this.recordDiagnostic('webrtc_peer_standby_failed', diagnosticMessage(error))
+    }
+    const standby = {
+      reasonCode,
+      resumeExpected: true,
+      sinceMs: Date.now()
+    }
+    if (!this.registry.markStandby(entry, standby)) return
+    if (this.primaryEntry === entry) this.primaryEntry = null
+    const close = this.detachEntry(entry, reasonCode)
+    this.refreshMeshTransport()
     await close()
     this.emit()
   }
@@ -610,9 +691,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   }
 
   private currentEntry(): MeshPeerSessionEntry | null {
-    if (this.primaryEntry && this.registry.has(this.primaryEntry)) return this.primaryEntry
-    const entries = this.registry.list()
-    return entries[entries.length - 1] ?? null
+    if (this.primaryEntry && this.registry.has(this.primaryEntry) && this.primaryEntry.standby === null) {
+      return this.primaryEntry
+    }
+    const active = this.registry.activeEntries()
+    return active[active.length - 1] ?? this.registry.list().at(-1) ?? null
   }
 
   /**
@@ -638,6 +721,11 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   private handleSessionSnapshot(entry: MeshPeerSessionEntry, snapshot: PeerSessionSnapshot | null): void {
     if (this.registry.has(entry)) {
       this.syncAllowlistBinding(entry, snapshot)
+      const resumeFallback = this.resumeFallbacks.get(entry)
+      if (resumeFallback && snapshot?.state === 'failed') {
+        void this.restoreStandbyAfterFailedResume(entry, resumeFallback)
+        return
+      }
       if (snapshot && ['failed', 'closed', 'idle', 'needs-invite', 'disabled'].includes(snapshot.state)) {
         entry.pendingPairing = null
       }
@@ -648,8 +736,29 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
         return
       }
       if (snapshot?.authorized && entry.peerId !== undefined && !entry.bridge && entry.session) {
+        this.resumeFallbacks.delete(entry)
+        entry.standby = null
         this.installAuthorizedBridge(entry)
       }
+    }
+    this.emit()
+  }
+
+  private async restoreStandbyAfterFailedResume(
+    entry: MeshPeerSessionEntry,
+    standby: MeshPeerSessionEntry,
+  ): Promise<void> {
+    if (this.resumeFallbacks.get(entry) !== standby) return
+    this.resumeFallbacks.delete(entry)
+    if (!this.registry.remove(entry)) return
+    if (this.primaryEntry === entry) this.primaryEntry = null
+    const close = this.detachEntry(entry, 'resume failed')
+    this.registry.add(standby)
+    this.refreshMeshTransport()
+    try {
+      await close()
+    } catch (error) {
+      this.recordDiagnostic('webrtc_peer_resume_cleanup_failed', diagnosticMessage(error))
     }
     this.emit()
   }
@@ -680,6 +789,9 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       // so every projection manifest would be rejected as "recipient unbound".
       ...(this.options.localStablePeerId ? { localPeerId: this.options.localStablePeerId } : {}),
       ...(this.options.peerHost ? { peerHost: this.options.peerHost } : {}),
+      onPeerStandby: (frame: MeshPeerStandbyFrame) => {
+        void this.acceptPeerStandby(entry, frame)
+      },
       ...(entry.localProtocolHello
         ? { localProtocolHello: entry.localProtocolHello }
         : {})
@@ -688,21 +800,43 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     this.establishedAuthorizedRoute = true
     this.refreshMeshTransport()
     this.recordDiagnostic('webrtc_mesh_authorized', 'WebRTC mesh transport authorized')
+    void this.applyConnectionBudget()
+  }
+
+  private async acceptPeerStandby(entry: MeshPeerSessionEntry, frame: MeshPeerStandbyFrame): Promise<void> {
+    if (!this.registry.has(entry) || entry.peerId === undefined || frame.peer_id !== entry.peerId) {
+      this.recordDiagnostic('webrtc_peer_standby_invalid', 'A device sent a standby notice for a different connection.')
+      return
+    }
+    const standby = {
+      reasonCode: frame.reason_code,
+      resumeExpected: frame.resume_expected !== false,
+      sinceMs: Date.now()
+    }
+    if (!this.registry.markStandby(entry, standby)) return
+    if (this.primaryEntry === entry) this.primaryEntry = null
+    const close = this.detachEntry(entry, frame.reason_code)
+    this.refreshMeshTransport()
+    await close()
+    this.emit()
   }
 
   /** Keep one transport pointed at the primary peer while the roster changes. */
   private refreshMeshTransport(): void {
-    if (this.primaryEntry && this.registry.has(this.primaryEntry) && this.primaryEntry.bridge && this.meshTransport) return
     const primary = this.registry.list().find((entry) => entry.bridge !== null && entry.peerId !== undefined) ?? null
     this.primaryEntry = primary
     if (!primary?.bridge || primary.peerId === undefined) {
       this.meshTransport = null
       return
     }
-    const meshOptions = {
-      bridge: this.bridgeRouter,
-      defaultPeerId: primary.peerId
-    } as import('../mesh.js').MeshP2PTransportOptions
+    const reachablePeerCount = this.registry.list().filter((entry) => entry.bridge !== null).length
+    const meshOptions = { bridge: this.bridgeRouter } as import('../mesh.js').MeshP2PTransportOptions
+    // The legacy implicit route is safe only when exactly one peer is reachable
+    // (or Connect policy enforces that invariant). Multi-peer mesh calls must
+    // carry a selector or resolve through the manifest-aware route resolver.
+    if (this.registry.connectionPolicy === 'connect' || reachablePeerCount === 1) {
+      meshOptions.defaultPeerId = primary.peerId
+    }
     if (this.options.routeResolver !== undefined) meshOptions.routeResolver = this.options.routeResolver
     if (this.options.defaultTimeoutMs !== undefined) meshOptions.defaultTimeoutMs = this.options.defaultTimeoutMs
     if (this.options.fallbackPeerIds !== undefined) meshOptions.fallbackPeerIds = this.options.fallbackPeerIds
@@ -760,11 +894,29 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
 
   private installVisibilityHook(): void {
     if (!this.visibilityDocument) return
+    this.lifecycleState = this.visibilityDocument.visibilityState === 'hidden' ? 'background' : 'foreground'
     const handler = () => {
-      if (this.visibilityDocument?.visibilityState === 'hidden') this.recordDiagnostic('page_hidden', 'WebRTC thin shell is running in a hidden document; browser throttling may delay signaling or media callbacks.')
+      const hidden = this.visibilityDocument?.visibilityState === 'hidden'
+      this.lifecycleState = hidden ? 'background' : 'foreground'
+      if (hidden) this.recordDiagnostic('page_hidden', 'WebRTC thin shell is running in a hidden document; browser throttling may delay signaling or media callbacks.')
+      if (hidden) void this.applyConnectionBudget()
+      else void this.resumeStandbyPeers()
     }
     this.visibilityDocument.addEventListener('visibilitychange', handler)
     this.removeVisibilityListener = () => this.visibilityDocument?.removeEventListener('visibilitychange', handler)
+  }
+
+  private async resumeStandbyPeers(): Promise<void> {
+    const profiles = this.registry.standbyEntries()
+      .filter((entry) => entry.standby?.resumeExpected !== false)
+      .map((entry) => entry.profile)
+    for (const profile of profiles) {
+      try {
+        await this.connectPeer(profile)
+      } catch (error) {
+        this.recordDiagnostic('webrtc_peer_resume_failed', diagnosticMessage(error))
+      }
+    }
   }
 
   private releaseVisibilityHook(): void {
@@ -1836,6 +1988,11 @@ function hex64Field(record: Record<string, unknown>, key: string): string | null
 
 function diagnostic(code: string, message: string): RedactedPeerDiagnostic {
   return { code, message: redactDiagnostic(message), at: new Date().toISOString() }
+}
+
+function diagnosticMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return 'WebRTC mesh standby announcement failed.'
 }
 
 function redactDiagnostic(message: string): string {

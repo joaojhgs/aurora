@@ -72,6 +72,7 @@ from .peer_protocol import (
     CAP_PROVIDER_LEASE_V1,
     DEFAULT_PEER_CAPABILITIES,
     FRAGMENT_FRAME_TYPE,
+    MESH_PEER_STANDBY_TYPE,
     PROTOCOL_HELLO_TYPE,
     FragmentProtocolError,
     FragmentReassembler,
@@ -81,6 +82,7 @@ from .peer_protocol import (
     build_protocol_hello,
     fragment_message,
     negotiate_protocol,
+    parse_mesh_peer_standby_frame,
     parse_protocol_hello,
     parse_provider_lease_frame,
 )
@@ -1184,6 +1186,10 @@ class RTCClient:
         elif msg_type == "capacity_update":
             asyncio.create_task(
                 self._on_capacity_update(self._stable_peer_id_for_session(peer), obj)
+            )
+        elif msg_type == MESH_PEER_STANDBY_TYPE:
+            asyncio.create_task(
+                self._on_mesh_peer_standby(self._stable_peer_id_for_session(peer), obj)
             )
         elif msg_type == "ping":
             self._send_pong(self._stable_peer_id_for_session(peer), obj)
@@ -4168,6 +4174,40 @@ class RTCClient:
         if max_concurrent > 0:
             active_calls = max(0, max_concurrent - available)
             await self._peer_registry.set_active_calls(peer_id, active_calls)
+
+    async def _on_mesh_peer_standby(self, peer_id: str, data: dict) -> None:
+        """Record a peer's announced, credential-keeping departure.
+
+        The peer is not removed and not marked stale.  It said it was going
+        away, so its silence means what it said, and it comes back on the
+        credential it already holds.  A malformed announcement is ignored
+        rather than acted on: an absence that cannot be parsed is not an
+        announced one, and it falls back to the ordinary stale window.
+
+        Args:
+            peer_id: Peer that stood down
+            data: Parsed ``mesh_peer_standby_v1`` frame
+        """
+
+        if not self._peer_registry:
+            return
+        try:
+            frame = parse_mesh_peer_standby_frame(data)
+        except PeerProtocolError as exc:
+            self._record_diagnostic_error(
+                "mesh_peer_standby_invalid",
+                f"Invalid peer standby frame: {exc}",
+                peer_id,
+            )
+            return
+        if frame.peer_id != peer_id:
+            self._record_diagnostic_error(
+                "mesh_peer_standby_wrong_peer",
+                "Peer standby frame did not match the authenticated session",
+                peer_id,
+            )
+            return
+        await self._peer_registry.mark_peer_standby(peer_id, frame.reason_code)
 
     def send_capacity_update(
         self, peer_id: str, module: str, available: int, max_concurrent: int

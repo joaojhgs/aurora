@@ -12,9 +12,11 @@ from app.services.gateway.webrtc.peer_protocol import (
     FragmentReassembler,
     PeerProtocolError,
     PeerProtocolLimits,
+    build_mesh_peer_standby,
     build_protocol_hello,
     fragment_message,
     negotiate_protocol,
+    parse_mesh_peer_standby_frame,
     parse_protocol_hello,
     parse_provider_lease_frame,
 )
@@ -158,6 +160,24 @@ def test_provider_lease_parser_rejects_malformed_and_expiry_regression() -> None
         parse_provider_lease_frame({**valid, "availability_revision": 9007199254740992})
     with pytest.raises(PeerProtocolError):
         parse_provider_lease_frame({**valid, "reason_code": "x" * 129})
+
+
+@pytest.mark.unit
+def test_mesh_peer_standby_frame_round_trips_and_rejects_unknown_reason() -> None:
+    frame = build_mesh_peer_standby(
+        peer_id="peer-mobile",
+        reason_code="surface_suspended",
+        resume_expected=True,
+    )
+
+    parsed = parse_mesh_peer_standby_frame(frame)
+    assert parsed.type == "mesh_peer_standby_v1"
+    assert parsed.peer_id == "peer-mobile"
+    assert parsed.reason_code == "surface_suspended"
+    assert parsed.resume_expected is True
+
+    with pytest.raises(PeerProtocolError, match="standby reason"):
+        parse_mesh_peer_standby_frame({**frame, "reason_code": "went_missing"})
 
 
 @pytest.mark.unit

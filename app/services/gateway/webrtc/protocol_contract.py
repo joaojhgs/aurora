@@ -82,6 +82,10 @@ MESH_CONTROL_FRAME_TYPES = (
     "provider_unavailable",
     "capacity_update",
     "mesh_event",
+    # R6's "going away, keep my credential" signal.  A peer shed to stay inside
+    # a connection budget is not a lost peer, and silence cannot tell the two
+    # apart.  See MESH_PEER_STANDBY_TYPE in peer_protocol.py.
+    "mesh_peer_standby_v1",
     "ping",
     "pong",
 )
@@ -133,6 +137,10 @@ WEBRTC_THIN_PROTOCOL_CAPABILITIES = MappingProxyType(
             "backpressure": True,
             "scoped_event_subscriptions": True,
             "consumer_only_peer": True,
+        },
+        "mesh": {
+            # A deliberate departure is announced, not inferred from silence.
+            "peer_standby_signal": True,
         },
         "pairing": {
             "commit_reveal_sas_v2": True,

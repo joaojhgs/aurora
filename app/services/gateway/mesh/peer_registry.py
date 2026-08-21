@@ -288,6 +288,47 @@ class PeerRegistry:
             except Exception as exc:
                 log_warning(f"PeerRegistry: on_peer_removed callback failed: {exc}")
 
+    async def mark_peer_standby(
+        self,
+        peer_id: str,
+        reason_code: str,
+    ) -> bool:
+        """Record that a peer announced a deliberate, credential-keeping absence.
+
+        The peer stays in the registry with its manifest, its lease and its
+        credential intact.  It is not removed and it is never marked stale for
+        this silence, because the silence was announced.  Returns whether a
+        peer was there to mark.
+
+        Args:
+            peer_id: Peer identifier
+            reason_code: Why the peer stood down; see
+                ``MESH_PEER_STANDBY_REASON_CODES``.
+        """
+
+        changed: tuple[str, str, str] | None = None
+        async with self._lock:
+            state = self._peers.get(peer_id)
+            if state is None:
+                log_debug(f"PeerRegistry: Standby from unknown peer {peer_id}")
+                return False
+            state.standby_reason_code = reason_code
+            state.standby_since = time.monotonic()
+            if state.status != "standby":
+                state.status = "standby"
+                changed = (peer_id, state.node_name, "standby")
+            log_info(
+                f"PeerRegistry: Peer {peer_id} stood down deliberately "
+                f"(reason={reason_code}); credential retained"
+            )
+
+        if changed and self.on_peer_status_changed:
+            try:
+                await self.on_peer_status_changed(*changed)
+            except Exception as exc:
+                log_warning(f"PeerRegistry: on_peer_status_changed callback failed: {exc}")
+        return True
+
     async def update_latency(self, peer_id: str, latency_ms: float) -> None:
         """Update latency measurement for a peer.
 
@@ -305,15 +346,22 @@ class PeerRegistry:
                 state.last_ping = time.monotonic()
                 # A successful pong proves transport liveness whether the peer
                 # shares provider services or is a consumer-only thin client.
-                if state.status == "stale":
+                # A peer that announced standby and then answered again came
+                # back on the credential it already had, so it returns to the
+                # status its manifest supports and never to a pairing path.
+                if state.status in {"stale", "standby"}:
+                    previous_status = state.status
                     next_status = (
                         self._bindable_status_for_peer_locked(peer_id, state)
                         if state.manifest
                         else "authenticated"
                     )
                     state.status = next_status
+                    state.standby_reason_code = ""
+                    state.standby_since = 0.0
                     log_info(
-                        f"PeerRegistry: Peer {peer_id} recovered from stale (latency={latency_ms:.1f}ms)"
+                        f"PeerRegistry: Peer {peer_id} recovered from {previous_status} "
+                        f"(latency={latency_ms:.1f}ms)"
                     )
                     recovered = (peer_id, state.node_name, next_status)
 
@@ -366,7 +414,7 @@ class PeerRegistry:
         lease_id = lease_id or uuid.uuid4().hex
         async with self._lock:
             state = self._peers.get(peer_id)
-            if not state or state.status in {"stale", "provider_unavailable"}:
+            if not state or state.status in {"stale", "standby", "provider_unavailable"}:
                 return None
             key = (peer_id, module)
             leases = self._capacity_leases.setdefault(key, set())
@@ -1106,6 +1154,14 @@ class PeerRegistry:
         async with self._lock:
             for peer_id, state in list(self._peers.items()):
                 if state.status == "stale":
+                    continue
+                # A peer that announced it was going away is deliberately
+                # absent, and silence from it means what it said it would mean.
+                # Marking it stale would make a shed indistinguishable from a
+                # loss, and the caller that reads "stale" would drop it and
+                # cost it a re-pair on return.  It leaves standby by answering,
+                # by removing itself, or never.
+                if state.status == "standby":
                     continue
                 if state.last_ping > 0 and (now - state.last_ping) > timeout:
                     state.status = "stale"

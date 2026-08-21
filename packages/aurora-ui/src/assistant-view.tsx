@@ -577,7 +577,6 @@ export function AssistantView({
     : primaryComposerAction === 'stop'
       ? 'Stop assistant generation'
       : 'Send assistant prompt'
-  const handsFreeControl = voiceModel.controls.find((control) => control.id === 'background-wake')
   const handsFreeActive = nativeDesktopBackgroundWakeActive || nativeMobileBackgroundWakeActive
   const contextSummary = summarizeAttachments(attachments)
   const runtimeStrip = useMemo(
@@ -643,6 +642,7 @@ export function AssistantView({
       voiceWaveformBars
     ]
   )
+  const handsFreeControl = voiceModel.controls.find((control) => control.id === 'background-wake')
   const voiceConsentRouteKey = useMemo(
     () => remoteAudioConsentRouteKey(voiceModel.remoteAudioRoute),
     [voiceModel.remoteAudioRoute]

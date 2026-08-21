@@ -329,6 +329,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
       // Connecting to an Aurora stays on one device at a time on purpose; a
       // device that is part of a mesh holds several through the same registry.
       peerConnectionPolicy: activeNodeRole === 'mesh-node' ? 'mesh' : 'connect',
+      peerConnectionBudget: surface.meshPeerBudget,
       ...(http ? { http } : {}),
       ...(activeProfile ? { profile: activeProfile } : {}),
       ...(localToolProviderEnabled && config.peerHost ? { peerHost: config.peerHost } : {}),
@@ -643,6 +644,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   ): BrowserDiscoveredDeviceState {
     const session = roster.peers.find((entry) => entry.peerId === device.peerId)
     if (session) {
+      if (session.standby) return 'known'
       if (session.snapshot.state === 'authorized') return 'connected'
       if (session.snapshot.pendingPairing) return 'confirm-code'
       return 'connecting'

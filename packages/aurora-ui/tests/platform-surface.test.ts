@@ -39,6 +39,38 @@ describe('Aurora surface profile regression coverage', () => {
     expect(profile.canManageLocalServiceConfiguration).toBe(false)
   })
 
+  it('derives mesh peer budgets from the physical surface', () => {
+    const desktop = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-thin',
+      transportKind: 'webrtc-preferred',
+    })
+    const android = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'webrtc-preferred',
+      nativePlatform: 'android',
+    })
+    const ios = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'webrtc-preferred',
+    })
+
+    expect(desktop.meshPeerBudget).toEqual({
+      foregroundPeerLimit: null,
+      backgroundPeerLimit: null,
+      backgroundStandbyReason: 'connection_budget',
+    })
+    expect(android.meshPeerBudget).toEqual({
+      foregroundPeerLimit: 8,
+      backgroundPeerLimit: 2,
+      backgroundStandbyReason: 'connection_budget',
+    })
+    expect(ios.meshPeerBudget).toEqual({
+      foregroundPeerLimit: 4,
+      backgroundPeerLimit: 1,
+      backgroundStandbyReason: 'surface_suspended',
+    })
+  })
+
   it('keeps desktop local service ownership separate from desktop remote-console transport', () => {
     const local = getAuroraSurfaceProfile({
       runtimeMode: 'desktop-local',

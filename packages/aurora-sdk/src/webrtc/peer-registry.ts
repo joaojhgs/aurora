@@ -18,6 +18,7 @@ import type { RoomKeys } from './crypto.js'
 import type { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import type { PairingSasResult } from './pairing.js'
 import type { WebRtcPeerSession } from './peer-session.js'
+import type { MeshPeerStandbyReason } from './protocol.js'
 import type { SignalingSessionAllowlist } from './signaling-allowlist.js'
 import type { MqttWebSocketSignalingClient } from './signaling-mqtt.js'
 import type { PeerConnectionSnapshot, WebRtcPeerConnectionProfile } from './types.js'
@@ -39,6 +40,36 @@ export const CONNECT_IS_SINGLE_PEER_REASON = 'connect_is_single_peer'
  * live here.
  */
 export type MeshPeerConnectionPolicy = 'connect' | 'mesh'
+
+export type MeshPeerLifecycleState = 'foreground' | 'background'
+
+export interface MeshPeerConnectionBudget {
+  readonly foregroundPeerLimit: number | null
+  readonly backgroundPeerLimit: number | null
+  /** iOS suspends the whole surface; other mobile surfaces shed by budget. */
+  readonly backgroundStandbyReason?: Extract<MeshPeerStandbyReason, 'connection_budget' | 'surface_suspended'> | undefined
+}
+
+export interface MeshPeerPriorityUpdate {
+  readonly userPinned?: boolean | undefined
+  readonly dependedUpon?: boolean | undefined
+}
+
+export interface MeshPeerBudgetState {
+  userPinned: boolean
+  dependedUpon: boolean
+  /** Number of RPC/stream/subscription routes currently using this peer. */
+  activeRouteCount: number
+  lastUsedAtMs: number
+  connectedAtMs: number
+}
+
+/** Deliberate, credential-preserving absence; distinct from transport loss. */
+export interface MeshPeerStandbyState {
+  readonly reasonCode: MeshPeerStandbyReason
+  readonly resumeExpected: boolean
+  readonly sinceMs: number
+}
 
 export function connectIsSinglePeerError(peerId: string): AuroraError {
   return new AuroraError({
@@ -71,6 +102,10 @@ export interface MeshPeerSessionEntry {
   keyMaterial: RoomKeys | null
   localProtocolHello: Record<string, unknown> | null
   pendingPairing: PairingSasResult | null
+  /** Local retention metadata only; authorization state stays in the authority store. */
+  budget: MeshPeerBudgetState
+  /** Present while the connection is intentionally shed or suspended. */
+  standby: MeshPeerStandbyState | null
 }
 
 export interface MeshPeerRosterEntry {
@@ -83,6 +118,7 @@ export interface MeshPeerRosterEntry {
    * Authorization decisions stay with `PeerHostAuthorizationStore`.
    */
   readonly authenticatedPeerContext?: AuthenticatedPeerContext | undefined
+  readonly standby?: MeshPeerStandbyState | undefined
   readonly snapshot: PeerConnectionSnapshot
 }
 
@@ -120,14 +156,23 @@ export interface MeshPeerRegistryController {
   disconnectPeer(peerId: string, reason?: string): Promise<void>
   /** How many devices this surface may hold at once. */
   connectionPolicy(): MeshPeerConnectionPolicy
+  setPeerPriority(peerId: string, priority: MeshPeerPriorityUpdate): void
+  notePeerUsed(peerId: string): void
+  applyConnectionBudget(): Promise<void>
 }
 
 export class MeshPeerSessionRegistry {
   private readonly entries = new Map<string, MeshPeerSessionEntry>()
   private policy: MeshPeerConnectionPolicy
+  private budget: MeshPeerConnectionBudget
 
-  constructor(options: { policy?: MeshPeerConnectionPolicy } = {}) {
+  constructor(options: { policy?: MeshPeerConnectionPolicy; budget?: MeshPeerConnectionBudget } = {}) {
     this.policy = options.policy ?? 'mesh'
+    this.budget = options.budget ?? {
+      foregroundPeerLimit: null,
+      backgroundPeerLimit: null,
+      backgroundStandbyReason: 'connection_budget'
+    }
   }
 
   get size(): number {
@@ -143,8 +188,24 @@ export class MeshPeerSessionRegistry {
     this.policy = policy
   }
 
+  setConnectionBudget(budget: MeshPeerConnectionBudget): void {
+    this.budget = budget
+  }
+
   list(): MeshPeerSessionEntry[] {
     return [...this.entries.values()]
+  }
+
+  activeEntries(): MeshPeerSessionEntry[] {
+    return this.list().filter((entry) => entry.standby === null)
+  }
+
+  standbyEntries(): MeshPeerSessionEntry[] {
+    return this.list().filter((entry) => entry.standby !== null)
+  }
+
+  backgroundStandbyReason(): Extract<MeshPeerStandbyReason, 'connection_budget' | 'surface_suspended'> {
+    return this.budget.backgroundStandbyReason ?? 'connection_budget'
   }
 
   has(entry: MeshPeerSessionEntry): boolean {
@@ -163,15 +224,74 @@ export class MeshPeerSessionRegistry {
    * refusing a second device on a surface whose policy is one at a time.
    */
   add(entry: MeshPeerSessionEntry): MeshPeerSessionEntry {
-    if (this.policy === 'connect' && this.entries.size > 0) {
+    if (this.policy === 'connect' && this.activeEntries().length > 0) {
       throw connectIsSinglePeerError(entry.peerId ?? entry.key)
     }
     if (entry.peerId !== undefined && this.findByPeerId(entry.peerId) !== undefined) {
       throw peerAlreadyRegisteredError(entry.peerId)
     }
     if (this.entries.has(entry.key)) throw peerAlreadyRegisteredError(entry.key)
+    const now = Date.now()
+    entry.budget = {
+      userPinned: entry.budget?.userPinned ?? false,
+      dependedUpon: entry.budget?.dependedUpon ?? false,
+      activeRouteCount: entry.budget?.activeRouteCount ?? 0,
+      lastUsedAtMs: entry.budget?.lastUsedAtMs ?? now,
+      connectedAtMs: entry.budget?.connectedAtMs ?? now
+    }
     this.entries.set(entry.key, entry)
     return entry
+  }
+
+  setPeerPriority(peerId: string, priority: MeshPeerPriorityUpdate): void {
+    const entry = this.findByPeerId(peerId) ?? this.entries.get(peerId)
+    if (!entry) return
+    if (priority.userPinned !== undefined) entry.budget.userPinned = priority.userPinned
+    if (priority.dependedUpon !== undefined) entry.budget.dependedUpon = priority.dependedUpon
+    entry.budget.lastUsedAtMs = Date.now()
+  }
+
+  notePeerUsed(peerId: string): void {
+    const entry = this.findByPeerId(peerId) ?? this.entries.get(peerId)
+    if (entry) entry.budget.lastUsedAtMs = Date.now()
+  }
+
+  beginPeerRoute(peerId: string): void {
+    const entry = this.findByPeerId(peerId) ?? this.entries.get(peerId)
+    if (!entry) return
+    entry.budget.activeRouteCount += 1
+    entry.budget.lastUsedAtMs = Date.now()
+  }
+
+  endPeerRoute(peerId: string): void {
+    const entry = this.findByPeerId(peerId) ?? this.entries.get(peerId)
+    if (!entry) return
+    entry.budget.activeRouteCount = Math.max(0, entry.budget.activeRouteCount - 1)
+    entry.budget.lastUsedAtMs = Date.now()
+  }
+
+  markStandby(entry: MeshPeerSessionEntry, standby: MeshPeerStandbyState): boolean {
+    if (!this.has(entry)) return false
+    entry.standby = standby
+    return true
+  }
+
+  /** Remove and return a dormant row so the same credential can reconnect. */
+  takeStandby(peerId: string): MeshPeerSessionEntry | undefined {
+    const entry = this.findByPeerId(peerId)
+    if (!entry?.standby || !this.remove(entry)) return undefined
+    return entry
+  }
+
+  overBudgetEntries(lifecycle: MeshPeerLifecycleState): MeshPeerSessionEntry[] {
+    if (this.policy === 'connect') return []
+    const limit = lifecycle === 'background'
+      ? this.budget.backgroundPeerLimit
+      : this.budget.foregroundPeerLimit
+    const candidates = this.activeEntries().filter((entry) => entry.bridge !== null)
+    if (limit === null || candidates.length <= limit) return []
+    const sorted = candidates.sort(compareRetentionPriority)
+    return sorted.slice(0, Math.max(0, sorted.length - limit))
   }
 
   /**
@@ -205,4 +325,20 @@ export class MeshPeerSessionRegistry {
     this.entries.clear()
     return entries
   }
+}
+
+function compareRetentionPriority(left: MeshPeerSessionEntry, right: MeshPeerSessionEntry): number {
+  // Lowest priority sorts first and is shed first. Keep the comparison
+  // lexicographic: no timestamp can outrank a dependency or a user pin.
+  if (left.budget.userPinned !== right.budget.userPinned) return left.budget.userPinned ? 1 : -1
+  const leftDependedUpon = left.budget.dependedUpon || left.budget.activeRouteCount > 0
+  const rightDependedUpon = right.budget.dependedUpon || right.budget.activeRouteCount > 0
+  if (leftDependedUpon !== rightDependedUpon) return leftDependedUpon ? 1 : -1
+  if (left.budget.lastUsedAtMs !== right.budget.lastUsedAtMs) {
+    return left.budget.lastUsedAtMs - right.budget.lastUsedAtMs
+  }
+  if (left.budget.connectedAtMs !== right.budget.connectedAtMs) {
+    return left.budget.connectedAtMs - right.budget.connectedAtMs
+  }
+  return left.key.localeCompare(right.key)
 }

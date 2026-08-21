@@ -860,7 +860,7 @@ export function normalizeDesktopOverlayHotkey(value: unknown): string | undefine
     return null
   })
   if (!key || !/^[A-Za-z0-9]$/u.test(key) || modifiers.some((part) => part === null)) return undefined
-  const uniqueModifiers = [...new Set(modifiers.filter((part): part is string => part !== null))]
+  const uniqueModifiers = [...new Set(modifiers.flatMap((part) => part === null ? [] : [part]))]
   return `${uniqueModifiers.join('+')}+${key.toUpperCase()}`
 }
 

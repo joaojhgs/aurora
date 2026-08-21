@@ -70,6 +70,7 @@ class FakePeerRegistry:
         self.applied: list[object] = []
         self.expired: list[tuple[str, str, int, int]] = []
         self.removed: list[str] = []
+        self.standby: list[tuple[str, str]] = []
         self.apply_result = True
 
     async def register_peer(self, peer_id: str, node_name: str = "") -> None:
@@ -105,6 +106,11 @@ class FakePeerRegistry:
     async def remove_peer(self, peer_id: str) -> None:
         self.calls.append(("remove_peer", peer_id))
         self.removed.append(peer_id)
+
+    async def mark_peer_standby(self, peer_id: str, reason_code: str) -> bool:
+        self.calls.append(("mark_peer_standby", peer_id))
+        self.standby.append((peer_id, reason_code))
+        return True
 
 
 def _settings():
@@ -217,6 +223,45 @@ def _reconnect_proof_frame() -> dict[str, str]:
         "token_id": "token-id-123",
         "proof": "ef" * 32,
     }
+
+
+@pytest.mark.asyncio
+async def test_peer_standby_marks_only_the_authenticated_peer() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+
+    await client._on_mesh_peer_standby(  # noqa: SLF001
+        "stable-peer",
+        {
+            "type": "mesh_peer_standby_v1",
+            "peer_id": "stable-peer",
+            "reason_code": "surface_suspended",
+            "resume_expected": True,
+        },
+    )
+
+    assert registry.standby == [("stable-peer", "surface_suspended")]
+    assert not client._diagnostic_errors  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_peer_standby_rejects_a_cross_peer_claim() -> None:
+    client = _client()
+    registry = FakePeerRegistry()
+    client._peer_registry = registry  # noqa: SLF001
+
+    await client._on_mesh_peer_standby(  # noqa: SLF001
+        "stable-peer",
+        {
+            "type": "mesh_peer_standby_v1",
+            "peer_id": "different-peer",
+            "reason_code": "connection_budget",
+        },
+    )
+
+    assert registry.standby == []
+    assert client._diagnostic_errors[-1].code == "mesh_peer_standby_wrong_peer"  # noqa: SLF001
 
 
 def test_parse_datachannel_frame_rejects_invalid_direct_call_before_dispatch() -> None:

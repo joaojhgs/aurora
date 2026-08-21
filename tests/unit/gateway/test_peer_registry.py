@@ -1379,6 +1379,33 @@ class TestStaleDetection:
         assert registry.get_peer("peer-1").status == "negotiated"
 
     @pytest.mark.asyncio
+    async def test_announced_standby_is_not_marked_stale_and_recovers_on_ping(self, registry):
+        registry.on_peer_status_changed = AsyncMock()
+        await registry.register_peer("peer-1", "node-1")
+        await registry.update_manifest("peer-1", _make_manifest("peer-1", ["TTS"]))
+        registry.on_peer_status_changed.reset_mock()
+        state = registry.get_peer("peer-1")
+        state.last_ping = time.monotonic() - registry._config.stale_peer_timeout_s - 1.0
+
+        assert await registry.mark_peer_standby("peer-1", "surface_suspended") is True
+        await registry._check_stale_peers()
+
+        state = registry.get_peer("peer-1")
+        assert state.status == "standby"
+        assert state.standby_reason_code == "surface_suspended"
+        assert await registry.acquire_capacity_lease("peer-1", "TTS") is None
+
+        await registry.update_latency("peer-1", 12.0)
+        state = registry.get_peer("peer-1")
+        assert state.status == "negotiated"
+        assert state.standby_reason_code == ""
+        assert state.standby_since == 0.0
+        assert [call.args for call in registry.on_peer_status_changed.await_args_list] == [
+            ("peer-1", "node-peer-1", "standby"),
+            ("peer-1", "node-peer-1", "negotiated"),
+        ]
+
+    @pytest.mark.asyncio
     async def test_stale_check_uses_one_live_policy_snapshot(self, mesh_config):
         store = MeshPolicyStore()
         store.replace(mesh_config.model_copy(update={"stale_peer_timeout_s": 1.0}))

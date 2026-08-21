@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AuroraClient, AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, type AuroraStreamRequest, createEventSubscription } from '../src/index.js'
-import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
+import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type BrowserWebRtcRuntimeOptions, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
 import type { PeerAuthorityResolverPort, PeerRelationshipSelector } from '../src/peer-host/authority-types.js'
 import { scriptedResolver } from './helpers/authority-doubles.js'
 import { createTestAuthority } from './helpers/wasm-authority.js'
@@ -2104,6 +2104,7 @@ interface RuntimeRosterEntry {
   peerId: string
   primary: boolean
   nodeName?: string
+  standby?: { reasonCode: string; resumeExpected: boolean; sinceMs: number }
   snapshot: { state: string; pendingPairing?: { sessionId: string; verificationCode: string } }
 }
 
@@ -2113,6 +2114,8 @@ interface RuntimePeerRegistry {
   subscribeRoster(listener: (roster: { peers: RuntimeRosterEntry[]; primaryPeerId?: string }) => void): () => void
   connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void>
   disconnectPeer(peerId: string, reason?: string): Promise<void>
+  setPeerPriority(peerId: string, priority: { userPinned?: boolean; dependedUpon?: boolean }): void
+  applyConnectionBudget?(reason?: 'connection_budget' | 'surface_suspended' | 'user_requested'): Promise<void>
 }
 
 interface MultiPeerHarness {
@@ -2132,8 +2135,19 @@ function meshPeerProfile(peerId: string | undefined, signalingPeerId: string, no
 
 function makeMultiPeerHarness(
   localSignalingIds: string[],
-  peerConnectionPolicy?: 'connect' | 'mesh',
+  peerConnectionPolicyOrOptions?: 'connect' | 'mesh' | {
+    peerConnectionPolicy?: 'connect' | 'mesh'
+    peerConnectionBudget?: {
+      foregroundPeerLimit: number | null
+      backgroundPeerLimit: number | null
+      backgroundStandbyReason?: 'connection_budget' | 'surface_suspended'
+    }
+    visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument']
+  },
 ): MultiPeerHarness {
+  const harnessOptions = typeof peerConnectionPolicyOrOptions === 'string'
+    ? { peerConnectionPolicy: peerConnectionPolicyOrOptions }
+    : peerConnectionPolicyOrOptions ?? {}
   const signalings: RuntimeFakeSignaling[] = []
   const connections: RuntimeFakePeerConnection[] = []
   const store = new MemoryPeerCredentialStore()
@@ -2157,7 +2171,9 @@ function makeMultiPeerHarness(
     },
     scryptDeriver: async () => new Uint8Array(32).fill(7),
     randomId: () => queuedLocalIds.shift() ?? `rpc-${rpc++}`,
-    ...(peerConnectionPolicy !== undefined ? { peerConnectionPolicy } : {}),
+    ...(harnessOptions.peerConnectionPolicy !== undefined ? { peerConnectionPolicy: harnessOptions.peerConnectionPolicy } : {}),
+    ...(harnessOptions.peerConnectionBudget !== undefined ? { peerConnectionBudget: harnessOptions.peerConnectionBudget } : {}),
+    ...(harnessOptions.visibilityDocument !== undefined ? { visibilityDocument: harnessOptions.visibilityDocument } : {}),
     windowLocation: secureLocation
   })
   return { runtime, registry: runtime.peer as unknown as RuntimePeerRegistry, store, signalings, connections }
@@ -2279,6 +2295,13 @@ describe('browser WebRTC runtime peer registry', {
       connectedStablePeerId: 'peer-alpha',
       nodeName: 'Alpha node'
     })
+    await expect(harness.runtime.transport.request({
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry'
+    })).rejects.toMatchObject({
+      code: 'unavailable_service',
+      detail: expect.objectContaining({ reason_code: 'no_route' })
+    })
 
     await harness.runtime.close()
     expect(harness.registry.roster().peers).toEqual([])
@@ -2383,9 +2406,305 @@ describe('browser WebRTC runtime peer registry', {
 
     await harness.runtime.close()
   })
+
+  it('sheds over-budget mesh peers by pin, dependency and recency after announcing standby', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta', 'a-gamma', 'a-gamma-return'], {
+      peerConnectionPolicy: 'mesh',
+      peerConnectionBudget: { foregroundPeerLimit: 2, backgroundPeerLimit: 1 }
+    })
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await saveMeshPeerCredential(harness, 'peer-gamma', 'a-gamma', 'z-gamma')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-gamma', 'z-gamma', 'Gamma node'))
+    harness.registry.setPeerPriority('peer-alpha', { userPinned: true })
+    harness.registry.setPeerPriority('peer-beta', { dependedUpon: true })
+    const alpha = await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const beta = await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+    const gamma = await authorizeMeshPeer(harness, 2, 'peer-gamma', 'a-gamma', 'z-gamma')
+
+    await harness.registry.applyConnectionBudget?.('connection_budget')
+    await flushRuntime()
+
+    expect(harness.registry.roster().peers.map((entry) => [entry.peerId, entry.standby?.reasonCode ?? null])).toEqual([
+      ['peer-alpha', null],
+      ['peer-beta', null],
+      ['peer-gamma', 'connection_budget']
+    ])
+    const gammaFrames = await Promise.all(gamma.sent.map((_, index) => decodeSent(gamma, index)))
+    expect(gammaFrames).toContainEqual(expect.objectContaining({
+      type: 'mesh_peer_standby_v1',
+      peer_id: 'local-stable',
+      reason_code: 'connection_budget',
+      resume_expected: true
+    }))
+    expect(alpha.readyState).toBe('open')
+    expect(beta.readyState).toBe('open')
+
+    await saveMeshPeerCredential(harness, 'peer-gamma', 'a-gamma-return', 'z-gamma')
+    await harness.registry.connectPeer(meshPeerProfile('peer-gamma', 'z-gamma', 'Gamma node'))
+    const returningGamma = await openMeshPeerChannel(harness, 3, 'peer-gamma', 'z-gamma')
+    const returningTypes = await Promise.all(returningGamma.sent.map((_, index) => decodeSent(returningGamma, index).then((frame) => frame.type)))
+    expect(returningTypes).not.toContain('pairing_v2_commit')
+
+    await harness.runtime.close()
+  })
+
+  it('keeps a user-pinned peer ahead of a depended-upon peer', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'], {
+      peerConnectionPolicy: 'mesh',
+      peerConnectionBudget: { foregroundPeerLimit: 1, backgroundPeerLimit: 1 }
+    })
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    harness.registry.setPeerPriority('peer-alpha', { userPinned: true })
+    harness.registry.setPeerPriority('peer-beta', { dependedUpon: true })
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const beta = await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.applyConnectionBudget?.()
+
+    expect(harness.registry.roster().peers.map((entry) => [entry.peerId, entry.standby?.reasonCode ?? null])).toEqual([
+      ['peer-alpha', null],
+      ['peer-beta', 'connection_budget']
+    ])
+    const betaFrames = await Promise.all(beta.sent.map((_, index) => decodeSent(beta, index)))
+    expect(betaFrames).toContainEqual(expect.objectContaining({
+      type: 'mesh_peer_standby_v1',
+      reason_code: 'connection_budget'
+    }))
+
+    await harness.runtime.close()
+  })
+
+  it('keeps a peer with an active route ahead of a newer idle peer', async () => {
+    const harness = makeMultiPeerHarness(['a-beta', 'a-alpha'], {
+      peerConnectionPolicy: 'mesh',
+      peerConnectionBudget: { foregroundPeerLimit: 1, backgroundPeerLimit: 1 }
+    })
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    const beta = await authorizeMeshPeer(harness, 0, 'peer-beta', 'a-beta', 'z-beta')
+
+    const callIndex = beta.sent.length
+    const pending = harness.runtime.transport.request({
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: { selector: { peer_id: 'peer-beta' } }
+    })
+    const call = await decodeSent(beta, callIndex)
+    expect(call).toMatchObject({ type: 'call', method: 'Gateway.GetRegistry' })
+
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const alpha = await authorizeMeshPeer(harness, 1, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const shedDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (!harness.registry.roster().peers.find((entry) => entry.peerId === 'peer-alpha')?.standby) {
+      if (Date.now() > shedDeadline) throw new Error('Active-route priority did not shed the idle peer')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    const alphaFrames = await Promise.all(alpha.sent.map((_, index) => decodeSent(alpha, index)))
+    expect(alphaFrames).toContainEqual(expect.objectContaining({
+      type: 'mesh_peer_standby_v1',
+      reason_code: 'connection_budget'
+    }))
+
+    beta.receive(await encodeInbound({
+      type: 'result',
+      id: call.id,
+      correlation_id: call.correlation_id,
+      result: { data: { ok: true }, status: 200 }
+    }))
+    await expect(pending).resolves.toMatchObject({ data: { ok: true } })
+    await harness.runtime.close()
+  })
+
+  it('uses the iOS suspend reason in background and resumes with the existing credential', async () => {
+    let visibilityState: DocumentVisibilityState = 'visible'
+    let visibilityListener: (() => void) | undefined
+    const visibilityDocument = {
+      get visibilityState() { return visibilityState },
+      addEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        visibilityListener = typeof listener === 'function'
+          ? () => listener(new Event('visibilitychange'))
+          : () => listener.handleEvent(new Event('visibilitychange'))
+      }),
+      removeEventListener: vi.fn()
+    } as unknown as BrowserWebRtcRuntimeOptions['visibilityDocument']
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta', 'a-beta-return'], {
+      peerConnectionPolicy: 'mesh',
+      peerConnectionBudget: {
+        foregroundPeerLimit: 2,
+        backgroundPeerLimit: 1,
+        backgroundStandbyReason: 'surface_suspended'
+      },
+      visibilityDocument
+    })
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    harness.registry.setPeerPriority('peer-alpha', { userPinned: true })
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const beta = await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+
+    visibilityState = 'hidden'
+    visibilityListener?.()
+    const suspendedDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (harness.registry.roster().peers.find((entry) => entry.peerId === 'peer-beta')?.standby === undefined) {
+      if (Date.now() > suspendedDeadline) throw new Error('iOS background budget did not suspend the excess peer')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    const betaFrames = await Promise.all(beta.sent.map((_, index) => decodeSent(beta, index)))
+    expect(betaFrames).toContainEqual(expect.objectContaining({
+      type: 'mesh_peer_standby_v1',
+      reason_code: 'surface_suspended',
+      resume_expected: true
+    }))
+
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta-return', 'z-beta')
+    visibilityState = 'visible'
+    visibilityListener?.()
+    const resumeDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (harness.signalings.length < 3) {
+      if (Date.now() > resumeDeadline) throw new Error('iOS foreground did not resume the suspended peer')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    const returning = await openMeshPeerChannel(harness, 2, 'peer-beta', 'z-beta')
+    const returningTypes = await Promise.all(
+      returning.sent.map((_, index) => decodeSent(returning, index).then((frame) => frame.type))
+    )
+    expect(returningTypes.filter((type) => String(type).startsWith('pairing_v2_'))).toEqual([])
+
+    await harness.runtime.close()
+  })
+
+  it('uses the suspend reason when a peer is authorized after the surface is already hidden', async () => {
+    const visibilityDocument = {
+      visibilityState: 'hidden' as DocumentVisibilityState,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as BrowserWebRtcRuntimeOptions['visibilityDocument']
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'], {
+      peerConnectionPolicy: 'mesh',
+      peerConnectionBudget: {
+        foregroundPeerLimit: 2,
+        backgroundPeerLimit: 1,
+        backgroundStandbyReason: 'surface_suspended'
+      },
+      visibilityDocument
+    })
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await saveMeshPeerCredential(harness, 'peer-beta', 'a-beta', 'z-beta')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+    harness.registry.setPeerPriority('peer-alpha', { userPinned: true })
+    await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+    const beta = await authorizeMeshPeer(harness, 1, 'peer-beta', 'a-beta', 'z-beta')
+
+    const suspendedDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (harness.registry.roster().peers.find((entry) => entry.peerId === 'peer-beta')?.standby === undefined) {
+      if (Date.now() > suspendedDeadline) throw new Error('Hidden surface did not suspend the excess peer')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    const betaFrames = await Promise.all(beta.sent.map((_, index) => decodeSent(beta, index)))
+    expect(betaFrames).toContainEqual(expect.objectContaining({
+      type: 'mesh_peer_standby_v1',
+      reason_code: 'surface_suspended'
+    }))
+
+    await harness.runtime.close()
+  })
+
+  it('keeps a remote standby row and credential distinct from a lost peer', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-alpha-return'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const alpha = await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+
+    alpha.receive(await encodeInbound({
+      type: 'mesh_peer_standby_v1',
+      peer_id: 'peer-alpha',
+      reason_code: 'surface_suspended',
+      resume_expected: true
+    }))
+    const standbyDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (!harness.registry.roster().peers[0]?.standby) {
+      if (Date.now() > standbyDeadline) throw new Error('Remote standby was not projected into the roster')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+
+    expect(harness.registry.roster().peers).toEqual([
+      expect.objectContaining({
+        peerId: 'peer-alpha',
+        standby: expect.objectContaining({
+          reasonCode: 'surface_suspended',
+          resumeExpected: true
+        })
+      })
+    ])
+    expect(await harness.store.get('peer-alpha')).toBeDefined()
+
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha-return', 'z-alpha')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const returning = await openMeshPeerChannel(harness, 1, 'peer-alpha', 'z-alpha')
+    const returningTypes = await Promise.all(
+      returning.sent.map((_, index) => decodeSent(returning, index).then((frame) => frame.type))
+    )
+    expect(returningTypes.filter((type) => String(type).startsWith('pairing_v2_'))).toEqual([])
+
+    await harness.runtime.close()
+  })
+
+  it('restores the remembered standby row when reconnect setup fails', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha', 'a-alpha-return'])
+    await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const alpha = await authorizeMeshPeer(harness, 0, 'peer-alpha', 'a-alpha', 'z-alpha')
+
+    alpha.receive(await encodeInbound({
+      type: 'mesh_peer_standby_v1',
+      peer_id: 'peer-alpha',
+      reason_code: 'surface_suspended',
+      resume_expected: true
+    }))
+    const standbyDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (!harness.registry.roster().peers[0]?.standby) {
+      if (Date.now() > standbyDeadline) throw new Error('Remote standby was not retained before reconnect')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const returningSignaling = harness.signalings[1] as RuntimeFakeSignaling
+    returningSignaling.emit({
+      channel: 'presence',
+      from: 'z-alpha',
+      stablePeerId: 'peer-other',
+      envelope: { type: 'presence', stable_peer_id: 'peer-other' }
+    })
+    const restoreDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+    while (!harness.registry.roster().peers[0]?.standby) {
+      if (Date.now() > restoreDeadline) throw new Error('Failed resume did not restore the standby row')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+    expect(harness.registry.roster().peers).toEqual([
+      expect.objectContaining({
+        peerId: 'peer-alpha',
+        standby: expect.objectContaining({
+          reasonCode: 'surface_suspended',
+          resumeExpected: true
+        })
+      })
+    ])
+    expect(await harness.store.get('peer-alpha')).toBeDefined()
+
+    await harness.runtime.close()
+  })
 })
 
-import { PEER_NOT_REGISTERED_REASON } from '../src/webrtc/mesh-bridge-router.js'
+import { MeshPeerBridgeRouter, PEER_NOT_REGISTERED_REASON } from '../src/webrtc/mesh-bridge-router.js'
 
 async function waitForCallFrame(channel: RuntimeFakeChannel, method: string): Promise<Record<string, unknown>> {
   const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
@@ -2402,6 +2721,66 @@ async function waitForCallFrame(channel: RuntimeFakeChannel, method: string): Pr
 describe('browser WebRTC runtime mesh bridge router', {
   timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
 }, () => {
+  it('releases route priority when a subscription fails before iteration starts', async () => {
+    let rejectReady: ((error: Error) => void) | undefined
+    const ready = new Promise<void>((_resolve, reject) => { rejectReady = reject })
+    const source = Object.assign((async function* () {})(), { ready })
+    let activeRoutes = 0
+    const router = new MeshPeerBridgeRouter({
+      resolve: () => ({
+        call: vi.fn(),
+        subscribe: () => source,
+      }),
+      onRouteStart: () => { activeRoutes += 1 },
+      onRouteEnd: () => { activeRoutes -= 1 },
+    })
+
+    const subscription = router.subscribe({
+      peerId: 'peer-alpha',
+      stream: 'Gateway.Events',
+      topics: ['Gateway.Events'],
+      kinds: [],
+      candidates: [],
+    }) as AsyncIterable<unknown> & { ready: Promise<void> }
+    expect(activeRoutes).toBe(1)
+
+    rejectReady?.(new Error('subscription setup failed'))
+    await expect(subscription.ready).rejects.toThrow('subscription setup failed')
+    expect(activeRoutes).toBe(0)
+    for await (const _event of subscription) {
+      throw new Error('failed subscription unexpectedly yielded an event')
+    }
+    expect(activeRoutes).toBe(0)
+  })
+
+  it('releases route priority when a ready subscription is aborted before iteration', async () => {
+    const controller = new AbortController()
+    const source = Object.assign((async function* () {})(), { ready: Promise.resolve() })
+    let activeRoutes = 0
+    const router = new MeshPeerBridgeRouter({
+      resolve: () => ({
+        call: vi.fn(),
+        subscribe: () => source,
+      }),
+      onRouteStart: () => { activeRoutes += 1 },
+      onRouteEnd: () => { activeRoutes -= 1 },
+    })
+
+    const subscription = router.subscribe({
+      peerId: 'peer-alpha',
+      stream: 'Gateway.Events',
+      topics: ['Gateway.Events'],
+      kinds: [],
+      candidates: [],
+      signal: controller.signal,
+    }) as AsyncIterable<unknown> & { ready: Promise<void> }
+    await subscription.ready
+    expect(activeRoutes).toBe(1)
+
+    controller.abort()
+    expect(activeRoutes).toBe(0)
+  })
+
   it('answers a request naming the second peer on that peer while the first stays connected', async () => {
     const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
     await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')

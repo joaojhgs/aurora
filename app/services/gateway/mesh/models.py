@@ -200,12 +200,26 @@ class PeerState(BaseModel):
     last_manifest: float = 0.0
     active_calls: int = 0
     active_calls_by_module: dict[str, int] = Field(default_factory=dict)
-    status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale" | "provider_unavailable"
+    # "connected" | "authenticated" | "negotiated" | "stale" | "standby" |
+    # "provider_unavailable".
+    #
+    # "standby" is R6's deliberate absence, and it is not "stale".  A peer shed
+    # to stay inside a connection budget announces itself with
+    # mesh_peer_standby_v1, keeps its credential, and is expected back; a stale
+    # peer stopped answering and may be gone.  Collapsing the two would make a
+    # shed indistinguishable from a loss, which is exactly what the signal
+    # exists to prevent.
+    status: str = "connected"
     # Compatibility report from manifest ACK (what the remote peer thinks of OUR services)
     remote_compatible: list[str] = Field(default_factory=list)
     remote_incompatible: list[str] = Field(default_factory=list)
     remote_unused: list[str] = Field(default_factory=list)
     remote_manifest_ack: ManifestAck | None = None
+    # Added fields rather than meanings loaded onto existing ones: both default
+    # to "no standby announced", so every caller that predates R6 reads a peer
+    # exactly as it did before.
+    standby_reason_code: str = ""
+    standby_since: float = 0.0
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

@@ -46,7 +46,7 @@
   "scripts": {
     "build": "pnpm run build:workspace-dependencies && tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
     "build:workspace-dependencies": "pnpm --dir ../.. --filter @aurora/client build && pnpm --dir ../.. --filter @aurora/voice-web build",
-    "typecheck": "pnpm --dir ../.. --filter @aurora/voice-web build && tsc --noEmit --incremental false",
+    "typecheck": "pnpm run build:workspace-dependencies && tsc --noEmit --incremental false",
     "test": "pnpm run build:workspace-dependencies && vitest run --environment node --exclude 'dist/**'",
     "test:accessibility": "pnpm run build:workspace-dependencies && vitest run --environment node tests/accessibility-responsive-visual.test.tsx",
     "test:coverage": "pnpm run build:workspace-dependencies && vitest run --environment node --exclude 'dist/**' --coverage"

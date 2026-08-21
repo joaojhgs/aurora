@@ -48,6 +48,11 @@ interface Fixture {
       call: { frame: Record<string, any>; json: string }
       error: { frame: Record<string, any>; json: string }
     }
+    standby: {
+      frame: Record<string, any>
+      json: string
+      parsed: Record<string, any>
+    }
     provider_lease_numbers: {
       capability: string
       accepted: Array<{
@@ -177,6 +182,16 @@ describe('WebRTC web thin protocol vectors', () => {
       code: 405,
       message: 'Local peer is consumer-only',
       reason_code: 'consumer_only_peer'
+    })
+
+    const standby = peerProtocol.standby
+    expect(JSON.parse(standby.json)).toEqual(standby.frame)
+    expect(parseWebRtcJsonFrame(standby.json)).toEqual(standby.parsed)
+    expect(standby.frame).toEqual({
+      type: 'mesh_peer_standby_v1',
+      peer_id: 'stable-answer',
+      reason_code: 'surface_suspended',
+      resume_expected: true
     })
   })
 

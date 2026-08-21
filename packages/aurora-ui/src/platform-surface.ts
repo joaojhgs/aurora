@@ -99,6 +99,7 @@ export interface AuroraSurfaceProfile {
   /** Product-safe state for on-device speech assets; this never implies browser capture can run local VAD/KWS/STT/TTS. */
   localSpeechPack: AuroraLocalSpeechPackStatus
   voiceCapture: AuroraVoiceCapturePolicy
+  meshPeerBudget: AuroraMeshPeerBudgetProfile
 }
 
 export type AuroraVoiceCaptureOwner = 'coordinator-daemon' | 'webview-focused' | 'mobile-native' | 'unavailable'
@@ -131,6 +132,15 @@ export interface AuroraVoiceCapturePolicy {
   usesBrowserVoiceRuntime: boolean
   /** Short operator-facing note for settings/voice copy. */
   detail: string
+}
+
+export interface AuroraMeshPeerBudgetProfile {
+  /** Null means this surface does not impose a client-side peer limit. */
+  foregroundPeerLimit: number | null
+  /** Null means this surface does not shed extra peers when backgrounded. */
+  backgroundPeerLimit: number | null
+  /** iOS suspends the surface; Android/mobile web shed only the excess peers. */
+  backgroundStandbyReason: 'connection_budget' | 'surface_suspended'
 }
 
 export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): AuroraSurfaceProfile {
@@ -204,6 +214,7 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     nativeWakewordAvailable: input.nativeWakewordAvailable === true,
     localSpeechPack,
   })
+  const meshPeerBudget = getAuroraMeshPeerBudgetProfile({ isDesktop, isMobile, isAndroid, isIos })
   return {
     physicalKind,
     kind: legacyKind,
@@ -236,6 +247,45 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
       ...voiceCapture,
       usesBrowserVoiceRuntime,
     },
+    meshPeerBudget,
+  }
+}
+
+function getAuroraMeshPeerBudgetProfile(input: {
+  isDesktop: boolean
+  isMobile: boolean
+  isAndroid: boolean
+  isIos: boolean
+}): AuroraMeshPeerBudgetProfile {
+  if (input.isDesktop || !input.isMobile) {
+    return {
+      foregroundPeerLimit: null,
+      backgroundPeerLimit: null,
+      backgroundStandbyReason: 'connection_budget'
+    }
+  }
+  if (input.isIos) {
+    // R5 produced no physical iOS measurements. These conservative defaults
+    // encode R7's smaller suspend/resume profile until device evidence replaces them.
+    return {
+      foregroundPeerLimit: 4,
+      backgroundPeerLimit: 1,
+      backgroundStandbyReason: 'surface_suspended'
+    }
+  }
+  if (input.isAndroid || input.isMobile) {
+    // R5's Waydroid run was non-physical, so it cannot tune the plan's starting
+    // mobile limits. Keep 8/2 until physical measurements exist.
+    return {
+      foregroundPeerLimit: 8,
+      backgroundPeerLimit: 2,
+      backgroundStandbyReason: 'connection_budget'
+    }
+  }
+  return {
+    foregroundPeerLimit: null,
+    backgroundPeerLimit: null,
+    backgroundStandbyReason: 'connection_budget'
   }
 }
 
