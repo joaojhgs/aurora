@@ -13,6 +13,10 @@ const defaultArtifactDir = path.join(repoRoot, 'reports/desktop-native-voice-e2e
 const runnerScript = path.join(repoRoot, 'scripts/desktop_native_voice_e2e.sh')
 const applicationWrapperScript = path.join(repoRoot, 'scripts/desktop_live_application.sh')
 const nativeVoiceApplicationWrapperScript = path.join(repoRoot, 'scripts/desktop_native_voice_application.sh')
+const nativeVoiceAlsaNullConfig = path.join(
+  repoRoot,
+  'tests/e2e/desktop_native_voice/alsa-null.conf',
+)
 const sidecarSentinelScript = path.join(repoRoot, 'tests/e2e/desktop_native_voice/sidecar-sentinel.mjs')
 const hookEnvelopeSchema = 'aurora.desktop_native_voice_e2e.webdriver_result.v1'
 const hookPayloadSchema = 'aurora.desktop_native_voice_e2e.hook_payload.v1'
@@ -665,17 +669,29 @@ async function executeAsyncScript(baseUrl, sessionId, script, scriptArgs = []) {
 }
 
 async function webdriverRequest(baseUrl, method, pathname, body, phase) {
-  const response = await fetch(new URL(pathname, baseUrl), {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  }).catch((error) => {
+  const timeoutMs = parsePositiveIntegerEnv(
+    'AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_REQUEST_TIMEOUT_MS',
+    30_000,
+  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(new URL(pathname, baseUrl), {
+      method,
+      headers: body ? { 'content-type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    const payload = text ? JSON.parse(text) : {}
+    if (!response.ok) throw new Error(`${phase} failed with ${response.status}: ${text}`)
+    return payload.value ?? payload
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(`${phase} timed out after ${timeoutMs}ms`)
     throw new Error(`${phase} failed: ${error instanceof Error ? error.message : String(error)}`)
-  })
-  const text = await response.text()
-  const payload = text ? JSON.parse(text) : {}
-  if (!response.ok) throw new Error(`${phase} failed with ${response.status}: ${text}`)
-  return payload.value ?? payload
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 async function waitForApplicationPid(pidFile, timeoutMs) {
@@ -880,9 +896,49 @@ async function runSelfTest() {
   assert.match(script, /desktop_native_voice_application\.sh/u)
   assert.match(script, /--features desktop-native-voice-e2e/u)
   assert.match(script, /AURORA_DESKTOP_NATIVE_VOICE_E2E_SIDECAR_PID_FILE/u)
+  assert.match(script, /AURORA_DESKTOP_NATIVE_VOICE_E2E_ALSA_CONFIG_PATH/u)
   assert.match(script, /tauri\.desktop-native-voice-e2e\.conf\.json/u)
   assert.doesNotMatch(script, /VITE_AURORA_RUNTIME_MODE/u)
   assert.equal(await fileExists(sidecarSentinelScript), true)
+  assert.equal(await fileExists(nativeVoiceAlsaNullConfig), true)
+  assert.match(await fs.readFile(nativeVoiceAlsaNullConfig, 'utf8'), /type\s+null/u)
+  const invalidDisplayProbe = spawnSync(runnerScript, [], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      DISPLAY: ':65534',
+      XAUTHORITY: '/tmp/aurora-missing-xauthority',
+      AURORA_DESKTOP_NATIVE_VOICE_E2E: '0',
+      AURORA_DESKTOP_NATIVE_VOICE_E2E_PROBE_DISPLAY_ONLY: '1',
+    },
+  })
+  assert.equal(invalidDisplayProbe.status, 0)
+  assert.equal(invalidDisplayProbe.stdout.trim(), 'unavailable')
+  const hangingServer = http.createServer(() => undefined)
+  await new Promise((resolve) => hangingServer.listen(0, '127.0.0.1', resolve))
+  const hangingAddress = hangingServer.address()
+  assert.ok(hangingAddress && typeof hangingAddress !== 'string')
+  const previousRequestTimeout = process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_REQUEST_TIMEOUT_MS
+  process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_REQUEST_TIMEOUT_MS = '50'
+  try {
+    await assert.rejects(
+      webdriverRequest(
+        `http://127.0.0.1:${hangingAddress.port}`,
+        'GET',
+        '/session',
+        undefined,
+        'self-test-request',
+      ),
+      /self-test-request timed out after 50ms/u,
+    )
+  } finally {
+    if (previousRequestTimeout === undefined) {
+      delete process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_REQUEST_TIMEOUT_MS
+    } else {
+      process.env.AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_REQUEST_TIMEOUT_MS = previousRequestTimeout
+    }
+    await new Promise((resolve, reject) => hangingServer.close((error) => error ? reject(error) : resolve()))
+  }
   for (const capability of ['aurora-main.json', 'aurora-thin.json']) {
     const value = JSON.parse(await fs.readFile(
       path.join(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities', capability),

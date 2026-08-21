@@ -78,6 +78,9 @@ describe("desktop native voice E2E hook", () => {
       { sequence: 3, phase: "stopping", reasonCode: null, turn: "completed", redacted: true },
     ]);
     expect(() => summarizeNativeVoiceEvents([events[1], events[0]])).toThrow(/monotonic/u);
+    expect(() => summarizeNativeVoiceEvents([
+      { sequence: 1, status: status("idle", 1) },
+    ])).toThrow(/active generation/u);
     expect(() => summarizeNativeVoiceEvents([])).toThrow(/required/u);
   });
 
@@ -124,7 +127,7 @@ describe("desktop native voice E2E hook", () => {
       }
       if (command === "aurora_native_voice_start") {
         if (activeProfile().nodeMode === "remote-console") {
-          throw { reasonCode: REMOTE_AUDIO_CONSENT_REASON };
+          throw { message: JSON.stringify({ reasonCode: REMOTE_AUDIO_CONSENT_REASON }) };
         }
         startCount += 1;
         activeGeneration = 6 + startCount;
@@ -183,7 +186,9 @@ describe("desktop native voice E2E hook", () => {
       bridge: {
         invoke: invoke as never,
         listen: listen as never,
-        hideWindow: vi.fn(async () => undefined),
+        hideWindow: vi.fn(async () => {
+          commands.push("hide-window");
+        }),
         now: () => {
           clock += 10;
           return clock;
@@ -260,6 +265,8 @@ describe("desktop native voice E2E hook", () => {
     ]);
     expect(commands).toContain("aurora_native_voice_finish");
     expect(commands).toContain("aurora_native_voice_cancel");
+    expect(commands.indexOf("hide-window"))
+      .toBeGreaterThan(commands.lastIndexOf("aurora_native_voice_cancel"));
     expect(commands.filter((command) => command === "aurora_native_voice_tray_toggle_e2e"))
       .toHaveLength(2);
     expect(commands).toContain("aurora_sidecar_start");

@@ -235,6 +235,9 @@ export function summarizeNativeVoiceEvents(
     }
     lastSequence = event.sequence;
     assertNativeVoiceStatusRedacted(event.status);
+    if (event.status.phase === "idle" && event.status.generation !== null) {
+      throw new Error("native voice idle events must not retain an active generation");
+    }
     return {
       sequence: event.sequence,
       phase: event.status.phase,
@@ -283,7 +286,6 @@ async function runDesktopNativeVoiceE2e(
     }
   };
   try {
-    await bridge.hideWindow();
     const stepTimeoutMs = payload.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
     unlisten = await bridge.listen<NativeVoiceEvent>(STATUS_EVENT, (event) => {
       const parsed = parseNativeVoiceEvent(event.payload);
@@ -336,6 +338,7 @@ async function runDesktopNativeVoiceE2e(
       throw new Error("completed native voice start did not return a generation");
     }
     await waitForEvent(events, completedStart.generation, ["starting"], stepTimeoutMs, bridge.now);
+    await waitForEvent(events, completedStart.generation, ["listening"], stepTimeoutMs, bridge.now);
     await sleep(750);
     const completedTerminal = await invokeNative<NativeVoiceStatus>("aurora_native_voice_finish", {
       request: {
@@ -423,6 +426,7 @@ async function runDesktopNativeVoiceE2e(
     });
     if (sidecarStoppedStatus.running !== false) throw new Error("managed sidecar did not stop");
     sidecarStopped = true;
+    await bridge.hideWindow();
     if (guards.calls.length > 0) throw new Error("WebView voice/model path was used");
     const generationLabels = new Map<number, NativeVoiceTurnLabel>([
       [completedStart.generation, "completed"],
@@ -590,11 +594,26 @@ async function expectNativeVoiceStartBlocked(
   throw new Error("remote-console native voice start was not blocked without explicit consent");
 }
 
-function boundedReasonCodeFromError(error: unknown): string | null {
+function boundedReasonCodeFromError(error: unknown, depth = 0): string | null {
+  if (depth > 3) return null;
+  if (typeof error === "string") {
+    if (error.length > 1024) return null;
+    try {
+      return boundedReasonCodeFromError(JSON.parse(error), depth + 1);
+    } catch {
+      return /^[a-z0-9_]{1,128}$/u.test(error) ? error : null;
+    }
+  }
+  if (error instanceof Error) return boundedReasonCodeFromError(error.message, depth + 1);
   if (!error || typeof error !== "object") return null;
-  for (const key of ["reasonCode", "reason", "code", "status"]) {
+  for (const key of ["reasonCode", "reason_code", "reason", "code", "status"]) {
     const value = (error as Record<string, unknown>)[key];
     if (typeof value === "string" && /^[a-z0-9_]{1,128}$/u.test(value)) return value;
+  }
+  for (const key of ["message", "error", "detail"]) {
+    const nested = (error as Record<string, unknown>)[key];
+    const reasonCode = boundedReasonCodeFromError(nested, depth + 1);
+    if (reasonCode !== null) return reasonCode;
   }
   return null;
 }

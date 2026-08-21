@@ -6,9 +6,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use {
     async_trait::async_trait,
     aurora_voice_core::{
-        CancellationToken, CaptureStartReason, Generation, RedactedSnapshot, RouteRevision,
-        RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease, VoiceCoreError,
-        VoiceRuntime, VoiceState, WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
+        AudioInput, CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, PcmFrame,
+        RedactedSnapshot, RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros,
+        TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
+        WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
     },
     aurora_voice_engine::{
         BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
@@ -652,9 +653,15 @@ impl NativeVoiceActor {
         if self.active.is_some() {
             return Err(NativeVoiceCommandError::invalid(ACTIVE_REASON));
         }
-        let profile = self
-            .resolve_profile(request.remote_audio_consent)
-            .map_err(NativeVoiceCommandError::unavailable)?;
+        let document = load_thin_profile_document()
+            .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
+        let profile = resolve_start_profile_from_document(
+            &document,
+            request.remote_audio_consent,
+            sidecar_running(&self.sidecar),
+            load_peer_bearer,
+            super::current_unix_ms,
+        )?;
         install_profile(&mut self.status, &profile);
 
         let profile_key = profile.reusable_key();
@@ -878,7 +885,7 @@ struct ActiveTurn {
     core_generation: Generation,
     continuous: bool,
     _handoff_generation: Option<Generation>,
-    control: NativeCaptureControl,
+    control: DesktopCaptureControl,
     cancellation: CancellationToken,
     handoff_slot: HandoffSlot,
     expected_terminal: bool,
@@ -964,7 +971,7 @@ impl TtsSynthesisPort for DesktopTts {
 
 #[cfg(desktop)]
 type RuntimeCore = VoiceRuntime<
-    CpalAudioInput,
+    DesktopAudioInput,
     DesktopFiniteStt,
     DesktopTts,
     NativeGatewayTransport,
@@ -975,8 +982,283 @@ type RuntimeCore = VoiceRuntime<
 #[cfg(desktop)]
 struct RuntimeBundle {
     core: RuntimeCore,
-    control: NativeCaptureControl,
+    control: DesktopCaptureControl,
     ui_generation: Rc<Cell<Option<u64>>>,
+}
+
+#[cfg(desktop)]
+enum DesktopAudioInput {
+    Production(CpalAudioInput),
+    #[cfg(feature = "desktop-native-voice-e2e")]
+    Deterministic(DeterministicE2eAudioInput),
+}
+
+#[cfg(desktop)]
+impl DesktopAudioInput {
+    fn runtime() -> Self {
+        #[cfg(feature = "desktop-native-voice-e2e")]
+        if desktop_native_voice_e2e_enabled() {
+            return Self::Deterministic(DeterministicE2eAudioInput::new());
+        }
+        Self::Production(CpalAudioInput::new(NativeCaptureConfig::default()))
+    }
+
+    fn control(&self) -> DesktopCaptureControl {
+        match self {
+            Self::Production(audio) => DesktopCaptureControl::Production(audio.control()),
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(audio) => DesktopCaptureControl::Deterministic(audio.control()),
+        }
+    }
+}
+
+#[cfg(desktop)]
+#[async_trait(?Send)]
+impl AudioInput for DesktopAudioInput {
+    async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+        match self {
+            Self::Production(audio) => audio.start(lease).await,
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(audio) => audio.start(lease).await,
+        }
+    }
+
+    async fn stop(&mut self, reason: TransitionReason) -> Result<(), VoiceCoreError> {
+        match self {
+            Self::Production(audio) => audio.stop(reason).await,
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(audio) => audio.stop(reason).await,
+        }
+    }
+
+    async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+        match self {
+            Self::Production(audio) => audio.next_frame().await,
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(audio) => audio.next_frame().await,
+        }
+    }
+
+    fn current_route_revision(&self) -> RouteRevision {
+        match self {
+            Self::Production(audio) => audio.current_route_revision(),
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(audio) => audio.current_route_revision(),
+        }
+    }
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug)]
+enum DesktopCaptureControl {
+    Production(NativeCaptureControl),
+    #[cfg(feature = "desktop-native-voice-e2e")]
+    Deterministic(DeterministicE2eCaptureControl),
+}
+
+#[cfg(desktop)]
+impl DesktopCaptureControl {
+    fn finish(&self, generation: Generation) {
+        match self {
+            Self::Production(control) => control.finish(generation),
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(control) => control.finish(generation),
+        }
+    }
+
+    fn interrupt(&self, generation: Generation) {
+        match self {
+            Self::Production(control) => control.interrupt(generation),
+            #[cfg(feature = "desktop-native-voice-e2e")]
+            Self::Deterministic(control) => control.interrupt(generation),
+        }
+    }
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+const E2E_AUDIO_FRAME_SAMPLES: usize = 160;
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+const E2E_AUDIO_FRAME_DURATION: Duration = Duration::from_millis(10);
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+#[derive(Debug)]
+struct DeterministicE2eAudioInput {
+    shared: Arc<DeterministicE2eCaptureShared>,
+    active: Option<DeterministicE2eCaptureSession>,
+    route_revision: RouteRevision,
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+impl DeterministicE2eAudioInput {
+    fn new() -> Self {
+        Self {
+            shared: Arc::new(DeterministicE2eCaptureShared::default()),
+            active: None,
+            route_revision: RouteRevision(0),
+        }
+    }
+
+    fn control(&self) -> DeterministicE2eCaptureControl {
+        DeterministicE2eCaptureControl {
+            shared: Arc::clone(&self.shared),
+        }
+    }
+
+    fn reset_inactive(&mut self) {
+        self.active = None;
+        self.shared
+            .active_generation
+            .store(0, std::sync::atomic::Ordering::SeqCst);
+        self.shared
+            .finished
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.shared
+            .interrupted
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+#[async_trait(?Send)]
+impl AudioInput for DeterministicE2eAudioInput {
+    async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+        if self.active.is_some() {
+            return Err(VoiceCoreError::OwnerAlreadyActive);
+        }
+        if lease.owner != CaptureOwnerKind::Native
+            || lease.generation.0 == 0
+            || lease.device_route != DEVICE_ROUTE
+        {
+            return Err(VoiceCoreError::TransportFault {
+                code: "invalid-e2e-capture-lease".to_owned(),
+            });
+        }
+        self.route_revision = lease.route_revision;
+        self.shared
+            .active_generation
+            .store(lease.generation.0, std::sync::atomic::Ordering::SeqCst);
+        self.shared
+            .finished
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.shared
+            .interrupted
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.active = Some(DeterministicE2eCaptureSession {
+            generation: lease.generation,
+            route_revision: lease.route_revision,
+            started_at: lease.created_at,
+            sequence: 0,
+        });
+        Ok(())
+    }
+
+    async fn stop(&mut self, _reason: TransitionReason) -> Result<(), VoiceCoreError> {
+        self.reset_inactive();
+        Ok(())
+    }
+
+    async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+        tokio::time::sleep(E2E_AUDIO_FRAME_DURATION).await;
+        if self
+            .shared
+            .interrupted
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        if self
+            .shared
+            .finished
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Ok(None);
+        }
+        let session = self.active.as_mut().ok_or(VoiceCoreError::NoOwnerActive)?;
+        let samples = (0..E2E_AUDIO_FRAME_SAMPLES)
+            .map(|offset| {
+                if (session.sequence as usize * E2E_AUDIO_FRAME_SAMPLES + offset) % 32 < 16 {
+                    0.2
+                } else {
+                    -0.2
+                }
+            })
+            .collect();
+        let frame = PcmFrame::new(
+            samples,
+            TimestampMicros(
+                session
+                    .started_at
+                    .0
+                    .saturating_add(session.sequence.saturating_mul(10_000)),
+            ),
+            session.sequence,
+            false,
+            session.route_revision,
+            session.generation,
+        )?;
+        session.sequence = session.sequence.saturating_add(1);
+        Ok(Some(frame))
+    }
+
+    fn current_route_revision(&self) -> RouteRevision {
+        self.route_revision
+    }
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+#[derive(Debug, Default)]
+struct DeterministicE2eCaptureShared {
+    active_generation: std::sync::atomic::AtomicU64,
+    finished: std::sync::atomic::AtomicBool,
+    interrupted: std::sync::atomic::AtomicBool,
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+#[derive(Clone, Debug)]
+struct DeterministicE2eCaptureControl {
+    shared: Arc<DeterministicE2eCaptureShared>,
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+impl DeterministicE2eCaptureControl {
+    fn finish(&self, generation: Generation) {
+        if self.active(generation) {
+            self.shared
+                .finished
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    fn interrupt(&self, generation: Generation) {
+        if self.active(generation) {
+            self.shared
+                .interrupted
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    fn active(&self, generation: Generation) -> bool {
+        generation.0 != 0
+            && self
+                .shared
+                .active_generation
+                .load(std::sync::atomic::Ordering::SeqCst)
+                == generation.0
+    }
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+#[derive(Debug)]
+struct DeterministicE2eCaptureSession {
+    generation: Generation,
+    route_revision: RouteRevision,
+    started_at: TimestampMicros,
+    sequence: u64,
+}
+
+#[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+fn desktop_native_voice_e2e_enabled() -> bool {
+    cfg!(debug_assertions) && std::env::var("AURORA_DESKTOP_NATIVE_VOICE_E2E").as_deref() == Ok("1")
 }
 
 #[cfg(desktop)]
@@ -1277,7 +1559,7 @@ fn build_runtime(
         }
     };
     let transport = transport_for_profile(profile)?;
-    let audio = CpalAudioInput::new(NativeCaptureConfig::default());
+    let audio = DesktopAudioInput::runtime();
     let control = audio.control();
     let output = CpalAudioOutput::new(NativeAudioConfig::default());
     let sink = StatusOnlySink {
@@ -2153,6 +2435,36 @@ fn resolve_profile_from_document(
 }
 
 #[cfg(desktop)]
+fn resolve_start_profile_from_document(
+    document: &ThinProfileDocument,
+    remote_audio_consent: bool,
+    sidecar_available: bool,
+    credential_loader: impl Fn(&str) -> Option<ThinBearerCredential>,
+    now_ms: impl Fn() -> u64,
+) -> Result<RuntimeProfile, NativeVoiceCommandError> {
+    let role = persisted_runtime_role(document)
+        .map_err(NativeVoiceCommandError::unavailable)?
+        .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
+    if role == PersistedRuntimeRole::RemoteConsole
+        && !remote_audio_consent
+        && local_speech_selection(document)
+            .map_err(NativeVoiceCommandError::unavailable)?
+            .stt
+            .is_none()
+    {
+        return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
+    }
+    resolve_profile_from_document(
+        document,
+        remote_audio_consent,
+        sidecar_available,
+        credential_loader,
+        now_ms,
+    )
+    .map_err(NativeVoiceCommandError::unavailable)
+}
+
+#[cfg(desktop)]
 fn local_speech_selection(
     document: &ThinProfileDocument,
 ) -> Result<LocalSpeechSelection, &'static str> {
@@ -2624,6 +2936,50 @@ mod tests {
         );
     }
 
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[tokio::test(flavor = "current_thread")]
+    async fn deterministic_e2e_input_is_paced_and_generation_scoped() {
+        let generation = Generation(7);
+        let mut audio = DeterministicE2eAudioInput::new();
+        let control = audio.control();
+        audio
+            .start(VoiceCaptureLease {
+                owner: CaptureOwnerKind::Native,
+                surface: SURFACE.to_owned(),
+                device_route: DEVICE_ROUTE.to_owned(),
+                start_reason: CaptureStartReason::PushToTalk,
+                generation,
+                created_at: TimestampMicros(1_000),
+                route_revision: RouteRevision(ROUTE_REVISION),
+                background_eligible: false,
+                consent_revision: 0,
+                heartbeat_at: TimestampMicros(1_000),
+                stop_deadline: None,
+            })
+            .await
+            .expect("start deterministic input");
+
+        let first = audio
+            .next_frame()
+            .await
+            .expect("first frame")
+            .expect("first frame present");
+        assert_eq!(first.generation(), generation);
+        assert_eq!(first.route_revision(), RouteRevision(ROUTE_REVISION));
+        assert_eq!(first.sequence(), 0);
+        assert_eq!(first.sample_count(), E2E_AUDIO_FRAME_SAMPLES);
+        assert!(first.samples().iter().any(|sample| *sample != 0.0));
+
+        control.finish(Generation(8));
+        assert!(audio
+            .next_frame()
+            .await
+            .expect("stale finish ignored")
+            .is_some());
+        control.finish(generation);
+        assert!(audio.next_frame().await.expect("finish observed").is_none());
+    }
+
     #[test]
     fn remote_profile_requires_https_http_capability_and_credential() {
         let document = ThinProfileDocument::V1(ThinProfileDocumentV1 {
@@ -2959,6 +3315,28 @@ mod tests {
         };
         assert!(!gateway_stt.permits_remote_audio());
         assert!(gateway_stt.requires_remote_audio_consent());
+    }
+
+    #[test]
+    fn remote_microphone_consent_is_checked_before_credentials() {
+        let document = test_runtime_profile_document("http-only", Some("home-peer"));
+        let credential_loader_called = Cell::new(false);
+        let error = resolve_start_profile_from_document(
+            &document,
+            false,
+            false,
+            |_| {
+                credential_loader_called.set(true);
+                None
+            },
+            || 10,
+        )
+        .expect_err("remote microphone capture must require consent");
+
+        assert_eq!(error.code, "invalid_state");
+        assert_eq!(error.reason_code, REMOTE_CONSENT_REASON);
+        assert!(error.redacted);
+        assert!(!credential_loader_called.get());
     }
 
     #[test]
@@ -3621,6 +3999,7 @@ mod tests {
     fn late_runtime_phase_cannot_regress_after_terminal_request() {
         assert!(!control_requires_terminal_suppression(false));
         assert!(control_requires_terminal_suppression(true));
+        assert!(!late_phase_allowed(false, NativeVoicePhase::Idle));
         assert!(late_phase_allowed(false, NativeVoicePhase::Processing));
         assert!(late_phase_allowed(true, NativeVoicePhase::Stopping));
         assert!(!late_phase_allowed(true, NativeVoicePhase::Processing));
@@ -3836,7 +4215,8 @@ fn worst_case_queued_shutdown_before_stop_wait() -> Duration {
 }
 
 fn late_phase_allowed(expected_terminal: bool, phase: NativeVoicePhase) -> bool {
-    !expected_terminal || matches!(phase, NativeVoicePhase::Stopping)
+    !matches!(phase, NativeVoicePhase::Idle)
+        && (!expected_terminal || matches!(phase, NativeVoicePhase::Stopping))
 }
 
 fn control_requires_terminal_suppression(cancel: bool) -> bool {

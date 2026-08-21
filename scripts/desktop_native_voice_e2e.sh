@@ -8,6 +8,8 @@ artifact_dir="${AURORA_DESKTOP_NATIVE_VOICE_E2E_ARTIFACT_DIR:-$repo_root/reports
 platform="$(uname -s)"
 webdriver_provider="${AURORA_DESKTOP_NATIVE_VOICE_E2E_WEBDRIVER_PROVIDER:-official}"
 driver_bin="${AURORA_DESKTOP_NATIVE_VOICE_E2E_TAURI_DRIVER_BIN:-tauri-driver}"
+display_probe_bin="${AURORA_DESKTOP_NATIVE_VOICE_E2E_DISPLAY_PROBE_BIN:-xdpyinfo}"
+alsa_config_path="${AURORA_DESKTOP_NATIVE_VOICE_E2E_ALSA_CONFIG_PATH:-$repo_root/tests/e2e/desktop_native_voice/alsa-null.conf}"
 application_bin="${AURORA_DESKTOP_NATIVE_VOICE_E2E_APPLICATION_BIN:-$repo_root/apps/aurora-tauri/src-tauri/target/debug/aurora-tauri}"
 application_wrapper="$repo_root/scripts/desktop_native_voice_application.sh"
 app_pid_file="${AURORA_DESKTOP_NATIVE_VOICE_E2E_APP_PID_FILE:-$artifact_dir/desktop-native-voice-application.pid}"
@@ -82,6 +84,21 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+display_is_available() {
+  [[ -n "${DISPLAY:-}" ]] || return 1
+  command -v "$display_probe_bin" >/dev/null 2>&1 || return 1
+  "$display_probe_bin" -display "$DISPLAY" >/dev/null 2>&1
+}
+
+if [[ "${AURORA_DESKTOP_NATIVE_VOICE_E2E_PROBE_DISPLAY_ONLY:-0}" == "1" ]]; then
+  if [[ "$platform" == "Linux" ]] && display_is_available; then
+    echo "available"
+  else
+    echo "unavailable"
+  fi
+  exit 0
+fi
+
 if [[ "$webdriver_provider" != "official" ]]; then
   echo "desktop native voice E2E currently supports the official tauri-driver provider" >&2
   exit 2
@@ -92,13 +109,15 @@ if [[ "${AURORA_DESKTOP_NATIVE_VOICE_E2E:-0}" != "1" ]]; then
   exit 0
 fi
 
-if [[ "$platform" == "Linux" && -z "${DISPLAY:-}" && "${AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB:-0}" != "1" ]]; then
-  if ! command -v xvfb-run >/dev/null 2>&1; then
-    echo "desktop native voice E2E requires xvfb-run when DISPLAY is unavailable" >&2
-    exit 2
+if [[ "$platform" == "Linux" && "${AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB:-0}" != "1" ]]; then
+  if ! display_is_available; then
+    if ! command -v xvfb-run >/dev/null 2>&1; then
+      echo "desktop native voice E2E requires xvfb-run when DISPLAY is unavailable" >&2
+      exit 2
+    fi
+    exec env -u DISPLAY -u XAUTHORITY AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB=1 \
+      xvfb-run -a "$repo_root/scripts/desktop_native_voice_e2e.sh" "$@"
   fi
-  exec env AURORA_DESKTOP_NATIVE_VOICE_E2E_UNDER_XVFB=1 \
-    xvfb-run -a "$repo_root/scripts/desktop_native_voice_e2e.sh" "$@"
 fi
 
 if ! command -v "$driver_bin" >/dev/null 2>&1; then
@@ -108,6 +127,13 @@ fi
 if [[ "$platform" == "Linux" ]] && ! command -v WebKitWebDriver >/dev/null 2>&1; then
   echo "desktop native voice E2E requires WebKitWebDriver" >&2
   exit 2
+fi
+if [[ "$platform" == "Linux" ]]; then
+  if [[ ! -f "$alsa_config_path" ]]; then
+    echo "desktop native voice E2E ALSA configuration is missing: $alsa_config_path" >&2
+    exit 2
+  fi
+  export ALSA_CONFIG_PATH="$alsa_config_path"
 fi
 
 mkdir -p "$artifact_dir"
