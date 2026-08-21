@@ -158,6 +158,7 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  mockShareableRegistryFixture,
   iosNativeCapabilityManifestFixture,
   meshInviteConfigFixture,
   meshPeerListFixture,

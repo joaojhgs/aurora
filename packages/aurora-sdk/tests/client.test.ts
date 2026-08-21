@@ -32,6 +32,7 @@ import {
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
   gatewayRegistryFixture,
+  mockShareableRegistryFixture,
   hasPermission,
   modelRuntimeCatalogFixture,
   normalizeAuroraErrorForUi,
@@ -7188,6 +7189,24 @@ describe('descriptors', () => {
       ok: true,
       checked: 34,
       issues: []
+    })
+
+    const mockShareableComparison = compareRegistryFixtureToBackendInventory(
+      mockShareableRegistryFixture,
+      backendInventoryFixture
+    )
+
+    expect(mockShareableComparison).toEqual({
+      ok: false,
+      checked: 40,
+      issues: [
+        expect.objectContaining({ busTopic: 'TTS.Speak', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'DB.RAGSearch', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'Tooling.GetToolCatalog', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'STT.GetStatus', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'WakeWord.GetStatus', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'Transcription.Transcribe', field: 'missing' })
+      ]
     })
 
     const gatewayModule = gatewayRegistryFixture.modules.find((moduleInfo) => moduleInfo.module === 'Gateway')!

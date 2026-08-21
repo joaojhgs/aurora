@@ -634,12 +634,21 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         }
       ]
-    },
-    ...shareableServiceRegistryModules
+    }
   ],
   digest: 'fixture',
-  service_count: 4 + shareableServiceRegistryModules.length,
-  method_count: 25 + shareableServiceRegistryModules.reduce((count, module) => count + module.methods.length, 0)
+  service_count: 4,
+  method_count: 34
+}
+
+export const mockShareableRegistryFixture: GetRegistryResponse = {
+  ...gatewayRegistryFixture,
+  modules: [
+    ...gatewayRegistryFixture.modules,
+    ...shareableServiceRegistryModules
+  ],
+  service_count: gatewayRegistryFixture.service_count + shareableServiceRegistryModules.length,
+  method_count: gatewayRegistryFixture.method_count + shareableServiceRegistryModules.reduce((count, module) => count + module.methods.length, 0)
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
