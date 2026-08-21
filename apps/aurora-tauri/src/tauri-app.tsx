@@ -2412,7 +2412,7 @@ export function routeForPath(
   const existing = snapshot.routes.find((route) => route.item.id === item.id);
   if (!existing) return fallbackRoute(item);
   if (existing.disabled && existing.evidenceSources.length === 0) {
-    return { ...existing, evidenceSources: ["pending SDK request"] };
+    return { ...existing, evidenceSources: ["Page is not ready"] };
   }
   return existing;
 }
@@ -2426,12 +2426,12 @@ function fallbackRoute(item: AuroraNavItem): RouteAvailability {
   return {
     item: navItemSnapshot(item),
     state: unavailableFallbackState(item),
-    explanation: "Capability state is loading.",
-    providerLabel: "pending",
-    blockers: ["loading"],
+    explanation: "This page is still starting. Try again in a moment.",
+    providerLabel: "Not ready yet",
+    blockers: ["Page is starting"],
     repairActions: [],
     candidateProviders: [],
-    evidenceSources: ["pending SDK request"],
+    evidenceSources: ["Page is starting"],
     selectorRequired: false,
     approvalRequired: false,
     routeable: false,

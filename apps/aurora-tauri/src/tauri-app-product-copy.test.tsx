@@ -22,6 +22,7 @@ import {
   nativeFeatureLabel,
   peerConnectionStatusLabel,
   requestTauriNativeAccess,
+  routeForPath,
   runtimeModeLabel,
   savedAccessLabel,
   tauriRouteRegistry,
@@ -368,6 +369,75 @@ describe("Tauri application product copy", () => {
     expect(rendered).not.toContain("mobile tab: unsupported");
     expect(rendered).not.toContain("mobile tab: degraded");
     expectProductCopy(rendered);
+  });
+
+  it("renders synthesized unavailable route state without internal route metadata", () => {
+    const client = createAuroraTauriRuntime().client;
+    const baseSnapshot = {
+      ...loadingShellSnapshot,
+      loadState: "ready" as const,
+      nativePlatform: "linux",
+      nativeAvailable: true,
+      routes: [],
+    };
+    const diagnosticsRoute = routeForPath(baseSnapshot, "/diagnostics");
+    const snapshot = {
+      ...baseSnapshot,
+      routes: [diagnosticsRoute],
+    };
+    const nativeContext = {
+      runtimeMode: "desktop-local",
+      localMode: true,
+      sidecar: null,
+      surfaceProfile: getAuroraSurfaceProfile({
+        runtimeMode: "desktop-local",
+        transportKind: "tauri",
+        nativePlatform: "linux",
+      }),
+      thinConnectionMode: "webrtc-preferred",
+      saveThinProfile: async () => undefined,
+      selectThinProfile: async () => undefined,
+      saveLocalSpeechSelection: async () => undefined,
+      saveDesktopOverlay: async () => undefined,
+      nativePermissions: null,
+      nativeFeatures: {},
+      iosInvocationStatus: null,
+      iosLocalLightStatus: null,
+      androidBaseline: null,
+      androidForeground: null,
+      androidMediaPolicy: null,
+    };
+
+    const markup = renderToStaticMarkup(
+      tauriRouteRegistry.diagnostics({
+        route: diagnosticsRoute,
+        snapshot,
+        nativeContext,
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: [],
+        assistantNativeCapabilities: [],
+      } as never),
+    );
+    const rendered = renderedUserCopy(markup);
+
+    expect(diagnosticsRoute.evidenceSources).toEqual(["Page is starting"]);
+    expect(rendered).toContain(
+      "This page is still starting. Try again in a moment.",
+    );
+    expect(rendered).toContain("Not ready yet");
+    for (const leaked of [
+      "SDK",
+      "backend",
+      "embedded route",
+      "route fallback",
+      "Capability state",
+      "pending SDK request",
+    ]) {
+      expect(rendered).not.toContain(leaked);
+      expect(diagnosticsRoute.evidenceSources.join(" ")).not.toContain(leaked);
+    }
+    expectProductCopy(rendered, diagnosticsRoute.evidenceSources.join(" "));
   });
 
   it("preserves redacted startup diagnostics outside rendered error copy", async () => {
