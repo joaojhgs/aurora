@@ -561,7 +561,7 @@ fn prepare_native_execution(
     decision: &PeerHostAuthorizationDecision,
     context: &BackgroundToolingProviderContext,
 ) -> Value {
-    let reason = native_prepare_denial_reason(request, decision);
+    let reason = native_prepare_denial_reason(request, decision, context);
     let allowed = reason.is_none();
     let tool_info = native_tool_info(context);
     let arguments = request
@@ -621,8 +621,12 @@ fn prepare_native_execution(
 fn native_prepare_denial_reason(
     request: &Value,
     decision: &PeerHostAuthorizationDecision,
+    context: &BackgroundToolingProviderContext,
 ) -> Option<&'static str> {
-    if !tool_name_matches(request.get("tool_name").and_then(Value::as_str)) {
+    if !tool_name_matches(
+        request.get("tool_name").and_then(Value::as_str),
+        &context.provider_peer_id,
+    ) {
         return Some("tool_not_found");
     }
     if !has_native_tool_contract_grant(decision) {
@@ -760,14 +764,14 @@ fn authority_revision(decision: &PeerHostAuthorizationDecision) -> Value {
     })
 }
 
-fn tool_name_matches(tool_name: Option<&str>) -> bool {
+fn tool_name_matches(tool_name: Option<&str>, provider_peer_id: &str) -> bool {
     matches!(
         tool_name,
         Some(name)
             if name == NATIVE_GET_DEVICE_STATUS_CONTRACT_ID
                 || name == NATIVE_GET_DEVICE_STATUS_LOCAL_NAME
                 || name == NATIVE_GET_DEVICE_STATUS_GLOBAL_FALLBACK
-                || name.starts_with("aurora-tool:v1:") && name.ends_with(":Tooling:aurora.local.native.get_device_status.v1")
+                || name == global_tool_id(provider_peer_id)
     )
 }
 
@@ -963,13 +967,7 @@ impl MeshSessionRegistry {
         // A reconnect binds to the stable id already in the registry. Minting a
         // new one is pairing, and pairing needs a human (R0 section 5).
         if self.lifecycle.is_background() && !self.sessions.contains_key(peer_id) {
-            let rebinding_known_connection = self
-                .sessions
-                .values()
-                .any(|session| session.connection_id == connection_id);
-            if rebinding_known_connection {
-                return Err(MeshSessionError::StableIdentityChangeWhileBackgrounded);
-            }
+            return Err(MeshSessionError::StableIdentityChangeWhileBackgrounded);
         }
         let session = self
             .sessions

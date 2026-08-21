@@ -473,6 +473,32 @@ fn a_backgrounded_execute_tool_call_rejects_ungranted_or_spoofed_tool_claims() {
     assert_eq!(answer["result"]["ok"], json!(false));
     assert_eq!(answer["result"]["status"], json!("denied"));
     assert_eq!(answer["result"]["error_code"], json!("tool_not_granted"));
+
+    let wrong_provider = json!({
+        "type": "call",
+        "id": "c-wrong-provider",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "aurora-tool:v1:other-peer:Tooling:aurora.local.native.get_device_status.v1",
+            "arguments": {},
+        },
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &wrong_provider, 5_100)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let granted = allowed_method_with_tools(
+        "Tooling.ExecuteTool",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+    let answer = execute_background_tooling_call(&pending, &granted, &native_context())
+        .expect("typed wrong-provider denial");
+
+    assert_eq!(answer["result"]["ok"], json!(false));
+    assert_eq!(answer["result"]["status"], json!("not_found"));
+    assert_eq!(answer["result"]["error_code"], json!("tool_not_found"));
 }
 
 #[test]
@@ -850,6 +876,19 @@ fn a_backgrounded_reconnect_may_not_accept_a_new_stable_identity() {
             Some(context_for("aurora-thin-brand-new")),
         )
         .expect_err("a new identity on a held connection is refused while backgrounded");
+    assert_eq!(
+        refusal,
+        MeshSessionError::StableIdentityChangeWhileBackgrounded
+    );
+    assert_eq!(registry.peer_ids(), vec![PEER_A.to_owned()]);
+
+    let refusal = registry
+        .bind(
+            "aurora-thin-brand-new-transport",
+            99,
+            Some(context_for("aurora-thin-brand-new-transport")),
+        )
+        .expect_err("a new identity on a new transport is also refused while backgrounded");
     assert_eq!(
         refusal,
         MeshSessionError::StableIdentityChangeWhileBackgrounded
