@@ -89,6 +89,7 @@ from app.shared.contracts.models.auth import (
     WhoAmIResponse,
 )
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.db import DBMethods, DBPruneOrphanedMeshPeerRowsRequest
 from app.shared.contracts.models.mesh import (
     MeshBoolResponse,
     MeshEvents,
@@ -161,6 +162,9 @@ class AuthService(BaseService):
         # Before BaseService.__init__: contract scan may access ``manager`` property,
         # which reads ``_manager`` — must exist or Python raises AttributeError.
         self._manager: AuthManager | None = None
+        self._mesh_peer_orphan_pruning_enabled = True
+        self._mesh_peer_orphan_retention_seconds = 30 * 24 * 60 * 60
+        self._mesh_peer_orphan_prune_max_rows = 256
         super().__init__(
             module="Auth",
             summary="Authentication, authorization, pairing, and principal management",
@@ -205,12 +209,14 @@ class AuthService(BaseService):
             default_perms = list(auth_cfg.default_pairing_permissions or [])
             if default_perms:
                 self._manager.update_permission_defaults(default_perms)
+            self._apply_auth_config(auth_cfg)
         except Exception as e:
             log_warning(
                 f"Could not load services.auth.default_pairing_permissions from ConfigService: {e}",
                 exc_info=True,
             )
 
+        await self._prune_orphaned_mesh_peer_rows_once()
         log_info("Auth service started")
 
     async def on_stop(self) -> None:
@@ -228,6 +234,7 @@ class AuthService(BaseService):
                     ConfigKeys.services.auth, AuthConfigModel, config_timeout=20.0
                 )
                 default_perms = list(auth_cfg.default_pairing_permissions or [])
+                self._apply_auth_config(auth_cfg)
                 if self._manager:
                     self._manager.invalidate_mesh_inbound_key_cache()
                     self._manager.update_permission_defaults(default_perms)
@@ -236,6 +243,50 @@ class AuthService(BaseService):
                     f"Auth reload: could not refresh permission defaults: {e}",
                     exc_info=True,
                 )
+
+    def _apply_auth_config(self, auth_cfg: Any) -> None:
+        self._mesh_peer_orphan_pruning_enabled = bool(
+            getattr(auth_cfg, "mesh_peer_orphan_pruning_enabled", True)
+        )
+        self._mesh_peer_orphan_retention_seconds = int(
+            getattr(auth_cfg, "mesh_peer_orphan_retention_seconds", None) or 30 * 24 * 60 * 60
+        )
+        self._mesh_peer_orphan_prune_max_rows = int(
+            getattr(auth_cfg, "mesh_peer_orphan_prune_max_rows", None) or 256
+        )
+
+    async def _prune_orphaned_mesh_peer_rows_once(self) -> None:
+        """Run bounded Auth-owned mesh peer row maintenance without blocking startup."""
+
+        if not self._mesh_peer_orphan_pruning_enabled:
+            log_info("Auth mesh peer orphan pruning disabled by configuration")
+            return
+
+        request = DBPruneOrphanedMeshPeerRowsRequest(
+            retention_seconds=self._mesh_peer_orphan_retention_seconds,
+            max_rows=self._mesh_peer_orphan_prune_max_rows,
+        )
+        try:
+            result = await self.bus.request(
+                DBMethods.PRUNE_ORPHANED_MESH_PEER_ROWS,
+                request,
+                timeout=AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+            )
+            ok = bool(getattr(result, "ok", True))
+            payload = getattr(result, "data", result)
+            if isinstance(payload, dict):
+                ok = ok and bool(payload.get("success", True))
+                pruned_count = len(payload.get("pruned_rows") or [])
+            else:
+                ok = ok and bool(getattr(payload, "success", True))
+                pruned_count = len(getattr(payload, "pruned_rows", ()) or ())
+            if not ok:
+                log_warning("Auth mesh peer orphan pruning did not complete successfully")
+                return
+            if pruned_count:
+                log_info(f"Auth pruned {pruned_count} orphaned mesh peer row(s)")
+        except Exception as exc:
+            log_warning(f"Auth mesh peer orphan pruning failed safely: {exc}")
 
     # ── Login / Logout ───────────────────────────────────────────────────
 

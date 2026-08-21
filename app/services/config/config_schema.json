@@ -405,6 +405,25 @@
               },
               "default": []
             },
+            "mesh_peer_orphan_pruning_enabled": {
+              "type": "boolean",
+              "description": "Enable a bounded startup maintenance pass that removes old never-approved credentialless mesh peer rows",
+              "default": true
+            },
+            "mesh_peer_orphan_retention_seconds": {
+              "type": "integer",
+              "description": "Minimum age in seconds before never-approved credentialless mesh peer rows can be pruned",
+              "minimum": 3600,
+              "maximum": 31536000,
+              "default": 2592000
+            },
+            "mesh_peer_orphan_prune_max_rows": {
+              "type": "integer",
+              "description": "Maximum orphaned mesh peer rows removed in one Auth startup maintenance pass",
+              "minimum": 1,
+              "maximum": 4096,
+              "default": 256
+            },
             "webrtc_auth_timeout_seconds": {
               "type": "number",
               "description": "Timeout in seconds for WebRTC peer authentication",

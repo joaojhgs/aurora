@@ -1332,6 +1332,9 @@ class _ServicesAuthConfigPath(ConfigPath):
     audit_retention_days: ConfigPath
     default_pairing_permissions: ConfigPath
     enabled: ConfigPath
+    mesh_peer_orphan_prune_max_rows: ConfigPath
+    mesh_peer_orphan_pruning_enabled: ConfigPath
+    mesh_peer_orphan_retention_seconds: ConfigPath
     pairing_code_expiry_minutes: ConfigPath
     pairing_max_attempts_per_ip: ConfigPath
     session_token_expiry_hours: ConfigPath
@@ -1346,6 +1349,15 @@ class _ServicesAuthConfigPath(ConfigPath):
         self.audit_retention_days = ConfigPath("services.auth.audit_retention_days")
         self.default_pairing_permissions = ConfigPath("services.auth.default_pairing_permissions")
         self.enabled = ConfigPath("services.auth.enabled")
+        self.mesh_peer_orphan_prune_max_rows = ConfigPath(
+            "services.auth.mesh_peer_orphan_prune_max_rows"
+        )
+        self.mesh_peer_orphan_pruning_enabled = ConfigPath(
+            "services.auth.mesh_peer_orphan_pruning_enabled"
+        )
+        self.mesh_peer_orphan_retention_seconds = ConfigPath(
+            "services.auth.mesh_peer_orphan_retention_seconds"
+        )
         self.pairing_code_expiry_minutes = ConfigPath("services.auth.pairing_code_expiry_minutes")
         self.pairing_max_attempts_per_ip = ConfigPath("services.auth.pairing_max_attempts_per_ip")
         self.session_token_expiry_hours = ConfigPath("services.auth.session_token_expiry_hours")

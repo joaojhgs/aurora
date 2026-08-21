@@ -276,6 +276,18 @@ class Auth(BaseConfigModel):
     """
     Default permissions assigned to new devices during pairing
     """
+    mesh_peer_orphan_pruning_enabled: bool | None = True
+    """
+    Enable a bounded startup maintenance pass that removes old never-approved credentialless mesh peer rows
+    """
+    mesh_peer_orphan_retention_seconds: int | None = Field(2592000, ge=3600, le=31536000)
+    """
+    Minimum age in seconds before never-approved credentialless mesh peer rows can be pruned
+    """
+    mesh_peer_orphan_prune_max_rows: int | None = Field(256, ge=1, le=4096)
+    """
+    Maximum orphaned mesh peer rows removed in one Auth startup maintenance pass
+    """
     webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
     """
     Timeout in seconds for WebRTC peer authentication

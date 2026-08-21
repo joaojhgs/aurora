@@ -85,6 +85,15 @@ It accepts `retention_seconds` (default 30 days, bounded to 1 hour through 365 d
 `max_rows` (default 256, bounded to 4096) so callers can schedule small maintenance passes
 without creating a broad deletion path.
 
+`AuthService` owns the production trigger. After startup initialization and config load, it
+runs one fail-safe maintenance pass through the message bus using
+`DB.PruneOrphanedMeshPeerRows`; failures are logged and do not stop Auth startup. The pass is
+controlled by:
+
+- `services.auth.mesh_peer_orphan_pruning_enabled` (default `true`)
+- `services.auth.mesh_peer_orphan_retention_seconds` (default `2592000`)
+- `services.auth.mesh_peer_orphan_prune_max_rows` (default `256`)
+
 The DB manager first selects eligible rows, then deletes each row by exact `mesh_peers.id`
 while re-checking the full eligibility predicate inside the same transaction. It never matches
 or deletes by `node_name`, never calls the admin removal/tombstone path, and never mutates
