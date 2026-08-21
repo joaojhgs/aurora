@@ -719,7 +719,9 @@ async function expectNonAdminNavigation(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'Services' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Access & RBAC' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Tokens' })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible()
+  // A hosted remote console manages the connected Aurora through its remote
+  // pages; it does not own this browser's local device settings.
+  await expect(page.getByRole('link', { name: 'Settings' })).toHaveCount(0)
 }
 
 async function expectRemovedToolAccessHidden(page: Page): Promise<void> {
