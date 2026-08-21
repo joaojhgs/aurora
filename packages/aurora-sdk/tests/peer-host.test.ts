@@ -1723,6 +1723,53 @@ describe('WebRtcPeerHost serving several peers', () => {
     expect(peerHost.recipientPeerIds()).toEqual(['peer-a'])
   })
 
+  it('does not send named peer frames through another peer fallback sender', async () => {
+    const registry = createToolingPeerHostRegistry({
+      getTools: async () => ({ count: 0, tools: [] }),
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: scriptedAuthorizationStore(
+        (request) => request.methodId === 'Tooling.GetTools' && request.remotePeerId === 'peer-b'
+          ? { allowed: true, grantRevision: 1, grantedMethodIds: ['Tooling.GetTools'] }
+          : { allowed: false, reasonCode: 'grant_not_found' },
+        (request) => ({
+          ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}),
+          grantedMethodIds: ['Tooling.GetTools'],
+          authGrantRevision: 1,
+          authGrantState: 'active'
+        })
+      ),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const toA: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { toA.push(frame) } })
+    peerHost.attach({ sendFrame: async (frame) => { toA.push(frame) } }, 'peer-a')
+
+    const manifestB = await peerHost.startEpoch('peer-b')
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(manifestB), 'peer-b')).toBe(true)
+    expect(toA).toHaveLength(0)
+
+    const staleManifestB = await peerHost.startEpoch('peer-b')
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(
+      ackFromManifest(staleManifestB, { projection_digest: '1'.repeat(64) }),
+      'peer-b'
+    )).rejects.toThrow('peer host is not attached')
+    await expect(peerHost.handleUnsubscribe('subscription-b', 'peer-b')).rejects.toThrow('peer host is not attached')
+    await expect(peerHost.handleCall(
+      { type: 'call', id: 'call-b', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )).rejects.toThrow('peer host is not attached')
+
+    expect(toA).toHaveLength(0)
+  })
+
   it('keeps the single-peer surface working with an unkeyed attach', async () => {
     const registry = createToolingPeerHostRegistry({
       getTools: async () => ({ count: 0, tools: [] }),

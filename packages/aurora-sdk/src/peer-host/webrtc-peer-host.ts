@@ -161,6 +161,7 @@ export class WebRtcPeerHost {
     const existing = this.recipients.get(remotePeerId)
     if (existing) return existing
     const created = this.createRecipient()
+    if (this.sender && this.recipients.size === 0) created.sender = this.sender
     this.recipients.set(remotePeerId, created)
     return created
   }
@@ -1115,9 +1116,8 @@ export class WebRtcPeerHost {
   /**
    * The channel one peer's frames go down.
    *
-   * A peer's own sender first. Then the unkeyed one, for a surface that never
-   * named a peer. Then the only recipient's, when there is exactly one, which
-   * is what makes a single-peer host behave as it always did.
+   * A named peer resolves only to its own sender. The unkeyed sender and sole
+   * recipient fallback are for peerless single-peer surfaces only.
    *
    * With several peers and no peer named there is no correct channel, so this
    * resolves to nothing and the caller's optional chain drops the frame rather
@@ -1127,8 +1127,7 @@ export class WebRtcPeerHost {
    */
   private resolveSender(remotePeerId?: string): PeerHostFrameSender | undefined {
     if (remotePeerId !== undefined) {
-      const keyed = this.recipients.get(remotePeerId)?.sender
-      if (keyed) return keyed
+      return this.recipients.get(remotePeerId)?.sender
     }
     if (this.sender) return this.sender
     if (this.recipients.size !== 1) return undefined
