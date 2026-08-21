@@ -40,6 +40,15 @@ def test_webrtc_services_uses_explicit_stable_compose_project() -> None:
     assert "docker compose -f docker-compose.webrtc-interop.yml" not in source
 
 
+def test_webrtc_services_can_reuse_externally_managed_local_services() -> None:
+    source = read_repo("scripts/webrtc_interop_services.sh")
+
+    assert 'AURORA_WEBRTC_INTEROP_SERVICES_EXTERNAL:-0' in source
+    assert 'if [[ "$EXTERNAL_SERVICES" != "1" ]]; then' in source
+    assert source.count("wait_for_tcp webrtc-interop-") == 2
+    assert 'echo "WebRTC interop services are externally managed"' in source
+
+
 def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
     for script_path in (
         "scripts/hosted_peer_e2e.sh",
