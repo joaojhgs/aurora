@@ -218,6 +218,7 @@ wait_for_http \
 setsid env \
   NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
   pnpm --filter @aurora/web exec next dev \
+    --webpack \
     --hostname 127.0.0.1 \
     --port "$WEB_PORT" >"$WEB_LOG" 2>&1 &
 WEB_PID=$!

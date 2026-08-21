@@ -67,6 +67,16 @@ def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
         assert voice_build < web_start, script_path
 
 
+def test_hosted_browser_harnesses_use_the_deterministic_webpack_dev_server() -> None:
+    for script_path in (
+        "scripts/hosted_peer_e2e.sh",
+        "scripts/hosted_mesh_node_e2e.sh",
+    ):
+        source = read_repo(script_path)
+
+        assert re.search(r"next dev \\\n\s+--webpack \\", source), script_path
+
+
 def test_hosted_browser_harnesses_bound_http_readiness_probes() -> None:
     for script_path in (
         "scripts/hosted_peer_e2e.sh",
