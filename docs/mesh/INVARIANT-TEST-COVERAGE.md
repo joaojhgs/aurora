@@ -16,8 +16,8 @@ the same thing:
 | 1 | Room membership is not authority; every peer needs its own SAS pairing and explicit approval | Rust authority | `grants nothing on room membership alone` (WASM), `a_credential_without_a_grant_authorizes_nothing` (Rust corpus) | read-and-run |
 | 2 | A per-session allowlist replaces `expectedStablePeerId` | `signaling-allowlist.ts`, consulted in `signaling-mqtt.ts` `handleRawMessage` | `refuses forged signaling that names an established session's device` + 4 allowlist unit tests | **mutation-confirmed** |
 | 3 | One stable id, one session | `MeshPeerSessionRegistry.add()` and `.bindPeerId()` | `refuses a second session for a stable peer id the registry already holds`, `refuses a known stable identity that presents on a second transport` | read-and-run |
-| 4 | Reconnect challenges stay single-use per peer | Rust authority challenge store | `reconnect_challenges_are_single_use_per_peer`, `reconnect_challenge_replay_guard_matches` | read-and-run |
-| 5 | Authority contexts never cross peers | Rust authority, keyed by peer identity, holds no transport state | `never lets an authority context cross peers` (WASM), `authority_holds_no_transport_state` (Rust corpus) | read-and-run |
+| 4 | Reconnect challenges stay single-use per peer | Rust authority challenge store | `reconnect_challenges_are_single_use_per_peer`, `reconnect_challenge_replay_guard_matches` | **mutation-confirmed** |
+| 5 | Authority contexts never cross peers | Rust authority, keyed by peer identity, holds no transport state | 6 corpus cases driven by `manifest_snapshots_match` and friends; `authority_holds_no_transport_state` covers the structural half | **mutation-confirmed** |
 | 6 | One Aurora in the notification shade | `AuroraRuntimeForegroundLedger`, reference-counted reasons | `android-runtime-foreground-service.test.ts` (5 tests) | **mutation-confirmed** |
 | 7 | Runtime is chosen by platform, never by lifecycle | `aurora-mesh-session` registry | `ping_is_answered_the_same_way_in_both_lifecycles` (Rust), which cites the invariant in its failure message | read-and-run |
 | 8 | Shedding a peer is distinguishable from losing one and costs no re-pair | R6's budget + the "going away, keep my credential" signal | — | **pending (M7/R6 not built)** |
@@ -38,6 +38,21 @@ transport failed the product-copy assertion. Both restored.
 
 **#9** — same run as #6: the forbidden-term sweep caught `transport` in notification copy.
 
+**#4** — neutering the `record.consumed_at_ms.is_some()` replay branch in
+`authority.rs::consume_challenge` failed both invariant-named tests,
+`reconnect_challenges_are_single_use_per_peer` and
+`reconnect_challenge_replay_guard_matches`. Restored, 21 passed.
+
+**#5** — neutering the `context.selector.claimant_peer_id != remote_peer_id` guard in
+`authorization.rs` failed `manifest_snapshots_match`. Worth recording precisely, because the
+naming misleads: `authority_holds_no_transport_state` is a *structural* test asserting the
+context carries no transport-derived members, and it does **not** catch this. The cross-peer
+denial is enforced by six corpus cases — `denies_a_context_belonging_to_another_peer`,
+`grant_for_another_peer_is_invisible`, `grant_for_another_peer_is_skipped`,
+`another_peers_grants_are_not_advertised`, `advertises_nothing_when_the_context_is_another_peers`,
+`rejects_proof_replayed_for_another_peer` — driven by the iterating corpus tests. The invariant
+is covered; it is just not covered by the test whose name suggests it is.
+
 ## Where the remaining two stand
 
 **#7** landed with R3. `ping_is_answered_the_same_way_in_both_lifecycles` drives the same
@@ -56,10 +71,10 @@ cross-language fixtures.
 
 ## Reading this honestly
 
-Seven of nine are enforced and covered, three of those mutation-confirmed. One is pending on
-work that has not landed (#8, R6's). The read-and-run rows are real tests asserting real effects, but they
-have not been proven to bite; **#3, #4 and #5 in particular guard impersonation, replay and
-cross-peer authority leakage, and deserve mutation confirmation before this work is considered
-finished.** They were not mutation-tested here only because the files involved were held by an
-agent working in that lane at the time, and corrupting its working tree would have cost more
-than the confirmation was worth in that moment.
+Seven of nine are enforced and covered, five of those mutation-confirmed. One is pending on
+work that has not landed (#8, R6's). #4 and #5 have since been mutation-confirmed, closing two of the three gaps this
+ledger originally flagged. **#3 — one stable id, one session — is the last read-and-run row
+guarding impersonation, and still deserves confirmation.** It was not done here because
+`peer-registry.ts` is being extended for R6's budget policy, and corrupting a working tree
+mid-run costs more than the confirmation is worth in that moment. It should be closed once M7
+lands.
