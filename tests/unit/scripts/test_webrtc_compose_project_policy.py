@@ -84,7 +84,7 @@ def test_hosted_browser_harnesses_use_the_production_web_server() -> None:
             source,
         ), script_path
         assert 'node "$WEB_STANDALONE_DIR/server.js"' in source, script_path
-        assert 'HOSTNAME=127.0.0.1 \\' in source, script_path
+        assert "HOSTNAME=127.0.0.1 \\" in source, script_path
         assert 'PORT="$WEB_PORT" \\' in source, script_path
         assert 'cp -R "$ROOT/apps/aurora-web/.next/static/."' in source, script_path
         assert 'cp -R "$ROOT/apps/aurora-web/public/."' in source, script_path
