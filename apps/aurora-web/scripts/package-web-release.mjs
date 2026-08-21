@@ -5,6 +5,8 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+import { loadSelectedBrowserEngineSource } from './browser-engine-release-source.mjs'
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const outDir = resolve(process.env.AURORA_WEB_RELEASE_DIR ?? join(packageRoot, 'dist'))
@@ -12,11 +14,7 @@ const stageDir = join(outDir, 'aurora-web-unsigned')
 const artifactPath = resolve(process.env.AURORA_WEB_RELEASE_ARTIFACT ?? join(outDir, 'aurora-web-unsigned.tar.gz'))
 const reportPath = resolve(process.env.AURORA_WEB_RELEASE_REPORT ?? join(outDir, 'aurora-web-unsigned.json'))
 const browserEngineReleaseDir = process.env.AURORA_BROWSER_ENGINE_RELEASE_DIR
-const expectedBrowserEngineSource = {
-  id: 'sherpa-onnx-source-v1.13.4',
-  version: 'v1.13.4',
-  sha256: '3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295',
-}
+const expectedBrowserEngineSource = loadSelectedBrowserEngineSource(repoRoot)
 const browserEngineAssets = [
   { capability: 'vad', source: 'assets/vad-stt/sherpa-onnx-vad.js', target: 'sherpa-onnx-vad.js' },
   { capability: 'stt', source: 'assets/vad-stt/sherpa-onnx-asr.js', target: 'sherpa-onnx-asr.js' },

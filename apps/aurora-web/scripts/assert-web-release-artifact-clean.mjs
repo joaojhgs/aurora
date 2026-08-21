@@ -6,8 +6,11 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
+import { loadSelectedBrowserEngineSource } from './browser-engine-release-source.mjs'
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
+const expectedBrowserEngineSource = loadSelectedBrowserEngineSource(repoRoot)
 const artifact = resolve(process.env.AURORA_WEB_RELEASE_ARTIFACT ?? process.argv[2] ?? join(packageRoot, 'dist', 'aurora-web-unsigned.tar.gz'))
 const extractRoot = mkdtempSync(join(tmpdir(), 'aurora-web-release-'))
 const failures = []
@@ -116,9 +119,9 @@ function checkBrowserEnginePayload() {
   if (manifest.schemaVersion !== 1) failures.push('browser engine manifest schema is invalid')
   if (manifest.releaseKind !== 'neutral-sherpa-browser-engine') failures.push('browser engine manifest release kind is invalid')
   if (manifest.includesModelWeights !== false) failures.push('browser engine manifest must declare no model weights')
-  if (manifest.source?.id !== 'sherpa-onnx-source-v1.13.4') failures.push('browser engine manifest source id is not pinned')
-  if (manifest.source?.version !== 'v1.13.4') failures.push('browser engine manifest source version is not pinned')
-  if (manifest.source?.sha256 !== '3243cb386d3a4ac87596adf7d2c89fddf23e2948b154942b987b4d91c1fee295') failures.push('browser engine manifest source hash is not pinned')
+  if (manifest.source?.id !== expectedBrowserEngineSource.id) failures.push('browser engine manifest source id is not pinned')
+  if (manifest.source?.version !== expectedBrowserEngineSource.version) failures.push('browser engine manifest source version is not pinned')
+  if (manifest.source?.sha256 !== expectedBrowserEngineSource.sha256) failures.push('browser engine manifest source hash is not pinned')
   if (Object.values(manifest).some((value) => typeof value === 'string' && /\/home\/developer\/projects\/aurora|[A-Z]:\\/iu.test(value))) {
     failures.push('browser engine manifest contains an absolute build path')
   }
