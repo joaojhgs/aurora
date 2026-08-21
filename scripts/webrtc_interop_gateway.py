@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
@@ -51,6 +52,7 @@ from app.services.gateway.mesh.provider_export import (  # noqa: E402
     NormalizedServiceSnapshot,
     RegistrySnapshot,
 )
+from app.services.gateway.webrtc.peer_protocol import CAP_PROVIDER_LEASE_V1  # noqa: E402
 from app.services.gateway.webrtc.rtc_client import RTCClient  # noqa: E402
 from app.shared.auth.identity import build_identity  # noqa: E402
 from app.shared.contracts.models.auth import (  # noqa: E402
@@ -879,6 +881,7 @@ async def run_ac18_reverse_browser_tool_probe(
     probe_id = f"ac18-browser-tool-{lane}"
     negative_probe_id = f"{probe_id}-negative"
     deadline = time.monotonic() + timeout
+    readiness_deadline = min(deadline, time.monotonic() + 15.0)
     last_status = "missing"
     last_lease: dict[str, Any] | None = None
     public_call_methods: list[str] = []
@@ -946,7 +949,7 @@ async def run_ac18_reverse_browser_tool_probe(
             manifest_revision=999,
         )
 
-    while time.monotonic() < deadline:
+    while time.monotonic() < readiness_deadline:
         peer = peer_registry.get_peer(peer_id)
         last_status = getattr(peer, "status", "missing") if peer is not None else "missing"
         lease = peer_registry.get_provider_lease(peer_id)
@@ -1317,6 +1320,7 @@ async def main() -> int:
     bus.on_mutation_started = _send_mutation_started
     started_at = time.monotonic()
     ac18_reverse_tool: dict[str, Any] | None = None
+    ac18_probe_task: asyncio.Task[dict[str, Any]] | None = None
     event_sent = False
     tts_event_sent = False
     wrong_corr_interest = False
@@ -1349,7 +1353,27 @@ async def main() -> int:
                     revoked_reconnect_failures += 1
             for peer in rtc.get_connected_peers():
                 stable = str(peer.get("stable_peer_id") or "")
-                if stable == BROWSER_MESH_PEER_ID and peer.get("connection_state") == "connected":
+                if stable == BROWSER_MESH_PEER_ID and peer.get("session_active") is True:
+                    session_peer_id = str(peer.get("peer_id") or "")
+                    if (
+                        ac18_local_tool_provider
+                        and ac18_probe_task is None
+                        and peer_registry is not None
+                        and peer_bridge is not None
+                        and rtc.peer_supports_capability(
+                            session_peer_id,
+                            CAP_PROVIDER_LEASE_V1,
+                        )
+                    ):
+                        ac18_probe_task = asyncio.create_task(
+                            run_ac18_reverse_browser_tool_probe(
+                                lane=args.lane,
+                                peer_registry=peer_registry,
+                                peer_bridge=peer_bridge,
+                                timeout=max(1.0, deadline - time.monotonic()),
+                            ),
+                            name=f"webrtc-interop-ac18:{args.lane}",
+                        )
                     if not manifest_sent:
                         manifest_sent = await rtc.send_to_peer_async(
                             stable,
@@ -1404,19 +1428,21 @@ async def main() -> int:
                             ),
                         )
                         tts_event_sent = True
-            if (
-                ac18_local_tool_provider
-                and ac18_reverse_tool is None
-                and peer_registry is not None
-                and peer_bridge is not None
-            ):
-                ac18_reverse_tool = await run_ac18_reverse_browser_tool_probe(
-                    lane=args.lane,
-                    peer_registry=peer_registry,
-                    peer_bridge=peer_bridge,
-                    timeout=max(1.0, deadline - time.monotonic()),
-                )
+            if ac18_probe_task is not None and ac18_probe_task.done():
+                ac18_reverse_tool = ac18_probe_task.result()
             await asyncio.sleep(0.1)
+
+        if ac18_probe_task is not None and ac18_reverse_tool is None:
+            try:
+                ac18_reverse_tool = await asyncio.wait_for(
+                    asyncio.shield(ac18_probe_task),
+                    timeout=min(15.0, max(1.0, args.timeout)),
+                )
+            except TimeoutError:
+                ac18_reverse_tool = {
+                    "enabled": True,
+                    "status": "not-completed",
+                }
 
         diagnostics = rtc.get_diagnostics().model_dump(mode="json")
         write_json(
@@ -1440,6 +1466,10 @@ async def main() -> int:
             ),
         )
     finally:
+        if ac18_probe_task is not None and not ac18_probe_task.done():
+            ac18_probe_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ac18_probe_task
         if peer_bridge is not None:
             await peer_bridge.cancel_all()
         await rtc.close()

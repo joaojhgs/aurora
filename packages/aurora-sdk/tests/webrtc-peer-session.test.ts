@@ -669,6 +669,64 @@ describe('WebRtcPeerSession', () => {
     expect(session.getSnapshot()).toMatchObject({ state: 'discovering-peer', remoteStableId: 'stable-b' })
   })
 
+  it('keeps an authorized epoch alive when a brief disconnected state recovers', async () => {
+    const timers = new FakeTimers()
+    const { session, pc } = await authorizedAnswerer({
+      timers,
+      timeouts: { disconnectedGraceMs: 25 }
+    })
+
+    pc.connectionState = 'disconnected'
+    pc.onconnectionstatechange?.()
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+    expect(timers.scheduledDelays()).toContain(25)
+
+    pc.connectionState = 'connected'
+    pc.onconnectionstatechange?.()
+    expect(timers.scheduledDelays()).not.toContain(25)
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+  })
+
+  it('reconnects when a disconnected peer connection outlives its grace period', async () => {
+    const timers = new FakeTimers()
+    const { session, pc } = await authorizedAnswerer({
+      timers,
+      timeouts: { disconnectedGraceMs: 25 },
+      reconnect: { maxAttempts: 1, baseDelayMs: 10, maxDelayMs: 10, jitterRatio: 0 }
+    })
+
+    pc.connectionState = 'disconnected'
+    pc.onconnectionstatechange?.()
+    timers.fireDelay(25)
+
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'reconnecting',
+      authorized: false,
+      reconnectAttempts: 1
+    })
+  })
+
+  it('does not delay a hard failure behind the disconnected grace period', async () => {
+    const timers = new FakeTimers()
+    const { session, pc } = await authorizedAnswerer({
+      timers,
+      timeouts: { disconnectedGraceMs: 25 },
+      reconnect: { maxAttempts: 1, baseDelayMs: 10, maxDelayMs: 10, jitterRatio: 0 }
+    })
+
+    pc.connectionState = 'disconnected'
+    pc.onconnectionstatechange?.()
+    pc.connectionState = 'failed'
+    pc.onconnectionstatechange?.()
+
+    expect(timers.scheduledDelays()).not.toContain(25)
+    expect(session.getSnapshot()).toMatchObject({
+      state: 'reconnecting',
+      authorized: false,
+      reconnectAttempts: 1
+    })
+  })
+
   it('keeps retrying transient transport failures by default until explicitly closed', async () => {
     const timers = new FakeTimers()
     const signaling = new FakeSignaling()

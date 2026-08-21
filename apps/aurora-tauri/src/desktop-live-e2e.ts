@@ -2,6 +2,7 @@ import {
   type AuroraClient,
   type JsonObject,
 } from "@aurora/client";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import {
   canonicalJson,
   LocalToolExecutionPolicy,
@@ -158,6 +159,8 @@ type Ac18BrowserLocalToolProbe = {
   auditRecords: LocalToolAuditRecord[];
   invocationRecords: Array<Record<string, unknown>>;
   peerHost: WebRtcPeerHost;
+  peerAuthorityResolver: ReturnType<RustPeerHostAuthorizationStore["asResolverPort"]>;
+  peerPairingIssuer: ReturnType<RustPeerHostAuthorizationStore["asPairingIssuerPort"]>;
   toolContractId: string;
   localName: string;
   probeId: string;
@@ -352,7 +355,12 @@ export async function runDesktopLiveE2e(
       localNodeName: "Aurora desktop live E2E",
       snapshots,
     });
-    const remoteAuthorized = await connectAndAuthorize(remoteRuntime, homeProfile, ready.timeoutMs);
+    const remoteAuthorized = await connectAndAuthorize(
+      remoteRuntime,
+      homeProfile,
+      Math.min(30_000, ready.timeoutMs),
+      "remote-console authorization",
+    );
     await drainRemoteConsoleManifestHandshake(remoteRuntime, ready);
     await remoteRuntime.peer.disconnect("desktop live role switch to mesh-node");
     await remoteRuntime.close();
@@ -369,7 +377,13 @@ export async function runDesktopLiveE2e(
       signalingPeerId: desktopLiveSignalingId(ready.localSignalingId, "mesh-node"),
       localNodeName: profile.localNode.nodeName,
       snapshots,
-      ...(ac18 ? { peerHost: ac18.peerHost } : {}),
+      ...(ac18
+        ? {
+            peerHost: ac18.peerHost,
+            peerAuthorityResolver: ac18.peerAuthorityResolver,
+            peerPairingIssuer: ac18.peerPairingIssuer,
+          }
+        : {}),
     });
     const browserResult = await runMeshInteropContract({
       runtime: meshRuntime,
@@ -443,6 +457,8 @@ function createInteropRuntime({
   localNodeName,
   snapshots,
   peerHost,
+  peerAuthorityResolver,
+  peerPairingIssuer,
 }: {
   ready: DesktopLiveReadyPayload;
   profile: WebRtcPeerConnectionProfile;
@@ -452,6 +468,8 @@ function createInteropRuntime({
   localNodeName: string;
   snapshots: Snapshot[];
   peerHost?: WebRtcPeerHost | undefined;
+  peerAuthorityResolver?: ReturnType<RustPeerHostAuthorizationStore["asResolverPort"]> | undefined;
+  peerPairingIssuer?: ReturnType<RustPeerHostAuthorizationStore["asPairingIssuerPort"]> | undefined;
 }): DesktopLiveRuntime {
   const runtime = createBrowserWebRtcAuroraRuntime({
     mode: "webrtc-only",
@@ -460,6 +478,8 @@ function createInteropRuntime({
     localNodeName,
     nodeRole,
     ...(peerHost ? { peerHost } : {}),
+    ...(peerAuthorityResolver ? { peerAuthorityResolver } : {}),
+    ...(peerPairingIssuer ? { peerPairingIssuer } : {}),
     defaultTimeoutMs: ready.timeoutMs,
     credentialStore,
     createPeerConnection: makePeerConnectionFactory(
@@ -497,9 +517,31 @@ async function connectAndAuthorize(
   runtime: DesktopLiveRuntime,
   profile: WebRtcPeerConnectionProfile,
   timeoutMs: number,
+  label = "mesh-node authorization",
 ): Promise<boolean> {
   await runtime.peer.connect(profile);
-  await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop WebRTC DataChannel", timeoutMs);
+  try {
+    await waitFor(
+      () => runtime.peer.snapshot().state === "authorized",
+      `authorized desktop WebRTC DataChannel (${label})`,
+      timeoutMs,
+    );
+  } catch (error) {
+    const snapshot = runtime.peer.snapshot();
+    const diagnostics = {
+      state: snapshot.state,
+      negotiationRole: snapshot.negotiationRole,
+      connectedStablePeerId: snapshot.connectedStablePeerId,
+      connectedSignalingPeerId: snapshot.connectedSignalingPeerId,
+      reconnectCount: snapshot.reconnectCount,
+      lastRedactedError: snapshot.lastRedactedError,
+    };
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${detail}; diagnostics=${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
+  }
   return runtime.peer.snapshot().state === "authorized";
 }
 
@@ -543,26 +585,36 @@ async function runMeshInteropContract({
     return await originalFetch(input as RequestInfo, init);
   }) as typeof fetch;
   let autoConfirmPairing = true;
+  let stage = "connect-and-authorize";
+  const operationTimeoutMs = Math.min(20_000, ready.timeoutMs);
+  const reconnectTimeoutMs = Math.min(30_000, ready.timeoutMs);
   const unsubscribe = runtime.peer.subscribe((snapshot) => {
     const pending = snapshot.pendingPairing;
     if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined);
   });
   try {
-    await connectAndAuthorize(runtime, profile, ready.timeoutMs);
+    await connectAndAuthorize(runtime, profile, reconnectTimeoutMs);
     const authorizedSnapshot = runtime.peer.snapshot();
+    stage = "registry";
     const registry = await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
       "desktop live registry after WebRTC authorization",
-      ready.timeoutMs,
+      operationTimeoutMs,
     );
     const meshTransport = runtime.meshTransport;
     if (!meshTransport) throw new Error("Authorized desktop runtime did not expose its mesh transport");
+    stage = "manifest";
     const manifest = await retryDesktopProviderReadiness(
       () => meshTransport.getManifest(ready.expectedStablePeerId),
       "desktop live manifest after WebRTC authorization",
-      ready.timeoutMs,
+      operationTimeoutMs,
     );
     if (!manifest) throw new Error("Python peer did not return a manifest over the DataChannel");
+    if (ac18) {
+      stage = "browser-local-tool-provider";
+      await waitForAc18BrowserProbe(ac18, operationTimeoutMs);
+    }
+    stage = "intentional-error-rpc";
     const intentionalError = await runtime.client.requestResult(
       ready.errorTopic,
       {},
@@ -570,33 +622,36 @@ async function runMeshInteropContract({
     );
     const fragmentCountsBefore = runtime.peer.snapshot();
     const largeRequestBlob = "x".repeat(512 * 1024);
+    stage = "fragmented-large-rpc";
     const largeResult = await runtime.client.request<{ blob: string }>(
       ready.largeEchoTopic,
       { blob: largeRequestBlob },
-      { busTopic: ready.largeEchoTopic, timeoutMs: ready.timeoutMs },
+      { busTopic: ready.largeEchoTopic, timeoutMs: operationTimeoutMs },
     );
     const fragmentCountsAfter = runtime.peer.snapshot();
     const expectedLargeResultBlob = "y".repeat(512 * 1024);
 
+    stage = "completed-stream";
     const completedStreamProbeId = `g009-stream-complete-${ready.lane}`;
     const completedStreamChunks: unknown[] = [];
     for await (const chunk of meshTransport.streamRequest({
       method: ready.streamTopic,
       busTopic: ready.streamTopic,
       payload: { probe_id: completedStreamProbeId, mode: "complete" },
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: operationTimeoutMs,
       audit: { correlationId: completedStreamProbeId },
     })) {
       completedStreamChunks.push(chunk);
     }
 
+    stage = "cancelled-stream";
     const cancelledStreamProbeId = `g009-stream-cancel-${ready.lane}`;
     const streamAbort = new AbortController();
     const cancelledStream = meshTransport.streamRequest<Record<string, unknown>>({
       method: ready.streamTopic,
       busTopic: ready.streamTopic,
       payload: { probe_id: cancelledStreamProbeId, mode: "cancel" },
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: operationTimeoutMs,
       signal: streamAbort.signal,
       audit: { correlationId: cancelledStreamProbeId },
     });
@@ -613,19 +668,22 @@ async function runMeshInteropContract({
       runtime,
       ready.streamStatusTopic,
       cancelledStreamProbeId,
-      ready.timeoutMs,
+      operationTimeoutMs,
     );
 
+    stage = "candidate-pair";
     const selectedCandidatePair = await waitForSelectedCandidatePair(runtime, ready.lane, Math.min(8000, ready.timeoutMs));
+    stage = "generic-scoped-event";
     const subscription = runtime.client.events.subscribe({
       stream: "generic",
       topics: [ready.eventTopic],
       correlationId: ready.eventCorrelationId,
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: operationTimeoutMs,
     });
-    const event = await firstEvent(subscription, ready.timeoutMs);
+    const event = await firstEvent(subscription, operationTimeoutMs);
     subscription.close("desktop live event received");
 
+    stage = "wrong-correlation-event";
     const ttsWrong = runtime.client.events.subscribe({
       stream: "generic",
       topics: [ready.ttsEventTopic],
@@ -635,15 +693,17 @@ async function runMeshInteropContract({
     });
     const wrongCorrelationEvent = await optionalFirstEvent(ttsWrong, 600);
     ttsWrong.close("desktop live wrong correlation probe done");
+    stage = "correlated-tts-event";
     const ttsSub = runtime.client.events.subscribe({
       stream: "generic",
       topics: [ready.ttsEventTopic],
       correlationId: ready.ttsCorrelationId,
       payload: { correlation_id: ready.ttsCorrelationId },
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: operationTimeoutMs,
     });
-    const ttsEvent = await firstEvent(ttsSub, ready.timeoutMs);
+    const ttsEvent = await firstEvent(ttsSub, operationTimeoutMs);
     ttsSub.close("desktop live tts metadata event received");
+    stage = "wildcard-event-rejection";
     let wildcardDelivered = false;
     try {
       const wildcardSub = runtime.client.events.subscribe({
@@ -659,17 +719,19 @@ async function runMeshInteropContract({
       wildcardDelivered = false;
     }
 
+    stage = "authorized-reconnect";
     const reconnectStart = snapshots.length;
     await runtime.peer.disconnect("desktop live reconnect probe").catch(() => undefined);
     await runtime.peer.connect(profile);
-    await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop reconnect WebRTC DataChannel", ready.timeoutMs);
+    await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop reconnect WebRTC DataChannel", reconnectTimeoutMs);
     const reconnectRegistry = await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
       "desktop live registry after WebRTC reconnect",
-      ready.timeoutMs,
+      operationTimeoutMs,
     );
     const reconnectPairingPrompts = countPendingPairing(snapshots, reconnectStart);
 
+    stage = "uncertain-mutation";
     const mutationId = `g009-${ready.lane}-${Date.now().toString(36)}`;
     const mutationStart = snapshots.length;
     const mutationStartedSub = runtime.client.events.subscribe({
@@ -677,7 +739,7 @@ async function runMeshInteropContract({
       topics: [ready.mutationStartedTopic],
       correlationId: mutationId,
       payload: { correlation_id: mutationId },
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: operationTimeoutMs,
     });
     let mutationSettledBeforeDisconnect = false;
     const mutationStartedAtMs = Date.now();
@@ -701,7 +763,7 @@ async function runMeshInteropContract({
         message: error instanceof Error ? error.message : String(error),
         settled_after_disconnect: true,
       }));
-    const mutationStartedEvent = await firstEvent(mutationStartedSub, ready.timeoutMs);
+    const mutationStartedEvent = await firstEvent(mutationStartedSub, operationTimeoutMs);
     mutationStartedSub.close("desktop live mutation started ack received");
     const disconnectAtMs = Date.now();
     const settledBeforeDisconnect = mutationSettledBeforeDisconnect;
@@ -715,7 +777,7 @@ async function runMeshInteropContract({
       })),
     ]);
     await runtime.peer.connect(profile);
-    await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", ready.timeoutMs);
+    await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", reconnectTimeoutMs);
     const mutationReconnectPairingPrompts = countPendingPairing(snapshots, mutationStart);
     const mutationCount = await retryDesktopProviderReadiness(
       () => runtime.client.request(
@@ -724,9 +786,10 @@ async function runMeshInteropContract({
         { busTopic: ready.mutationCountTopic, timeoutMs: 5000 },
       ),
       "desktop live mutation count after WebRTC reconnect",
-      ready.timeoutMs,
+      operationTimeoutMs,
     );
 
+    stage = "credential-revocation";
     const revokeResult = await runtime.client.request(ready.revokeTopic, {}, { busTopic: ready.revokeTopic, timeoutMs: 5000 });
     const revokedStart = snapshots.length;
     autoConfirmPairing = false;
@@ -736,12 +799,13 @@ async function runMeshInteropContract({
       snapshot: () => runtime.peer.snapshot(),
       snapshots,
       startIndex: revokedStart,
-      timeoutMs: ready.timeoutMs,
+      timeoutMs: reconnectTimeoutMs,
     });
     const revokedSnapshot = revocationObservation.snapshot;
     const revokedPendingPairing = revocationObservation.pendingPairingPrompts;
 
     const snapshot = runtime.peer.snapshot();
+    stage = "report-assembly";
     return {
       lane: ready.lane,
       authorized: authorizedSnapshot.state === "authorized",
@@ -860,6 +924,22 @@ async function runMeshInteropContract({
       httpFetchCalls: fetchCalls,
       noHttpFetchTransportUsed: fetchCalls.length === 0,
     };
+  } catch (error) {
+    const snapshot = runtime.peer.snapshot();
+    const diagnostics = {
+      state: snapshot.state,
+      reconnectCount: snapshot.reconnectCount,
+      pendingCallCount: snapshot.pendingCallCount,
+      pendingStreamCount: snapshot.pendingStreamCount,
+      sentFragmentCount: snapshot.sentFragmentCount,
+      receivedFragmentCount: snapshot.receivedFragmentCount,
+      lastRedactedError: snapshot.lastRedactedError,
+    };
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Desktop live ${stage} failed: ${detail}; diagnostics=${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
   } finally {
     unsubscribe();
     globalThis.fetch = originalFetch;
@@ -887,6 +967,28 @@ export async function retryDesktopProviderReadiness<T>(
   throw new Error(`Timed out waiting for ${label}: provider_not_ready`, {
     cause: lastProviderNotReady,
   });
+}
+
+export async function waitForAc18BrowserProbe(
+  ac18: Pick<Ac18BrowserLocalToolProbe, "auditRecords" | "invocationRecords" | "probeId">,
+  timeoutMs: number,
+): Promise<void> {
+  await waitFor(
+    () => {
+      const positiveInvocationCount = ac18.invocationRecords.filter(
+        (record) => record.probe_id === ac18.probeId,
+      ).length;
+      const negativeAuditObserved = ac18.auditRecords.some(
+        (record) =>
+          record.action === "execute" &&
+          record.result === "not_found" &&
+          record.correlation_id === `${ac18.probeId}-negative`,
+      );
+      return positiveInvocationCount === 1 && negativeAuditObserved;
+    },
+    "Python peer to complete the browser-local tool provider probe",
+    timeoutMs,
+  );
 }
 
 function isTransientProviderNotReady(error: unknown): boolean {
@@ -932,14 +1034,7 @@ function hasConflictingProviderReadinessEnvelope(value: Record<string, unknown>)
 type DesktopLiveInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
 function resolveDesktopLiveInvoke(): DesktopLiveInvoke {
-  const tauri = (globalThis as {
-    __TAURI__?: { core?: { invoke?: DesktopLiveInvoke }; invoke?: DesktopLiveInvoke };
-  }).__TAURI__;
-  const invoke = tauri?.core?.invoke ?? tauri?.invoke;
-  if (!invoke) {
-    throw new Error("Desktop live E2E requires the Tauri invoke bridge");
-  }
-  return invoke;
+  return (command, args) => tauriInvoke(command, args);
 }
 
 function canonicalReasonCode(value: unknown): string | null {
@@ -1068,27 +1163,25 @@ function createAc18BrowserLocalToolProvider(
       protocol_revision: 1,
     },
   });
-  const configuredPeerHost = new WebRtcPeerHost({
-    localPeerId: config.localStablePeerId,
-    nodeName: "Aurora desktop live E2E",
-    registry: createToolingPeerHostRegistry(provider),
-    authorizationStore: new RustPeerHostAuthorizationStore(
-      createTauriAuthorityPort(resolveDesktopLiveInvoke()),
-      undefined,
-      // The harness seeds one grant for one peer. It is replayed into the Rust
-      // authority rather than answered by a TypeScript stand-in: R2 leaves
-      // exactly one implementation, and an E2E lane that used a second one
-      // would stop testing the thing that ships.
-      async () => ({
+  const authorizationStore = new RustPeerHostAuthorizationStore(
+    createTauriAuthorityPort(resolveDesktopLiveInvoke()),
+  );
+  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort();
+  const peerPairingIssuer: ReturnType<
+    RustPeerHostAuthorizationStore["asPairingIssuerPort"]
+  > = {
+    async issue(selector, options) {
+      const issued = await authorityPairingIssuer.issue(selector, options);
+      await authorizationStore.hydrate({
         verifiers: [],
         grants: [
           {
-            version: 1 as const,
+            version: 1,
             grantId: "ac18-python-gateway-grant",
-            tokenId: "interop-token-row",
-            claimantPeerId: config.expectedStablePeerId,
-            verifierPeerId: config.localStablePeerId,
-            roomName: config.room,
+            tokenId: issued.verifier.tokenId,
+            claimantPeerId: issued.verifier.claimantPeerId,
+            verifierPeerId: issued.verifier.verifierPeerId,
+            roomName: issued.verifier.roomName,
             allowedMethodIds: [
               "Tooling.GetTools",
               "Tooling.GetExportCatalog",
@@ -1098,12 +1191,28 @@ function createAc18BrowserLocalToolProvider(
             allowedToolContractIds: [toolContractId],
             capabilityPackIds: ["interop.browser.echo"],
             resourceScopes: ["interop.browser.echo"],
-            createdAtMs: 1,
+            createdAtMs: Date.now(),
             grantRevision: 1,
           },
         ],
-      }),
-    ),
+      });
+      return {
+        ...issued,
+        grantedPermissions: ["Tooling.GetTools", "Tooling.ExecuteTool"],
+      };
+    },
+    async rollback(selector) {
+      await authorityPairingIssuer.rollback(selector);
+    },
+  };
+  const configuredPeerHost = new WebRtcPeerHost({
+    localPeerId: config.localStablePeerId,
+    nodeName: "Aurora desktop live E2E",
+    registry: createToolingPeerHostRegistry(provider),
+    // Pairing and provider decisions share this one native Rust authority.
+    // The grant is hydrated only after Rust issues the selector it belongs to,
+    // so the manifest can never be authorized against a placeholder token.
+    authorizationStore,
     randomId: () => `ac18-epoch-${config.lane}`,
     defaultTimeoutMs: config.timeoutMs,
   });
@@ -1111,6 +1220,8 @@ function createAc18BrowserLocalToolProvider(
   return {
     auditRecords,
     invocationRecords,
+    peerAuthorityResolver: authorizationStore.asResolverPort(),
+    peerPairingIssuer,
     peerHost: configuredPeerHost,
     toolContractId,
     localName,
@@ -1137,6 +1248,7 @@ async function buildAc18Evidence(ac18: Ac18BrowserLocalToolProbe): Promise<Recor
   };
   return {
     enabled: true,
+    authorityImplementation: "rust-wasm",
     toolContractId: ac18.toolContractId,
     localName: ac18.localName,
     globalToolId: ac18.registeredTool.toolInfo.global_tool_id,
@@ -1440,6 +1552,7 @@ export async function waitForPostRevocationPairingObservation(
     observedPendingPairingPrompts = Math.max(observedPendingPairingPrompts, pendingPairingPrompts);
     if (
       lastSnapshot.state === "authorized" ||
+      lastSnapshot.state === "failed" ||
       (lastSnapshot.state === "awaiting-sas-confirmation" && observedPendingPairingPrompts > 0)
     ) {
       return {

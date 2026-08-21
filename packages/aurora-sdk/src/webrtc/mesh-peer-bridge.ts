@@ -106,7 +106,7 @@ type SubscribeAck = {
 }
 
 type AsyncDispatchFailure = {
-  operation: 'inbound_call' | 'inbound_subscribe' | 'inbound_unsubscribe' | 'manifest_ack' | 'manifest_response'
+  operation: 'inbound_call' | 'inbound_subscribe' | 'inbound_unsubscribe' | 'manifest_ack' | 'manifest_response' | 'provider_epoch_start'
   reason: 'bridge_closed' | 'send_failed' | 'handler_failed'
 }
 
@@ -724,11 +724,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     const key = authorityContextKey(this.authenticatedPeerContext)
     if (this.startedAuthorityEpochKeys.has(key)) return
     this.startedAuthorityEpochKeys.add(key)
-    void this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
+    const start = this.peerHost.startEpoch(this.remotePeerId, this.authenticatedPeerContext)
       .then((frame) => this.sendLogicalFrame(frame))
-      .catch(() => {
+      .catch((error) => {
         this.startedAuthorityEpochKeys.delete(key)
+        throw error
       })
+    this.observeAsyncDispatch('provider_epoch_start', start)
   }
 
   private resolvePending(id: string, value: unknown): void {

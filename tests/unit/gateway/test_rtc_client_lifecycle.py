@@ -199,6 +199,28 @@ def test_get_connected_peers_anonymous(client):
     assert peers[0]["effective_perms"] == []
 
 
+def test_transient_disconnected_peer_stays_active_while_data_channel_is_open(client):
+    pc = MagicMock()
+    pc.connectionState = "disconnected"
+    channel = MagicMock()
+    channel.readyState = "open"
+    client._pcs = {"peer-a": pc}
+    client._peer_data_channels = {"peer-a": channel}
+
+    peer = client.get_connected_peers()[0]
+
+    assert peer["connection_state"] == "disconnected"
+    assert peer["data_channel_state"] == "open"
+    assert peer["session_active"] is True
+    assert client._is_peer_session_active("peer-a") is True
+
+    channel.readyState = "closed"
+    assert client._is_peer_session_active("peer-a") is False
+    channel.readyState = "open"
+    pc.connectionState = "failed"
+    assert client._is_peer_session_active("peer-a") is False
+
+
 def test_outbound_ice_filter_is_default_off(mock_deps):
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service)

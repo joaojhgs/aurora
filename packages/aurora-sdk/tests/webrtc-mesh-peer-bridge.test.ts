@@ -1043,7 +1043,7 @@ describe('WebRtcMeshPeerBridge', () => {
       handleUnsubscribe: vi.fn(),
       markManifestAcknowledged: vi.fn()
     }
-    new WebRtcMeshPeerBridge({
+    const bridge = new WebRtcMeshPeerBridge({
       session,
       remotePeerId: 'peer-a',
       localPeerRole: 'hybrid',
@@ -1054,8 +1054,13 @@ describe('WebRtcMeshPeerBridge', () => {
     session.sendFailure = new Error('first manifest send fails')
     session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))
     await flush()
+    await flush()
     expect(peerHost.startEpoch).toHaveBeenCalledTimes(1)
     expect(session.sent.filter((frame) => (frame as any).type === 'manifest')).toHaveLength(0)
+    expect(bridge.getDiagnostics()).toMatchObject({
+      asyncDispatchFailureCount: 1,
+      lastAsyncDispatchFailure: { operation: 'provider_epoch_start', reason: 'send_failed' }
+    })
 
     session.sendFailure = null
     session.emit(buildProtocolHello({ role: 'hybrid', capabilities: [CAP_FRAGMENTATION_V1, CAP_PROVIDER_LEASE_V1] }))

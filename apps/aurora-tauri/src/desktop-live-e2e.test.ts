@@ -13,6 +13,7 @@ import {
   resolveDesktopLivePeerConnectionPrimitive,
   retryDesktopProviderReadiness,
   validateDesktopLiveE2ePayload,
+  waitForAc18BrowserProbe,
   waitForPostRevocationPairingObservation,
   type DesktopLiveRevocationSnapshot,
   type DesktopLiveE2ePayload,
@@ -407,6 +408,35 @@ describe("desktop live E2E WebView hook", () => {
     expect(attempts).toBe(1);
   });
 
+  it("keeps the authorized mesh epoch alive until the reverse browser-tool probe finishes", async () => {
+    vi.useFakeTimers();
+    try {
+      const probe = {
+        probeId: "ac18-browser-tool-direct",
+        invocationRecords: [] as Array<Record<string, unknown>>,
+        auditRecords: [] as Array<Record<string, unknown>>,
+      };
+      const waiting = waitForAc18BrowserProbe(
+        probe as unknown as Parameters<typeof waitForAc18BrowserProbe>[0],
+        1_000,
+      );
+      setTimeout(() => {
+        probe.invocationRecords.push({ probe_id: probe.probeId });
+        probe.auditRecords.push({
+          action: "execute",
+          result: "not_found",
+          correlation_id: `${probe.probeId}-negative`,
+        });
+      }, 200);
+
+      await vi.advanceTimersByTimeAsync(300);
+
+      await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("waits past the old fixed revocation window until a new pairing prompt is observed", async () => {
     vi.useFakeTimers();
     try {
@@ -522,6 +552,34 @@ describe("desktop live E2E WebView hook", () => {
     }
   });
 
+  it("returns immediately when revoked reconnect reaches terminal failure", async () => {
+    vi.useFakeTimers();
+    try {
+      let current: DesktopLiveRevocationSnapshot = { state: "discovering-peer" };
+      setTimeout(() => {
+        current = { state: "failed" };
+      }, 300);
+
+      const observing = waitForPostRevocationPairingObservation({
+        snapshot: () => current,
+        snapshots: [],
+        startIndex: 0,
+        timeoutMs: 5_000,
+        intervalMs: 100,
+      });
+      await vi.advanceTimersByTimeAsync(400);
+
+      await expect(observing).resolves.toMatchObject({
+        snapshot: { state: "failed" },
+        elapsedMs: 300,
+        timeoutMs: 5_000,
+        timedOut: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("observes a full bounded window when revocation remains fail-closed while discovering", async () => {
     vi.useFakeTimers();
     try {
@@ -589,6 +647,38 @@ describe("desktop live E2E WebView hook", () => {
     const main = await readFile(resolve(import.meta.dirname, "main.tsx"), "utf8");
     expect(tauriApp).not.toContain("__AURORA_DESKTOP_LIVE_E2E__");
     expect(main).toContain("installDesktopLiveE2eHook");
+  });
+
+  it("uses the supported Tauri API instead of requiring the optional global bridge", async () => {
+    const source = await readFile(resolve(import.meta.dirname, "desktop-live-e2e.ts"), "utf8");
+
+    expect(source).toContain('import { invoke as tauriInvoke } from "@tauri-apps/api/core";');
+    expect(source).toContain("tauriInvoke(command, args)");
+    expect(source).not.toContain("Desktop live E2E requires the Tauri invoke bridge");
+  });
+
+  it("binds the reverse provider grant to the credential issued by native Rust", async () => {
+    const source = await readFile(resolve(import.meta.dirname, "desktop-live-e2e.ts"), "utf8");
+
+    expect(source).toContain("const authorityPairingIssuer = authorizationStore.asPairingIssuerPort()");
+    expect(source).toContain("tokenId: issued.verifier.tokenId");
+    expect(source).toContain("peerAuthorityResolver: authorizationStore.asResolverPort()");
+    expect(source).toContain("peerPairingIssuer: ac18.peerPairingIssuer");
+    expect(source).not.toContain('tokenId: "interop-token-row"');
+  });
+
+  it("fails a stalled fragmented RPC before the WebDriver deadline with stage diagnostics", async () => {
+    const source = await readFile(resolve(import.meta.dirname, "desktop-live-e2e.ts"), "utf8");
+
+    expect(source).toContain('stage = "fragmented-large-rpc";');
+    expect(source).toContain("Math.min(30_000, ready.timeoutMs)");
+    expect(source).toContain("const operationTimeoutMs = Math.min(20_000, ready.timeoutMs)");
+    expect(source).toContain("timeoutMs: operationTimeoutMs");
+    expect(source).toContain("pendingCallCount: snapshot.pendingCallCount");
+    expect(source).toContain("sentFragmentCount: snapshot.sentFragmentCount");
+    expect(source).toContain('stage = "wrong-correlation-event";');
+    expect(source).toContain('"remote-console authorization"');
+    expect(source).toContain("negotiationRole: snapshot.negotiationRole");
   });
 });
 

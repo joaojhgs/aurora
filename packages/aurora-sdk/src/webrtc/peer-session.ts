@@ -245,6 +245,7 @@ export interface PeerSessionTimeouts {
   negotiationMs: number
   authMs: number
   pairingMs: number
+  disconnectedGraceMs: number
 }
 
 export interface PeerSessionReconnectOptions {
@@ -262,7 +263,12 @@ const DEFAULT_TIMEOUTS: PeerSessionTimeouts = {
   discoveryMs: 30_000,
   negotiationMs: 20_000,
   authMs: 20_000,
-  pairingMs: 300_000
+  pairingMs: 300_000,
+  // `disconnected` is explicitly transient in WebRTC implementations. Native
+  // stacks can remain in that state while an open SCTP/DataChannel continues
+  // carrying traffic, so wait through a short ICE-recovery window. Hard
+  // failures and DataChannel close/error still invalidate the epoch at once.
+  disconnectedGraceMs: 10_000
 }
 
 const DEFAULT_RECONNECT: PeerSessionReconnectOptions = {
@@ -892,15 +898,30 @@ export class WebRtcPeerSession {
 
   private onConnectionStateChanged(pc: PeerConnectionLike, generation: number): void {
     if (!this.isCurrentTransport(pc, generation)) return
-    const state = pc.connectionState ?? pc.iceConnectionState
-    if (state === 'failed' || state === 'disconnected') {
-      this.onTransientDisconnect(`peer connection ${state}`)
+    const state = String(pc.connectionState ?? pc.iceConnectionState ?? '').toLowerCase()
+    if (state === 'failed') {
+      this.clearTimerKind('disconnected-grace')
+      this.onTransientDisconnect('peer connection failed')
+      return
     }
+    if (state === 'disconnected') {
+      if (this.hasTimerKind('disconnected-grace')) return
+      this.armTimeout('disconnected-grace', this.timeouts.disconnectedGraceMs, () => {
+        if (!this.isCurrentTransport(pc, generation)) return
+        const currentState = String(pc.connectionState ?? pc.iceConnectionState ?? '').toLowerCase()
+        if (currentState === 'disconnected') {
+          this.onTransientDisconnect('peer connection disconnected')
+        }
+      })
+      return
+    }
+    this.clearTimerKind('disconnected-grace')
   }
 
   private onTransientDisconnect(reason: string): void {
     if (this.closedExplicitly || this.terminalNoReconnect || this.isTerminal()) return
     if (this.state === 'reconnecting') return
+    this.clearTimerKind('disconnected-grace')
     this.authenticatedPeerContext = undefined
     if (this.reconnectAttempts >= this.reconnectOptions.maxAttempts) {
       this.fail(reason, false)
@@ -1124,6 +1145,10 @@ export class WebRtcPeerSession {
         timerKinds.delete(handle)
       }
     }
+  }
+
+  private hasTimerKind(kind: string): boolean {
+    return [...this.timerHandles].some((handle) => timerKinds.get(handle) === kind)
   }
 
   private clearAllTimers(): void {

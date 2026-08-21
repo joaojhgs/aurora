@@ -217,6 +217,9 @@ async function runLive() {
       AURORA_DESKTOP_LIVE_E2E_APPLICATION: driverApplication,
       AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE: applicationPidFile,
       AURORA_DESKTOP_LIVE_E2E_SESSION_NONCE: sessionNonce,
+      AURORA_DESKTOP_LIVE_E2E_SCRIPT_TIMEOUT_MS: String(
+        Math.max(1_000, timeoutMs - 15_000),
+      ),
       WEBRTC_INTEROP_LANE: lane,
       WEBRTC_INTEROP_READY: readyPath,
       WEBRTC_INTEROP_DONE: donePath,
@@ -227,6 +230,13 @@ async function runLive() {
 
     await waitForJson(donePath, timeoutMs, 'desktop driver completion')
     const desktopReport = await waitForJson(desktopReportPath, 10_000, 'desktop driver report')
+    await waitForChild(pythonPeer, 30_000, 'Python peer')
+    if (driverRun.exit.code !== 0) {
+      throw new Error(
+        `desktop driver command exited with ${driverRun.exit.code ?? `signal ${driverRun.exit.signal}`}: `
+        + `${desktopReport.blocker ?? 'unknown'}: ${desktopReport.detail ?? 'no detail'}`,
+      )
+    }
     validateDriverReport(desktopReport, { sessionNonce, expectedWebRtcPrimitive })
     const tauriPid = String(desktopReport.tauriPid)
     const processTreeBefore = desktopReport.processTree.beforeHook
@@ -241,7 +251,6 @@ async function runLive() {
       driverLogDigest: driverRun.outputDigest,
     })
     await enforceNoSeededSecretsInTree(artifactDir, seededSecrets)
-    await waitForChild(pythonPeer, 30_000, 'Python peer')
     run('uv', [
       'run',
       'python',
@@ -447,11 +456,9 @@ async function runDriver(command, env, timeoutMs, seededSecrets, logPath) {
   const redacted = redactSeeded(redactProcessOutput(`stdout:\n${stdout}\nstderr:\n${stderr}`), seededSecrets)
   assertNoSeededSecretsInText(redacted, seededSecrets, 'desktop driver log')
   await fs.writeFile(logPath, redacted)
-  if (exit.code !== 0) {
-    throw new Error(`desktop driver command exited with ${exit.code ?? `signal ${exit.signal}`}`)
-  }
   return {
     outputDigest: sha256Hex(redacted),
+    exit,
   }
 }
 

@@ -15,7 +15,18 @@ const desktopHookReadinessScript = `
     tauriPresent: Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__),
     title: String(document.title || ''),
     readyState: String(document.readyState || ''),
-    hookReady: typeof window.__AURORA_DESKTOP_LIVE_E2E__ === 'function'
+    hookReady: typeof window.__AURORA_DESKTOP_LIVE_E2E__ === 'function',
+    surface: String(
+      document.documentElement.dataset.auroraSurface
+      || document.body?.dataset.auroraSurface
+      || ''
+    ),
+    overlaySurface: Boolean(
+      document.documentElement.dataset.auroraSurface === 'overlay'
+      || document.body?.dataset.auroraSurface === 'overlay'
+      || document.documentElement.classList.contains('aurora-overlay-surface')
+      || document.body?.classList.contains('aurora-overlay-surface')
+    )
   };
 `
 
@@ -73,7 +84,12 @@ async function run() {
     session = await createSession(webdriverUrl, application)
     await setSessionTimeouts(webdriverUrl, session.sessionId, scriptTimeoutMs)
     tauriPid = await waitForApplicationPid(pidFile)
+    await selectMainDesktopWindow(webdriverUrl, session.sessionId)
     await waitForDesktopHookContext(webdriverUrl, session.sessionId)
+    // The overlay is created during app startup and WebKitWebDriver can make the
+    // newest WebView current. Re-select main after readiness so the privileged
+    // hook cannot be invoked in the intentionally restricted overlay context.
+    await selectMainDesktopWindow(webdriverUrl, session.sessionId)
     const processTreeBefore = captureProcessTree(tauriPid)
     const payload = await buildHookPayload({ sessionNonce, tauriPid, reportPath, donePath })
     const hookResult = await invokeDesktopHook(webdriverUrl, session.sessionId, payload)
@@ -216,6 +232,78 @@ async function executeAsyncScript(baseUrl, sessionId, script, args = []) {
   return value.value ?? value
 }
 
+async function listWindowHandles(baseUrl, sessionId) {
+  const value = await request(
+    baseUrl,
+    'GET',
+    `/session/${encodeURIComponent(sessionId)}/window/handles`,
+    undefined,
+    'list-window-handles',
+  )
+  const handles = value.value ?? value
+  if (!Array.isArray(handles)) {
+    throw new Error('WebDriver did not return a window handle list')
+  }
+  return handles.filter((handle) => typeof handle === 'string' && handle.length > 0)
+}
+
+async function switchToWindow(baseUrl, sessionId, handle) {
+  await request(
+    baseUrl,
+    'POST',
+    `/session/${encodeURIComponent(sessionId)}/window`,
+    { handle },
+    'switch-window',
+  )
+}
+
+async function selectMainDesktopWindow(
+  baseUrl,
+  sessionId,
+  {
+    timeoutMs = 30_000,
+    pollMs = 50,
+    listHandles = listWindowHandles,
+    switchWindow = switchToWindow,
+    execute = executeScript,
+    sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+  } = {},
+) {
+  const deadline = Date.now() + timeoutMs
+  let lastRuntime
+  let lastTransientError
+
+  while (Date.now() < deadline) {
+    const handles = await listHandles(baseUrl, sessionId)
+    for (const handle of handles) {
+      try {
+        await switchWindow(baseUrl, sessionId, handle)
+        const runtime = normalizeDesktopHookRuntime(
+          await execute(baseUrl, sessionId, desktopHookReadinessScript),
+        )
+        lastRuntime = runtime
+        lastTransientError = undefined
+        if (!runtime.overlaySurface) return { handle, runtime }
+      } catch (error) {
+        if (!isTransientDesktopContextError(error)) throw error
+        lastTransientError = webdriverErrorCode(error)
+      }
+    }
+    await sleep(pollMs)
+  }
+
+  const runtimeDetail = lastRuntime
+    ? ` Last runtime: ${JSON.stringify(lastRuntime)}.`
+    : ''
+  const errorDetail = lastTransientError
+    ? ` Last transient WebDriver error: ${lastTransientError}.`
+    : ''
+  throw new DesktopHookReadinessError(
+    `Timed out selecting the main Tauri WebView.${runtimeDetail}${errorDetail}`,
+    lastRuntime,
+  )
+}
+
 async function waitForDesktopHookContext(
   baseUrl,
   sessionId,
@@ -271,6 +359,8 @@ function normalizeDesktopHookRuntime(value) {
       title: '',
       readyState: '',
       hookReady: false,
+      surface: '',
+      overlaySurface: false,
     }
   }
   return {
@@ -279,6 +369,8 @@ function normalizeDesktopHookRuntime(value) {
     title: typeof value.title === 'string' ? value.title : '',
     readyState: typeof value.readyState === 'string' ? value.readyState : '',
     hookReady: value.hookReady === true,
+    surface: typeof value.surface === 'string' ? value.surface : '',
+    overlaySurface: value.overlaySurface === true,
   }
 }
 
@@ -629,6 +721,32 @@ async function runSelfTest() {
     () => parseHookResultEnvelope(JSON.stringify({ schema: 'wrong', result: {} })),
     /invalid result envelope/,
   )
+  let selectedWindow = ''
+  const windowSwitches = []
+  const selected = await selectMainDesktopWindow('http://unused.test', 'session', {
+    timeoutMs: 1_000,
+    pollMs: 0,
+    listHandles: async () => ['overlay-window', 'main-window'],
+    switchWindow: async (_baseUrl, _sessionId, handle) => {
+      selectedWindow = handle
+      windowSwitches.push(handle)
+    },
+    execute: async () => ({
+      href: selectedWindow === 'overlay-window'
+        ? 'tauri://localhost/?surface=overlay'
+        : 'tauri://localhost/',
+      tauriPresent: true,
+      title: 'Aurora',
+      readyState: 'complete',
+      hookReady: true,
+      surface: selectedWindow === 'overlay-window' ? 'overlay' : '',
+      overlaySurface: selectedWindow === 'overlay-window',
+    }),
+    sleep: async () => undefined,
+  })
+  assert.deepEqual(windowSwitches, ['overlay-window', 'main-window'])
+  assert.equal(selected.handle, 'main-window')
+  assert.equal(selected.runtime.overlaySurface, false)
   await assert.rejects(
     request('http://127.0.0.1:1', 'GET', '/status', undefined, 'self-test-phase'),
     /self-test-phase failed/,

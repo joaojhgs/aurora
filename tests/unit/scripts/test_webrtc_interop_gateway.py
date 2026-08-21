@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import inspect
 import json
 import socket
 
@@ -66,6 +67,19 @@ def test_gateway_http_probe_reserves_a_non_listening_port() -> None:
             contender.bind(("127.0.0.1", port))
     finally:
         reservation.close()
+
+
+def test_live_gateway_runs_reverse_tool_probe_without_blocking_the_peer_loop() -> None:
+    source = inspect.getsource(__import__("scripts.webrtc_interop_gateway", fromlist=["main"]).main)
+
+    assert "asyncio.create_task(" in source
+    assert 'name=f"webrtc-interop-ac18:{args.lane}"' in source
+    assert "rtc.peer_supports_capability(" in source
+    assert "CAP_PROVIDER_LEASE_V1" in source
+    assert "readiness_deadline = min(deadline, time.monotonic() + 15.0)" in inspect.getsource(
+        run_ac18_reverse_browser_tool_probe
+    )
+    assert "ac18_reverse_tool = await run_ac18_reverse_browser_tool_probe(" not in source
 
 
 def test_registry_response_is_sorted_and_digest_is_stable() -> None:

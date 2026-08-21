@@ -2008,11 +2008,14 @@ class RTCClient:
         for peer_id, pc in self._pcs.items():
             identity = self._peer_acl.get(peer_id, ANONYMOUS)
             stable_peer_id = self._claimed_stable_peer_id_for_session(peer_id)
+            channel = self._peer_data_channels.get(peer_id)
             peers.append(
                 {
                     "peer_id": peer_id,
                     "stable_peer_id": stable_peer_id,
                     "connection_state": pc.connectionState,
+                    "data_channel_state": getattr(channel, "readyState", "unknown"),
+                    "session_active": self._is_peer_session_active(peer_id),
                     "principal_name": identity.principal_name,
                     "is_admin": identity.is_admin,
                     "effective_perms": list(identity.effective_perms),
@@ -2029,7 +2032,11 @@ class RTCClient:
         return bool(
             pc is not None
             and channel is not None
-            and connection_state not in ("disconnected", "failed", "closed")
+            # WebRTC's disconnected state is transient. Some native stacks
+            # retain a fully usable SCTP/DataChannel while ICE recovers, so the
+            # authenticated epoch remains active until the channel closes or
+            # the peer connection reaches a hard terminal state.
+            and connection_state not in ("failed", "closed")
             and getattr(channel, "readyState", None) == "open"
         )
 
