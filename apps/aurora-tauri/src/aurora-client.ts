@@ -83,7 +83,13 @@ import type {
   LocalFeatureSharingPort,
   ProviderLocalApprovalControllerPort,
 } from "@aurora/client/local-tools";
-import { createTauriNativePeerConnection } from "./native-webrtc";
+import { providerServiceInstanceId } from "@aurora/client/local-tools";
+import {
+  createTauriNativePeerConnection,
+  deliverNativeTransportFrame,
+  nativeTransportHandleForRemoteSignalingId,
+} from "./native-webrtc";
+import { installMeshSessionRuntimeLink } from "./mesh-session-link";
 import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
 import {
   createTauriMeshNodeServices,
@@ -1283,6 +1289,38 @@ function createTauriWebThinRuntime({
     createDemoClient: () =>
       new AuroraClient({ transport: new MockAuroraTransport() }),
   });
+  const nativeLocalPeerId = meshNodeServices?.enabled
+    ? meshNodeServices.localPeerId
+    : localStablePeerId;
+  const meshSessionLink = usesNativePeerConnection
+    ? installMeshSessionRuntimeLink({
+        invoke,
+        peer: runtime.peer,
+        handleForRemoteSignalingId:
+          nativeTransportHandleForRemoteSignalingId,
+        deliverFrame: deliverNativeTransportFrame,
+        ...(nativeLocalPeerId !== undefined
+          ? {
+              localPeerId: nativeLocalPeerId,
+              providerServiceInstanceId:
+                providerServiceInstanceId(nativeLocalPeerId),
+            }
+          : {}),
+        ...(typeof document === "undefined"
+          ? {}
+          : { lifecycleTarget: document }),
+      })
+    : null;
+  if (meshSessionLink) {
+    const closeRuntime = runtime.close.bind(runtime);
+    runtime = {
+      ...runtime,
+      async close(): Promise<void> {
+        await meshSessionLink.close();
+        await closeRuntime();
+      },
+    };
+  }
   if (webrtcProfile && mode !== "http-only") {
     queueMicrotask(() => {
       void runtime.peer.connect(webrtcProfile).catch(() => undefined);

@@ -426,6 +426,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     return () => this.rosterListeners.delete(listener)
   }
 
+  async getManifest(peerId: string): Promise<import('../mesh.js').MeshPeerManifest | null> {
+    return await this.bridgeRouter.getManifest(peerId)
+  }
+
   connectionPolicy(): MeshPeerConnectionPolicy {
     return this.registry.connectionPolicy
   }
@@ -792,6 +796,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       onPeerStandby: (frame: MeshPeerStandbyFrame) => {
         void this.acceptPeerStandby(entry, frame)
       },
+      onManifestChanged: () => this.emit(),
       ...(entry.localProtocolHello
         ? { localProtocolHello: entry.localProtocolHello }
         : {})

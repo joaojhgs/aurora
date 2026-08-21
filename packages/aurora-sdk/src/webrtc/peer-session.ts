@@ -147,8 +147,19 @@ export interface PeerSessionTimerPort {
   clearTimeout(handle: unknown): void
 }
 
+/** Identity known by the session when it creates one transport primitive. */
+export interface PeerSessionPeerConnectionContext {
+  /** Exact signaling identity this peer connection is pinned to. */
+  remoteSignalingId?: string | undefined
+  /** Expected stable identity from the profile, when one was known up front. */
+  expectedRemoteStableId?: string | undefined
+}
+
 export interface PeerSessionPeerConnectionFactory {
-  (configuration: RTCConfiguration): PeerConnectionLike
+  (
+    configuration: RTCConfiguration,
+    context?: PeerSessionPeerConnectionContext,
+  ): PeerConnectionLike
 }
 
 export interface PeerConnectionLike {
@@ -646,7 +657,16 @@ export class WebRtcPeerSession {
 
   private ensurePeerConnection(): void {
     if (this.pc !== undefined) return
-    const pc = this.options.createPeerConnection({ iceServers: this.options.iceServers ?? [] })
+    const remoteSignalingId = this.remoteSignalingId ?? this.options.expectedRemoteSignalingId
+    const pc = this.options.createPeerConnection(
+      { iceServers: this.options.iceServers ?? [] },
+      {
+        ...(remoteSignalingId !== undefined ? { remoteSignalingId } : {}),
+        ...(this.options.expectedRemoteStableId !== undefined
+          ? { expectedRemoteStableId: this.options.expectedRemoteStableId }
+          : {}),
+      }
+    )
     const generation = this.transportGeneration + 1
     this.transportGeneration = generation
     this.pc = pc

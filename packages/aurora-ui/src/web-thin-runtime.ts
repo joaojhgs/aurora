@@ -6,6 +6,7 @@ import {
   type AuroraTransport,
   type HttpTransportOptions,
   type JsonObject,
+  type MeshPeerManifest,
 } from '@aurora/client'
 import {
   CAP_BACKPRESSURE_V1,
@@ -196,7 +197,9 @@ export interface BrowserWebRtcSnapshot extends PeerConnectionSnapshot {
 
 type BrowserSnapshotListener = (snapshot: BrowserWebRtcSnapshot) => void
 /** The multi-device half of the controller, present once a session registry exists. */
-type RegistryCapablePeerController = PeerConnectionController & Partial<MeshPeerRegistryController>
+type RegistryCapablePeerController = PeerConnectionController & Partial<MeshPeerRegistryController> & {
+  getManifest?(peerId: string): Promise<MeshPeerManifest | null>
+}
 type SelectedCandidatePairEvidence = Awaited<ReturnType<PeerConnectionController['getSelectedCandidatePairEvidence']>>
 type LocalProviderLifecyclePort = {
   resumeLocalProvider(): void | Promise<void>
@@ -596,6 +599,21 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.listeners.add(listener)
     listener(this.snapshot())
     return () => this.listeners.delete(listener)
+  }
+
+  /** Exact per-device transport roster for native composition code. */
+  roster(): MeshPeerRosterSnapshot | null {
+    return this.peer?.roster?.() ?? null
+  }
+
+  subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void): () => void {
+    const subscribe = this.peer?.subscribeRoster
+    if (!subscribe) return () => undefined
+    return subscribe.call(this.peer, listener)
+  }
+
+  async getManifest(peerId: string): Promise<MeshPeerManifest | null> {
+    return await this.peer?.getManifest?.(peerId) ?? null
   }
 
   /**

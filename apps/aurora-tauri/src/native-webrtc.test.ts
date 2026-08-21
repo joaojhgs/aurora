@@ -5,6 +5,8 @@ import type {
 } from "@aurora/client/webrtc";
 import {
   createTauriNativePeerConnectionFactory,
+  deliverNativeTransportFrame,
+  nativeTransportHandleForRemoteSignalingId,
   NativeWebRtcMessageTooLargeError,
   NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
   type TauriNativeWebRtcBridge,
@@ -85,6 +87,35 @@ class FakeNativeWebRtcBridge implements TauriNativeWebRtcBridge {
 }
 
 describe("Tauri native WebRTC fallback", () => {
+  it("indexes and reinjects frames by the session's exact signaling identity", async () => {
+    const bridge = new FakeNativeWebRtcBridge();
+    const peer = createTauriNativePeerConnectionFactory(bridge)(
+      {},
+      { remoteSignalingId: "signal-exact-peer" },
+    );
+    const channel = peer.createDataChannel("aurora-rpc");
+    const onMessage = vi.fn();
+    channel.onmessage = onMessage;
+    await peer.createOffer();
+    bridge.emit({
+      type: "dataChannelOpen",
+      peerConnectionId: 7,
+      dataChannelId: 8,
+    });
+
+    expect(
+      nativeTransportHandleForRemoteSignalingId("signal-exact-peer"),
+    ).toEqual({ peerConnectionId: 7, dataChannelId: 8 });
+    expect(deliverNativeTransportFrame(8, { type: "event", id: "replay-1" }))
+      .toBe(true);
+    expect(onMessage).toHaveBeenCalledWith({
+      data: '{"type":"event","id":"replay-1"}',
+    });
+    expect(
+      nativeTransportHandleForRemoteSignalingId("signal-other-peer"),
+    ).toBeNull();
+  });
+
   it("keeps negotiation ordering and browser-like peer/data-channel semantics", async () => {
     const bridge = new FakeNativeWebRtcBridge();
     const createPeerConnection =

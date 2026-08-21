@@ -4,6 +4,7 @@ import type {
   DataChannelLike,
   IceCandidateInitLike,
   PeerConnectionLike,
+  PeerSessionPeerConnectionContext,
   PeerSessionPeerConnectionFactory,
   SessionDescriptionLike,
 } from "@aurora/client/webrtc";
@@ -167,8 +168,8 @@ export function createTauriNativePeerConnectionFactory(
   bridge: TauriNativeWebRtcBridge,
 ): PeerSessionPeerConnectionFactory {
   const registry = new NativeWebRtcEventRegistry(bridge);
-  return (configuration) =>
-    new TauriNativePeerConnection(configuration, bridge, registry);
+  return (configuration, context) =>
+    new TauriNativePeerConnection(configuration, bridge, registry, context);
 }
 
 class TauriNativePeerConnection implements PeerConnectionLike {
@@ -195,13 +196,18 @@ class TauriNativePeerConnection implements PeerConnectionLike {
     private readonly configuration: RTCConfiguration,
     private readonly bridge: TauriNativeWebRtcBridge,
     private readonly registry: NativeWebRtcEventRegistry,
+    private readonly context: PeerSessionPeerConnectionContext = {},
   ) {}
 
   createDataChannel(
     label: string,
     options: RTCDataChannelInit = {},
   ): DataChannelLike {
-    const channel = new TauriNativeDataChannel(label, this.bridge);
+    const channel = new TauriNativeDataChannel(
+      label,
+      this.bridge,
+      this.context.remoteSignalingId,
+    );
     const binding = this.ensurePeerConnection()
       .then(async (peerConnectionId) => {
         const response =
@@ -322,7 +328,11 @@ class TauriNativePeerConnection implements PeerConnectionLike {
         this.oniceconnectionstatechange?.();
         return;
       case "dataChannel": {
-        const channel = new TauriNativeDataChannel(event.label, this.bridge);
+        const channel = new TauriNativeDataChannel(
+          event.label,
+          this.bridge,
+          this.context.remoteSignalingId,
+        );
         channel.bind(event.peerConnectionId, {
           dataChannelId: event.dataChannelId,
           label: event.label,
@@ -501,13 +511,56 @@ const liveNativeDataChannels = new Set<TauriNativeDataChannel>();
 export function openNativeTransportHandles(): {
   peerConnectionId: number;
   dataChannelId: number;
+  remoteSignalingId?: string;
 }[] {
-  const handles: { peerConnectionId: number; dataChannelId: number }[] = [];
+  const handles: {
+    peerConnectionId: number;
+    dataChannelId: number;
+    remoteSignalingId?: string;
+  }[] = [];
   for (const channel of liveNativeDataChannels) {
     const handle = channel.nativeTransportHandles();
     if (handle) handles.push(handle);
   }
   return handles;
+}
+
+/** Resolve one native channel by the signaling identity pinned to its session. */
+export function nativeTransportHandleForRemoteSignalingId(
+  remoteSignalingId: string,
+): { peerConnectionId: number; dataChannelId: number } | null {
+  const matches = [...liveNativeDataChannels]
+    .filter((channel) => channel.remoteSignalingId === remoteSignalingId)
+    .flatMap((channel) => {
+      const handles = channel.nativeTransportHandles();
+      return handles ? [handles] : [];
+    });
+  if (matches.length > 1) {
+    throw new Error(
+      `multiple native data channels are pinned to signaling peer ${remoteSignalingId}`,
+    );
+  }
+  const [match] = matches;
+  return match
+    ? {
+        peerConnectionId: match.peerConnectionId,
+        dataChannelId: match.dataChannelId,
+      }
+    : null;
+}
+
+/** Reinject one Rust-parked JSON frame through its exact live data channel. */
+export function deliverNativeTransportFrame(
+  dataChannelId: number,
+  frame: unknown,
+): boolean {
+  for (const channel of liveNativeDataChannels) {
+    const handles = channel.nativeTransportHandles();
+    if (handles?.dataChannelId !== dataChannelId) continue;
+    channel.message(JSON.stringify(frame));
+    return true;
+  }
+  return false;
 }
 
 class TauriNativeDataChannel implements DataChannelLike {
@@ -537,6 +590,7 @@ class TauriNativeDataChannel implements DataChannelLike {
   constructor(
     label: string,
     private readonly bridge: TauriNativeWebRtcBridge,
+    readonly remoteSignalingId?: string,
   ) {
     this.label = label;
   }
@@ -652,13 +706,20 @@ class TauriNativeDataChannel implements DataChannelLike {
    * identifiers, not identity.
    */
   nativeTransportHandles():
-    | { peerConnectionId: number; dataChannelId: number }
+    | {
+        peerConnectionId: number;
+        dataChannelId: number;
+        remoteSignalingId?: string;
+      }
     | null {
     if (this.peerConnectionId === undefined) return null;
     if (this.dataChannelId === undefined) return null;
     return {
       peerConnectionId: this.peerConnectionId,
       dataChannelId: this.dataChannelId,
+      ...(this.remoteSignalingId !== undefined
+        ? { remoteSignalingId: this.remoteSignalingId }
+        : {}),
     };
   }
 

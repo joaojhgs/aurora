@@ -221,6 +221,32 @@ describe('WebRtcPeerSession', () => {
     expect(categorizeIceCandidate('candidate:0 1 udp 1 203.0.113.3 123 typ relay')).toBe('relay')
   })
 
+  it('passes the exact remote signaling identity into the peer-connection factory', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection()
+    const contexts: unknown[] = []
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z',
+      expectedRemoteStableId: 'stable-a',
+      signaling,
+      createPeerConnection: (_configuration, context) => {
+        contexts.push(context)
+        return pc
+      },
+      codec,
+      timers: new FakeTimers(),
+      auth: { handleFrame: async () => undefined }
+    })
+    await session.start()
+    signaling.emit({ channel: 'offer', from: 'signal-a', envelope: { type: 'offer', sdp: 'offer' } })
+    await flush()
+
+    expect(contexts).toEqual([{
+      remoteSignalingId: 'signal-a',
+      expectedRemoteStableId: 'stable-a'
+    }])
+  })
+
   it('exposes authenticated peer context only after auth success and clears it on reconnect', async () => {
     const context = authenticatedContext()
     const { session, pc } = await authorizedAnswerer({

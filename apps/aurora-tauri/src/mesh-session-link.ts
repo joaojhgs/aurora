@@ -72,6 +72,10 @@ export async function bindMeshSessionPeer(
   options: {
     readonly authenticatedPeerContext?: unknown;
     readonly handles?: { peerConnectionId: number; dataChannelId: number };
+    readonly localPeerId?: string;
+    readonly providerServiceInstanceId?: string;
+    readonly advertisedMethodIds?: readonly string[];
+    readonly primary?: boolean;
   } = {},
 ): Promise<MeshSessionBindResult> {
   const handles = options.handles ?? soleNativeTransportHandle();
@@ -81,6 +85,10 @@ export async function bindMeshSessionPeer(
       peerConnectionId: handles.peerConnectionId,
       dataChannelId: handles.dataChannelId,
       authenticatedPeerContext: options.authenticatedPeerContext ?? null,
+      localPeerId: options.localPeerId ?? null,
+      providerServiceInstanceId: options.providerServiceInstanceId ?? null,
+      advertisedMethodIds: [...(options.advertisedMethodIds ?? [])],
+      primary: options.primary ?? false,
     },
   });
 }
@@ -160,6 +168,258 @@ export function observeMeshSurfaceLifecycle(
   onVisibilityChange();
   return () => {
     target.removeEventListener("visibilitychange", onVisibilityChange);
+  };
+}
+
+export interface MeshSessionRosterPeer {
+  readonly peerId: string;
+  readonly primary: boolean;
+  readonly authenticatedPeerContext?: unknown;
+  readonly standby?: unknown;
+  readonly snapshot: {
+    readonly state: string;
+    readonly connectedSignalingPeerId?: string;
+  };
+}
+
+export interface MeshSessionRoster {
+  readonly peers: readonly MeshSessionRosterPeer[];
+}
+
+export interface MeshSessionRuntimePeer {
+  subscribeRoster(listener: (roster: MeshSessionRoster) => void): () => void;
+  getManifest(peerId: string): Promise<{
+    readonly services?: readonly {
+      readonly methods?: readonly string[];
+    }[];
+  } | null>;
+}
+
+export interface MeshSessionRuntimeLinkOptions {
+  readonly invoke: MeshSessionInvoke;
+  readonly peer: MeshSessionRuntimePeer;
+  readonly localPeerId?: string;
+  readonly providerServiceInstanceId?: string;
+  readonly handleForRemoteSignalingId: (
+    remoteSignalingId: string,
+  ) => { peerConnectionId: number; dataChannelId: number } | null;
+  readonly deliverFrame: (dataChannelId: number, frame: unknown) => boolean;
+  readonly lifecycleTarget?: Pick<
+    Document,
+    "addEventListener" | "removeEventListener" | "visibilityState"
+  >;
+}
+
+export interface MeshSessionRuntimeLink {
+  close(): Promise<void>;
+}
+
+type ActiveMeshSessionBinding = {
+  readonly signature: string;
+  readonly dataChannelId: number;
+};
+
+function bindableRosterPeer(
+  roster: MeshSessionRoster,
+  peerId: string,
+): MeshSessionRosterPeer | null {
+  const peer = roster.peers.find((candidate) => candidate.peerId === peerId);
+  if (!peer) return null;
+  if (peer.snapshot.state !== "authorized") return null;
+  if (peer.standby !== undefined) return null;
+  if (peer.snapshot.connectedSignalingPeerId === undefined) return null;
+  return peer;
+}
+
+/**
+ * Bind every authorized native channel to its exact stable peer identity.
+ *
+ * Roster changes are serialized so reconnects cannot interleave unbind/bind
+ * operations. The signaling identity is the lookup key for transport handles;
+ * a sole-channel guess is never used on this production path.
+ */
+export function installMeshSessionRuntimeLink(
+  options: MeshSessionRuntimeLinkOptions,
+): MeshSessionRuntimeLink {
+  const bindings = new Map<string, ActiveMeshSessionBinding>();
+  const pendingDrains = new Map<string, unknown[]>();
+  let closed = false;
+  let latestRoster: MeshSessionRoster = { peers: [] };
+  let reconcileQueue: Promise<void> = Promise.resolve();
+
+  const flushPeer = (peerId: string): void => {
+    const binding = bindings.get(peerId);
+    const pending = pendingDrains.get(peerId);
+    if (!binding || !pending || pending.length === 0) return;
+    let delivered = 0;
+    for (const frame of pending) {
+      if (!options.deliverFrame(binding.dataChannelId, frame)) break;
+      delivered += 1;
+    }
+    if (delivered === pending.length) pendingDrains.delete(peerId);
+    else if (delivered > 0) pending.splice(0, delivered);
+  };
+
+  const retainDrains = (drained: readonly MeshSessionDrain[]): void => {
+    for (const item of drained) {
+      const pending = pendingDrains.get(item.peerId) ?? [];
+      pending.push(...item.frames);
+      pendingDrains.set(item.peerId, pending);
+      flushPeer(item.peerId);
+    }
+  };
+
+  const bindRosterPeer = async (
+    rosterPeer: MeshSessionRosterPeer,
+    handles: { peerConnectionId: number; dataChannelId: number },
+    advertisedMethodIds: readonly string[],
+  ): Promise<void> => {
+    const signature = JSON.stringify({
+      peerConnectionId: handles.peerConnectionId,
+      dataChannelId: handles.dataChannelId,
+      authenticatedPeerContext: rosterPeer.authenticatedPeerContext ?? null,
+      localPeerId: options.localPeerId ?? null,
+      providerServiceInstanceId: options.providerServiceInstanceId ?? null,
+      advertisedMethodIds,
+      primary: rosterPeer.primary,
+    });
+    const existing = bindings.get(rosterPeer.peerId);
+    if (existing?.signature === signature) return;
+    if (existing && existing.dataChannelId !== handles.dataChannelId) {
+      await unbindMeshSessionPeer(options.invoke, rosterPeer.peerId);
+      bindings.delete(rosterPeer.peerId);
+    }
+    await bindMeshSessionPeer(options.invoke, rosterPeer.peerId, {
+      handles,
+      authenticatedPeerContext: rosterPeer.authenticatedPeerContext,
+      ...(options.localPeerId !== undefined
+        ? { localPeerId: options.localPeerId }
+        : {}),
+      ...(options.providerServiceInstanceId !== undefined
+        ? { providerServiceInstanceId: options.providerServiceInstanceId }
+        : {}),
+      advertisedMethodIds,
+      primary: rosterPeer.primary,
+    });
+    bindings.set(rosterPeer.peerId, {
+      signature,
+      dataChannelId: handles.dataChannelId,
+    });
+    flushPeer(rosterPeer.peerId);
+  };
+
+  const reconcile = async (): Promise<void> => {
+    if (closed) return;
+    const desired = new Map(
+      latestRoster.peers
+        .flatMap((peer) => {
+          const bindable = bindableRosterPeer(latestRoster, peer.peerId);
+          return bindable ? [bindable] : [];
+        })
+        .map((peer) => [peer.peerId, peer] as const),
+    );
+    for (const peerId of [...bindings.keys()]) {
+      if (desired.has(peerId)) continue;
+      await unbindMeshSessionPeer(options.invoke, peerId).catch(() => undefined);
+      bindings.delete(peerId);
+      pendingDrains.delete(peerId);
+    }
+    for (const rosterPeer of desired.values()) {
+      const remoteSignalingId = rosterPeer.snapshot.connectedSignalingPeerId;
+      if (!remoteSignalingId) continue;
+      let handles: { peerConnectionId: number; dataChannelId: number } | null;
+      try {
+        handles = options.handleForRemoteSignalingId(remoteSignalingId);
+      } catch {
+        handles = null;
+      }
+      if (!handles) {
+        if (bindings.has(rosterPeer.peerId)) {
+          await unbindMeshSessionPeer(options.invoke, rosterPeer.peerId).catch(
+            () => undefined,
+          );
+          bindings.delete(rosterPeer.peerId);
+        }
+        continue;
+      }
+      await bindRosterPeer(rosterPeer, handles, []);
+      void options.peer
+        .getManifest(rosterPeer.peerId)
+        .then((manifest) => {
+          reconcileQueue = reconcileQueue.then(async () => {
+            if (closed || !manifest) return;
+            const currentPeer = bindableRosterPeer(
+              latestRoster,
+              rosterPeer.peerId,
+            );
+            if (!currentPeer) return;
+            const currentRemoteSignalingId =
+              currentPeer.snapshot.connectedSignalingPeerId;
+            if (currentRemoteSignalingId === undefined) return;
+            if (
+              currentRemoteSignalingId !==
+              rosterPeer.snapshot.connectedSignalingPeerId
+            ) {
+              return;
+            }
+            let currentHandles: {
+              peerConnectionId: number;
+              dataChannelId: number;
+            } | null;
+            try {
+              currentHandles = options.handleForRemoteSignalingId(
+                currentRemoteSignalingId,
+              );
+            } catch {
+              currentHandles = null;
+            }
+            if (
+              !currentHandles ||
+              currentHandles.peerConnectionId !== handles.peerConnectionId ||
+              currentHandles.dataChannelId !== handles.dataChannelId
+            ) {
+              return;
+            }
+            const methodIds = [
+              ...new Set(
+                (manifest.services ?? []).flatMap((service) => [
+                  ...(service.methods ?? []),
+                ]),
+              ),
+            ].sort();
+            await bindRosterPeer(currentPeer, currentHandles, methodIds);
+          });
+        })
+        .catch(() => undefined);
+    }
+  };
+
+  const scheduleReconcile = (roster: MeshSessionRoster): void => {
+    latestRoster = roster;
+    reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
+  };
+  const unsubscribeRoster = options.peer.subscribeRoster(scheduleReconcile);
+  const stopLifecycle = observeMeshSurfaceLifecycle({
+    invoke: options.invoke,
+    onDrained: retainDrains,
+    ...(options.lifecycleTarget !== undefined
+      ? { target: options.lifecycleTarget }
+      : {}),
+  });
+
+  return {
+    async close(): Promise<void> {
+      if (closed) return;
+      closed = true;
+      unsubscribeRoster();
+      stopLifecycle();
+      await reconcileQueue;
+      for (const peerId of [...bindings.keys()]) {
+        await unbindMeshSessionPeer(options.invoke, peerId).catch(() => undefined);
+      }
+      bindings.clear();
+      pendingDrains.clear();
+    },
   };
 }
 

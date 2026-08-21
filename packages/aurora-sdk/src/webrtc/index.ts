@@ -24,6 +24,7 @@ export type {
   IceCandidateInitLike,
   IceCandidateLike,
   PeerConnectionLike,
+  PeerSessionPeerConnectionContext,
   PeerSessionPeerConnectionFactory,
   PeerSessionAuthContext,
   PeerSessionAuthPort,
