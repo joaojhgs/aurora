@@ -293,6 +293,7 @@ export async function createTauriMeshNodeServices(
       nodeName,
       registry,
       authorityResolver,
+      authorizationStore,
       exportDecision: options.exportDecision ?? localFeatureSharing,
       audit: localToolAudit,
       cursorSecret: randomBytes(32),

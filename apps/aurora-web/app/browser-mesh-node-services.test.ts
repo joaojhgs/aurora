@@ -255,6 +255,121 @@ describe('browser mesh-node service composition', () => {
     await credentialStore.close()
   })
 
+  it('hydrates durable feature-sharing grants into a recreated browser authority', async () => {
+    const credentialStore = durableCredentialStore()
+    const crypto = new RecordingEnvelopeCrypto()
+    const selector = {
+      tokenId: 'token-browser-sharing-reload',
+      claimantPeerId: 'remote-peer',
+      verifierPeerId: 'browser-peer',
+      roomName: 'office',
+    }
+    const transport = {
+      channelBinding: 'd'.repeat(64),
+      claimantSignalingPeerId: 'signal-remote',
+      verifierSignalingPeerId: 'signal-browser',
+    }
+    let nextId = 1
+    const createServices = async (
+      backend: PersistentMemoryLocalDataBackend,
+      imported?: Awaited<ReturnType<LocalDataSession['exportV1']>>,
+    ) => await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore,
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => {
+        const authority = await localDataAuthority(backend)
+        if (imported !== undefined) await authority.session.importV1(imported)
+        return authority
+      },
+      envelopeCryptoFactory: () => crypto,
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => `reload-sharing-id-${nextId++}`,
+      authorityWasmSource: nodeWasmSource,
+    })
+
+    const first = await createServices(new PersistentMemoryLocalDataBackend())
+    const issued = await first.peerPairingIssuer.issue(selector)
+    await first.localFeatureSharing.setFeatureEnabled(
+      'aurora.local.native.get_device_status.v1',
+      true,
+    )
+    await first.localFeatureSharing.replacePeerSharing(
+      selector.claimantPeerId,
+      ['aurora.local.native.get_device_status.v1'],
+      null,
+    )
+    const exported = await first.session.exportV1()
+    await first.close()
+
+    const recreated = await createServices(
+      new PersistentMemoryLocalDataBackend(),
+      exported,
+    )
+    await expect(recreated.localFeatureSharing.load()).resolves.toMatchObject({
+      approvedDevices: [{
+        peerId: selector.claimantPeerId,
+        featureIds: ['aurora.local.native.get_device_status.v1'],
+      }],
+    })
+    const resolver = recreated.peerAuthorityResolver
+    expect(resolver).toBeDefined()
+    if (resolver === undefined) throw new Error('peer authority resolver missing')
+    const challenge = await resolver.issueReconnectChallenge({
+      identity: {
+        claimantPeerId: selector.claimantPeerId,
+        verifierPeerId: selector.verifierPeerId,
+        roomName: selector.roomName,
+      },
+      transport,
+      nowMs: 1_000,
+    })
+    const proofHex = await createReconnectProofForBearer(
+      issued.bearerToken,
+      selector,
+      transport,
+      challenge.challenge,
+    )
+    const verified = await resolver.verifyReconnectProof({
+      proofHex,
+      selector,
+      transport,
+      challenge: challenge.challenge,
+      nowMs: 1_000,
+    })
+    expect(verified).toMatchObject({ ok: true })
+    if (!verified.ok || verified.context === undefined) {
+      throw new Error('recreated authority did not authenticate the durable relationship')
+    }
+
+    const activeGrants = await recreated.peerGrantManager.listActiveGrants(selector)
+    const registryMethods = recreated.provider.peerHostRegistry.list().map((method) => method.methodId)
+    expect(activeGrants).toEqual([
+      expect.objectContaining({
+        allowedMethodIds: registryMethods,
+        allowedToolContractIds: ['aurora.local.native.get_device_status.v1'],
+      }),
+    ])
+    const manifest = await recreated.peerHost!.startEpoch(
+      selector.claimantPeerId,
+      verified.context,
+    )
+    expect(manifest).toMatchObject({
+      projection_active: true,
+      shared_services: [
+        expect.objectContaining({ module: 'Tooling' }),
+      ],
+    })
+    await recreated.close()
+    await credentialStore.close()
+  })
+
   it('uses explicit export decisions and records local tool audit directly into durable local data', async () => {
     const store = durableCredentialStore()
     const backend = new PersistentMemoryLocalDataBackend()

@@ -232,6 +232,32 @@ describe("Tauri mesh node services", () => {
     await services.close();
   });
 
+  it("projects native tooling methods through the composed Rust authority", async () => {
+    const services = await createEnabledServices();
+    await services.grantManager.replaceGrant(selector, {
+      allowedMethodIds: ["Tooling.GetTools"],
+      allowedToolContractIds: [AURORA_NATIVE_TOOL_IDS.getDeviceStatus],
+    });
+    const authenticatedPeerContext = peerHostCallContext(
+      "Tooling.GetTools",
+      1_000,
+    ).authenticatedPeerContext;
+    if (!authenticatedPeerContext) throw new Error("expected authenticated peer context");
+
+    await expect(
+      services.peerHost.startEpoch(selector.claimantPeerId, authenticatedPeerContext),
+    ).resolves.toMatchObject({
+      projection_active: true,
+      shared_services: [
+        expect.objectContaining({
+          module: "Tooling",
+          methods: [expect.objectContaining({ name: "GetTools" })],
+        }),
+      ],
+    });
+    await services.close();
+  });
+
   it("persists issued verifiers and their revocation through the native composition", async () => {
     const verifierSecretStorage = new MemorySecretStorage();
     const services = await createEnabledServices(() => 1_000, {
@@ -821,15 +847,30 @@ function fakeAuthorityInvoke(newId: () => string) {
     if (command === "aurora_mesh_authority_hydrate") return undefined;
     if (command === "aurora_mesh_authority_drain_audit") return [];
     if (command === "aurora_mesh_authority_snapshot_manifest") {
+      const request = args?.request as {
+        remotePeerId?: string;
+        authenticatedPeerContext?: { selector: PeerRelationshipSelector };
+        nowMs?: number;
+      };
+      const requestSelector = request.authenticatedPeerContext?.selector;
+      const nowMs = Number(request.nowMs ?? 0);
+      const active = requestSelector
+        ? [...grants.values()]
+            .filter((grant) => keyFor(grant) === keyFor(requestSelector))
+            .filter((grant) => grant.revokedAtMs === undefined || grant.revokedAtMs > nowMs)
+            .filter((grant) => grant.expiresAtMs === undefined || grant.expiresAtMs > nowMs)
+        : [];
       return {
-        authorityRevision: {
-          catalogRevision: 1,
-          exportPolicyRevision: 1,
-          authGrantRevision: 1,
-          manifestRevision: 1,
-          switchRevision: 1,
-          protocolRevision: 1,
-        },
+        recipientPeerId: request.remotePeerId ?? requestSelector?.claimantPeerId,
+        grantedMethodIds: [...new Set(active.flatMap((grant) => grant.allowedMethodIds))].sort(),
+        grantedToolContractIds: [
+          ...new Set(active.flatMap((grant) => grant.allowedToolContractIds)),
+        ].sort(),
+        authGrantRevision: active.reduce(
+          (revision, grant) => Math.max(revision, grant.grantRevision),
+          0,
+        ),
+        authGrantState: active.length > 0 ? "active" : "unknown",
       };
     }
     if (command === "aurora_mesh_authority_authorize") {

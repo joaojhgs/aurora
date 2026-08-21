@@ -265,6 +265,7 @@ export async function createBrowserMeshNodeServices(
       nodeName: profile.localNode.nodeName,
       registry: pack.registry as unknown as Parameters<typeof localTools.createMeshNodeLocalToolProvider>[0]['registry'],
       authorityResolver: resolver,
+      authorizationStore,
       exportDecision: options.exportDecision ?? localFeatureSharing,
       audit: async (record: LocalToolAuditRecord) => {
         await recordLocalToolAudit(session, record, profileId, localNodeId, options.nowMs?.() ?? Date.now(), options.randomId)
