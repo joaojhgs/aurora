@@ -2210,8 +2210,17 @@ class DatabaseManager:
             outbound_status = 'pending'
             AND inbound_status IN ('unknown', 'pending')
             AND outbound_token_id IS NULL
+            AND outbound_device_id IS NULL
+            AND outbound_user_id IS NULL
+            AND outbound_approved_at IS NULL
+            AND outbound_approved_by IS NULL
             AND inbound_token IS NULL
             AND inbound_token_id IS NULL
+            AND inbound_device_id IS NULL
+            AND inbound_user_id IS NULL
+            AND inbound_approved_at IS NULL
+            AND json_array_length(COALESCE(NULLIF(outbound_permissions, ''), '[]')) = 0
+            AND json_array_length(COALESCE(NULLIF(inbound_permissions, ''), '[]')) = 0
             AND COALESCE(last_seen_at, first_seen_at) IS NOT NULL
             AND {age_expr} <= datetime(?)
         """

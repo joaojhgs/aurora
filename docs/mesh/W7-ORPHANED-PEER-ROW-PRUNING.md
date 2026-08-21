@@ -100,7 +100,8 @@ or deletes by `node_name`, never calls the admin removal/tombstone path, and nev
 `mesh_peer_auth_grant_revisions`.
 
 The operation is intentionally conservative: it removes only rows with `outbound_status =
-'pending'`, `inbound_status IN ('unknown', 'pending')`, no outbound token id, no inbound bearer,
-no inbound token selector, and an age older than the retention window based on
-`COALESCE(last_seen_at, first_seen_at)`. Anything approved, denied, fresh, or credential-linked
+'pending'`, `inbound_status IN ('unknown', 'pending')`, no outbound/inbound credential identity
+fields, no approval timestamps or approver markers, empty outbound/inbound permission arrays,
+and an age older than the retention window based on `COALESCE(last_seen_at, first_seen_at)`.
+Anything approved, denied, fresh, permission-bearing, approval-marked, or credential-linked
 survives for explicit user review.
