@@ -8,7 +8,9 @@ import {
   type GeneratedBackendMethodOutput,
   type GeneratedBackendMethodParsedInput
 } from '../generated-contracts.js'
+import { z } from 'zod/v4'
 import { parseBoundary } from '../validation/index.js'
+import type { ToolingProjectionInvalidated } from '../types.js'
 import type {
   PeerHostCallContext,
   PeerHostEventDescriptor,
@@ -28,6 +30,14 @@ const DEFAULT_EVENT_BYTES = 64 * 1024
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_EVENT_STREAM_ID_LENGTH = 256
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
+const TOOLING_PROJECTION_INVALIDATED_TOPIC = 'Tooling.ProjectionInvalidated'
+const TOOLING_PROJECTION_INVALIDATED_FORBIDDEN_FIELDS = Object.freeze([
+  'tools',
+  'tool_ids',
+  'toolIds',
+  'names',
+  'schemas'
+] as const)
 const GENERATED_PEER_HOST_BLOCKED_METHODS = new Set<GeneratedBackendMethodId>([
   'Gateway.ExplainRoute',
   'WakeWord.ProcessAudio',
@@ -55,6 +65,10 @@ export interface GeneratedPeerHostRegistrationOptions {
 
 export type GeneratedPeerHostEventHandler<TTopic extends GeneratedBackendEventTopic> = (
   context: PeerHostSubscribeContext<GeneratedBackendEventOutput<TTopic>>
+) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
+
+export type ToolingProjectionInvalidatedEventHandler = (
+  context: PeerHostSubscribeContext<ToolingProjectionInvalidated>
 ) => Promise<PeerHostSubscriptionHandle | void> | PeerHostSubscriptionHandle | void
 
 export interface GeneratedPeerHostEventRegistrationOptions {
@@ -252,6 +266,7 @@ export interface ToolingPeerHostHandlers {
   readonly getExportCatalog: GeneratedPeerHostMethodHandler<'Tooling.GetExportCatalog'>
   readonly prepareExecution: GeneratedPeerHostMethodHandler<'Tooling.PrepareExecution'>
   readonly executeTool: GeneratedPeerHostMethodHandler<'Tooling.ExecuteTool'>
+  readonly projectionInvalidated?: ToolingProjectionInvalidatedEventHandler
 }
 
 export function createToolingPeerHostRegistry(
@@ -278,7 +293,55 @@ export function createToolingPeerHostRegistry(
     'Tooling.ExecuteTool',
     handlers.executeTool
   )
+  registerToolingProjectionInvalidatedEvent(
+    registry,
+    handlers.projectionInvalidated ?? (() => ({ close: () => undefined }))
+  )
   return registry
+}
+
+function registerToolingProjectionInvalidatedEvent(
+  registry: PeerHostContractRegistry,
+  handler: ToolingProjectionInvalidatedEventHandler
+): PeerHostContractRegistry {
+  return registry.registerEvent({
+    topic: TOOLING_PROJECTION_INVALIDATED_TOPIC,
+    module: 'Tooling',
+    name: 'ProjectionInvalidated',
+    outputSchemaId: 'Tooling.ProjectionInvalidated.output.ToolingProjectionInvalidated',
+    outputSchema: toolingProjectionInvalidatedSchema,
+    requiredPermissions: [TOOLING_PROJECTION_INVALIDATED_TOPIC],
+    maxTtlSeconds: 120,
+    maxEventBytes: DEFAULT_EVENT_BYTES,
+    orderedEventGroup: 'Tooling.Projection',
+    createEmissionValidator: () => validateToolingProjectionInvalidatedEmission,
+    handler
+  })
+}
+
+const toolingProjectionAuthorityRevisionSchema = z.object({
+  catalog_revision: z.number().int().nonnegative(),
+  export_policy_revision: z.number().int().nonnegative(),
+  auth_grant_revision: z.number().int().nonnegative(),
+  manifest_revision: z.number().int().nonnegative(),
+  switch_revision: z.number().int().nonnegative(),
+  protocol_revision: z.number().int().nonnegative()
+}).strict()
+
+const toolingProjectionInvalidatedSchema: z.ZodType<ToolingProjectionInvalidated> = z.object({
+  provider_peer_id: z.string().min(1),
+  service_instance_id: z.string().min(1),
+  authority_revision: toolingProjectionAuthorityRevisionSchema,
+  reason_code: z.string().min(1),
+  correlation_id: z.string().min(1)
+}).strict()
+
+function validateToolingProjectionInvalidatedEmission(event: ToolingProjectionInvalidated): void {
+  for (const field of TOOLING_PROJECTION_INVALIDATED_FORBIDDEN_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(event, field)) {
+      throw new Error('Tooling projection invalidation must not include tool membership')
+    }
+  }
 }
 
 type TtsAudioSequenceState = {

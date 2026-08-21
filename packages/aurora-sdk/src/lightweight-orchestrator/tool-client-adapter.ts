@@ -12,6 +12,7 @@ import { createLocalToolingProviderHandlers } from '../local-tools/index.js'
 import type { PeerHostCallContext } from '../peer-host/types.js'
 import { parseToolingExportCatalogPage } from '../tools.js'
 import type {
+  AuroraEvent,
   JsonObject,
   ToolingGetExportCatalogRequest,
   ToolingGetExportCatalogResponse,
@@ -19,6 +20,7 @@ import type {
   ToolingPrepareExecutionResponse,
   ToolingProjectionAuthorityRevision,
   ToolingProjectionBlockedTool,
+  ToolingProjectionInvalidated,
   ToolingProjectionRetirement,
   ToolingProjectionToolInfo
 } from '../types.js'
@@ -79,6 +81,13 @@ export interface LightweightRemoteProjectionCatalogSnapshot {
   readonly tools: readonly ToolingProjectionToolInfo[]
 }
 
+export interface LightweightProjectionInvalidationRefreshOptions {
+  readonly catalogClientForPeer: (peerId: string, event: ToolingProjectionInvalidated) => LightweightRemoteProjectionCatalogClient | null | undefined
+  readonly pageSize?: number | undefined
+  readonly maxPages?: number | undefined
+  readonly previousSnapshot?: LightweightRemoteProjectionCatalogSnapshot | null | undefined
+}
+
 interface PendingLocalApproval {
   readonly request: ToolingPrepareExecutionRequest
   readonly prepared: ToolingPrepareExecutionResponse
@@ -88,6 +97,8 @@ interface PendingLocalApproval {
 }
 
 const LOCAL_APPROVAL_PREFIX = 'local-lw-approval'
+const TOOLING_PROJECTION_INVALIDATED_TOPIC = 'Tooling.ProjectionInvalidated'
+const TOOLING_INVALIDATION_FORBIDDEN_FIELDS = new Set(['tools', 'tool_ids', 'toolIds', 'names', 'schemas'])
 
 /**
  * Build the narrow self-authority used by the on-device assistant.
@@ -198,6 +209,33 @@ export async function loadLightweightRemoteProjectionCatalog(
     cursor = page.next_cursor
   }
   throw new LightweightOrchestratorError('projection_page_limit_exceeded')
+}
+
+export async function refreshLightweightRemoteProjectionCatalogFromInvalidation(
+  event: AuroraEvent<unknown>,
+  options: LightweightProjectionInvalidationRefreshOptions
+): Promise<LightweightRemoteProjectionCatalogSnapshot> {
+  const invalidation = parseToolingProjectionInvalidationEvent(event)
+  const sourcePeerId = event.audit.targetPeerId
+  if (!sourcePeerId) throw new LightweightOrchestratorError('projection_invalidation_missing_peer')
+  if (sourcePeerId !== invalidation.provider_peer_id) {
+    throw new LightweightOrchestratorError('projection_invalidation_peer_mismatch')
+  }
+  const client = options.catalogClientForPeer(sourcePeerId, invalidation)
+  if (!client) throw new LightweightOrchestratorError('projection_invalidation_peer_unavailable')
+  const snapshot = await loadLightweightRemoteProjectionCatalog(client, {
+    ...(options.pageSize !== undefined ? { pageSize: options.pageSize } : {}),
+    ...(options.maxPages !== undefined ? { maxPages: options.maxPages } : {}),
+    lastProjectionRevision: options.previousSnapshot?.projectionRevision ?? null,
+    lastProjectionDigest: options.previousSnapshot?.projectionDigest ?? null
+  })
+  if (
+    snapshot.providerPeerId !== invalidation.provider_peer_id
+    || snapshot.serviceInstanceId !== invalidation.service_instance_id
+  ) {
+    throw new LightweightOrchestratorError('projection_invalidation_snapshot_mismatch')
+  }
+  return snapshot
 }
 
 export function createLightweightToolClientAdapter(options: LightweightToolClientAdapterOptions): LightweightToolClientPort {
@@ -343,6 +381,51 @@ function requestedExecutionLocation(payload: ToolingPrepareExecutionRequest): 'l
 function readExecutionLocation(value: JsonObject | null | undefined): 'local' | 'remote' | null {
   const raw = value?.execution_location
   return raw === 'local' || raw === 'remote' ? raw : null
+}
+
+function parseToolingProjectionInvalidationEvent(event: AuroraEvent<unknown>): ToolingProjectionInvalidated {
+  if (event.topic !== TOOLING_PROJECTION_INVALIDATED_TOPIC) {
+    throw new LightweightOrchestratorError('projection_invalidation_topic_mismatch')
+  }
+  if (!isRecord(event.payload)) throw new LightweightOrchestratorError('projection_invalidation_invalid')
+  for (const field of TOOLING_INVALIDATION_FORBIDDEN_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(event.payload, field)) {
+      throw new LightweightOrchestratorError('projection_invalidation_contains_membership')
+    }
+  }
+  const providerPeerId = readRequiredString(event.payload, 'provider_peer_id')
+  const serviceInstanceId = readRequiredString(event.payload, 'service_instance_id')
+  const reasonCode = readRequiredString(event.payload, 'reason_code')
+  const correlationId = readRequiredString(event.payload, 'correlation_id')
+  const authorityRevision = event.payload.authority_revision
+  if (!isAuthorityRevision(authorityRevision)) throw new LightweightOrchestratorError('projection_invalidation_invalid')
+  return {
+    provider_peer_id: providerPeerId,
+    service_instance_id: serviceInstanceId,
+    authority_revision: authorityRevision,
+    reason_code: reasonCode,
+    correlation_id: correlationId
+  }
+}
+
+function readRequiredString(record: Record<string, unknown>, key: string): string {
+  const value = record[key]
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new LightweightOrchestratorError('projection_invalidation_invalid')
+  }
+  return value
+}
+
+function isAuthorityRevision(value: unknown): value is ToolingProjectionAuthorityRevision {
+  if (!isRecord(value)) return false
+  return [
+    'catalog_revision',
+    'export_policy_revision',
+    'auth_grant_revision',
+    'manifest_revision',
+    'switch_revision',
+    'protocol_revision'
+  ].every((key) => Number.isSafeInteger(value[key]) && (value[key] as number) >= 0)
 }
 
 interface ToolRouteSelector {
@@ -535,6 +618,10 @@ function approvalTokenDenied(payload: ToolApprovalConfirmRequest, reason: string
 
 function clonePayload(payload: ToolingPrepareExecutionRequest): ToolingPrepareExecutionRequest {
   return structuredClone(payload)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function neverAbortedSignal(): AbortSignal {

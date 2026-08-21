@@ -189,6 +189,9 @@ describe('mesh-node local Tooling provider composition', () => {
       'Tooling.GetTools',
       'Tooling.PrepareExecution'
     ])
+    expect(composition.peerHostRegistry.listEvents().map((event) => event.topic)).toEqual([
+      'Tooling.ProjectionInvalidated'
+    ])
     const manifest = await composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)
     expect(JSON.stringify(manifest)).toContain('Tooling.ExecuteTool')
     expect(
@@ -227,6 +230,42 @@ describe('mesh-node local Tooling provider composition', () => {
       data: { ok: true, caller: 'peer-a' }
     })
     expect(JSON.stringify({ result, audits })).not.toContain('cursor-secret-1234')
+  })
+
+  it('registers Tooling projection invalidation as a metadata-only host event', () => {
+    const { resolver, authorizationStore } = authorityFromGrants([grant({
+      allowedMethodIds: [...grant().allowedMethodIds, 'Tooling.ProjectionInvalidated']
+    })], 'peer-a')
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithEcho(),
+      authorityResolver: resolver,
+      authorizationStore,
+      exportDecision: { isShared: () => true },
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret-1234',
+      clock: () => 1_000,
+      randomId: () => 'epoch-1'
+    })
+
+    const event = composition.peerHostRegistry.getEvent('Tooling.ProjectionInvalidated')
+    expect(event).toBeDefined()
+    if (!event) throw new Error('projection invalidation event missing')
+    expect(event).toMatchObject({
+      module: 'Tooling',
+      name: 'ProjectionInvalidated',
+      requiredPermissions: ['Tooling.ProjectionInvalidated'],
+      maxEventBytes: 64 * 1024,
+      maxTtlSeconds: 120,
+      orderedEventGroup: 'Tooling.Projection'
+    })
+    expect(() => composition.peerHostRegistry.parseEventOutput(event, projectionInvalidated())).not.toThrow()
+    expect(() => composition.peerHostRegistry.parseEventOutput(event, {
+      ...projectionInvalidated(),
+      tools: [{ name: 'echo' }]
+    })).toThrow()
   })
 
   it('passes the local owner approval policy into the provider execution gate', async () => {
@@ -581,3 +620,20 @@ function ackFromManifest(manifest: Record<string, unknown>, patch: Record<string
   }
 }
 
+function projectionInvalidated(patch: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    provider_peer_id: 'provider',
+    service_instance_id: 'local:provider:Tooling',
+    authority_revision: {
+      catalog_revision: 1,
+      export_policy_revision: 2,
+      auth_grant_revision: 3,
+      manifest_revision: 4,
+      switch_revision: 5,
+      protocol_revision: 1
+    },
+    reason_code: 'catalog_changed',
+    correlation_id: 'corr-invalidation',
+    ...patch
+  }
+}

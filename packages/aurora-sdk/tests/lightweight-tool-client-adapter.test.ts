@@ -10,6 +10,7 @@ import {
   createLightweightToolClientAdapter,
   createOnDeviceLightweightToolPolicy,
   loadLightweightRemoteProjectionCatalog,
+  refreshLightweightRemoteProjectionCatalogFromInvalidation,
   type LightweightToolClientDelegate
 } from '../src/lightweight-orchestrator/index.js'
 import {
@@ -17,9 +18,11 @@ import {
   computeProjectionPageHash
 } from '../src/local-tools/index.js'
 import type {
+  AuroraEvent,
   JsonObject,
   ToolingGetExportCatalogResponse,
   ToolingPrepareExecutionRequest,
+  ToolingProjectionInvalidated,
   ToolingProjectionToolInfo
 } from '../src/types.js'
 
@@ -283,6 +286,110 @@ describe('lightweight tool-client adapter', () => {
       reasonCode: 'invalid_projection_page'
     })
   })
+
+  it('refreshes invalidated remote projections only through the authenticated emitting peer', async () => {
+    const peerB = 'garage-peer'
+    const peerBService = `remote:${peerB}:Tooling`
+    const pageA = projectionPages([[remoteToolInfo('remote.search')]])[0]!
+    const pageB = projectionPages([[remoteToolInfo('garage.search', peerB, peerBService)]], {
+      providerPeerId: peerB,
+      serviceInstanceId: peerBService
+    })[0]!
+    const calls: Array<{ peerId: string; payload: unknown }> = []
+
+    const first = await refreshLightweightRemoteProjectionCatalogFromInvalidation(
+      invalidationEvent({ providerPeerId: REMOTE_PEER_ID, serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID }),
+      {
+        pageSize: 1,
+        previousSnapshot: {
+          providerPeerId: REMOTE_PEER_ID,
+          serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
+          authorityRevision: pageA.authority_revision,
+          projectionRevision: 'previous-revision',
+          projectionDigest: 'a'.repeat(64),
+          tools: []
+        },
+        catalogClientForPeer(peerId) {
+          return {
+            async getExportCatalog(payload) {
+              calls.push({ peerId, payload })
+              return pageA
+            }
+          }
+        }
+      }
+    )
+
+    const second = await refreshLightweightRemoteProjectionCatalogFromInvalidation(
+      invalidationEvent({ providerPeerId: peerB, serviceInstanceId: peerBService }),
+      {
+        pageSize: 1,
+        catalogClientForPeer(peerId) {
+          return {
+            async getExportCatalog(payload) {
+              calls.push({ peerId, payload })
+              return pageB
+            }
+          }
+        }
+      }
+    )
+
+    expect(first.providerPeerId).toBe(REMOTE_PEER_ID)
+    expect(second.providerPeerId).toBe(peerB)
+    expect(calls).toEqual([
+      {
+        peerId: REMOTE_PEER_ID,
+        payload: {
+          protocol_tier: 'projection_v1',
+          page_size: 1,
+          cursor: null,
+          last_projection_revision: 'previous-revision',
+          last_projection_digest: 'a'.repeat(64)
+        }
+      },
+      {
+        peerId: peerB,
+        payload: {
+          protocol_tier: 'projection_v1',
+          page_size: 1,
+          cursor: null,
+          last_projection_revision: null,
+          last_projection_digest: null
+        }
+      }
+    ])
+  })
+
+  it('rejects projection invalidations from the wrong peer or with tool membership', async () => {
+    const calls: string[] = []
+    const options = {
+      catalogClientForPeer(peerId: string) {
+        calls.push(peerId)
+        return {
+          async getExportCatalog() {
+            return projectionPages([[remoteToolInfo('remote.search')]])[0]!
+          }
+        }
+      }
+    }
+
+    await expect(refreshLightweightRemoteProjectionCatalogFromInvalidation(
+      invalidationEvent({ providerPeerId: REMOTE_PEER_ID, serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID, sourcePeerId: 'other-peer' }),
+      options
+    )).rejects.toMatchObject({ reasonCode: 'projection_invalidation_peer_mismatch' })
+
+    await expect(refreshLightweightRemoteProjectionCatalogFromInvalidation(
+      invalidationEvent({
+        providerPeerId: REMOTE_PEER_ID,
+        serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
+        payloadPatch: { tools: [remoteToolInfo('remote.search')] as unknown as JsonObject[] }
+      }),
+      options
+    )).rejects.toMatchObject({ reasonCode: 'projection_invalidation_contains_membership' })
+
+    expect(calls).toEqual([])
+  })
 })
 
 function fixture(options: {
@@ -401,11 +508,15 @@ function remoteDelegate(): LightweightToolClientDelegate & { calls: Array<[strin
   }
 }
 
-function remoteToolInfo(name: string): ToolingProjectionToolInfo {
+function remoteToolInfo(
+  name: string,
+  providerPeerId = REMOTE_PEER_ID,
+  serviceInstanceId = REMOTE_SERVICE_INSTANCE_ID
+): ToolingProjectionToolInfo {
   return {
     name,
     local_name: name,
-    global_tool_id: canonicalToolGlobalId(REMOTE_PEER_ID, name),
+    global_tool_id: canonicalToolGlobalId(providerPeerId, name),
     tool_id_scheme: 'aurora-tool',
     tool_id_version: 1,
     tool_contract_id: name,
@@ -413,8 +524,8 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     share_group_label: name,
     legacy_global_tool_ids: [],
     exportable: true,
-    provider_peer_id: REMOTE_PEER_ID,
-    provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
+    provider_peer_id: providerPeerId,
+    provider_service_instance_id: serviceInstanceId,
     provider_label: null,
     provider_granted_permissions: null,
     provider_available: true,
@@ -427,7 +538,7 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     argument_visibility: {},
     source_type: 'mesh_peer',
     source: 'mesh_peer',
-    source_id: REMOTE_SERVICE_INSTANCE_ID,
+    source_id: serviceInstanceId,
     trust_tier: 'trusted',
     capability_class: 'read',
     resource_scope: [],
@@ -443,8 +554,8 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
     confirmation_required: false,
     rate_limit_hints: null,
     provenance: {
-      provider_peer_id: REMOTE_PEER_ID,
-      provider_service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
+      provider_peer_id: providerPeerId,
+      provider_service_instance_id: serviceInstanceId,
       provider_kind: 'mesh_peer',
       source: 'unknown',
       advertised_name: name
@@ -452,15 +563,20 @@ function remoteToolInfo(name: string): ToolingProjectionToolInfo {
   }
 }
 
-function projectionPages(toolPages: ToolingProjectionToolInfo[][]): ToolingGetExportCatalogResponse[] {
+function projectionPages(
+  toolPages: ToolingProjectionToolInfo[][],
+  options: { providerPeerId?: string; serviceInstanceId?: string } = {}
+): ToolingGetExportCatalogResponse[] {
   const tools = toolPages.flat()
   const digest = computeProjectionChecksum(tools, [], [])
+  const providerPeerId = options.providerPeerId ?? REMOTE_PEER_ID
+  const serviceInstanceId = options.serviceInstanceId ?? REMOTE_SERVICE_INSTANCE_ID
   return toolPages.map((pageTools, index): ToolingGetExportCatalogResponse => {
     const complete = index === toolPages.length - 1
     const page = {
       ok: true,
-      provider_peer_id: REMOTE_PEER_ID,
-      service_instance_id: REMOTE_SERVICE_INSTANCE_ID,
+      provider_peer_id: providerPeerId,
+      service_instance_id: serviceInstanceId,
       selected_protocol_tier: 'projection_v1' as const,
       authority_revision: {
         catalog_revision: 1,
@@ -489,4 +605,51 @@ function projectionPages(toolPages: ToolingProjectionToolInfo[][]): ToolingGetEx
 function idSequence(...ids: string[]) {
   let index = 0
   return () => ids[index++] ?? `id-${index}`
+}
+
+function invalidationEvent(options: {
+  providerPeerId: string
+  serviceInstanceId: string
+  sourcePeerId?: string
+  payloadPatch?: JsonObject
+}): AuroraEvent<unknown> {
+  const payload: ToolingProjectionInvalidated & JsonObject = {
+    provider_peer_id: options.providerPeerId,
+    service_instance_id: options.serviceInstanceId,
+    authority_revision: {
+      catalog_revision: 1,
+      export_policy_revision: 2,
+      auth_grant_revision: 3,
+      manifest_revision: 4,
+      switch_revision: 5,
+      protocol_revision: 1
+    },
+    reason_code: 'catalog_changed',
+    correlation_id: 'invalidation-1',
+    ...options.payloadPatch
+  }
+  return {
+    id: 'event-1',
+    kind: 'Tooling.ProjectionInvalidated',
+    topic: 'Tooling.ProjectionInvalidated',
+    method: null,
+    busTopic: 'Tooling.ProjectionInvalidated',
+    payload,
+    audit: {
+      correlationId: 'invalidation-1',
+      eventKind: 'Tooling.ProjectionInvalidated',
+      peerId: null,
+      principalId: null,
+      targetPeerId: options.sourcePeerId ?? options.providerPeerId,
+      method: null,
+      busTopic: 'Tooling.ProjectionInvalidated',
+      toolId: null,
+      resourceId: null,
+      status: null,
+      transport: 'mesh',
+      redaction: { secretsRedacted: true, redactedFields: [], source: 'sdk', warnings: [] }
+    },
+    redaction: { secretsRedacted: true, redactedFields: [], source: 'sdk', warnings: [] },
+    receivedAt: '2026-01-01T00:00:00.000Z'
+  }
 }

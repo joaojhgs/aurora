@@ -33,11 +33,13 @@ export {
   createOnDeviceLightweightToolPolicy,
   loadLightweightRemoteProjectionCatalog,
   mergeLightweightAssistantTools,
-  onDeviceAssistantPermissions
+  onDeviceAssistantPermissions,
+  refreshLightweightRemoteProjectionCatalogFromInvalidation
 } from './tool-client-adapter.js'
 export type {
   LightweightToolClientAdapterOptions,
   LightweightToolClientDelegate,
+  LightweightProjectionInvalidationRefreshOptions,
   LightweightRemoteProjectionCatalogClient,
   LightweightRemoteProjectionCatalogOptions,
   LightweightRemoteProjectionCatalogSnapshot,
