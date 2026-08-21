@@ -59,22 +59,22 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // Assistant baselines omit the retired route-and-privacy sheet while keeping
-  // product-safe conversation copy.
+  // These baselines include the shared Spoken replies navigation entry. Admin
+  // renders also use product labels for voice and local-data actions.
   assistant: {
-    desktop: 'fd6b5e9ac2bd',
-    tablet: '4e3ba89da594',
-    mobile: '348b815e112a'
+    desktop: 'a8bb9a1cb954',
+    tablet: '0cbe3471c66e',
+    mobile: 'c36699053885'
   },
   admin: {
-    desktop: '31168261c927',
-    tablet: '9a26c863e23f',
-    mobile: '1d292565b618'
+    desktop: '80c0ccddaec4',
+    tablet: 'b0b12ff614d9',
+    mobile: '87dc0e4d457a'
   },
   'native-settings': {
-    desktop: '7f51090910fc',
-    tablet: '28798dde9c29',
-    mobile: '5cfd630ca8a4'
+    desktop: '9f00fa3874aa',
+    tablet: 'cd3afd754914',
+    mobile: 'e3fc9dd841aa'
   }
 }
 

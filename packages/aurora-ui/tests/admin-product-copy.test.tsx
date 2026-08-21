@@ -20,7 +20,7 @@ import { AdminRbacView, type AdminRbacSnapshot } from '../src/admin-rbac-view'
 import { AdminSchedulerView, type AdminSchedulerSnapshot } from '../src/admin-scheduler-view'
 import { AdminAuditView, type AdminAuditSnapshot } from '../src/admin-audit-view'
 import { ModelsView } from '../src/models-view'
-import { adminReasonText, productAdminReasonCopy, sanitizeAdminText } from '../src/admin-product-copy'
+import { adminActionLabel, adminModuleLabel, adminReasonText, productAdminReasonCopy, sanitizeAdminText } from '../src/admin-product-copy'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -144,6 +144,15 @@ describe('admin product copy', () => {
     expect(productAdminReasonCopy('services.gateway.webrtc.room_password', 'Admin status needs attention.')).toBe('Admin status needs attention.')
     expect(productAdminReasonCopy('Gateway.GetSchemaMetadata', 'Admin status needs attention.')).toBe('Admin status needs attention.')
     expect(productAdminReasonCopy('This action needs attention before it can run.', 'Admin status needs attention.')).toBe('This action needs attention before it can run.')
+  })
+
+  it('translates voice and local-data service identifiers into product labels', () => {
+    expect(adminModuleLabel('TTS')).toBe('Spoken replies')
+    expect(adminModuleLabel('STTCoordinator')).toBe('Voice input')
+    expect(adminModuleLabel('WakeWord')).toBe('Hands-free listening')
+    expect(adminModuleLabel('DB')).toBe('Local data')
+    expect(adminActionLabel({ module: 'TTS', name: 'Synthesize', busTopic: 'TTS.Synthesize' })).toBe('Speak a reply')
+    expect(adminActionLabel({ module: 'WakeWord', name: 'Control', busTopic: 'WakeWord.Control' })).toBe('Hands-free listening controls')
   })
 })
 

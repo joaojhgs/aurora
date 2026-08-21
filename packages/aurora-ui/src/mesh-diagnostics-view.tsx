@@ -248,8 +248,10 @@ function productDeviceCopy(value: string | null | undefined): string {
 
 function productFeatureCopy(value: string | null | undefined): string {
   const normalized = redactDiagnosticText(value).trim().toLowerCase()
+  if (normalized === 'gateway') return 'Connectivity'
   if (normalized === 'tts') return 'Voice playback'
-  if (normalized === 'stt' || normalized.includes('transcription')) return 'Voice input'
+  if (normalized === 'stt' || normalized === 'sttcoordinator' || normalized.includes('transcription')) return 'Voice input'
+  if (normalized === 'wakeword') return 'Hands-free listening'
   if (normalized === 'scheduler') return 'Scheduled actions'
   if (normalized === 'tooling') return 'Tools'
   if (normalized === 'auth') return 'Device access'
@@ -1023,7 +1025,7 @@ function buildServiceProbeRows(bundle: GatewaySupportBundleResponse | null): Dia
   if (!bundle) return []
   const healthRows = bundle.service_health.map((health, index) => ({
     id: `service-health-${health.module}-${index}`,
-    name: `${health.module} service probe`,
+    name: `${productFeatureCopy(health.module)} check`,
     state: serviceHealthState(health.status),
     source: `Gateway.GetSupportBundle service_health @ ${redactDiagnosticText(health.timestamp)}`,
     detail: redactDiagnosticText(`${health.status}; checks ${safeDiagnosticDetails(health.checks)}`)
@@ -1032,7 +1034,7 @@ function buildServiceProbeRows(bundle: GatewaySupportBundleResponse | null): Dia
     .filter((service) => !bundle.service_health.some((health) => health.module === service.module))
     .map((service) => ({
       id: `service-${service.module}-${service.instance_id ?? 'default'}`,
-      name: `${service.module} service probe`,
+      name: `${productFeatureCopy(service.module)} check`,
       state: serviceHealthState(service.status),
       source: 'Gateway.GetSupportBundle services',
       detail: redactDiagnosticText(`${service.status}; ${service.method_count} methods; ${service.capabilities.join(', ') || 'no capabilities reported'}`)

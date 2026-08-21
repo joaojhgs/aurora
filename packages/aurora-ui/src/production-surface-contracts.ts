@@ -314,7 +314,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Spoken replies',
     navItemIds: ['spoken-replies'],
     routeOracles: [routeOracle('spoken-replies', ['Spoken replies'], ['Show available voices'])],
-    mockReferenceFiles: ['packages/aurora-ui/src/voice-settings-view.tsx'],
+    mockReferenceFiles: ['components/aurora/settings/settings-permissions-view.tsx'],
     mockUxAnchors: ['Spoken reply voices', 'Voices available to Aurora', 'Show available voices'],
     componentFiles: ['voice-settings-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],

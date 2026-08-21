@@ -93,7 +93,9 @@ export function adminReasonText(value: string | null | undefined, fallback = 'Th
 
 export function adminActionLabel(input: string | Pick<MethodDescriptor, 'module' | 'name' | 'busTopic'>): string {
   if (typeof input === 'string') return humanizeAction(input)
-  return `${adminModuleLabel(input.module)} ${humanizeAction(input.name || input.busTopic)}`
+  const action = input.name || input.busTopic.split('.').at(-1) || input.busTopic
+  const knownLabel = PRODUCT_ACTION_LABELS[`${input.module}.${action}`.toLowerCase()]
+  return knownLabel ?? `${adminModuleLabel(input.module)} ${humanizeAction(action)}`
 }
 
 export function adminModuleLabel(module: string): string {
@@ -101,10 +103,24 @@ export function adminModuleLabel(module: string): string {
   if (/auth/i.test(module)) return 'Access'
   if (/orchestrator/i.test(module)) return 'Assistant'
   if (/tooling/i.test(module)) return 'Tools'
+  if (/^tts$/i.test(module)) return 'Spoken replies'
+  if (/^(?:stt|sttcoordinator|stttranscription)$/i.test(module)) return 'Voice input'
+  if (/wakeword/i.test(module)) return 'Hands-free listening'
+  if (/^db$/i.test(module)) return 'Local data'
   if (/config/i.test(module)) return 'Settings'
   if (/scheduler/i.test(module)) return 'Scheduler'
   if (/backup/i.test(module)) return 'Backups'
   return humanizeAction(module)
+}
+
+const PRODUCT_ACTION_LABELS: Record<string, string> = {
+  'tts.synthesize': 'Speak a reply',
+  'tts.stop': 'Stop speaking',
+  'tts.listvoices': 'Available voices',
+  'tts.listvoiceprofiles': 'Voice profiles',
+  'tts.getcapabilities': 'Spoken reply availability',
+  'wakeword.processaudio': 'Listen for the wake phrase',
+  'wakeword.control': 'Hands-free listening controls',
 }
 
 export function sanitizeAdminText(value: string, fallback = 'This item needs attention.'): string {

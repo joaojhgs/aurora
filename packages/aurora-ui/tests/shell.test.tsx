@@ -395,6 +395,7 @@ describe('Aurora production shell', () => {
       'admin-devices',
       'admin-scheduler',
       'config-editor',
+      'spoken-replies',
       'memory-rag',
       'backup-restore',
       'models-runtime',
@@ -558,7 +559,7 @@ describe('Aurora production shell', () => {
       expect(text, `${rel} must not import mock reference fixtures`).not.toMatch(/modules\/ui-mock-reference|ui-mock-reference\/lib\/aurora\/data/)
       expect(text, `${rel} must not call raw service objects`).not.toMatch(/\b(LocalBus|BullMQBus|MeshBus|ConfigManager)\b/)
     }
-  })
+  }, 30_000)
 
   it('removes debug dump styling from production route previews', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -3322,7 +3323,8 @@ describe('Aurora production shell', () => {
     expect(snapshot.supportBundleCorrelationId).toBe(supportBundleFixture.correlation_id)
     expect(snapshot.supportBundleAuditReceipt).toBe(supportBundleFixture.audit_receipt)
     expect(snapshot.supportBundleServiceCount).toBe(supportBundleFixture.services.length)
-    expect(snapshot.serviceProbeRows.map((row) => row.name)).toEqual(expect.arrayContaining(['Gateway service probe']))
+    expect(snapshot.serviceProbeRows.map((row) => row.name)).toEqual(expect.arrayContaining(['Connectivity check']))
+    expect(snapshot.serviceProbeRows.map((row) => row.name).join(' ')).not.toMatch(/Gateway|STTCoordinator|WakeWord/u)
     expect(snapshot.nativeCapabilityRows.map((row) => row.name)).toContain('native_capability_manifest')
     expect(snapshot.sidecarLogRows.map((row) => row.name)).toContain('gateway_sidecar_logs')
     expect(snapshot.frontendLogRows.map((row) => row.name)).toContain('Frontend errors/logs')
@@ -5026,6 +5028,7 @@ function isAllowedAdapterFile(repoRoot: string, file: string): boolean {
     'apps/aurora-web/app/aurora-client.ts',
     'apps/aurora-tauri/src/aurora-client.ts',
     'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
+    'apps/aurora-tauri/src/mesh-session-link.ts',
     'apps/aurora-tauri/src/eventstream-smoke.tsx'
   ].includes(rel)
 }

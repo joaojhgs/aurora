@@ -1115,8 +1115,7 @@ describe('Assistant hosted browser voice runtime', () => {
       await Promise.resolve()
     })
     await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus).toHaveBeenCalledTimes(1))
-    await clickButton(container, 'Open route details')
-    expect(findButtonByText(container, 'Hands-free').hasAttribute('disabled')).toBe(true)
+    expect(findButtonOrNull(container, 'Hands-free')).toBeNull()
 
     backgroundAvailable = true
     await act(async () => {
@@ -1174,7 +1173,6 @@ describe('Assistant hosted browser voice runtime', () => {
       nativePlatform: 'android'
     })
 
-    await clickButton(container, 'Open route details')
     await clickButtonByText(container, 'Hands-free')
     await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus.mock.calls.length).toBeGreaterThan(1))
@@ -1200,7 +1198,6 @@ describe('Assistant hosted browser voice runtime', () => {
       nativePlatform: 'android'
     })
 
-    await clickButton(container, 'Open route details')
     await clickButtonByText(container, 'Hands-free')
     await vi.waitFor(() => expect(nativeMobileVoice.stopBackground).toHaveBeenCalledTimes(1))
     expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
