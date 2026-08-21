@@ -438,7 +438,10 @@ function createAuroraBrowserRuntimeFromStore(
       closeBrowserMeshNodeServices(effectiveMeshNodeServices).catch(() => undefined),
     ])
   }
-  if (persistedProfile && rolloutFlags.webrtc_thin_client) {
+  const ownsPeerConnection =
+    runtimeProfile?.nodeMode !== 'mesh-node'
+    || effectiveMeshNodeServices !== null
+  if (persistedProfile && rolloutFlags.webrtc_thin_client && ownsPeerConnection) {
     queueMicrotask(() => {
       void runtime.peer.connect(persistedProfile).catch(() => undefined)
     })

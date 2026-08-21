@@ -167,6 +167,53 @@ test('real Chromium IndexedDB local data uses Web Locks ownership and persists a
   expect(result.reacquiredCount).toBe(1)
 })
 
+test('real Chromium denies the same local-data writer in a second tab', async ({
+  page,
+  context,
+  browserName,
+}) => {
+  test.skip(browserName !== 'chromium', 'This smoke is scoped to real Chromium Web Locks behavior.')
+  await page.goto(origin)
+  await page.evaluate(async () => {
+    const { BrowserIndexedDbLocalDataBackend } = await import(
+      '/packages/aurora-ui/dist/local-data/browser-indexeddb.js'
+    )
+    const backend = new BrowserIndexedDbLocalDataBackend({ origin: location.origin })
+    await backend.open('profile-cross-tab', 'node-cross-tab')
+    ;(globalThis as typeof globalThis & { heldAuroraBackend?: { close(): Promise<void> } })
+      .heldAuroraBackend = backend
+  })
+
+  const secondPage = await context.newPage()
+  try {
+    await secondPage.goto(origin)
+    const denied = await secondPage.evaluate(async () => {
+      const { BrowserIndexedDbLocalDataBackend } = await import(
+        '/packages/aurora-ui/dist/local-data/browser-indexeddb.js'
+      )
+      const backend = new BrowserIndexedDbLocalDataBackend({ origin: location.origin })
+      return await backend.open('profile-cross-tab', 'node-cross-tab').then(
+        () => ({ denied: false, reason: null }),
+        (error) => ({
+          denied: true,
+          reason: (error as { metadata?: { reason?: string }; message?: string })
+            .metadata?.reason ?? (error as { message?: string }).message ?? null,
+        }),
+      )
+    })
+    expect(denied).toEqual({ denied: true, reason: 'owner_exists' })
+  } finally {
+    await secondPage.close()
+    await page.evaluate(async () => {
+      const scope = globalThis as typeof globalThis & {
+        heldAuroraBackend?: { close(): Promise<void> }
+      }
+      await scope.heldAuroraBackend?.close()
+      delete scope.heldAuroraBackend
+    })
+  }
+})
+
 test('production browser selector uses durable IndexedDB when SQLite ownership is unavailable', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'This selector proof requires Chromium IndexedDB, Web Locks, and OPFS capability detection.')
   await page.goto(origin)

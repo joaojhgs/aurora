@@ -341,6 +341,18 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   try {
     await secondPage.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
     const secondRoot = secondPage.locator('[data-local-node-provider]').first()
+    await secondRoot.waitFor({ state: 'visible', timeout: 60_000 })
+    await testInfo.attach('browser-local-node-ownership.json', {
+      body: JSON.stringify(
+        {
+          primary: await browserLocalNodeOwnership(page),
+          secondary: await browserLocalNodeOwnership(secondPage),
+        },
+        null,
+        2,
+      ),
+      contentType: 'application/json',
+    })
     await expect(secondRoot).toHaveAttribute('data-local-node-provider', 'open-in-another-tab', {
       timeout: 60_000,
     })
@@ -375,7 +387,8 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
     exact: true,
   })
   await savePeerFeatures.click()
-  await expect(savePeerFeatures).toBeDisabled({ timeout: 5_000 })
+  const peerPermissionRow = page.locator('tr').filter({ hasText: expectedNodeName })
+  await expect(peerPermissionRow).toContainText('Tool use', { timeout: 30_000 })
   await expect(savePeerFeatures).toBeEnabled()
   await peerFeaturesDialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(peerFeaturesDialog).not.toBeVisible()
@@ -603,6 +616,38 @@ async function post<T>(
     throw new Error(`${path} ${response.status()}: ${text}`)
   }
   return JSON.parse(text) as T
+}
+
+async function browserLocalNodeOwnership(page: Page): Promise<JsonObject> {
+  return await page.evaluate(async () => {
+    const profileDocument = JSON.parse(
+      localStorage.getItem('aurora.runtimeProfiles.v2') ?? 'null',
+    ) as {
+      activeProfileId?: string | null
+      profiles?: Array<{
+        id?: string
+        localNode?: { stablePeerId?: string }
+      }>
+    } | null
+    const activeProfile = profileDocument?.profiles?.find(
+      (profile) => profile.id === profileDocument.activeProfileId,
+    )
+    const lockSnapshot = await navigator.locks?.query()
+    return {
+      url: location.href,
+      visibilityState: document.visibilityState,
+      activeProfileId: profileDocument?.activeProfileId ?? null,
+      localStablePeerId: activeProfile?.localNode?.stablePeerId ?? null,
+      providerState:
+        document.querySelector('[data-local-node-provider]')?.getAttribute(
+          'data-local-node-provider',
+        ) ?? null,
+      heldLocks:
+        lockSnapshot?.held?.map((lock) => ({ name: lock.name, mode: lock.mode })) ?? [],
+      pendingLocks:
+        lockSnapshot?.pending?.map((lock) => ({ name: lock.name, mode: lock.mode })) ?? [],
+    }
+  })
 }
 
 async function confirmedAdminPost(

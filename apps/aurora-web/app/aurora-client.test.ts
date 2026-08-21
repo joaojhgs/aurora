@@ -851,6 +851,12 @@ describe('createAuroraBrowserClient', () => {
       registeredFeatureCount: 0,
       localDataWritable: false,
     })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runtime.peer.snapshot()).toMatchObject({
+      status: 'needs-invite',
+      reconnectCount: 0,
+    })
+    expect(runtime.peer.snapshot().pairingSessionId).toBeUndefined()
     await runtime.close()
   })
 
