@@ -679,6 +679,14 @@ describe("desktop live E2E WebView hook", () => {
     expect(source).toContain('stage = "wrong-correlation-event";');
     expect(source).toContain('"remote-console authorization"');
     expect(source).toContain("negotiationRole: snapshot.negotiationRole");
+    const postReconnectRegistryDrain = source.indexOf(
+      '"desktop live registry after uncertain mutation WebRTC reconnect"',
+    );
+    const mutationCountRead = source.indexOf(
+      '"desktop live mutation count after WebRTC reconnect"',
+    );
+    expect(postReconnectRegistryDrain).toBeGreaterThan(-1);
+    expect(mutationCountRead).toBeGreaterThan(postReconnectRegistryDrain);
   });
 });
 

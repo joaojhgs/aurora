@@ -778,6 +778,11 @@ async function runMeshInteropContract({
     ]);
     await runtime.peer.connect(profile);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", reconnectTimeoutMs);
+    await retryDesktopProviderReadiness(
+      () => runtime.client.registry.getRegistry(),
+      "desktop live registry after uncertain mutation WebRTC reconnect",
+      operationTimeoutMs,
+    );
     const mutationReconnectPairingPrompts = countPendingPairing(snapshots, mutationStart);
     const mutationCount = await retryDesktopProviderReadiness(
       () => runtime.client.request(
