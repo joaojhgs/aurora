@@ -6,10 +6,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use {
     async_trait::async_trait,
     aurora_voice_core::{
-        AudioInput, CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, PcmFrame,
-        RedactedSnapshot, RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros,
-        TransitionReason, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
-        WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
+        AudioInput, CancellationToken, CaptureStartReason, Generation, PcmFrame, RedactedSnapshot,
+        RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, TransitionReason,
+        VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState, WakeKwsProvider,
+        WakeOrchestrationConfig, WakeVadProvider,
     },
     aurora_voice_engine::{
         BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
@@ -1125,7 +1125,7 @@ impl AudioInput for DeterministicE2eAudioInput {
         if self.active.is_some() {
             return Err(VoiceCoreError::OwnerAlreadyActive);
         }
-        if lease.owner != CaptureOwnerKind::Native
+        if lease.owner != aurora_voice_core::CaptureOwnerKind::Native
             || lease.generation.0 == 0
             || lease.device_route != DEVICE_ROUTE
         {
@@ -2944,7 +2944,7 @@ mod tests {
         let control = audio.control();
         audio
             .start(VoiceCaptureLease {
-                owner: CaptureOwnerKind::Native,
+                owner: aurora_voice_core::CaptureOwnerKind::Native,
                 surface: SURFACE.to_owned(),
                 device_route: DEVICE_ROUTE.to_owned(),
                 start_reason: CaptureStartReason::PushToTalk,
