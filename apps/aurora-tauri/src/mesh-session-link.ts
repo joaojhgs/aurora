@@ -21,6 +21,9 @@
 import { openNativeTransportHandles } from "./native-webrtc";
 
 export type MeshSurfaceLifecycle = "foreground" | "background";
+export type MeshSessionDispatcherLifecycle =
+  | MeshSurfaceLifecycle
+  | "resuming";
 
 export interface MeshSessionInvoke {
   <T>(command: string, args?: Record<string, unknown>): Promise<T>;
@@ -32,7 +35,7 @@ export interface MeshSessionDrain {
 }
 
 export interface MeshSessionLifecycleResult {
-  readonly lifecycle: MeshSurfaceLifecycle;
+  readonly lifecycle: MeshSessionDispatcherLifecycle;
   readonly drained: readonly MeshSessionDrain[];
 }
 
@@ -124,15 +127,35 @@ export async function setMeshSurfaceLifecycle(
   );
 }
 
+/** Acknowledge one delivered resume batch and fetch arrivals queued behind it. */
+export async function finishMeshSurfaceResume(
+  invoke: MeshSessionInvoke,
+): Promise<MeshSessionLifecycleResult> {
+  return await invoke<MeshSessionLifecycleResult>(
+    "aurora_mesh_session_finish_resume",
+  );
+}
+
 export interface ObserveMeshSurfaceLifecycleOptions {
   readonly invoke: MeshSessionInvoke;
-  /** Receives frames that were parked while this surface slept, in order. */
-  readonly onDrained?: (drained: readonly MeshSessionDrain[]) => void;
+  /**
+   * Receives frames that were parked while this surface slept, in order.
+   * Return false until every frame is safely back on its exact channel.
+   */
+  readonly onDrained?: (
+    drained: readonly MeshSessionDrain[],
+  ) => boolean | void | Promise<boolean | void>;
   /** Injected for tests; defaults to the document. */
   readonly target?: Pick<
     Document,
     "addEventListener" | "removeEventListener" | "visibilityState"
   >;
+}
+
+export interface MeshSurfaceLifecycleStop {
+  (): void;
+  /** Retry a resume batch that the consumer previously could not deliver. */
+  retryResume(): void;
 }
 
 /**
@@ -145,19 +168,44 @@ export interface ObserveMeshSurfaceLifecycleOptions {
  */
 export function observeMeshSurfaceLifecycle(
   options: ObserveMeshSurfaceLifecycleOptions,
-): () => void {
+): MeshSurfaceLifecycleStop {
   const target = options.target ?? globalThis.document;
-  if (!target) return () => undefined;
+  if (!target) {
+    return Object.assign(() => undefined, { retryResume: () => undefined });
+  }
 
   let last: MeshSurfaceLifecycle | null = null;
+  let stopped = false;
+  let resumeBlocked = false;
+  let operationQueue: Promise<void> = Promise.resolve();
+
+  const enqueue = (operation: () => Promise<void>): void => {
+    operationQueue = operationQueue.then(operation).catch(() => undefined);
+  };
+
+  const drainResume = async (
+    initial: MeshSessionLifecycleResult,
+  ): Promise<void> => {
+    let result = initial;
+    while (!stopped) {
+      if (result.drained.length > 0) {
+        resumeBlocked = true;
+        const accepted = await options.onDrained?.(result.drained);
+        if (accepted === false) return;
+        resumeBlocked = false;
+      }
+      if (result.lifecycle !== "resuming") return;
+      result = await finishMeshSurfaceResume(options.invoke);
+    }
+  };
+
   const apply = (lifecycle: MeshSurfaceLifecycle): void => {
     if (lifecycle === last) return;
     last = lifecycle;
-    void setMeshSurfaceLifecycle(options.invoke, lifecycle)
-      .then((result) => {
-        if (result.drained.length > 0) options.onDrained?.(result.drained);
-      })
-      .catch(() => undefined);
+    enqueue(async () => {
+      const result = await setMeshSurfaceLifecycle(options.invoke, lifecycle);
+      if (lifecycle === "foreground") await drainResume(result);
+    });
   };
 
   const onVisibilityChange = (): void => {
@@ -166,9 +214,19 @@ export function observeMeshSurfaceLifecycle(
 
   target.addEventListener("visibilitychange", onVisibilityChange);
   onVisibilityChange();
-  return () => {
+  const stop = (() => {
+    stopped = true;
     target.removeEventListener("visibilitychange", onVisibilityChange);
+  }) as MeshSurfaceLifecycleStop;
+  stop.retryResume = (): void => {
+    if (stopped || last !== "foreground" || !resumeBlocked) return;
+    enqueue(async () => {
+      if (!resumeBlocked || stopped || last !== "foreground") return;
+      resumeBlocked = false;
+      await drainResume(await finishMeshSurfaceResume(options.invoke));
+    });
   };
+  return stop;
 }
 
 export interface MeshSessionRosterPeer {
@@ -246,6 +304,7 @@ export function installMeshSessionRuntimeLink(
   let closed = false;
   let latestRoster: MeshSessionRoster = { peers: [] };
   let reconcileQueue: Promise<void> = Promise.resolve();
+  let lifecycleStop: MeshSurfaceLifecycleStop | null = null;
 
   const flushPeer = (peerId: string): void => {
     const binding = bindings.get(peerId);
@@ -258,15 +317,17 @@ export function installMeshSessionRuntimeLink(
     }
     if (delivered === pending.length) pendingDrains.delete(peerId);
     else if (delivered > 0) pending.splice(0, delivered);
+    if (pendingDrains.size === 0) lifecycleStop?.retryResume();
   };
 
-  const retainDrains = (drained: readonly MeshSessionDrain[]): void => {
+  const retainDrains = (drained: readonly MeshSessionDrain[]): boolean => {
     for (const item of drained) {
       const pending = pendingDrains.get(item.peerId) ?? [];
       pending.push(...item.frames);
       pendingDrains.set(item.peerId, pending);
       flushPeer(item.peerId);
     }
+    return pendingDrains.size === 0;
   };
 
   const bindRosterPeer = async (
@@ -399,7 +460,7 @@ export function installMeshSessionRuntimeLink(
     reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
   };
   const unsubscribeRoster = options.peer.subscribeRoster(scheduleReconcile);
-  const stopLifecycle = observeMeshSurfaceLifecycle({
+  lifecycleStop = observeMeshSurfaceLifecycle({
     invoke: options.invoke,
     onDrained: retainDrains,
     ...(options.lifecycleTarget !== undefined
@@ -412,7 +473,8 @@ export function installMeshSessionRuntimeLink(
       if (closed) return;
       closed = true;
       unsubscribeRoster();
-      stopLifecycle();
+      lifecycleStop?.();
+      lifecycleStop = null;
       await reconcileQueue;
       for (const peerId of [...bindings.keys()]) {
         await unbindMeshSessionPeer(options.invoke, peerId).catch(() => undefined);

@@ -134,10 +134,14 @@ describe("mesh session link", () => {
 
     target.visibilityState = "visible";
     target.emit("visibilitychange");
-    await Promise.resolve();
-
-    expect(calls.map((call) => (call.args as { request: { lifecycle: string } }).request.lifecycle))
-      .toEqual(["foreground", "background", "foreground"]);
+    await vi.waitFor(() => {
+      expect(
+        calls.map(
+          (call) =>
+            (call.args as { request: { lifecycle: string } }).request.lifecycle,
+        ),
+      ).toEqual(["foreground", "background", "foreground"]);
+    });
     stop();
     expect(target.listenerCount("visibilitychange")).toBe(0);
   });
@@ -155,7 +159,7 @@ describe("mesh session link", () => {
   });
 
   it("hands back frames parked while the surface slept, in order", async () => {
-    const target = fakeDocument("hidden");
+    const target = fakeDocument("visible");
     const drained = [
       { peerId: "peer-a", frames: [{ id: "e-1" }, { id: "e-2" }] },
     ];
@@ -163,10 +167,77 @@ describe("mesh session link", () => {
     const onDrained = vi.fn();
 
     observeMeshSurfaceLifecycle({ invoke, target, onDrained });
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(onDrained).toHaveBeenCalledWith(drained));
+  });
 
-    expect(onDrained).toHaveBeenCalledWith(drained);
+  it("acknowledges every resume batch before Rust returns to foreground", async () => {
+    const target = fakeDocument("visible");
+    const calls: string[] = [];
+    let finishCount = 0;
+    const invoke = (async (command: string) => {
+      calls.push(command);
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return {
+          lifecycle: "resuming",
+          drained: [{ peerId: "peer-a", frames: [{ id: "a-1" }] }],
+        };
+      }
+      finishCount += 1;
+      return finishCount === 1
+        ? {
+            lifecycle: "resuming",
+            drained: [{ peerId: "peer-a", frames: [{ id: "a-2" }] }],
+          }
+        : { lifecycle: "foreground", drained: [] };
+    }) as MeshSessionInvoke;
+    const delivered: unknown[] = [];
+
+    const stop = observeMeshSurfaceLifecycle({
+      invoke,
+      target,
+      onDrained: (drained) => {
+        delivered.push(...drained.flatMap((item) => item.frames));
+        return true;
+      },
+    });
+    await vi.waitFor(() => expect(calls).toHaveLength(3));
+
+    expect(calls).toEqual([
+      "aurora_mesh_session_set_lifecycle",
+      "aurora_mesh_session_finish_resume",
+      "aurora_mesh_session_finish_resume",
+    ]);
+    expect(delivered).toEqual([{ id: "a-1" }, { id: "a-2" }]);
+    stop();
+  });
+
+  it("does not acknowledge a resume batch until its exact channel is ready", async () => {
+    const target = fakeDocument("visible");
+    const calls: string[] = [];
+    let canDeliver = false;
+    const invoke = (async (command: string) => {
+      calls.push(command);
+      return command === "aurora_mesh_session_set_lifecycle"
+        ? {
+            lifecycle: "resuming",
+            drained: [{ peerId: "peer-a", frames: [{ id: "a-1" }] }],
+          }
+        : { lifecycle: "foreground", drained: [] };
+    }) as MeshSessionInvoke;
+
+    const stop = observeMeshSurfaceLifecycle({
+      invoke,
+      target,
+      onDrained: () => canDeliver,
+    });
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls).toEqual(["aurora_mesh_session_set_lifecycle"]);
+
+    canDeliver = true;
+    stop.retryResume();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1]).toBe("aurora_mesh_session_finish_resume");
+    stop();
   });
 
   it("treats a failing dispatcher as an awake surface rather than throwing", async () => {
