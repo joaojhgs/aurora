@@ -78,6 +78,7 @@ export async function bindMeshSessionPeer(
     readonly localPeerId?: string;
     readonly providerServiceInstanceId?: string;
     readonly advertisedMethodIds?: readonly string[];
+    readonly manifestMethodsReady?: boolean;
     readonly primary?: boolean;
   } = {},
 ): Promise<MeshSessionBindResult> {
@@ -91,6 +92,7 @@ export async function bindMeshSessionPeer(
       localPeerId: options.localPeerId ?? null,
       providerServiceInstanceId: options.providerServiceInstanceId ?? null,
       advertisedMethodIds: [...(options.advertisedMethodIds ?? [])],
+      manifestMethodsReady: options.manifestMethodsReady ?? true,
       primary: options.primary ?? false,
     },
   });
@@ -505,6 +507,7 @@ export function installMeshSessionRuntimeLink(
     rosterPeer: MeshSessionRosterPeer,
     handles: { peerConnectionId: number; dataChannelId: number },
     advertisedMethodIds: readonly string[],
+    manifestMethodsReady: boolean,
   ): Promise<void> => {
     const signature = JSON.stringify({
       peerConnectionId: handles.peerConnectionId,
@@ -513,6 +516,7 @@ export function installMeshSessionRuntimeLink(
       localPeerId: options.localPeerId ?? null,
       providerServiceInstanceId: options.providerServiceInstanceId ?? null,
       advertisedMethodIds,
+      manifestMethodsReady,
       primary: rosterPeer.primary,
     });
     const existing = bindings.get(rosterPeer.peerId);
@@ -531,6 +535,7 @@ export function installMeshSessionRuntimeLink(
         ? { providerServiceInstanceId: options.providerServiceInstanceId }
         : {}),
       advertisedMethodIds,
+      manifestMethodsReady,
       primary: rosterPeer.primary,
     });
     bindings.set(rosterPeer.peerId, {
@@ -578,17 +583,19 @@ export function installMeshSessionRuntimeLink(
         }
         continue;
       }
-      await bindRosterPeer(rosterPeer, handles, []);
+      await bindRosterPeer(rosterPeer, handles, [], false);
       void options.peer
         .getManifest(rosterPeer.peerId)
+        .catch(() => null)
         .then((manifest) => {
           reconcileQueue = reconcileQueue.then(async () => {
-            if (closed || !manifest) return;
+            if (closed) return;
             const currentPeer = bindableRosterPeer(
               latestRoster,
               rosterPeer.peerId,
             );
             if (!currentPeer) return;
+            if (retiringBindings.has(rosterPeer.peerId)) return;
             const currentRemoteSignalingId =
               currentPeer.snapshot.connectedSignalingPeerId;
             if (currentRemoteSignalingId === undefined) return;
@@ -618,15 +625,14 @@ export function installMeshSessionRuntimeLink(
             }
             const methodIds = [
               ...new Set(
-                (manifest.services ?? []).flatMap((service) => [
+                (manifest?.services ?? []).flatMap((service) => [
                   ...(service.methods ?? []),
                 ]),
               ),
             ].sort();
-            await bindRosterPeer(currentPeer, currentHandles, methodIds);
+            await bindRosterPeer(currentPeer, currentHandles, methodIds, true);
           });
-        })
-        .catch(() => undefined);
+        });
     }
   };
 

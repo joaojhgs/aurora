@@ -30,6 +30,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
 use aurora_contracts::ids;
@@ -58,6 +59,10 @@ const MESH_SESSION_EVENT: &str = "aurora://mesh-session";
 /// measurement window. The spelling here is what makes that regex match; the
 /// two are kept in step by `docs/mesh/BACKGROUND-MEASUREMENT.md`.
 const BACKGROUND_TOOL_CALL_MARKER: &str = "background_tool_call";
+const NATIVE_ASSISTANT_ABANDONED_TTL_MS: i64 = 5 * 60 * 1000;
+const NATIVE_ASSISTANT_ABANDONED_MAX: usize = 256;
+const RETIRED_CHANNEL_TTL_MS: i64 = 5 * 60 * 1000;
+const RETIRED_CHANNEL_MAX: usize = 128;
 
 /// The registry, plus what the shell needs to route back to a channel.
 #[derive(Clone, Default)]
@@ -75,8 +80,14 @@ struct MeshSessionInner {
     /// Per-peer native assistant eligibility supplied by the production bind.
     peer_bindings: HashMap<String, MeshSessionPeerBinding>,
     /// Native-owned outbound calls awaiting a response on an exact peer.
-    native_assistant_pending:
-        HashMap<(String, String), oneshot::Sender<Result<Value, TransportError>>>,
+    native_assistant_pending: HashMap<(String, String), NativeAssistantPendingResponse>,
+    /// Recently abandoned calls whose late result/error frames must not leak
+    /// to the generic WebView path.
+    native_assistant_abandoned: HashMap<(String, String), ExpiringMarker>,
+    /// Superseded data channels retained briefly so late frames from them do
+    /// not settle current calls or masquerade as generic WebView traffic.
+    retired_channel_peers: HashMap<u64, RetiredChannelPeer>,
+    expiring_marker_sequence: u64,
     /// Whether this process currently holds the R4 connected-device reason.
     ///
     /// The decision is `aurora-mesh-session`'s and is tested there; this only
@@ -92,7 +103,26 @@ struct MeshSessionInner {
 struct MeshSessionPeerBinding {
     data_channel_id: u64,
     advertised_method_ids: BTreeSet<String>,
+    manifest_methods_ready: bool,
     primary: bool,
+}
+
+#[derive(Debug)]
+struct NativeAssistantPendingResponse {
+    data_channel_id: u64,
+    sender: oneshot::Sender<Result<Value, TransportError>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ExpiringMarker {
+    expires_at_ms: i64,
+    sequence: u64,
+}
+
+#[derive(Clone, Debug)]
+struct RetiredChannelPeer {
+    peer_id: String,
+    marker: ExpiringMarker,
 }
 
 #[derive(Debug)]
@@ -122,6 +152,9 @@ pub struct MeshSessionBindRequest {
     /// Methods currently advertised by this exact peer manifest.
     #[serde(default)]
     advertised_method_ids: Vec<String>,
+    /// Whether `advertised_method_ids` is authoritative for this binding.
+    #[serde(default = "default_manifest_methods_ready")]
+    manifest_methods_ready: bool,
     /// Whether this peer is the primary eligible route for this local surface.
     #[serde(default)]
     primary: bool,
@@ -164,27 +197,19 @@ pub async fn aurora_mesh_session_bind(
         }
         _ => None,
     };
+    let now_ms = current_time_ms();
     let mut inner = state.inner.lock().await;
     inner
         .registry
         .bind(&request.peer_id, request.peer_connection_id, context)
         .map_err(|error| error.to_string())?;
-    inner
-        .channel_peers
-        .insert(request.data_channel_id, request.peer_id.clone());
-    if let Some(previous_channel_id) = inner
-        .peer_channels
-        .insert(request.peer_id.clone(), request.data_channel_id)
-    {
-        if previous_channel_id != request.data_channel_id {
-            inner.channel_peers.remove(&previous_channel_id);
-        }
-    }
+    inner.bind_channel_to_peer(&request.peer_id, request.data_channel_id, now_ms);
     inner.peer_bindings.insert(
         request.peer_id.clone(),
         MeshSessionPeerBinding {
             data_channel_id: request.data_channel_id,
             advertised_method_ids: request.advertised_method_ids.into_iter().collect(),
+            manifest_methods_ready: request.manifest_methods_ready,
             primary: request.primary,
         },
     );
@@ -288,6 +313,10 @@ fn drained_payload(drained: Vec<(String, Vec<QueuedFrame>)>) -> Vec<MeshSessionD
         .collect()
 }
 
+fn default_manifest_methods_ready() -> bool {
+    true
+}
+
 impl MeshSessionInner {
     /// Match the foreground service's connected-device reason to whether any
     /// session is actually being held, and report whether it is held now.
@@ -322,8 +351,13 @@ impl MeshSessionInner {
         let (peer_id, binding) =
             self.select_native_assistant_peer(preferred_peer_id, required_method_id)?;
         let (sender, response) = oneshot::channel();
-        self.native_assistant_pending
-            .insert((peer_id.clone(), request_id.to_owned()), sender);
+        self.native_assistant_pending.insert(
+            (peer_id.clone(), request_id.to_owned()),
+            NativeAssistantPendingResponse {
+                data_channel_id: binding.data_channel_id,
+                sender,
+            },
+        );
         Ok(NativeAssistantPendingCall {
             peer_id,
             data_channel_id: binding.data_channel_id,
@@ -343,7 +377,10 @@ impl MeshSessionInner {
                 .get(peer_id)
                 .ok_or(TransportError::InvalidConfiguration)?;
             if required_method_id
-                .is_some_and(|method_id| !binding.advertised_method_ids.contains(method_id))
+                .is_some_and(|method_id| {
+                    !binding.manifest_methods_ready
+                        || !binding.advertised_method_ids.contains(method_id)
+                })
             {
                 return Err(TransportError::UnknownMethod);
             }
@@ -354,8 +391,10 @@ impl MeshSessionInner {
             .peer_bindings
             .iter()
             .filter(|(_, binding)| {
-                required_method_id
-                    .is_none_or(|method_id| binding.advertised_method_ids.contains(method_id))
+                required_method_id.is_none_or(|method_id| {
+                    binding.manifest_methods_ready
+                        && binding.advertised_method_ids.contains(method_id)
+                })
             })
             .map(|(peer_id, binding)| (peer_id.clone(), binding.clone()))
             .collect::<Vec<_>>();
@@ -373,29 +412,67 @@ impl MeshSessionInner {
         Err(TransportError::InvalidConfiguration)
     }
 
-    fn settle_native_assistant_response(&mut self, peer_id: &str, frame: &Value) -> bool {
+    fn native_assistant_methods_unresolved(&self, peer_id: &str, _method_id: &str) -> bool {
+        self.peer_bindings
+            .get(peer_id)
+            .is_some_and(|binding| !binding.manifest_methods_ready)
+    }
+
+    fn bind_channel_to_peer(&mut self, peer_id: &str, data_channel_id: u64, now_ms: i64) {
+        self.prune_expiring_markers(now_ms);
+        self.channel_peers.insert(data_channel_id, peer_id.to_owned());
+        if let Some(previous_channel_id) =
+            self.peer_channels.insert(peer_id.to_owned(), data_channel_id)
+        {
+            if previous_channel_id != data_channel_id {
+                self.channel_peers.remove(&previous_channel_id);
+                self.retire_channel(previous_channel_id, peer_id, now_ms);
+                self.fail_native_assistant_peer_channel(
+                    peer_id,
+                    previous_channel_id,
+                    TransportError::RequestFailed,
+                );
+            }
+        }
+    }
+
+    fn settle_native_assistant_response(
+        &mut self,
+        peer_id: &str,
+        data_channel_id: u64,
+        frame: &Value,
+        now_ms: i64,
+    ) -> NativeAssistantFrameDisposition {
+        self.prune_expiring_markers(now_ms);
         let Some(frame_type) = frame.get("type").and_then(Value::as_str) else {
-            return false;
+            return NativeAssistantFrameDisposition::NotAssistant;
         };
         if frame_type != "result" && frame_type != "error" {
-            return false;
+            return NativeAssistantFrameDisposition::NotAssistant;
         }
         let Some(request_id) = frame.get("id").and_then(Value::as_str) else {
-            return false;
+            return NativeAssistantFrameDisposition::NotAssistant;
         };
-        let Some(sender) = self
-            .native_assistant_pending
-            .remove(&(peer_id.to_owned(), request_id.to_owned()))
-        else {
-            return false;
+        let key = (peer_id.to_owned(), request_id.to_owned());
+        if self.native_assistant_abandoned.contains_key(&key) {
+            return NativeAssistantFrameDisposition::Consumed;
+        }
+        let Some(pending) = self.native_assistant_pending.get(&key) else {
+            return NativeAssistantFrameDisposition::NotAssistant;
+        };
+        if pending.data_channel_id != data_channel_id {
+            return NativeAssistantFrameDisposition::NotAssistant;
+        }
+        let Some(pending) = self.native_assistant_pending.remove(&key) else {
+            return NativeAssistantFrameDisposition::NotAssistant;
         };
         let result = if frame_type == "result" {
             Ok(frame.get("result").cloned().unwrap_or(Value::Null))
         } else {
             Err(transport_error_from_frame(frame))
         };
-        let _ = sender.send(result);
-        true
+        let _ = pending.sender.send(result);
+        NativeAssistantFrameDisposition::Consumed
     }
 
     fn fail_native_assistant_peer(&mut self, peer_id: &str, error: TransportError) {
@@ -406,11 +483,136 @@ impl MeshSessionInner {
             .cloned()
             .collect::<Vec<_>>();
         for key in keys {
-            if let Some(sender) = self.native_assistant_pending.remove(&key) {
-                let _ = sender.send(Err(error.clone()));
+            if let Some(pending) = self.native_assistant_pending.remove(&key) {
+                let _ = pending.sender.send(Err(error.clone()));
             }
         }
     }
+
+    fn fail_native_assistant_peer_channel(
+        &mut self,
+        peer_id: &str,
+        data_channel_id: u64,
+        error: TransportError,
+    ) {
+        let keys = self
+            .native_assistant_pending
+            .iter()
+            .filter(|((pending_peer_id, _), pending)| {
+                pending_peer_id == peer_id && pending.data_channel_id == data_channel_id
+            })
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        for key in keys {
+            if let Some(pending) = self.native_assistant_pending.remove(&key) {
+                let _ = pending.sender.send(Err(error.clone()));
+            }
+        }
+    }
+
+    fn remove_native_assistant_call(&mut self, peer_id: &str, request_id: &str) {
+        self.native_assistant_pending
+            .remove(&(peer_id.to_owned(), request_id.to_owned()));
+    }
+
+    fn abandon_native_assistant_call(&mut self, peer_id: &str, request_id: &str, now_ms: i64) {
+        self.remove_native_assistant_call(peer_id, request_id);
+        let marker = self.new_expiring_marker(now_ms, NATIVE_ASSISTANT_ABANDONED_TTL_MS);
+        self.native_assistant_abandoned
+            .insert((peer_id.to_owned(), request_id.to_owned()), marker);
+        self.prune_expiring_markers(now_ms);
+    }
+
+    fn retire_channel(&mut self, data_channel_id: u64, peer_id: &str, now_ms: i64) {
+        let marker = self.new_expiring_marker(now_ms, RETIRED_CHANNEL_TTL_MS);
+        self.retired_channel_peers.insert(
+            data_channel_id,
+            RetiredChannelPeer {
+                peer_id: peer_id.to_owned(),
+                marker,
+            },
+        );
+        self.prune_expiring_markers(now_ms);
+    }
+
+    fn new_expiring_marker(&mut self, now_ms: i64, ttl_ms: i64) -> ExpiringMarker {
+        self.expiring_marker_sequence = self.expiring_marker_sequence.wrapping_add(1);
+        ExpiringMarker {
+            expires_at_ms: now_ms.saturating_add(ttl_ms),
+            sequence: self.expiring_marker_sequence,
+        }
+    }
+
+    fn prune_expiring_markers(&mut self, now_ms: i64) {
+        self.native_assistant_abandoned
+            .retain(|_, marker| marker.expires_at_ms > now_ms);
+        self.retired_channel_peers
+            .retain(|_, retired| retired.marker.expires_at_ms > now_ms);
+        prune_abandoned_marker_map(
+            &mut self.native_assistant_abandoned,
+            NATIVE_ASSISTANT_ABANDONED_MAX,
+        );
+        prune_retired_channel_map(&mut self.retired_channel_peers, RETIRED_CHANNEL_MAX);
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NativeAssistantFrameDisposition {
+    Consumed,
+    NotAssistant,
+}
+
+fn stale_channel_should_swallow(expected_peer_id: &str, frame: &Value) -> bool {
+    let Some(frame_type) = frame.get("type").and_then(Value::as_str) else {
+        return false;
+    };
+    if !matches!(frame_type, "call" | "cancel" | "result" | "error") {
+        return false;
+    }
+    frame
+        .get("peer_id")
+        .and_then(Value::as_str)
+        .is_none_or(|peer_id| peer_id == expected_peer_id)
+}
+
+fn prune_abandoned_marker_map(
+    map: &mut HashMap<(String, String), ExpiringMarker>,
+    max_len: usize,
+) {
+    if map.len() <= max_len {
+        return;
+    }
+    let mut by_sequence = map
+        .iter()
+        .map(|(key, marker)| (key.clone(), marker.sequence))
+        .collect::<Vec<_>>();
+    by_sequence.sort_by_key(|(_, sequence)| *sequence);
+    let remove_count = map.len().saturating_sub(max_len);
+    for (key, _) in by_sequence.into_iter().take(remove_count) {
+        map.remove(&key);
+    }
+}
+
+fn prune_retired_channel_map(map: &mut HashMap<u64, RetiredChannelPeer>, max_len: usize) {
+    if map.len() <= max_len {
+        return;
+    }
+    let mut by_sequence = map
+        .iter()
+        .map(|(key, retired)| (*key, retired.marker.sequence))
+        .collect::<Vec<_>>();
+    by_sequence.sort_by_key(|(_, sequence)| *sequence);
+    let remove_count = map.len().saturating_sub(max_len);
+    for (key, _) in by_sequence.into_iter().take(remove_count) {
+        map.remove(&key);
+    }
+}
+
+fn current_time_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(i64::MAX as u128) as i64)
+        .unwrap_or(0)
 }
 
 fn transport_error_from_frame(frame: &Value) -> TransportError {
@@ -454,13 +656,25 @@ pub async fn route_inbound(
         return InboundRouting::Emit;
     }
     let mut inner = state.inner.lock().await;
-    let Some(peer_id) = inner.channel_peers.get(&data_channel_id).cloned() else {
-        return InboundRouting::Emit;
-    };
+    inner.prune_expiring_markers(now_ms);
     let Ok(frame) = serde_json::from_str::<Value>(payload) else {
         return InboundRouting::Emit;
     };
-    if inner.settle_native_assistant_response(&peer_id, &frame) {
+    let Some(peer_id) = inner.channel_peers.get(&data_channel_id).cloned() else {
+        let retired_peer = inner
+            .retired_channel_peers
+            .get(&data_channel_id)
+            .map(|retired| retired.peer_id.clone());
+        return match retired_peer {
+            Some(peer_id) if stale_channel_should_swallow(&peer_id, &frame) => {
+                InboundRouting::Parked
+            }
+            _ => InboundRouting::Emit,
+        };
+    };
+    if inner.settle_native_assistant_response(&peer_id, data_channel_id, &frame, now_ms)
+        == NativeAssistantFrameDisposition::Consumed
+    {
         return InboundRouting::Parked;
     }
 
@@ -534,9 +748,17 @@ impl MeshSessionState {
 
     pub async fn cancel_native_assistant_call(&self, peer_id: &str, request_id: &str) {
         let mut inner = self.inner.lock().await;
-        inner
-            .native_assistant_pending
-            .remove(&(peer_id.to_owned(), request_id.to_owned()));
+        inner.remove_native_assistant_call(peer_id, request_id);
+    }
+
+    pub async fn abandon_native_assistant_call(&self, peer_id: &str, request_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner.abandon_native_assistant_call(peer_id, request_id, current_time_ms());
+    }
+
+    pub async fn native_assistant_methods_unresolved(&self, peer_id: &str, method_id: &str) -> bool {
+        let inner = self.inner.lock().await;
+        inner.native_assistant_methods_unresolved(peer_id, method_id)
     }
 
     #[cfg(test)]
@@ -548,18 +770,31 @@ impl MeshSessionState {
         primary: bool,
         local_peer_id: Option<&str>,
     ) {
+        self.test_bind_native_assistant_peer_at(
+            peer_id,
+            data_channel_id,
+            advertised_method_ids,
+            primary,
+            local_peer_id,
+            0,
+            true,
+        )
+        .await;
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_bind_native_assistant_peer_at(
+        &self,
+        peer_id: &str,
+        data_channel_id: u64,
+        advertised_method_ids: &[&str],
+        primary: bool,
+        local_peer_id: Option<&str>,
+        now_ms: i64,
+        manifest_methods_ready: bool,
+    ) {
         let mut inner = self.inner.lock().await;
-        inner
-            .channel_peers
-            .insert(data_channel_id, peer_id.to_owned());
-        if let Some(previous_channel_id) = inner
-            .peer_channels
-            .insert(peer_id.to_owned(), data_channel_id)
-        {
-            if previous_channel_id != data_channel_id {
-                inner.channel_peers.remove(&previous_channel_id);
-            }
-        }
+        inner.bind_channel_to_peer(peer_id, data_channel_id, now_ms);
         inner.peer_bindings.insert(
             peer_id.to_owned(),
             MeshSessionPeerBinding {
@@ -568,6 +803,7 @@ impl MeshSessionState {
                     .iter()
                     .map(|method| (*method).to_owned())
                     .collect(),
+                manifest_methods_ready,
                 primary,
             },
         );
@@ -581,7 +817,42 @@ impl MeshSessionState {
         frame: &Value,
     ) -> bool {
         let mut inner = self.inner.lock().await;
-        inner.settle_native_assistant_response(peer_id, frame)
+        let Some(data_channel_id) = inner.peer_channels.get(peer_id).copied() else {
+            return false;
+        };
+        inner.settle_native_assistant_response(peer_id, data_channel_id, frame, 0)
+            == NativeAssistantFrameDisposition::Consumed
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_abandon_native_assistant_call_at(
+        &self,
+        peer_id: &str,
+        request_id: &str,
+        now_ms: i64,
+    ) {
+        let mut inner = self.inner.lock().await;
+        inner.abandon_native_assistant_call(peer_id, request_id, now_ms);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_route_native_assistant_frame_at(
+        &self,
+        data_channel_id: u64,
+        frame: &Value,
+        now_ms: i64,
+    ) -> NativeAssistantFrameDisposition {
+        let mut inner = self.inner.lock().await;
+        inner.prune_expiring_markers(now_ms);
+        let Some(peer_id) = inner.channel_peers.get(&data_channel_id).cloned() else {
+            return match inner.retired_channel_peers.get(&data_channel_id) {
+                Some(retired) if stale_channel_should_swallow(&retired.peer_id, frame) => {
+                    NativeAssistantFrameDisposition::Consumed
+                }
+                _ => NativeAssistantFrameDisposition::NotAssistant,
+            };
+        };
+        inner.settle_native_assistant_response(&peer_id, data_channel_id, frame, now_ms)
     }
 
     #[cfg(test)]
@@ -1000,6 +1271,156 @@ mod tests {
                     .await
                     .expect_err("active close removed binding"),
                 TransportError::InvalidConfiguration
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_late_abandoned_result_is_consumed_then_expires() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+            let pending = state
+                .begin_native_assistant_call(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-abandoned",
+                    true,
+                )
+                .await
+                .expect("pending call");
+            state
+                .test_abandon_native_assistant_call_at("peer-a", "request-abandoned", 100)
+                .await;
+            drop(pending);
+
+            let late = json!({
+                "type": "result",
+                "id": "request-abandoned",
+                "result": {"text": "late"}
+            });
+            assert_eq!(
+                state
+                    .test_route_native_assistant_frame_at(10, &late, 1_000)
+                    .await,
+                NativeAssistantFrameDisposition::Consumed
+            );
+            assert_eq!(
+                state
+                    .test_route_native_assistant_frame_at(
+                        10,
+                        &late,
+                        100 + NATIVE_ASSISTANT_ABANDONED_TTL_MS + 1,
+                    )
+                    .await,
+                NativeAssistantFrameDisposition::NotAssistant
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_superseded_channel_frames_do_not_settle_current_call() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer_at(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                    100,
+                    true,
+                )
+                .await;
+            let old_pending = state
+                .begin_native_assistant_call(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("old pending");
+            state
+                .test_bind_native_assistant_peer_at(
+                    "peer-a",
+                    20,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                    200,
+                    true,
+                )
+                .await;
+            assert_eq!(
+                old_pending
+                    .response
+                    .await
+                    .expect("sender")
+                    .expect_err("old channel failed"),
+                TransportError::RequestFailed
+            );
+            let current_pending = state
+                .begin_native_assistant_call(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("current pending can reuse abandoned id after failure");
+
+            let stale_result = json!({
+                "type": "result",
+                "id": "request-1",
+                "result": {"text": "stale"}
+            });
+            assert_eq!(
+                state
+                    .test_route_native_assistant_frame_at(10, &stale_result, 250)
+                    .await,
+                NativeAssistantFrameDisposition::Consumed
+            );
+            assert_eq!(
+                state
+                    .test_route_native_assistant_frame_at(
+                        10,
+                        &json!({"type": "call", "id": "stale-call"}),
+                        250,
+                    )
+                    .await,
+                NativeAssistantFrameDisposition::Consumed
+            );
+            assert_eq!(
+                state
+                    .test_route_native_assistant_frame_at(
+                        20,
+                        &json!({
+                            "type": "result",
+                            "id": "request-1",
+                            "result": {"text": "current"}
+                        }),
+                        250,
+                    )
+                    .await,
+                NativeAssistantFrameDisposition::Consumed
+            );
+            assert_eq!(
+                current_pending
+                    .response
+                    .await
+                    .expect("sender")
+                    .expect("current result"),
+                json!({"text": "current"})
             );
         });
     }

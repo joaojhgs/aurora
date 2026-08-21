@@ -71,6 +71,7 @@ describe("mesh session link", () => {
             localPeerId: null,
             providerServiceInstanceId: null,
             advertisedMethodIds: [],
+            manifestMethodsReady: true,
             primary: false,
           },
         },
@@ -529,6 +530,110 @@ describe("mesh session link", () => {
     await link.close();
   });
 
+  it("marks native methods unresolved until delayed manifest hydration finishes", async () => {
+    const target = fakeDocument("visible");
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return { lifecycle: "foreground", drained: [] };
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    let resolveManifest:
+      | ((manifest: { services: { methods: string[] }[] }) => void)
+      | undefined;
+    const peer = {
+      subscribeRoster(
+        listener: (value: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: { state: string; connectedSignalingPeerId: string };
+          }>;
+        }) => void,
+      ) {
+        listener({
+          peers: [
+            {
+              peerId: "peer-a",
+              primary: true,
+              snapshot: {
+                state: "authorized",
+                connectedSignalingPeerId: "signal-a",
+              },
+            },
+          ],
+        });
+        return () => undefined;
+      },
+      async getManifest() {
+        return await new Promise<{ services: { methods: string[] }[] }>(
+          (resolve) => {
+            resolveManifest = resolve;
+          },
+        );
+      },
+    };
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 1,
+        dataChannelId: 11,
+      }),
+      deliverFrame: () => true,
+      lifecycleTarget: target,
+    });
+
+    await vi.waitFor(() => {
+      const binds = calls.filter(
+        ({ command }) => command === "aurora_mesh_session_bind",
+      );
+      expect(binds).toHaveLength(1);
+    });
+    const firstBind = calls.find(
+      ({ command }) => command === "aurora_mesh_session_bind",
+    );
+    expect(
+      (firstBind?.args as { request: Record<string, unknown> }).request,
+    ).toMatchObject({
+      peerId: "peer-a",
+      dataChannelId: 11,
+      advertisedMethodIds: [],
+      manifestMethodsReady: false,
+      primary: true,
+    });
+
+    resolveManifest?.({
+      services: [{ methods: ["Orchestrator.ExternalUserInput"] }],
+    });
+    await vi.waitFor(() => {
+      const binds = calls.filter(
+        ({ command }) => command === "aurora_mesh_session_bind",
+      );
+      expect(binds).toHaveLength(2);
+    });
+    const secondBind = calls.filter(
+      ({ command }) => command === "aurora_mesh_session_bind",
+    )[1];
+    expect(
+      (secondBind?.args as { request: Record<string, unknown> }).request,
+    ).toMatchObject({
+      peerId: "peer-a",
+      dataChannelId: 11,
+      advertisedMethodIds: ["Orchestrator.ExternalUserInput"],
+      manifestMethodsReady: true,
+      primary: true,
+    });
+
+    await link.close();
+  });
+
   it("retries a rejected native unbind without serving a removed peer", async () => {
     vi.useFakeTimers();
     const target = fakeDocument("hidden");
@@ -782,8 +887,11 @@ describe("mesh session link", () => {
     await vi.waitFor(() => {
       expect(
         calls.filter(({ command }) => command === "aurora_mesh_session_bind"),
-      ).toHaveLength(1);
+      ).toHaveLength(2);
     });
+    const bindsBeforeRetiredPeerReturns = calls.filter(
+      ({ command }) => command === "aurora_mesh_session_bind",
+    ).length;
 
     rosterListener?.({ peers: [] });
     await vi.waitFor(() => {
@@ -815,7 +923,7 @@ describe("mesh session link", () => {
 
     expect(
       calls.filter(({ command }) => command === "aurora_mesh_session_bind"),
-    ).toHaveLength(1);
+    ).toHaveLength(bindsBeforeRetiredPeerReturns);
     expect(failures).toMatchObject([
       {
         peerId: "peer-a",

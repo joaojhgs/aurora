@@ -566,7 +566,7 @@ impl SpeechTransport for NativeMeshAssistantSpeechTransport {
         }
         let active =
             self.active_assistant
-                .take()
+                .clone()
                 .ok_or_else(|| VoiceCoreError::TransportFault {
                     code: "no_active_session".to_owned(),
                 })?;
@@ -589,6 +589,7 @@ impl SpeechTransport for NativeMeshAssistantSpeechTransport {
                 code: "invalid_response".to_owned(),
             });
         }
+        self.active_assistant = None;
         Ok(())
     }
 }
@@ -1001,7 +1002,7 @@ impl SpeechTransport for NativeGatewayTransport {
         }
         let active =
             self.active_assistant
-                .take()
+                .clone()
                 .ok_or_else(|| VoiceCoreError::TransportFault {
                     code: "no_active_session".to_owned(),
                 })?;
@@ -1025,6 +1026,7 @@ impl SpeechTransport for NativeGatewayTransport {
                 code: "invalid_response".to_owned(),
             });
         }
+        self.active_assistant = None;
         Ok(())
     }
 }
@@ -1965,6 +1967,57 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn mesh_failed_interrupt_keeps_active_turn_retryable() {
+        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        clear_native_mesh_assistant_transport_factory();
+        let turn = assistant_request(34, "retry mesh interrupt");
+        let mut invalid_response = assistant_response_value_for(&turn, "wrong id");
+        invalid_response["request_id"] = Value::String("other-request".to_owned());
+        let state = Arc::new(Mutex::new(MeshTestState {
+            response: Some(invalid_response),
+            interrupt_response: None,
+            ..MeshTestState::default()
+        }));
+        install_native_mesh_assistant_transport_factory(Arc::new(RecordingMeshFactory {
+            state: Arc::clone(&state),
+        }));
+        let route = NativeMeshAssistantRoute::new(None).expect("mesh route");
+        let mut transport =
+            NativeMeshAssistantSpeechTransport::new(route, TransportLimits::default())
+                .expect("mesh transport");
+
+        let error =
+            SpeechTransport::assistant_turn(&mut transport, turn.clone(), CancellationToken::new())
+                .await
+                .expect_err("invalid mesh response");
+
+        assert_eq!(
+            error,
+            VoiceCoreError::TransportFault {
+                code: "invalid_response".to_owned()
+            }
+        );
+        {
+            let mut state = state.lock().expect("mesh state");
+            assert_eq!(state.interrupts.len(), 1);
+            state.interrupt_response = Some(interrupt_response_value_for(&turn));
+        }
+        SpeechTransport::cancel_session(&mut transport, Generation(34))
+            .await
+            .expect("retry interrupt succeeds");
+        let state = state.lock().expect("mesh state");
+        assert_eq!(state.interrupts.len(), 2);
+        drop(state);
+        assert_eq!(
+            SpeechTransport::cancel_session(&mut transport, Generation(34)).await,
+            Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned()
+            })
+        );
+        clear_native_mesh_assistant_transport_factory();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn mesh_assistant_turn_maps_timeout_without_leaking_payloads() {
         let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
         clear_native_mesh_assistant_transport_factory();
@@ -2236,10 +2289,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_cleanup_interrupt_does_not_leave_stale_active_session() {
+    async fn failed_cleanup_interrupt_keeps_active_session_retryable() {
         let server = FixtureServer::responses([
             status_response("500 Internal Server Error"),
             status_response("500 Internal Server Error"),
+            interrupt_response(4),
         ]);
         let mut transport = NativeGatewayTransport::new(
             server.base_url.clone(),
@@ -2256,15 +2310,18 @@ mod tests {
             .await;
 
         assert_eq!(failed, Err(TransportError::HttpStatus { status: 500 }));
+        assert_eq!(transport.cancel_session(Generation(4)).await, Ok(()));
+        let _assistant_request = server.request.recv().expect("assistant request");
+        let failed_interrupt = server.request.recv().expect("failed interrupt request");
+        assert!(failed_interrupt.contains("x-request-id: voice-interrupt-4-"));
+        let retry_interrupt = server.request.recv().expect("retry interrupt request");
+        assert!(retry_interrupt.contains("x-request-id: voice-interrupt-4-"));
         assert_eq!(
             transport.cancel_session(Generation(4)).await,
             Err(VoiceCoreError::TransportFault {
                 code: "no_active_session".to_owned()
             })
         );
-        let _assistant_request = server.request.recv().expect("assistant request");
-        let interrupt_request = server.request.recv().expect("interrupt request");
-        assert!(interrupt_request.contains("x-request-id: voice-interrupt-4-"));
     }
 
     #[tokio::test]

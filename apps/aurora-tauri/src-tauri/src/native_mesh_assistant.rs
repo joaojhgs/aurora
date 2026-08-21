@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use aurora_contracts::ids;
@@ -136,13 +136,16 @@ impl TauriNativeMeshAssistantTransport {
         if cancellation.is_cancelled() {
             return Err(TransportError::Cancelled);
         }
+        let started = Instant::now();
         let pending = self
-            .mesh_state
-            .begin_native_assistant_call(
+            .begin_call_when_ready(
                 preferred_peer_id,
                 method_id,
                 request_id,
                 require_advertised_method,
+                timeout,
+                started,
+                &cancellation,
             )
             .await?;
         let peer_id = pending.peer_id.clone();
@@ -165,16 +168,73 @@ impl TauriNativeMeshAssistantTransport {
             return Err(error);
         }
         self.active_peer_id = Some(peer_id.clone());
+        let remaining_timeout = timeout
+            .checked_sub(started.elapsed())
+            .unwrap_or(Duration::ZERO);
+        if remaining_timeout.is_zero() {
+            send_cancel_frame(&self.sender, pending.data_channel_id, request_id).await;
+            self.mesh_state
+                .abandon_native_assistant_call(&peer_id, request_id)
+                .await;
+            return Err(TransportError::Timeout);
+        }
         await_response(
             &self.mesh_state,
             Arc::clone(&self.sender),
             pending,
             request_id,
-            timeout,
+            remaining_timeout,
             self.options.limits().max_response_bytes,
             cancellation,
         )
         .await
+    }
+
+    async fn begin_call_when_ready(
+        &self,
+        preferred_peer_id: Option<&str>,
+        method_id: &str,
+        request_id: &str,
+        require_advertised_method: bool,
+        timeout: Duration,
+        started: Instant,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeAssistantPendingCall, TransportError> {
+        loop {
+            match self
+                .mesh_state
+                .begin_native_assistant_call(
+                    preferred_peer_id,
+                    method_id,
+                    request_id,
+                    require_advertised_method,
+                )
+                .await
+            {
+                Ok(pending) => return Ok(pending),
+                Err(TransportError::UnknownMethod) => {
+                    let unresolved = match preferred_peer_id {
+                        Some(peer_id) if require_advertised_method => {
+                            self.mesh_state
+                                .native_assistant_methods_unresolved(peer_id, method_id)
+                                .await
+                        }
+                        _ => false,
+                    };
+                    if !unresolved {
+                        return Err(TransportError::UnknownMethod);
+                    }
+                    if cancellation.is_cancelled() {
+                        return Err(TransportError::Cancelled);
+                    }
+                    if started.elapsed() >= timeout {
+                        return Err(TransportError::Timeout);
+                    }
+                    tokio::time::sleep(CANCEL_POLL_INTERVAL).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
 }
 
@@ -204,13 +264,13 @@ async fn await_response(
             }
             _ = &mut timeout => {
                 send_cancel_frame(&sender, data_channel_id, request_id).await;
-                mesh_state.cancel_native_assistant_call(&peer_id, request_id).await;
+                mesh_state.abandon_native_assistant_call(&peer_id, request_id).await;
                 return Err(TransportError::Timeout);
             }
             _ = tokio::time::sleep(CANCEL_POLL_INTERVAL) => {
                 if cancellation.is_cancelled() {
                     send_cancel_frame(&sender, data_channel_id, request_id).await;
-                    mesh_state.cancel_native_assistant_call(&peer_id, request_id).await;
+                    mesh_state.abandon_native_assistant_call(&peer_id, request_id).await;
                     return Err(TransportError::Cancelled);
                 }
             }
@@ -386,6 +446,84 @@ mod tests {
     }
 
     #[test]
+    fn invoke_waits_for_exact_peer_manifest_before_unknown_method() {
+        block_on(async {
+            let mesh_state = MeshSessionState::default();
+            mesh_state
+                .test_bind_native_assistant_peer_at(
+                    "peer-a",
+                    42,
+                    &[],
+                    true,
+                    None,
+                    0,
+                    false,
+                )
+                .await;
+            let sender = Arc::new(RecordingSender::default());
+            let mut transport = TauriNativeMeshAssistantTransport {
+                mesh_state: mesh_state.clone(),
+                sender: sender.clone(),
+                options: NativeMeshAssistantTransportOptions::new(
+                    aurora_voice_native::NativeMeshAssistantRoute::new(Some(
+                        "peer-a".to_owned(),
+                    ))
+                    .expect("route"),
+                    aurora_voice_native::TransportLimits {
+                        request_timeout: Duration::from_millis(250),
+                        ..Default::default()
+                    },
+                )
+                .expect("options"),
+                active_peer_id: None,
+            };
+            let payload = json!({"text": "hello"});
+            let response = transport.invoke(
+                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                "request-delayed-manifest",
+                "idem-delayed-manifest",
+                &payload,
+                Duration::from_millis(250),
+                CancellationToken::new(),
+                Some("peer-a"),
+                true,
+            );
+            tokio::pin!(response);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+            assert!(sender.frames.lock().expect("frames").is_empty());
+
+            mesh_state
+                .test_bind_native_assistant_peer_at(
+                    "peer-a",
+                    42,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                    10,
+                    true,
+                )
+                .await;
+            tokio::select! {
+                result = &mut response => panic!("invoke finished before response: {result:?}"),
+                _ = wait_for_frame_count(&sender, 1) => {}
+            }
+            assert!(
+                mesh_state
+                    .test_settle_native_assistant_response(
+                        "peer-a",
+                        &json!({
+                            "type": "result",
+                            "id": "request-delayed-manifest",
+                            "result": {"text": "ready"}
+                        }),
+                    )
+                    .await
+            );
+            assert_eq!(response.await.expect("response"), json!({"text": "ready"}));
+        });
+    }
+
+    #[test]
     fn invoke_times_out_and_removes_pending_call() {
         block_on(async {
             let mesh_state = MeshSessionState::default();
@@ -426,7 +564,7 @@ mod tests {
             let cancel: Value = serde_json::from_str(&sent[1].1).expect("cancel");
             assert_eq!(sent[1].0, 42);
             assert_eq!(cancel, json!({"type": "cancel", "id": "request-timeout"}));
-            assert!(!mesh_state
+            assert!(mesh_state
                 .test_settle_native_assistant_response(
                     "peer-a",
                     &json!({"type": "result", "id": "request-timeout", "result": {"text": "late"}}),
@@ -482,7 +620,7 @@ mod tests {
             assert_eq!(sent[1].0, 42);
             let cancel: Value = serde_json::from_str(&sent[1].1).expect("cancel");
             assert_eq!(cancel, json!({"type": "cancel", "id": "request-cancel"}));
-            assert!(!mesh_state
+            assert!(mesh_state
                 .test_settle_native_assistant_response(
                     "peer-a",
                     &json!({"type": "result", "id": "request-cancel", "result": {"text": "late"}}),
