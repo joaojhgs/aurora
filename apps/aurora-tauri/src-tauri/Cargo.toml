@@ -26,6 +26,8 @@ tauri-build = { version = "2.5.3", features = [] }
 aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
 aurora-mesh-authority = { path = "../../../rust/crates/aurora-mesh-authority" }
 aurora-mesh-session = { path = "../../../rust/crates/aurora-mesh-session" }
+aurora-contracts = { path = "../../../rust/crates/aurora-contracts" }
+aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
 base64 = "=0.22.1"
 getrandom = "=0.2.17"
 hmac = "0.12"
@@ -41,10 +43,9 @@ tauri-plugin-wdio-webdriver = { version = "=1.2.0", optional = true }
 thiserror = "2.0"
 tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
 url = "2.5"
+async-trait = "0.1"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-async-trait = "0.1"
-aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
 aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["desktop-sherpa-tts"] }
 aurora-voice-sherpa = { path = "../../../rust/crates/aurora-voice-sherpa" }
@@ -64,7 +65,6 @@ webrtc = "0.11.0"
 tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
 aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }

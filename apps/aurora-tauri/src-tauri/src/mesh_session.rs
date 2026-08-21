@@ -28,19 +28,22 @@
 //! authority on every call, and the answer does not depend on which of the two
 //! states we are in.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+#[cfg(test)]
+use aurora_contracts::ids;
 use aurora_mesh_authority::types::{PeerHostAuthorizeRequest, PeerHostErrorBody};
 use aurora_mesh_session::{
     error_frame, execute_background_tooling_call, BackgroundToolingProviderContext, CallOutcome,
     DeviceLinkAction, DeviceLinkLedger, InboundDisposition, MeshSessionRegistry, PendingCall,
     QueuedFrame, SurfaceLifecycle,
 };
+use aurora_voice_native::TransportError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 /// Event the shell emits when the background dispatcher has something the
 /// webview must see once it wakes: drained frames, and the fact of a call
@@ -57,7 +60,7 @@ const MESH_SESSION_EVENT: &str = "aurora://mesh-session";
 const BACKGROUND_TOOL_CALL_MARKER: &str = "background_tool_call";
 
 /// The registry, plus what the shell needs to route back to a channel.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MeshSessionState {
     inner: Arc<Mutex<MeshSessionInner>>,
 }
@@ -66,9 +69,14 @@ pub struct MeshSessionState {
 struct MeshSessionInner {
     registry: MeshSessionRegistry,
     /// Which stable peer id a data channel carries, once TypeScript said so.
-    channels: HashMap<u64, String>,
+    channel_peers: HashMap<u64, String>,
     /// Reverse of `channels`, so an answer can find its way back out.
     peer_channels: HashMap<String, u64>,
+    /// Per-peer native assistant eligibility supplied by the production bind.
+    peer_bindings: HashMap<String, MeshSessionPeerBinding>,
+    /// Native-owned outbound calls awaiting a response on an exact peer.
+    native_assistant_pending:
+        HashMap<(String, String), oneshot::Sender<Result<Value, TransportError>>>,
     /// Whether this process currently holds the R4 connected-device reason.
     ///
     /// The decision is `aurora-mesh-session`'s and is tested there; this only
@@ -78,6 +86,21 @@ struct MeshSessionInner {
     provider_peer_id: Option<String>,
     /// Local Tooling service instance id used in background projections.
     provider_service_instance_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct MeshSessionPeerBinding {
+    data_channel_id: u64,
+    advertised_method_ids: BTreeSet<String>,
+    primary: bool,
+}
+
+#[derive(Debug)]
+pub struct NativeAssistantPendingCall {
+    pub peer_id: String,
+    pub data_channel_id: u64,
+    pub local_peer_id: Option<String>,
+    pub response: oneshot::Receiver<Result<Value, TransportError>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +119,12 @@ pub struct MeshSessionBindRequest {
     /// Local Tooling service instance id, supplied by the production bind.
     #[serde(default)]
     provider_service_instance_id: Option<String>,
+    /// Methods currently advertised by this exact peer manifest.
+    #[serde(default)]
+    advertised_method_ids: Vec<String>,
+    /// Whether this peer is the primary eligible route for this local surface.
+    #[serde(default)]
+    primary: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,11 +170,24 @@ pub async fn aurora_mesh_session_bind(
         .bind(&request.peer_id, request.peer_connection_id, context)
         .map_err(|error| error.to_string())?;
     inner
-        .channels
+        .channel_peers
         .insert(request.data_channel_id, request.peer_id.clone());
-    inner
+    if let Some(previous_channel_id) = inner
         .peer_channels
-        .insert(request.peer_id.clone(), request.data_channel_id);
+        .insert(request.peer_id.clone(), request.data_channel_id)
+    {
+        if previous_channel_id != request.data_channel_id {
+            inner.channel_peers.remove(&previous_channel_id);
+        }
+    }
+    inner.peer_bindings.insert(
+        request.peer_id.clone(),
+        MeshSessionPeerBinding {
+            data_channel_id: request.data_channel_id,
+            advertised_method_ids: request.advertised_method_ids.into_iter().collect(),
+            primary: request.primary,
+        },
+    );
     if let Some(local_peer_id) = request.local_peer_id {
         inner.provider_peer_id = Some(local_peer_id);
     }
@@ -175,8 +217,10 @@ pub async fn aurora_mesh_session_unbind(
     let mut inner = state.inner.lock().await;
     let removed = inner.registry.unbind(&request.peer_id);
     if let Some(channel_id) = inner.peer_channels.remove(&request.peer_id) {
-        inner.channels.remove(&channel_id);
+        inner.channel_peers.remove(&channel_id);
     }
+    inner.peer_bindings.remove(&request.peer_id);
+    inner.fail_native_assistant_peer(&request.peer_id, TransportError::RequestFailed);
     let held = inner.sync_device_link(&app);
     Ok(json!({
         "peerId": request.peer_id,
@@ -259,6 +303,127 @@ impl MeshSessionInner {
         }
         self.device_link.is_held()
     }
+
+    fn begin_native_assistant_call(
+        &mut self,
+        preferred_peer_id: Option<&str>,
+        method_id: &str,
+        request_id: &str,
+        require_advertised_method: bool,
+    ) -> Result<NativeAssistantPendingCall, TransportError> {
+        if self
+            .native_assistant_pending
+            .keys()
+            .any(|(_, id)| id == request_id)
+        {
+            return Err(TransportError::InvalidConfiguration);
+        }
+        let required_method_id = require_advertised_method.then_some(method_id);
+        let (peer_id, binding) =
+            self.select_native_assistant_peer(preferred_peer_id, required_method_id)?;
+        let (sender, response) = oneshot::channel();
+        self.native_assistant_pending
+            .insert((peer_id.clone(), request_id.to_owned()), sender);
+        Ok(NativeAssistantPendingCall {
+            peer_id,
+            data_channel_id: binding.data_channel_id,
+            local_peer_id: self.provider_peer_id.clone(),
+            response,
+        })
+    }
+
+    fn select_native_assistant_peer(
+        &self,
+        preferred_peer_id: Option<&str>,
+        required_method_id: Option<&str>,
+    ) -> Result<(String, MeshSessionPeerBinding), TransportError> {
+        if let Some(peer_id) = preferred_peer_id {
+            let binding = self
+                .peer_bindings
+                .get(peer_id)
+                .ok_or(TransportError::InvalidConfiguration)?;
+            if required_method_id
+                .is_some_and(|method_id| !binding.advertised_method_ids.contains(method_id))
+            {
+                return Err(TransportError::UnknownMethod);
+            }
+            return Ok((peer_id.to_owned(), binding.clone()));
+        }
+
+        let mut candidates = self
+            .peer_bindings
+            .iter()
+            .filter(|(_, binding)| {
+                required_method_id
+                    .is_none_or(|method_id| binding.advertised_method_ids.contains(method_id))
+            })
+            .map(|(peer_id, binding)| (peer_id.clone(), binding.clone()))
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| left.0.cmp(&right.0));
+        if candidates.len() == 1 {
+            return Ok(candidates.remove(0));
+        }
+        let mut primary = candidates
+            .into_iter()
+            .filter(|(_, binding)| binding.primary)
+            .collect::<Vec<_>>();
+        if primary.len() == 1 {
+            return Ok(primary.remove(0));
+        }
+        Err(TransportError::InvalidConfiguration)
+    }
+
+    fn settle_native_assistant_response(&mut self, peer_id: &str, frame: &Value) -> bool {
+        let Some(frame_type) = frame.get("type").and_then(Value::as_str) else {
+            return false;
+        };
+        if frame_type != "result" && frame_type != "error" {
+            return false;
+        }
+        let Some(request_id) = frame.get("id").and_then(Value::as_str) else {
+            return false;
+        };
+        let Some(sender) = self
+            .native_assistant_pending
+            .remove(&(peer_id.to_owned(), request_id.to_owned()))
+        else {
+            return false;
+        };
+        let result = if frame_type == "result" {
+            Ok(frame.get("result").cloned().unwrap_or(Value::Null))
+        } else {
+            Err(transport_error_from_frame(frame))
+        };
+        let _ = sender.send(result);
+        true
+    }
+
+    fn fail_native_assistant_peer(&mut self, peer_id: &str, error: TransportError) {
+        let keys = self
+            .native_assistant_pending
+            .keys()
+            .filter(|(pending_peer_id, _)| pending_peer_id == peer_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in keys {
+            if let Some(sender) = self.native_assistant_pending.remove(&key) {
+                let _ = sender.send(Err(error.clone()));
+            }
+        }
+    }
+}
+
+fn transport_error_from_frame(frame: &Value) -> TransportError {
+    match frame
+        .get("error")
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_u64)
+        .and_then(|code| u16::try_from(code).ok())
+    {
+        Some(408) => TransportError::Timeout,
+        Some(status @ 400..=599) => TransportError::HttpStatus { status },
+        _ => TransportError::RequestFailed,
+    }
 }
 
 /// What the transport should do with a frame it just received.
@@ -289,12 +454,15 @@ pub async fn route_inbound(
         return InboundRouting::Emit;
     }
     let mut inner = state.inner.lock().await;
-    let Some(peer_id) = inner.channels.get(&data_channel_id).cloned() else {
+    let Some(peer_id) = inner.channel_peers.get(&data_channel_id).cloned() else {
         return InboundRouting::Emit;
     };
     let Ok(frame) = serde_json::from_str::<Value>(payload) else {
         return InboundRouting::Emit;
     };
+    if inner.settle_native_assistant_response(&peer_id, &frame) {
+        return InboundRouting::Parked;
+    }
 
     let disposition = match inner.registry.accept_inbound(&peer_id, &frame, now_ms) {
         Ok(disposition) => disposition,
@@ -318,6 +486,123 @@ pub async fn route_inbound(
             drop(inner);
             settle(app, state, *pending, background).await
         }
+    }
+}
+
+pub async fn native_data_channel_closed(
+    app: &AppHandle,
+    state: &MeshSessionState,
+    data_channel_id: u64,
+) {
+    let mut inner = state.inner.lock().await;
+    let Some(peer_id) = inner.channel_peers.remove(&data_channel_id) else {
+        return;
+    };
+    if inner.peer_channels.get(&peer_id) != Some(&data_channel_id) {
+        return;
+    }
+    inner.peer_channels.remove(&peer_id);
+    inner.peer_bindings.remove(&peer_id);
+    inner.registry.unbind(&peer_id);
+    inner.fail_native_assistant_peer(&peer_id, TransportError::RequestFailed);
+    inner.sync_device_link(app);
+}
+
+pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: u64) {
+    let Some(state) = app.try_state::<MeshSessionState>() else {
+        return;
+    };
+    native_data_channel_closed(app, &state, data_channel_id).await;
+}
+
+impl MeshSessionState {
+    pub async fn begin_native_assistant_call(
+        &self,
+        preferred_peer_id: Option<&str>,
+        method_id: &str,
+        request_id: &str,
+        require_advertised_method: bool,
+    ) -> Result<NativeAssistantPendingCall, TransportError> {
+        let mut inner = self.inner.lock().await;
+        inner.begin_native_assistant_call(
+            preferred_peer_id,
+            method_id,
+            request_id,
+            require_advertised_method,
+        )
+    }
+
+    pub async fn cancel_native_assistant_call(&self, peer_id: &str, request_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner
+            .native_assistant_pending
+            .remove(&(peer_id.to_owned(), request_id.to_owned()));
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_bind_native_assistant_peer(
+        &self,
+        peer_id: &str,
+        data_channel_id: u64,
+        advertised_method_ids: &[&str],
+        primary: bool,
+        local_peer_id: Option<&str>,
+    ) {
+        let mut inner = self.inner.lock().await;
+        inner
+            .channel_peers
+            .insert(data_channel_id, peer_id.to_owned());
+        if let Some(previous_channel_id) = inner
+            .peer_channels
+            .insert(peer_id.to_owned(), data_channel_id)
+        {
+            if previous_channel_id != data_channel_id {
+                inner.channel_peers.remove(&previous_channel_id);
+            }
+        }
+        inner.peer_bindings.insert(
+            peer_id.to_owned(),
+            MeshSessionPeerBinding {
+                data_channel_id,
+                advertised_method_ids: advertised_method_ids
+                    .iter()
+                    .map(|method| (*method).to_owned())
+                    .collect(),
+                primary,
+            },
+        );
+        inner.provider_peer_id = local_peer_id.map(str::to_owned);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_settle_native_assistant_response(
+        &self,
+        peer_id: &str,
+        frame: &Value,
+    ) -> bool {
+        let mut inner = self.inner.lock().await;
+        inner.settle_native_assistant_response(peer_id, frame)
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_fail_native_assistant_peer(&self, peer_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner.fail_native_assistant_peer(peer_id, TransportError::RequestFailed);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_close_native_data_channel(&self, data_channel_id: u64) {
+        let mut inner = self.inner.lock().await;
+        let Some(peer_id) = inner.channel_peers.remove(&data_channel_id) else {
+            return;
+        };
+        if inner.peer_channels.get(&peer_id) != Some(&data_channel_id) {
+            return;
+        }
+        inner.peer_channels.remove(&peer_id);
+        inner.peer_bindings.remove(&peer_id);
+        inner.registry.unbind(&peer_id);
+        inner.fail_native_assistant_peer(&peer_id, TransportError::RequestFailed);
     }
 }
 
@@ -445,8 +730,8 @@ fn bridge_error_frame(call_id: &str, code: u16, reason_code: &str) -> Value {
 /// identical to a dead session from the other end.
 fn log_background_tool_call(pending: &PendingCall, outcome: &str) {
     println!(
-        "aurora.mesh {BACKGROUND_TOOL_CALL_MARKER} outcome={outcome} method={} peer={}",
-        pending.method_id, pending.peer_id
+        "aurora.mesh {BACKGROUND_TOOL_CALL_MARKER} outcome={outcome} method={}",
+        pending.method_id
     );
 }
 
@@ -505,3 +790,254 @@ fn hold_device_link(_app: &AppHandle) {}
 
 #[cfg(not(target_os = "android"))]
 fn release_device_link(_app: &AppHandle) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("test runtime")
+            .block_on(future)
+    }
+
+    #[test]
+    fn native_assistant_selects_primary_eligible_peer_and_claims_exact_response() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    false,
+                    Some("local-node"),
+                )
+                .await;
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-b",
+                    20,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    Some("local-node"),
+                )
+                .await;
+
+            let pending = state
+                .begin_native_assistant_call(
+                    None,
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("pending call");
+            assert_eq!(pending.peer_id, "peer-b");
+            assert_eq!(pending.data_channel_id, 20);
+            assert_eq!(pending.local_peer_id.as_deref(), Some("local-node"));
+
+            assert!(
+                !state
+                    .test_settle_native_assistant_response(
+                        "peer-a",
+                        &json!({"type": "result", "id": "request-1", "result": {"text": "wrong"}}),
+                    )
+                    .await
+            );
+            assert!(
+                state
+                    .test_settle_native_assistant_response(
+                        "peer-b",
+                        &json!({"type": "result", "id": "request-1", "result": {"text": "ok"}}),
+                    )
+                    .await
+            );
+            assert_eq!(
+                pending.response.await.expect("sender").expect("response"),
+                json!({"text": "ok"})
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_refuses_ambiguous_or_unadvertised_peer() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    false,
+                    None,
+                )
+                .await;
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-b",
+                    20,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    false,
+                    None,
+                )
+                .await;
+            assert_eq!(
+                state
+                    .begin_native_assistant_call(
+                        None,
+                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        "ambiguous",
+                        true,
+                    )
+                    .await
+                    .expect_err("ambiguous route"),
+                TransportError::InvalidConfiguration
+            );
+            assert_eq!(
+                state
+                    .begin_native_assistant_call(
+                        Some("peer-a"),
+                        ids::ORCHESTRATOR_INTERRUPT,
+                        "missing-method",
+                        true,
+                    )
+                    .await
+                    .expect_err("missing method"),
+                TransportError::UnknownMethod
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_pending_calls_fail_when_peer_fails() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+            let pending = state
+                .begin_native_assistant_call(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("pending call");
+            state.test_fail_native_assistant_peer("peer-a").await;
+            assert_eq!(
+                pending
+                    .response
+                    .await
+                    .expect("sender")
+                    .expect_err("failed peer"),
+                TransportError::RequestFailed
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_rebind_ignores_stale_channel_close() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    20,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+
+            state.test_close_native_data_channel(10).await;
+            let still_bound = state
+                .begin_native_assistant_call(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-after-stale-close",
+                    true,
+                )
+                .await
+                .expect("new channel remains bound");
+            assert_eq!(still_bound.data_channel_id, 20);
+
+            state.test_close_native_data_channel(20).await;
+            assert_eq!(
+                still_bound
+                    .response
+                    .await
+                    .expect("sender")
+                    .expect_err("active channel closed"),
+                TransportError::RequestFailed
+            );
+            assert_eq!(
+                state
+                    .begin_native_assistant_call(
+                        Some("peer-a"),
+                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        "request-after-active-close",
+                        true,
+                    )
+                    .await
+                    .expect_err("active close removed binding"),
+                TransportError::InvalidConfiguration
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_selection_filters_by_requested_method() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-primary",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-interrupt",
+                    20,
+                    &[ids::ORCHESTRATOR_INTERRUPT],
+                    false,
+                    None,
+                )
+                .await;
+
+            let pending = state
+                .begin_native_assistant_call(
+                    None,
+                    ids::ORCHESTRATOR_INTERRUPT,
+                    "request-interrupt",
+                    true,
+                )
+                .await
+                .expect("interrupt-capable peer selected");
+            assert_eq!(pending.peer_id, "peer-interrupt");
+            assert_eq!(pending.data_channel_id, 20);
+        });
+    }
+}

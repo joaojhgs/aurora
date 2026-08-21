@@ -65,6 +65,7 @@ static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
 mod local_data_native;
 mod mesh_authority;
 mod mesh_session;
+mod native_mesh_assistant;
 mod native_voice;
 mod native_webrtc;
 mod generated {
@@ -8668,6 +8669,7 @@ pub fn run() {
         .manage(mesh_authority::MeshAuthorityState::default())
         .manage(mesh_session::MeshSessionState::default())
         .setup(move |app| {
+            native_mesh_assistant::install_for_app(app);
             #[cfg(desktop)]
             {
                 match app

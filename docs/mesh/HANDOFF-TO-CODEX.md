@@ -59,15 +59,59 @@ rust/crates/aurora-mesh-session/tests/session_liveness.rs | 1 +
   silence is exactly what a lost peer produces, and `provider_unavailable` says the provider is
   gone and the caller should stop routing, a different claim.
 
-**State of the tree, verified not assumed:** all four changed Python files parse. Nothing is
-known to be broken. But **none of it has been run** — no test was executed against it, the
-cross-language fixtures were **not** regenerated, and invariant #8's three-property test does
-not exist yet. Treat it as a coherent design, complete on the contract-definition side, and
-entirely unverified.
+**State of the tree.** All four changed Python files parse, and nothing is half-written
+mid-statement. **But three named tests will fail as the tree stands** — the agent's own report
+is more precise than inspection here, and it is right:
+
+- `tests/unit/gateway/test_webrtc_web_thin_protocol_vectors.py::test_webrtc_web_thin_protocol_fixture_is_regenerated_byte_for_byte`
+- `…::test_protocol_descriptor_matches_fixture_and_reserves_future_features`
+- the vitest `keeps the TS descriptor in parity with the Python descriptor fixture`
+
+Cause: `protocol_contract.py` gained `mesh_peer_standby_v1` in `MESH_CONTROL_FRAME_TYPES` and a
+`mesh.peer_standby_signal` capability, so `protocol_descriptor()` no longer matches the committed
+fixture. `scripts/generate_webrtc_protocol_fixtures.py` was **not touched at all** and
+`tests/fixtures/webrtc_web_thin_protocol_vectors.json` was **not regenerated**. This is the one
+hard breakage and it is fixed by adding standby vectors to the generator and running it.
+
+A second inconsistency: `docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md` §3 does **not** name
+`mesh_peer_standby_v1`, but `ownership.rs` and its test now do. The Rust test still passes
+because it compares code to code, so the doc and the code disagree silently. Add the §3 row.
+
+**Nothing has been run** — no pytest, no vitest, no cargo, no tsc. Treat every claim about this
+tree as "written", never as "passing". The agent flags
+`packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts` as the **highest compile risk**:
+`sendPeerStandby()` casts through `as unknown as Record<string, unknown>` and reads
+`this.localPeerId`, which is `string | undefined`, and its import line was rewritten by script.
+Type-check that file first.
 
 **What was clearly not reached:** the budget defaults and priority ordering
-(`peer-registry.ts` is untouched), invariant #8's test, R7's iOS profile beyond the
-`surface_suspended` reason existing, and the fixture regeneration.
+(`peer-registry.ts` is untouched), invariant #8's three-property test (row 8 in the invariant
+ledger still correctly reads "pending"), R7's iOS profile, and the fixture regeneration.
+
+**Two design decisions it made and recorded, worth honouring or consciously overriding:**
+
+- It **rejected reusing `provider_unavailable`** with a new reason code, because R0 §6 gives
+  that frame a different meaning (the provider is gone, stop routing to it), which is not what a
+  shed claims.
+- It **designed but did not implement a negotiated capability gate** for sending the frame. As
+  the tree stands, an older TypeScript peer receiving it throws `unsupported frame type` in
+  `parseWebRtcFrame`, which `mesh-peer-bridge.handleFrame` catches and counts as a dropped
+  frame — the session survives and falls back to the 120 s stale window. Defensible, but a
+  capability gate would be cleaner and it recommends the next agent add one.
+- It flags one place it arguably bent the "add a field rather than repurpose one" rule: `status`
+  gains a new *value* `"standby"` rather than a new field. `standby_reason_code` and
+  `standby_since` are genuinely new fields on `PeerState`.
+
+**Its recommended next step, which I endorse:** add standby vectors to the generator, run it, add
+the boundary-note §3 row, then type-check `mesh-peer-bridge.ts` first since it is the least
+certain file. Nothing needs reverting wholesale.
+
+**R7's unimplemented plan, recorded so it is not re-derived:** map iOS `suspended`/`resumed` onto
+the existing `SurfaceLifecycle::Background`/`Foreground` in `aurora_mesh_session_set_lifecycle`,
+which today hard-errors on any string other than `foreground`/`background` — and that error is
+itself the alarming path R7 forbids. No third lifecycle variant; `ios_voice.rs` deliberately
+untouched. The budget was to live in `peer-registry.ts` as one table keyed by surface × lifecycle
+with iOS as a row, since R0 §1 makes the session registry permanently TypeScript-owned.
 
 Its original brief was:
 

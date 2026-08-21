@@ -514,13 +514,10 @@ impl NativeMeshAssistantSpeechTransport {
                 idempotency_key: request.correlation_id.clone(),
                 timeout: self.limits.request_timeout,
             };
-            let response = await_timed(
-                self.transport
-                    .external_user_input(mesh_request, cancellation.clone()),
-                &cancellation,
-                self.limits.request_timeout,
-            )
-            .await??;
+            let response = self
+                .transport
+                .external_user_input(mesh_request, cancellation.clone())
+                .await?;
             let response = assistant_response_value(response)?;
             validate_optional_response_id(&response, "session_id", &request.session_id)?;
             validate_optional_response_id(&response, "request_id", &request.request_id)?;
@@ -581,14 +578,11 @@ impl SpeechTransport for NativeMeshAssistantSpeechTransport {
             timeout: self.limits.request_timeout,
         };
         let cancellation = CancellationToken::new();
-        let response = await_timed(
-            self.transport.interrupt(request, cancellation.clone()),
-            &cancellation,
-            self.limits.request_timeout,
-        )
-        .await
-        .map_err(map_transport_error)?
-        .map_err(map_transport_error)?;
+        let response = self
+            .transport
+            .interrupt(request, cancellation.clone())
+            .await
+            .map_err(map_transport_error)?;
         let response = assistant_interrupt_response_value(response).map_err(map_transport_error)?;
         if required_string(&response, "status").is_none() {
             return Err(VoiceCoreError::TransportFault {
@@ -1650,15 +1644,15 @@ mod tests {
         async fn external_user_input(
             &mut self,
             request: NativeMeshExternalUserInput,
-            _cancellation: CancellationToken,
+            cancellation: CancellationToken,
         ) -> Result<Value, TransportError> {
             let delay = {
                 let mut state = self.state.lock().expect("mesh state");
-                state.external_inputs.push(request);
+                state.external_inputs.push(request.clone());
                 state.delay
             };
             if let Some(delay) = delay {
-                tokio::time::sleep(delay).await;
+                await_timed(tokio::time::sleep(delay), &cancellation, request.timeout()).await?;
             }
             self.state
                 .lock()

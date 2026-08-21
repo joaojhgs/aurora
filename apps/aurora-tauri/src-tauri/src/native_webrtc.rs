@@ -59,7 +59,7 @@ fn ensure_within_message_ceiling(byte_length: usize) -> Result<(), NativeWebRtcS
     Ok(())
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct NativeWebRtcState {
     #[cfg(aurora_native_webrtc)]
     inner: std::sync::Arc<native::NativeWebRtcStore>,
@@ -360,6 +360,24 @@ pub async fn aurora_native_webrtc_data_channel_send(
     #[cfg(not(aurora_native_webrtc))]
     {
         let _ = (app, state, request);
+        Err(NativeWebRtcSendError::NotSupported)
+    }
+}
+
+pub async fn send_native_text_data_channel(
+    app: AppHandle,
+    state: &NativeWebRtcState,
+    data_channel_id: u64,
+    payload: String,
+) -> Result<(), NativeWebRtcSendError> {
+    #[cfg(aurora_native_webrtc)]
+    {
+        return native::send_data_channel_text_now(app, &state.inner, data_channel_id, payload)
+            .await;
+    }
+    #[cfg(not(aurora_native_webrtc))]
+    {
+        let _ = (app, state, data_channel_id, payload);
         Err(NativeWebRtcSendError::NotSupported)
     }
 }
@@ -674,6 +692,43 @@ mod native {
         Ok(())
     }
 
+    pub(super) async fn send_data_channel_text_now(
+        app: AppHandle,
+        store: &Arc<NativeWebRtcStore>,
+        data_channel_id: u64,
+        payload: String,
+    ) -> Result<(), NativeWebRtcSendError> {
+        let (peer_connection_id, channel, send_lock) =
+            data_channel_with_send_lock(store, data_channel_id)
+                .await
+                .map_err(|_| NativeWebRtcSendError::ChannelUnavailable)?;
+        ensure_within_message_ceiling(payload.len())?;
+        let _send_guard = send_lock.lock().await;
+        match channel.send_text(payload).await {
+            Ok(_) => {
+                emit_to_main(
+                    &app,
+                    NativeWebRtcEventPayload::DataChannelBufferedAmount {
+                        peer_connection_id,
+                        data_channel_id,
+                        buffered_amount: channel.buffered_amount().await,
+                    },
+                );
+                Ok(())
+            }
+            Err(error) => {
+                emit_error(
+                    &app,
+                    peer_connection_id,
+                    Some(data_channel_id),
+                    "data-channel",
+                    error,
+                );
+                Err(NativeWebRtcSendError::ChannelUnavailable)
+            }
+        }
+    }
+
     pub(super) async fn close_data_channel(
         store: &Arc<NativeWebRtcStore>,
         data_channel_id: u64,
@@ -905,6 +960,7 @@ mod native {
                     .write()
                     .await
                     .remove(&data_channel_id);
+                crate::mesh_session::route_native_data_channel_closed(&app, data_channel_id).await;
                 emit_to_main(
                     &app,
                     NativeWebRtcEventPayload::DataChannelClose {

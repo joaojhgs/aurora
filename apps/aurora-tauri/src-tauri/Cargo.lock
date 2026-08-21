@@ -453,6 +453,7 @@ version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
+ "aurora-contracts",
  "aurora-mesh-authority",
  "aurora-mesh-session",
  "aurora-voice-core",
