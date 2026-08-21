@@ -747,6 +747,7 @@ pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: 
 }
 
 impl MeshSessionState {
+    #[cfg(test)]
     pub async fn begin_native_assistant_call(
         &self,
         preferred_peer_id: Option<&str>,

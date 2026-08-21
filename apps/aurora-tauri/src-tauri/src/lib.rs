@@ -2692,9 +2692,9 @@ async fn aurora_native_speech_pack_activate(
                     request.reference.reference_revision.clone(),
                 )
                 .map_err(|_| AuroraCommandError::NativeSpeechPackSelectionInvalid)?;
-            } else if voice.model_family == "vits_piper" && request.reference.has_any_value() {
-                return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid);
-            } else if voice.model_family != "vits_piper" && voice.model_family != "pockettts" {
+            } else if (voice.model_family == "vits_piper" && request.reference.has_any_value())
+                || (voice.model_family != "vits_piper" && voice.model_family != "pockettts")
+            {
                 return Err(AuroraCommandError::NativeSpeechPackSelectionInvalid);
             }
         }

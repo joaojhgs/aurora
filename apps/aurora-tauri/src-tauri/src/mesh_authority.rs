@@ -8,9 +8,9 @@
 //! to drift from.
 //!
 //! Per the R0 boundary note (`docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md`, section
-//! 1) this is the *authority store* and not a session registry: it is keyed by
-//! peer identity, holds no transport state, and never learns which connection a
-//! peer arrived on.
+//! one), this is the *authority store* and not a session registry: it is keyed
+//! by peer identity, holds no transport state, and never learns which connection
+//! a peer arrived on.
 
 use aurora_mesh_authority::authority::{
     AuthorityError, AuthorityResult, InboundCredentialVerifierStore,

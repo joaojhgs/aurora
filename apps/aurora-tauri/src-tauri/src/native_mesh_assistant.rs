@@ -67,6 +67,27 @@ struct TauriNativeMeshAssistantTransport {
     active_peer_id: Option<String>,
 }
 
+struct NativeMeshInvokeRequest<'a> {
+    method_id: &'a str,
+    request_id: &'a str,
+    idempotency_key: &'a str,
+    payload: &'a Value,
+    timeout: Duration,
+    cancellation: CancellationToken,
+    preferred_peer_id: Option<&'a str>,
+    require_advertised_method: bool,
+}
+
+struct NativeMeshBeginCallRequest<'a> {
+    preferred_peer_id: Option<&'a str>,
+    method_id: &'a str,
+    request_id: &'a str,
+    require_advertised_method: bool,
+    timeout: Duration,
+    started: Instant,
+    cancellation: &'a CancellationToken,
+}
+
 #[async_trait(?Send)]
 impl NativeMeshAssistantTransport for TauriNativeMeshAssistantTransport {
     async fn external_user_input(
@@ -80,16 +101,16 @@ impl NativeMeshAssistantTransport for TauriNativeMeshAssistantTransport {
             .preferred_stable_peer_id()
             .map(str::to_owned);
         let response = self
-            .invoke(
-                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                request.request_id(),
-                request.idempotency_key(),
-                request.payload(),
-                request.timeout(),
+            .invoke(NativeMeshInvokeRequest {
+                method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                request_id: request.request_id(),
+                idempotency_key: request.idempotency_key(),
+                payload: request.payload(),
+                timeout: request.timeout(),
                 cancellation,
-                preferred.as_deref(),
-                true,
-            )
+                preferred_peer_id: preferred.as_deref(),
+                require_advertised_method: true,
+            })
             .await;
         if response.is_err() {
             self.active_peer_id = None;
@@ -107,16 +128,16 @@ impl NativeMeshAssistantTransport for TauriNativeMeshAssistantTransport {
             .as_deref()
             .or_else(|| self.options.route().preferred_stable_peer_id())
             .map(str::to_owned);
-        self.invoke(
-            ids::ORCHESTRATOR_INTERRUPT,
-            request.request_id(),
-            request.idempotency_key(),
-            request.payload(),
-            request.timeout(),
+        self.invoke(NativeMeshInvokeRequest {
+            method_id: ids::ORCHESTRATOR_INTERRUPT,
+            request_id: request.request_id(),
+            idempotency_key: request.idempotency_key(),
+            payload: request.payload(),
+            timeout: request.timeout(),
             cancellation,
-            active_peer_id.as_deref(),
-            true,
-        )
+            preferred_peer_id: active_peer_id.as_deref(),
+            require_advertised_method: true,
+        })
         .await
     }
 }
@@ -124,29 +145,32 @@ impl NativeMeshAssistantTransport for TauriNativeMeshAssistantTransport {
 impl TauriNativeMeshAssistantTransport {
     async fn invoke(
         &mut self,
-        method_id: &str,
-        request_id: &str,
-        idempotency_key: &str,
-        payload: &Value,
-        timeout: Duration,
-        cancellation: CancellationToken,
-        preferred_peer_id: Option<&str>,
-        require_advertised_method: bool,
+        request: NativeMeshInvokeRequest<'_>,
     ) -> Result<Value, TransportError> {
+        let NativeMeshInvokeRequest {
+            method_id,
+            request_id,
+            idempotency_key,
+            payload,
+            timeout,
+            cancellation,
+            preferred_peer_id,
+            require_advertised_method,
+        } = request;
         if cancellation.is_cancelled() {
             return Err(TransportError::Cancelled);
         }
         let started = Instant::now();
         let pending = self
-            .begin_call_when_ready(
+            .begin_call_when_ready(NativeMeshBeginCallRequest {
                 preferred_peer_id,
                 method_id,
                 request_id,
                 require_advertised_method,
                 timeout,
                 started,
-                &cancellation,
-            )
+                cancellation: &cancellation,
+            })
             .await?;
         let peer_id = pending.peer_id.clone();
         let frame = assistant_call_frame(method_id, request_id, idempotency_key, payload, &pending);
@@ -192,14 +216,17 @@ impl TauriNativeMeshAssistantTransport {
 
     async fn begin_call_when_ready(
         &self,
-        preferred_peer_id: Option<&str>,
-        method_id: &str,
-        request_id: &str,
-        require_advertised_method: bool,
-        timeout: Duration,
-        started: Instant,
-        cancellation: &CancellationToken,
+        request: NativeMeshBeginCallRequest<'_>,
     ) -> Result<NativeAssistantPendingCall, TransportError> {
+        let NativeMeshBeginCallRequest {
+            preferred_peer_id,
+            method_id,
+            request_id,
+            require_advertised_method,
+            timeout,
+            started,
+            cancellation,
+        } = request;
         loop {
             match self
                 .mesh_state
@@ -396,16 +423,16 @@ mod tests {
                 active_peer_id: None,
             };
             let payload = json!({"text": "hello", "correlation_id": "request-1"});
-            let response = transport.invoke(
-                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                "request-1",
-                "idem-1",
-                &payload,
-                Duration::from_secs(1),
-                CancellationToken::new(),
-                None,
-                true,
-            );
+            let response = transport.invoke(NativeMeshInvokeRequest {
+                method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                request_id: "request-1",
+                idempotency_key: "idem-1",
+                payload: &payload,
+                timeout: Duration::from_secs(1),
+                cancellation: CancellationToken::new(),
+                preferred_peer_id: None,
+                require_advertised_method: true,
+            });
             tokio::pin!(response);
             tokio::select! {
                 result = &mut response => panic!("invoke finished before response: {result:?}"),
@@ -457,16 +484,16 @@ mod tests {
                 active_peer_id: None,
             };
             let payload = json!({"text": "hello"});
-            let response = transport.invoke(
-                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                "request-delayed-manifest",
-                "idem-delayed-manifest",
-                &payload,
-                Duration::from_millis(250),
-                CancellationToken::new(),
-                Some("peer-a"),
-                true,
-            );
+            let response = transport.invoke(NativeMeshInvokeRequest {
+                method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                request_id: "request-delayed-manifest",
+                idempotency_key: "idem-delayed-manifest",
+                payload: &payload,
+                timeout: Duration::from_millis(250),
+                cancellation: CancellationToken::new(),
+                preferred_peer_id: Some("peer-a"),
+                require_advertised_method: true,
+            });
             tokio::pin!(response);
             tokio::time::sleep(Duration::from_millis(25)).await;
             assert!(sender.frames.lock().expect("frames").is_empty());
@@ -524,16 +551,16 @@ mod tests {
                 active_peer_id: None,
             };
             let payload = json!({"text": "hello"});
-            let response = transport.invoke(
-                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                "request-auto-manifest",
-                "idem-auto-manifest",
-                &payload,
-                Duration::from_millis(250),
-                CancellationToken::new(),
-                None,
-                true,
-            );
+            let response = transport.invoke(NativeMeshInvokeRequest {
+                method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                request_id: "request-auto-manifest",
+                idempotency_key: "idem-auto-manifest",
+                payload: &payload,
+                timeout: Duration::from_millis(250),
+                cancellation: CancellationToken::new(),
+                preferred_peer_id: None,
+                require_advertised_method: true,
+            });
             tokio::pin!(response);
             tokio::time::sleep(Duration::from_millis(25)).await;
             assert!(sender.frames.lock().expect("frames").is_empty());
@@ -591,16 +618,16 @@ mod tests {
             };
             assert_eq!(
                 transport
-                    .invoke(
-                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                        "request-timeout",
-                        "idem-timeout",
-                        &json!({"text": "hello"}),
-                        Duration::from_millis(5),
-                        CancellationToken::new(),
-                        None,
-                        true,
-                    )
+                    .invoke(NativeMeshInvokeRequest {
+                        method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        request_id: "request-timeout",
+                        idempotency_key: "idem-timeout",
+                        payload: &json!({"text": "hello"}),
+                        timeout: Duration::from_millis(5),
+                        cancellation: CancellationToken::new(),
+                        preferred_peer_id: None,
+                        require_advertised_method: true,
+                    })
                     .await
                     .expect_err("timeout"),
                 TransportError::Timeout
@@ -641,16 +668,16 @@ mod tests {
             };
             let cancellation = CancellationToken::new();
             let payload = json!({"text": "hello"});
-            let response = transport.invoke(
-                ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                "request-cancel",
-                "idem-cancel",
-                &payload,
-                Duration::from_secs(1),
-                cancellation.clone(),
-                None,
-                true,
-            );
+            let response = transport.invoke(NativeMeshInvokeRequest {
+                method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                request_id: "request-cancel",
+                idempotency_key: "idem-cancel",
+                payload: &payload,
+                timeout: Duration::from_secs(1),
+                cancellation: cancellation.clone(),
+                preferred_peer_id: None,
+                require_advertised_method: true,
+            });
             tokio::pin!(response);
             tokio::select! {
                 result = &mut response => panic!("invoke finished before cancellation: {result:?}"),
@@ -697,16 +724,16 @@ mod tests {
             };
             assert_eq!(
                 transport
-                    .invoke(
-                        ids::ORCHESTRATOR_INTERRUPT,
-                        "request-interrupt",
-                        "idem-interrupt",
-                        &json!({"session_id": "s", "request_id": "r"}),
-                        Duration::from_secs(1),
-                        CancellationToken::new(),
-                        Some("peer-a"),
-                        true,
-                    )
+                    .invoke(NativeMeshInvokeRequest {
+                        method_id: ids::ORCHESTRATOR_INTERRUPT,
+                        request_id: "request-interrupt",
+                        idempotency_key: "idem-interrupt",
+                        payload: &json!({"session_id": "s", "request_id": "r"}),
+                        timeout: Duration::from_secs(1),
+                        cancellation: CancellationToken::new(),
+                        preferred_peer_id: Some("peer-a"),
+                        require_advertised_method: true,
+                    })
                     .await
                     .expect_err("interrupt not advertised"),
                 TransportError::UnknownMethod
@@ -739,16 +766,16 @@ mod tests {
             cancellation.cancel();
             assert_eq!(
                 transport
-                    .invoke(
-                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
-                        "request-cancelled",
-                        "idem-cancelled",
-                        &json!({"text": "hello"}),
-                        Duration::from_secs(1),
+                    .invoke(NativeMeshInvokeRequest {
+                        method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        request_id: "request-cancelled",
+                        idempotency_key: "idem-cancelled",
+                        payload: &json!({"text": "hello"}),
+                        timeout: Duration::from_secs(1),
                         cancellation,
-                        None,
-                        true,
-                    )
+                        preferred_peer_id: None,
+                        require_advertised_method: true,
+                    })
                     .await
                     .expect_err("cancelled"),
                 TransportError::Cancelled
