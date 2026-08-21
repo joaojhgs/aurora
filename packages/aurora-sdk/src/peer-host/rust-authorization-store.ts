@@ -375,7 +375,7 @@ function defaultGrantId(): string {
  * implementation.
  */
 export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStore {
-  private readonly hydrated = new Set<string>()
+  private readonly hydrationByRelationship = new Map<string, Promise<void>>()
 
   constructor(
     private readonly port: RustAuthorityPort,
@@ -410,16 +410,32 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
    * the error and the authority answers nothing rather than answering blind.
    */
   private async ensureHydrated(selector?: PeerRelationshipSelector): Promise<void> {
-    if (this.loadHydration === undefined || selector === undefined) return
+    const loadHydration = this.loadHydration
+    if (loadHydration === undefined || selector === undefined) return
     const key = JSON.stringify([
       selector.tokenId,
       selector.claimantPeerId,
       selector.verifierPeerId,
       selector.roomName
     ])
-    if (this.hydrated.has(key)) return
-    this.hydrated.add(key)
-    await this.port.hydrate(await this.loadHydration(selector))
+    const existing = this.hydrationByRelationship.get(key)
+    if (existing !== undefined) {
+      await existing
+      return
+    }
+
+    const hydration = (async () => {
+      await this.port.hydrate(await loadHydration(selector))
+    })()
+    this.hydrationByRelationship.set(key, hydration)
+    try {
+      await hydration
+    } catch (error) {
+      if (this.hydrationByRelationship.get(key) === hydration) {
+        this.hydrationByRelationship.delete(key)
+      }
+      throw error
+    }
   }
 
   /** Replay durable verifiers and grants into the authority at session start. */

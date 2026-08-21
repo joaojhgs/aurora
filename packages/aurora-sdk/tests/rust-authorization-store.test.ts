@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   MESH_AUTHORITY_COMMANDS,
@@ -168,11 +168,79 @@ describe('Rust-backed peer host authorization store', () => {
     // is pinned rather than sampled.
     expect(Object.keys(store).sort()).toEqual([
       'auditSink',
-      'hydrated',
+      'hydrationByRelationship',
       'loadHydration',
       'port',
       'projectPermissions'
     ])
-    expect((store as unknown as { hydrated: Set<string> }).hydrated.size).toBe(0)
+    expect(
+      (store as unknown as { hydrationByRelationship: Map<string, Promise<void>> })
+        .hydrationByRelationship.size
+    ).toBe(0)
+  })
+
+  it('makes concurrent authorization wait for one relationship hydration', async () => {
+    let releaseHydration: ((value: { verifiers: never[]; grants: never[] }) => void) | undefined
+    const loadHydration = vi.fn(
+      () => new Promise<{ verifiers: never[]; grants: never[] }>((resolve) => {
+        releaseHydration = resolve
+      })
+    )
+    const hydrate = vi.fn(async () => undefined)
+    const authorize = vi.fn(async () => ({ allowed: false, reasonCode: 'grant_not_found' }))
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate,
+        authorize,
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        })
+      }),
+      undefined,
+      loadHydration
+    )
+
+    const first = store.authorize(AUTHORIZE_REQUEST)
+    const second = store.authorize(AUTHORIZE_REQUEST)
+    await Promise.resolve()
+
+    expect(loadHydration).toHaveBeenCalledTimes(1)
+    expect(authorize).not.toHaveBeenCalled()
+    releaseHydration?.({ verifiers: [], grants: [] })
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(hydrate).toHaveBeenCalledTimes(1)
+    expect(authorize).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries relationship hydration after a transient load failure', async () => {
+    const loadHydration = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockResolvedValueOnce({ verifiers: [], grants: [] })
+    const authorize = vi.fn(async () => ({ allowed: false, reasonCode: 'grant_not_found' }))
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize,
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        })
+      }),
+      undefined,
+      loadHydration
+    )
+
+    await expect(store.authorize(AUTHORIZE_REQUEST)).rejects.toThrow('storage unavailable')
+    await expect(store.authorize(AUTHORIZE_REQUEST)).resolves.toMatchObject({
+      reasonCode: 'grant_not_found'
+    })
+    expect(loadHydration).toHaveBeenCalledTimes(2)
+    expect(authorize).toHaveBeenCalledTimes(1)
   })
 })
