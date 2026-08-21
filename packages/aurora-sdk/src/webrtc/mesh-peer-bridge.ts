@@ -193,7 +193,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.clock = options.clock ?? (() => Date.now() / 1000)
     this.peerHost = options.peerHost
     this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
-    this.peerHost?.attach({ sendFrame: (frame, signal) => this.sendPeerHostFrame(frame, signal) })
+    // Keyed by this bridge's peer. One host serves every peer, so an unkeyed
+    // attach let whichever bridge was built last own the only sender and carry
+    // another peer's manifest down its own channel.
+    this.peerHost?.attach(
+      { sendFrame: (frame, signal) => this.sendPeerHostFrame(frame, signal) },
+      this.remotePeerId
+    )
     this.eventSubscriptions = new MeshEventSubscriptionRegistry({ maxTopicsPerPeer: 32, clock: this.clock })
     this.reassembler = new FragmentReassembler({ limits: new PeerProtocolLimits(), clock: this.clock })
     this.unsubscribeFrames = this.session.subscribeFrames((frame) => this.handleFrame(frame))
@@ -403,6 +409,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
     this.rpcStreams.clear()
     this.peerHost?.handleDisconnect(reason)
+    this.peerHost?.detach(this.remotePeerId)
     this.stopLocalProviderLeaseRenewal()
     this.clearRemoteLease()
     this.reassembler.cleanupPeer(this.remotePeerId)

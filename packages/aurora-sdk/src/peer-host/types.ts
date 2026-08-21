@@ -60,6 +60,19 @@ export interface PeerHostErrorBody {
   readonly code: number
   readonly message: string
   readonly reason_code: string
+  /**
+   * When the caller should try again, for the retryable codes that know.
+   *
+   * Additive and optional, so an older peer that ignores it still sees a
+   * well-formed error. Its only value today is `peer_foreground`, carried by
+   * the 503 `orchestration_deferred` a backgrounded device answers with while
+   * its orchestrator is frozen. See `docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md`
+   * section 6; the body itself is minted in Rust, by `aurora-mesh-session`.
+   *
+   * Receiving one is not a reason to drop the peer or to re-pair: the device
+   * is still there, still holding its lease, and still answering liveness.
+   */
+  readonly retry_when?: 'peer_foreground'
   readonly error_ref?: string
   readonly schema_id?: string
   readonly boundary?: string

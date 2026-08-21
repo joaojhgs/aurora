@@ -1498,3 +1498,138 @@ describe('WebRtcPeerHost', () => {
     }
   })
 })
+
+/**
+ * One host, several peers.
+ *
+ * `lastRecipientPeerId` was a single mutable "who did I last talk to"
+ * (`docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md` section 8). Its sender was the
+ * same defect wearing different clothes: every per-peer bridge attached to the
+ * same host, so the one sender belonged to whichever peer connected last and
+ * another peer's frames left down its channel. These are the regression tests
+ * for both halves.
+ */
+describe('WebRtcPeerHost serving several peers', () => {
+  function multiPeerHost() {
+    const registry = createToolingPeerHostRegistry({
+      getTools: async () => ({ count: 0, tools: [] }),
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: allowMethods({
+        claimantPeerId: 'peer-a',
+        methodIds: ['Tooling.GetTools'],
+        grantRevision: 1
+      }),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const toA: unknown[] = []
+    const toB: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { toA.push(frame) } }, 'peer-a')
+    peerHost.attach({ sendFrame: async (frame) => { toB.push(frame) } }, 'peer-b')
+    return { peerHost, toA, toB }
+  }
+
+  it('sends each peer its own frames rather than the last attached peer everything', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+
+    await peerHost.handleCall(
+      { type: 'call', id: 'call-a', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+
+    expect(toA).toHaveLength(1)
+    expect(toB).toHaveLength(0)
+  })
+
+  it('answers a second peer down its own channel', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+
+    await peerHost.handleCall(
+      { type: 'call', id: 'call-b', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )
+
+    expect(toB).toHaveLength(1)
+    expect(toA).toHaveLength(0)
+  })
+
+  it('keeps each peer authenticated context to itself', async () => {
+    const { peerHost } = multiPeerHost()
+    const contextA = authenticatedContext()
+    const contextB = authenticatedContext({
+      selector: {
+        tokenId: 'token-2',
+        claimantPeerId: 'peer-b',
+        verifierPeerId: 'local-peer',
+        roomName: 'room-a'
+      }
+    })
+
+    const manifestA = await peerHost.buildManifest('peer-a', contextA)
+    const manifestB = await peerHost.buildManifest('peer-b', contextB)
+
+    // Each manifest names the peer it was built for. Before the per-peer
+    // record, the second call's snapshot could fall back to the first peer.
+    expect(manifestA.peer_id).toBe('local-peer')
+    expect(manifestB.peer_id).toBe('local-peer')
+    expect(peerHost.recipientPeerIds()).toEqual(['peer-a', 'peer-b'])
+  })
+
+  it('re-announces the provider to every peer, not just one', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+
+    await peerHost.resumeLocalProvider()
+
+    expect(toA).toHaveLength(1)
+    expect(toB).toHaveLength(1)
+  })
+
+  it('stops sending to a peer once its bridge has gone', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+
+    expect(peerHost.detach('peer-b')).toBe(true)
+    await peerHost.resumeLocalProvider()
+
+    expect(toA).toHaveLength(1)
+    expect(toB).toHaveLength(0)
+    expect(peerHost.recipientPeerIds()).toEqual(['peer-a'])
+  })
+
+  it('keeps the single-peer surface working with an unkeyed attach', async () => {
+    const registry = createToolingPeerHostRegistry({
+      getTools: async () => ({ count: 0, tools: [] }),
+      getExportCatalog: async () => { throw new Error('not implemented') },
+      prepareExecution: async () => { throw new Error('not implemented') },
+      executeTool: async () => { throw new Error('not implemented') }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: allowMethods({
+        claimantPeerId: 'peer-a',
+        methodIds: ['Tooling.GetTools'],
+        grantRevision: 1
+      }),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+
+    await peerHost.handleCall(
+      { type: 'call', id: 'call-a', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+
+    expect(sent).toHaveLength(1)
+    expect(peerHost.recipientPeerIds()).toEqual(['peer-a'])
+  })
+})

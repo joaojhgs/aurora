@@ -38,6 +38,18 @@ type ManifestEvidence = {
   requiredServices: string[]
 } | null
 
+/**
+ * Everything this host knows about one peer it talks to.
+ *
+ * Transport and identity, never authority. The context is a reference to what
+ * a reconnect proof established so a manifest can be built for the right peer;
+ * grants and permission evaluation stay behind `PeerHostAuthorizationStore`.
+ */
+type PeerHostRecipient = {
+  sender?: PeerHostFrameSender
+  authenticatedPeerContext?: AuthenticatedPeerContext
+}
+
 const DEFAULT_MAX_REQUEST_BYTES = 256 * 1024
 const DEFAULT_TIMEOUT_MS = 30_000
 const TIMEOUT_ERROR_REF = 'peer-host-timeout'
@@ -65,8 +77,23 @@ export class WebRtcPeerHost {
   private pendingManifest: ManifestEvidence = null
   private pendingManifestFrame: Record<string, unknown> | null = null
   private staleManifestAckRetryCount = 0
-  private lastRecipientPeerId: string | undefined
-  private lastAuthenticatedPeerContext: AuthenticatedPeerContext | undefined
+  /**
+   * One record per peer this host talks to, keyed by stable peer id.
+   *
+   * This replaces the `lastRecipientPeerId` / `lastAuthenticatedPeerContext`
+   * pair, which was a single mutable "who did I last talk to" and is the wrong
+   * shape now that one host serves several peers (see
+   * `docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md` section 8). The two halves of
+   * that defect travelled together: every per-peer bridge called `attach()` on
+   * the same host, so the *sender* was clobbered by whichever peer connected
+   * last and peer A's manifest could leave down peer B's data channel. A
+   * recipient owns both its sender and its authenticated context, so neither
+   * can be borrowed from another peer.
+   *
+   * The context is a reference to what a reconnect proof established. It is
+   * never a grant: every authorization question still goes to the authority.
+   */
+  private readonly recipients = new Map<string, PeerHostRecipient>()
   private activeAuthoritySelector: PeerRelationshipSelector | null = null
   private authorityRevoked = false
   private unsubscribeRevocation: (() => void) | null = null
@@ -93,8 +120,63 @@ export class WebRtcPeerHost {
     return this.options.localPeerId
   }
 
-  attach(sender: PeerHostFrameSender): void {
-    this.sender = sender
+  /**
+   * Register where this host's frames go.
+   *
+   * With a `remotePeerId` the sender belongs to that peer alone. Without one it
+   * becomes the fallback, which is what a single-peer surface and a bridge that
+   * has not yet learned its peer's stable id both use.
+   */
+  attach(sender: PeerHostFrameSender, remotePeerId?: string): void {
+    if (remotePeerId === undefined) {
+      this.sender = sender
+      return
+    }
+    const recipient = this.recipientFor(remotePeerId)
+    recipient.sender = sender
+  }
+
+  /** Forget one peer, so nothing is later sent down a channel that is gone. */
+  detach(remotePeerId: string): boolean {
+    return this.recipients.delete(remotePeerId)
+  }
+
+  /** Peers this host currently holds a record for, in first-seen order. */
+  recipientPeerIds(): string[] {
+    return [...this.recipients.keys()]
+  }
+
+  private recipientFor(remotePeerId: string): PeerHostRecipient {
+    const existing = this.recipients.get(remotePeerId)
+    if (existing) return existing
+    const created: PeerHostRecipient = {}
+    this.recipients.set(remotePeerId, created)
+    return created
+  }
+
+  private rememberRecipient(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): void {
+    if (remotePeerId === undefined) return
+    const recipient = this.recipientFor(remotePeerId)
+    if (authenticatedPeerContext !== undefined) recipient.authenticatedPeerContext = authenticatedPeerContext
+  }
+
+  /**
+   * The peer a peer-less call is about, when there is exactly one.
+   *
+   * With several peers there is no correct answer, so this returns nothing
+   * rather than guessing. Guessing is precisely the old defect: it hands one
+   * peer's manifest authority to another.
+   */
+  private soleRecipientPeerId(): string | undefined {
+    if (this.recipients.size !== 1) return undefined
+    const [only] = this.recipients.keys()
+    return only
+  }
+
+  private contextFor(remotePeerId?: string): AuthenticatedPeerContext | undefined {
+    const peerId = remotePeerId ?? this.soleRecipientPeerId()
+    if (peerId === undefined) return undefined
+    return this.recipients.get(peerId)?.authenticatedPeerContext
   }
 
   async startEpoch(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
@@ -106,9 +188,8 @@ export class WebRtcPeerHost {
     this.pendingManifestFrame = null
     this.staleManifestAckRetryCount = 0
     this.authorityRevoked = false
-    if (remotePeerId !== undefined) this.lastRecipientPeerId = remotePeerId
-    if (authenticatedPeerContext !== undefined) this.lastAuthenticatedPeerContext = authenticatedPeerContext
-    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext ?? this.lastAuthenticatedPeerContext)
+    this.rememberRecipient(remotePeerId, authenticatedPeerContext)
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext ?? this.contextFor(remotePeerId))
     this.bindRevocation(epochContext)
     return await this.buildManifest(remotePeerId, epochContext)
   }
@@ -131,7 +212,7 @@ export class WebRtcPeerHost {
     this.pendingManifest = null
     this.pendingManifestFrame = null
     this.staleManifestAckRetryCount = 0
-    void this.sender?.sendFrame(this.renewLease()).catch(() => undefined)
+    void this.resolveSender()?.sendFrame(this.renewLease()).catch(() => undefined)
     return true
   }
 
@@ -153,24 +234,61 @@ export class WebRtcPeerHost {
     return frame
   }
 
-  async resume(): Promise<Record<string, unknown>> {
-    return await this.startEpoch(this.lastRecipientPeerId, this.lastAuthenticatedPeerContext)
+  /**
+   * Restart an epoch for one peer, or for the only peer when there is one.
+   *
+   * With several peers and no `remotePeerId` there is nothing correct to
+   * restart, so this restarts nothing rather than picking whichever peer spoke
+   * last. `resumeLocalProvider` is the multi-peer entry point.
+   */
+  async resume(remotePeerId?: string): Promise<Record<string, unknown>> {
+    const peerId = remotePeerId ?? this.soleRecipientPeerId()
+    return await this.startEpoch(peerId, this.contextFor(peerId))
   }
 
+  /**
+   * Re-announce this provider to every peer it serves, each down its own channel.
+   *
+   * A single-peer surface keeps its old behaviour exactly: one recipient means
+   * one epoch and one frame. With several peers each gets its own manifest,
+   * built from its own authenticated context, instead of all of them getting
+   * whichever peer happened to speak last.
+   */
   async resumeLocalProvider(): Promise<void> {
-    const sender = this.requireSender()
-    await sender.sendFrame(await this.resume())
+    const peerIds = this.recipientPeerIds()
+    if (peerIds.length === 0) {
+      await this.requireSender().sendFrame(await this.resume())
+      return
+    }
+    for (const peerId of peerIds) {
+      const frame = await this.resume(peerId)
+      await this.senderFor(peerId).sendFrame(frame)
+    }
   }
 
   async renewLocalProvider(): Promise<void> {
-    const sender = this.requireSender()
     if (!this.acceptingInbound) return
-    await sender.sendFrame(this.renewLease())
+    const peerIds = this.recipientPeerIds()
+    if (peerIds.length === 0) {
+      await this.requireSender().sendFrame(this.renewLease())
+      return
+    }
+    const lease = this.renewLease()
+    for (const peerId of peerIds) {
+      await this.senderFor(peerId).sendFrame(lease)
+    }
   }
 
   async suspendLocalProvider(reason = 'provider_unavailable'): Promise<void> {
-    const sender = this.requireSender()
-    await sender.sendFrame(this.suspend(reason))
+    const frame = this.suspend(reason)
+    const peerIds = this.recipientPeerIds()
+    if (peerIds.length === 0) {
+      await this.requireSender().sendFrame(frame)
+      return
+    }
+    for (const peerId of peerIds) {
+      await this.senderFor(peerId).sendFrame(frame)
+    }
   }
 
   renewLease(): Record<string, unknown> {
@@ -259,9 +377,9 @@ export class WebRtcPeerHost {
   }
 
   async buildManifest(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
-    if (remotePeerId !== undefined) this.lastRecipientPeerId = remotePeerId
+    this.rememberRecipient(remotePeerId)
     const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
-    if (epochContext !== undefined) this.lastAuthenticatedPeerContext = epochContext
+    this.rememberRecipient(remotePeerId, epochContext)
     const nowMs = Math.floor(this.options.clock())
     const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
@@ -365,7 +483,8 @@ export class WebRtcPeerHost {
   }
 
   async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
-    const sender = this.requireSender()
+    const sender = this.senderFor(remotePeerId)
+    this.rememberRecipient(remotePeerId, authenticatedPeerContext)
     if (this.reservedWorkIds.has(frame.id)) {
       await sender.sendFrame(
         errorFrame(frame.id, 409, 'request is already active', 'request_in_progress')
@@ -447,7 +566,8 @@ export class WebRtcPeerHost {
   }
 
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
-    const sender = this.requireSender()
+    const sender = this.senderFor(remotePeerId)
+    this.rememberRecipient(remotePeerId, authenticatedPeerContext)
     if (this.reservedWorkIds.has(frame.id)) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
@@ -660,8 +780,8 @@ export class WebRtcPeerHost {
   }
 
   private async manifestAuthoritySnapshot(remotePeerId: string | undefined, authenticatedPeerContext: AuthenticatedPeerContext | undefined, nowMs: number): Promise<PeerHostManifestAuthoritySnapshot> {
-    const context = authenticatedPeerContext ?? this.lastAuthenticatedPeerContext
-    const peerId = remotePeerId ?? context?.selector.claimantPeerId ?? this.lastRecipientPeerId
+    const context = authenticatedPeerContext ?? this.contextFor(remotePeerId)
+    const peerId = remotePeerId ?? context?.selector.claimantPeerId ?? this.soleRecipientPeerId()
     return await (this.options.authorizationStore.snapshotManifestAuthority?.({
       ...(peerId !== undefined ? { remotePeerId: peerId } : {}),
       ...(context !== undefined ? { authenticatedPeerContext: context } : {}),
@@ -690,7 +810,7 @@ export class WebRtcPeerHost {
   }
 
   private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
-    const sender = this.requireSender()
+    const sender = this.senderFor(remotePeerId)
     const abort = new AbortController()
     const active: ActiveWork = {
       abort,
@@ -797,7 +917,7 @@ export class WebRtcPeerHost {
   ): void {
     active.abort.abort(reason)
     if (!this.finishActive(subscriptionId, active, reason)) return
-    void this.sender?.sendFrame({
+    void this.resolveSender()?.sendFrame({
       type: 'unsubscribed',
       id: subscriptionId,
       subscription_id: subscriptionId,
@@ -841,10 +961,10 @@ export class WebRtcPeerHost {
 
   private async sendRevocationTerminal(id: string, kind: ActiveWork['kind'], error: PeerHostErrorBody): Promise<void> {
     if (kind === 'subscription') {
-      await this.sender?.sendFrame({ type: 'unsubscribed', id, subscription_id: id, removed: true })
+      await this.resolveSender()?.sendFrame({ type: 'unsubscribed', id, subscription_id: id, removed: true })
       return
     }
-    await this.sender?.sendFrame({ type: 'error', id, correlation_id: id, error })
+    await this.resolveSender()?.sendFrame({ type: 'error', id, correlation_id: id, error })
   }
 
   private async timeoutWork(id: string, active: ActiveWork): Promise<void> {
@@ -900,8 +1020,39 @@ export class WebRtcPeerHost {
   }
 
   private requireSender(): PeerHostFrameSender {
-    if (!this.sender) throw new Error('peer host is not attached')
-    return this.sender
+    const sender = this.resolveSender()
+    if (!sender) throw new Error('peer host is not attached')
+    return sender
+  }
+
+  /**
+   * The channel one peer's frames go down.
+   *
+   * A peer's own sender first. Then the unkeyed one, for a surface that never
+   * named a peer. Then the only recipient's, when there is exactly one, which
+   * is what makes a single-peer host behave as it always did.
+   *
+   * With several peers and no peer named there is no correct channel, so this
+   * resolves to nothing and the caller's optional chain drops the frame rather
+   * than sending it to whoever happens to be first. Sending it anyway is the
+   * defect this map exists to end: one peer's frame leaving down another's
+   * channel.
+   */
+  private resolveSender(remotePeerId?: string): PeerHostFrameSender | undefined {
+    if (remotePeerId !== undefined) {
+      const keyed = this.recipients.get(remotePeerId)?.sender
+      if (keyed) return keyed
+    }
+    if (this.sender) return this.sender
+    if (this.recipients.size !== 1) return undefined
+    const [only] = this.recipients.values()
+    return only?.sender
+  }
+
+  private senderFor(remotePeerId?: string): PeerHostFrameSender {
+    const sender = this.resolveSender(remotePeerId)
+    if (!sender) throw new Error('peer host is not attached')
+    return sender
   }
 }
 
