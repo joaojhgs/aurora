@@ -65,6 +65,7 @@ static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
 mod local_data_native;
 mod native_voice;
 mod mesh_authority;
+mod mesh_session;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
@@ -874,7 +875,7 @@ struct NativePermissionStatus {
     secrets_redacted: bool,
 }
 
-struct AuroraMobileNativePlugin<R: tauri::Runtime> {
+pub(crate) struct AuroraMobileNativePlugin<R: tauri::Runtime> {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     handle: Option<tauri::plugin::PluginHandle<R>>,
     _runtime: std::marker::PhantomData<fn() -> R>,
@@ -5487,7 +5488,7 @@ fn aurora_mobile_native_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugi
 }
 
 #[cfg(target_os = "android")]
-fn run_android_plugin_command(
+pub(crate) fn run_android_plugin_command(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
     command: &str,
     payload: Value,
@@ -8665,6 +8666,7 @@ pub fn run() {
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
         .manage(mesh_authority::MeshAuthorityState::default())
+            .manage(mesh_session::MeshSessionState::default())
         .setup(move |app| {
             #[cfg(desktop)]
             {
@@ -8812,6 +8814,10 @@ pub fn run() {
             aurora_assistant_provider_status,
             aurora_assistant_provider_configure,
             aurora_assistant_provider_complete,
+            mesh_session::aurora_mesh_session_bind,
+            mesh_session::aurora_mesh_session_unbind,
+            mesh_session::aurora_mesh_session_set_lifecycle,
+            mesh_session::aurora_mesh_session_snapshot,
             aurora_local_data_open,
             aurora_local_data_status,
             aurora_local_data_close,

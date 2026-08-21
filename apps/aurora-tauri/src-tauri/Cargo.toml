@@ -25,6 +25,7 @@ tauri-build = { version = "2.5.3", features = [] }
 [dependencies]
 aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
 aurora-mesh-authority = { path = "../../../rust/crates/aurora-mesh-authority" }
+aurora-mesh-session = { path = "../../../rust/crates/aurora-mesh-session" }
 base64 = "=0.22.1"
 getrandom = "=0.2.17"
 hmac = "0.12"

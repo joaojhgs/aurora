@@ -476,6 +476,40 @@ class NativeWebRtcEventRegistry {
   }
 }
 
+/**
+ * Every native data channel currently open in this process.
+ *
+ * The mesh session binding has to tell Rust which stable peer id a data
+ * channel carries, and the stable id is learned by the session layer long
+ * after the channel is created. Rather than thread a peer id down through the
+ * transport, the channels register themselves here and the binding looks them
+ * up when it has an id to bind.
+ *
+ * Entries are removed on close, so a stale handle is never offered to a
+ * binding.
+ */
+const liveNativeDataChannels = new Set<TauriNativeDataChannel>();
+
+/**
+ * The native handles a mesh session binding may use.
+ *
+ * Returns every open channel's handles. The caller decides what to do when
+ * there is more than one: this deliberately does not guess which channel
+ * belongs to which peer, because guessing is how one peer's session ends up
+ * bound to another's identity.
+ */
+export function openNativeTransportHandles(): {
+  peerConnectionId: number;
+  dataChannelId: number;
+}[] {
+  const handles: { peerConnectionId: number; dataChannelId: number }[] = [];
+  for (const channel of liveNativeDataChannels) {
+    const handle = channel.nativeTransportHandles();
+    if (handle) handles.push(handle);
+  }
+  return handles;
+}
+
 class TauriNativeDataChannel implements DataChannelLike {
   readonly label: string;
   readyState = "connecting";
@@ -529,6 +563,7 @@ class TauriNativeDataChannel implements DataChannelLike {
   ): void {
     this.peerConnectionId = peerConnectionId;
     this.dataChannelId = response.dataChannelId;
+    liveNativeDataChannels.add(this);
     this.readyState = response.readyState || "connecting";
     this.nativeBufferedAmount = response.bufferedAmount;
     this.syncBufferedAmountLowThreshold();
@@ -609,6 +644,24 @@ class TauriNativeDataChannel implements DataChannelLike {
     this.listeners.get(type)?.delete(listener);
   }
 
+  /**
+   * The native handles this channel is carried on, once both are known.
+   *
+   * Read by the mesh session binding so Rust can be told which stable peer a
+   * data channel belongs to. Nothing else needs them: they are transport
+   * identifiers, not identity.
+   */
+  nativeTransportHandles():
+    | { peerConnectionId: number; dataChannelId: number }
+    | null {
+    if (this.peerConnectionId === undefined) return null;
+    if (this.dataChannelId === undefined) return null;
+    return {
+      peerConnectionId: this.peerConnectionId,
+      dataChannelId: this.dataChannelId,
+    };
+  }
+
   open(): void {
     if (this.readyState === "closed") return;
     this.readyState = "open";
@@ -651,6 +704,7 @@ class TauriNativeDataChannel implements DataChannelLike {
   nativeClose(): void {
     if (this.readyState === "closed") return;
     this.readyState = "closed";
+    liveNativeDataChannels.delete(this);
     this.nativeBufferedAmount = 0;
     this.pendingIpcBytes = 0;
     this.onclose?.();

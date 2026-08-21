@@ -436,12 +436,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-mesh-session"
+version = "0.1.0"
+dependencies = [
+ "aurora-mesh-authority",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "aurora-tauri"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
  "aurora-mesh-authority",
+ "aurora-mesh-session",
  "aurora-voice-core",
  "aurora-voice-engine",
  "aurora-voice-ios-bridge",

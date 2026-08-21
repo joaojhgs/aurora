@@ -23,6 +23,7 @@
     "aurora-secure-storage",
     "aurora-local-data-storage",
     "aurora-mesh-authority",
+    "aurora-mesh-session",
     "aurora-local-data-envelope-crypto",
     "aurora-assistant-provider",
     "aurora-thin-peer-credentials",

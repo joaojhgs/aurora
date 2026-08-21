@@ -71,6 +71,17 @@ impl Default for MeshAuthorityState {
     }
 }
 
+impl MeshAuthorityState {
+    /// Take the write lock.
+    ///
+    /// R3's background dispatcher asks the same authority the foreground asks,
+    /// through this same lock, which is what makes a backgrounded decision
+    /// identical to a foreground one rather than merely similar.
+    pub(crate) async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeAuthority> {
+        self.0.lock().await
+    }
+}
+
 fn to_error<E: std::fmt::Display>(error: E) -> String {
     error.to_string()
 }

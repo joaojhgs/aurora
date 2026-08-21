@@ -506,6 +506,46 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(localLightInferenceStatusObject())
     }
 
+    /**
+     * Take a hold on the one Aurora foreground service for a held device
+     * connection.
+     *
+     * R4 built the reference-counted ledger and R3 is its first caller: a mesh
+     * session that has to keep answering while the webview is frozen needs the
+     * process kept alive, and this is how it asks. Voice and mesh share the one
+     * service and the one entry in the shade, so this never starts a second
+     * service and never ends a voice session that is holding its own reason.
+     */
+    @Command
+    fun meshDeviceLinkHold(invoke: Invoke) {
+        AuroraRuntimeForegroundService.holdDeviceLink(activity.applicationContext)
+        invoke.resolve(deviceLinkStatusObject())
+    }
+
+    /** Drop one held device connection, stopping the service if it was the last reason. */
+    @Command
+    fun meshDeviceLinkRelease(invoke: Invoke) {
+        AuroraRuntimeForegroundService.releaseDeviceLink(activity.applicationContext)
+        invoke.resolve(deviceLinkStatusObject())
+    }
+
+    /** What is currently keeping the one Aurora service alive. */
+    @Command
+    fun meshDeviceLinkStatus(invoke: Invoke) {
+        invoke.resolve(deviceLinkStatusObject())
+    }
+
+    private fun deviceLinkStatusObject(): JSObject {
+        val ret = JSObject()
+        val reasons = AuroraRuntimeForegroundService.activeForegroundReasonIds()
+        ret.put("held", reasons.contains("device_link"))
+        ret.put("activeReasons", JSArray().apply { reasons.forEach { put(it) } })
+        ret.put("serviceRunning", AuroraRuntimeForegroundService.running)
+        ret.put("notificationsSuppressed", AuroraRuntimeForegroundService.notificationsSuppressed)
+        return ret
+    }
+
+
     @Command
     fun requestAndroidPermission(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidPermissionRequestArgs::class.java)

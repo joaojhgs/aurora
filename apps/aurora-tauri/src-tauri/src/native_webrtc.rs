@@ -844,21 +844,50 @@ mod native {
             .insert(data_channel_id, Arc::new(Mutex::new(())));
 
         let message_app = app.clone();
+        let message_channel = Arc::clone(&channel);
         channel.on_message(Box::new(move |message| {
             let app = message_app.clone();
+            let channel = Arc::clone(&message_channel);
             Box::pin(async move {
+                let binary = !message.is_string;
                 let payload = if message.is_string {
                     String::from_utf8_lossy(&message.data).into_owned()
                 } else {
                     BASE64.encode(&message.data)
                 };
+
+                // R3's interception point. A frozen webview issues no commands,
+                // so what Rust owns has to be decided here, before anything is
+                // emitted. Everything the dispatcher does not claim -- binary
+                // traffic, an unbound channel, a frame the section 3 table does
+                // not name -- falls through to the emit below exactly as it did
+                // before R3.
+                match route_inbound_frame(&app, data_channel_id, &payload, binary).await {
+                    crate::mesh_session::InboundRouting::Answer(answers) => {
+                        for answer in answers {
+                            if let Err(error) = channel.send_text(answer).await {
+                                emit_error(
+                                    &app,
+                                    peer_connection_id,
+                                    Some(data_channel_id),
+                                    "data-channel",
+                                    error,
+                                );
+                            }
+                        }
+                        return;
+                    }
+                    crate::mesh_session::InboundRouting::Parked => return,
+                    crate::mesh_session::InboundRouting::Emit => {}
+                }
+
                 emit_to_main(
                     &app,
                     NativeWebRtcEventPayload::DataChannelMessage {
                         peer_connection_id,
                         data_channel_id,
                         payload,
-                        binary: !message.is_string,
+                        binary,
                     },
                 );
             })
@@ -1026,6 +1055,28 @@ mod native {
             sdp_type: description.sdp_type.to_string(),
             sdp: description.sdp,
         }
+    }
+
+    /// Ask the R3 dispatcher what to do with one inbound payload.
+    ///
+    /// Passes everything through untouched when the dispatcher is not managed,
+    /// which is what keeps a shell built without it behaving as before.
+    async fn route_inbound_frame(
+        app: &AppHandle,
+        data_channel_id: u64,
+        payload: &str,
+        binary: bool,
+    ) -> crate::mesh_session::InboundRouting {
+        use tauri::Manager;
+        let Some(state) = app.try_state::<crate::mesh_session::MeshSessionState>() else {
+            return crate::mesh_session::InboundRouting::Emit;
+        };
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_millis() as i64)
+            .unwrap_or_default();
+        crate::mesh_session::route_inbound(app, &state, data_channel_id, payload, binary, now_ms)
+            .await
     }
 
     fn emit_to_main(app: &AppHandle, event: NativeWebRtcEventPayload) {

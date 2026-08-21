@@ -411,6 +411,114 @@
           "markdownDescription": "Enables the aurora_log_tail command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_mesh_authority_authorize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-authorize",
+          "markdownDescription": "Enables the aurora_mesh_authority_authorize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_drain_audit command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-drain-audit",
+          "markdownDescription": "Enables the aurora_mesh_authority_drain_audit command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_export_grants command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-export-grants",
+          "markdownDescription": "Enables the aurora_mesh_authority_export_grants command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_hydrate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-hydrate",
+          "markdownDescription": "Enables the aurora_mesh_authority_hydrate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_issue_pairing_credential command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-issue-pairing-credential",
+          "markdownDescription": "Enables the aurora_mesh_authority_issue_pairing_credential command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_issue_reconnect_challenge command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-issue-reconnect-challenge",
+          "markdownDescription": "Enables the aurora_mesh_authority_issue_reconnect_challenge command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_list_active_grants command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-list-active-grants",
+          "markdownDescription": "Enables the aurora_mesh_authority_list_active_grants command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_replace_grant command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-replace-grant",
+          "markdownDescription": "Enables the aurora_mesh_authority_replace_grant command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_resolve_grant command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-resolve-grant",
+          "markdownDescription": "Enables the aurora_mesh_authority_resolve_grant command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-revoke-peer-authority",
+          "markdownDescription": "Enables the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_revoke_sharing command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-revoke-sharing",
+          "markdownDescription": "Enables the aurora_mesh_authority_revoke_sharing command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_rollback_pairing_credential command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-rollback-pairing-credential",
+          "markdownDescription": "Enables the aurora_mesh_authority_rollback_pairing_credential command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-snapshot-manifest",
+          "markdownDescription": "Enables the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_authority_verify_reconnect_proof command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-authority-verify-reconnect-proof",
+          "markdownDescription": "Enables the aurora_mesh_authority_verify_reconnect_proof command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_bind command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-bind",
+          "markdownDescription": "Enables the aurora_mesh_session_bind command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-set-lifecycle",
+          "markdownDescription": "Enables the aurora_mesh_session_set_lifecycle command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-snapshot",
+          "markdownDescription": "Enables the aurora_mesh_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_unbind command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-unbind",
+          "markdownDescription": "Enables the aurora_mesh_session_unbind command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_native_capability_manifest command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-native-capability-manifest",
@@ -667,6 +775,18 @@
           "type": "string",
           "const": "aurora-log-tail",
           "markdownDescription": "Allow the frontend SDK adapter to query non-secret sidecar log-tail availability without reading arbitrary files."
+        },
+        {
+          "description": "Allow the thin shell to ask the Rust mesh authority whether a peer may call a method, to hydrate it from durable storage at session start, and to manage or revoke what a peer is allowed. The authority is keyed by peer identity and holds no transport state; no bearer token or verifier hash crosses this boundary.",
+          "type": "string",
+          "const": "aurora-mesh-authority",
+          "markdownDescription": "Allow the thin shell to ask the Rust mesh authority whether a peer may call a method, to hydrate it from durable storage at session start, and to manage or revoke what a peer is allowed. The authority is keyed by peer identity and holds no transport state; no bearer token or verifier hash crosses this boundary."
+        },
+        {
+          "description": "Allow the thin shell to tell the native session dispatcher which stable peer a data channel carries and whether the surface is awake, and to read what the dispatcher has answered. Frames the dispatcher owns are answered in Rust without the webview, so this boundary carries bindings and lifecycle only. No grant, permission set or credential crosses it: every authorization question still goes to the mesh authority.",
+          "type": "string",
+          "const": "aurora-mesh-session",
+          "markdownDescription": "Allow the thin shell to tell the native session dispatcher which stable peer a data channel carries and whether the surface is awake, and to read what the dispatcher has answered. Frames the dispatcher owns are answered in Rust without the webview, so this boundary carries bindings and lifecycle only. No grant, permission set or credential crosses it: every authorization question still goes to the mesh authority."
         },
         {
           "description": "Allow Android and iOS WebViews to invoke bounded outgoing share, link, and notification wrappers. Platform capability selection keeps these commands unavailable to desktop WebViews.",
@@ -1021,6 +1141,114 @@
           "type": "string",
           "const": "deny-aurora-log-tail",
           "markdownDescription": "Denies the aurora_log_tail command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_authorize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-authorize",
+          "markdownDescription": "Denies the aurora_mesh_authority_authorize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_drain_audit command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-drain-audit",
+          "markdownDescription": "Denies the aurora_mesh_authority_drain_audit command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_export_grants command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-export-grants",
+          "markdownDescription": "Denies the aurora_mesh_authority_export_grants command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_hydrate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-hydrate",
+          "markdownDescription": "Denies the aurora_mesh_authority_hydrate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_issue_pairing_credential command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-issue-pairing-credential",
+          "markdownDescription": "Denies the aurora_mesh_authority_issue_pairing_credential command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_issue_reconnect_challenge command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-issue-reconnect-challenge",
+          "markdownDescription": "Denies the aurora_mesh_authority_issue_reconnect_challenge command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_list_active_grants command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-list-active-grants",
+          "markdownDescription": "Denies the aurora_mesh_authority_list_active_grants command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_replace_grant command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-replace-grant",
+          "markdownDescription": "Denies the aurora_mesh_authority_replace_grant command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_resolve_grant command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-resolve-grant",
+          "markdownDescription": "Denies the aurora_mesh_authority_resolve_grant command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-revoke-peer-authority",
+          "markdownDescription": "Denies the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_revoke_sharing command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-revoke-sharing",
+          "markdownDescription": "Denies the aurora_mesh_authority_revoke_sharing command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_rollback_pairing_credential command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-rollback-pairing-credential",
+          "markdownDescription": "Denies the aurora_mesh_authority_rollback_pairing_credential command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-snapshot-manifest",
+          "markdownDescription": "Denies the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_authority_verify_reconnect_proof command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-authority-verify-reconnect-proof",
+          "markdownDescription": "Denies the aurora_mesh_authority_verify_reconnect_proof command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_bind command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-bind",
+          "markdownDescription": "Denies the aurora_mesh_session_bind command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-set-lifecycle",
+          "markdownDescription": "Denies the aurora_mesh_session_set_lifecycle command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-snapshot",
+          "markdownDescription": "Denies the aurora_mesh_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_unbind command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-unbind",
+          "markdownDescription": "Denies the aurora_mesh_session_unbind command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_native_capability_manifest command without any pre-configured scope.",

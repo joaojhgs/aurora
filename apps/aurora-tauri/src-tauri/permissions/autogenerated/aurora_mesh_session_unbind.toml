@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-session-unbind"
+description = "Enables the aurora_mesh_session_unbind command without any pre-configured scope."
+commands.allow = ["aurora_mesh_session_unbind"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-session-unbind"
+description = "Denies the aurora_mesh_session_unbind command without any pre-configured scope."
+commands.deny = ["aurora_mesh_session_unbind"]
