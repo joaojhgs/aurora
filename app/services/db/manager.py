@@ -79,6 +79,9 @@ from app.shared.contracts.models.db import (
     DBMeshAuthoritySnapshot,
     DBMutateToolingExportPolicyRequest,
     DBMutateToolingExportPolicyResponse,
+    DBPrunedMeshPeerRow,
+    DBPruneOrphanedMeshPeerRowsRequest,
+    DBPruneOrphanedMeshPeerRowsResponse,
     DBPruneToolingRemoteCatalogRetentionRequest,
     DBPruneToolingRemoteCatalogRetentionResponse,
     DBReconcileToolIdentityRequest,
@@ -2189,6 +2192,69 @@ class DatabaseManager:
                     await db.rollback()
             log_error(f"Atomic mesh peer removal failed for peer {peer_id}: {exc}")
             return False, None
+        finally:
+            if db is not None:
+                await close_database(db)
+
+    async def prune_orphaned_mesh_peer_rows(
+        self,
+        request: DBPruneOrphanedMeshPeerRowsRequest,
+    ) -> DBPruneOrphanedMeshPeerRowsResponse:
+        """Garbage-collect old mesh rows that never gained trust or credentials."""
+
+        now = request.now if request.now is not None else datetime.now(UTC).timestamp()
+        cutoff = datetime.fromtimestamp(now - request.retention_seconds, UTC)
+        cutoff_text = cutoff.replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
+        age_expr = "datetime(COALESCE(last_seen_at, first_seen_at))"
+        eligible_where = f"""
+            outbound_status = 'pending'
+            AND inbound_status IN ('unknown', 'pending')
+            AND outbound_token_id IS NULL
+            AND inbound_token IS NULL
+            AND inbound_token_id IS NULL
+            AND COALESCE(last_seen_at, first_seen_at) IS NOT NULL
+            AND {age_expr} <= datetime(?)
+        """
+
+        db: aiosqlite.Connection | None = None
+        try:
+            db = await self._connect()
+            await db.execute("BEGIN IMMEDIATE")
+            rows = await (
+                await db.execute(
+                    f"""
+                    SELECT id, peer_id, room_name
+                    FROM mesh_peers
+                    WHERE {eligible_where}
+                    ORDER BY {age_expr} ASC, peer_id ASC, room_name ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (cutoff_text, request.max_rows),
+                )
+            ).fetchall()
+            pruned_rows: list[DBPrunedMeshPeerRow] = []
+            for row_id, peer_id, room_name in rows:
+                cursor = await db.execute(
+                    f"DELETE FROM mesh_peers WHERE id = ? AND {eligible_where}",
+                    (str(row_id), cutoff_text),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("mesh peer row changed during orphan pruning")
+                pruned_rows.append(
+                    DBPrunedMeshPeerRow(
+                        row_id=str(row_id),
+                        peer_id=str(peer_id),
+                        room_name=str(room_name),
+                    )
+                )
+            await db.commit()
+            return DBPruneOrphanedMeshPeerRowsResponse(pruned_rows=pruned_rows)
+        except Exception as exc:
+            if db is not None:
+                with contextlib.suppress(Exception):
+                    await db.rollback()
+            log_error(f"Orphaned mesh peer row pruning failed: {exc}")
+            return DBPruneOrphanedMeshPeerRowsResponse(success=False)
         finally:
             if db is not None:
                 await close_database(db)

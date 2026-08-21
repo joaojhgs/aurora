@@ -107,6 +107,8 @@ from app.shared.contracts.models.db import (
     DBModule,
     DBMutateToolingExportPolicyRequest,
     DBMutateToolingExportPolicyResponse,
+    DBPruneOrphanedMeshPeerRowsRequest,
+    DBPruneOrphanedMeshPeerRowsResponse,
     DBPruneToolingRemoteCatalogRetentionRequest,
     DBPruneToolingRemoteCatalogRetentionResponse,
     DBRAGDeleteRequest,
@@ -2168,6 +2170,20 @@ class DBService(BaseService):
         except Exception as exc:
             log_error(f"Error removing mesh peer: {exc}", exc_info=True)
             return DBAuthorityMutationResponse(success=False)
+
+    @method_contract(
+        method_id=DBMethods.PRUNE_ORPHANED_MESH_PEER_ROWS,
+        input_model=DBPruneOrphanedMeshPeerRowsRequest,
+        output_model=DBPruneOrphanedMeshPeerRowsResponse,
+        summary="Prune old never-approved credentialless mesh peer rows",
+        exposure="internal",
+        method_type="manage",
+    )
+    async def prune_orphaned_mesh_peer_rows(
+        self,
+        cmd: DBPruneOrphanedMeshPeerRowsRequest,
+    ) -> DBPruneOrphanedMeshPeerRowsResponse:
+        return await self.db_manager.prune_orphaned_mesh_peer_rows(cmd)
 
     @method_contract(
         method_id=DBMethods.LINK_MESH_PEER_CREDENTIAL,

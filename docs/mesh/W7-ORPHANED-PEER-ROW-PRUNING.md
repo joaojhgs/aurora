@@ -77,3 +77,21 @@ controls.
 - A duplicate that is not auto-prunable is reported to the user rather than silently kept or
   silently removed, in product copy that does not name internal identifiers.
 - The retention window is configurable and documented; it is not a magic constant.
+
+## Implemented DB operation
+
+`DB.PruneOrphanedMeshPeerRows` is the bounded garbage-collection operation for this rule.
+It accepts `retention_seconds` (default 30 days, bounded to 1 hour through 365 days) and
+`max_rows` (default 256, bounded to 4096) so callers can schedule small maintenance passes
+without creating a broad deletion path.
+
+The DB manager first selects eligible rows, then deletes each row by exact `mesh_peers.id`
+while re-checking the full eligibility predicate inside the same transaction. It never matches
+or deletes by `node_name`, never calls the admin removal/tombstone path, and never mutates
+`mesh_peer_auth_grant_revisions`.
+
+The operation is intentionally conservative: it removes only rows with `outbound_status =
+'pending'`, `inbound_status IN ('unknown', 'pending')`, no outbound token id, no inbound bearer,
+no inbound token selector, and an age older than the retention window based on
+`COALESCE(last_seen_at, first_seen_at)`. Anything approved, denied, fresh, or credential-linked
+survives for explicit user review.

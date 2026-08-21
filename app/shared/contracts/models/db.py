@@ -85,6 +85,7 @@ class DBMethods:
     UPDATE_MESH_PEER_PERMISSIONS = f"{DBModule.NAME}.UpdateMeshPeerPermissions"
     DENY_MESH_PEER = f"{DBModule.NAME}.DenyMeshPeer"
     REMOVE_MESH_PEER = f"{DBModule.NAME}.RemoveMeshPeer"
+    PRUNE_ORPHANED_MESH_PEER_ROWS = f"{DBModule.NAME}.PruneOrphanedMeshPeerRows"
     LINK_MESH_PEER_CREDENTIAL = f"{DBModule.NAME}.LinkMeshPeerCredential"
     ISSUE_MESH_PEER_CREDENTIAL = f"{DBModule.NAME}.IssueMeshPeerCredential"
     GET_MESH_PEER_AUTHORITY_SNAPSHOT = f"{DBModule.NAME}.GetMeshPeerAuthoritySnapshot"
@@ -788,6 +789,29 @@ class DBRemoveMeshPeerRequest(IOModel):
 
     peer_id: str
     revoke_token: bool = True
+
+
+class DBPrunedMeshPeerRow(IOModel):
+    """One exact never-approved mesh peer row removed by bounded garbage collection."""
+
+    row_id: str
+    peer_id: str
+    room_name: str
+
+
+class DBPruneOrphanedMeshPeerRowsRequest(IOModel):
+    """Prune only old, never-approved, credentialless mesh peer rows."""
+
+    now: float | None = Field(default=None, ge=0)
+    retention_seconds: int = Field(default=2592000, ge=3600, le=31536000)
+    max_rows: int = Field(default=256, ge=1, le=4096)
+
+
+class DBPruneOrphanedMeshPeerRowsResponse(IOModel):
+    """Result of bounded orphaned mesh peer row pruning."""
+
+    success: bool = True
+    pruned_rows: list[DBPrunedMeshPeerRow] = Field(default_factory=list)
 
 
 class DBLinkMeshPeerCredentialRequest(IOModel):

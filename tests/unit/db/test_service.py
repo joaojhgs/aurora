@@ -15,6 +15,9 @@ from app.shared.contracts.models.db import (
     DBCreateTokenRequest,
     DBExecuteSQLRequest,
     DBMethods,
+    DBPrunedMeshPeerRow,
+    DBPruneOrphanedMeshPeerRowsRequest,
+    DBPruneOrphanedMeshPeerRowsResponse,
     DBReconcileToolIdentityRequest,
     DBReconcileToolIdentityResponse,
     DBResolveToolIdentityAliasesRequest,
@@ -101,6 +104,24 @@ async def test_execute_sql_reports_statement_failure(db_service, tmp_path):
     assert "no such table" in (failed.error or "")
     assert failed.rows == []
     assert failed.rowcount == 0
+
+
+@pytest.mark.asyncio
+async def test_prune_orphaned_mesh_peer_rows_delegates_to_manager(db_service):
+    request = DBPruneOrphanedMeshPeerRowsRequest(now=1000, retention_seconds=3600)
+    response = DBPruneOrphanedMeshPeerRowsResponse(
+        pruned_rows=[
+            DBPrunedMeshPeerRow(
+                row_id="row-1",
+                peer_id="peer-1",
+                room_name="room-1",
+            )
+        ]
+    )
+    db_service.db_manager.prune_orphaned_mesh_peer_rows = AsyncMock(return_value=response)
+
+    assert await db_service.prune_orphaned_mesh_peer_rows(request) == response
+    db_service.db_manager.prune_orphaned_mesh_peer_rows.assert_awaited_once_with(request)
 
 
 @pytest.mark.asyncio
