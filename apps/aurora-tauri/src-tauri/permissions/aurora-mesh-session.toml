@@ -5,5 +5,6 @@ commands.allow = [
   "aurora_mesh_session_bind",
   "aurora_mesh_session_unbind",
   "aurora_mesh_session_set_lifecycle",
+  "aurora_mesh_session_finish_resume",
   "aurora_mesh_session_snapshot"
 ]

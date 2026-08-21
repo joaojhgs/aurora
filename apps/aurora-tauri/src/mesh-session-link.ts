@@ -244,6 +244,26 @@ export interface MeshSessionRoster {
   readonly peers: readonly MeshSessionRosterPeer[];
 }
 
+export interface MeshSessionCleanupFailure {
+  readonly peerId: string;
+  readonly command: "aurora_mesh_session_unbind";
+  readonly phase: "roster" | "retry" | "close";
+  readonly attempt: number;
+  readonly final: boolean;
+  readonly error: unknown;
+}
+
+export class MeshSessionCleanupError extends Error {
+  constructor(readonly failures: readonly MeshSessionCleanupFailure[]) {
+    super(
+      `mesh session cleanup failed for ${failures
+        .map((failure) => failure.peerId)
+        .join(", ")}`,
+    );
+    this.name = "MeshSessionCleanupError";
+  }
+}
+
 export interface MeshSessionRuntimePeer {
   subscribeRoster(listener: (roster: MeshSessionRoster) => void): () => void;
   getManifest(peerId: string): Promise<{
@@ -266,6 +286,8 @@ export interface MeshSessionRuntimeLinkOptions {
     Document,
     "addEventListener" | "removeEventListener" | "visibilityState"
   >;
+  readonly unbindRetryDelaysMs?: readonly number[];
+  readonly onCleanupFailure?: (failure: MeshSessionCleanupFailure) => void;
 }
 
 export interface MeshSessionRuntimeLink {
@@ -276,6 +298,15 @@ type ActiveMeshSessionBinding = {
   readonly signature: string;
   readonly dataChannelId: number;
 };
+
+type RetiringMeshSessionBinding = ActiveMeshSessionBinding & {
+  attempts: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  inFlight: boolean;
+  exhausted: boolean;
+};
+
+const DEFAULT_UNBIND_RETRY_DELAYS_MS = [100, 500, 2_000] as const;
 
 function bindableRosterPeer(
   roster: MeshSessionRoster,
@@ -300,13 +331,26 @@ export function installMeshSessionRuntimeLink(
   options: MeshSessionRuntimeLinkOptions,
 ): MeshSessionRuntimeLink {
   const bindings = new Map<string, ActiveMeshSessionBinding>();
+  const retiringBindings = new Map<string, RetiringMeshSessionBinding>();
+  const lastCleanupFailures = new Map<string, MeshSessionCleanupFailure>();
   const pendingDrains = new Map<string, unknown[]>();
   let closed = false;
   let latestRoster: MeshSessionRoster = { peers: [] };
   let reconcileQueue: Promise<void> = Promise.resolve();
   let lifecycleStop: MeshSurfaceLifecycleStop | null = null;
+  const unbindRetryDelaysMs =
+    options.unbindRetryDelaysMs ?? DEFAULT_UNBIND_RETRY_DELAYS_MS;
+
+  const reportCleanupFailure = (
+    failure: MeshSessionCleanupFailure,
+  ): MeshSessionCleanupFailure => {
+    lastCleanupFailures.set(failure.peerId, failure);
+    options.onCleanupFailure?.(failure);
+    return failure;
+  };
 
   const flushPeer = (peerId: string): void => {
+    if (retiringBindings.has(peerId)) return;
     const binding = bindings.get(peerId);
     const pending = pendingDrains.get(peerId);
     if (!binding || !pending || pending.length === 0) return;
@@ -330,6 +374,133 @@ export function installMeshSessionRuntimeLink(
     return pendingDrains.size === 0;
   };
 
+  const attemptRetiredUnbind = async (
+    peerId: string,
+    phase: MeshSessionCleanupFailure["phase"],
+  ): Promise<boolean> => {
+    const retiring = retiringBindings.get(peerId);
+    if (!retiring || retiring.inFlight) return !retiring;
+    retiring.inFlight = true;
+    if (retiring.retryTimer) {
+      clearTimeout(retiring.retryTimer);
+      retiring.retryTimer = null;
+    }
+    try {
+      await unbindMeshSessionPeer(options.invoke, peerId);
+      retiringBindings.delete(peerId);
+      lastCleanupFailures.delete(peerId);
+      pendingDrains.delete(peerId);
+      return true;
+    } catch (error) {
+      retiring.attempts += 1;
+      const final =
+        unbindRetryDelaysMs[Math.max(0, retiring.attempts - 1)] === undefined;
+      retiring.exhausted = final;
+      reportCleanupFailure({
+        peerId,
+        command: "aurora_mesh_session_unbind",
+        phase,
+        attempt: retiring.attempts,
+        final,
+        error,
+      });
+      return false;
+    } finally {
+      const current = retiringBindings.get(peerId);
+      if (current) current.inFlight = false;
+    }
+  };
+
+  const scheduleRetiredUnbindRetry = (peerId: string): void => {
+    const retiring = retiringBindings.get(peerId);
+    if (!retiring || retiring.retryTimer || retiring.inFlight || retiring.exhausted) {
+      return;
+    }
+    const delayMs = unbindRetryDelaysMs[Math.max(0, retiring.attempts - 1)];
+    if (delayMs === undefined) return;
+    retiring.retryTimer = setTimeout(() => {
+      const current = retiringBindings.get(peerId);
+      if (!current) return;
+      current.retryTimer = null;
+      reconcileQueue = reconcileQueue
+        .then(async () => {
+          if (closed) return;
+          const removed = await attemptRetiredUnbind(peerId, "retry");
+          if (!removed) scheduleRetiredUnbindRetry(peerId);
+        })
+        .catch(() => undefined);
+    }, delayMs);
+  };
+
+  const retirePeer = async (peerId: string): Promise<void> => {
+    const existing = bindings.get(peerId);
+    if (existing) {
+      bindings.delete(peerId);
+      const current = retiringBindings.get(peerId);
+      if (!current) {
+        retiringBindings.set(peerId, {
+          ...existing,
+          attempts: 0,
+          retryTimer: null,
+          inFlight: false,
+          exhausted: false,
+        });
+      }
+    }
+    const removed = await attemptRetiredUnbind(peerId, "roster");
+    if (!removed) scheduleRetiredUnbindRetry(peerId);
+  };
+
+  const moveActiveBindingToRetiring = (peerId: string): void => {
+    const existing = bindings.get(peerId);
+    if (!existing || retiringBindings.has(peerId)) return;
+    bindings.delete(peerId);
+    retiringBindings.set(peerId, {
+      ...existing,
+      attempts: 0,
+      retryTimer: null,
+      inFlight: false,
+      exhausted: false,
+    });
+  };
+
+  const cleanupRetiringBindingsForClose = async (): Promise<void> => {
+    const failures: MeshSessionCleanupFailure[] = [];
+    for (const retiring of retiringBindings.values()) {
+      if (retiring.retryTimer) {
+        clearTimeout(retiring.retryTimer);
+        retiring.retryTimer = null;
+      }
+      retiring.exhausted = false;
+    }
+    for (const peerId of [...retiringBindings.keys()]) {
+      while (retiringBindings.has(peerId)) {
+        const removed = await attemptRetiredUnbind(peerId, "close");
+        if (removed) break;
+        const retiring = retiringBindings.get(peerId);
+        if (!retiring) break;
+        const delayMs =
+          unbindRetryDelaysMs[Math.max(0, retiring.attempts - 1)];
+        if (delayMs === undefined) {
+          failures.push(
+            lastCleanupFailures.get(peerId) ??
+              reportCleanupFailure({
+                peerId,
+                command: "aurora_mesh_session_unbind",
+                phase: "close",
+                attempt: retiring.attempts,
+                final: true,
+                error: new Error("native unbind retry budget exhausted"),
+              }),
+          );
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    if (failures.length > 0) throw new MeshSessionCleanupError(failures);
+  };
+
   const bindRosterPeer = async (
     rosterPeer: MeshSessionRosterPeer,
     handles: { peerConnectionId: number; dataChannelId: number },
@@ -347,8 +518,8 @@ export function installMeshSessionRuntimeLink(
     const existing = bindings.get(rosterPeer.peerId);
     if (existing?.signature === signature) return;
     if (existing && existing.dataChannelId !== handles.dataChannelId) {
-      await unbindMeshSessionPeer(options.invoke, rosterPeer.peerId);
-      bindings.delete(rosterPeer.peerId);
+      await retirePeer(rosterPeer.peerId);
+      if (retiringBindings.has(rosterPeer.peerId)) return;
     }
     await bindMeshSessionPeer(options.invoke, rosterPeer.peerId, {
       handles,
@@ -381,11 +552,18 @@ export function installMeshSessionRuntimeLink(
     );
     for (const peerId of [...bindings.keys()]) {
       if (desired.has(peerId)) continue;
-      await unbindMeshSessionPeer(options.invoke, peerId).catch(() => undefined);
-      bindings.delete(peerId);
-      pendingDrains.delete(peerId);
+      await retirePeer(peerId);
     }
     for (const rosterPeer of desired.values()) {
+      const retiring = retiringBindings.get(rosterPeer.peerId);
+      if (retiring) {
+        if (retiring.exhausted) continue;
+        const removed = await attemptRetiredUnbind(rosterPeer.peerId, "roster");
+        if (!removed) {
+          scheduleRetiredUnbindRetry(rosterPeer.peerId);
+          continue;
+        }
+      }
       const remoteSignalingId = rosterPeer.snapshot.connectedSignalingPeerId;
       if (!remoteSignalingId) continue;
       let handles: { peerConnectionId: number; dataChannelId: number } | null;
@@ -396,10 +574,7 @@ export function installMeshSessionRuntimeLink(
       }
       if (!handles) {
         if (bindings.has(rosterPeer.peerId)) {
-          await unbindMeshSessionPeer(options.invoke, rosterPeer.peerId).catch(
-            () => undefined,
-          );
-          bindings.delete(rosterPeer.peerId);
+          await retirePeer(rosterPeer.peerId);
         }
         continue;
       }
@@ -470,16 +645,20 @@ export function installMeshSessionRuntimeLink(
 
   return {
     async close(): Promise<void> {
-      if (closed) return;
-      closed = true;
-      unsubscribeRoster();
-      lifecycleStop?.();
-      lifecycleStop = null;
-      await reconcileQueue;
-      for (const peerId of [...bindings.keys()]) {
-        await unbindMeshSessionPeer(options.invoke, peerId).catch(() => undefined);
+      if (closed && bindings.size === 0 && retiringBindings.size === 0) return;
+      if (!closed) {
+        closed = true;
+        unsubscribeRoster();
+        lifecycleStop?.();
+        lifecycleStop = null;
+        await reconcileQueue;
       }
+      for (const peerId of [...bindings.keys()]) {
+        moveActiveBindingToRetiring(peerId);
+      }
+      await cleanupRetiringBindingsForClose();
       bindings.clear();
+      lastCleanupFailures.clear();
       pendingDrains.clear();
     },
   };

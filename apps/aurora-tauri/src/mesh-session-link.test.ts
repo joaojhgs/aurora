@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   MeshSessionBindError,
+  MeshSessionCleanupError,
   bindMeshSessionPeer,
   installMeshSessionRuntimeLink,
   observeMeshSurfaceLifecycle,
@@ -42,6 +43,10 @@ function fakeDocument(visibilityState: DocumentVisibilityState = "visible") {
 }
 
 describe("mesh session link", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("binds a peer to the transport handles it was given", async () => {
     const { invoke, calls } = recordingInvoke({
       peerId: "peer-a",
@@ -522,5 +527,377 @@ describe("mesh session link", () => {
     });
     expect(staleMethodBinds).toHaveLength(0);
     await link.close();
+  });
+
+  it("retries a rejected native unbind without serving a removed peer", async () => {
+    vi.useFakeTimers();
+    const target = fakeDocument("hidden");
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    let rosterListener:
+      | ((value: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: { state: string; connectedSignalingPeerId: string };
+          }>;
+        }) => void)
+      | undefined;
+    let unbindAttempts = 0;
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        const lifecycle = (
+          args as { request: { lifecycle: string } }
+        ).request.lifecycle;
+        return {
+          lifecycle,
+          drained:
+            lifecycle === "foreground"
+              ? [{ peerId: "peer-a", frames: [{ id: "stale-frame" }] }]
+              : [],
+        };
+      }
+      if (command === "aurora_mesh_session_unbind") {
+        unbindAttempts += 1;
+        if (unbindAttempts === 1) throw new Error("native rejected unbind");
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    const peer = {
+      subscribeRoster(
+        listener: NonNullable<typeof rosterListener>,
+      ) {
+        rosterListener = listener;
+        listener({
+          peers: [
+            {
+              peerId: "peer-a",
+              primary: true,
+              snapshot: {
+                state: "authorized",
+                connectedSignalingPeerId: "signal-a",
+              },
+            },
+          ],
+        });
+        return () => {
+          rosterListener = undefined;
+        };
+      },
+      async getManifest() {
+        return { services: [{ methods: ["Tooling.GetTools"] }] };
+      },
+    };
+    const delivered: unknown[] = [];
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 1,
+        dataChannelId: 11,
+      }),
+      deliverFrame: (_dataChannelId, frame) => {
+        delivered.push(frame);
+        return true;
+      },
+      lifecycleTarget: target,
+      unbindRetryDelaysMs: [25],
+    });
+    await vi.waitFor(() => {
+      expect(
+        calls.some(({ command }) => command === "aurora_mesh_session_bind"),
+      ).toBe(true);
+    });
+
+    rosterListener?.({ peers: [] });
+    await vi.waitFor(() => expect(unbindAttempts).toBe(1));
+
+    target.visibilityState = "visible";
+    target.emit("visibilitychange");
+    await Promise.resolve();
+    expect(delivered).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(25);
+    await vi.waitFor(() => expect(unbindAttempts).toBe(2));
+    expect(delivered).toEqual([]);
+    expect(
+      calls.filter(({ command }) => command === "aurora_mesh_session_unbind"),
+    ).toHaveLength(2);
+
+    await link.close();
+  });
+
+  it("retries native cleanup during close before releasing ownership", async () => {
+    vi.useFakeTimers();
+    const target = fakeDocument("visible");
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    let unbindAttempts = 0;
+    const failures: unknown[] = [];
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return { lifecycle: "foreground", drained: [] };
+      }
+      if (command === "aurora_mesh_session_unbind") {
+        unbindAttempts += 1;
+        if (unbindAttempts === 1) throw new Error("close cleanup rejected");
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    const peer = {
+      subscribeRoster(
+        listener: (value: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: { state: string; connectedSignalingPeerId: string };
+          }>;
+        }) => void,
+      ) {
+        listener({
+          peers: [
+            {
+              peerId: "peer-a",
+              primary: true,
+              snapshot: {
+                state: "authorized",
+                connectedSignalingPeerId: "signal-a",
+              },
+            },
+          ],
+        });
+        return () => undefined;
+      },
+      async getManifest() {
+        return { services: [] };
+      },
+    };
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 1,
+        dataChannelId: 11,
+      }),
+      deliverFrame: () => true,
+      lifecycleTarget: target,
+      unbindRetryDelaysMs: [25],
+      onCleanupFailure: (failure) => failures.push(failure),
+    });
+    await vi.waitFor(() => {
+      expect(
+        calls.some(({ command }) => command === "aurora_mesh_session_bind"),
+      ).toBe(true);
+    });
+
+    const closePromise = link.close();
+    await vi.waitFor(() => expect(unbindAttempts).toBe(1));
+    await vi.advanceTimersByTimeAsync(25);
+    await expect(closePromise).resolves.toBeUndefined();
+
+    expect(unbindAttempts).toBe(2);
+    expect(failures).toMatchObject([
+      {
+        peerId: "peer-a",
+        command: "aurora_mesh_session_unbind",
+        phase: "close",
+        attempt: 1,
+        final: false,
+      },
+    ]);
+    await expect(link.close()).resolves.toBeUndefined();
+  });
+
+  it("reports final unbind exhaustion and does not rebind that peer", async () => {
+    vi.useFakeTimers();
+    const target = fakeDocument("visible");
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    const failures: unknown[] = [];
+    let rosterListener:
+      | ((value: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: { state: string; connectedSignalingPeerId: string };
+          }>;
+        }) => void)
+      | undefined;
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return { lifecycle: "foreground", drained: [] };
+      }
+      if (command === "aurora_mesh_session_unbind") {
+        throw new Error("native cleanup unavailable");
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    const peer = {
+      subscribeRoster(listener: NonNullable<typeof rosterListener>) {
+        rosterListener = listener;
+        listener({
+          peers: [
+            {
+              peerId: "peer-a",
+              primary: true,
+              snapshot: {
+                state: "authorized",
+                connectedSignalingPeerId: "signal-a",
+              },
+            },
+          ],
+        });
+        return () => {
+          rosterListener = undefined;
+        };
+      },
+      async getManifest() {
+        return { services: [] };
+      },
+    };
+
+    installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 1,
+        dataChannelId: 11,
+      }),
+      deliverFrame: () => true,
+      lifecycleTarget: target,
+      unbindRetryDelaysMs: [25],
+      onCleanupFailure: (failure) => failures.push(failure),
+    });
+    await vi.waitFor(() => {
+      expect(
+        calls.filter(({ command }) => command === "aurora_mesh_session_bind"),
+      ).toHaveLength(1);
+    });
+
+    rosterListener?.({ peers: [] });
+    await vi.waitFor(() => {
+      expect(
+        calls.filter(({ command }) => command === "aurora_mesh_session_unbind"),
+      ).toHaveLength(1);
+    });
+    await vi.advanceTimersByTimeAsync(25);
+    await vi.waitFor(() => {
+      expect(
+        calls.filter(({ command }) => command === "aurora_mesh_session_unbind"),
+      ).toHaveLength(2);
+    });
+
+    rosterListener?.({
+      peers: [
+        {
+          peerId: "peer-a",
+          primary: true,
+          snapshot: {
+            state: "authorized",
+            connectedSignalingPeerId: "signal-a",
+          },
+        },
+      ],
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      calls.filter(({ command }) => command === "aurora_mesh_session_bind"),
+    ).toHaveLength(1);
+    expect(failures).toMatchObject([
+      {
+        peerId: "peer-a",
+        phase: "roster",
+        attempt: 1,
+        final: false,
+      },
+      {
+        peerId: "peer-a",
+        phase: "retry",
+        attempt: 2,
+        final: true,
+      },
+    ]);
+  });
+
+  it("rejects close when native cleanup exhausts its retry budget", async () => {
+    vi.useFakeTimers();
+    const target = fakeDocument("visible");
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return { lifecycle: "foreground", drained: [] };
+      }
+      if (command === "aurora_mesh_session_unbind") {
+        throw new Error("close cleanup unavailable");
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    const peer = {
+      subscribeRoster(
+        listener: (value: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: { state: string; connectedSignalingPeerId: string };
+          }>;
+        }) => void,
+      ) {
+        listener({
+          peers: [
+            {
+              peerId: "peer-a",
+              primary: true,
+              snapshot: {
+                state: "authorized",
+                connectedSignalingPeerId: "signal-a",
+              },
+            },
+          ],
+        });
+        return () => undefined;
+      },
+      async getManifest() {
+        return { services: [] };
+      },
+    };
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 1,
+        dataChannelId: 11,
+      }),
+      deliverFrame: () => true,
+      lifecycleTarget: target,
+      unbindRetryDelaysMs: [25],
+    });
+    await vi.waitFor(() => {
+      expect(
+        calls.some(({ command }) => command === "aurora_mesh_session_bind"),
+      ).toBe(true);
+    });
+    const closeExpectation = expect(link.close()).rejects.toBeInstanceOf(
+      MeshSessionCleanupError,
+    );
+    await vi.advanceTimersByTimeAsync(25);
+    await closeExpectation;
   });
 });

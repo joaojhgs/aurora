@@ -56,6 +56,7 @@ import {
   createMemoryRuntimeProfileStore,
   createAuroraTauriRuntime,
   loadTauriRemoteAssistantTools,
+  reportMeshSessionCleanupFailure,
   usesNativeWebRtcPrimitive,
   type AuroraThinConnectionProfile,
 } from "./aurora-client";
@@ -1834,6 +1835,39 @@ describe("Aurora Tauri runtime wrapper", () => {
     );
     await runtime.thinPeer?.disconnect("test cleanup");
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
+  });
+
+  it("wires native mesh-session cleanup telemetry without raw peer or error data", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/aurora-client.ts"),
+      "utf8",
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const failure = {
+      peerId: "peer-secret-must-not-log",
+      command: "aurora_mesh_session_unbind",
+      phase: "retry",
+      attempt: 2,
+      final: true,
+      error: new Error("token=sensitive sdp=v=0 ice=1.2.3.4:3478"),
+    } as const;
+
+    reportMeshSessionCleanupFailure(failure);
+
+    expect(source).toContain(
+      "onCleanupFailure: reportMeshSessionCleanupFailure",
+    );
+    expect(warn).toHaveBeenCalledWith(
+      "Aurora native mesh session cleanup failed",
+      { phase: "retry", attempt: 2, final: true },
+    );
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toContain("peer-secret-must-not-log");
+    expect(logged).not.toContain("token=sensitive");
+    expect(logged).not.toContain("sdp=v=0");
+    expect(logged).not.toContain("ice=1.2.3.4");
+
+    warn.mockRestore();
   });
 
   it("keeps desktop-thin HTTP and sidecar isolation intact when WebRTC rollout is disabled", async () => {

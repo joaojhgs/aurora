@@ -89,7 +89,10 @@ import {
   deliverNativeTransportFrame,
   nativeTransportHandleForRemoteSignalingId,
 } from "./native-webrtc";
-import { installMeshSessionRuntimeLink } from "./mesh-session-link";
+import {
+  installMeshSessionRuntimeLink,
+  type MeshSessionCleanupFailure,
+} from "./mesh-session-link";
 import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
 import {
   createTauriMeshNodeServices,
@@ -130,6 +133,16 @@ export function usesNativeWebRtcPrimitive({
 }): boolean {
   if (!rolloutFlags.native_webrtc_transport_v1) return false;
   return surfaceProfile.supportsNativeWebRtcBridge && !hasWebViewPeerConnection;
+}
+
+export function reportMeshSessionCleanupFailure(
+  failure: Pick<MeshSessionCleanupFailure, "phase" | "attempt" | "final">,
+): void {
+  console.warn("Aurora native mesh session cleanup failed", {
+    phase: failure.phase,
+    attempt: failure.attempt,
+    final: failure.final,
+  });
 }
 
 const TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const;
@@ -1309,6 +1322,7 @@ function createTauriWebThinRuntime({
         ...(typeof document === "undefined"
           ? {}
           : { lifecycleTarget: document }),
+        onCleanupFailure: reportMeshSessionCleanupFailure,
       })
     : null;
   if (meshSessionLink) {
