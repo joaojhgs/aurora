@@ -1,13 +1,15 @@
 import '../../../apps/aurora-tauri/src/legacy-webview-polyfills.js'
 import {
   createBrowserWebRtcAuroraRuntime,
+  createWasmAuthorityPort,
   MemoryPeerCredentialStore,
   MqttWebSocketSignalingClient,
-  SessionPeerHostAuthorizationStore,
+  RustPeerHostAuthorizationStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   type WebRtcPeerConnectionProfile
 } from '../../../packages/aurora-sdk/src/webrtc/index.js'
+import { WasmPeerHostAuthorizationStore } from '../../../packages/aurora-mesh-authority-web/dist/index.js'
 import {
   canonicalJson,
   LocalToolExecutionPolicy,
@@ -336,6 +338,7 @@ async function waitForPostRevocationObservation(
       : 1
     if (
       lastSnapshot.state === 'authorized' ||
+      lastSnapshot.state === 'failed' ||
       (lastSnapshot.state === 'awaiting-sas-confirmation' && pendingPairingPrompts > 0)
     ) {
       return {
@@ -375,6 +378,9 @@ type Ac18BrowserLocalToolProbe = {
   auditRecords: LocalToolAuditRecord[]
   invocationRecords: Array<Record<string, unknown>>
   peerHost: WebRtcPeerHost
+  peerAuthorityResolver: ReturnType<RustPeerHostAuthorizationStore['asResolverPort']>
+  peerPairingIssuer: ReturnType<RustPeerHostAuthorizationStore['asPairingIssuerPort']>
+  wasmAuthority: WasmPeerHostAuthorizationStore
   toolContractId: string
   localName: string
   probeId: string
@@ -385,10 +391,11 @@ type Ac18BrowserLocalToolProbe = {
 
 const AC18_BROWSER_TOOL_CONTRACT_ID = 'interop.browser.echo'
 const AC18_BROWSER_TOOL_LOCAL_NAME = 'interop.browser.echo'
+const MESH_AUTHORITY_WASM_ASSET = '/aurora_mesh_authority_bg.wasm'
 
-function createAc18BrowserLocalToolProvider(
+async function createAc18BrowserLocalToolProvider(
   config: InteropBrowserConfig
-): Ac18BrowserLocalToolProbe {
+): Promise<Ac18BrowserLocalToolProbe> {
   const toolContractId = config.ac18ToolContractId ?? AC18_BROWSER_TOOL_CONTRACT_ID
   const localName = config.ac18ToolLocalName ?? AC18_BROWSER_TOOL_LOCAL_NAME
   const probeId = config.ac18ProbeId ?? `ac18-browser-tool-${config.lane}`
@@ -506,37 +513,68 @@ function createAc18BrowserLocalToolProvider(
       protocol_revision: 1
     }
   })
+  const wasmAuthority = await WasmPeerHostAuthorizationStore.create()
+  const authorizationStore = new RustPeerHostAuthorizationStore(
+    createWasmAuthorityPort(
+      wasmAuthority,
+      () => `ac18-grant-${config.lane}`
+    )
+  )
+  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort()
+  const peerPairingIssuer: ReturnType<
+    RustPeerHostAuthorizationStore['asPairingIssuerPort']
+  > = {
+    async issue(selector, options) {
+      const issued = await authorityPairingIssuer.issue(selector, options)
+      await authorizationStore.hydrate({
+        verifiers: [],
+        grants: [
+          {
+            version: 1,
+            grantId: `ac18-python-gateway-grant-${config.lane}`,
+            tokenId: issued.verifier.tokenId,
+            claimantPeerId: issued.verifier.claimantPeerId,
+            verifierPeerId: issued.verifier.verifierPeerId,
+            roomName: issued.verifier.roomName,
+            allowedMethodIds: [
+              'Tooling.GetTools',
+              'Tooling.GetExportCatalog',
+              'Tooling.PrepareExecution',
+              'Tooling.ExecuteTool'
+            ],
+            allowedToolContractIds: [toolContractId],
+            capabilityPackIds: ['interop.browser.echo'],
+            resourceScopes: ['interop.browser.echo'],
+            createdAtMs: Date.now(),
+            grantRevision: 1
+          }
+        ]
+      })
+      return {
+        ...issued,
+        grantedPermissions: ['Tooling.GetTools', 'Tooling.ExecuteTool']
+      }
+    },
+    async rollback(selector) {
+      await authorityPairingIssuer.rollback(selector)
+    }
+  }
   const configuredPeerHost = new WebRtcPeerHost({
     localPeerId: config.localStablePeerId,
     nodeName: 'G009 browser',
     registry: createToolingPeerHostRegistry(provider),
-    authorizationStore: new SessionPeerHostAuthorizationStore([
-      {
-        version: 1,
-        grantId: 'ac18-python-gateway-grant',
-        tokenId: 'interop-token-row',
-        claimantPeerId: config.expectedStablePeerId,
-        allowedMethodIds: [
-          'Tooling.GetTools',
-          'Tooling.GetExportCatalog',
-          'Tooling.PrepareExecution',
-          'Tooling.ExecuteTool'
-        ],
-        allowedToolContractIds: [toolContractId],
-        capabilityPackIds: ['interop.browser.echo'],
-        resourceScopes: ['interop.browser.echo'],
-        createdAtMs: 1,
-        grantRevision: 1
-      }
-    ]),
+    authorizationStore,
     randomId: () => `ac18-epoch-${config.lane}`,
     defaultTimeoutMs: config.timeoutMs
   })
   peerHost = configuredPeerHost
   return {
     auditRecords,
+    peerAuthorityResolver: authorizationStore.asResolverPort(),
+    peerPairingIssuer,
     invocationRecords,
     peerHost: configuredPeerHost,
+    wasmAuthority,
     toolContractId,
     localName,
     probeId,
@@ -564,6 +602,7 @@ async function buildAc18Evidence(
   }
   return {
     enabled: true,
+    authorityImplementation: 'rust-wasm',
     toolContractId: ac18.toolContractId,
     localName: ac18.localName,
     globalToolId: ac18.registeredTool.toolInfo.global_tool_id,
@@ -666,80 +705,88 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
   window.addEventListener('unhandledrejection', unhandledRejectionHandler)
   const originalFetch = globalThis.fetch.bind(globalThis)
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    fetchCalls.push(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url)
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    if (new URL(url, window.location.href).pathname !== MESH_AUTHORITY_WASM_ASSET) {
+      fetchCalls.push(url)
+    }
     return await originalFetch(input as RequestInfo, init)
   }) as typeof fetch
 
-  const snapshots: Snapshot[] = []
-  const ac18 = config.ac18LocalToolProvider
-    ? createAc18BrowserLocalToolProvider(config)
-    : null
-  let autoConfirmPairing = true
-  const profile: WebRtcPeerConnectionProfile = {
-    mode: 'webrtc-only',
-    appId: config.appId,
-    room: config.room,
-    roomSecretRef: config.roomSecret,
-    signalingBrokers: [config.brokerUrl],
-    expectedStablePeerId: config.expectedStablePeerId,
-    nodeName: config.nodeName,
-    production: false,
-    allowInsecureLoopbackSignaling: true,
-    stunServers: config.stunServers,
-    turnServers: config.turnServers
-  }
-
-  const runtime = createBrowserWebRtcAuroraRuntime({
-    mode: 'webrtc-only',
-    profile,
-    localStablePeerId: config.localStablePeerId,
-    localNodeName: 'G009 browser',
-    nodeRole: ac18 ? 'mesh-node' : 'remote-console',
-    ...(ac18 ? { peerHost: ac18.peerHost } : {}),
-    defaultTimeoutMs: config.timeoutMs,
-    credentialStore: new MemoryPeerCredentialStore(),
-    createPeerConnection: makePeerConnectionFactory(
-      config.forceRelay,
-      config.suppressHostCandidates,
-      config.turnUsername,
-      config.turnCredential
-    ),
-    signalingFactory: (options) => {
-      const signaling = new MqttWebSocketSignalingClient({
-        ...options,
-        mqttFactory
-      })
-      Object.assign(globalThis, {
-        __auroraWebRtcInteropSignalingDiagnostics: () =>
-          signaling.diagnostics()
-      })
-      return signaling
-    },
-    randomId: signalingIdFactory(config.localSignalingId),
-    allowInsecureLoopback: true,
-    windowLocation: config.runtimeLocation ?? window.location,
-    scryptWorkerFactory: () =>
-      new Worker(
-        new URL('/crypto-worker-bundle.js', window.location.href)
-      ),
-    pairingConnectPoll: {
-      maxAttempts: Math.max(20, Math.ceil(config.timeoutMs / 500)),
-      initialDelayMs: 100,
-      maxDelayMs: 500,
-      rpcTimeoutMs: 5000
-    }
-  })
-  recordInteropProgress('runtime-created', runtime.peer.snapshot())
-
-  runtime.peer.subscribe((snapshot) => {
-    snapshots.push(snapshot)
-    recordInteropProgress(`peer:${snapshot.state}`, snapshot)
-    console.log('g009-snapshot', snapshot.state, snapshot.icePathCategory, snapshot.selectedSignalingBrokerOrigin || '', snapshot.connectedSignalingPeerId || '', Boolean(snapshot.pendingPairing), snapshot.lastRedactedError?.code || '', snapshot.lastRedactedError?.message || '')
-    const pending = snapshot.pendingPairing
-    if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined)
-  })
-
+  let ac18: Ac18BrowserLocalToolProbe | null = null
+  let runtimeToClose: ReturnType<typeof createBrowserWebRtcAuroraRuntime> | null = null
   try {
+    const snapshots: Snapshot[] = []
+    ac18 = config.ac18LocalToolProvider
+      ? await createAc18BrowserLocalToolProvider(config)
+      : null
+    let autoConfirmPairing = true
+    const profile: WebRtcPeerConnectionProfile = {
+      mode: 'webrtc-only',
+      appId: config.appId,
+      room: config.room,
+      roomSecretRef: config.roomSecret,
+      signalingBrokers: [config.brokerUrl],
+      expectedStablePeerId: config.expectedStablePeerId,
+      nodeName: config.nodeName,
+      production: false,
+      allowInsecureLoopbackSignaling: true,
+      stunServers: config.stunServers,
+      turnServers: config.turnServers
+    }
+
+    const runtime = createBrowserWebRtcAuroraRuntime({
+      mode: 'webrtc-only',
+      profile,
+      localStablePeerId: config.localStablePeerId,
+      localNodeName: 'G009 browser',
+      nodeRole: ac18 ? 'mesh-node' : 'remote-console',
+      ...(ac18 ? { peerHost: ac18.peerHost } : {}),
+      ...(ac18 ? { peerAuthorityResolver: ac18.peerAuthorityResolver } : {}),
+      ...(ac18 ? { peerPairingIssuer: ac18.peerPairingIssuer } : {}),
+      defaultTimeoutMs: config.timeoutMs,
+      credentialStore: new MemoryPeerCredentialStore(),
+      createPeerConnection: makePeerConnectionFactory(
+        config.forceRelay,
+        config.suppressHostCandidates,
+        config.turnUsername,
+        config.turnCredential
+      ),
+      signalingFactory: (options) => {
+        const signaling = new MqttWebSocketSignalingClient({
+          ...options,
+          mqttFactory
+        })
+        Object.assign(globalThis, {
+          __auroraWebRtcInteropSignalingDiagnostics: () =>
+            signaling.diagnostics()
+        })
+        return signaling
+      },
+      randomId: signalingIdFactory(config.localSignalingId),
+      allowInsecureLoopback: true,
+      windowLocation: config.runtimeLocation ?? window.location,
+      scryptWorkerFactory: () =>
+        new Worker(
+          new URL('/crypto-worker-bundle.js', window.location.href)
+        ),
+      pairingConnectPoll: {
+        maxAttempts: Math.max(20, Math.ceil(config.timeoutMs / 500)),
+        initialDelayMs: 100,
+        maxDelayMs: 500,
+        rpcTimeoutMs: 5000
+      }
+    })
+    runtimeToClose = runtime
+    recordInteropProgress('runtime-created', runtime.peer.snapshot())
+
+    runtime.peer.subscribe((snapshot) => {
+      snapshots.push(snapshot)
+      recordInteropProgress(`peer:${snapshot.state}`, snapshot)
+      console.log('g009-snapshot', snapshot.state, snapshot.icePathCategory, snapshot.selectedSignalingBrokerOrigin || '', snapshot.connectedSignalingPeerId || '', Boolean(snapshot.pendingPairing), snapshot.lastRedactedError?.code || '', snapshot.lastRedactedError?.message || '')
+      const pending = snapshot.pendingPairing
+      if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined)
+    })
+
     await runtime.peer.connect(profile)
     recordInteropProgress('connect-returned', runtime.peer.snapshot())
     await waitFor(() => runtime.peer.snapshot().state === 'authorized', 'authorized WebRTC DataChannel', config.timeoutMs)
@@ -978,6 +1025,8 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       revocationEvidence: {
         revokeResult,
         finalState: revokedSnapshot.state,
+        failureCode: revokedSnapshot.lastRedactedError?.code ?? null,
+        failureMessage: revokedSnapshot.lastRedactedError?.message ?? null,
         pendingPairingPrompts: revokedPendingPairing,
         routeAuthorizedAfterRevocation: revokedSnapshot.state === 'authorized',
         observation: {
@@ -1002,8 +1051,20 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       suppressedUnhandledRejections
     }
   } finally {
-    recordInteropProgress('closing', runtime.peer.snapshot())
-    await runtime.close()
+    let cleanupError: unknown
+    if (runtimeToClose) {
+      try {
+        recordInteropProgress('closing', runtimeToClose.peer.snapshot())
+        await runtimeToClose.close()
+      } catch (error) {
+        cleanupError = error
+      }
+    }
+    try {
+      ac18?.wasmAuthority.free()
+    } catch (error) {
+      cleanupError ??= error
+    }
     Reflect.deleteProperty(
       globalThis,
       '__auroraWebRtcInteropSignalingDiagnostics'
@@ -1015,6 +1076,7 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
     globalThis.fetch = originalFetch
     window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
     window.removeEventListener('error', errorHandler)
+    if (cleanupError !== undefined) throw cleanupError
   }
 }
 

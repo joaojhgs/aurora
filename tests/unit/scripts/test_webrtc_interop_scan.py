@@ -178,6 +178,10 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
         "gatewayHttpApiEnabled": False,
         "gatewayHttpReachable": False,
         "scopedEventEvidence": {"wildcardInterested": False},
+        "reconnectEvidence": {
+            "revokedReconnectFailuresObserved": 1,
+            "proofVerificationResults": ["accepted", "revoked"],
+        },
         "manifestSent": True,
         "largeRpcRecords": [
             {
@@ -383,6 +387,7 @@ def _enable_ac18(
     assert isinstance(browser_result, dict)
     browser_result["ac18LocalToolProviderEvidence"] = {
         "enabled": True,
+        "authorityImplementation": "rust-wasm",
         "toolContractId": "interop.browser.echo",
         "localName": "interop.browser.echo",
         "globalToolId": ("aurora-tool:v1:browser-g009:Tooling:interop.browser.echo"),
@@ -532,6 +537,69 @@ def test_aggregate_accepts_awaiting_sas_with_post_revocation_prompt(tmp_path: Pa
     assert report["status"] == "passed"
     assert report["assertions"]["revokedCredentialPromptRequired"] is True
     assert report["assertions"]["revokedCredentialPromptObserved"] is True
+
+
+def test_aggregate_accepts_terminal_revocation_failure_within_observation_bound(
+    tmp_path: Path,
+) -> None:
+    python_report, browser_report = _passing_reports()
+    python_report["reconnectEvidence"] = {
+        "revokedReconnectFailuresObserved": 0,
+        "proofVerificationResults": ["accepted", "revoked"],
+    }
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation["finalState"] = "failed"
+    revocation["observation"] = {
+        "elapsedMs": 703,
+        "timeoutMs": 45_000,
+        "timedOut": False,
+    }
+    browser_result["finalStateAfterRevocation"] = "failed"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "passed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is True
+    assert report["assertions"]["revokedCredentialBoundedTimeout"] is False
+    assert report["assertions"]["revokedCredentialBoundedObservation"] is True
+    assert report["assertions"]["revokedCredentialTerminalFailure"] is True
+    assert report["assertions"]["revokedProofRejectionObserved"] is True
+
+
+@pytest.mark.parametrize(
+    "reconnect_evidence",
+    [
+        {},
+        {"revokedReconnectFailuresObserved": 1, "proofVerificationResults": []},
+        {"revokedReconnectFailuresObserved": 1, "proofVerificationResults": ["accepted"]},
+    ],
+)
+def test_aggregate_rejects_terminal_failure_without_revoked_proof_evidence(
+    tmp_path: Path,
+    reconnect_evidence: dict[str, object],
+) -> None:
+    python_report, browser_report = _passing_reports()
+    python_report["reconnectEvidence"] = reconnect_evidence
+    browser_result = browser_report["browserResult"]
+    assert isinstance(browser_result, dict)
+    revocation = browser_result["revocationEvidence"]
+    assert isinstance(revocation, dict)
+    revocation["finalState"] = "failed"
+    revocation["observation"] = {
+        "elapsedMs": 703,
+        "timeoutMs": 45_000,
+        "timedOut": False,
+    }
+    browser_result["finalStateAfterRevocation"] = "failed"
+
+    report = _aggregate(tmp_path, python_report, browser_report)
+
+    assert report["status"] == "failed"
+    assert report["assertions"]["revokedCredentialFailsClosed"] is False
+    assert report["assertions"]["revokedProofRejectionObserved"] is False
 
 
 def test_aggregate_rejects_awaiting_sas_without_post_revocation_prompt(tmp_path: Path) -> None:
@@ -690,6 +758,7 @@ def test_aggregate_rejects_invalid_final_state_values_after_revocation(
         ("negative", "failClosedWithoutHandler", False),
         ("identity", "frameCallerPeerIdOverridden", False),
         ("browser", "positiveInvocationCount", 0),
+        ("browser", "authorityImplementation", "session-typescript"),
         ("browser", "negativeInvocationCount", 1),
         ("browser", "globalToolId", "aurora-tool:v1:wrong"),
         ("browser", "toolResponseDataDigest", "b" * 64),

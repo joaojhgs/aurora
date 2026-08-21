@@ -275,6 +275,17 @@ async def test_authentication_builds_an_admin_webrtc_identity_without_exposing_t
     assert TOKEN not in serialized
 
 
+@pytest.mark.asyncio
+async def test_revocation_rejects_pairing_and_bearer_authentication_fallbacks() -> None:
+    bus = make_bus()
+    auth = InteropAuth(TOKEN, bus)
+
+    await bus.request(REVOKE_TOPIC)
+
+    assert await auth.validate_mesh_pairing_token(token_str=TOKEN) is None
+    assert await auth.authenticate_token(TOKEN) is None
+
+
 @pytest.mark.parametrize(
     ("candidate", "allowed"),
     [

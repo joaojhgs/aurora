@@ -1026,6 +1026,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
   private remoteAuthenticatedByReconnectProof = false
   private remoteAuthenticated = false
   private remoteAuthenticatedContext: AuthenticatedPeerContext | undefined
+  private outboundAuthenticationRequired = false
   private gatewayHelloReceived = false
   private pairingCompleted = false
   private transportGeneration = 0
@@ -1051,6 +1052,26 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
 
   async tryReconnect(context: PeerSessionAuthContext): Promise<PeerSessionAuthFrameResult> {
     const generation = this.transportGeneration
+    const peerId = this.options.profile.expectedStablePeerId ?? ''
+    let hasOutboundCredential = false
+    if (peerId && this.options.credentialStore) {
+      try {
+        if (this.options.credentialStore.status !== undefined) {
+          hasOutboundCredential = (await this.options.credentialStore.status(peerId)).found
+        } else {
+          hasOutboundCredential = (await this.options.credentialStore.get(peerId)) !== undefined
+        }
+        if (!this.isCurrentTransport(generation)) return undefined
+      } catch {
+        if (!this.isCurrentTransport(generation)) return undefined
+        this.options.onDiagnostic(
+          'webrtc_reconnect_store_unavailable',
+          'Native reconnect storage is unavailable; pairing was not attempted.'
+        )
+        return { denied: true, terminal: true }
+      }
+    }
+    this.outboundAuthenticationRequired = hasOutboundCredential
     if (this.options.peerAuthorityResolver !== undefined) {
       let issued = false
       try {
@@ -1068,27 +1089,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
         return await this.waitForReconnectResult()
       }
     }
-    const peerId = this.options.profile.expectedStablePeerId ?? ''
-    if (!peerId || !this.options.credentialStore) return undefined
-    try {
-      if (this.options.credentialStore.status !== undefined) {
-        const status = await this.options.credentialStore.status(peerId)
-        if (!this.isCurrentTransport(generation)) return undefined
-        if (!status.found) return undefined
-      } else {
-        const credential = await this.options.credentialStore.get(peerId)
-        if (!this.isCurrentTransport(generation)) return undefined
-        if (credential === undefined) return undefined
-      }
-    } catch {
-      if (!this.isCurrentTransport(generation)) return undefined
-      this.options.onDiagnostic(
-        'webrtc_reconnect_store_unavailable',
-        'Native reconnect storage is unavailable; pairing was not attempted.'
-      )
-      return { denied: true, terminal: true }
-    }
-    if (!this.isCurrentTransport(generation)) return undefined
+    if (!hasOutboundCredential) return undefined
     return await this.waitForReconnectResult()
   }
 
@@ -1121,6 +1122,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     this.remoteAuthenticatedByReconnectProof = false
     this.remoteAuthenticated = false
     this.remoteAuthenticatedContext = undefined
+    this.outboundAuthenticationRequired = false
     this.gatewayHelloReceived = false
     const preservePairingState = !this.pairingCompleted && (
       this.pairing !== null
@@ -1198,6 +1200,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return undefined
     }
     if (type === 'mesh_auth_challenge_v1') {
+      // Receiving a challenge makes reciprocal authentication mandatory for
+      // this transport before a proof lookup or remote proof can race ahead.
+      this.outboundAuthenticationRequired = true
       const proof = await createReconnectProof(this.options.credentialStore, this.options.profile.expectedStablePeerId ?? '', frame as unknown as MeshReconnectChallengeMessage)
       if (!this.isCurrentTransport(generation)) return { handled: true }
       if (proof) {
@@ -1214,6 +1219,14 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     }
     if (type === 'pairing_v2_commit') {
       this.resolveReconnectWait(undefined)
+      // A fresh pairing commit means the peer did not accept an outbound
+      // reconnect proof that is still awaiting acknowledgement. Invalidate
+      // that proof path before processing the recovery handshake so a late
+      // protocol hello cannot authorize the rejected credential direction.
+      if (this.awaitingGatewayHello && !this.sentAuthFrame) {
+        this.awaitingGatewayHello = false
+        this.gatewayHelloReceived = false
+      }
       const handshake = await this.ensureHandshake(context, generation)
       if (!handshake || !this.isCurrentTransport(generation)) return { handled: true }
       handshake.acceptCommit(parsePairingCommitMessage(frame))
@@ -1267,7 +1280,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     const handle = typeof result.code === 'string' ? result.code : ''
     if (!handle || handle === pairing.verificationCode) throw new PairingProtocolError('Remote reused the display code as a pairing credential')
     this.pairingHandle = handle
-    if (this.localSasConfirmed) return await this.pollPairingConnect(context, handle, generation)
+    if (this.localSasConfirmed || this.remoteAuthenticatedByReconnectProof) {
+      return await this.pollPairingConnect(context, handle, generation)
+    }
     return undefined
   }
 
@@ -1650,14 +1665,14 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     this.remoteAuthenticatedByReconnectProof = true
     this.remoteAuthenticated = true
     this.remoteAuthenticatedContext = result.context
-    this.localSasConfirmed = true
     return this.mutualAuthenticationResult()
   }
 
   private mutualAuthenticationResult(): PeerSessionAuthFrameResult {
     const remoteAuthenticationRequired = this.options.peerAuthorityResolver !== undefined
       || this.options.peerPairingIssuer !== undefined
-    const outboundAuthenticationRequired = this.pairing !== null
+    const outboundAuthenticationRequired = this.outboundAuthenticationRequired
+      || this.pairing !== null
       || this.awaitingGatewayHello
       || this.sentAuthFrame
     if ((outboundAuthenticationRequired && !this.gatewayHelloReceived)

@@ -254,6 +254,7 @@ def ac18_local_tool_provider_passed(
     )
     browser_ok = (
         browser_evidence.get("enabled") is True
+        and browser_evidence.get("authorityImplementation") == "rust-wasm"
         and registered_tool_ok
         and browser_evidence.get("positiveInvocationCount") == 1
         and browser_evidence.get("negativeInvocationCount") == 0
@@ -447,6 +448,11 @@ def build_interop_report(
         and browser_final_state_after_revocation == revocation_final_state
     )
     revocation_observation = revocation.get("observation") or {}
+    python_reconnect_evidence = python_report.get("reconnectEvidence") or {}
+    proof_verification_results = python_reconnect_evidence.get("proofVerificationResults") or []
+    revoked_proof_rejection_observed = (
+        isinstance(proof_verification_results, list) and "revoked" in proof_verification_results
+    )
     revocation_prompt_required = revocation_final_state == "awaiting-sas-confirmation"
     revocation_prompt_ok = (
         not revocation_prompt_required or revocation.get("pendingPairingPrompts", 0) >= 1
@@ -462,8 +468,23 @@ def build_interop_report(
         and revocation_timeout_ms > 0
         and revocation_timeout_elapsed_ms >= revocation_timeout_ms
     )
+    revocation_terminal_failure_ok = (
+        revocation_final_state == "failed"
+        and isinstance(revocation_timeout_elapsed_ms, (int, float))
+        and not isinstance(revocation_timeout_elapsed_ms, bool)
+        and isinstance(revocation_timeout_ms, (int, float))
+        and not isinstance(revocation_timeout_ms, bool)
+        and revocation_observation.get("timedOut") is False
+        and revocation_timeout_ms > 0
+        and 0 <= revocation_timeout_elapsed_ms <= revocation_timeout_ms
+    )
+    revocation_bounded_observation_ok = (
+        revocation_bounded_timeout_ok or revocation_terminal_failure_ok
+    )
     if revocation_final_state == "authorized":
         revocation_terminal_ok = False
+    elif revocation_final_state == "failed":
+        revocation_terminal_ok = revocation_terminal_failure_ok
     elif revocation_prompt_required:
         revocation_terminal_ok = revocation_prompt_ok
     else:
@@ -475,6 +496,7 @@ def build_interop_report(
         and (br.get("hostileCaseEvidence") or {}).get("failClosedObserved") is True
         and authorized_peer_count_after_revocation == 0
         and connected_peer_count_after_revocation == 0
+        and revoked_proof_rejection_observed
         and revocation_terminal_ok
     )
     required_ok = (
@@ -587,6 +609,9 @@ def build_interop_report(
             "revokedCredentialPromptRequired": revocation_prompt_required,
             "revokedCredentialPromptObserved": revocation.get("pendingPairingPrompts", 0) >= 1,
             "revokedCredentialBoundedTimeout": revocation_bounded_timeout_ok,
+            "revokedCredentialBoundedObservation": revocation_bounded_observation_ok,
+            "revokedCredentialTerminalFailure": revocation_terminal_failure_ok,
+            "revokedProofRejectionObserved": revoked_proof_rejection_observed,
             "revokedCredentialFinalStateMatched": revocation_final_state_valid,
             "mutationAtMostOnce": mutation.get("executionCountAtMostOnce"),
             "mutationUncertainLossWindow": (mutation.get("uncertainLossWindow") or {}).get(

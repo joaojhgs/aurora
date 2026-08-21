@@ -27,6 +27,7 @@ export type InteropBrowserResult = {
   }
   ac18LocalToolProviderEvidence?: {
     enabled: boolean
+    authorityImplementation?: string
     toolContractId: string | null
     localName: string | null
     globalToolId: string | null
@@ -91,6 +92,8 @@ export type InteropBrowserResult = {
   }
   revocationEvidence: {
     finalState: string
+    failureCode?: string | null
+    failureMessage?: string | null
     pendingPairingPrompts: number
     routeAuthorizedAfterRevocation: boolean
     observation?: {
@@ -378,6 +381,10 @@ export function collectInteropAssertionFailures(
   if (expectations.expectedAc18LocalToolProvider) {
     const ac18 = result.ac18LocalToolProviderEvidence
     check(ac18?.enabled === true, 'AC18 browser local tool provider was not enabled')
+    check(
+      ac18?.authorityImplementation === 'rust-wasm',
+      'AC18 browser authorization did not use the Rust/WASM authority',
+    )
     check(
       ac18?.positiveInvocationCount === 1,
       `AC18 browser local tool invocation count was ${String(ac18?.positiveInvocationCount)}`,

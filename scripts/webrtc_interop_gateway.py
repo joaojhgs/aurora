@@ -651,6 +651,8 @@ class InteropAuth:
         return "interop-system-token-redacted"
 
     async def validate_mesh_pairing_token(self, **kwargs: Any) -> Token | None:
+        if self.bus.revoked:
+            return None
         token_str = str(kwargs.get("token_str") or "")
         if token_str != self.token_value:
             return None
@@ -664,6 +666,8 @@ class InteropAuth:
         )
 
     async def authenticate_token(self, token_str: str) -> Token | None:
+        if self.bus.revoked:
+            return None
         if token_str != self.token_value:
             return None
         return Token(

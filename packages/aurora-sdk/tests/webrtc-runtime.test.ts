@@ -1648,7 +1648,111 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     await harness.runtime.close()
   })
 
-  it('keeps a completed local approval after a verified reconnect proof without prompting or rotating that direction', async () => {
+  it('invalidates an unacknowledged outbound proof when the peer starts recovery pairing', async () => {
+    const authority = await createTestAuthority(() => 100)
+    const inbound = await authority.pairingIssuer.issue({
+      tokenId: 'token-row-remote',
+      claimantPeerId: 'peer-remote',
+      verifierPeerId: 'local-stable',
+      roomName: 'room-1'
+    })
+    const credentialStore = new MemoryPeerCredentialStore()
+    await credentialStore.save('peer-remote', {
+      tokenId: 'token-row-local',
+      claimantPeerId: 'local-stable',
+      verifierPeerId: 'peer-remote',
+      claimantSignalingPeerId: 'a-local',
+      verifierSignalingPeerId: 'z-remote',
+      roomName: 'room-1',
+      rawBearerToken: 'saved-local-token'
+    })
+    const harness = makeRuntimeHarness({
+      mode: 'webrtc-only',
+      credentialStore,
+      peerAuthorityResolver: authority.resolver
+    })
+
+    await harness.runtime.peer.connect(harness.runtimeProfile)
+    harness.signaling.emit({ channel: 'presence', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'presence', stable_peer_id: 'peer-remote' } })
+    await flushRuntime()
+    harness.signaling.emit({ channel: 'answer', from: 'z-remote', stablePeerId: 'peer-remote', envelope: { type: 'answer', sdp: 'answer-sdp' } })
+    await flushRuntime()
+    const channel = harness.pc.channels[0] as RuntimeFakeChannel
+    channel.open()
+    const localChallenge = await decodeSent(channel, 0)
+    const binding = String(localChallenge.channel_binding)
+    const remoteProof = await authority.reconnectProof(
+      inbound.bearerToken,
+      inbound.verifier,
+      {
+        channelBinding: binding,
+        claimantSignalingPeerId: 'z-remote',
+        verifierSignalingPeerId: 'a-local'
+      },
+      String(localChallenge.challenge)
+    )
+
+    channel.receive(await encodeInbound({
+      type: 'mesh_auth_proof_v1',
+      token_id: inbound.tokenId,
+      challenge: localChallenge.challenge,
+      proof: remoteProof,
+      channel_binding: binding,
+      claimant_peer_id: 'peer-remote',
+      verifier_peer_id: 'local-stable',
+      claimant_signaling_peer_id: 'z-remote',
+      verifier_signaling_peer_id: 'a-local',
+      room_name: 'room-1'
+    }))
+    await flushRuntime()
+
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+    expect(harness.runtime.meshTransport).toBeUndefined()
+
+    channel.receive(await encodeInbound({
+      type: 'mesh_auth_challenge_v1',
+      challenge: 'b'.repeat(64),
+      channel_binding: binding,
+      claimant_peer_id: 'local-stable',
+      verifier_peer_id: 'peer-remote',
+      claimant_signaling_peer_id: 'a-local',
+      verifier_signaling_peer_id: 'z-remote',
+      room_name: 'room-1'
+    }))
+    await waitForSent(channel, 2)
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+
+    const remote = new PairingSasHandshake({
+      channelBindingSha256: binding,
+      localIdentity: pairingIdentity({ role: 'answerer', stablePeerId: 'peer-remote', signalingPeerId: 'z-remote', nodeName: 'Remote node' }),
+      expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: 'a-local', nodeName: 'Thin Shell' })
+    })
+    channel.receive(await encodeInbound(await remote.commitMessage()))
+    const localCommit = await decodeSent(channel, 2)
+    remote.acceptCommit(localCommit)
+    const localReveal = await decodeSent(channel, 3)
+    await remote.acceptReveal(localReveal)
+
+    // The peer began fresh pairing instead of acknowledging our reconnect
+    // proof. A delayed hello from that abandoned proof path must be ignored.
+    channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
+    await flushRuntime()
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+    expect(harness.runtime.meshTransport).toBeUndefined()
+
+    channel.receive(await encodeInbound(remote.revealMessage()))
+    const pairingStart = await decodeSent(channel, 4)
+    expect(pairingStart).toMatchObject({ type: 'call', method: 'Auth.PairingStart' })
+    expect(harness.runtime.peer.snapshot().pendingPairing).toBeUndefined()
+
+    channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
+    await flushRuntime()
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+    expect(harness.runtime.meshTransport).toBeUndefined()
+    await harness.runtime.close()
+  })
+
+  it('repairs the missing trust direction without treating a reconnect proof as fresh SAS approval', async () => {
     const authority = await createTestAuthority(() => 100)
     const issuer = authority.pairingIssuer
     const issued = await issuer.issue({
@@ -1692,6 +1796,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     }))
     await waitForRuntimeState(harness.runtime, 'authorized')
     await waitForSent(channel, 2)
+    expect((harness.runtime.peer as any).session.options.auth.localSasConfirmed).toBe(false)
 
     const remote = new PairingSasHandshake({
       channelBindingSha256: String(challenge.channel_binding),

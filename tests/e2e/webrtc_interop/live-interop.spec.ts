@@ -52,6 +52,10 @@ const cryptoWorkerBundlePath = path.join(
   artifactDir,
   'crypto-worker-bundle.js',
 )
+const authorityWasmPath = path.join(
+  root,
+  'packages/aurora-mesh-authority-web/dist/wasm/aurora_mesh_authority_bg.wasm',
+)
 const configured = Boolean(
   process.env.WEBRTC_INTEROP_LANE &&
     readyPath &&
@@ -157,6 +161,14 @@ test.beforeAll(async () => {
         'cache-control': 'no-store',
       })
       response.end(await fs.readFile(cryptoWorkerBundlePath))
+      return
+    }
+    if (request.url === '/aurora_mesh_authority_bg.wasm') {
+      response.writeHead(200, {
+        'content-type': 'application/wasm',
+        'cache-control': 'no-store',
+      })
+      response.end(await fs.readFile(authorityWasmPath))
       return
     }
     response.writeHead(200, { 'content-type': 'text/html' })
