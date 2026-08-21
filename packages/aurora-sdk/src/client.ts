@@ -6,6 +6,7 @@ import {
   createAuditReceipt,
   normalizeError,
   unsupportedTransport,
+  type AuroraPeerBoundTransport,
   type AuroraResponse,
   type AuroraTransport
 } from './transport.js'
@@ -223,6 +224,10 @@ export interface AuroraClientOptions {
   defaultTimeoutMs?: number
 }
 
+function isPeerBoundTransport(transport: AuroraTransport): transport is AuroraPeerBoundTransport {
+  return typeof (transport as { requestPeer?: unknown }).requestPeer === 'function'
+}
+
 export class AuroraClient {
   readonly transport: AuroraTransport
   readonly auth: AuthSession
@@ -298,6 +303,33 @@ export class AuroraClient {
     } catch (error) {
       this.auth.applyError(normalizeError(error))
       throw error
+    }
+  }
+
+  async requestPeer<TData = unknown, TPayload = unknown>(
+    peerId: string,
+    method: string,
+    payload?: TPayload,
+    options: { busTopic?: string; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal } = {}
+  ): Promise<TData> {
+    if (!isPeerBoundTransport(this.transport)) {
+      throw unsupportedTransport(this.transport.kind, 'Exact-peer mesh dispatch', 'unsupported_feature')
+    }
+    const busTopic = options.busTopic ?? method
+    try {
+      const response = await this.transport.requestPeer<TData, TPayload>(peerId, {
+        method,
+        busTopic,
+        payload,
+        headers: options.headers,
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
+      })
+      return response.data
+    } catch (error) {
+      const normalized = normalizeError(error)
+      this.auth.applyError(normalized)
+      throw normalized
     }
   }
 
@@ -1939,6 +1971,18 @@ export class ToolClient {
       TOOLING_METHODS.getExportCatalog,
       request,
       { path: routePath('Tooling', 'GetExportCatalog') }
+    )
+  }
+
+  getExportCatalogFromPeer(
+    peerId: string,
+    request: ToolingGetExportCatalogRequest = {}
+  ): Promise<ToolingGetExportCatalogResponse> {
+    return this.client.requestPeer<ToolingGetExportCatalogResponse, ToolingGetExportCatalogRequest>(
+      peerId,
+      TOOLING_METHODS.getExportCatalog,
+      request,
+      { busTopic: TOOLING_METHODS.getExportCatalog }
     )
   }
 

@@ -121,12 +121,14 @@ import {
   createInitialAuroraTauriRuntime,
   loadTauriRemoteAssistantTools,
   requiresAsyncAuroraTauriBootstrap,
+  startTauriRemoteAssistantToolInvalidationRefresh,
   type AndroidForegroundRuntimeStatus,
   type AndroidMediaPolicyStatus,
   type AuroraTauriRuntime as AuroraTauriRuntimeModel,
   type AuroraThinConnectionProfile,
   type AuroraThinProfileDocument,
 } from "./aurora-client";
+import type { LightweightRemoteProjectionCatalogSnapshot } from "@aurora/client/lightweight-orchestrator";
 import type { TauriNativeSpeechCatalogReadiness } from "./native-speech-catalog";
 import {
   initMeshDeepLinks,
@@ -719,13 +721,59 @@ export function AuroraTauriApp({
     let cancelled = false;
     let refreshEpoch = 0;
     let ready = false;
+    let remoteToolsByPeer = new Map<string, readonly ToolingProjectionToolInfo[]>();
+    let remoteProjectionSnapshots = new Map<
+      string,
+      LightweightRemoteProjectionCatalogSnapshot
+    >();
+    let stopInvalidationRefresh: (() => void) | null = null;
     setAssistantRemoteTools(runtime.localAssistant?.remoteTools ?? []);
+
+    const setRemoteToolsFromSnapshots = () => {
+      setAssistantRemoteTools(
+        [...remoteToolsByPeer.values()].flatMap((tools) => [...tools]),
+      );
+    };
+
+    const stopProjectionInvalidations = () => {
+      stopInvalidationRefresh?.();
+      stopInvalidationRefresh = null;
+    };
+
+    const startProjectionInvalidations = () => {
+      if (stopInvalidationRefresh) return;
+      const subscription = startTauriRemoteAssistantToolInvalidationRefresh(
+        runtime,
+        {
+          previousSnapshotForPeer: (peerId) =>
+            remoteProjectionSnapshots.get(peerId) ?? null,
+          onSnapshot: (snapshot) => {
+            if (cancelled) return;
+            remoteProjectionSnapshots = new Map(remoteProjectionSnapshots);
+            remoteProjectionSnapshots.set(snapshot.providerPeerId, snapshot);
+            remoteToolsByPeer = new Map(remoteToolsByPeer);
+            remoteToolsByPeer.set(snapshot.providerPeerId, snapshot.tools);
+            setRemoteToolsFromSnapshots();
+          },
+          onError: () => undefined,
+        },
+      );
+      if (!subscription) return;
+      const stop = () => subscription.close("runtime changed");
+      stopInvalidationRefresh = stop;
+      void subscription.closed.finally(() => {
+        if (stopInvalidationRefresh === stop) stopInvalidationRefresh = null;
+      });
+    };
 
     const refreshRemoteTools = async () => {
       const epoch = ++refreshEpoch;
       const tools = await loadTauriRemoteAssistantTools(runtime);
       if (!cancelled && epoch === refreshEpoch) {
+        remoteToolsByPeer = toolsByProviderPeer(tools);
+        remoteProjectionSnapshots = new Map();
         setAssistantRemoteTools(tools);
+        startProjectionInvalidations();
       }
     };
 
@@ -734,6 +782,7 @@ export function AuroraTauriApp({
       return () => {
         cancelled = true;
         refreshEpoch += 1;
+        stopProjectionInvalidations();
       };
     }
 
@@ -748,6 +797,9 @@ export function AuroraTauriApp({
       } else if (!nextReady && ready) {
         ready = false;
         refreshEpoch += 1;
+        stopProjectionInvalidations();
+        remoteToolsByPeer = new Map();
+        remoteProjectionSnapshots = new Map();
         setAssistantRemoteTools([]);
       }
     };
@@ -756,6 +808,7 @@ export function AuroraTauriApp({
     return () => {
       cancelled = true;
       refreshEpoch += 1;
+      stopProjectionInvalidations();
       unsubscribe();
     };
   }, [runtime]);
@@ -1540,6 +1593,21 @@ async function buildRuntimeShellSnapshot(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toolsByProviderPeer(
+  tools: readonly ToolingProjectionToolInfo[],
+): Map<string, readonly ToolingProjectionToolInfo[]> {
+  const grouped = new Map<string, ToolingProjectionToolInfo[]>();
+  for (const tool of tools) {
+    if (tool.execution_location !== "remote" || !tool.provider_peer_id) {
+      continue;
+    }
+    const peerTools = grouped.get(tool.provider_peer_id) ?? [];
+    peerTools.push(tool);
+    grouped.set(tool.provider_peer_id, peerTools);
+  }
+  return grouped;
 }
 
 interface NativeContext {

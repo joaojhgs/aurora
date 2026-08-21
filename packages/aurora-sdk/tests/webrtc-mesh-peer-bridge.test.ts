@@ -383,8 +383,24 @@ describe('WebRtcMeshPeerBridge', () => {
     }
     const bridgeA = new WebRtcMeshPeerBridge({ session: sessionA, remotePeerId: 'peer-a', randomId: () => 'sub-a' })
     const bridgeB = new WebRtcMeshPeerBridge({ session: sessionB, remotePeerId: 'peer-b', randomId: () => 'sub-b' })
+    sessionA.sendFrameGate = (frame) => {
+      if ((frame as any).type === 'call' && (frame as any).method === 'Tooling.GetExportCatalog') {
+        sessionA.emit({ type: 'result', id: (frame as any).id, result: projectionPageForPeer('peer-a', 'peer-a.search') })
+      }
+    }
+    sessionB.sendFrameGate = (frame) => {
+      if ((frame as any).type === 'call' && (frame as any).method === 'Tooling.GetExportCatalog') {
+        sessionB.emit({ type: 'result', id: (frame as any).id, result: projectionPageForPeer('peer-b', 'peer-b.search') })
+      }
+    }
     sessionA.emit(hello())
     sessionB.emit(hello())
+    const client = new AuroraClient({
+      transport: new MeshP2PTransport({
+        bridge: exactPeerBridge({ 'peer-a': bridgeA, 'peer-b': bridgeB }),
+        defaultPeerId: 'default-peer'
+      })
+    })
     const calls: Array<{ peerId: string; payload: unknown }> = []
     const snapshots: string[] = []
     const watcher = subscribeLightweightRemoteProjectionInvalidations({
@@ -394,7 +410,7 @@ describe('WebRtcMeshPeerBridge', () => {
         return {
           async getExportCatalog(payload) {
             calls.push({ peerId, payload })
-            return projectionPageForPeer(peerId, `${peerId}.search`)
+            return await client.tools.getExportCatalogFromPeer(peerId, payload)
           }
         }
       },
@@ -402,6 +418,7 @@ describe('WebRtcMeshPeerBridge', () => {
         snapshots.push(snapshot.providerPeerId)
       }
     })
+    await flush()
     expect(sessionA.sent[0]).toMatchObject({ type: 'subscribe', id: 'sub-a', topics: ['Tooling.ProjectionInvalidated'] })
     expect(sessionB.sent[0]).toMatchObject({ type: 'subscribe', id: 'sub-b', topics: ['Tooling.ProjectionInvalidated'] })
     sessionA.emit({ type: 'subscribed', id: 'sub-a', subscription_id: 'sub-a', accepted: true, accepted_topics: ['Tooling.ProjectionInvalidated'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
@@ -1755,6 +1772,16 @@ function mergedBridgeEvents(bridges: readonly WebRtcMeshPeerBridge[]) {
         for (const controller of controllers) controller.abort()
         wake()
       }, Promise.all(streams.map((stream) => stream.ready)).then(() => undefined))
+    }
+  }
+}
+
+function exactPeerBridge(bridges: Record<string, WebRtcMeshPeerBridge>) {
+  return {
+    call(request: Parameters<WebRtcMeshPeerBridge['call']>[0]) {
+      const bridge = bridges[request.peerId]
+      if (!bridge) throw new Error(`unexpected peer ${request.peerId}`)
+      return bridge.call(request)
     }
   }
 }

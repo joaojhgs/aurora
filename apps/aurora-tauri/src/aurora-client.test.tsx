@@ -13,13 +13,17 @@ import {
   ORCHESTRATOR_MODEL_METHODS,
   STT_METHODS,
   TOOLING_METHODS,
+  createEventSubscription,
   capabilityCatalogFixture,
   cloneFixture,
   modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
+  type AuroraEvent,
   type AuroraTransportRequest,
   type ToolingGetExportCatalogResponse,
+  type ToolingProjectionInvalidated,
+  type ToolingProjectionToolInfo,
 } from "@aurora/client";
 import {
   auroraNavSections,
@@ -44,6 +48,7 @@ import {
   type LocalDataSession,
 } from "@aurora/client/local-data";
 import {
+  canonicalToolGlobalId,
   computeProjectionChecksum,
   computeProjectionPageHash,
 } from "@aurora/client/local-tools";
@@ -460,6 +465,196 @@ async function waitUntil(assertion: () => void) {
     }
   }
   throw lastError;
+}
+
+function controlledProjectionInvalidationStream() {
+  const queue: AuroraEvent<unknown>[] = [];
+  const waiters: Array<() => void> = [];
+  let closed = false;
+  let closeCount = 0;
+  const wake = () => {
+    for (const waiter of waiters.splice(0)) waiter();
+  };
+  const subscription = createEventSubscription(
+    async function* () {
+      while (!closed) {
+        const next = queue.shift();
+        if (next) {
+          yield next;
+          continue;
+        }
+        await new Promise<void>((resolve) => waiters.push(resolve));
+      }
+    }(),
+    () => {
+      if (closed) return;
+      closed = true;
+      closeCount += 1;
+      wake();
+    },
+    Promise.resolve(),
+  );
+  return {
+    subscription,
+    emit(event: AuroraEvent<unknown>) {
+      if (closed) return;
+      queue.push(event);
+      wake();
+    },
+    get closeCount() {
+      return closeCount;
+    },
+  };
+}
+
+function projectionInvalidationEvent(options: {
+  providerPeerId: string;
+  sourcePeerId: string;
+  targetPeerId: string;
+  correlationId?: string;
+}): AuroraEvent<unknown> {
+  const correlationId = options.correlationId ?? "projection-invalidated";
+  const payload: ToolingProjectionInvalidated = {
+    provider_peer_id: options.providerPeerId,
+    service_instance_id: `remote:${options.providerPeerId}:Tooling`,
+    authority_revision: {
+      catalog_revision: 1,
+      export_policy_revision: 1,
+      auth_grant_revision: 1,
+      manifest_revision: 1,
+      switch_revision: 1,
+      protocol_revision: 1,
+    },
+    reason_code: "projection_changed",
+    correlation_id: correlationId,
+  };
+  return {
+    id: correlationId,
+    kind: "Tooling.ProjectionInvalidated",
+    topic: "Tooling.ProjectionInvalidated",
+    method: null,
+    busTopic: "Tooling.ProjectionInvalidated",
+    payload,
+    audit: {
+      correlationId,
+      eventKind: "Tooling.ProjectionInvalidated",
+      peerId: options.sourcePeerId,
+      principalId: null,
+      targetPeerId: options.targetPeerId,
+      method: null,
+      busTopic: "Tooling.ProjectionInvalidated",
+      toolId: null,
+      resourceId: null,
+      status: null,
+      transport: "mesh",
+      redaction: {
+        secretsRedacted: true,
+        redactedFields: [],
+        source: "sdk",
+        warnings: [],
+      },
+    },
+    redaction: {
+      secretsRedacted: true,
+      redactedFields: [],
+      source: "sdk",
+      warnings: [],
+    },
+    receivedAt: "2026-08-21T00:00:00.000Z",
+  };
+}
+
+function projectionPage(
+  providerPeerId: string,
+  tools: readonly ToolingProjectionToolInfo[],
+): ToolingGetExportCatalogResponse {
+  const digest = computeProjectionChecksum(tools, [], []);
+  const pageTools = [...tools];
+  const page = {
+    ok: true,
+    provider_peer_id: providerPeerId,
+    service_instance_id: `remote:${providerPeerId}:Tooling`,
+    selected_protocol_tier: "projection_v1" as const,
+    authority_revision: {
+      catalog_revision: 1,
+      export_policy_revision: 1,
+      auth_grant_revision: 1,
+      manifest_revision: 1,
+      switch_revision: 1,
+      protocol_revision: 1,
+    },
+    projection_revision: `revision-${providerPeerId}`,
+    projection_digest: digest,
+    page_index: 0,
+    page_size: 100,
+    page_hash: "0".repeat(64),
+    tools: pageTools,
+    blocked_tools: [],
+    retirements: [],
+    complete: true as const,
+    next_cursor: null,
+    total_count: pageTools.length,
+    final_checksum: digest,
+  };
+  return {
+    ...page,
+    page_hash: computeProjectionPageHash(page),
+  } as ToolingGetExportCatalogResponse;
+}
+
+function remoteProjectionTool(
+  providerPeerId: string,
+  name: string,
+): ToolingProjectionToolInfo {
+  const serviceInstanceId = `remote:${providerPeerId}:Tooling`;
+  return {
+    name,
+    local_name: name,
+    global_tool_id: canonicalToolGlobalId(providerPeerId, name),
+    tool_id_scheme: "aurora-tool",
+    tool_id_version: 1,
+    tool_contract_id: name,
+    share_group_id: name,
+    share_group_label: name,
+    legacy_global_tool_ids: [],
+    exportable: true,
+    provider_peer_id: providerPeerId,
+    provider_service_instance_id: serviceInstanceId,
+    provider_label: null,
+    provider_granted_permissions: null,
+    provider_available: true,
+    namespace: "remote",
+    display_name: name,
+    aliases: [],
+    description: name,
+    args_schema: { type: "object" },
+    schema: { type: "object" },
+    argument_visibility: {},
+    source_type: "mesh_peer",
+    source: "mesh_peer",
+    source_id: serviceInstanceId,
+    trust_tier: "trusted",
+    capability_class: "read",
+    resource_scope: [],
+    execution_location: "remote",
+    safety_class: "standard",
+    risk_class: "standard",
+    data_egress: false,
+    mutating: false,
+    external: false,
+    admin: false,
+    privacy_hints: [],
+    required_permissions: ["Tooling.ExecuteTool"],
+    confirmation_required: false,
+    rate_limit_hints: null,
+    provenance: {
+      provider_peer_id: providerPeerId,
+      provider_service_instance_id: serviceInstanceId,
+      provider_kind: "mesh_peer",
+      source: "unknown",
+      advertised_name: name,
+    },
+  };
 }
 
 async function navigateByHref(container: HTMLElement, href: string) {
@@ -2098,6 +2293,89 @@ describe("Aurora Tauri runtime wrapper", () => {
       last_projection_revision: null,
       last_projection_digest: null,
     });
+  });
+
+  it("refreshes remote assistant tools from projection invalidations with exact-peer dispatch and cleans up listeners", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const eventStream = controlledProjectionInvalidationStream();
+    const getExportCatalog = vi
+      .spyOn(client.tools, "getExportCatalog")
+      .mockResolvedValue(projectionPage("bootstrap-peer", []));
+    const getExportCatalogFromPeer = vi
+      .spyOn(client.tools, "getExportCatalogFromPeer")
+      .mockImplementation(async (peerId, payload) => {
+        if (peerId !== "peer-p") {
+          throw new Error(`unexpected peer ${peerId}`);
+        }
+        expect(payload).toMatchObject({
+          protocol_tier: "projection_v1",
+          page_size: 100,
+          cursor: null,
+        });
+        return projectionPage(peerId, [remoteProjectionTool(peerId, "peer-p.search")]);
+      });
+    const subscribe = vi
+      .spyOn(client, "subscribe")
+      .mockImplementation(() => eventStream.subscription);
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "desktop-thin",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: fakeThinPeer({ status: "authorized", state: "authorized" }),
+      localAssistant: {
+        provider: {
+          complete: async () => ({ type: "message", content: "Ready." }),
+        },
+      },
+    };
+    window.history.replaceState({}, "", "/assistant");
+
+    const mounted = await mountOutcomeApp(runtime);
+    let cleaned = false;
+    try {
+      await waitUntil(() => expect(subscribe).toHaveBeenCalledTimes(1));
+      eventStream.emit(
+        projectionInvalidationEvent({
+          providerPeerId: "peer-p",
+          sourcePeerId: "peer-p",
+          targetPeerId: "local-peer",
+        }),
+      );
+      await waitUntil(() =>
+        expect(getExportCatalogFromPeer).toHaveBeenCalledTimes(1),
+      );
+      expect(getExportCatalog).toHaveBeenCalledTimes(1);
+      expect(getExportCatalogFromPeer).toHaveBeenCalledWith("peer-p", {
+        protocol_tier: "projection_v1",
+        page_size: 100,
+        cursor: null,
+        last_projection_revision: null,
+        last_projection_digest: null,
+      });
+
+      await act(async () => {
+        mounted.root.unmount();
+        await flushReactWork();
+      });
+      mounted.container.remove();
+      cleaned = true;
+      eventStream.emit(
+        projectionInvalidationEvent({
+          providerPeerId: "peer-p",
+          sourcePeerId: "peer-p",
+          targetPeerId: "local-peer",
+          correlationId: "after-unmount",
+        }),
+      );
+      await flushReactWork();
+      expect(eventStream.closeCount).toBe(1);
+      expect(getExportCatalogFromPeer).toHaveBeenCalledTimes(1);
+    } finally {
+      if (!cleaned) {
+        await act(async () => mounted.root.unmount());
+        mounted.container.remove();
+      }
+    }
   });
 
   it("refreshes the shell when a thin peer becomes authorized without a local assistant", async () => {

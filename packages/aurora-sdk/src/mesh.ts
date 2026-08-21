@@ -206,6 +206,54 @@ export class MeshP2PTransport implements AuroraTransport {
     }
   }
 
+  async requestPeer<TData = unknown, TPayload = unknown>(
+    peerId: string,
+    request: AuroraTransportRequest<TPayload>
+  ): Promise<AuroraTransportResponse<TData>> {
+    const topic = request.busTopic ?? request.method
+    const normalizedPeerId = normalizePeerId(peerId)
+    const resolution: MeshRouteResolution = {
+      peerId: normalizedPeerId,
+      candidates: [{ peerId: normalizedPeerId }]
+    }
+    const candidates = normalizeCandidates(resolution, this.fallbackPeerIds)
+    const callRequest: MeshRpcRequest<TPayload> = {
+      peerId: normalizedPeerId,
+      method: request.method,
+      busTopic: topic,
+      payload: request.payload,
+      timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
+      candidates
+    }
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
+    if (request.audit) callRequest.audit = request.audit
+
+    try {
+      const response = await this.bridge.call<TPayload>(callRequest)
+      const envelope = toMeshEnvelope<TData>(response, request, normalizedPeerId, candidates)
+      if (envelope.error !== undefined) throw meshError(classifyMeshError(envelope.error), readMeshErrorMessage(envelope.error), request, envelope.error)
+      return {
+        data: envelope.data as TData,
+        status: envelope.status,
+        headers: envelope.headers,
+        audit: {
+          ...envelope.audit,
+          method: envelope.audit?.method ?? request.method,
+          busTopic: envelope.audit?.busTopic ?? topic,
+          targetPeerId: envelope.audit?.targetPeerId ?? envelope.targetPeerId ?? normalizedPeerId,
+          peerId: envelope.audit?.peerId ?? envelope.peerId ?? null,
+          transport: this.kind,
+          status: envelope.audit?.status ?? readStatus(envelope.status)
+        }
+      }
+    } catch (error) {
+      if (error instanceof AuroraError) throw error
+      throw normalizeMeshTransportError(error, request)
+    }
+  }
+
   getManifest(peerId: string): Promise<MeshPeerManifest | null> {
     if (!this.bridge.getManifest) {
       throw new AuroraError({
@@ -328,6 +376,17 @@ export class MeshP2PTransport implements AuroraTransport {
       candidates
     }
   }
+}
+
+function normalizePeerId(peerId: string): string {
+  if (typeof peerId !== 'string' || peerId.length === 0) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'Mesh peer id is required for exact-peer dispatch.',
+      detail: { reason_code: 'missing_peer_id' }
+    })
+  }
+  return peerId
 }
 
 async function* normalizeMeshEvents<TPayload>(

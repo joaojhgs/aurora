@@ -77,7 +77,10 @@ import type { EnvelopeCryptoPort, LocalDataSession } from "@aurora/client/local-
 import {
   createAuroraInferenceProvider,
   loadLightweightRemoteProjectionCatalog,
+  subscribeLightweightRemoteProjectionInvalidations,
   type LightweightAssistantProvider,
+  type LightweightProjectionInvalidationSubscription,
+  type LightweightRemoteProjectionCatalogSnapshot,
 } from "@aurora/client/lightweight-orchestrator";
 import type {
   LocalFeatureSharingPort,
@@ -521,6 +524,36 @@ export async function loadTauriRemoteAssistantTools(
     }
   }
   return [];
+}
+
+export function startTauriRemoteAssistantToolInvalidationRefresh(
+  runtime: AuroraTauriRuntime,
+  options: {
+    readonly onSnapshot: (
+      snapshot: LightweightRemoteProjectionCatalogSnapshot,
+    ) => void | Promise<void>;
+    readonly onError?: (error: unknown) => void;
+    readonly previousSnapshotForPeer?: (
+      peerId: string,
+    ) => LightweightRemoteProjectionCatalogSnapshot | null | undefined;
+  },
+): LightweightProjectionInvalidationSubscription | null {
+  if (!runtime.localAssistant && !runtime.localToolProvider) return null;
+  return subscribeLightweightRemoteProjectionInvalidations({
+    events: {
+      subscribe: (request) => runtime.client.subscribe(request),
+    },
+    pageSize: 100,
+    maxPages: 16,
+    catalogClientForPeer: (peerId) => ({
+      getExportCatalog: (payload) =>
+        runtime.client.tools.getExportCatalogFromPeer(peerId, payload),
+    }),
+    previousSnapshotForPeer: (peerId) =>
+      options.previousSnapshotForPeer?.(peerId) ?? null,
+    onSnapshot: options.onSnapshot,
+    onError: options.onError,
+  });
 }
 
 function connectedAuroraInferenceAssistant(
