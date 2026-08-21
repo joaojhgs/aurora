@@ -23,9 +23,53 @@ The durable ledger is `omc ultragoal`, plan id
 
 ### M7 (R6 + R7) — the state you are inheriting
 
-An agent was mid-implementation at handoff. **Check `git status` and `git log` first**: it may
-have committed some slices, may have left a dirty tree, or may have left nothing. Do not assume.
-Its brief was:
+The M7 agent was **stopped mid-implementation** when the budget ran out. It committed
+**nothing**. All of its work is uncommitted in the working tree — 11 files, +339/-6. Inspected
+directly rather than taken on report:
+
+```
+app/services/gateway/mesh/models.py                | 16 +++-
+app/services/gateway/mesh/peer_registry.py         | 60 ++++++++++++++-
+app/services/gateway/webrtc/peer_protocol.py       | 86 ++++++++++++++++++++++
+app/services/gateway/webrtc/protocol_contract.py   |  8 ++
+app/services/gateway/webrtc/rtc_client.py          | 33 +++++++++
+packages/aurora-sdk/src/webrtc-protocol-contract.ts | 10 ++-
+packages/aurora-sdk/src/webrtc/index.ts            |  7 ++
+packages/aurora-sdk/src/webrtc/mesh-peer-bridge.ts | 36 ++++++++-
+packages/aurora-sdk/src/webrtc/protocol.ts         | 83 ++++++++++++++++++++-
+rust/crates/aurora-mesh-session/src/ownership.rs   |  5 ++
+rust/crates/aurora-mesh-session/tests/session_liveness.rs | 1 +
+```
+
+**What it had designed, and it is a good design — keep it rather than restart:**
+
+- The signal is a new frame type `mesh_peer_standby_v1` (`MESH_PEER_STANDBY_TYPE` in
+  `protocol.ts`), carrying a `MeshPeerStandbyReason` of `connection_budget` (R6's shed),
+  `surface_suspended` (R7's iOS path) or `user_requested` (a person disconnecting on purpose).
+  All three mean the same thing to the peer left behind: the absence is deliberate, the
+  credential stays valid, and returning is a reconnect rather than a pairing.
+- `resume_expected` was added as a **new optional field** rather than a meaning loaded onto an
+  existing one, explicitly following the precedent R3 set with `retry_when` on the deferral
+  body — additive, so a peer that has never heard of it still reads a well-formed frame.
+- Python gains a `"standby"` peer status alongside `stale`, with a comment recording why they
+  must not be collapsed: a shed peer announced itself and is expected back, a stale peer stopped
+  answering and may be gone; collapsing them makes a shed indistinguishable from a loss, which
+  is the whole point of the signal.
+- It reasoned explicitly that neither silence nor `provider_unavailable` can carry this —
+  silence is exactly what a lost peer produces, and `provider_unavailable` says the provider is
+  gone and the caller should stop routing, a different claim.
+
+**State of the tree, verified not assumed:** all four changed Python files parse. Nothing is
+known to be broken. But **none of it has been run** — no test was executed against it, the
+cross-language fixtures were **not** regenerated, and invariant #8's three-property test does
+not exist yet. Treat it as a coherent design, complete on the contract-definition side, and
+entirely unverified.
+
+**What was clearly not reached:** the budget defaults and priority ordering
+(`peer-registry.ts` is untouched), invariant #8's test, R7's iOS profile beyond the
+`surface_suspended` reason existing, and the fixture regeneration.
+
+Its original brief was:
 
 - **R6 budget**: keyed by surface and lifecycle. Keep the plan's starting defaults — mobile 8
   foreground / 2 background, desktop unbounded — because R5 only ran on Waydroid, where battery
