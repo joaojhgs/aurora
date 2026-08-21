@@ -299,6 +299,11 @@ describe('mesh-node local Tooling provider composition', () => {
       topics: ['Tooling.ProjectionInvalidated'],
       correlationIds: [],
       ttlSeconds: 60,
+      identity: {
+        callerPeerId: 'peer-a',
+        effectivePermissions: ['Tooling.ProjectionInvalidated'],
+        authGrantRevision: 5
+      },
       signal: abort.signal,
       receivedAtMs: 1_000,
       emit: async (payload) => {
@@ -316,7 +321,8 @@ describe('mesh-node local Tooling provider composition', () => {
       provider_peer_id: 'provider',
       service_instance_id: 'local:provider:Tooling',
       reason_code: 'projection_changed',
-      correlation_id: 'sub-1:event-1'
+      correlation_id: 'sub-1:event-1',
+      authority_revision: expect.objectContaining({ auth_grant_revision: 5 })
     })
     expect(JSON.stringify(emitted[0])).not.toContain('tools')
     await handle?.close('test')

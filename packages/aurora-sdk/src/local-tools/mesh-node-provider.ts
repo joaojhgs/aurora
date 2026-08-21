@@ -205,7 +205,7 @@ function createProjectionInvalidatedHandler(options: {
           authority_revision: authorityRevision({
             catalogRevision,
             exportPolicyRevision,
-            authGrantRevision: context.authenticatedPeerContext?.credentialRevision,
+            authGrantRevision: context.identity?.authGrantRevision,
             manifestRevision: null
           }),
           reason_code: reasonCode,

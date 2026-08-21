@@ -633,6 +633,57 @@ describe('WebRtcPeerHost', () => {
     expect(peerHost.getActiveWorkCount()).toBe(0)
   })
 
+  it('passes the event authorization grant revision to subscription handlers', async () => {
+    let subscriptionContext: Parameters<NonNullable<ReturnType<PeerHostContractRegistry['getEvent']>>['handler']>[0] | undefined
+    const registry = new PeerHostContractRegistry().register({
+      methodId: 'Tooling.GetTools',
+      methodType: 'unary',
+      inputSchemaId: 'Tooling.GetTools.input',
+      outputSchemaId: 'Tooling.GetTools.output',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      requiredPermissions: ['Tooling.GetTools'],
+      handler: async () => ({ count: 0, tools: [] })
+    }).registerEvent({
+      topic: 'Tooling.ProjectionInvalidated',
+      outputSchemaId: 'Tooling.ProjectionInvalidated.output',
+      outputSchema: z.object({ provider_peer_id: z.string() }),
+      requiredPermissions: ['Tooling.ProjectionInvalidated'],
+      handler: (context) => {
+        subscriptionContext = context
+      }
+    })
+    const peerHost = new WebRtcPeerHost({
+      localPeerId: 'local-peer',
+      nodeName: 'Local',
+      registry,
+      authorizationStore: allowMethods({
+        claimantPeerId: 'peer-a',
+        methodIds: ['Tooling.GetTools', 'Tooling.ProjectionInvalidated'],
+        grantRevision: 7
+      }),
+      clock: () => 1000,
+      randomId: () => 'epoch-1'
+    })
+    peerHost.attach({ sendFrame: async () => undefined }, 'peer-a')
+    const manifest = await peerHost.startEpoch('peer-a', authenticatedContext())
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(manifest), 'peer-a')).toBe(true)
+
+    await peerHost.handleSubscribe({
+      type: 'subscribe',
+      id: 'grant-aware-subscription',
+      topics: ['Tooling.ProjectionInvalidated'],
+      correlation_ids: [],
+      ttl_seconds: 60
+    }, 'peer-a', authenticatedContext())
+
+    expect(subscriptionContext?.identity).toMatchObject({
+      callerPeerId: 'peer-a',
+      authGrantRevision: 7
+    })
+    peerHost.handleDisconnect('test_complete', 'peer-a')
+  })
+
   it('preserves active subscription ownership when duplicate work IDs collide', async () => {
     const handler = vi.fn(async () => ({ count: 0, tools: [] }))
     const close = vi.fn()

@@ -683,6 +683,7 @@ export class WebRtcPeerHost {
     // is enforced per topic by authorizationStore.authorize below.
     const nowMs = Math.floor(this.options.clock())
     const identity = identityFromAuthority(epochContext, undefined, remotePeerId)
+    const eventAuthorizationDecisions = new Map<string, PeerHostAuthorizationDecision>()
     for (const event of events as PeerHostEventDescriptor[]) {
       const authorizeRequest = {
         remotePeerId,
@@ -697,6 +698,7 @@ export class WebRtcPeerHost {
         await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: decision.reasonCode ?? 'not_authorized', rejected_topics: frame.topics })
         return
       }
+      eventAuthorizationDecisions.set(event.topic, decision)
     }
     for (const event of events as PeerHostEventDescriptor[]) {
       const ttlSeconds = frame.ttl_seconds ?? 60
@@ -738,10 +740,18 @@ export class WebRtcPeerHost {
     try {
       for (const event of events as PeerHostEventDescriptor[]) {
         const ttlSeconds = frame.ttl_seconds ?? 60
+        const decision = eventAuthorizationDecisions.get(event.topic)
         const subscribeContext = {
           id: frame.id,
           topic: event.topic,
           remotePeerId,
+          identity: identityFromAuthority(
+            epochContext,
+            undefined,
+            remotePeerId,
+            decision,
+            decision?.grantedPermissions ?? []
+          ),
           topics: frame.topics,
           correlationIds: frame.correlation_ids ?? [],
           ttlSeconds,

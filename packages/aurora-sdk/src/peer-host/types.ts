@@ -43,6 +43,8 @@ export interface PeerHostSubscribeContext<TEvent = unknown> {
   readonly id: string
   readonly topic: string
   readonly remotePeerId: string
+  /** Authority-derived identity for this exact event subscription. */
+  readonly identity?: PeerHostIdentity
   readonly authenticatedPeerContext?: AuthenticatedPeerContext
   readonly topics: readonly string[]
   readonly correlationIds: readonly string[]
