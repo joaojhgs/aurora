@@ -16,6 +16,7 @@ import type {
   PeerGrantManagerPort,
   PeerPairingIssuerPort,
   PeerRevocationController,
+  RustAuthorityAuditFailureReporter,
   WasmAuthorityLike,
 } from '@aurora/client/webrtc'
 import {
@@ -64,7 +65,18 @@ export interface BrowserMeshNodeServicesOptions {
   readonly randomId?: (() => string) | undefined
   readonly randomBytes?: ((length: number) => Uint8Array) | undefined
   readonly authorityWasmSource?: MeshAuthorityWasmSource | undefined
+  readonly reportAuthorityAuditFailure?: RustAuthorityAuditFailureReporter | undefined
+  readonly reportProviderRefreshFailure?: BrowserProviderRefreshFailureReporter | undefined
 }
+
+export interface BrowserProviderRefreshFailure {
+  readonly code: 'provider_manifest_refresh_failed'
+  readonly attempts: 2
+}
+
+export type BrowserProviderRefreshFailureReporter = (
+  failure: BrowserProviderRefreshFailure,
+) => void
 
 export interface BrowserLocalDataAuthority {
   readonly backend: LocalDataBackend
@@ -197,6 +209,7 @@ export async function createBrowserMeshNodeServices(
         now: options.nowMs ?? Date.now,
       }),
       auditSink,
+      options.reportAuthorityAuditFailure ?? reportBrowserAuthorityAuditFailure,
     )
     const resolver = authorizationStore.asResolverPort()
     const pairingIssuer: PeerPairingIssuerPort = authorizationStore.asPairingIssuerPort(
@@ -265,10 +278,25 @@ export async function createBrowserMeshNodeServices(
     }
     let providerRefreshClosed = false
     let providerRefreshQueue = Promise.resolve()
+    const reportProviderRefreshFailure = options.reportProviderRefreshFailure
+      ?? reportBrowserProviderRefreshFailure
     const scheduleProviderRefresh = () => {
       providerRefreshQueue = providerRefreshQueue.then(async () => {
         if (providerRefreshClosed) return
-        await provider.peerHost.resumeLocalProvider().catch(() => undefined)
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try {
+            await provider.peerHost.resumeLocalProvider()
+            return
+          } catch {
+            if (providerRefreshClosed) return
+            if (attempt === 2) {
+              reportFailureSafely(reportProviderRefreshFailure, {
+                code: 'provider_manifest_refresh_failed',
+                attempts: 2,
+              })
+            }
+          }
+        }
       })
     }
     let initialFeatureSnapshotSeen = false
@@ -328,6 +356,26 @@ export async function createBrowserMeshNodeServices(
       throw failedCompositionError('local_data_owned_elsewhere')
     }
     throw failedCompositionError('composition_failed')
+  }
+}
+
+function reportBrowserAuthorityAuditFailure(
+  failure: Parameters<RustAuthorityAuditFailureReporter>[0],
+): void {
+  console.warn('Aurora authority audit records could not be saved', failure)
+}
+
+function reportBrowserProviderRefreshFailure(
+  failure: BrowserProviderRefreshFailure,
+): void {
+  console.warn('Aurora sharing details could not be refreshed', failure)
+}
+
+function reportFailureSafely<T>(report: (failure: T) => void, failure: T): void {
+  try {
+    report(failure)
+  } catch {
+    // Diagnostics must not break the serialized refresh queue.
   }
 }
 

@@ -171,7 +171,8 @@ describe('Rust-backed peer host authorization store', () => {
       'hydrationByRelationship',
       'loadHydration',
       'port',
-      'projectPermissions'
+      'projectPermissions',
+      'reportAuditFailure'
     ])
     expect(
       (store as unknown as { hydrationByRelationship: Map<string, Promise<void>> })
@@ -242,5 +243,76 @@ describe('Rust-backed peer host authorization store', () => {
     })
     expect(loadHydration).toHaveBeenCalledTimes(2)
     expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports audit persistence failure without changing or exposing the decision', async () => {
+    const reportAuditFailure = vi.fn()
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false, reasonCode: 'method_not_granted' }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        drainAuditRecords: () => [{
+          action: 'grant.check',
+          selector: SELECTOR,
+          decision: 'rejected',
+          authorityState: 'active',
+          createdAtMs: 2_000,
+          redacted: true,
+          redactedFields: []
+        }]
+      }),
+      undefined,
+      undefined,
+      { record: async () => { throw new Error('secret audit storage path') } },
+      reportAuditFailure
+    )
+
+    await expect(store.authorize(AUTHORIZE_REQUEST)).resolves.toEqual({
+      allowed: false,
+      reasonCode: 'method_not_granted'
+    })
+    expect(reportAuditFailure).toHaveBeenCalledOnce()
+    expect(reportAuditFailure).toHaveBeenCalledWith({
+      code: 'authority_audit_persist_failed',
+      droppedRecordCount: 1
+    })
+    expect(JSON.stringify(reportAuditFailure.mock.calls)).not.toMatch(
+      /secret|peer-a|token-a|lab-room/u
+    )
+  })
+
+  it('reports audit drain failure without changing or exposing the decision', async () => {
+    const reportAuditFailure = vi.fn()
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: true, grantedMethodIds: ['Tooling.GetTools'] }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        drainAuditRecords: () => { throw new Error('secret authority state') }
+      }),
+      undefined,
+      undefined,
+      { record: async () => undefined },
+      reportAuditFailure
+    )
+
+    await expect(store.authorize(AUTHORIZE_REQUEST)).resolves.toMatchObject({ allowed: true })
+    expect(reportAuditFailure).toHaveBeenCalledWith({
+      code: 'authority_audit_drain_failed'
+    })
+    expect(JSON.stringify(reportAuditFailure.mock.calls)).not.toMatch(
+      /secret|peer-a|token-a|lab-room/u
+    )
   })
 })

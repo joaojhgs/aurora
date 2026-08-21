@@ -299,6 +299,15 @@ describe("Tauri application product copy", () => {
         assistantNativePermissions: [],
         assistantNativeCapabilities: [],
       } as never),
+      tauriRouteRegistry.admin({
+        route: routeFor("admin"),
+        snapshot,
+        nativeContext,
+        client,
+        shutdown: async () => undefined,
+        assistantNativePermissions: [],
+        assistantNativeCapabilities: [],
+      } as never),
       <MissingTauriRoute route={hostileRoute()} />,
       tauriRouteRegistry.native({
         snapshot,

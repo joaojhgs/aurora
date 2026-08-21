@@ -2128,13 +2128,12 @@ function embeddedRoute(
   return {
     item: navItemSnapshot(item),
     state: unavailableFallbackState(item),
-    explanation:
-      "Embedded route state is unavailable until the backend snapshot reports this capability.",
-    providerLabel: "embedded route unavailable",
+    explanation: "This page is still starting. Try again in a moment.",
+    providerLabel: "Not ready yet",
     blockers: [],
     repairActions: [],
     candidateProviders: [],
-    evidenceSources: ["embedded route fallback"],
+    evidenceSources: ["Page is starting"],
     selectorRequired: false,
     approvalRequired: item.adminGated ?? false,
     routeable: false,

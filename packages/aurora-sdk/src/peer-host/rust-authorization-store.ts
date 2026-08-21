@@ -93,6 +93,14 @@ export type RustAuthorityHydrationLoader = (
   selector: PeerRelationshipSelector
 ) => Promise<RustAuthorityHydration>
 
+/** Payload-free signal emitted when drained authority audit rows are lost. */
+export interface RustAuthorityAuditFailure {
+  readonly code: 'authority_audit_drain_failed' | 'authority_audit_persist_failed'
+  readonly droppedRecordCount?: number
+}
+
+export type RustAuthorityAuditFailureReporter = (failure: RustAuthorityAuditFailure) => void
+
 /** The subset of the Rust authority this store dispatches to. */
 export interface RustAuthorityPort {
   hydrate(hydration: RustAuthorityHydration): Promise<void>
@@ -381,7 +389,8 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
     private readonly port: RustAuthorityPort,
     private readonly projectPermissions?: GrantedPermissionsProjection,
     private readonly loadHydration?: RustAuthorityHydrationLoader,
-    private readonly auditSink?: PeerAuditSink
+    private readonly auditSink?: PeerAuditSink,
+    private readonly reportAuditFailure?: RustAuthorityAuditFailureReporter
   ) {}
 
   /**
@@ -394,12 +403,31 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
    */
   private async drainAudit(): Promise<void> {
     if (this.auditSink === undefined) return
+    let records: readonly LocalPeerAuditRecord[]
     try {
-      for (const record of await this.port.drainAuditRecords()) {
-        await this.auditSink.record(record)
-      }
+      records = await this.port.drainAuditRecords()
     } catch {
-      // Losing an audit row must not change a decision.
+      this.reportAuditLoss({ code: 'authority_audit_drain_failed' })
+      return
+    }
+    for (const [index, record] of records.entries()) {
+      try {
+        await this.auditSink.record(record)
+      } catch {
+        this.reportAuditLoss({
+          code: 'authority_audit_persist_failed',
+          droppedRecordCount: records.length - index
+        })
+        return
+      }
+    }
+  }
+
+  private reportAuditLoss(failure: RustAuthorityAuditFailure): void {
+    try {
+      this.reportAuditFailure?.(failure)
+    } catch {
+      // Reporting an audit loss must not change the authority's decision.
     }
   }
 

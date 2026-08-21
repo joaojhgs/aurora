@@ -301,6 +301,45 @@ describe('browser mesh-node service composition', () => {
     expect(maxActiveResumes).toBe(1)
     await services.close()
   })
+
+  it('retries a failed provider refresh once and reports only a stable failure code', async () => {
+    const reportProviderRefreshFailure = vi.fn()
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: durableCredentialStore(),
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(new PersistentMemoryLocalDataBackend()),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'id-1',
+      randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
+      reportProviderRefreshFailure,
+    })
+    const resume = vi
+      .spyOn(services.provider.peerHost, 'resumeLocalProvider')
+      .mockRejectedValue(new Error('secret provider refresh details'))
+
+    await services.localFeatureSharing.setFeatureEnabled(
+      'aurora.local.native.get_device_status.v1',
+      true,
+    )
+
+    await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2))
+    expect(reportProviderRefreshFailure).toHaveBeenCalledOnce()
+    expect(reportProviderRefreshFailure).toHaveBeenCalledWith({
+      code: 'provider_manifest_refresh_failed',
+      attempts: 2,
+    })
+    expect(JSON.stringify(reportProviderRefreshFailure.mock.calls)).not.toContain('secret')
+    await services.close()
+  })
 })
 
 const AUTHORITY_WASM_DIR = resolve(

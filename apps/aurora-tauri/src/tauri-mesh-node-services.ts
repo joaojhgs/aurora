@@ -25,6 +25,7 @@ import {
   SecureInboundCredentialVerifierStore,
   type InboundVerifierSecretStoragePort,
   type PeerGrantRepository,
+  type RustAuthorityAuditFailureReporter,
 } from "@aurora/client/webrtc";
 import {
   DurableFeatureSharingController,
@@ -65,6 +66,7 @@ export interface TauriMeshNodeServicesOptions {
   readonly exportDecision?: LocalToolExportDecisionPort | undefined;
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined;
   readonly invokeCommand?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+  readonly reportAuthorityAuditFailure?: RustAuthorityAuditFailureReporter | undefined;
 }
 
 export type TauriMeshNodeServicesDisabledReason =
@@ -254,6 +256,7 @@ export async function createTauriMeshNodeServices(
       // The authority records what it decided; persisting those rows stays here,
       // because the durable store is TypeScript's.
       auditSink,
+      options.reportAuthorityAuditFailure ?? reportTauriAuthorityAuditFailure,
     );
     const nowMs = options.now ?? (() => Date.now());
     const authorityResolver = authorizationStore.asResolverPort();
@@ -375,6 +378,12 @@ export async function createTauriMeshNodeServices(
       registeredToolIds: registered.registered,
     });
   }
+}
+
+function reportTauriAuthorityAuditFailure(
+  failure: Parameters<RustAuthorityAuditFailureReporter>[0],
+): void {
+  console.warn("Aurora authority audit records could not be saved", failure);
 }
 
 function disabled(

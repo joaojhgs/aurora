@@ -211,30 +211,43 @@ const browserWasmSource: MeshAuthorityWasmSource = {
     await import('./wasm/aurora_mesh_authority.js')
 }
 
-let modulePromise: Promise<MeshAuthorityModule> | undefined
+const modulePromises = new WeakMap<
+  MeshAuthorityWasmSource,
+  Promise<MeshAuthorityModule>
+>()
 
 /**
- * Load the authority's WebAssembly bindings once per process.
+ * Load the authority's WebAssembly bindings once per source.
  *
- * Idempotent: repeated calls share one instantiation, because the generated
- * module is a singleton and re-initialising it would reset every authority
- * built on top of it.
+ * Idempotent for a source: repeated calls share one instantiation, because a
+ * generated module is a singleton and re-initialising it would reset every
+ * authority built on top of it. Distinct injected sources remain isolated, and
+ * a failed load is removed so a transient fetch/import failure can be retried.
  */
 export async function loadMeshAuthorityModule(
   source: MeshAuthorityWasmSource = browserWasmSource
 ): Promise<MeshAuthorityModule> {
-  if (modulePromise === undefined) {
-    modulePromise = (async () => {
-      const bindings = (await source.importBindings()) as MeshAuthorityModule
-      if (source.wasmBytes === undefined) {
-        await bindings.default()
-      } else {
-        await bindings.default({ module_or_path: await source.wasmBytes() })
-      }
-      return bindings
-    })()
+  const existing = modulePromises.get(source)
+  if (existing !== undefined) return await existing
+
+  const loading = (async () => {
+    const bindings = (await source.importBindings()) as MeshAuthorityModule
+    if (source.wasmBytes === undefined) {
+      await bindings.default()
+    } else {
+      await bindings.default({ module_or_path: await source.wasmBytes() })
+    }
+    return bindings
+  })()
+  modulePromises.set(source, loading)
+  try {
+    return await loading
+  } catch (error) {
+    if (modulePromises.get(source) === loading) {
+      modulePromises.delete(source)
+    }
+    throw error
   }
-  return await modulePromise
 }
 
 /**

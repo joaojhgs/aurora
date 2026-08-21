@@ -10,6 +10,8 @@ export {
 } from './rust-authorization-store.js'
 export type {
   GrantedPermissionsProjection,
+  RustAuthorityAuditFailure,
+  RustAuthorityAuditFailureReporter,
   RustAuthorityHydration,
   RustAuthorityHydrationLoader,
   RustAuthorityPort,

@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { WasmPeerHostAuthorizationStore } from '../src/index.js'
+import { WasmPeerHostAuthorizationStore, loadMeshAuthorityModule } from '../src/index.js'
 import type {
   LocalPeerGrantV1,
   MeshAuthorityWasmSource,
@@ -65,6 +65,36 @@ describe('WASM mesh authority', () => {
   beforeAll(async () => {
     // Fails loudly with a clear message when dist/wasm has not been built.
     await WasmPeerHostAuthorizationStore.create(nodeWasmSource)
+  })
+
+  it('caches bindings per source and retries a transient source failure', async () => {
+    const moduleA = fakeAuthorityModule()
+    const moduleB = fakeAuthorityModule()
+    const importA = vi.fn(async () => moduleA)
+    const importB = vi.fn(async () => moduleB)
+    const sourceA = { importBindings: importA }
+    const sourceB = { importBindings: importB }
+
+    const [loadedA1, loadedA2, loadedB] = await Promise.all([
+      loadMeshAuthorityModule(sourceA),
+      loadMeshAuthorityModule(sourceA),
+      loadMeshAuthorityModule(sourceB)
+    ])
+
+    expect(loadedA1).toBe(moduleA)
+    expect(loadedA2).toBe(moduleA)
+    expect(loadedB).toBe(moduleB)
+    expect(importA).toHaveBeenCalledOnce()
+    expect(importB).toHaveBeenCalledOnce()
+
+    const retryModule = fakeAuthorityModule()
+    const retryImport = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary source failure'))
+      .mockResolvedValueOnce(retryModule)
+    const retrySource = { importBindings: retryImport }
+    await expect(loadMeshAuthorityModule(retrySource)).rejects.toThrow('temporary source failure')
+    await expect(loadMeshAuthorityModule(retrySource)).resolves.toBe(retryModule)
+    expect(retryImport).toHaveBeenCalledTimes(2)
   })
 
   it('loads the compiled bindings and answers a permission question', async () => {
@@ -280,6 +310,13 @@ describe('WASM mesh authority', () => {
     }
   })
 })
+
+function fakeAuthorityModule() {
+  return {
+    default: vi.fn(async () => undefined),
+    MeshAuthority: class {}
+  }
+}
 
 describe('WASM mesh authority invariants', () => {
   it('never lets an authority context cross peers', async () => {
