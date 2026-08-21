@@ -307,6 +307,9 @@ export class WebRtcPeerHost {
   async resumeLocalProvider(): Promise<void> {
     const peerIds = this.recipientPeerIds()
     if (peerIds.length === 0) {
+      // Local settings may change before any transport exists. The first
+      // startEpoch() will build a manifest from the latest authority state.
+      if (!this.sender) return
       await this.requireSender().sendFrame(await this.resume())
       return
     }
@@ -333,6 +336,7 @@ export class WebRtcPeerHost {
   async suspendLocalProvider(reason = 'provider_unavailable'): Promise<void> {
     const peerIds = this.recipientPeerIds()
     if (peerIds.length === 0) {
+      if (!this.sender) return
       await this.requireSender().sendFrame(this.suspend(reason))
       return
     }

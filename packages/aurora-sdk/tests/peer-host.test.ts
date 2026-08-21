@@ -1622,6 +1622,21 @@ describe('WebRtcPeerHost serving several peers', () => {
     expect(toB).toHaveLength(0)
   })
 
+  it('treats provider lifecycle changes before transport attachment as a no-op', async () => {
+    const { peerHost } = multiPeerHost()
+    peerHost.detach('peer-a')
+    peerHost.detach('peer-b')
+
+    await expect(peerHost.resumeLocalProvider()).resolves.toBeUndefined()
+    await expect(peerHost.suspendLocalProvider('settings_changed')).resolves.toBeUndefined()
+
+    const sent: unknown[] = []
+    peerHost.attach({ sendFrame: async (frame) => { sent.push(frame) } })
+    await peerHost.resumeLocalProvider()
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ type: 'manifest' })
+  })
+
   it('answers a second peer down its own channel', async () => {
     const { peerHost, toA, toB } = multiPeerHost()
 
