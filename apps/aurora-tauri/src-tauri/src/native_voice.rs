@@ -3321,7 +3321,7 @@ mod tests {
     fn remote_microphone_consent_is_checked_before_credentials() {
         let document = test_runtime_profile_document("http-only", Some("home-peer"));
         let credential_loader_called = Cell::new(false);
-        let error = resolve_start_profile_from_document(
+        let error = match resolve_start_profile_from_document(
             &document,
             false,
             false,
@@ -3330,8 +3330,10 @@ mod tests {
                 None
             },
             || 10,
-        )
-        .expect_err("remote microphone capture must require consent");
+        ) {
+            Ok(_) => panic!("remote microphone capture must require consent"),
+            Err(error) => error,
+        };
 
         assert_eq!(error.code, "invalid_state");
         assert_eq!(error.reason_code, REMOTE_CONSENT_REASON);
