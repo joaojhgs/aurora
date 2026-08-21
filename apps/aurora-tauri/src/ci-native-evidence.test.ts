@@ -787,17 +787,28 @@ describe('Tauri CI native evidence contract', () => {
       '.github/workflows/tauri-desktop.yml',
     )
 
-    const linuxDependencies =
-      cargo.match(
-        /\[target\.'cfg\(target_os = "linux"\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
-      )?.[1] ?? ''
+    // R1 moved the transport off the Linux-only block: the gate was never about
+    // Linux, it was about WebKitGTK lacking RTCPeerConnection, and that gate was
+    // also what kept mobile on a webview that cannot survive the background.
+    // Pin the wider block, and pin that mobile is inside it.
+    const nativeTransportBlock = cargo.match(
+      /\[target\.'cfg\(any\(([^)]*target_os = "android"[^)]*)\)\)'\.dependencies\]([\s\S]*?)(?=\n\[|$)/,
+    )
+    const nativeTransportCfg = nativeTransportBlock?.[1] ?? ''
+    const nativeTransportDependencies = nativeTransportBlock?.[2] ?? ''
     const commonDependencies =
       cargo.match(/\[dependencies\]([\s\S]*?)(?=\n\[|$)/)?.[1] ?? ''
-    expect(linuxDependencies).toContain('webrtc = "0.11.0"')
-    expect(`${commonDependencies}\n${linuxDependencies}`).toContain(
+    expect(nativeTransportDependencies).toContain('webrtc = "0.11.0"')
+    expect(`${commonDependencies}\n${nativeTransportDependencies}`).toContain(
       'base64 = "=0.22.1"',
     )
-    expect(linuxDependencies).toContain('bytes = "1"')
+    expect(nativeTransportDependencies).toContain('bytes = "1"')
+    for (const target of ['linux', 'macos', 'windows', 'android', 'ios']) {
+      expect(nativeTransportCfg, `native transport must build for ${target}`).toContain(
+        `target_os = "${target}"`,
+      )
+    }
+    expect(cargo).not.toContain(`[target.'cfg(target_os = "linux")'.dependencies]`)
     expect(cargo).not.toContain('webkit2gtk =')
     expect(thinCapability).toContain('"aurora-native-webrtc"')
     expect(nativeWebRtcPermission).toContain(
