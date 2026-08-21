@@ -49,10 +49,16 @@ export const FOREGROUND_SERVICE_TYPE_BITS = Object.freeze({
 })
 
 /**
- * A background tool call served while the webview is frozen is R3's work, and
+ * A background tool call answered while the webview is frozen is R3's work, and
  * R3 runs in Rust, which reaches Android's log under `RustStdoutStderr`. The
- * harness counts those lines over the sampling window. Until R3 emits them the
- * count stays zero and the dimension reports why.
+ * harness counts those lines over the sampling window.
+ *
+ * R3 has landed and emits `background_tool_call` from
+ * `apps/aurora-tauri/src-tauri/src/mesh_session.rs`, once per inbound call it
+ * answers without the webview -- served, deferred or denied, because all three
+ * are the device answering while backgrounded and a denial that never reached
+ * the wire looks identical to a dead session from the other end. This pattern
+ * and that spelling are kept in step by `docs/mesh/BACKGROUND-MEASUREMENT.md`.
  */
 export const BACKGROUND_TOOL_CALL_MARKER = /RustStdoutStderr.*\bbackground[ _-]?tool[ _-]?call\b/iu
 
@@ -257,8 +263,8 @@ export function summariseScenario(scenario, deviceClass) {
     }
     : {
       status: 'not_yet_available',
-      blockedBy: 'R3',
-      reason: 'no connected-device foreground reason was held while this scenario ran, so there is no device connection whose survival could be timed',
+      blockedBy: 'no_signal_observed',
+      reason: 'no connected-device foreground reason was held while this scenario ran, so there is no device connection whose survival could be timed. R3 takes that reason on its first bound session, so this means either no session was held during the window or the build under measurement predates R3',
       probe: 'dumpsys activity services -> ServiceRecord types mask, decoded for connectedDevice',
     }
 
@@ -267,9 +273,9 @@ export function summariseScenario(scenario, deviceClass) {
     ? { status: 'measured', observed: toolCallsObserved }
     : {
       status: 'not_yet_available',
-      blockedBy: 'R3',
+      blockedBy: 'no_signal_observed',
       observed: 0,
-      reason: 'background tool serving is not implemented yet, so no served call reached the log during this window',
+      reason: 'no inbound call was answered without the webview during this window. R3 emits one line per such call, so this means either no remote call arrived while backgrounded or the build under measurement predates R3',
       probe: `logcat lines matching ${BACKGROUND_TOOL_CALL_MARKER}`,
     }
 
@@ -380,16 +386,17 @@ function enterLifecycle(serial, appId, lifecycle) {
 
 async function runScenario(serial, appId, { peerCount, lifecycle, durationSeconds, sampleIntervalSeconds }) {
   if (peerCount > 0) {
-    // Nothing can hold a device connection on the phone until R3 lands, so a
-    // scenario asking for one is recorded as unreachable rather than sampled
-    // with a peer count the harness did not actually establish.
+    // The harness does not itself establish device connections, so a scenario
+    // asking for a non-zero count is recorded as unreachable rather than
+    // sampled with a peer count it did not actually set up. Driving real peers
+    // is R6's work, which is what needs the numbers.
     return {
       peerCount,
       lifecycle,
       durationSeconds,
       status: 'not_yet_available',
-      blockedBy: 'R3',
-      reason: 'the phone cannot hold a connection to another device yet, so a scenario with a non-zero device count cannot be established',
+      blockedBy: 'no_peer_driver',
+      reason: 'this harness does not establish device connections, so a scenario with a non-zero device count cannot be labelled with a count it did not set up',
       samples: [],
     }
   }

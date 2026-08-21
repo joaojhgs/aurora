@@ -194,10 +194,12 @@ describe('android background measurement reporting', () => {
     // Absent, and it says so rather than reporting a temperature.
     expect(dimensions.thermal).toMatchObject({ status: 'not_available' })
     expect(dimensions.thermal).not.toHaveProperty('readings')
-    // R3 has not landed, so neither of its dimensions may report a number.
-    expect(dimensions.deviceLinkSurvival).toMatchObject({ status: 'not_yet_available', blockedBy: 'R3' })
+    // R3's two dimensions saw no signal in this window, so neither may report
+    // a number. Absence is reported as absence, never as a zero that reads
+    // like a measurement.
+    expect(dimensions.deviceLinkSurvival).toMatchObject({ status: 'not_yet_available', blockedBy: 'no_signal_observed' })
     expect(dimensions.deviceLinkSurvival.probe).toBeTruthy()
-    expect(dimensions.backgroundToolCalls).toMatchObject({ status: 'not_yet_available', blockedBy: 'R3', observed: 0 })
+    expect(dimensions.backgroundToolCalls).toMatchObject({ status: 'not_yet_available', blockedBy: 'no_signal_observed', observed: 0 })
   })
 
   it('starts measuring R3 dimensions the moment the signals appear', () => {
@@ -262,7 +264,7 @@ describe('android background measurement reporting', () => {
           lifecycle: 'background',
           durationSeconds: 60,
           status: 'not_yet_available',
-          blockedBy: 'R3',
+          blockedBy: 'no_peer_driver',
           reason: 'the phone cannot hold a connection to another device yet',
           samples: [],
         },
@@ -279,7 +281,7 @@ describe('android background measurement reporting', () => {
       physicalThermalReadings: false,
     })
     expect(report.caveats.length).toBeGreaterThan(0)
-    expect(report.scenarios[1]).toMatchObject({ status: 'not_yet_available', blockedBy: 'R3', dimensions: null })
+    expect(report.scenarios[1]).toMatchObject({ status: 'not_yet_available', blockedBy: 'no_peer_driver', dimensions: null })
 
     const console = summariseReportForConsole(report)
     expect(console).toContain('waydroid-container')
