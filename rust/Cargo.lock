@@ -103,6 +103,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-mesh-session"
+version = "0.1.0"
+dependencies = [
+ "aurora-mesh-authority",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "aurora-voice-core"
 version = "0.1.0"
 dependencies = [

@@ -96,6 +96,14 @@ pub struct PeerHostErrorBody {
     pub message: String,
     /// Machine-readable reason.
     pub reason_code: String,
+    /// When the caller should try again, for the retryable codes that know.
+    ///
+    /// Additive and optional, so an older peer that ignores it still sees a
+    /// well-formed error. Its only value today is `peer_foreground`, carried by
+    /// R3's orchestration deferral (`docs/mesh/NATIVE-TYPESCRIPT-BOUNDARY.md`
+    /// section 6); nothing in the authority sets it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_when: Option<String>,
     /// Opaque correlation handle for logs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_ref: Option<String>,
@@ -118,6 +126,7 @@ impl PeerHostErrorBody {
             code: error_code::NOT_AUTHORIZED,
             message: "not authorized".to_owned(),
             reason_code: reason_code.to_owned(),
+            retry_when: None,
             error_ref: None,
             schema_id: None,
             boundary: None,
@@ -132,6 +141,7 @@ impl PeerHostErrorBody {
             code: error_code::NOT_AUTHORIZED,
             message: "peer authority revoked".to_owned(),
             reason_code: reason_code::PEER_AUTHORITY_REVOKED.to_owned(),
+            retry_when: None,
             error_ref: None,
             schema_id: None,
             boundary: None,
@@ -146,6 +156,7 @@ impl PeerHostErrorBody {
             code: error_code::REQUEST_TIMEOUT,
             message: "request timed out".to_owned(),
             reason_code: reason_code::REQUEST_TIMEOUT.to_owned(),
+            retry_when: None,
             error_ref: None,
             schema_id: None,
             boundary: None,
@@ -160,6 +171,7 @@ impl PeerHostErrorBody {
             code: error_code::REQUEST_CANCELLED,
             message: "request cancelled".to_owned(),
             reason_code: reason_code::REQUEST_CANCELLED.to_owned(),
+            retry_when: None,
             error_ref: None,
             schema_id: None,
             boundary: None,

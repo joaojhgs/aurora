@@ -1,0 +1,19 @@
+[package]
+name = "aurora-mesh-session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Mesh session liveness and background frame serving: ownership, per-peer FIFO, typed deferral"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+aurora-mesh-authority = { path = "../aurora-mesh-authority" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
