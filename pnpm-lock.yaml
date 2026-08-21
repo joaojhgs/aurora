@@ -84,6 +84,9 @@ importers:
       '@aurora/client':
         specifier: workspace:*
         version: link:../../packages/aurora-sdk
+      '@aurora/mesh-authority-web':
+        specifier: workspace:*
+        version: link:../../packages/aurora-mesh-authority-web
       '@aurora/ui':
         specifier: workspace:*
         version: link:../../packages/aurora-ui
@@ -194,6 +197,15 @@ importers:
       typescript-eslint:
         specifier: ^8.50.0
         version: 8.61.1(eslint@9.39.4(jiti@2.7.0))(typescript@5.7.3)
+      vitest:
+        specifier: ^4.0.16
+        version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0))
+
+  packages/aurora-mesh-authority-web:
+    devDependencies:
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
       vitest:
         specifier: ^4.0.16
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@24.13.2)(@vitest/coverage-v8@4.1.9)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0))

@@ -291,8 +291,10 @@ export interface WasmAuthorityLike {
     reasonCode: string,
     revokedAtMs: number
   ): Promise<PeerRevocationEvent>
-  drainAuditRecords(): readonly LocalPeerAuditRecord[]
-  exportGrants(selector: PeerRelationshipSelector): readonly LocalPeerGrantV1[]
+  drainAuditRecords(): Promise<readonly LocalPeerAuditRecord[]> | readonly LocalPeerAuditRecord[]
+  exportGrants(
+    selector: PeerRelationshipSelector
+  ): Promise<readonly LocalPeerGrantV1[]> | readonly LocalPeerGrantV1[]
 }
 
 /**

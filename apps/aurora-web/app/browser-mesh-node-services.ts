@@ -13,17 +13,22 @@ import type {
   MeshNodeLocalToolProviderComposition,
 } from '@aurora/client/local-tools'
 import type {
-  PeerPairingIssuer,
-  PeerGrantManager,
+  PeerGrantManagerPort,
+  PeerPairingIssuerPort,
   PeerRevocationController,
+  WasmAuthorityLike,
 } from '@aurora/client/webrtc'
+import {
+  WasmPeerHostAuthorizationStore,
+  type MeshAuthorityWasmSource,
+} from '@aurora/mesh-authority-web'
 
 export interface BrowserMeshNodeServices {
   readonly enabled: boolean
   readonly peerHost: import('@aurora/ui').BrowserThinRuntimeConfig['peerHost']
   readonly peerAuthorityResolver: import('@aurora/ui').BrowserThinRuntimeConfig['peerAuthorityResolver']
-  readonly peerPairingIssuer: import('@aurora/ui').BrowserThinRuntimeConfig['peerPairingIssuer']
-  readonly peerGrantManager: PeerGrantManager
+  readonly peerPairingIssuer: PeerPairingIssuerPort
+  readonly peerGrantManager: PeerGrantManagerPort
   readonly peerRevocationController: PeerRevocationController
   readonly session: LocalDataSession
   readonly backend: LocalDataBackend
@@ -58,6 +63,7 @@ export interface BrowserMeshNodeServicesOptions {
   readonly nowMs?: (() => number) | undefined
   readonly randomId?: (() => string) | undefined
   readonly randomBytes?: ((length: number) => Uint8Array) | undefined
+  readonly authorityWasmSource?: MeshAuthorityWasmSource | undefined
 }
 
 export interface BrowserLocalDataAuthority {
@@ -146,6 +152,7 @@ export async function createBrowserMeshNodeServices(
 
   let backend: LocalDataBackend | null = null
   let crypto: (EnvelopeCryptoPort & { close?: () => Promise<void> }) | null = null
+  let wasmAuthority: WasmPeerHostAuthorizationStore | null = null
   try {
     const authority = await options.localDataBackendFactory(profileId, localNodeId)
     backend = authority.backend
@@ -177,35 +184,33 @@ export async function createBrowserMeshNodeServices(
       localNodeId,
       randomId: options.randomId ?? (() => randomAuditId(options.crypto ?? safeGlobalCrypto())),
     })
-    const challengeStore = new peerHost.MemoryReconnectChallengeStore(
-      options.randomBytes ? { randomBytes: options.randomBytes } : {},
+    wasmAuthority = await WasmPeerHostAuthorizationStore.create(options.authorityWasmSource)
+    const authorizationStore = new peerHost.RustPeerHostAuthorizationStore(
+      peerHost.createWasmAuthorityPort(
+        wasmAuthority as unknown as WasmAuthorityLike,
+        options.randomId,
+      ),
+      undefined,
+      peerHost.createDurableHydrationLoader({
+        verifierStore,
+        grantRepository,
+        now: options.nowMs ?? Date.now,
+      }),
+      auditSink,
     )
-    const broadcaster = new peerHost.MemoryPeerRevocationBroadcaster()
-    const resolver = new peerHost.PeerAuthorityResolver({
-      verifierStore,
-      grantRepository,
-      challengeStore,
-      auditSink,
-    })
-    const pairingIssuer = new peerHost.PeerPairingIssuer({
-      verifierStore,
-      auditSink,
-      ...(options.randomBytes ? { randomBytes: options.randomBytes } : {}),
-      now: options.nowMs ?? Date.now,
-    })
-    const revocationController = new peerHost.MemoryPeerRevocationController({
-      verifierStore,
-      grantRepository,
-      challengeStore,
-      auditSink,
+    const resolver = authorizationStore.asResolverPort()
+    const pairingIssuer: PeerPairingIssuerPort = authorizationStore.asPairingIssuerPort(
+      options.nowMs ?? Date.now,
+    )
+    const broadcaster = new peerHost.PeerRevocationHub()
+    const revocationController = authorizationStore.asRevocationControllerPort(
       broadcaster,
-      now: options.nowMs ?? Date.now,
-    })
-    const grantManager = new peerHost.PeerGrantManager({
-      repository: grantRepository,
-      now: options.nowMs ?? Date.now,
-      randomId: options.randomId,
-    })
+      options.nowMs ?? Date.now,
+    )
+    const grantManager = authorizationStore.asGrantManagerPort(
+      options.nowMs ?? Date.now,
+      grantRepository,
+    )
 
     const packFactory = options.nativeCapabilityPackFactory ?? (await import('@aurora/ui')).createBrowserNativeCapabilityPack
     const pack = packFactory({
@@ -305,11 +310,14 @@ export async function createBrowserMeshNodeServices(
         unsubscribeFeatureSharing()
         unsubscribeApprovalPolicy()
         await providerRefreshQueue
+        wasmAuthority?.free()
+        wasmAuthority = null
         await crypto?.close?.().catch(() => undefined)
         await backend?.close().catch(() => undefined)
       },
     }
   } catch (error) {
+    wasmAuthority?.free()
     await crypto?.close?.().catch(() => undefined)
     await backend?.close().catch(() => undefined)
     if (error instanceof BrowserMeshNodeCompositionError) throw error

@@ -1037,7 +1037,7 @@ function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServic
     enabled: true,
     peerHost: undefined,
     peerAuthorityResolver: undefined,
-    peerPairingIssuer: undefined,
+    peerPairingIssuer: {} as BrowserMeshNodeServices['peerPairingIssuer'],
     peerGrantManager: {} as BrowserMeshNodeServices['peerGrantManager'],
     peerRevocationController: {} as BrowserMeshNodeServices['peerRevocationController'],
     session: {} as BrowserMeshNodeServices['session'],

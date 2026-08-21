@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@aurora/client": "workspace:*",
+    "@aurora/mesh-authority-web": "workspace:*",
     "@aurora/ui": "workspace:*",
     "next": "16.2.6",
     "react": "^19",

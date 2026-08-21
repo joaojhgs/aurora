@@ -1,7 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserPersistentPeerCredentialStore, createBrowserNativeCapabilityPack, type AuroraRuntimeProfileV2 } from '@aurora/ui'
 import { MemoryLocalDataBackend, type EncryptedDataEnvelopeV1, type EnvelopeCryptoPort, type LocalDataBackend, type LocalDataBackendStatus, type LocalDataKeyPurpose, type LocalDataSession } from '@aurora/client/local-data'
 import type { LocalToolExportDecisionPort } from '@aurora/client/local-tools'
+import type { MeshAuthorityWasmSource } from '@aurora/mesh-authority-web'
 import {
   BrowserMeshNodeCompositionError,
   createBrowserMeshNodeServices,
@@ -30,6 +34,7 @@ describe('browser mesh-node service composition', () => {
       nowMs: () => 1_000,
       randomId: () => 'id-1',
       randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
     })).rejects.toMatchObject({
       name: 'BrowserMeshNodeCompositionError',
       code: 'credential_store_memory_only',
@@ -62,6 +67,7 @@ describe('browser mesh-node service composition', () => {
         .mockReturnValueOnce('audit-1')
         .mockReturnValue('epoch-1'),
       randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
     })
 
     expect(services.enabled).toBe(true)
@@ -115,11 +121,66 @@ describe('browser mesh-node service composition', () => {
       nowMs: () => 1_000,
       randomId: () => 'id-1',
       randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
     })
 
     const catalog = await dispatchExportCatalog(services)
 
     expect(catalog).toMatchObject({ tools: [] })
+    await services.close()
+  })
+
+  it('routes pairing, sharing, and revocation through the Rust WASM authority', async () => {
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: durableCredentialStore(),
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(new PersistentMemoryLocalDataBackend()),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'grant-browser-1',
+      authorityWasmSource: nodeWasmSource,
+    })
+    const selector = {
+      tokenId: 'token-browser-1',
+      claimantPeerId: 'remote-peer',
+      verifierPeerId: 'browser-peer',
+      roomName: 'office',
+    }
+
+    const issued = await services.peerPairingIssuer.issue(selector)
+    expect(issued).toMatchObject({
+      tokenId: selector.tokenId,
+      verifier: expect.objectContaining(selector),
+    })
+    expect(issued.bearerToken).toMatch(/^[0-9a-f]{64}$/u)
+
+    const grant = await services.peerGrantManager.replaceGrant(selector, {
+      allowedToolContractIds: ['aurora.local.native.get_device_status.v1'],
+      capabilityPackIds: ['native-actions'],
+    })
+    await expect(services.peerGrantManager.listActiveGrants(selector)).resolves.toEqual([
+      expect.objectContaining({
+        grantId: grant.grantId,
+        claimantPeerId: 'remote-peer',
+        sharingState: 'active',
+        secretFieldsRedacted: true,
+      }),
+    ])
+
+    await expect(services.peerRevocationController.revoke(selector)).resolves.toMatchObject({
+      type: 'peer_authority_revoked_v1',
+      selector,
+      reasonCode: 'peer_authority_revoked',
+      redacted: true,
+    })
+    await expect(services.peerGrantManager.listActiveGrants(selector)).resolves.toEqual([])
     await services.close()
   })
 
@@ -147,6 +208,7 @@ describe('browser mesh-node service composition', () => {
         .mockReturnValueOnce('audit-1')
         .mockReturnValue('epoch-1'),
       randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
     })
 
     const catalog = await dispatchExportCatalog(services)
@@ -203,6 +265,7 @@ describe('browser mesh-node service composition', () => {
       nowMs: () => 1_000,
       randomId: () => 'id-1',
       randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
     })
     let releaseFirstResume: (() => void) | undefined
     const firstResume = new Promise<void>((resolve) => {
@@ -239,6 +302,16 @@ describe('browser mesh-node service composition', () => {
     await services.close()
   })
 })
+
+const AUTHORITY_WASM_DIR = resolve(
+  process.cwd(),
+  '../../packages/aurora-mesh-authority-web/dist/wasm',
+)
+
+const nodeWasmSource: MeshAuthorityWasmSource = {
+  importBindings: async () => await import(resolve(AUTHORITY_WASM_DIR, 'aurora_mesh_authority.js')),
+  wasmBytes: async () => readFileSync(resolve(AUTHORITY_WASM_DIR, 'aurora_mesh_authority_bg.wasm')),
+}
 
 async function localDataAuthority(backend: PersistentMemoryLocalDataBackend) {
   return {
@@ -373,13 +446,13 @@ class RecordingEnvelopeCrypto implements EnvelopeCryptoPort {
   private nextId = 1
 
   async encrypt(_keyPurpose: LocalDataKeyPurpose, plaintext: Uint8Array): Promise<EncryptedDataEnvelopeV1> {
-    const key = `cipher-${this.nextId++}`
+    const key = Buffer.from(new Uint8Array(16).fill(this.nextId++)).toString('base64url')
     this.values.set(key, new Uint8Array(plaintext))
     return {
       version: 1,
       algorithm: 'AES-GCM-256',
       keyId: 'test-key',
-      nonceB64Url: 'bm9uY2U',
+      nonceB64Url: 'AAAAAAAAAAAAAAAA',
       ciphertextAndTagB64Url: key,
       createdAtMs: 1_000,
     }
