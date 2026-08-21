@@ -289,6 +289,8 @@ export interface MeshSessionRuntimeLinkOptions {
     "addEventListener" | "removeEventListener" | "visibilityState"
   >;
   readonly unbindRetryDelaysMs?: readonly number[];
+  /** Delays between manifest hydration retries; injected for deterministic tests. */
+  readonly manifestRetryDelaysMs?: readonly number[];
   readonly onCleanupFailure?: (failure: MeshSessionCleanupFailure) => void;
 }
 
@@ -308,7 +310,18 @@ type RetiringMeshSessionBinding = ActiveMeshSessionBinding & {
   exhausted: boolean;
 };
 
+type ManifestHydration = {
+  readonly remoteSignalingId: string;
+  readonly peerConnectionId: number;
+  readonly dataChannelId: number;
+  attempts: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  inFlight: boolean;
+  exhausted: boolean;
+};
+
 const DEFAULT_UNBIND_RETRY_DELAYS_MS = [100, 500, 2_000] as const;
+const DEFAULT_MANIFEST_RETRY_DELAYS_MS = [100, 500, 2_000] as const;
 
 function bindableRosterPeer(
   roster: MeshSessionRoster,
@@ -334,6 +347,7 @@ export function installMeshSessionRuntimeLink(
 ): MeshSessionRuntimeLink {
   const bindings = new Map<string, ActiveMeshSessionBinding>();
   const retiringBindings = new Map<string, RetiringMeshSessionBinding>();
+  const manifestHydrations = new Map<string, ManifestHydration>();
   const lastCleanupFailures = new Map<string, MeshSessionCleanupFailure>();
   const pendingDrains = new Map<string, unknown[]>();
   let closed = false;
@@ -342,6 +356,14 @@ export function installMeshSessionRuntimeLink(
   let lifecycleStop: MeshSurfaceLifecycleStop | null = null;
   const unbindRetryDelaysMs =
     options.unbindRetryDelaysMs ?? DEFAULT_UNBIND_RETRY_DELAYS_MS;
+  const manifestRetryDelaysMs =
+    options.manifestRetryDelaysMs ?? DEFAULT_MANIFEST_RETRY_DELAYS_MS;
+
+  const cancelManifestHydration = (peerId: string): void => {
+    const hydration = manifestHydrations.get(peerId);
+    if (hydration?.retryTimer) clearTimeout(hydration.retryTimer);
+    manifestHydrations.delete(peerId);
+  };
 
   const reportCleanupFailure = (
     failure: MeshSessionCleanupFailure,
@@ -435,6 +457,7 @@ export function installMeshSessionRuntimeLink(
   };
 
   const retirePeer = async (peerId: string): Promise<void> => {
+    cancelManifestHydration(peerId);
     const existing = bindings.get(peerId);
     if (existing) {
       bindings.delete(peerId);
@@ -545,6 +568,180 @@ export function installMeshSessionRuntimeLink(
     flushPeer(rosterPeer.peerId);
   };
 
+  const currentManifestTarget = (
+    peerId: string,
+    hydration: ManifestHydration,
+  ):
+    | {
+        rosterPeer: MeshSessionRosterPeer;
+        handles: { peerConnectionId: number; dataChannelId: number };
+      }
+    | null => {
+    if (
+      closed ||
+      manifestHydrations.get(peerId) !== hydration ||
+      retiringBindings.has(peerId) ||
+      !bindings.has(peerId)
+    ) {
+      return null;
+    }
+    const rosterPeer = bindableRosterPeer(latestRoster, peerId);
+    if (
+      !rosterPeer ||
+      rosterPeer.snapshot.connectedSignalingPeerId !==
+        hydration.remoteSignalingId
+    ) {
+      return null;
+    }
+    let handles: { peerConnectionId: number; dataChannelId: number } | null;
+    try {
+      handles = options.handleForRemoteSignalingId(
+        hydration.remoteSignalingId,
+      );
+    } catch {
+      handles = null;
+    }
+    if (
+      !handles ||
+      handles.peerConnectionId !== hydration.peerConnectionId ||
+      handles.dataChannelId !== hydration.dataChannelId
+    ) {
+      return null;
+    }
+    return { rosterPeer, handles };
+  };
+
+  const scheduleManifestRetry = (
+    peerId: string,
+    hydration: ManifestHydration,
+  ): void => {
+    if (
+      manifestHydrations.get(peerId) !== hydration ||
+      hydration.retryTimer ||
+      hydration.inFlight ||
+      hydration.exhausted
+    ) {
+      return;
+    }
+    const delayMs =
+      manifestRetryDelaysMs[Math.max(0, hydration.attempts - 1)];
+    if (delayMs === undefined) {
+      hydration.exhausted = true;
+      return;
+    }
+    hydration.retryTimer = setTimeout(() => {
+      if (manifestHydrations.get(peerId) !== hydration) return;
+      hydration.retryTimer = null;
+      reconcileQueue = reconcileQueue
+        .then(() => {
+          if (!currentManifestTarget(peerId, hydration)) {
+            cancelManifestHydration(peerId);
+            return;
+          }
+          requestManifestHydration(peerId, hydration);
+        })
+        .catch(() => undefined);
+    }, delayMs);
+  };
+
+  const requestManifestHydration = (
+    peerId: string,
+    hydration: ManifestHydration,
+  ): void => {
+    if (
+      hydration.inFlight ||
+      hydration.retryTimer ||
+      hydration.exhausted ||
+      !currentManifestTarget(peerId, hydration)
+    ) {
+      return;
+    }
+    hydration.inFlight = true;
+    hydration.attempts += 1;
+    void Promise.resolve()
+      .then(() => options.peer.getManifest(peerId))
+      .then(
+        (manifest) => {
+          reconcileQueue = reconcileQueue
+            .then(async () => {
+              if (manifestHydrations.get(peerId) !== hydration) return;
+              hydration.inFlight = false;
+              const target = currentManifestTarget(peerId, hydration);
+              if (!target) {
+                cancelManifestHydration(peerId);
+                return;
+              }
+              if (manifest === null) {
+                scheduleManifestRetry(peerId, hydration);
+                return;
+              }
+              const methodIds = [
+                ...new Set(
+                  (manifest.services ?? []).flatMap((service) => [
+                    ...(service.methods ?? []),
+                  ]),
+                ),
+              ].sort();
+              try {
+                await bindRosterPeer(
+                  target.rosterPeer,
+                  target.handles,
+                  methodIds,
+                  true,
+                );
+              } catch {
+                scheduleManifestRetry(peerId, hydration);
+                return;
+              }
+              cancelManifestHydration(peerId);
+            })
+            .catch(() => undefined);
+        },
+        () => {
+          reconcileQueue = reconcileQueue
+            .then(() => {
+              if (manifestHydrations.get(peerId) !== hydration) return;
+              hydration.inFlight = false;
+              if (!currentManifestTarget(peerId, hydration)) {
+                cancelManifestHydration(peerId);
+                return;
+              }
+              scheduleManifestRetry(peerId, hydration);
+            })
+            .catch(() => undefined);
+        },
+      );
+  };
+
+  const hydrateManifest = (
+    rosterPeer: MeshSessionRosterPeer,
+    handles: { peerConnectionId: number; dataChannelId: number },
+  ): void => {
+    const remoteSignalingId = rosterPeer.snapshot.connectedSignalingPeerId;
+    if (!remoteSignalingId) return;
+    const existing = manifestHydrations.get(rosterPeer.peerId);
+    if (
+      existing?.remoteSignalingId === remoteSignalingId &&
+      existing.peerConnectionId === handles.peerConnectionId &&
+      existing.dataChannelId === handles.dataChannelId
+    ) {
+      requestManifestHydration(rosterPeer.peerId, existing);
+      return;
+    }
+    cancelManifestHydration(rosterPeer.peerId);
+    const hydration: ManifestHydration = {
+      remoteSignalingId,
+      peerConnectionId: handles.peerConnectionId,
+      dataChannelId: handles.dataChannelId,
+      attempts: 0,
+      retryTimer: null,
+      inFlight: false,
+      exhausted: false,
+    };
+    manifestHydrations.set(rosterPeer.peerId, hydration);
+    requestManifestHydration(rosterPeer.peerId, hydration);
+  };
+
   const reconcile = async (): Promise<void> => {
     if (closed) return;
     const desired = new Map(
@@ -584,55 +781,7 @@ export function installMeshSessionRuntimeLink(
         continue;
       }
       await bindRosterPeer(rosterPeer, handles, [], false);
-      void options.peer
-        .getManifest(rosterPeer.peerId)
-        .catch(() => null)
-        .then((manifest) => {
-          reconcileQueue = reconcileQueue.then(async () => {
-            if (closed) return;
-            const currentPeer = bindableRosterPeer(
-              latestRoster,
-              rosterPeer.peerId,
-            );
-            if (!currentPeer) return;
-            if (retiringBindings.has(rosterPeer.peerId)) return;
-            const currentRemoteSignalingId =
-              currentPeer.snapshot.connectedSignalingPeerId;
-            if (currentRemoteSignalingId === undefined) return;
-            if (
-              currentRemoteSignalingId !==
-              rosterPeer.snapshot.connectedSignalingPeerId
-            ) {
-              return;
-            }
-            let currentHandles: {
-              peerConnectionId: number;
-              dataChannelId: number;
-            } | null;
-            try {
-              currentHandles = options.handleForRemoteSignalingId(
-                currentRemoteSignalingId,
-              );
-            } catch {
-              currentHandles = null;
-            }
-            if (
-              !currentHandles ||
-              currentHandles.peerConnectionId !== handles.peerConnectionId ||
-              currentHandles.dataChannelId !== handles.dataChannelId
-            ) {
-              return;
-            }
-            const methodIds = [
-              ...new Set(
-                (manifest?.services ?? []).flatMap((service) => [
-                  ...(service.methods ?? []),
-                ]),
-              ),
-            ].sort();
-            await bindRosterPeer(currentPeer, currentHandles, methodIds, true);
-          });
-        });
+      hydrateManifest(rosterPeer, handles);
     }
   };
 
@@ -657,6 +806,9 @@ export function installMeshSessionRuntimeLink(
         unsubscribeRoster();
         lifecycleStop?.();
         lifecycleStop = null;
+        for (const peerId of [...manifestHydrations.keys()]) {
+          cancelManifestHydration(peerId);
+        }
         await reconcileQueue;
       }
       for (const peerId of [...bindings.keys()]) {

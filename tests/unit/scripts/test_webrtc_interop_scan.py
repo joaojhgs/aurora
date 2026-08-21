@@ -278,6 +278,8 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
 def _enable_ac18(
     python_report: dict[str, object],
     browser_report: dict[str, object],
+    *,
+    authority_implementation: str = "rust-wasm",
 ) -> None:
     digest = "a" * 64
     python_report["ac18LocalToolProviderEnabled"] = True
@@ -387,7 +389,7 @@ def _enable_ac18(
     assert isinstance(browser_result, dict)
     browser_result["ac18LocalToolProviderEvidence"] = {
         "enabled": True,
-        "authorityImplementation": "rust-wasm",
+        "authorityImplementation": authority_implementation,
         "toolContractId": "interop.browser.echo",
         "localName": "interop.browser.echo",
         "globalToolId": ("aurora-tool:v1:browser-g009:Tooling:interop.browser.echo"),
@@ -509,9 +511,20 @@ def test_aggregate_accepts_complete_http_disabled_proof(tmp_path: Path) -> None:
     assert report["assertions"]["ac18LocalToolProvider"] is False
 
 
-def test_aggregate_accepts_complete_ac18_local_tool_provider_evidence(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "authority_implementation",
+    ["rust-wasm", "rust-native-tauri"],
+)
+def test_aggregate_accepts_complete_ac18_local_tool_provider_evidence(
+    tmp_path: Path,
+    authority_implementation: str,
+) -> None:
     python_report, browser_report = _passing_reports()
-    _enable_ac18(python_report, browser_report)
+    _enable_ac18(
+        python_report,
+        browser_report,
+        authority_implementation=authority_implementation,
+    )
 
     report = _aggregate(tmp_path, python_report, browser_report)
 

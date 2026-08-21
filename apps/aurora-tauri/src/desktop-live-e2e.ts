@@ -1248,7 +1248,7 @@ async function buildAc18Evidence(ac18: Ac18BrowserLocalToolProbe): Promise<Recor
   };
   return {
     enabled: true,
-    authorityImplementation: "rust-wasm",
+    authorityImplementation: "rust-native-tauri",
     toolContractId: ac18.toolContractId,
     localName: ac18.localName,
     globalToolId: ac18.registeredTool.toolInfo.global_tool_id,

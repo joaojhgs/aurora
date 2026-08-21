@@ -254,7 +254,7 @@ def ac18_local_tool_provider_passed(
     )
     browser_ok = (
         browser_evidence.get("enabled") is True
-        and browser_evidence.get("authorityImplementation") == "rust-wasm"
+        and browser_evidence.get("authorityImplementation") in {"rust-wasm", "rust-native-tauri"}
         and registered_tool_ok
         and browser_evidence.get("positiveInvocationCount") == 1
         and browser_evidence.get("negativeInvocationCount") == 0
@@ -460,9 +460,9 @@ def build_interop_report(
     revocation_timeout_elapsed_ms = revocation_observation.get("elapsedMs")
     revocation_timeout_ms = revocation_observation.get("timeoutMs")
     revocation_bounded_timeout_ok = (
-        isinstance(revocation_timeout_elapsed_ms, (int, float))
+        isinstance(revocation_timeout_elapsed_ms, int | float)
         and not isinstance(revocation_timeout_elapsed_ms, bool)
-        and isinstance(revocation_timeout_ms, (int, float))
+        and isinstance(revocation_timeout_ms, int | float)
         and not isinstance(revocation_timeout_ms, bool)
         and revocation_observation.get("timedOut") is True
         and revocation_timeout_ms > 0
@@ -470,9 +470,9 @@ def build_interop_report(
     )
     revocation_terminal_failure_ok = (
         revocation_final_state == "failed"
-        and isinstance(revocation_timeout_elapsed_ms, (int, float))
+        and isinstance(revocation_timeout_elapsed_ms, int | float)
         and not isinstance(revocation_timeout_elapsed_ms, bool)
-        and isinstance(revocation_timeout_ms, (int, float))
+        and isinstance(revocation_timeout_ms, int | float)
         and not isinstance(revocation_timeout_ms, bool)
         and revocation_observation.get("timedOut") is False
         and revocation_timeout_ms > 0
