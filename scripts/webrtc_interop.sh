@@ -26,6 +26,7 @@ export WEBRTC_INTEROP_AC18_LOCAL_TOOL_PROVIDER="${WEBRTC_INTEROP_AC18_LOCAL_TOOL
 
 BROKER="${WEBRTC_INTEROP_BROKER:-ws://127.0.0.1:9001/mqtt}"
 ROOM="${WEBRTC_INTEROP_ROOM:-g009-live-interop-$LANE-$$}"
+TIMEOUT_SECONDS="${WEBRTC_INTEROP_TIMEOUT_SECONDS:-120}"
 STUN_ARGS=()
 TURN_ARGS=()
 interop_host_ipv4() {
@@ -81,6 +82,7 @@ uv run python scripts/webrtc_interop_gateway.py \
   --report "$PY_REPORT" \
   --broker "$BROKER" \
   --room "$ROOM" \
+  --timeout "$TIMEOUT_SECONDS" \
   "${STUN_ARGS[@]}" "${TURN_ARGS[@]}" &
 PY_PID=$!
 cleanup() {

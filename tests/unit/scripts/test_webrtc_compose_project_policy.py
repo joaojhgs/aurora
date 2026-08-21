@@ -49,6 +49,13 @@ def test_webrtc_services_can_reuse_externally_managed_local_services() -> None:
     assert 'echo "WebRTC interop services are externally managed"' in source
 
 
+def test_webrtc_browser_runner_has_a_separate_overridable_total_timeout() -> None:
+    source = read_repo("scripts/webrtc_interop.sh")
+
+    assert 'TIMEOUT_SECONDS="${WEBRTC_INTEROP_TIMEOUT_SECONDS:-120}"' in source
+    assert '--timeout "$TIMEOUT_SECONDS"' in source
+
+
 def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
     for script_path in (
         "scripts/hosted_peer_e2e.sh",
