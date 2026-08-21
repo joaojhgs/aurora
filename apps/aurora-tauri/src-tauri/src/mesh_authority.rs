@@ -13,11 +13,11 @@
 //! peer arrived on.
 
 use aurora_mesh_authority::authority::{
-    InboundCredentialVerifierStore, IssueReconnectChallengeRequest,
-    LocalPeerCredentialVerifierV1, LocalPeerGrantV1, MemoryInboundCredentialVerifierStore,
-    MemoryPeerAuditSink, MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster,
-    MemoryPeerRevocationController, MemoryReconnectChallengeStore, PeerAuthorityResolver,
-    PeerGrantRepository, PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
+    InboundCredentialVerifierStore, IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1,
+    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
+    MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController,
+    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
+    PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
 };
 use aurora_mesh_authority::authorization::PeerAuthorityHostAuthorizationStore;
 use aurora_mesh_authority::grant_management::{PeerGrantManager, PeerGrantSelection};
@@ -274,7 +274,10 @@ pub async fn aurora_mesh_authority_export_grants(
     selector: PeerRelationshipSelector,
 ) -> Result<Value, String> {
     let mut authority = state.0.lock().await;
-    let rows = authority.resolver_mut().grant_repository.export_grants(&selector);
+    let rows = authority
+        .resolver_mut()
+        .grant_repository
+        .export_grants(&selector);
     to_value(&rows)
 }
 
@@ -323,7 +326,10 @@ pub async fn aurora_mesh_authority_replace_grant(
         getrandom::getrandom(&mut bytes).ok()?;
         Some(format!(
             "grant-{}",
-            bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()
+            bytes
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
         ))
     }));
     let summary = manager.replace_grant(&selector, &selection, now_ms).await;
@@ -411,10 +417,7 @@ mod tests {
         }
     }
 
-    fn authorize_request(
-        remote_peer_id: &str,
-        claimant: &str,
-    ) -> PeerHostAuthorizeRequest {
+    fn authorize_request(remote_peer_id: &str, claimant: &str) -> PeerHostAuthorizeRequest {
         PeerHostAuthorizeRequest {
             remote_peer_id: remote_peer_id.to_owned(),
             method_id: "Tooling.GetTools".to_owned(),

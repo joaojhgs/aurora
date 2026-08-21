@@ -15,10 +15,11 @@ use aurora_mesh_authority::authority::{
 use aurora_mesh_authority::types::PeerHostAuthorizationDecision;
 use aurora_mesh_session::{
     background_executable_methods, background_execution_for, frames_served_by_rust_today,
-    inbound_frame_ownership, is_pairing_frame, BackgroundCapability, CallOutcome, FrameOwner,
-    InboundDisposition, MeshSessionError, MeshSessionRegistry, SurfaceLifecycle,
-    INBOUND_FRAME_OWNERSHIP, MAX_QUEUED_FRAMES_PER_PEER, ORCHESTRATION_DEFERRED_CODE,
-    ORCHESTRATION_DEFERRED_MESSAGE, ORCHESTRATION_DEFERRED_REASON, RETRY_WHEN_PEER_FOREGROUND,
+    inbound_frame_ownership, is_pairing_frame, BackgroundCapability, BackgroundExecution,
+    CallOutcome, FrameOwner, InboundDisposition, MeshSessionError, MeshSessionRegistry,
+    SurfaceLifecycle, INBOUND_FRAME_OWNERSHIP, MAX_QUEUED_FRAMES_PER_PEER,
+    ORCHESTRATION_DEFERRED_CODE, ORCHESTRATION_DEFERRED_MESSAGE, ORCHESTRATION_DEFERRED_REASON,
+    RETRY_WHEN_PEER_FOREGROUND,
 };
 use serde_json::{json, Value};
 
@@ -191,7 +192,7 @@ fn an_inbound_call_is_authorized_in_both_lifecycles_before_anything_else() {
 
 #[test]
 fn a_denied_call_is_denied_identically_in_the_background() {
-    let frame = call_frame("c-1", "Tooling.ExecuteTool");
+    let frame = call_frame("c-1", "Tooling.RequestApproval");
     let denial = PeerHostAuthorizationDecision::denied("grant_expired");
 
     let mut foreground = registry_with(&[PEER_A]);
@@ -236,7 +237,7 @@ fn deferral_is_decided_after_authorization_so_it_leaks_no_grant() {
     // while the webview is frozen. If the deferral were decided before
     // authorization both would hear the same thing, and the answer would tell
     // an unauthorized caller that a grant exists for someone.
-    let frame = call_frame("c-1", "Tooling.ExecuteTool");
+    let frame = call_frame("c-1", "Tooling.RequestApproval");
     let mut registry = registry_with(&[PEER_A, PEER_B]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
 
@@ -257,7 +258,10 @@ fn deferral_is_decided_after_authorization_so_it_leaks_no_grant() {
         .settle_call(&granted, &allowed())
         .expect("bound peer");
     let ungranted_answer = registry
-        .settle_call(&ungranted, &PeerHostAuthorizationDecision::denied("no_grant"))
+        .settle_call(
+            &ungranted,
+            &PeerHostAuthorizationDecision::denied("no_grant"),
+        )
         .expect("bound peer");
 
     assert!(matches!(granted_answer, CallOutcome::Deferred(_)));
@@ -270,7 +274,7 @@ fn an_authorized_call_needing_the_orchestrator_defers_with_the_section_6_body() 
     let mut registry = registry_with(&[PEER_A]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
     let InboundDisposition::Authorize(pending) = registry
-        .accept_inbound(PEER_A, &call_frame("c-9", "Tooling.ExecuteTool"), 5_000)
+        .accept_inbound(PEER_A, &call_frame("c-9", "Tooling.RequestApproval"), 5_000)
         .expect("bound peer")
     else {
         panic!("expected an authorization hop");
@@ -301,6 +305,29 @@ fn an_authorized_call_needing_the_orchestrator_defers_with_the_section_6_body() 
 }
 
 #[test]
+fn an_authorized_background_tooling_call_uses_the_native_executor() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &call_frame("c-8", "Tooling.ExecuteTool"), 5_000)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+
+    assert_eq!(
+        registry
+            .settle_call(&pending, &allowed())
+            .expect("bound peer"),
+        CallOutcome::Serve {
+            execution: BackgroundExecution::ExecuteTool,
+            call_id: "c-8".to_owned()
+        },
+        "background-safe native tooling calls are answered while the webview sleeps"
+    );
+}
+
+#[test]
 fn an_authorized_call_in_the_foreground_goes_to_the_orchestrator() {
     let mut registry = registry_with(&[PEER_A]);
     let InboundDisposition::Authorize(pending) = registry
@@ -311,7 +338,9 @@ fn an_authorized_call_in_the_foreground_goes_to_the_orchestrator() {
     };
 
     assert_eq!(
-        registry.settle_call(&pending, &allowed()).expect("bound peer"),
+        registry
+            .settle_call(&pending, &allowed())
+            .expect("bound peer"),
         CallOutcome::Orchestrate {
             call_id: "c-2".to_owned()
         },
@@ -329,7 +358,9 @@ fn deferral_is_not_eviction() {
     else {
         panic!("expected an authorization hop");
     };
-    let _ = registry.settle_call(&pending, &allowed()).expect("bound peer");
+    let _ = registry
+        .settle_call(&pending, &allowed())
+        .expect("bound peer");
 
     // The peer stays in the roster and keeps answering ping. A caller that
     // receives a deferral must not drop the peer or re-pair.
@@ -420,11 +451,17 @@ fn queued_frames_drain_in_arrival_order_on_resume() {
     let (peer_id, frames) = &drained[0];
     assert_eq!(peer_id, PEER_A);
     assert_eq!(
-        frames.iter().map(|queued| queued.sequence).collect::<Vec<_>>(),
+        frames
+            .iter()
+            .map(|queued| queued.sequence)
+            .collect::<Vec<_>>(),
         vec![0, 1, 2, 3]
     );
     assert_eq!(
-        frames.iter().map(|queued| queued.frame.clone()).collect::<Vec<_>>(),
+        frames
+            .iter()
+            .map(|queued| queued.frame.clone())
+            .collect::<Vec<_>>(),
         arrivals.to_vec(),
         "the queue drains in arrival order, verbatim"
     );
@@ -508,7 +545,9 @@ fn the_queue_is_bounded_and_answers_retryably_when_it_is_full() {
     for index in 0..MAX_QUEUED_FRAMES_PER_PEER {
         let frame = json!({ "type": "event", "id": format!("e-{index}") });
         assert!(matches!(
-            registry.accept_inbound(PEER_A, &frame, 1_000).expect("bound peer"),
+            registry
+                .accept_inbound(PEER_A, &frame, 1_000)
+                .expect("bound peer"),
             InboundDisposition::Queued { .. }
         ));
     }
@@ -583,7 +622,11 @@ fn a_backgrounded_reconnect_may_not_accept_a_new_stable_identity() {
     // The same transport coming back claiming a different stable id is a
     // pairing attempt wearing a reconnect's clothes.
     let refusal = registry
-        .bind("aurora-thin-brand-new", 1, Some(context_for("aurora-thin-brand-new")))
+        .bind(
+            "aurora-thin-brand-new",
+            1,
+            Some(context_for("aurora-thin-brand-new")),
+        )
         .expect_err("a new identity on a held connection is refused while backgrounded");
     assert_eq!(
         refusal,
@@ -650,7 +693,10 @@ fn the_same_registry_serves_both_lifecycles() {
         drained.is_empty(),
         "pings were answered, not parked, so there is nothing to replay"
     );
-    assert_eq!(registry.session(PEER_A).expect("session").answered_pings(), 3);
+    assert_eq!(
+        registry.session(PEER_A).expect("session").answered_pings(),
+        3
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -662,42 +708,122 @@ fn the_frame_ownership_table_matches_the_boundary_note() {
     // Section 3, row by row. A frame type missing from this list, or a row
     // whose owner moved, means the table and the note disagree.
     let expected: &[(&str, FrameOwner, BackgroundCapability)] = &[
-        ("protocol_hello", FrameOwner::Rust, BackgroundCapability::Yes),
+        (
+            "protocol_hello",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
         ("fragment", FrameOwner::Rust, BackgroundCapability::Yes),
         ("ping", FrameOwner::Rust, BackgroundCapability::Yes),
         ("pong", FrameOwner::TypeScript, BackgroundCapability::No),
-        ("mesh_auth_challenge_v1", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("mesh_auth_proof_v1", FrameOwner::Rust, BackgroundCapability::Yes),
+        (
+            "mesh_auth_challenge_v1",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
+        (
+            "mesh_auth_proof_v1",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
         ("auth", FrameOwner::Rust, BackgroundCapability::Yes),
         ("reauth", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("pairing_v2_commit", FrameOwner::TypeScript, BackgroundCapability::No),
-        ("pairing_v2_reveal", FrameOwner::TypeScript, BackgroundCapability::No),
-        ("pairing_v2_terminal", FrameOwner::TypeScript, BackgroundCapability::No),
+        (
+            "pairing_v2_commit",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
+        (
+            "pairing_v2_reveal",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
+        (
+            "pairing_v2_terminal",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
         ("call", FrameOwner::Rust, BackgroundCapability::Yes),
         ("result", FrameOwner::TypeScript, BackgroundCapability::No),
         ("error", FrameOwner::TypeScript, BackgroundCapability::No),
         ("chunk", FrameOwner::Rust, BackgroundCapability::Yes),
         ("eof", FrameOwner::Rust, BackgroundCapability::Yes),
         ("cancel", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("event", FrameOwner::TypeScript, BackgroundCapability::Partial),
+        (
+            "event",
+            FrameOwner::TypeScript,
+            BackgroundCapability::Partial,
+        ),
         ("subscribe", FrameOwner::Rust, BackgroundCapability::Yes),
         ("unsubscribe", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("subscribed", FrameOwner::TypeScript, BackgroundCapability::No),
-        ("subscribe_rejected", FrameOwner::TypeScript, BackgroundCapability::No),
-        ("unsubscribed", FrameOwner::TypeScript, BackgroundCapability::No),
+        (
+            "subscribed",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
+        (
+            "subscribe_rejected",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
+        (
+            "unsubscribed",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
         ("manifest", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("manifest_request", FrameOwner::Rust, BackgroundCapability::Yes),
+        (
+            "manifest_request",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
         ("manifest_ack", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("provider_lease", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("provider_unavailable", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("capacity_update", FrameOwner::Rust, BackgroundCapability::Yes),
+        (
+            "provider_lease",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
+        (
+            "provider_unavailable",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
+        (
+            "capacity_update",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
         ("presence", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("presence_departed", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("mesh_peer_standby_v1", FrameOwner::Rust, BackgroundCapability::Yes),
-        ("offer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),
-        ("answer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),
-        ("candidate", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly),
-        ("mesh_event", FrameOwner::TypeScript, BackgroundCapability::No),
+        (
+            "presence_departed",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
+        (
+            "mesh_peer_standby_v1",
+            FrameOwner::Rust,
+            BackgroundCapability::Yes,
+        ),
+        (
+            "offer",
+            FrameOwner::RustOnReconnect,
+            BackgroundCapability::ReconnectOnly,
+        ),
+        (
+            "answer",
+            FrameOwner::RustOnReconnect,
+            BackgroundCapability::ReconnectOnly,
+        ),
+        (
+            "candidate",
+            FrameOwner::RustOnReconnect,
+            BackgroundCapability::ReconnectOnly,
+        ),
+        (
+            "mesh_event",
+            FrameOwner::TypeScript,
+            BackgroundCapability::No,
+        ),
     ];
 
     assert_eq!(INBOUND_FRAME_OWNERSHIP.len(), expected.len());
@@ -728,26 +854,21 @@ fn rust_answers_exactly_the_frames_this_build_implements() {
 }
 
 #[test]
-fn no_method_is_executable_in_rust_yet_so_every_authorized_call_defers() {
-    // Section 6 rule 2 says a call Rust can authorize *and execute* against the
-    // aurora_local_data_* commands is answered rather than deferred. The mesh
-    // serves four methods and all four run through the TypeScript local tool
-    // provider — its in-memory registry, approval controller, export decision
-    // and audit sink — so all four need the orchestrator and all four defer.
-    // This test pins that, and fails the moment an executor is added without
-    // the claim being updated with it.
-    assert!(background_executable_methods().is_empty());
-    for method in [
+fn tooling_meta_methods_have_background_executors() {
+    let methods = [
         "Tooling.GetTools",
         "Tooling.GetExportCatalog",
         "Tooling.PrepareExecution",
         "Tooling.ExecuteTool",
-    ] {
+    ];
+    assert_eq!(background_executable_methods(), methods);
+    for method in methods {
         assert!(
-            background_execution_for(method).is_none(),
-            "{method} claims a background executor that does not exist"
+            background_execution_for(method).is_some(),
+            "{method} must stay answerable while the webview is frozen"
         );
     }
+    assert!(background_execution_for("Tooling.RequestApproval").is_none());
 }
 
 // ---------------------------------------------------------------------------
@@ -775,7 +896,10 @@ fn the_deferral_message_carries_no_transport_jargon() {
             "product copy must not say {forbidden:?}: {ORCHESTRATION_DEFERRED_MESSAGE:?}"
         );
     }
-    assert_eq!(ORCHESTRATION_DEFERRED_MESSAGE, "deferred until the device is back in use");
+    assert_eq!(
+        ORCHESTRATION_DEFERRED_MESSAGE,
+        "deferred until the device is back in use"
+    );
 }
 
 #[test]
@@ -900,9 +1024,18 @@ fn reconnect_auth_frames_are_not_answered_here_so_no_challenge_is_replayed() {
     let mut registry = registry_with(&[PEER_A]);
     registry.set_lifecycle(SurfaceLifecycle::Background);
 
-    for frame_type in ["mesh_auth_challenge_v1", "mesh_auth_proof_v1", "auth", "reauth"] {
+    for frame_type in [
+        "mesh_auth_challenge_v1",
+        "mesh_auth_proof_v1",
+        "auth",
+        "reauth",
+    ] {
         let row = inbound_frame_ownership(frame_type).expect("the table names it");
-        assert_eq!(row.owner, FrameOwner::Rust, "section 3 assigns {frame_type} to Rust");
+        assert_eq!(
+            row.owner,
+            FrameOwner::Rust,
+            "section 3 assigns {frame_type} to Rust"
+        );
         assert!(
             !row.served_by_rust_today,
             "{frame_type} is answered here now: move the single-use replay guard with it and \
@@ -910,8 +1043,12 @@ fn reconnect_auth_frames_are_not_answered_here_so_no_challenge_is_replayed() {
         );
 
         let frame = json!({ "type": frame_type, "id": "auth-1", "challenge": "deadbeef" });
-        let first = registry.accept_inbound(PEER_A, &frame, 1_000).expect("bound peer");
-        let second = registry.accept_inbound(PEER_A, &frame, 1_001).expect("bound peer");
+        let first = registry
+            .accept_inbound(PEER_A, &frame, 1_000)
+            .expect("bound peer");
+        let second = registry
+            .accept_inbound(PEER_A, &frame, 1_001)
+            .expect("bound peer");
         assert!(
             matches!(first, InboundDisposition::Queued { .. }),
             "{frame_type} must be parked for the auth state machine, not answered: {first:?}"
@@ -927,7 +1064,10 @@ fn reconnect_auth_frames_are_not_answered_here_so_no_challenge_is_replayed() {
     let drained = registry.drain_peer(PEER_A).expect("bound peer");
     assert_eq!(drained.len(), 8);
     assert_eq!(
-        drained.iter().map(|queued| queued.sequence).collect::<Vec<_>>(),
+        drained
+            .iter()
+            .map(|queued| queued.sequence)
+            .collect::<Vec<_>>(),
         (0..8).collect::<Vec<u64>>()
     );
 }
@@ -988,7 +1128,10 @@ fn a_flapping_session_does_not_leak_holds() {
             Some(DeviceLinkAction::Release) => holds -= 1,
             None => {}
         }
-        assert!((0..=1).contains(&holds), "holds left the 0..1 range: {holds}");
+        assert!(
+            (0..=1).contains(&holds),
+            "holds left the 0..1 range: {holds}"
+        );
     }
     assert_eq!(holds, 0, "every hold was matched by exactly one release");
     assert!(!ledger.is_held());

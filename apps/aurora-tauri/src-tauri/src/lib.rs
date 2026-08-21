@@ -63,9 +63,9 @@ static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
         u32,
     ) -> *mut aurora_voice_native::IosVoiceSession = ios_voice::aurora_ios_voice_session_new;
 mod local_data_native;
-mod native_voice;
 mod mesh_authority;
 mod mesh_session;
+mod native_voice;
 mod native_webrtc;
 mod generated {
     pub mod local_data_migrations;
@@ -8666,7 +8666,7 @@ pub fn run() {
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
         .manage(mesh_authority::MeshAuthorityState::default())
-            .manage(mesh_session::MeshSessionState::default())
+        .manage(mesh_session::MeshSessionState::default())
         .setup(move |app| {
             #[cfg(desktop)]
             {
@@ -10784,7 +10784,9 @@ mod tests {
     fn gateway_request_url_rejects_absolute_and_protocol_relative_overrides() {
         let base = Url::parse("http://127.0.0.1:8000/").unwrap();
         assert_eq!(
-            gateway_request_url(&base, None, "Gateway.GetRegistry").unwrap().as_str(),
+            gateway_request_url(&base, None, "Gateway.GetRegistry")
+                .unwrap()
+                .as_str(),
             "http://127.0.0.1:8000/api/methods/Gateway/GetRegistry"
         );
         assert_eq!(
@@ -10799,7 +10801,10 @@ mod tests {
             "Gateway.GetRegistry"
         )
         .is_err());
-        assert!(gateway_request_url(&base, Some("//evil.example/steal"), "Gateway.GetRegistry").is_err());
+        assert!(
+            gateway_request_url(&base, Some("//evil.example/steal"), "Gateway.GetRegistry")
+                .is_err()
+        );
         assert!(gateway_request_url(
             &base,
             Some("http://evil.example/steal"),

@@ -131,6 +131,8 @@ pub struct PendingCall {
     pub call_id: String,
     /// Method the caller named.
     pub method_id: String,
+    /// The call's `params`, carried verbatim to the native executor.
+    pub params: Value,
     /// The question for the authority.
     pub authorize: PeerHostAuthorizeRequest,
 }
@@ -182,41 +184,41 @@ pub enum CallOutcome {
 }
 
 /// How Rust executes a call without the webview.
-///
-/// # The gap this enum makes visible
-///
-/// It is deliberately empty of tool handlers today, and
-/// [`background_execution_for`] returns `None` for every method the mesh
-/// currently serves. That is not an oversight, and it is not section 6 rule 2
-/// being skipped — it is rule 2 applied. The mesh serves exactly four methods
-/// (`Tooling.GetTools`, `Tooling.GetExportCatalog`, `Tooling.PrepareExecution`,
-/// `Tooling.ExecuteTool`), and all four are handled by the TypeScript local
-/// tool provider: the in-memory tool registry, the approval controller, the
-/// export decision and the audit sink. Every one of them needs the
-/// orchestrator, so every one of them defers, which is exactly what rule 2
-/// prescribes.
-///
-/// The seam is here so that a method Rust *can* finish against the
-/// `aurora_local_data_*` commands is added by writing one executor and one
-/// table row, without revisiting the dispatcher. When that happens
-/// [`background_executable_methods`] grows and its test fails until the claim
-/// and the code agree.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BackgroundExecution {}
+pub enum BackgroundExecution {
+    /// Return the bounded native background tool catalog.
+    GetTools,
+    /// Return the recipient projection for the bounded native catalog.
+    GetExportCatalog,
+    /// Prepare execution for a bounded native tool without asking the webview.
+    PrepareExecution,
+    /// Execute a bounded native tool without asking the webview.
+    ExecuteTool,
+}
 
 /// Methods Rust can complete without the webview, sorted.
 ///
 /// Empty today. See [`BackgroundExecution`] for why, and for what changes it.
 #[must_use]
 pub fn background_executable_methods() -> Vec<&'static str> {
-    Vec::new()
+    vec![
+        "Tooling.GetTools",
+        "Tooling.GetExportCatalog",
+        "Tooling.PrepareExecution",
+        "Tooling.ExecuteTool",
+    ]
 }
 
 /// How Rust would execute `method_id` in the background, if it can at all.
 #[must_use]
 pub fn background_execution_for(method_id: &str) -> Option<BackgroundExecution> {
-    let _ = method_id;
-    None
+    match method_id {
+        "Tooling.GetTools" => Some(BackgroundExecution::GetTools),
+        "Tooling.GetExportCatalog" => Some(BackgroundExecution::GetExportCatalog),
+        "Tooling.PrepareExecution" => Some(BackgroundExecution::PrepareExecution),
+        "Tooling.ExecuteTool" => Some(BackgroundExecution::ExecuteTool),
+        _ => None,
+    }
 }
 
 /// One peer's live session, from the transport's point of view.
@@ -392,7 +394,10 @@ impl MeshSessionRegistry {
     /// Returns the frames that were parked while the webview slept, per peer,
     /// in arrival order. Moving *into* the background parks nothing and returns
     /// nothing; moving back out is what drains.
-    pub fn set_lifecycle(&mut self, lifecycle: SurfaceLifecycle) -> Vec<(String, Vec<QueuedFrame>)> {
+    pub fn set_lifecycle(
+        &mut self,
+        lifecycle: SurfaceLifecycle,
+    ) -> Vec<(String, Vec<QueuedFrame>)> {
         let was_background = self.lifecycle.is_background();
         self.lifecycle = lifecycle;
         if !was_background || lifecycle.is_background() {
@@ -420,12 +425,12 @@ impl MeshSessionRegistry {
 
     /// One peer's backlog, in arrival order, leaving its queue empty.
     pub fn drain_peer(&mut self, peer_id: &str) -> Result<Vec<QueuedFrame>, MeshSessionError> {
-        let session = self
-            .sessions
-            .get_mut(peer_id)
-            .ok_or_else(|| MeshSessionError::UnknownPeer {
-                peer_id: peer_id.to_owned(),
-            })?;
+        let session =
+            self.sessions
+                .get_mut(peer_id)
+                .ok_or_else(|| MeshSessionError::UnknownPeer {
+                    peer_id: peer_id.to_owned(),
+                })?;
         Ok(session.queue.drain(..).collect())
     }
 
@@ -504,21 +509,21 @@ impl MeshSessionRegistry {
             let body = not_authorized_body(decision.reason_code.as_deref());
             return Ok(CallOutcome::Denied(error_frame(&pending.call_id, &body)));
         }
-        if let Some(execution) = background_execution_for(&pending.method_id) {
-            session.served_calls += 1;
-            return Ok(CallOutcome::Serve {
-                execution,
-                call_id: pending.call_id.clone(),
-            });
-        }
         if lifecycle.is_background() {
+            if let Some(execution) = background_execution_for(&pending.method_id) {
+                session.served_calls += 1;
+                return Ok(CallOutcome::Serve {
+                    execution,
+                    call_id: pending.call_id.clone(),
+                });
+            }
             session.deferred_calls += 1;
             return Ok(CallOutcome::Deferred(orchestration_deferred_frame(
                 &pending.call_id,
             )));
         }
-        // Foreground and not executable here: the orchestrator is awake, so the
-        // call goes to it and nothing is answered from this module.
+        // Foreground: the orchestrator is awake, so the call goes to it and
+        // nothing is answered from this module.
         Ok(CallOutcome::Orchestrate {
             call_id: pending.call_id.clone(),
         })
@@ -577,14 +582,10 @@ impl MeshSessionRegistry {
     /// clock, and on nothing else. In particular it does not read the
     /// lifecycle, which is what makes the decision identical in the foreground
     /// and in the background.
-    fn build_pending_call(
-        &self,
-        peer_id: &str,
-        frame: &Value,
-        now_ms: i64,
-    ) -> Option<PendingCall> {
+    fn build_pending_call(&self, peer_id: &str, frame: &Value, now_ms: i64) -> Option<PendingCall> {
         let call_id = frame.get("id").and_then(Value::as_str)?.to_owned();
         let method_id = frame.get("method").and_then(Value::as_str)?.to_owned();
+        let params = frame.get("params").cloned().unwrap_or_else(|| json!({}));
         let session = self.sessions.get(peer_id)?;
         let identity = inbound_identity(frame, peer_id);
         Some(PendingCall {
@@ -604,6 +605,7 @@ impl MeshSessionRegistry {
                 now_ms,
             },
             method_id,
+            params,
         })
     }
 }

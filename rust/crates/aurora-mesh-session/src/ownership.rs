@@ -76,29 +76,79 @@ pub struct FrameOwnership {
 /// frames are the dispatcher's own output and are not classified here.
 pub const INBOUND_FRAME_OWNERSHIP: &[FrameOwnership] = &[
     // Rust fragments, so Rust owns the negotiated result — section 4.
-    row("protocol_hello", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "protocol_hello",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Fragmentation and reassembly, including the 65,535-byte ceiling.
-    row("fragment", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "fragment",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // R3's headline: hold the session past Python's 120 s stale window.
     row("ping", FrameOwner::Rust, BackgroundCapability::Yes, true),
     // Resolves a liveness probe this side originated, which TypeScript holds.
-    row("pong", FrameOwner::TypeScript, BackgroundCapability::No, false),
+    row(
+        "pong",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
     // Reconnect proof is deterministic from a durable credential.
-    row("mesh_auth_challenge_v1", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "mesh_auth_challenge_v1",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Single-use per peer; the replay guard moves with the frame.
-    row("mesh_auth_proof_v1", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "mesh_auth_proof_v1",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Credential presentation only, never credential creation.
     row("auth", FrameOwner::Rust, BackgroundCapability::Yes, false),
     row("reauth", FrameOwner::Rust, BackgroundCapability::Yes, false),
     // SAS needs a human comparing a code, so pairing never runs backgrounded.
-    row("pairing_v2_commit", FrameOwner::TypeScript, BackgroundCapability::No, false),
-    row("pairing_v2_reveal", FrameOwner::TypeScript, BackgroundCapability::No, false),
-    row("pairing_v2_terminal", FrameOwner::TypeScript, BackgroundCapability::No, false),
+    row(
+        "pairing_v2_commit",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
+    row(
+        "pairing_v2_reveal",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
+    row(
+        "pairing_v2_terminal",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
     // Authorize, then serve against the local data commands or defer — section 6.
     row("call", FrameOwner::Rust, BackgroundCapability::Yes, true),
     // Resolve a pending RPC this side originated.
-    row("result", FrameOwner::TypeScript, BackgroundCapability::No, false),
-    row("error", FrameOwner::TypeScript, BackgroundCapability::No, false),
+    row(
+        "result",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
+    row(
+        "error",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
     // Stream framing; delivery into TypeScript resumes on thaw.
     row("chunk", FrameOwner::Rust, BackgroundCapability::Yes, false),
     row("eof", FrameOwner::Rust, BackgroundCapability::Yes, false),
@@ -107,34 +157,129 @@ pub const INBOUND_FRAME_OWNERSHIP: &[FrameOwnership] = &[
     // Rust for a cancel to reach and it goes where the work is.
     row("cancel", FrameOwner::Rust, BackgroundCapability::Yes, false),
     // Fan-out to UI subscribers on the way in; Rust sources some on the way out.
-    row("event", FrameOwner::TypeScript, BackgroundCapability::Partial, false),
+    row(
+        "event",
+        FrameOwner::TypeScript,
+        BackgroundCapability::Partial,
+        false,
+    ),
     // Admission is an authority decision.
-    row("subscribe", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("unsubscribe", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("subscribed", FrameOwner::TypeScript, BackgroundCapability::No, false),
-    row("subscribe_rejected", FrameOwner::TypeScript, BackgroundCapability::No, false),
-    row("unsubscribed", FrameOwner::TypeScript, BackgroundCapability::No, false),
+    row(
+        "subscribe",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "unsubscribe",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "subscribed",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
+    row(
+        "subscribe_rejected",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
+    row(
+        "unsubscribed",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
     // Manifest content derives from the authority and the contract registry.
-    row("manifest", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("manifest_request", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("manifest_ack", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "manifest",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "manifest_request",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "manifest_ack",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Lease renewal is a timer that must survive the background.
-    row("provider_lease", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("provider_unavailable", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("capacity_update", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "provider_lease",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "provider_unavailable",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "capacity_update",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Roster observation, projected into TypeScript for the UI.
-    row("presence", FrameOwner::Rust, BackgroundCapability::Yes, false),
-    row("presence_departed", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "presence",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
+    row(
+        "presence_departed",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // R6's deliberate departure. A roster observation like `presence_departed`,
     // and Rust-owned for the same reason: the peer left behind must learn that
     // this absence was announced even while its own webview is frozen, because
     // silence is what a lost peer produces too.
-    row("mesh_peer_standby_v1", FrameOwner::Rust, BackgroundCapability::Yes, false),
+    row(
+        "mesh_peer_standby_v1",
+        FrameOwner::Rust,
+        BackgroundCapability::Yes,
+        false,
+    ),
     // Rust on reconnect, TypeScript on first contact — section 5.
-    row("offer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly, false),
-    row("answer", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly, false),
-    row("candidate", FrameOwner::RustOnReconnect, BackgroundCapability::ReconnectOnly, false),
-    row("mesh_event", FrameOwner::TypeScript, BackgroundCapability::No, false),
+    row(
+        "offer",
+        FrameOwner::RustOnReconnect,
+        BackgroundCapability::ReconnectOnly,
+        false,
+    ),
+    row(
+        "answer",
+        FrameOwner::RustOnReconnect,
+        BackgroundCapability::ReconnectOnly,
+        false,
+    ),
+    row(
+        "candidate",
+        FrameOwner::RustOnReconnect,
+        BackgroundCapability::ReconnectOnly,
+        false,
+    ),
+    row(
+        "mesh_event",
+        FrameOwner::TypeScript,
+        BackgroundCapability::No,
+        false,
+    ),
 ];
 
 const fn row(
