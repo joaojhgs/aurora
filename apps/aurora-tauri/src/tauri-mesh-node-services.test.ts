@@ -22,10 +22,11 @@ import type {
   LocalDataSession,
   PeerGrantMetadataRecord,
 } from "@aurora/client/local-data";
-import type {
-  PeerHostCallContext,
-  InboundVerifierSecretStoragePort,
-  PeerRelationshipSelector,
+import {
+  SecureInboundCredentialVerifierStore,
+  type PeerHostCallContext,
+  type InboundVerifierSecretStoragePort,
+  type PeerRelationshipSelector,
 } from "@aurora/client/webrtc";
 import { AURORA_NATIVE_TOOL_IDS, type LocalToolExportDecisionPort } from "@aurora/client/local-tools";
 import type {
@@ -228,6 +229,24 @@ describe("Tauri mesh node services", () => {
     ]);
     nowMs = 2_001;
     await expect(services.grantManager.listActiveGrants(selector)).resolves.toEqual([]);
+    await services.close();
+  });
+
+  it("persists issued verifiers and their revocation through the native composition", async () => {
+    const verifierSecretStorage = new MemorySecretStorage();
+    const services = await createEnabledServices(() => 1_000, {
+      verifierSecretStorage,
+    });
+    const issued = await services.pairingIssuer.issue(selector);
+    const durableVerifiers = new SecureInboundCredentialVerifierStore({
+      storage: verifierSecretStorage,
+    });
+
+    await expect(durableVerifiers.getVerifier(selector, 1_000)).resolves.toEqual(
+      issued.verifier,
+    );
+    await services.revocationController.revoke(selector, "user_revoked", 2_000);
+    await expect(durableVerifiers.getVerifier(selector, 2_001)).resolves.toBeUndefined();
     await services.close();
   });
 
@@ -896,12 +915,21 @@ function fakeAuthorityInvoke(newId: () => string) {
       return summaries;
     }
     if (command === "aurora_mesh_authority_issue_pairing_credential") {
+      const selectorArg = args?.selector as PeerRelationshipSelector;
+      const createdAtMs = Number(args?.nowMs ?? 0);
       return {
-        selector: args?.selector,
-        bearerToken: "redacted-test-token",
-        expiresAtMs: args?.expiresAtMs ?? null,
-        issuedAtMs: args?.nowMs ?? 0,
-        redacted: true,
+        tokenId: selectorArg.tokenId,
+        bearerToken: "a".repeat(64),
+        verifier: {
+          version: 1,
+          ...selectorArg,
+          tokenHashHex: "b".repeat(64),
+          createdAtMs,
+          ...(typeof args?.expiresAtMs === "number"
+            ? { expiresAtMs: args.expiresAtMs }
+            : {}),
+          credentialRevision: 1,
+        },
       };
     }
     if (command === "aurora_mesh_authority_rollback_pairing_credential") {

@@ -16,6 +16,7 @@ import {
 import {
   MemoryPeerCredentialStore,
   RustPeerHostAuthorizationStore,
+  SecureInboundCredentialVerifierStore,
   createTauriAuthorityPort,
   WebRtcPeerHost,
   createBrowserWebRtcAuroraRuntime,
@@ -45,6 +46,21 @@ const REPORT_SCHEMA = "aurora.desktop_live_e2e.desktop_report.v1";
 const AC18_BROWSER_TOOL_CONTRACT_ID = "interop.browser.echo";
 const AC18_BROWSER_TOOL_LOCAL_NAME = "interop.browser.echo";
 const FORCE_NATIVE_WEBRTC_ENV = "VITE_AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC";
+
+function createEphemeralInboundVerifierStore(): SecureInboundCredentialVerifierStore {
+  const secrets = new Map<string, string>();
+  return new SecureInboundCredentialVerifierStore({
+    storage: {
+      getOpaqueSecret: async (key) => secrets.get(key),
+      setOpaqueSecret: async (key, value) => {
+        secrets.set(key, value);
+      },
+      deleteOpaqueSecret: async (key) => {
+        secrets.delete(key);
+      },
+    },
+  });
+}
 
 type DesktopLiveE2eWindow = Window & {
   __AURORA_DESKTOP_LIVE_E2E__?: (payload: unknown) => Promise<DesktopLiveE2eReport>;
@@ -1171,7 +1187,9 @@ function createAc18BrowserLocalToolProvider(
   const authorizationStore = new RustPeerHostAuthorizationStore(
     createTauriAuthorityPort(resolveDesktopLiveInvoke()),
   );
-  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort();
+  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort(
+    createEphemeralInboundVerifierStore(),
+  );
   const peerPairingIssuer: ReturnType<
     RustPeerHostAuthorizationStore["asPairingIssuerPort"]
   > = {

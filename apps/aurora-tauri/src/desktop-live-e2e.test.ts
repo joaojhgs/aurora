@@ -660,7 +660,8 @@ describe("desktop live E2E WebView hook", () => {
   it("binds the reverse provider grant to the credential issued by native Rust", async () => {
     const source = await readFile(resolve(import.meta.dirname, "desktop-live-e2e.ts"), "utf8");
 
-    expect(source).toContain("const authorityPairingIssuer = authorizationStore.asPairingIssuerPort()");
+    expect(source).toContain("const authorityPairingIssuer = authorizationStore.asPairingIssuerPort(");
+    expect(source).toContain("createEphemeralInboundVerifierStore()");
     expect(source).toContain("tokenId: issued.verifier.tokenId");
     expect(source).toContain("peerAuthorityResolver: authorizationStore.asResolverPort()");
     expect(source).toContain("peerPairingIssuer: ac18.peerPairingIssuer");

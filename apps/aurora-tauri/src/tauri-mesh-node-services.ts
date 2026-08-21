@@ -260,10 +260,11 @@ export async function createTauriMeshNodeServices(
     );
     const nowMs = options.now ?? (() => Date.now());
     const authorityResolver = authorizationStore.asResolverPort();
-    const basePairingIssuer = authorizationStore.asPairingIssuerPort(nowMs);
+    const basePairingIssuer = authorizationStore.asPairingIssuerPort(verifierStore, nowMs);
     const revocationBroadcaster = new PeerRevocationHub();
     const revocationController = authorizationStore.asRevocationControllerPort(
       revocationBroadcaster,
+      { verifierStore, grantRepository },
       nowMs,
     );
     const grantManager = authorizationStore.asGrantManagerPort(nowMs, grantRepository);

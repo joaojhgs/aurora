@@ -101,6 +101,12 @@ export interface RustAuthorityAuditFailure {
 
 export type RustAuthorityAuditFailureReporter = (failure: RustAuthorityAuditFailure) => void
 
+/** Durable rows that must move with one authority revocation. */
+export interface RustAuthorityRevocationPersistence {
+  readonly verifierStore: InboundCredentialVerifierStore
+  readonly grantRepository: PeerGrantRepository
+}
+
 /** The subset of the Rust authority this store dispatches to. */
 export interface RustAuthorityPort {
   hydrate(hydration: RustAuthorityHydration): Promise<void>
@@ -512,13 +518,43 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
     }
   }
 
-  /** The pairing issuer seam, answered by the same authority. */
-  asPairingIssuerPort(now: () => number = Date.now): PeerPairingIssuerPort {
+  /**
+   * The pairing issuer seam, answered by the same authority.
+   *
+   * The authority owns credential generation, while `persist` owns the durable
+   * verifier row needed to authenticate the claimant after this process is
+   * recreated. The bearer token is not returned until that verifier is durable.
+   */
+  asPairingIssuerPort(
+    persist: InboundCredentialVerifierStore,
+    now: () => number = Date.now
+  ): PeerPairingIssuerPort {
     return {
-      issue: async (selector, options = {}) =>
-        await this.port.issuePairingCredential(selector, options, now()),
+      issue: async (selector, options = {}) => {
+        const issued = await this.port.issuePairingCredential(selector, options, now())
+        try {
+          await persist.upsertVerifier(issued.verifier)
+          return issued
+        } catch (error) {
+          // A credential whose verifier is not durable must never escape. Both
+          // cleanup paths are attempted because a storage operation may fail
+          // after partially completing.
+          await Promise.allSettled([
+            this.port.rollbackPairingCredential(selector),
+            persist.deleteVerifier(selector)
+          ])
+          throw error
+        }
+      },
       rollback: async (selector) => {
-        await this.port.rollbackPairingCredential(selector)
+        const results = await Promise.allSettled([
+          this.port.rollbackPairingCredential(selector),
+          persist.deleteVerifier(selector)
+        ])
+        const failed = results.find(
+          (result): result is PromiseRejectedResult => result.status === 'rejected'
+        )
+        if (failed !== undefined) throw failed.reason
       }
     }
   }
@@ -531,12 +567,21 @@ export class RustPeerHostAuthorizationStore implements PeerHostAuthorizationStor
    */
   asRevocationControllerPort(
     hub: { publish(event: PeerRevocationEvent): Promise<void> },
+    persist: RustAuthorityRevocationPersistence,
     now: () => number = Date.now
   ): PeerRevocationController {
     return {
       revoke: async (selector, reasonCode = 'peer_authority_revoked', revokedAtMs = now()) => {
         await this.ensureHydrated(selector)
         const event = await this.port.revokePeerAuthority(selector, reasonCode, revokedAtMs)
+        // Publish only after every durable authority row has been withdrawn.
+        // The live Rust authority is already fail-closed if persistence fails,
+        // and the rejection prevents callers from claiming success. The
+        // verifier tombstone is the restart-safety boundary. Persist it before
+        // touching grants: if later cleanup fails, the old grants are
+        // unreachable because the relationship can no longer authenticate.
+        await persist.verifierStore.revokeVerifier(selector, event.revokedAtMs)
+        await persist.grantRepository.revokeGrants(selector, event.revokedAtMs)
         await hub.publish(event)
         return event
       }

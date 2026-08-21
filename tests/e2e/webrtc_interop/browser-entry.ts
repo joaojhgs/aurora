@@ -5,6 +5,7 @@ import {
   MemoryPeerCredentialStore,
   MqttWebSocketSignalingClient,
   RustPeerHostAuthorizationStore,
+  SecureInboundCredentialVerifierStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   type WebRtcPeerConnectionProfile
@@ -393,6 +394,21 @@ const AC18_BROWSER_TOOL_CONTRACT_ID = 'interop.browser.echo'
 const AC18_BROWSER_TOOL_LOCAL_NAME = 'interop.browser.echo'
 const MESH_AUTHORITY_WASM_ASSET = '/aurora_mesh_authority_bg.wasm'
 
+function createEphemeralInboundVerifierStore(): SecureInboundCredentialVerifierStore {
+  const secrets = new Map<string, string>()
+  return new SecureInboundCredentialVerifierStore({
+    storage: {
+      getOpaqueSecret: async (key) => secrets.get(key),
+      setOpaqueSecret: async (key, value) => {
+        secrets.set(key, value)
+      },
+      deleteOpaqueSecret: async (key) => {
+        secrets.delete(key)
+      }
+    }
+  })
+}
+
 async function createAc18BrowserLocalToolProvider(
   config: InteropBrowserConfig
 ): Promise<Ac18BrowserLocalToolProbe> {
@@ -520,7 +536,9 @@ async function createAc18BrowserLocalToolProvider(
       () => `ac18-grant-${config.lane}`
     )
   )
-  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort()
+  const authorityPairingIssuer = authorizationStore.asPairingIssuerPort(
+    createEphemeralInboundVerifierStore()
+  )
   const peerPairingIssuer: ReturnType<
     RustPeerHostAuthorizationStore['asPairingIssuerPort']
   > = {

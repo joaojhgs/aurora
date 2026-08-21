@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MESH_AUTHORITY_COMMANDS,
   RustPeerHostAuthorizationStore,
+  createDurableHydrationLoader,
   createTauriAuthorityPort,
   createWasmAuthorityPort
 } from '../src/peer-host/rust-authorization-store.js'
+import { SecureInboundCredentialVerifierStore } from '../src/peer-host/local-data-authority-adapters.js'
 import type { PeerHostAuthorizationStore } from '../src/peer-host/types.js'
 
 const SELECTOR = {
@@ -36,6 +38,20 @@ const GRANT = {
   resourceScopes: [],
   createdAtMs: 1_000,
   grantRevision: 3
+}
+
+const VERIFIER = {
+  version: 1 as const,
+  ...SELECTOR,
+  tokenHashHex: 'a'.repeat(64),
+  createdAtMs: 1_000,
+  credentialRevision: 1
+}
+
+const ISSUED = {
+  tokenId: SELECTOR.tokenId,
+  bearerToken: 'b'.repeat(64),
+  verifier: VERIFIER
 }
 
 const AUTHORIZE_REQUEST = {
@@ -243,6 +259,276 @@ describe('Rust-backed peer host authorization store', () => {
     })
     expect(loadHydration).toHaveBeenCalledTimes(2)
     expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists an issued verifier before returning its bearer credential', async () => {
+    const order: string[] = []
+    const issuePairingCredential = vi.fn(async () => {
+      order.push('authority')
+      return ISSUED
+    })
+    const upsertVerifier = vi.fn(async () => {
+      order.push('durable')
+    })
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        issuePairingCredential
+      })
+    )
+
+    await expect(store.asPairingIssuerPort({
+      getVerifier: async () => undefined,
+      upsertVerifier,
+      revokeVerifier: async () => undefined,
+      deleteVerifier: async () => undefined
+    }, () => 1_000).issue(SELECTOR)).resolves.toEqual(ISSUED)
+
+    expect(issuePairingCredential).toHaveBeenCalledWith(SELECTOR, undefined, 1_000)
+    expect(upsertVerifier).toHaveBeenCalledWith(VERIFIER)
+    expect(order).toEqual(['authority', 'durable'])
+  })
+
+  it('withdraws both authority copies when issued-verifier persistence fails', async () => {
+    const rollbackPairingCredential = vi.fn(async () => undefined)
+    const deleteVerifier = vi.fn(async () => undefined)
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        issuePairingCredential: async () => ISSUED,
+        rollbackPairingCredential
+      })
+    )
+    const issuer = store.asPairingIssuerPort({
+      getVerifier: async () => undefined,
+      upsertVerifier: async () => { throw new Error('durable verifier unavailable') },
+      revokeVerifier: async () => undefined,
+      deleteVerifier
+    }, () => 1_000)
+
+    await expect(issuer.issue(SELECTOR)).rejects.toThrow('durable verifier unavailable')
+    expect(rollbackPairingCredential).toHaveBeenCalledWith(SELECTOR)
+    expect(deleteVerifier).toHaveBeenCalledWith(SELECTOR)
+  })
+
+  it('removes both live and durable verifier copies on pairing rollback', async () => {
+    const rollbackPairingCredential = vi.fn(async () => undefined)
+    const deleteVerifier = vi.fn(async () => undefined)
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        rollbackPairingCredential
+      })
+    )
+    const issuer = store.asPairingIssuerPort({
+      getVerifier: async () => undefined,
+      upsertVerifier: async () => undefined,
+      revokeVerifier: async () => undefined,
+      deleteVerifier
+    }, () => 1_000)
+
+    await expect(issuer.rollback(SELECTOR)).resolves.toBeUndefined()
+    expect(rollbackPairingCredential).toHaveBeenCalledWith(SELECTOR)
+    expect(deleteVerifier).toHaveBeenCalledWith(SELECTOR)
+  })
+
+  it('persists verifier and grant revocations before notifying live subscribers', async () => {
+    const order: string[] = []
+    const event = {
+      type: 'peer_authority_revoked_v1' as const,
+      selector: SELECTOR,
+      revokedGrantIds: [GRANT.grantId],
+      credentialRevision: 2,
+      revokedAtMs: 2_000,
+      reasonCode: 'user_revoked',
+      redacted: true as const
+    }
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        revokePeerAuthority: async () => {
+          order.push('authority')
+          return event
+        }
+      })
+    )
+    const publish = vi.fn(async () => { order.push('publish') })
+    const revokeVerifier = vi.fn(async () => {
+      order.push('verifier')
+      return { ...VERIFIER, credentialRevision: 2, revokedAtMs: 2_000 }
+    })
+    const revokeGrants = vi.fn(async () => {
+      order.push('grants')
+      return [{ ...GRANT, grantRevision: 4, revokedAtMs: 2_000 }]
+    })
+    const controller = store.asRevocationControllerPort(
+      { publish },
+      {
+        verifierStore: {
+          getVerifier: async () => undefined,
+          upsertVerifier: async () => undefined,
+          revokeVerifier,
+          deleteVerifier: async () => undefined
+        },
+        grantRepository: {
+          upsertGrant: async () => undefined,
+          resolveGrant: async () => ({ allowed: false }),
+          listRecipientGrants: async () => [],
+          revokeGrants
+        }
+      },
+      () => 2_000
+    )
+
+    await expect(controller.revoke(SELECTOR, 'user_revoked')).resolves.toEqual(event)
+    expect(revokeVerifier).toHaveBeenCalledWith(SELECTOR, 2_000)
+    expect(revokeGrants).toHaveBeenCalledWith(SELECTOR, 2_000)
+    expect(order[0]).toBe('authority')
+    expect(order.at(-1)).toBe('publish')
+  })
+
+  it('does not broadcast a revocation whose durable write fails', async () => {
+    const event = {
+      type: 'peer_authority_revoked_v1' as const,
+      selector: SELECTOR,
+      revokedGrantIds: [],
+      revokedAtMs: 2_000,
+      reasonCode: 'user_revoked',
+      redacted: true as const
+    }
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        revokePeerAuthority: async () => event
+      })
+    )
+    const publish = vi.fn(async () => undefined)
+    const revokeGrants = vi.fn(async () => [])
+    const controller = store.asRevocationControllerPort(
+      { publish },
+      {
+        verifierStore: {
+          getVerifier: async () => undefined,
+          upsertVerifier: async () => undefined,
+          revokeVerifier: async () => { throw new Error('durable revoke unavailable') },
+          deleteVerifier: async () => undefined
+        },
+        grantRepository: {
+          upsertGrant: async () => undefined,
+          resolveGrant: async () => ({ allowed: false }),
+          listRecipientGrants: async () => [],
+          revokeGrants
+        }
+      },
+      () => 2_000
+    )
+
+    await expect(controller.revoke(SELECTOR, 'user_revoked')).rejects.toThrow(
+      'durable revoke unavailable'
+    )
+    expect(publish).not.toHaveBeenCalled()
+    expect(revokeGrants).not.toHaveBeenCalled()
+  })
+
+  it('cannot rehydrate a revoked credential when later grant cleanup fails', async () => {
+    const secrets = new Map<string, string>()
+    const verifierStore = new SecureInboundCredentialVerifierStore({
+      storage: {
+        getOpaqueSecret: async (key) => secrets.get(key),
+        setOpaqueSecret: async (key, value) => {
+          secrets.set(key, value)
+        },
+        deleteOpaqueSecret: async (key) => {
+          secrets.delete(key)
+        }
+      }
+    })
+    await verifierStore.upsertVerifier(VERIFIER)
+
+    const event = {
+      type: 'peer_authority_revoked_v1' as const,
+      selector: SELECTOR,
+      revokedGrantIds: [GRANT.grantId],
+      revokedAtMs: 2_000,
+      reasonCode: 'user_revoked',
+      redacted: true as const
+    }
+    const store = new RustPeerHostAuthorizationStore(
+      createWasmAuthorityPort({
+        ...unusedWasmSurface,
+        hydrate: async () => undefined,
+        authorize: async () => ({ allowed: false }),
+        snapshotManifestAuthority: async () => ({
+          grantedMethodIds: [],
+          authGrantRevision: 0,
+          authGrantState: 'unknown' as const
+        }),
+        revokePeerAuthority: async () => event
+      })
+    )
+    const publish = vi.fn(async () => undefined)
+    const grantRepository = {
+      upsertGrant: async () => undefined,
+      resolveGrant: async () => ({ allowed: false }),
+      listRecipientGrants: async () => [GRANT],
+      revokeGrants: async () => {
+        throw new Error('grant cleanup unavailable')
+      }
+    }
+
+    await expect(
+      store.asRevocationControllerPort(
+        { publish },
+        { verifierStore, grantRepository },
+        () => 2_000
+      ).revoke(SELECTOR, 'user_revoked')
+    ).rejects.toThrow('grant cleanup unavailable')
+    expect(publish).not.toHaveBeenCalled()
+
+    const reload = createDurableHydrationLoader({
+      verifierStore,
+      grantRepository,
+      now: () => 2_001
+    })
+    await expect(reload(SELECTOR)).resolves.toEqual({
+      verifiers: [],
+      grants: [GRANT]
+    })
   })
 
   it('reports audit persistence failure without changing or exposing the decision', async () => {

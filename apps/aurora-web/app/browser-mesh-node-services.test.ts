@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BrowserPersistentPeerCredentialStore, createBrowserNativeCapabilityPack, type AuroraRuntimeProfileV2 } from '@aurora/ui'
 import { MemoryLocalDataBackend, type EncryptedDataEnvelopeV1, type EnvelopeCryptoPort, type LocalDataBackend, type LocalDataBackendStatus, type LocalDataKeyPurpose, type LocalDataSession } from '@aurora/client/local-data'
 import type { LocalToolExportDecisionPort } from '@aurora/client/local-tools'
+import { createReconnectProofForBearer } from '@aurora/client/webrtc'
 import type { MeshAuthorityWasmSource } from '@aurora/mesh-authority-web'
 import {
   BrowserMeshNodeCompositionError,
@@ -184,6 +185,76 @@ describe('browser mesh-node service composition', () => {
     await services.close()
   })
 
+  it('hydrates an issued verifier after the browser authority is recreated', async () => {
+    const credentialStore = durableCredentialStore()
+    const createServices = async () => await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore,
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(
+        new PersistentMemoryLocalDataBackend(),
+      ),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'reload-id-1',
+      authorityWasmSource: nodeWasmSource,
+    })
+    const selector = {
+      tokenId: 'token-browser-reload',
+      claimantPeerId: 'remote-peer',
+      verifierPeerId: 'browser-peer',
+      roomName: 'office',
+    }
+    const transport = {
+      channelBinding: 'c'.repeat(64),
+      claimantSignalingPeerId: 'signal-remote',
+      verifierSignalingPeerId: 'signal-browser',
+    }
+
+    const first = await createServices()
+    const issued = await first.peerPairingIssuer.issue(selector)
+    await first.close()
+
+    const recreated = await createServices()
+    const resolver = recreated.peerAuthorityResolver
+    expect(resolver).toBeDefined()
+    if (resolver === undefined) throw new Error('peer authority resolver missing')
+    const challenge = await resolver.issueReconnectChallenge({
+      identity: {
+        claimantPeerId: selector.claimantPeerId,
+        verifierPeerId: selector.verifierPeerId,
+        roomName: selector.roomName,
+      },
+      transport,
+      nowMs: 1_000,
+    })
+    const proofHex = await createReconnectProofForBearer(
+      issued.bearerToken,
+      selector,
+      transport,
+      challenge.challenge,
+    )
+
+    await expect(resolver.verifyReconnectProof({
+      proofHex,
+      selector,
+      transport,
+      challenge: challenge.challenge,
+      nowMs: 1_000,
+    })).resolves.toMatchObject({
+      ok: true,
+      context: expect.objectContaining({ selector }),
+    })
+    await recreated.close()
+    await credentialStore.close()
+  })
+
   it('uses explicit export decisions and records local tool audit directly into durable local data', async () => {
     const store = durableCredentialStore()
     const backend = new PersistentMemoryLocalDataBackend()
@@ -300,6 +371,36 @@ describe('browser mesh-node service composition', () => {
     await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2))
     expect(maxActiveResumes).toBe(1)
     await services.close()
+  })
+
+  it('defers provider refreshes until a peer transport is attached', async () => {
+    const reportProviderRefreshFailure = vi.fn()
+    const services = await createBrowserMeshNodeServices({
+      runtimeProfile: meshProfile(),
+      credentialStore: durableCredentialStore(),
+      rolloutFlags: rolloutFlags(),
+      localStablePeerId: 'browser-peer',
+      localDataBackendFactory: async () => localDataAuthority(new PersistentMemoryLocalDataBackend()),
+      envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+      nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+        ...options,
+        navigator: { onLine: true, userAgent: 'vitest' },
+      }),
+      cursorSecret: 'cursor-secret-1234',
+      nowMs: () => 1_000,
+      randomId: () => 'id-1',
+      randomBytes: fixedBytes,
+      authorityWasmSource: nodeWasmSource,
+      reportProviderRefreshFailure,
+    })
+
+    await services.localFeatureSharing.setFeatureEnabled(
+      'aurora.local.native.get_device_status.v1',
+      true,
+    )
+    await services.close()
+
+    expect(reportProviderRefreshFailure).not.toHaveBeenCalled()
   })
 
   it('retries a failed provider refresh once and reports only a stable failure code', async () => {

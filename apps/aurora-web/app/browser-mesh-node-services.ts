@@ -213,11 +213,13 @@ export async function createBrowserMeshNodeServices(
     )
     const resolver = authorizationStore.asResolverPort()
     const pairingIssuer: PeerPairingIssuerPort = authorizationStore.asPairingIssuerPort(
+      verifierStore,
       options.nowMs ?? Date.now,
     )
     const broadcaster = new peerHost.PeerRevocationHub()
     const revocationController = authorizationStore.asRevocationControllerPort(
       broadcaster,
+      { verifierStore, grantRepository },
       options.nowMs ?? Date.now,
     )
     const grantManager = authorizationStore.asGrantManagerPort(
