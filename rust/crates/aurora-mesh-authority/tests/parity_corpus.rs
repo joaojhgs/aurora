@@ -12,11 +12,12 @@
 use std::path::PathBuf;
 
 use aurora_mesh_authority::authority::{
-    AuthenticatedPeerContext, InboundCredentialVerifierStore, LocalPeerGrantV1,
-    MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink, MemoryPeerGrantRepository,
-    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
-    PeerGrantResolutionRequest, PeerRelationshipIdentity, PeerRelationshipSelector, RandomSource,
-    ReconnectChallengeStore, ReconnectTransportAttestation,
+    AuthenticatedPeerContext, AuthorityError, AuthorityResult, InboundCredentialVerifierStore,
+    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
+    MemoryPeerGrantRepository, MemoryReconnectChallengeStore, PeerAuthorityResolver,
+    PeerGrantRepository, PeerGrantResolutionRequest, PeerPairingIssueOptions, PeerPairingIssuer,
+    PeerRelationshipIdentity, PeerRelationshipSelector, RandomSource, ReconnectChallengeStore,
+    ReconnectTransportAttestation,
 };
 use aurora_mesh_authority::authorization::{
     PeerAuthorityHostAuthorizationStore, SessionPeerHostAuthorizationStore,
@@ -43,8 +44,16 @@ use serde_json::Value;
 struct FixedRandomSource(u8);
 
 impl RandomSource for FixedRandomSource {
-    fn random_bytes(&self, length: usize) -> Vec<u8> {
-        vec![self.0; length]
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
+        Ok(vec![self.0; length])
+    }
+}
+
+struct FailingRandomSource;
+
+impl RandomSource for FailingRandomSource {
+    fn random_bytes(&self, _length: usize) -> AuthorityResult<Vec<u8>> {
+        Err(AuthorityError::RandomSourceUnavailable)
     }
 }
 
@@ -942,9 +951,9 @@ async fn a_credential_without_a_grant_authorizes_nothing() {
 async fn reconnect_challenges_are_single_use_per_peer() {
     struct Counter(std::sync::atomic::AtomicU8);
     impl RandomSource for Counter {
-        fn random_bytes(&self, length: usize) -> Vec<u8> {
+        fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
             let value = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            vec![value; length]
+            Ok(vec![value; length])
         }
     }
 
@@ -1023,6 +1032,50 @@ async fn reconnect_challenges_are_single_use_per_peer() {
             .as_str(),
         "accepted"
     );
+}
+
+#[tokio::test]
+async fn random_source_failure_rejects_challenge_issue_without_panicking() {
+    let identity = PeerRelationshipIdentity {
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let transport = ReconnectTransportAttestation {
+        channel_binding: "b".repeat(64),
+        claimant_signaling_peer_id: "sig-a".to_owned(),
+        verifier_signaling_peer_id: "sig-host".to_owned(),
+    };
+    let mut store = MemoryReconnectChallengeStore::new(Box::new(FailingRandomSource));
+
+    let error = store
+        .issue_challenge(&identity, &transport, 1_000)
+        .await
+        .expect_err("random-source failure is returned");
+
+    assert!(matches!(error, AuthorityError::RandomSourceUnavailable));
+}
+
+#[tokio::test]
+async fn random_source_failure_rejects_pairing_issue_without_panicking() {
+    let selector = PeerRelationshipSelector {
+        token_id: "token-a".to_owned(),
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let mut issuer = PeerPairingIssuer::new(
+        MemoryInboundCredentialVerifierStore::new(),
+        MemoryPeerAuditSink::default(),
+        Box::new(FailingRandomSource),
+    );
+
+    let error = issuer
+        .issue(&selector, &PeerPairingIssueOptions::default(), 1_000)
+        .await
+        .expect_err("random-source failure is returned");
+
+    assert!(matches!(error, AuthorityError::RandomSourceUnavailable));
 }
 
 /// The corpus must keep carrying hostile cases, or it stops being a guard.

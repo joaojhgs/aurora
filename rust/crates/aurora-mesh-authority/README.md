@@ -96,7 +96,8 @@ Owned entirely by this lane, so it lands with no conflict.
 use std::sync::Arc;
 
 use aurora_mesh_authority::authority::{
-    InboundCredentialVerifierStore, IssueReconnectChallengeRequest,
+    AuthorityError, AuthorityResult, InboundCredentialVerifierStore,
+    IssueReconnectChallengeRequest,
     LocalPeerCredentialVerifierV1, LocalPeerGrantV1, MemoryInboundCredentialVerifierStore,
     MemoryPeerAuditSink, MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster,
     MemoryPeerRevocationController, MemoryReconnectChallengeStore, PeerAuthorityResolver,
@@ -115,10 +116,11 @@ use tokio::sync::Mutex;
 struct OsRandomSource;
 
 impl RandomSource for OsRandomSource {
-    fn random_bytes(&self, length: usize) -> Vec<u8> {
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
         let mut out = vec![0_u8; length];
-        getrandom::getrandom(&mut out).expect("OS random source is unavailable");
-        out
+        getrandom::getrandom(&mut out)
+            .map_err(|_| AuthorityError::RandomSourceUnavailable)?;
+        Ok(out)
     }
 }
 

@@ -20,11 +20,11 @@
 use wasm_bindgen::prelude::*;
 
 use crate::authority::{
-    IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1, LocalPeerGrantV1,
-    MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink, MemoryPeerGrantRepository,
-    MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController, MemoryReconnectChallengeStore,
-    PeerAuthorityResolver, PeerGrantRepository, PeerRelationshipSelector, RandomSource,
-    VerifyReconnectProofRequest,
+    AuthorityError, AuthorityResult, IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1,
+    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
+    MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController,
+    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
+    PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
 };
 use crate::authorization::PeerAuthorityHostAuthorizationStore;
 use crate::contract_registry::{
@@ -44,20 +44,20 @@ use crate::types::{
 struct JsRandomSource;
 
 impl RandomSource for JsRandomSource {
-    fn random_bytes(&self, length: usize) -> Vec<u8> {
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
         let mut out = vec![0_u8; length];
-        getrandom_from_js(&mut out);
-        out
+        getrandom_from_js(&mut out).map_err(|_| AuthorityError::RandomSourceUnavailable)?;
+        Ok(out)
     }
 }
 
-fn getrandom_from_js(out: &mut [u8]) {
+fn getrandom_from_js(out: &mut [u8]) -> Result<JsValue, JsValue> {
     #[wasm_bindgen]
     extern "C" {
-        #[wasm_bindgen(js_namespace = crypto, js_name = getRandomValues)]
-        fn get_random_values(target: &mut [u8]);
+        #[wasm_bindgen(catch, js_namespace = crypto, js_name = getRandomValues)]
+        fn get_random_values(target: &mut [u8]) -> Result<JsValue, JsValue>;
     }
-    get_random_values(out);
+    get_random_values(out)
 }
 
 fn to_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {

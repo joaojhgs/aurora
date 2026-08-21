@@ -54,6 +54,9 @@ pub enum AuthorityError {
     /// The reconnect challenge store is a deny-all stub.
     #[error("Reconnect challenge store is unavailable")]
     ChallengeStoreUnavailable,
+    /// The platform cryptographic random source could not provide bytes.
+    #[error("Cryptographic random source is unavailable")]
+    RandomSourceUnavailable,
     /// The random source produced a colliding challenge too many times.
     #[error("Reconnect challenge collision retry limit exceeded")]
     ChallengeCollisionRetryLimit,
@@ -526,15 +529,15 @@ pub struct PeerRevocationEvent {
 /// Tauri and tests.
 pub trait RandomSource: Send + Sync {
     /// Fill `length` bytes.
-    fn random_bytes(&self, length: usize) -> Vec<u8>;
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>>;
 }
 
 impl<F> RandomSource for F
 where
     F: Fn(usize) -> Vec<u8> + Send + Sync,
 {
-    fn random_bytes(&self, length: usize) -> Vec<u8> {
-        self(length)
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
+        Ok(self(length))
     }
 }
 
@@ -1062,7 +1065,7 @@ impl ReconnectChallengeStore for MemoryReconnectChallengeStore {
         validate_transport(transport)?;
         self.prune(now_ms);
         for _ in 0..=MAX_CHALLENGE_COLLISION_RETRIES {
-            let challenge = bytes_to_hex(&self.random.random_bytes(32));
+            let challenge = bytes_to_hex(&self.random.random_bytes(32)?);
             if !is_hex64(&challenge) {
                 return Err(AuthorityError::InvalidChallengeBytes);
             }
@@ -1613,7 +1616,7 @@ where
         now_ms: i64,
     ) -> AuthorityResult<IssuedPeerBearerCredential> {
         validate_selector(selector)?;
-        let bearer_token = bytes_to_hex(&self.random.random_bytes(32));
+        let bearer_token = bytes_to_hex(&self.random.random_bytes(32)?);
         let token_hash = sha256(bearer_token.as_bytes());
         let verifier = LocalPeerCredentialVerifierV1 {
             version: 1,

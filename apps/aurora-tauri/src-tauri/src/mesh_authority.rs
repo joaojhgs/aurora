@@ -13,11 +13,12 @@
 //! peer arrived on.
 
 use aurora_mesh_authority::authority::{
-    InboundCredentialVerifierStore, IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1,
-    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
-    MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController,
-    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
-    PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
+    AuthorityError, AuthorityResult, InboundCredentialVerifierStore,
+    IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1, LocalPeerGrantV1,
+    MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink, MemoryPeerGrantRepository,
+    MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController, MemoryReconnectChallengeStore,
+    PeerAuthorityResolver, PeerGrantRepository, PeerRelationshipSelector, RandomSource,
+    VerifyReconnectProofRequest,
 };
 use aurora_mesh_authority::authorization::PeerAuthorityHostAuthorizationStore;
 use aurora_mesh_authority::grant_management::{PeerGrantManager, PeerGrantSelection};
@@ -35,10 +36,10 @@ use tokio::sync::Mutex;
 struct OsRandomSource;
 
 impl RandomSource for OsRandomSource {
-    fn random_bytes(&self, length: usize) -> Vec<u8> {
+    fn random_bytes(&self, length: usize) -> AuthorityResult<Vec<u8>> {
         let mut out = vec![0_u8; length];
-        getrandom::getrandom(&mut out).expect("OS random source is unavailable");
-        out
+        getrandom::getrandom(&mut out).map_err(|_| AuthorityError::RandomSourceUnavailable)?;
+        Ok(out)
     }
 }
 
