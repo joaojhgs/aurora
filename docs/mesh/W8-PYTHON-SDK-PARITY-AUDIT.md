@@ -154,24 +154,28 @@ row reopens.
 |---|---|---|
 | `_tooling_remote_authority_revisions`, `_tooling_remote_authority_grants` | Rust authority decisions carry `grantedToolContractIds`; consumer projects labels | green |
 | `_tooling_projection_refresh_tasks`, `_tooling_projection_sync_after_lease`, `_tooling_outbound_manifest_revisions` | manifest revision + lease renewal per bridge | green |
-| `_latest_tooling_projection_invalidations_by_peer`, `_tooling_invalidation_retry_tasks` | **unresolved — see below** | unresolved |
+| `_latest_tooling_projection_invalidations_by_peer`, `_tooling_invalidation_retry_tasks` | typed `Tooling.ProjectionInvalidated` event, authenticated source-peer binding, exact-peer catalog refresh, and per-peer Tauri refresh generation | green |
 | `_latest_tooling_projection_invalidation` (global) | — | excluded (global cursor, not per-peer) |
 
-**Unresolved, and deliberately not called a gap.** Python sends a metadata-only invalidation
-to exactly one authenticated peer (`send_tooling_projection_invalidation`,
-`rtc_client.py:3586`), carrying `manifest_revision`, `authority_revision` and
-`auth_grant_revision`, and retries delivery per peer on failure
-(`_tooling_invalidation_retry_tasks[recipient_peer_id]`, line 3680).
+**End-to-end trace.** Python sends a metadata-only invalidation to exactly one authenticated
+peer through `send_tooling_projection_invalidation` in
+`app/services/gateway/webrtc/rtc_client.py`. The forwarded event remains the typed
+`Tooling.ProjectionInvalidated` topic through the Gateway RPC allowlist. The TypeScript peer
+host registers the same metadata-only event in
+`packages/aurora-sdk/src/peer-host/contract-registry.ts`, and the local tooling provider emits
+it from `packages/aurora-sdk/src/local-tools/mesh-node-provider.ts` without accepting caller
+supplied peer-membership fields.
 
-What I could verify: a repository-wide search finds no SDK code referencing projection
-invalidation by name. What I could **not** verify: how the SDK consumes it. The payload has no
-bespoke frame type, so it is most likely delivered as a typed `event`, which the bridge does
-dispatch through its per-peer subscription registry — in which case there may be no gap at all,
-only a different mechanism. Confirming this needs a trace of the sending topic through to the
-SDK subscriber, which I did not complete.
-
-Recorded as unresolved rather than asserted as a defect. An audit that overstates a gap costs
-as much as one that misses it.
+The consumer in
+`packages/aurora-sdk/src/lightweight-orchestrator/tool-client-adapter.ts` binds the source to
+the authenticated event audit peer, rejects mismatched or forbidden peer membership, and
+refreshes the catalog from that exact peer. The production Tauri consumer in
+`apps/aurora-tauri/src/aurora-client.ts` and `tauri-app.tsx` refreshes only the emitting peer;
+a per-peer generation token prevents a late request from restoring a projection after that
+peer loses readiness. Provider emission, authenticated source binding, exact-peer refresh,
+wrong-peer rejection, readiness loss, and stale-refresh suppression are covered by
+`local-tools-mesh-provider-composition.test.ts`, `lightweight-tool-client-adapter.test.ts`,
+`webrtc-mesh-peer-bridge.test.ts`, and `aurora-client.test.tsx`.
 
 ## I. Events
 
@@ -193,16 +197,14 @@ and singletons. The SDK's equivalents are constructor options and runtime-level 
 ## Summary
 
 - **Rows walked:** 83 fields across `rtc_client.py:391-515`.
-- **Green:** every per-peer subsystem except the two below — transport, session lifecycle,
+- **Green:** every applicable per-peer subsystem — transport, session lifecycle,
   identity binding, credentials, reconnect replay, pairing, protocol negotiation,
-  fragmentation, RPC correlation, manifest, provider lease, tooling authority, events.
+  fragmentation, RPC correlation, manifest, provider lease, tooling authority, tooling
+  invalidation, and events.
 - **Gaps: none.** The one row that looked like a gap — `_peer_pairing_directions` against a
   single `pendingPairing` slot — resolves green on inspection: the slot is the SAS prompt, and
   SAS is one code per handshake, while the two credential directions are separate fields on the
   auth port that do not cancel each other.
-- **Unresolved (1):** tooling projection invalidation — no SDK code references it by name, but
-  its delivery mechanism was not traced end to end, so whether that is a gap is genuinely open.
-
-The unresolved row needs a trace of the sending topic through to its SDK subscriber before it
-can be called green or a gap. If it turns out to be a gap, it needs a failing test before a
-fix, per the plan's standard for the invariants.
+- **Unresolved: none.** The tooling invalidation row is green after tracing the typed event
+  through its authenticated SDK subscriber and production Tauri consumer, with exact-peer and
+  stale-refresh regression coverage.

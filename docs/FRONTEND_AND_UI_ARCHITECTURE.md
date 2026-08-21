@@ -73,6 +73,7 @@ Platform playback rules:
 
 - Desktop local daemon/STT requests keep wakeword and background capture in Python services. The orchestrator starts `TTS.StreamStart` with `play_on_server=true`, so the local TTS service speaks even if the WebView is minimized.
 - Desktop client, hosted web, and mobile push-to-talk/read-aloud paths use client playback from `TTS.AudioChunk` events unless a native bridge later advertises a tested playback surface.
+- Linux desktop clients whose WebView lacks WebRTC route the assistant through the native Rust mesh session selected for that exact peer. Calls wait for the selected peer's manifest, correlate results to the peer and channel generation that issued them, discard late replies after timeout or cancellation, and keep cancellation retryable until the peer accepts the interrupt. JavaScript receives normalized assistant updates and never receives the peer credential.
 - UI-origin text messages do not auto-read responses unless runtime config enables the UI assistant readback preference.
 - Tool-call cards must use redacted stream previews from the SDK; no component may display raw tool args, tokens, audio, or unredacted support data.
 

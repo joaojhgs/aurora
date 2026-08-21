@@ -1,5 +1,8 @@
 # Handoff — thin-client mesh parity, M7 and M8 remaining
 
+**Status:** Historical/provenance. This records the state of an earlier agent handoff and is
+not current implementation guidance.
+
 Written for the agent taking this over. Everything here is state as of the handoff commit;
 nothing is aspirational. Read `docs/mesh/THIN-CLIENT-MESH-PARITY-PLAN.md` first — it is the
 authoritative brief and it has not changed.

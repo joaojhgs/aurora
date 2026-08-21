@@ -20,7 +20,7 @@ the same thing:
 | 5 | Authority contexts never cross peers | Rust authority, keyed by peer identity, holds no transport state | 6 corpus cases driven by `manifest_snapshots_match` and friends; `authority_holds_no_transport_state` covers the structural half | **mutation-confirmed** |
 | 6 | One Aurora in the notification shade | `AuroraRuntimeForegroundLedger`, reference-counted reasons | `android-runtime-foreground-service.test.ts` (5 tests) | **mutation-confirmed** |
 | 7 | Runtime is chosen by platform, never by lifecycle | `aurora-mesh-session` registry | `ping_is_answered_the_same_way_in_both_lifecycles` (Rust), which cites the invariant in its failure message | read-and-run |
-| 8 | Shedding a peer is distinguishable from losing one and costs no re-pair | R6's budget + the "going away, keep my credential" signal | — | **pending (M7/R6 not built)** |
+| 8 | Shedding a peer is distinguishable from losing one and costs no re-pair | per-peer budget shedding plus `mesh_peer_standby_v1`; Python stores `standby` separately from `stale` | `sheds over-budget peers only after announcing standby`, `keeps a remote standby row and credential distinct from a lost peer`, `test_announced_standby_is_not_marked_stale_and_recovers_on_ping`, and authenticated/cross-peer standby tests | read-and-run |
 | 9 | Product copy stays product copy | `product-copy-forbidden-terms.ts` + rendered-copy tests | forbidden-term sweeps across mesh, onboarding and foreground-service copy | **mutation-confirmed** |
 
 ## How the mutation confirmations were done
@@ -53,7 +53,7 @@ denial is enforced by six corpus cases — `denies_a_context_belonging_to_anothe
 `rejects_proof_replayed_for_another_peer` — driven by the iterating corpus tests. The invariant
 is covered; it is just not covered by the test whose name suggests it is.
 
-## Where the remaining two stand
+## Read-and-run boundaries added by later milestones
 
 **#7** landed with R3. `ping_is_answered_the_same_way_in_both_lifecycles` drives the same
 registry through `SurfaceLifecycle::Foreground` and `Background` and asserts the answer does
@@ -63,18 +63,17 @@ is selected, so a future "background mode" that swapped runtimes but happened to
 identical pong would still pass. Adequate today because there is only one implementation; it
 should be tightened if a second ever appears.
 
-**#8** is R6's, in M7, and is not built. It needs the contract change first: an explicit
-"going away, keep my credential" signal so Python distinguishes intentional absence from a lost
-peer instead of evicting at the 120 s stale window. Until that exists there is nothing to test
-against, and the plan is explicit that this is a contract change requiring regenerated
-cross-language fixtures.
+**#8** landed with R6/M7. The SDK announces `mesh_peer_standby_v1` before shedding an
+over-budget peer, retains the peer row and credential separately from a lost peer, and does not
+emit any `pairing_v2_*` frame during the shed/reconnect path. Python accepts standby only for
+the authenticated peer, rejects cross-peer claims, keeps announced standby out of the stale
+eviction path, and restores the peer on ping without re-pairing. The cross-language protocol
+fixtures include the standby frame and capability.
 
 ## Reading this honestly
 
-Seven of nine are enforced and covered, five of those mutation-confirmed. One is pending on
-work that has not landed (#8, R6's). #4 and #5 have since been mutation-confirmed, closing two of the three gaps this
-ledger originally flagged. **#3 — one stable id, one session — is the last read-and-run row
-guarding impersonation, and still deserves confirmation.** It was not done here because
-`peer-registry.ts` is being extended for R6's budget policy, and corrupting a working tree
-mid-run costs more than the confirmation is worth in that moment. It should be closed once M7
-lands.
+All nine invariants are enforced and covered; five are mutation-confirmed and four remain
+read-and-run (#1, #3, #7, and #8). #4 and #5 were mutation-confirmed after this ledger first
+flagged them. **#3 — one stable id, one session — remains the highest-priority mutation check**
+because it guards impersonation directly; its two effect-level registry tests are green, but
+the enforcement has not deliberately been broken to prove that those exact tests fail.
