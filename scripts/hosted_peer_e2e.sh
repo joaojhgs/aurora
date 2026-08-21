@@ -59,6 +59,12 @@ mkdir -p "$ARTIFACT_DIR" "$DATA_DIR"
 
 pnpm --filter @aurora/voice-web build
 pnpm --filter @aurora/client build
+NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
+  pnpm --filter @aurora/web build
+WEB_STANDALONE_DIR="$ROOT/apps/aurora-web/.next/standalone/apps/aurora-web"
+mkdir -p "$WEB_STANDALONE_DIR/.next/static" "$WEB_STANDALONE_DIR/public"
+cp -R "$ROOT/apps/aurora-web/.next/static/." "$WEB_STANDALONE_DIR/.next/static/"
+cp -R "$ROOT/apps/aurora-web/public/." "$WEB_STANDALONE_DIR/public/"
 
 cleanup() {
   local status=$?
@@ -170,10 +176,9 @@ wait_for_http \
 
 setsid env \
   NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
-  pnpm --filter @aurora/web exec next dev \
-    --webpack \
-    --hostname 127.0.0.1 \
-    --port "$WEB_PORT" >"$WEB_LOG" 2>&1 &
+  HOSTNAME=127.0.0.1 \
+  PORT="$WEB_PORT" \
+  node "$WEB_STANDALONE_DIR/server.js" >"$WEB_LOG" 2>&1 &
 WEB_PID=$!
 
 wait_for_http \

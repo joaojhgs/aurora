@@ -63,18 +63,31 @@ def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
     ):
         source = read_repo(script_path)
         voice_build = source.index("pnpm --filter @aurora/voice-web build")
-        web_start = source.index("pnpm --filter @aurora/web exec next dev")
+        web_build = source.index("pnpm --filter @aurora/web build")
+        web_start = source.index('node "$WEB_STANDALONE_DIR/server.js"')
         assert voice_build < web_start, script_path
+        assert voice_build < web_build < web_start, script_path
 
 
-def test_hosted_browser_harnesses_use_the_deterministic_webpack_dev_server() -> None:
+def test_hosted_browser_harnesses_use_the_production_web_server() -> None:
     for script_path in (
         "scripts/hosted_peer_e2e.sh",
         "scripts/hosted_mesh_node_e2e.sh",
     ):
         source = read_repo(script_path)
 
-        assert re.search(r"next dev \\\n\s+--webpack \\", source), script_path
+        assert "next dev" not in source, script_path
+        assert "next start" not in source, script_path
+        assert re.search(
+            r"NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \\\n"
+            r"\s+pnpm --filter @aurora/web build",
+            source,
+        ), script_path
+        assert 'node "$WEB_STANDALONE_DIR/server.js"' in source, script_path
+        assert 'HOSTNAME=127.0.0.1 \\' in source, script_path
+        assert 'PORT="$WEB_PORT" \\' in source, script_path
+        assert 'cp -R "$ROOT/apps/aurora-web/.next/static/."' in source, script_path
+        assert 'cp -R "$ROOT/apps/aurora-web/public/."' in source, script_path
 
 
 def test_hosted_browser_harnesses_bound_http_readiness_probes() -> None:
