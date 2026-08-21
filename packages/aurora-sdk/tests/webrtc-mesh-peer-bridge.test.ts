@@ -1004,7 +1004,7 @@ describe('WebRtcMeshPeerBridge', () => {
 
     session.emit({ type: 'unsubscribe', id: 'sub-1' })
     await flush()
-    expect(peerHost.handleUnsubscribe).toHaveBeenCalledWith('sub-1')
+    expect(peerHost.handleUnsubscribe).toHaveBeenCalledWith('sub-1', 'peer-a')
   })
 
   it('closes provider epoch and clears stale authority when authenticated snapshot assertion fails', async () => {

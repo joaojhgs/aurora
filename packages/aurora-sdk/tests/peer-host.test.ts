@@ -1510,9 +1510,12 @@ describe('WebRtcPeerHost', () => {
  * for both halves.
  */
 describe('WebRtcPeerHost serving several peers', () => {
-  function multiPeerHost() {
+  function multiPeerHost(options: {
+    handler?: GeneratedPeerHostMethodHandler<'Tooling.GetTools'>
+    broadcaster?: PeerRevocationBroadcaster
+  } = {}) {
     const registry = createToolingPeerHostRegistry({
-      getTools: async () => ({ count: 0, tools: [] }),
+      getTools: options.handler ?? (async () => ({ count: 0, tools: [] })),
       getExportCatalog: async () => { throw new Error('not implemented') },
       prepareExecution: async () => { throw new Error('not implemented') },
       executeTool: async () => { throw new Error('not implemented') }
@@ -1521,11 +1524,18 @@ describe('WebRtcPeerHost serving several peers', () => {
       localPeerId: 'local-peer',
       nodeName: 'Local',
       registry,
-      authorizationStore: allowMethods({
-        claimantPeerId: 'peer-a',
-        methodIds: ['Tooling.GetTools'],
-        grantRevision: 1
-      }),
+      authorizationStore: scriptedAuthorizationStore(
+        (request) => request.methodId === 'Tooling.GetTools' && (request.remotePeerId === 'peer-a' || request.remotePeerId === 'peer-b')
+          ? { allowed: true, grantRevision: 1, grantedMethodIds: ['Tooling.GetTools'] }
+          : { allowed: false, reasonCode: 'grant_not_found' },
+        (request) => ({
+          ...(request.remotePeerId !== undefined ? { recipientPeerId: request.remotePeerId } : {}),
+          grantedMethodIds: ['Tooling.GetTools'],
+          authGrantRevision: 1,
+          authGrantState: 'active'
+        })
+      ),
+      ...(options.broadcaster !== undefined ? { revocationBroadcaster: options.broadcaster } : {}),
       clock: () => 1000,
       randomId: () => 'epoch-1'
     })
@@ -1534,6 +1544,19 @@ describe('WebRtcPeerHost serving several peers', () => {
     peerHost.attach({ sendFrame: async (frame) => { toA.push(frame) } }, 'peer-a')
     peerHost.attach({ sendFrame: async (frame) => { toB.push(frame) } }, 'peer-b')
     return { peerHost, toA, toB }
+  }
+
+  async function admitPeer(peerHost: WebRtcPeerHost, remotePeerId: string, context = authenticatedContext({
+    selector: {
+      tokenId: `token-${remotePeerId}`,
+      claimantPeerId: remotePeerId,
+      verifierPeerId: 'local-peer',
+      roomName: 'room-a'
+    }
+  })) {
+    const manifest = await peerHost.startEpoch(remotePeerId, context)
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(manifest), remotePeerId)).toBe(true)
+    return { manifest, context }
   }
 
   it('sends each peer its own frames rather than the last attached peer everything', async () => {
@@ -1558,6 +1581,102 @@ describe('WebRtcPeerHost serving several peers', () => {
 
     expect(toB).toHaveLength(1)
     expect(toA).toHaveLength(0)
+  })
+
+  it('admits one peer from its own ACK without admitting another peer', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+    const manifestA = await peerHost.startEpoch('peer-a')
+    const manifestB = await peerHost.startEpoch('peer-b')
+
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(manifestA), 'peer-b')).toBe(false)
+    expect(peerHost.markManifestAcknowledged(ackFromManifest(manifestB), 'peer-b')).toBe(true)
+
+    await peerHost.handleCall(
+      { type: 'call', id: 'call-a', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+    await peerHost.handleCall(
+      { type: 'call', id: 'call-b', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )
+
+    expect(toA.at(-1)).toMatchObject({ type: 'error', id: 'call-a', error: { reason_code: 'provider_not_ready' } })
+    expect(toB.at(-1)).toEqual({ type: 'result', id: 'call-b', result: { count: 0, tools: [] } })
+  })
+
+  it('allows different peers to use the same call id independently', async () => {
+    const handler = vi.fn(async (_params: unknown, context: PeerHostCallContext) => ({
+      count: context.remotePeerId === 'peer-a' ? 1 : 2,
+      tools: []
+    }))
+    const { peerHost, toA, toB } = multiPeerHost({ handler })
+    await admitPeer(peerHost, 'peer-a')
+    await admitPeer(peerHost, 'peer-b')
+
+    await peerHost.handleCall(
+      { type: 'call', id: 'same-call', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+    await peerHost.handleCall(
+      { type: 'call', id: 'same-call', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )
+
+    expect(toA.at(-1)).toEqual({ type: 'result', id: 'same-call', result: { count: 1, tools: [] } })
+    expect(toB.at(-1)).toEqual({ type: 'result', id: 'same-call', result: { count: 2, tools: [] } })
+  })
+
+  it('keeps suspend and authority revocation scoped to the affected peer', async () => {
+    const broadcaster = new PeerRevocationHub()
+    const { peerHost, toA, toB } = multiPeerHost({ broadcaster })
+    const { context: contextA } = await admitPeer(peerHost, 'peer-a')
+    await admitPeer(peerHost, 'peer-b')
+
+    await peerHost.suspendLocalProvider('manual_pause')
+    expect(toA.at(-1)).toMatchObject({ type: 'provider_unavailable', reason_code: 'manual_pause' })
+    expect(toB.at(-1)).toMatchObject({ type: 'provider_unavailable', reason_code: 'manual_pause' })
+
+    await admitPeer(peerHost, 'peer-a', contextA)
+    await admitPeer(peerHost, 'peer-b')
+    peerHost.suspend('peer_pause', 'peer-a')
+    await peerHost.handleCall(
+      { type: 'call', id: 'after-suspend-a', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+    await peerHost.handleCall(
+      { type: 'call', id: 'after-suspend-b', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )
+    expect(toA.at(-1)).toMatchObject({ type: 'error', id: 'after-suspend-a', error: { reason_code: 'provider_not_ready' } })
+    expect(toB.at(-1)).toEqual({ type: 'result', id: 'after-suspend-b', result: { count: 0, tools: [] } })
+
+    await admitPeer(peerHost, 'peer-a', contextA)
+    broadcaster.publish(revocationEvent(contextA.selector))
+    await flush()
+    await peerHost.handleCall(
+      { type: 'call', id: 'after-revoke-a', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-a'
+    )
+    await peerHost.handleCall(
+      { type: 'call', id: 'after-revoke-b', method: 'Tooling.GetTools', params: {} } as never,
+      'peer-b'
+    )
+    expect(toA.at(-1)).toMatchObject({ type: 'error', id: 'after-revoke-a', error: { reason_code: 'peer_authority_revoked' } })
+    expect(toB.at(-1)).toEqual({ type: 'result', id: 'after-revoke-b', result: { count: 0, tools: [] } })
+  })
+
+  it('retries a stale manifest only to the peer that sent the stale ACK', async () => {
+    const { peerHost, toA, toB } = multiPeerHost()
+    const manifestA = await peerHost.startEpoch('peer-a')
+    await peerHost.startEpoch('peer-b')
+
+    await expect(peerHost.retryManifestAfterStaleAcknowledgement(
+      ackFromManifest(manifestA, { projection_digest: '1'.repeat(64) }),
+      'peer-a'
+    )).resolves.toBe(true)
+
+    expect(toA.at(-1)).toMatchObject({ type: 'manifest' })
+    expect(toB).toHaveLength(0)
   })
 
   it('keeps each peer authenticated context to itself', async () => {
@@ -1594,6 +1713,8 @@ describe('WebRtcPeerHost serving several peers', () => {
   it('stops sending to a peer once its bridge has gone', async () => {
     const { peerHost, toA, toB } = multiPeerHost()
 
+    await admitPeer(peerHost, 'peer-b')
+    toB.length = 0
     expect(peerHost.detach('peer-b')).toBe(true)
     await peerHost.resumeLocalProvider()
 

@@ -40,6 +40,8 @@ export interface WebRtcMeshPeerBridgeOptions {
    * credential. Not a loss: the caller must not forget the peer or re-pair it.
    */
   onPeerStandby?: (frame: MeshPeerStandbyFrame) => void
+  /** Notify composition code when this peer's accepted manifest changes. */
+  onManifestChanged?: (manifest: MeshPeerManifest | null) => void
 }
 
 export interface WebRtcMeshTransportOptions extends Omit<MeshP2PTransportOptions, 'bridge'> {
@@ -141,6 +143,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly clock: () => number
   private readonly peerHost: WebRtcPeerHost | undefined
   private readonly onPeerStandby: WebRtcMeshPeerBridgeOptions['onPeerStandby']
+  private readonly onManifestChanged: WebRtcMeshPeerBridgeOptions['onManifestChanged']
   private readonly pending = new Map<string, PendingRpc>()
   private readonly pendingSubscribes = new Map<string, PendingSubscribe>()
   private readonly pendingManifests = new Map<string, PendingManifest>()
@@ -199,6 +202,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.clock = options.clock ?? (() => Date.now() / 1000)
     this.peerHost = options.peerHost
     this.onPeerStandby = options.onPeerStandby
+    this.onManifestChanged = options.onManifestChanged
     this.authenticatedPeerContext = this.assertAuthenticatedPeerSnapshot(this.session.getSnapshot())
     // Keyed by this bridge's peer. One host serves every peer, so an unkeyed
     // attach let whichever bridge was built last own the only sender and carry
@@ -415,7 +419,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.streams.clear()
     for (const stream of this.rpcStreams.values()) this.failRpcStream(stream, new Error(reason))
     this.rpcStreams.clear()
-    this.peerHost?.handleDisconnect(reason)
+    this.peerHost?.handleDisconnect(reason, this.remotePeerId)
     this.peerHost?.detach(this.remotePeerId)
     this.stopLocalProviderLeaseRenewal()
     this.clearRemoteLease()
@@ -560,7 +564,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     }
     this.reassembler.cleanupPeer(this.remotePeerId)
     this.remoteProtocol = null
-    this.manifest = null
+    this.setManifest(null)
     this.incomingManifestGeneration += 1
     this.incomingManifestAck = null
     this.authenticatedPeerContext = undefined
@@ -644,7 +648,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.finishStream(String(frame.id))
         return
       case 'cancel':
-        this.peerHost?.handleCancel(String(frame.id))
+        this.peerHost?.handleCancel(String(frame.id), this.remotePeerId)
         if (this.finishRpcStream(String(frame.id))) return
         this.finishStream(String(frame.id))
         return
@@ -676,13 +680,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
         this.observeAsyncDispatch('manifest_response', this.sendLocalManifest())
         return
       case 'manifest_ack':
-        if (this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame)) {
+        if (this.peerHost?.markManifestAcknowledged(frame as unknown as Record<string, unknown> & ManifestAckFrame, this.remotePeerId)) {
           this.startLocalProviderLeaseRenewal()
         } else if (this.peerHost) {
           this.observeAsyncDispatch(
             'manifest_response',
             this.peerHost
-              .retryManifestAfterStaleAcknowledgement(frame as unknown as Record<string, unknown> & ManifestAckFrame)
+              .retryManifestAfterStaleAcknowledgement(frame as unknown as Record<string, unknown> & ManifestAckFrame, this.remotePeerId)
               .then(() => undefined)
           )
         }
@@ -914,7 +918,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       await this.sendLogicalFrame({ type: 'unsubscribed', id, subscription_id: id, removed: false })
       return
     }
-    await this.peerHost.handleUnsubscribe(id)
+    await this.peerHost.handleUnsubscribe(id, this.remotePeerId)
   }
 
   private async handleManifest(frame: unknown): Promise<void> {
@@ -935,7 +939,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       if (this.incomingManifestAck?.generation !== generation) return
       this.incomingManifestAck = null
       if (!this.remoteRequiresProviderLease()) {
-        this.manifest = incoming.manifest
+        this.setManifest(incoming.manifest)
         if (this.remoteAvailability === 'unknown') this.remoteAvailability = 'active'
         for (const pending of this.pendingManifests.values()) {
           this.clearTimer(pending.timer)
@@ -953,7 +957,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
           this.pendingManifests.clear()
           return
         }
-        this.manifest = incoming.manifest
+        this.setManifest(incoming.manifest)
         if (this.remoteLease !== null && leaseChangedDuringAck) {
           for (const pending of this.pendingManifests.values()) {
             this.clearTimer(pending.timer)
@@ -1098,10 +1102,16 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     }
   }
 
+  private setManifest(manifest: MeshPeerManifest | null): void {
+    if (this.manifest === manifest) return
+    this.manifest = manifest
+    this.onManifestChanged?.(manifest)
+  }
+
   private clearRemoteAvailability(options: { settleWaiters?: boolean } = {}): void {
     this.clearRemoteLease()
     this.remoteAvailability = 'unavailable'
-    this.manifest = null
+    this.setManifest(null)
     this.remoteLeaseFloor = this.remoteLeaseCursor
     if (options.settleWaiters === false) return
     for (const pending of this.pendingManifests.values()) {

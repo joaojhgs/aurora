@@ -21,7 +21,14 @@ import type {
   PeerHostProjectionMethodType
 } from './types.js'
 
-type ActiveWork = { abort: AbortController; cleanup(reason: string): void; settled: boolean; kind: 'call' | 'stream' | 'subscription' }
+type ActiveWork = {
+  abort: AbortController
+  cleanup(reason: string): void
+  settled: boolean
+  kind: 'call' | 'stream' | 'subscription'
+  id: string
+  remotePeerId?: string
+}
 type SubscriptionEmissionState = {
   acknowledged: boolean
   failed: boolean
@@ -48,6 +55,19 @@ type ManifestEvidence = {
 type PeerHostRecipient = {
   sender?: PeerHostFrameSender
   authenticatedPeerContext?: AuthenticatedPeerContext
+  lease: ProviderLeaseController
+  acceptingInbound: boolean
+  admittedServices: ReadonlySet<string>
+  availabilityRevision: number
+  connectionEpoch: string
+  pendingManifest: ManifestEvidence
+  pendingManifestFrame: Record<string, unknown> | null
+  staleManifestAckRetryCount: number
+  activeAuthoritySelector: PeerRelationshipSelector | null
+  authorityRevoked: boolean
+  unsubscribeRevocation: (() => void) | null
+  reservedWorkIds: Set<string>
+  inFlightCallIds: Set<string>
 }
 
 const DEFAULT_MAX_REQUEST_BYTES = 256 * 1024
@@ -68,15 +88,7 @@ export class WebRtcPeerHost {
   private readonly options: Required<Pick<PeerHostOptions, 'clock' | 'randomId' | 'maxRequestBytes' | 'defaultTimeoutMs'>> & Omit<PeerHostOptions, 'clock' | 'randomId' | 'maxRequestBytes' | 'defaultTimeoutMs'>
   private readonly active = new Map<string, ActiveWork>()
   private sender: PeerHostFrameSender | null = null
-  private acceptingInbound = false
-  // Modules the recipient's ACK reported compatible. Admission is per service:
-  // a consumer that does not route one of our modules must not close the rest.
-  private admittedServices: ReadonlySet<string> = new Set<string>()
-  private availabilityRevision = 0
-  private connectionEpoch: string
-  private pendingManifest: ManifestEvidence = null
-  private pendingManifestFrame: Record<string, unknown> | null = null
-  private staleManifestAckRetryCount = 0
+  private readonly fallbackRecipient: PeerHostRecipient
   /**
    * One record per peer this host talks to, keyed by stable peer id.
    *
@@ -94,13 +106,8 @@ export class WebRtcPeerHost {
    * never a grant: every authorization question still goes to the authority.
    */
   private readonly recipients = new Map<string, PeerHostRecipient>()
-  private activeAuthoritySelector: PeerRelationshipSelector | null = null
-  private authorityRevoked = false
-  private unsubscribeRevocation: (() => void) | null = null
   private timeoutSendFailureCount = 0
   private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
-  private readonly reservedWorkIds = new Set<string>()
-  private readonly inFlightCallIds = new Set<string>()
 
   constructor(options: PeerHostOptions) {
     const randomId = options.randomId ?? (() => `host-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`)
@@ -112,8 +119,8 @@ export class WebRtcPeerHost {
       maxRequestBytes: options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES,
       defaultTimeoutMs: options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS
     }
-    this.connectionEpoch = randomId()
-    this.lease = new ProviderLeaseController({ peerId: options.localPeerId, clock, randomId })
+    this.fallbackRecipient = this.createRecipient()
+    this.lease = this.fallbackRecipient.lease
   }
 
   get localPeerId(): string {
@@ -138,6 +145,10 @@ export class WebRtcPeerHost {
 
   /** Forget one peer, so nothing is later sent down a channel that is gone. */
   detach(remotePeerId: string): boolean {
+    const state = this.recipients.get(remotePeerId)
+    if (!state) return false
+    this.cancelAll('detached', remotePeerId)
+    this.unbindRevocation(state)
     return this.recipients.delete(remotePeerId)
   }
 
@@ -149,9 +160,43 @@ export class WebRtcPeerHost {
   private recipientFor(remotePeerId: string): PeerHostRecipient {
     const existing = this.recipients.get(remotePeerId)
     if (existing) return existing
-    const created: PeerHostRecipient = {}
+    const created = this.createRecipient()
     this.recipients.set(remotePeerId, created)
     return created
+  }
+
+  private createRecipient(): PeerHostRecipient {
+    return {
+      lease: new ProviderLeaseController({
+        peerId: this.options.localPeerId,
+        clock: this.options.clock,
+        randomId: this.options.randomId
+      }),
+      acceptingInbound: false,
+      admittedServices: new Set<string>(),
+      availabilityRevision: 0,
+      connectionEpoch: this.options.randomId(),
+      pendingManifest: null,
+      pendingManifestFrame: null,
+      staleManifestAckRetryCount: 0,
+      activeAuthoritySelector: null,
+      authorityRevoked: false,
+      unsubscribeRevocation: null,
+      reservedWorkIds: new Set<string>(),
+      inFlightCallIds: new Set<string>()
+    }
+  }
+
+  private stateFor(remotePeerId?: string): PeerHostRecipient {
+    if (remotePeerId !== undefined) return this.recipientFor(remotePeerId)
+    const peerId = this.soleRecipientPeerId()
+    return peerId === undefined ? this.fallbackRecipient : this.recipientFor(peerId)
+  }
+
+  private stateIfKnown(remotePeerId?: string): PeerHostRecipient {
+    if (remotePeerId !== undefined) return this.recipients.get(remotePeerId) ?? this.recipientFor(remotePeerId)
+    const peerId = this.soleRecipientPeerId()
+    return peerId === undefined ? this.fallbackRecipient : this.recipientFor(peerId)
   }
 
   private rememberRecipient(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): void {
@@ -180,57 +225,61 @@ export class WebRtcPeerHost {
   }
 
   async startEpoch(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
-    this.acceptingInbound = false
-    this.admittedServices = new Set<string>()
-    this.connectionEpoch = this.lease.startEpoch()
-    this.availabilityRevision = 0
-    this.pendingManifest = null
-    this.pendingManifestFrame = null
-    this.staleManifestAckRetryCount = 0
-    this.authorityRevoked = false
+    const state = this.stateFor(remotePeerId)
+    state.acceptingInbound = false
+    state.admittedServices = new Set<string>()
+    state.connectionEpoch = state.lease.startEpoch()
+    state.availabilityRevision = 0
+    state.pendingManifest = null
+    state.pendingManifestFrame = null
+    state.staleManifestAckRetryCount = 0
+    state.authorityRevoked = false
     this.rememberRecipient(remotePeerId, authenticatedPeerContext)
-    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext ?? this.contextFor(remotePeerId))
-    this.bindRevocation(epochContext)
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext ?? this.contextFor(remotePeerId), state)
+    this.bindRevocation(state, epochContext)
     return await this.buildManifest(remotePeerId, epochContext)
   }
 
-  markManifestAcknowledged(ack: Record<string, unknown>): boolean {
-    if (!this.pendingManifest) return false
-    if (!this.manifestAckEvidenceMatches(ack)) return false
+  markManifestAcknowledged(ack: Record<string, unknown>, remotePeerId?: string): boolean {
+    const state = this.stateIfKnown(remotePeerId)
+    if (!state.pendingManifest) return false
+    if (!this.manifestAckEvidenceMatches(ack, state)) return false
     const compatible = this.validateStructuredManifestAckServices(ack)
     if (compatible === null) return false
-    if (this.pendingManifest.requiredServices.length === 0) return false
+    if (state.pendingManifest.requiredServices.length === 0) return false
     // Admit exactly the projected modules the recipient called compatible.
     // Python classifies a service it has no routing config for as `unused`,
     // which is a statement about the consumer's preference, not about whether
     // the service works — so an all-or-nothing gate here let one uninterested
     // consumer close the provider entirely.
-    const admitted = this.pendingManifest.requiredServices.filter((service) => compatible.includes(service))
+    const admitted = state.pendingManifest.requiredServices.filter((service) => compatible.includes(service))
     if (admitted.length === 0) return false
-    this.admittedServices = new Set(admitted)
-    this.acceptingInbound = true
-    this.pendingManifest = null
-    this.pendingManifestFrame = null
-    this.staleManifestAckRetryCount = 0
-    void this.resolveSender()?.sendFrame(this.renewLease()).catch(() => undefined)
+    state.admittedServices = new Set(admitted)
+    state.acceptingInbound = true
+    state.pendingManifest = null
+    state.pendingManifestFrame = null
+    state.staleManifestAckRetryCount = 0
+    void this.resolveSender(remotePeerId)?.sendFrame(this.renewLease(remotePeerId)).catch(() => undefined)
     return true
   }
 
   /** Retransmit the pending manifest after a stale authority acknowledgement. */
-  async retryManifestAfterStaleAcknowledgement(ack: Record<string, unknown>): Promise<boolean> {
-    if (!this.pendingManifest || !this.pendingManifestFrame) return false
-    if (this.manifestAckEvidenceMatches(ack)) return false
-    if (this.staleManifestAckRetryCount >= MAX_STALE_MANIFEST_ACK_RETRIES) return false
-    this.staleManifestAckRetryCount += 1
-    await this.requireSender().sendFrame(this.pendingManifestFrame)
+  async retryManifestAfterStaleAcknowledgement(ack: Record<string, unknown>, remotePeerId?: string): Promise<boolean> {
+    const state = this.stateIfKnown(remotePeerId)
+    if (!state.pendingManifest || !state.pendingManifestFrame) return false
+    if (this.manifestAckEvidenceMatches(ack, state)) return false
+    if (state.staleManifestAckRetryCount >= MAX_STALE_MANIFEST_ACK_RETRIES) return false
+    state.staleManifestAckRetryCount += 1
+    await this.requireSender(remotePeerId).sendFrame(state.pendingManifestFrame)
     return true
   }
 
-  suspend(reason = 'provider_unavailable'): Record<string, unknown> {
-    this.acceptingInbound = false
-    this.admittedServices = new Set<string>()
-    this.cancelAll(reason)
-    const frame = this.lease.tombstone(reason) as unknown as Record<string, unknown>
+  suspend(reason = 'provider_unavailable', remotePeerId?: string): Record<string, unknown> {
+    const state = this.stateFor(remotePeerId)
+    state.acceptingInbound = false
+    state.admittedServices = new Set<string>()
+    this.cancelAll(reason, remotePeerId)
+    const frame = state.lease.tombstone(reason) as unknown as Record<string, unknown>
     return frame
   }
 
@@ -267,38 +316,39 @@ export class WebRtcPeerHost {
   }
 
   async renewLocalProvider(): Promise<void> {
-    if (!this.acceptingInbound) return
     const peerIds = this.recipientPeerIds()
     if (peerIds.length === 0) {
+      if (!this.fallbackRecipient.acceptingInbound) return
       await this.requireSender().sendFrame(this.renewLease())
       return
     }
-    const lease = this.renewLease()
     for (const peerId of peerIds) {
-      await this.senderFor(peerId).sendFrame(lease)
+      const state = this.stateFor(peerId)
+      if (!state.acceptingInbound) continue
+      await this.senderFor(peerId).sendFrame(this.renewLease(peerId))
     }
   }
 
   async suspendLocalProvider(reason = 'provider_unavailable'): Promise<void> {
-    const frame = this.suspend(reason)
     const peerIds = this.recipientPeerIds()
     if (peerIds.length === 0) {
-      await this.requireSender().sendFrame(frame)
+      await this.requireSender().sendFrame(this.suspend(reason))
       return
     }
     for (const peerId of peerIds) {
-      await this.senderFor(peerId).sendFrame(frame)
+      await this.senderFor(peerId).sendFrame(this.suspend(reason, peerId))
     }
   }
 
-  renewLease(): Record<string, unknown> {
-    const lease = this.lease.renew()
-    this.availabilityRevision = lease.availability_revision
+  renewLease(remotePeerId?: string): Record<string, unknown> {
+    const state = this.stateFor(remotePeerId)
+    const lease = state.lease.renew()
+    state.availabilityRevision = lease.availability_revision
     return lease as unknown as Record<string, unknown>
   }
 
-  currentLease(): Record<string, unknown> | null {
-    return this.lease.snapshot() as unknown as Record<string, unknown> | null
+  currentLease(remotePeerId?: string): Record<string, unknown> | null {
+    return this.stateFor(remotePeerId).lease.snapshot() as unknown as Record<string, unknown> | null
   }
 
   private validateStructuredManifestAckServices(ack: Record<string, unknown>): string[] | null {
@@ -346,20 +396,20 @@ export class WebRtcPeerHost {
    * builds the manifest, so the admitted set and the advertised set cannot
    * disagree about which module a descriptor belongs to.
    */
-  private isServiceAdmitted(module: string): boolean {
-    return this.admittedServices.has(module)
+  private isServiceAdmitted(state: PeerHostRecipient, module: string): boolean {
+    return state.admittedServices.has(module)
   }
 
-  private manifestAckEvidenceMatches(ack: Record<string, unknown>): boolean {
+  private manifestAckEvidenceMatches(ack: Record<string, unknown>, state: PeerHostRecipient): boolean {
     return Boolean(
-      this.pendingManifest
+      state.pendingManifest
       && ack.active_protocol === ACTIVE_MANIFEST_PROTOCOL
       && ack.active_version === ACTIVE_VERSION
       && ack.active_tier === ACTIVE_TIER
-      && ack.projection_digest === this.pendingManifest.projectionDigest
-      && ack.registry_revision === this.pendingManifest.registryRevision
-      && ack.export_policy_revision === this.pendingManifest.policyRevision
-      && ack.auth_grant_revision === this.pendingManifest.authGrantRevision
+      && ack.projection_digest === state.pendingManifest.projectionDigest
+      && ack.registry_revision === state.pendingManifest.registryRevision
+      && ack.export_policy_revision === state.pendingManifest.policyRevision
+      && ack.auth_grant_revision === state.pendingManifest.authGrantRevision
     )
   }
 
@@ -377,11 +427,12 @@ export class WebRtcPeerHost {
   }
 
   async buildManifest(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
+    const state = this.stateFor(remotePeerId)
     this.rememberRecipient(remotePeerId)
-    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext, state)
     this.rememberRecipient(remotePeerId, epochContext)
     const nowMs = Math.floor(this.options.clock())
-    const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs)
+    const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs, state)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
     const registryMethods = this.options.registry.list()
     const registryDigest = digest({ services: manifestServices(registryMethods) })
@@ -395,9 +446,9 @@ export class WebRtcPeerHost {
       && authority.recipientPeerId.length > 0
       && methods.length > 0
     if (!projectionReady) {
-      this.pendingManifest = null
-      this.pendingManifestFrame = null
-      this.staleManifestAckRetryCount = 0
+      state.pendingManifest = null
+      state.pendingManifestFrame = null
+      state.staleManifestAckRetryCount = 0
       return {
         type: 'manifest',
         peer_id: this.options.localPeerId,
@@ -454,14 +505,14 @@ export class WebRtcPeerHost {
     const requiredServices = sharedServices
       .map((service) => service.module)
       .filter((module): module is string => typeof module === 'string')
-    this.pendingManifest = {
+    state.pendingManifest = {
       projectionDigest,
       registryRevision,
       policyRevision,
       authGrantRevision: authority.authGrantRevision,
       requiredServices
     }
-    this.staleManifestAckRetryCount = 0
+    state.staleManifestAckRetryCount = 0
     const manifestFrame: Record<string, unknown> = {
       type: 'manifest',
       peer_id: this.options.localPeerId,
@@ -478,37 +529,39 @@ export class WebRtcPeerHost {
       recipient_projection_evidence: evidence,
       timestamp: new Date(nowMs).toISOString()
     }
-    this.pendingManifestFrame = manifestFrame
+    state.pendingManifestFrame = manifestFrame
     return manifestFrame
   }
 
   async handleCall(frame: CallFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
+    const state = this.stateFor(remotePeerId)
     const sender = this.senderFor(remotePeerId)
     this.rememberRecipient(remotePeerId, authenticatedPeerContext)
-    if (this.reservedWorkIds.has(frame.id)) {
+    if (state.reservedWorkIds.has(frame.id)) {
       await sender.sendFrame(
         errorFrame(frame.id, 409, 'request is already active', 'request_in_progress')
       )
       return
     }
-    this.reservedWorkIds.add(frame.id)
-    this.inFlightCallIds.add(frame.id)
+    state.reservedWorkIds.add(frame.id)
+    state.inFlightCallIds.add(frame.id)
+    const workId = this.workId(remotePeerId, frame.id)
     try {
-      const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
+      const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext, state)
       const method = this.options.registry.get(frame.method)
       if (!method) {
         await sender.sendFrame(errorFrame(frame.id, 404, 'method not found', 'method_not_found'))
         return
       }
-      if (this.authorityRevoked) {
+      if (state.authorityRevoked) {
         await sender.sendFrame(errorFrame(frame.id, 403, 'peer authority revoked', 'peer_authority_revoked'))
         return
       }
-      if (!this.acceptingInbound || !this.lease.isActive()) {
+      if (!state.acceptingInbound || !state.lease.isActive()) {
         await sender.sendFrame(errorFrame(frame.id, 425, 'provider is not ready', 'provider_not_ready'))
         return
       }
-      if (!this.isServiceAdmitted(methodModule(method))) {
+      if (!this.isServiceAdmitted(state, methodModule(method))) {
         await sender.sendFrame(errorFrame(frame.id, 403, 'service is not admitted', 'service_not_admitted'))
         return
       }
@@ -542,33 +595,36 @@ export class WebRtcPeerHost {
       const abort = new AbortController()
       const active: ActiveWork = {
         abort,
+        id: frame.id,
+        remotePeerId,
         kind: 'call',
         settled: false,
         cleanup: () => clearTimeout(timer)
       }
       const timer = setTimeout(() => {
-        void this.timeoutWork(frame.id, active)
+        void this.timeoutWork(frame.id, active, remotePeerId)
       }, Math.max(1, deadlineAtMs - nowMs))
-      this.active.set(frame.id, active)
+      this.active.set(workId, active)
       try {
         const context = this.callContext(frame, method, remotePeerId, authorizedIdentity, abort.signal, nowMs, deadlineAtMs, epochContext)
         const result = await this.options.registry.dispatch(method, frame.params ?? {}, context)
-        if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'result', id: frame.id, result })
+        if (this.finishActive(frame.id, active, remotePeerId)) await sender.sendFrame({ type: 'result', id: frame.id, result })
       } catch (error) {
-        if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
+        if (this.finishActive(frame.id, active, remotePeerId)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
       } finally {
-        this.finishActive(frame.id, active)
+        this.finishActive(frame.id, active, remotePeerId)
       }
     } finally {
-      this.inFlightCallIds.delete(frame.id)
-      this.reservedWorkIds.delete(frame.id)
+      state.inFlightCallIds.delete(frame.id)
+      state.reservedWorkIds.delete(frame.id)
     }
   }
 
   async handleSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
+    const state = this.stateFor(remotePeerId)
     const sender = this.senderFor(remotePeerId)
     this.rememberRecipient(remotePeerId, authenticatedPeerContext)
-    if (this.reservedWorkIds.has(frame.id)) {
+    if (state.reservedWorkIds.has(frame.id)) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
         id: frame.id,
@@ -577,17 +633,17 @@ export class WebRtcPeerHost {
       })
       return
     }
-    this.reservedWorkIds.add(frame.id)
+    state.reservedWorkIds.add(frame.id)
     try {
-      await this.handleReservedSubscribe(frame, remotePeerId, authenticatedPeerContext, sender)
+      await this.handleReservedSubscribe(frame, remotePeerId, authenticatedPeerContext, sender, state)
     } finally {
-      if (!this.active.has(frame.id)) this.reservedWorkIds.delete(frame.id)
+      if (!this.active.has(this.workId(remotePeerId, frame.id))) state.reservedWorkIds.delete(frame.id)
     }
   }
 
-  private async handleReservedSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext: AuthenticatedPeerContext | undefined, sender: PeerHostFrameSender): Promise<void> {
-    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext)
-    if (this.authorityRevoked) {
+  private async handleReservedSubscribe(frame: SubscribeFrame, remotePeerId: string, authenticatedPeerContext: AuthenticatedPeerContext | undefined, sender: PeerHostFrameSender, state: PeerHostRecipient): Promise<void> {
+    const epochContext = this.authenticatedContextForCurrentEpoch(authenticatedPeerContext, state)
+    if (state.authorityRevoked) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
         id: frame.id,
@@ -596,7 +652,7 @@ export class WebRtcPeerHost {
       })
       return
     }
-    if (!this.acceptingInbound || !this.lease.isActive()) {
+    if (!state.acceptingInbound || !state.lease.isActive()) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
         id: frame.id,
@@ -605,7 +661,8 @@ export class WebRtcPeerHost {
       })
       return
     }
-    if (this.active.has(frame.id)) {
+    const workId = this.workId(remotePeerId, frame.id)
+    if (this.active.has(workId)) {
       await sender.sendFrame({
         type: 'subscribe_rejected',
         id: frame.id,
@@ -649,7 +706,7 @@ export class WebRtcPeerHost {
     }
     const abort = new AbortController()
     const timer = setTimeout(() => {
-      void this.handleUnsubscribe(frame.id).catch(() => undefined)
+      void this.handleUnsubscribe(frame.id, remotePeerId).catch(() => undefined)
     }, Math.max(1, frame.ttl_seconds ?? 60) * 1000)
     const handles: Array<{ close(reason?: string): void | Promise<void> }> = []
     const emission: SubscriptionEmissionState = {
@@ -667,6 +724,8 @@ export class WebRtcPeerHost {
     }
     const active: ActiveWork = {
       abort,
+      id: frame.id,
+      remotePeerId,
       kind: 'subscription',
       settled: false,
       cleanup: (reason: string) => {
@@ -674,7 +733,7 @@ export class WebRtcPeerHost {
         for (const handle of handles) void handle.close(reason)
       }
     }
-    this.active.set(frame.id, active)
+    this.active.set(workId, active)
     try {
       for (const event of events as PeerHostEventDescriptor[]) {
         const ttlSeconds = frame.ttl_seconds ?? 60
@@ -693,12 +752,13 @@ export class WebRtcPeerHost {
             options,
             frame,
             active,
-            emission
+            emission,
+            remotePeerId
           )
         }
         if (epochContext !== undefined) Object.assign(subscribeContext, { authenticatedPeerContext: epochContext })
         const handle = await this.options.registry.openSubscription(event, subscribeContext)
-        if (abort.signal.aborted || active.settled || this.active.get(frame.id) !== active) {
+        if (abort.signal.aborted || active.settled || this.active.get(workId) !== active) {
           if (handle) void handle.close('peer_authority_revoked')
           return
         }
@@ -706,11 +766,11 @@ export class WebRtcPeerHost {
       }
       if (emission.failed) throw new Error('peer-host subscription event queue overflow')
     } catch {
-      if (!this.finishActive(frame.id, active, 'subscription_rejected')) return
+      if (!this.finishActive(frame.id, active, remotePeerId, 'subscription_rejected')) return
       await sender.sendFrame({ type: 'subscribe_rejected', id: frame.id, reason: 'handler_failed', rejected_topics: frame.topics })
       return
     }
-    if (abort.signal.aborted || active.settled || this.active.get(frame.id) !== active) return
+    if (abort.signal.aborted || active.settled || this.active.get(workId) !== active) return
     try {
       await sender.sendFrame({
         type: 'subscribed',
@@ -727,23 +787,24 @@ export class WebRtcPeerHost {
       const buffered = emission.pending.splice(0)
       emission.acknowledged = true
       const delivered = await Promise.all(
-        buffered.map((eventFrame) => this.scheduleSubscriptionEvent(frame.id, active, emission, eventFrame))
+        buffered.map((eventFrame) => this.scheduleSubscriptionEvent(frame.id, active, emission, eventFrame, remotePeerId))
       )
       if (delivered.some((sent) => !sent)) return
     } catch (error) {
       active.abort.abort('event_send_failed')
-      this.finishActive(frame.id, active, 'event_send_failed')
+      this.finishActive(frame.id, active, remotePeerId, 'event_send_failed')
       throw error
     }
   }
 
-  async handleUnsubscribe(id: string): Promise<void> {
-    const sender = this.requireSender()
-    const active = this.active.get(id)
+  async handleUnsubscribe(id: string, remotePeerId?: string): Promise<void> {
+    const effectiveRemotePeerId = this.effectiveRemotePeerId(remotePeerId)
+    const sender = this.requireSender(effectiveRemotePeerId)
+    const active = this.active.get(this.workId(effectiveRemotePeerId, id))
     const removed = active?.kind === 'subscription'
     if (removed && active) {
       active.abort.abort('remote_unsubscribed')
-      this.finishActive(id, active, 'remote_unsubscribed')
+      this.finishActive(id, active, effectiveRemotePeerId, 'remote_unsubscribed')
     }
     await sender.sendFrame({
       type: 'unsubscribed',
@@ -753,18 +814,29 @@ export class WebRtcPeerHost {
     })
   }
 
-  handleCancel(id: string): void {
-    const active = this.active.get(id)
+  handleCancel(id: string, remotePeerId?: string): void {
+    const effectiveRemotePeerId = this.effectiveRemotePeerId(remotePeerId)
+    const active = this.active.get(this.workId(effectiveRemotePeerId, id))
     if (!active) return
     active.abort.abort('remote_cancelled')
-    this.finishActive(id, active)
+    this.finishActive(id, active, effectiveRemotePeerId)
   }
 
-  handleDisconnect(reason = 'disconnect'): void {
-    this.acceptingInbound = false
-    this.admittedServices = new Set<string>()
-    this.cancelAll(reason)
-    this.unbindRevocation()
+  handleDisconnect(reason = 'disconnect', remotePeerId?: string): void {
+    if (remotePeerId === undefined) {
+      for (const [, state] of this.recipientStates()) {
+        state.acceptingInbound = false
+        state.admittedServices = new Set<string>()
+        this.unbindRevocation(state)
+      }
+      this.cancelAll(reason)
+      return
+    }
+    const state = this.stateIfKnown(remotePeerId)
+    state.acceptingInbound = false
+    state.admittedServices = new Set<string>()
+    this.cancelAll(reason, remotePeerId)
+    this.unbindRevocation(state)
   }
 
   getActiveWorkCount(): number {
@@ -779,13 +851,13 @@ export class WebRtcPeerHost {
     }
   }
 
-  private async manifestAuthoritySnapshot(remotePeerId: string | undefined, authenticatedPeerContext: AuthenticatedPeerContext | undefined, nowMs: number): Promise<PeerHostManifestAuthoritySnapshot> {
+  private async manifestAuthoritySnapshot(remotePeerId: string | undefined, authenticatedPeerContext: AuthenticatedPeerContext | undefined, nowMs: number, state: PeerHostRecipient): Promise<PeerHostManifestAuthoritySnapshot> {
     const context = authenticatedPeerContext ?? this.contextFor(remotePeerId)
     const peerId = remotePeerId ?? context?.selector.claimantPeerId ?? this.soleRecipientPeerId()
     return await (this.options.authorizationStore.snapshotManifestAuthority?.({
       ...(peerId !== undefined ? { remotePeerId: peerId } : {}),
       ...(context !== undefined ? { authenticatedPeerContext: context } : {}),
-      correlationId: `manifest:${this.connectionEpoch}`,
+      correlationId: `manifest:${state.connectionEpoch}`,
       nowMs
     }) ?? {
       ...(peerId !== undefined ? { recipientPeerId: peerId } : {}),
@@ -795,10 +867,10 @@ export class WebRtcPeerHost {
     })
   }
 
-  private authenticatedContextForCurrentEpoch(context: AuthenticatedPeerContext | undefined): AuthenticatedPeerContext | undefined {
+  private authenticatedContextForCurrentEpoch(context: AuthenticatedPeerContext | undefined, state: PeerHostRecipient): AuthenticatedPeerContext | undefined {
     if (context === undefined) return undefined
-    if (context.connectionEpoch === this.connectionEpoch) return context
-    return { ...context, selector: { ...context.selector }, transport: { ...context.transport }, connectionEpoch: this.connectionEpoch }
+    if (context.connectionEpoch === state.connectionEpoch) return context
+    return { ...context, selector: { ...context.selector }, transport: { ...context.transport }, connectionEpoch: state.connectionEpoch }
   }
 
   private effectivePermissionsForGrant(decision: PeerHostAuthorizationDecision): string[] {
@@ -811,31 +883,34 @@ export class WebRtcPeerHost {
 
   private async handleStreamCall(method: PeerHostMethodDescriptor, frame: CallFrame, remotePeerId: string, identity: PeerHostIdentity, nowMs: number, deadlineAtMs: number, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     const sender = this.senderFor(remotePeerId)
+    const workId = this.workId(remotePeerId, frame.id)
     const abort = new AbortController()
     const active: ActiveWork = {
       abort,
+      id: frame.id,
+      remotePeerId,
       kind: 'stream',
       settled: false,
       cleanup: () => clearTimeout(timer)
     }
     const timer = setTimeout(() => {
-      void this.timeoutWork(frame.id, active)
+      void this.timeoutWork(frame.id, active, remotePeerId)
     }, Math.max(1, deadlineAtMs - nowMs))
-    this.active.set(frame.id, active)
+    this.active.set(workId, active)
     try {
       const context = this.callContext(frame, method, remotePeerId, identity, abort.signal, nowMs, deadlineAtMs, authenticatedPeerContext)
       const stream = await this.options.registry.openStream(method, frame.params ?? {}, context)
       for await (const chunk of stream) {
         if (abort.signal.aborted || active.settled) break
         const parsed = this.options.registry.parseOutput(method, chunk)
-        if (this.active.get(frame.id) !== active || active.settled) break
+        if (this.active.get(workId) !== active || active.settled) break
         await sender.sendFrame({ type: 'chunk', id: frame.id, data: parsed })
       }
-      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'eof', id: frame.id, cancelled: abort.signal.aborted })
+      if (this.finishActive(frame.id, active, remotePeerId)) await sender.sendFrame({ type: 'eof', id: frame.id, cancelled: abort.signal.aborted })
     } catch (error) {
-      if (this.finishActive(frame.id, active)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
+      if (this.finishActive(frame.id, active, remotePeerId)) await sender.sendFrame({ type: 'error', id: frame.id, correlation_id: frame.id, error: redactError(error, this.options.randomId) })
     } finally {
-      this.finishActive(frame.id, active)
+      this.finishActive(frame.id, active, remotePeerId)
     }
   }
 
@@ -845,14 +920,16 @@ export class WebRtcPeerHost {
     options: PeerHostEventEmitOptions | undefined,
     subscription: SubscribeFrame,
     active: ActiveWork,
-    emission: SubscriptionEmissionState
+    emission: SubscriptionEmissionState,
+    remotePeerId: string
   ): Promise<boolean> {
-    if (active.settled || active.abort.signal.aborted || this.active.get(subscription.id) !== active) return false
+    const workId = this.workId(remotePeerId, subscription.id)
+    if (active.settled || active.abort.signal.aborted || this.active.get(workId) !== active) return false
     const queueDepth = emission.acknowledged ? emission.queuedSends : emission.pending.length
     if (queueDepth >= MAX_SUBSCRIPTION_EVENT_QUEUE) {
       emission.failed = true
       if (emission.acknowledged) {
-        this.terminateSubscriptionDelivery(subscription.id, active, 'event_queue_overflow')
+        this.terminateSubscriptionDelivery(subscription.id, active, remotePeerId, 'event_queue_overflow')
       }
       return false
     }
@@ -878,32 +955,34 @@ export class WebRtcPeerHost {
       emission.pending.push(eventFrame)
       return true
     }
-    return await this.scheduleSubscriptionEvent(subscription.id, active, emission, eventFrame)
+    return await this.scheduleSubscriptionEvent(subscription.id, active, emission, eventFrame, remotePeerId)
   }
 
   private scheduleSubscriptionEvent(
     subscriptionId: string,
     active: ActiveWork,
     emission: SubscriptionEmissionState,
-    eventFrame: Record<string, unknown>
+    eventFrame: Record<string, unknown>,
+    remotePeerId?: string
   ): Promise<boolean> {
-    if (active.settled || active.abort.signal.aborted || this.active.get(subscriptionId) !== active) {
+    const workId = this.workId(remotePeerId, subscriptionId)
+    if (active.settled || active.abort.signal.aborted || this.active.get(workId) !== active) {
       return Promise.resolve(false)
     }
     if (emission.queuedSends >= MAX_SUBSCRIPTION_EVENT_QUEUE) {
       emission.failed = true
-      this.terminateSubscriptionDelivery(subscriptionId, active, 'event_queue_overflow')
+      this.terminateSubscriptionDelivery(subscriptionId, active, remotePeerId, 'event_queue_overflow')
       return Promise.resolve(false)
     }
     emission.queuedSends += 1
     const delivery = emission.sendChain.then(async () => {
-      if (active.settled || active.abort.signal.aborted || this.active.get(subscriptionId) !== active) return false
-      await this.requireSender().sendFrame(eventFrame, active.abort.signal)
-      return !active.settled && !active.abort.signal.aborted && this.active.get(subscriptionId) === active
+      if (active.settled || active.abort.signal.aborted || this.active.get(workId) !== active) return false
+      await this.requireSender(remotePeerId).sendFrame(eventFrame, active.abort.signal)
+      return !active.settled && !active.abort.signal.aborted && this.active.get(workId) === active
     })
     emission.sendChain = delivery.then(() => undefined, () => undefined)
     return delivery.catch((error) => {
-      this.terminateSubscriptionDelivery(subscriptionId, active, 'event_send_failed')
+      this.terminateSubscriptionDelivery(subscriptionId, active, remotePeerId, 'event_send_failed')
       throw error
     }).finally(() => {
       emission.queuedSends -= 1
@@ -913,11 +992,12 @@ export class WebRtcPeerHost {
   private terminateSubscriptionDelivery(
     subscriptionId: string,
     active: ActiveWork,
+    remotePeerId: string | undefined,
     reason: string
   ): void {
     active.abort.abort(reason)
-    if (!this.finishActive(subscriptionId, active, reason)) return
-    void this.resolveSender()?.sendFrame({
+    if (!this.finishActive(subscriptionId, active, remotePeerId, reason)) return
+    void this.resolveSender(remotePeerId)?.sendFrame({
       type: 'unsubscribed',
       id: subscriptionId,
       subscription_id: subscriptionId,
@@ -939,39 +1019,43 @@ export class WebRtcPeerHost {
     return context
   }
 
-  private cancelAll(reason: string): void {
+  private cancelAll(reason: string, remotePeerId?: string): void {
     for (const [id, active] of this.active) {
+      if (remotePeerId !== undefined && active.remotePeerId !== remotePeerId) continue
       active.abort.abort(reason)
-      this.finishActive(id, active)
+      this.finishActive(active.id, active, active.remotePeerId)
     }
   }
 
   private cancelRevokedAuthority(event: PeerRevocationEvent): void {
-    if (!this.selectorMatchesActiveAuthority(event.selector)) return
-    this.authorityRevoked = true
-    this.acceptingInbound = false
-    this.admittedServices = new Set<string>()
     const terminal = revocationTerminalError(event)
-    for (const [id, active] of [...this.active]) {
-      active.abort.abort('peer_authority_revoked')
-      if (!this.finishActive(id, active, 'peer_authority_revoked')) continue
-      void this.sendRevocationTerminal(id, active.kind, terminal).catch(() => undefined)
+    for (const [remotePeerId, state] of this.recipientStates()) {
+      if (!this.selectorMatchesActiveAuthority(state, event.selector)) continue
+      state.authorityRevoked = true
+      state.acceptingInbound = false
+      state.admittedServices = new Set<string>()
+      for (const active of [...this.active.values()]) {
+        if (active.remotePeerId !== remotePeerId) continue
+        active.abort.abort('peer_authority_revoked')
+        if (!this.finishActive(active.id, active, active.remotePeerId, 'peer_authority_revoked')) continue
+        void this.sendRevocationTerminal(active.id, active.kind, terminal, active.remotePeerId).catch(() => undefined)
+      }
     }
   }
 
-  private async sendRevocationTerminal(id: string, kind: ActiveWork['kind'], error: PeerHostErrorBody): Promise<void> {
+  private async sendRevocationTerminal(id: string, kind: ActiveWork['kind'], error: PeerHostErrorBody, remotePeerId?: string): Promise<void> {
     if (kind === 'subscription') {
-      await this.resolveSender()?.sendFrame({ type: 'unsubscribed', id, subscription_id: id, removed: true })
+      await this.resolveSender(remotePeerId)?.sendFrame({ type: 'unsubscribed', id, subscription_id: id, removed: true })
       return
     }
-    await this.resolveSender()?.sendFrame({ type: 'error', id, correlation_id: id, error })
+    await this.resolveSender(remotePeerId)?.sendFrame({ type: 'error', id, correlation_id: id, error })
   }
 
-  private async timeoutWork(id: string, active: ActiveWork): Promise<void> {
-    if (!this.finishActive(id, active)) return
+  private async timeoutWork(id: string, active: ActiveWork, remotePeerId?: string): Promise<void> {
+    if (!this.finishActive(id, active, remotePeerId)) return
     active.abort.abort('deadline')
     try {
-      await this.requireSender().sendFrame({
+      await this.requireSender(remotePeerId).sendFrame({
         type: 'error',
         id,
         correlation_id: id,
@@ -983,35 +1067,38 @@ export class WebRtcPeerHost {
     }
   }
 
-  private finishActive(id: string, active: ActiveWork, reason = 'work_finished'): boolean {
-    if (active.settled || this.active.get(id) !== active) return false
+  private finishActive(id: string, active: ActiveWork, remotePeerId?: string, reason = 'work_finished'): boolean {
+    const effectiveRemotePeerId = this.effectiveRemotePeerId(remotePeerId)
+    const workId = this.workId(effectiveRemotePeerId, id)
+    if (active.settled || this.active.get(workId) !== active) return false
+    const state = this.stateIfKnown(effectiveRemotePeerId)
     active.settled = true
     active.cleanup(reason)
-    this.active.delete(id)
-    if (!this.inFlightCallIds.has(id)) this.reservedWorkIds.delete(id)
+    this.active.delete(workId)
+    if (!state.inFlightCallIds.has(id)) state.reservedWorkIds.delete(id)
     return true
   }
 
-  private bindRevocation(context: AuthenticatedPeerContext | undefined): void {
-    this.unbindRevocation()
+  private bindRevocation(state: PeerHostRecipient, context: AuthenticatedPeerContext | undefined): void {
+    this.unbindRevocation(state)
     if (context === undefined || this.options.revocationBroadcaster === undefined) {
-      this.activeAuthoritySelector = null
+      state.activeAuthoritySelector = null
       return
     }
-    this.activeAuthoritySelector = { ...context.selector }
-    this.unsubscribeRevocation = this.options.revocationBroadcaster.subscribe((event) => {
+    state.activeAuthoritySelector = { ...context.selector }
+    state.unsubscribeRevocation = this.options.revocationBroadcaster.subscribe((event) => {
       this.cancelRevokedAuthority(event)
     })
   }
 
-  private unbindRevocation(): void {
-    this.unsubscribeRevocation?.()
-    this.unsubscribeRevocation = null
-    this.activeAuthoritySelector = null
+  private unbindRevocation(state: PeerHostRecipient): void {
+    state.unsubscribeRevocation?.()
+    state.unsubscribeRevocation = null
+    state.activeAuthoritySelector = null
   }
 
-  private selectorMatchesActiveAuthority(selector: PeerRelationshipSelector): boolean {
-    const active = this.activeAuthoritySelector
+  private selectorMatchesActiveAuthority(state: PeerHostRecipient, selector: PeerRelationshipSelector): boolean {
+    const active = state.activeAuthoritySelector
     return active !== null &&
       active.tokenId === selector.tokenId &&
       active.claimantPeerId === selector.claimantPeerId &&
@@ -1019,8 +1106,8 @@ export class WebRtcPeerHost {
       active.roomName === selector.roomName
   }
 
-  private requireSender(): PeerHostFrameSender {
-    const sender = this.resolveSender()
+  private requireSender(remotePeerId?: string): PeerHostFrameSender {
+    const sender = this.resolveSender(remotePeerId)
     if (!sender) throw new Error('peer host is not attached')
     return sender
   }
@@ -1053,6 +1140,18 @@ export class WebRtcPeerHost {
     const sender = this.resolveSender(remotePeerId)
     if (!sender) throw new Error('peer host is not attached')
     return sender
+  }
+
+  private workId(remotePeerId: string | undefined, id: string): string {
+    return remotePeerId === undefined ? id : `${remotePeerId.length}:${remotePeerId}:${id}`
+  }
+
+  private effectiveRemotePeerId(remotePeerId?: string): string | undefined {
+    return remotePeerId ?? this.soleRecipientPeerId()
+  }
+
+  private recipientStates(): Array<[string | undefined, PeerHostRecipient]> {
+    return [[undefined, this.fallbackRecipient], ...this.recipients.entries()]
   }
 }
 
