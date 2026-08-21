@@ -325,6 +325,8 @@ describe('browser mesh-node service composition', () => {
     const resume = vi
       .spyOn(services.provider.peerHost, 'resumeLocalProvider')
       .mockRejectedValue(new Error('secret provider refresh details'))
+    const sentFrames: Record<string, unknown>[] = []
+    services.provider.peerHost.attach({ sendFrame: async (frame) => { sentFrames.push(frame) } })
 
     await services.localFeatureSharing.setFeatureEnabled(
       'aurora.local.native.get_device_status.v1',
@@ -332,11 +334,17 @@ describe('browser mesh-node service composition', () => {
     )
 
     await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(2))
-    expect(reportProviderRefreshFailure).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(reportProviderRefreshFailure).toHaveBeenCalledOnce())
     expect(reportProviderRefreshFailure).toHaveBeenCalledWith({
       code: 'provider_manifest_refresh_failed',
       attempts: 2,
     })
+    await vi.waitFor(() => expect(sentFrames).toEqual([
+      expect.objectContaining({
+        type: 'provider_unavailable',
+        reason_code: 'provider_manifest_refresh_failed',
+      }),
+    ]))
     expect(JSON.stringify(reportProviderRefreshFailure.mock.calls)).not.toContain('secret')
     await services.close()
   })

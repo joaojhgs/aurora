@@ -290,6 +290,9 @@ export async function createBrowserMeshNodeServices(
           } catch {
             if (providerRefreshClosed) return
             if (attempt === 2) {
+              await provider.peerHost
+                .suspendLocalProvider('provider_manifest_refresh_failed')
+                .catch(() => undefined)
               reportFailureSafely(reportProviderRefreshFailure, {
                 code: 'provider_manifest_refresh_failed',
                 attempts: 2,
