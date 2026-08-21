@@ -2378,6 +2378,77 @@ describe("Aurora Tauri runtime wrapper", () => {
     }
   });
 
+  it("does not repopulate remote assistant tools from delayed invalidations after readiness loss", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    const eventStream = controlledProjectionInvalidationStream();
+    let resolveCatalog!: (page: ToolingGetExportCatalogResponse) => void;
+    const delayedCatalog = new Promise<ToolingGetExportCatalogResponse>(
+      (resolve) => {
+        resolveCatalog = resolve;
+      },
+    );
+    vi.spyOn(client.tools, "getExportCatalog").mockResolvedValue(
+      projectionPage("bootstrap-peer", []),
+    );
+    const getExportCatalogFromPeer = vi
+      .spyOn(client.tools, "getExportCatalogFromPeer")
+      .mockImplementation(async () => delayedCatalog);
+    vi.spyOn(client, "subscribe").mockImplementation(
+      () => eventStream.subscription,
+    );
+    const thinPeer = controllableThinPeer({
+      status: "authorized",
+      state: "authorized",
+    });
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "desktop-local",
+      thinConnectionMode: "webrtc-only",
+      thinPeer: thinPeer.peer,
+      localAssistant: {
+        provider: {
+          complete: async () => ({ type: "message", content: "Ready." }),
+        },
+      },
+    };
+    window.history.replaceState({}, "", "/tools");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => expect(eventStream.closeCount).toBe(0));
+      eventStream.emit(
+        projectionInvalidationEvent({
+          providerPeerId: "peer-p",
+          sourcePeerId: "peer-p",
+          targetPeerId: "local-peer",
+        }),
+      );
+      await waitUntil(() =>
+        expect(getExportCatalogFromPeer).toHaveBeenCalledTimes(1),
+      );
+      await act(async () => {
+        thinPeer.emit({ status: "needs-invite", state: "failed" });
+        await flushReactWork();
+      });
+      expect(eventStream.closeCount).toBe(1);
+      expect(mounted.container.textContent).not.toContain("peer-p.search");
+
+      resolveCatalog(
+        projectionPage("peer-p", [
+          remoteProjectionTool("peer-p", "peer-p.search"),
+        ]),
+      );
+      await act(async () => {
+        await delayedCatalog;
+        await flushReactWork();
+      });
+      expect(mounted.container.textContent).not.toContain("peer-p.search");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
   it("refreshes the shell when a thin peer becomes authorized without a local assistant", async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() });
     const getGraph = vi.spyOn(client.capabilities, "getGraph");

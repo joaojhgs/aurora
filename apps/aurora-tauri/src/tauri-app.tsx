@@ -727,6 +727,7 @@ export function AuroraTauriApp({
       LightweightRemoteProjectionCatalogSnapshot
     >();
     let stopInvalidationRefresh: (() => void) | null = null;
+    let invalidationRefreshGeneration = 0;
     setAssistantRemoteTools(runtime.localAssistant?.remoteTools ?? []);
 
     const setRemoteToolsFromSnapshots = () => {
@@ -736,19 +737,21 @@ export function AuroraTauriApp({
     };
 
     const stopProjectionInvalidations = () => {
+      invalidationRefreshGeneration += 1;
       stopInvalidationRefresh?.();
       stopInvalidationRefresh = null;
     };
 
     const startProjectionInvalidations = () => {
       if (stopInvalidationRefresh) return;
+      const generation = ++invalidationRefreshGeneration;
       const subscription = startTauriRemoteAssistantToolInvalidationRefresh(
         runtime,
         {
           previousSnapshotForPeer: (peerId) =>
             remoteProjectionSnapshots.get(peerId) ?? null,
           onSnapshot: (snapshot) => {
-            if (cancelled) return;
+            if (cancelled || generation !== invalidationRefreshGeneration) return;
             remoteProjectionSnapshots = new Map(remoteProjectionSnapshots);
             remoteProjectionSnapshots.set(snapshot.providerPeerId, snapshot);
             remoteToolsByPeer = new Map(remoteToolsByPeer);
