@@ -4,10 +4,12 @@ import {
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
   type PeerHostAuthorizationStore,
-  type PeerHostOptions
+  type PeerHostOptions,
+  type ToolingProjectionInvalidatedEventHandler
 } from '../peer-host/index.js'
 import { DenyAllPeerHostAuthorizationStore } from '../peer-host/rust-authorization-store.js'
 import type { PeerAuthorityResolverPort } from '../peer-host/authority-types.js'
+import type { ToolingProjectionAuthorityRevision, ToolingProjectionInvalidated } from '../types.js'
 import { createPeerAuthorityLocalToolPolicyPorts } from './authority-policy.js'
 import type { LocalToolExportDecisionPort } from './export-catalog.js'
 import type { LocalToolApprovalDecisionPort } from './durable-feature-sharing.js'
@@ -46,6 +48,7 @@ export interface MeshNodeLocalToolProviderOptions {
   readonly nowSeconds?: () => number
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
   readonly approvalPolicy?: LocalToolApprovalDecisionPort | undefined
+  readonly projectionInvalidationSource?: MeshNodeToolProjectionInvalidationSource | undefined
 }
 
 export interface MeshNodeLocalToolProviderComposition {
@@ -58,6 +61,11 @@ export interface MeshNodeLocalToolProviderComposition {
   readonly registeredToolIds: readonly string[]
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
   readonly enabled: boolean
+}
+
+export interface MeshNodeToolProjectionInvalidationSource {
+  subscribe(listener: () => void): () => void
+  subscribeApprovalPolicies?(listener: () => void): () => void
 }
 
 const DENY_ALL_PORTS: LocalToolPolicyPorts = Object.freeze({
@@ -106,8 +114,25 @@ export function createMeshNodeLocalToolProvider(
     ...(options.nowSeconds ? { nowSeconds: options.nowSeconds } : {}),
     ...(options.approvalController ? { approvalController: options.approvalController } : {})
   })
+  const projectionInvalidationSource = enabled
+    ? options.projectionInvalidationSource ?? projectionInvalidationSourceFromExportDecision(options.exportDecision)
+    : undefined
   const peerHostRegistry = enabled
-    ? createToolingPeerHostRegistry(handlers)
+    ? createToolingPeerHostRegistry({
+        ...handlers,
+        ...(projectionInvalidationSource
+          ? {
+              projectionInvalidated: createProjectionInvalidatedHandler({
+                source: projectionInvalidationSource,
+                providerPeerId: options.localPeerId,
+                serviceInstanceId,
+                registry: options.registry,
+                nowSeconds: options.nowSeconds,
+                randomId: options.randomId
+              })
+            }
+          : {})
+      })
     : new PeerHostContractRegistry()
   const peerHost = new WebRtcPeerHost({
     localPeerId: options.localPeerId,
@@ -133,6 +158,110 @@ export function createMeshNodeLocalToolProvider(
     ...(options.approvalController ? { approvalController: options.approvalController } : {}),
     enabled
   }
+}
+
+function projectionInvalidationSourceFromExportDecision(
+  value: LocalToolExportDecisionPort | undefined
+): MeshNodeToolProjectionInvalidationSource | undefined {
+  if (!value || typeof (value as { subscribe?: unknown }).subscribe !== 'function') return undefined
+  const candidate = value as unknown as {
+    subscribe(listener: () => void): () => void
+    subscribeApprovalPolicies?: (listener: () => void) => () => void
+  }
+  return {
+    subscribe: (listener) => candidate.subscribe(listener),
+    ...(typeof candidate.subscribeApprovalPolicies === 'function'
+      ? { subscribeApprovalPolicies: (listener) => candidate.subscribeApprovalPolicies!(listener) }
+      : {})
+  }
+}
+
+function createProjectionInvalidatedHandler(options: {
+  readonly source: MeshNodeToolProjectionInvalidationSource
+  readonly providerPeerId: string
+  readonly serviceInstanceId: string
+  readonly registry: LocalToolRegistry
+  readonly nowSeconds?: (() => number) | undefined
+  readonly randomId?: (() => string) | undefined
+}): ToolingProjectionInvalidatedEventHandler {
+  let catalogRevision = Math.max(1, options.registry.list().length)
+  let exportPolicyRevision = 0
+  const handler: ToolingProjectionInvalidatedEventHandler = (context) => {
+    let closed = false
+    let featureInitial = true
+    let policyInitial = true
+    let pending = false
+    const emit = (reasonCode: string) => {
+      if (closed || pending) return
+      pending = true
+      void Promise.resolve().then(async () => {
+        pending = false
+        if (closed || context.signal.aborted) return
+        catalogRevision += 1
+        if (reasonCode === 'export_policy_changed') exportPolicyRevision += 1
+        await context.emit({
+          provider_peer_id: options.providerPeerId,
+          service_instance_id: options.serviceInstanceId,
+          authority_revision: authorityRevision({
+            catalogRevision,
+            exportPolicyRevision,
+            authGrantRevision: context.authenticatedPeerContext?.credentialRevision,
+            manifestRevision: null
+          }),
+          reason_code: reasonCode,
+          correlation_id: `${context.id}:${options.randomId?.() ?? String(options.nowSeconds?.() ?? Date.now())}`
+        } satisfies ToolingProjectionInvalidated)
+      }).catch(() => undefined)
+    }
+    const unsubscribeFeatureSharing = options.source.subscribe(() => {
+      if (featureInitial) {
+        featureInitial = false
+        return
+      }
+      emit('projection_changed')
+    })
+    const unsubscribeApprovalPolicies = options.source.subscribeApprovalPolicies?.(() => {
+      if (policyInitial) {
+        policyInitial = false
+        return
+      }
+      emit('export_policy_changed')
+    }) ?? (() => undefined)
+    const close = () => {
+      if (closed) return
+      closed = true
+      unsubscribeFeatureSharing()
+      unsubscribeApprovalPolicies()
+    }
+    context.signal.addEventListener('abort', close, { once: true })
+    return { close }
+  }
+  return handler
+}
+
+function authorityRevision(input: {
+  readonly catalogRevision: number
+  readonly exportPolicyRevision: number
+  readonly authGrantRevision?: number | null | undefined
+  readonly manifestRevision?: string | number | null | undefined
+}): ToolingProjectionAuthorityRevision {
+  return {
+    catalog_revision: input.catalogRevision,
+    export_policy_revision: input.exportPolicyRevision,
+    auth_grant_revision: safeRevision(input.authGrantRevision),
+    manifest_revision: safeRevision(input.manifestRevision),
+    switch_revision: input.catalogRevision,
+    protocol_revision: 1
+  }
+}
+
+function safeRevision(value: string | number | null | undefined): number {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isSafeInteger(parsed) && parsed >= 0) return parsed
+  }
+  return 0
 }
 
 function isUsableCursorSecret(secret: Uint8Array | string | undefined): boolean {

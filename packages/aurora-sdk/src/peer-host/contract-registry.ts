@@ -293,10 +293,9 @@ export function createToolingPeerHostRegistry(
     'Tooling.ExecuteTool',
     handlers.executeTool
   )
-  registerToolingProjectionInvalidatedEvent(
-    registry,
-    handlers.projectionInvalidated ?? (() => ({ close: () => undefined }))
-  )
+  if (handlers.projectionInvalidated) {
+    registerToolingProjectionInvalidatedEvent(registry, handlers.projectionInvalidated)
+  }
   return registry
 }
 

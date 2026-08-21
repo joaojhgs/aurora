@@ -11,6 +11,7 @@ import {
 import { createLocalToolingProviderHandlers } from '../local-tools/index.js'
 import type { PeerHostCallContext } from '../peer-host/types.js'
 import { parseToolingExportCatalogPage } from '../tools.js'
+import type { AuroraEventSubscription, AuroraSubscribeOptions } from '../events.js'
 import type {
   AuroraEvent,
   JsonObject,
@@ -83,9 +84,31 @@ export interface LightweightRemoteProjectionCatalogSnapshot {
 
 export interface LightweightProjectionInvalidationRefreshOptions {
   readonly catalogClientForPeer: (peerId: string, event: ToolingProjectionInvalidated) => LightweightRemoteProjectionCatalogClient | null | undefined
+  readonly sourcePeerId?: string | undefined
   readonly pageSize?: number | undefined
   readonly maxPages?: number | undefined
   readonly previousSnapshot?: LightweightRemoteProjectionCatalogSnapshot | null | undefined
+}
+
+export interface LightweightProjectionInvalidationEventClient {
+  subscribe(options?: AuroraSubscribeOptions): AuroraEventSubscription<unknown>
+}
+
+export interface LightweightProjectionInvalidationSubscriptionOptions {
+  readonly events: LightweightProjectionInvalidationEventClient
+  readonly catalogClientForPeer: (peerId: string, event: ToolingProjectionInvalidated) => LightweightRemoteProjectionCatalogClient | null | undefined
+  readonly onSnapshot: (snapshot: LightweightRemoteProjectionCatalogSnapshot, event: ToolingProjectionInvalidated) => void | Promise<void>
+  readonly onError?: (error: unknown) => void
+  readonly previousSnapshotForPeer?: (peerId: string, event: ToolingProjectionInvalidated) => LightweightRemoteProjectionCatalogSnapshot | null | undefined
+  readonly pageSize?: number | undefined
+  readonly maxPages?: number | undefined
+  readonly signal?: AbortSignal | undefined
+}
+
+export interface LightweightProjectionInvalidationSubscription {
+  readonly ready?: Promise<void>
+  readonly closed: Promise<void>
+  close(reason?: unknown): void
 }
 
 interface PendingLocalApproval {
@@ -216,7 +239,7 @@ export async function refreshLightweightRemoteProjectionCatalogFromInvalidation(
   options: LightweightProjectionInvalidationRefreshOptions
 ): Promise<LightweightRemoteProjectionCatalogSnapshot> {
   const invalidation = parseToolingProjectionInvalidationEvent(event)
-  const sourcePeerId = event.audit.targetPeerId
+  const sourcePeerId = options.sourcePeerId ?? event.audit.peerId
   if (!sourcePeerId) throw new LightweightOrchestratorError('projection_invalidation_missing_peer')
   if (sourcePeerId !== invalidation.provider_peer_id) {
     throw new LightweightOrchestratorError('projection_invalidation_peer_mismatch')
@@ -236,6 +259,53 @@ export async function refreshLightweightRemoteProjectionCatalogFromInvalidation(
     throw new LightweightOrchestratorError('projection_invalidation_snapshot_mismatch')
   }
   return snapshot
+}
+
+export function subscribeLightweightRemoteProjectionInvalidations(
+  options: LightweightProjectionInvalidationSubscriptionOptions
+): LightweightProjectionInvalidationSubscription {
+  const snapshots = new Map<string, LightweightRemoteProjectionCatalogSnapshot>()
+  const subscription = options.events.subscribe({
+    stream: 'generic',
+    topics: [TOOLING_PROJECTION_INVALIDATED_TOPIC],
+    kinds: [TOOLING_PROJECTION_INVALIDATED_TOPIC],
+    protocol: 'mesh',
+    reconnect: { maxAttempts: 0 },
+    ...(options.signal ? { signal: options.signal } : {})
+  })
+  let closed = false
+  const closedPromise = (async () => {
+    try {
+      if (subscription.ready) await subscription.ready
+      for await (const event of subscription) {
+        const sourcePeerId = event.audit.peerId
+        const previousSnapshot = sourcePeerId
+          ? (options.previousSnapshotForPeer?.(sourcePeerId, parseToolingProjectionInvalidationEvent(event)) ?? snapshots.get(sourcePeerId) ?? null)
+          : null
+        const snapshot = await refreshLightweightRemoteProjectionCatalogFromInvalidation(event, {
+          catalogClientForPeer: options.catalogClientForPeer,
+          ...(sourcePeerId ? { sourcePeerId } : {}),
+          ...(options.pageSize !== undefined ? { pageSize: options.pageSize } : {}),
+          ...(options.maxPages !== undefined ? { maxPages: options.maxPages } : {}),
+          previousSnapshot
+        })
+        snapshots.set(snapshot.providerPeerId, snapshot)
+        await options.onSnapshot(snapshot, parseToolingProjectionInvalidationEvent(event))
+      }
+    } catch (error) {
+      if (!closed) options.onError?.(error)
+    }
+  })()
+  void closedPromise.catch(() => undefined)
+  return {
+    ...(subscription.ready ? { ready: subscription.ready } : {}),
+    closed: closedPromise,
+    close(reason?: unknown) {
+      if (closed) return
+      closed = true
+      subscription.close(reason)
+    }
+  }
 }
 
 export function createLightweightToolClientAdapter(options: LightweightToolClientAdapterOptions): LightweightToolClientPort {

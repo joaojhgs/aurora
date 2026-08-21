@@ -11,6 +11,7 @@ import {
   createOnDeviceLightweightToolPolicy,
   loadLightweightRemoteProjectionCatalog,
   refreshLightweightRemoteProjectionCatalogFromInvalidation,
+  subscribeLightweightRemoteProjectionInvalidations,
   type LightweightToolClientDelegate
 } from '../src/lightweight-orchestrator/index.js'
 import {
@@ -298,7 +299,12 @@ describe('lightweight tool-client adapter', () => {
     const calls: Array<{ peerId: string; payload: unknown }> = []
 
     const first = await refreshLightweightRemoteProjectionCatalogFromInvalidation(
-      invalidationEvent({ providerPeerId: REMOTE_PEER_ID, serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID }),
+      invalidationEvent({
+        providerPeerId: REMOTE_PEER_ID,
+        serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
+        sourcePeerId: REMOTE_PEER_ID,
+        targetPeerId: 'local-peer'
+      }),
       {
         pageSize: 1,
         previousSnapshot: {
@@ -321,7 +327,12 @@ describe('lightweight tool-client adapter', () => {
     )
 
     const second = await refreshLightweightRemoteProjectionCatalogFromInvalidation(
-      invalidationEvent({ providerPeerId: peerB, serviceInstanceId: peerBService }),
+      invalidationEvent({
+        providerPeerId: peerB,
+        serviceInstanceId: peerBService,
+        sourcePeerId: peerB,
+        targetPeerId: 'local-peer'
+      }),
       {
         pageSize: 1,
         catalogClientForPeer(peerId) {
@@ -389,6 +400,70 @@ describe('lightweight tool-client adapter', () => {
     )).rejects.toMatchObject({ reasonCode: 'projection_invalidation_contains_membership' })
 
     expect(calls).toEqual([])
+  })
+
+  it('subscribes to projection invalidations and updates exact-peer remote catalog state', async () => {
+    const pageA1 = projectionPages([[remoteToolInfo('remote.search')]])[0]!
+    const pageA2 = projectionPages([[remoteToolInfo('remote.files')]])[0]!
+    const pageB = projectionPages([[remoteToolInfo('garage.search', 'garage-peer', 'remote:garage-peer:Tooling')]], {
+      providerPeerId: 'garage-peer',
+      serviceInstanceId: 'remote:garage-peer:Tooling'
+    })[0]!
+    const events = [
+      invalidationEvent({
+        providerPeerId: REMOTE_PEER_ID,
+        serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
+        sourcePeerId: REMOTE_PEER_ID,
+        targetPeerId: 'local-peer'
+      }),
+      invalidationEvent({
+        providerPeerId: REMOTE_PEER_ID,
+        serviceInstanceId: REMOTE_SERVICE_INSTANCE_ID,
+        sourcePeerId: REMOTE_PEER_ID,
+        targetPeerId: 'local-peer'
+      })
+    ]
+    const snapshots: string[][] = []
+    const calls: Array<{ peerId: string; payload: unknown }> = []
+    let closed = false
+    const subscription = subscribeLightweightRemoteProjectionInvalidations({
+      events: {
+        subscribe() {
+          return {
+            ready: Promise.resolve(),
+            closed: Promise.resolve(),
+            close() { closed = true },
+            async *[Symbol.asyncIterator]() {
+              for (const event of events) yield event
+            }
+          }
+        }
+      },
+      pageSize: 1,
+      catalogClientForPeer(peerId) {
+        return {
+          async getExportCatalog(payload) {
+            calls.push({ peerId, payload })
+            if (peerId === 'garage-peer') return pageB
+            return calls.filter((call) => call.peerId === REMOTE_PEER_ID).length === 1 ? pageA1 : pageA2
+          }
+        }
+      },
+      onSnapshot(snapshot) {
+        snapshots.push(snapshot.tools.map((tool) => tool.name))
+      }
+    })
+
+    await subscription.closed
+    subscription.close()
+
+    expect(closed).toBe(true)
+    expect(snapshots).toEqual([['remote.search'], ['remote.files']])
+    expect(calls.map((call) => call.peerId)).toEqual([REMOTE_PEER_ID, REMOTE_PEER_ID])
+    expect(calls[1]!.payload).toMatchObject({
+      last_projection_revision: pageA1.projection_revision,
+      last_projection_digest: pageA1.projection_digest
+    })
   })
 })
 
@@ -611,6 +686,7 @@ function invalidationEvent(options: {
   providerPeerId: string
   serviceInstanceId: string
   sourcePeerId?: string
+  targetPeerId?: string
   payloadPatch?: JsonObject
 }): AuroraEvent<unknown> {
   const payload: ToolingProjectionInvalidated & JsonObject = {
@@ -638,9 +714,9 @@ function invalidationEvent(options: {
     audit: {
       correlationId: 'invalidation-1',
       eventKind: 'Tooling.ProjectionInvalidated',
-      peerId: null,
+      peerId: options.sourcePeerId ?? options.providerPeerId,
       principalId: null,
-      targetPeerId: options.sourcePeerId ?? options.providerPeerId,
+      targetPeerId: options.targetPeerId ?? 'local-peer',
       method: null,
       busTopic: 'Tooling.ProjectionInvalidated',
       toolId: null,

@@ -78,6 +78,7 @@ export type {
   GeneratedPeerHostMethodHandler,
   GeneratedPeerHostMethodId,
   GeneratedPeerHostRegistrationOptions,
+  ToolingProjectionInvalidatedEventHandler,
   ToolingPeerHostHandlers
 } from './contract-registry.js'
 export {

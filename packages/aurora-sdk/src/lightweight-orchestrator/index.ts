@@ -34,12 +34,16 @@ export {
   loadLightweightRemoteProjectionCatalog,
   mergeLightweightAssistantTools,
   onDeviceAssistantPermissions,
-  refreshLightweightRemoteProjectionCatalogFromInvalidation
+  refreshLightweightRemoteProjectionCatalogFromInvalidation,
+  subscribeLightweightRemoteProjectionInvalidations
 } from './tool-client-adapter.js'
 export type {
   LightweightToolClientAdapterOptions,
   LightweightToolClientDelegate,
+  LightweightProjectionInvalidationEventClient,
   LightweightProjectionInvalidationRefreshOptions,
+  LightweightProjectionInvalidationSubscription,
+  LightweightProjectionInvalidationSubscriptionOptions,
   LightweightRemoteProjectionCatalogClient,
   LightweightRemoteProjectionCatalogOptions,
   LightweightRemoteProjectionCatalogSnapshot,

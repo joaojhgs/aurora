@@ -3,6 +3,9 @@ import { z } from 'zod/v4'
 import { allowMethods } from './helpers/authority-doubles.js'
 
 import { AuroraClient } from '../src/client.js'
+import { createEventSubscription, eventFromUnknown } from '../src/events.js'
+import { canonicalToolGlobalId, computeProjectionChecksum, computeProjectionPageHash } from '../src/local-tools/index.js'
+import { subscribeLightweightRemoteProjectionInvalidations } from '../src/lightweight-orchestrator/index.js'
 import { MeshP2PTransport } from '../src/mesh.js'
 import {
   CAP_BACKPRESSURE_V1,
@@ -22,6 +25,7 @@ import {
   type PeerSessionSnapshot
 } from '../src/webrtc/index.js'
 import type { AuthenticatedPeerContext } from '../src/peer-host/authority-types.js'
+import type { AuroraEvent, ToolingGetExportCatalogResponse, ToolingProjectionInvalidated, ToolingProjectionToolInfo } from '../src/types.js'
 
 class FakeSession {
   sent: unknown[] = []
@@ -367,6 +371,51 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(iterator.next()).resolves.toMatchObject({ value: { kind: 'Orchestrator.Response', topic: 'Orchestrator.Response', payload: { text: 'ok' }, correlation_id: 'corr-1' }, done: false })
     await iterator.return?.()
     expect(session.sent.some((frame) => (frame as any).type === 'unsubscribe' && (frame as any).id === 'sub-1')).toBe(true)
+  })
+
+  it('refreshes tooling projections from the authenticated WebRTC event source peer only', async () => {
+    const sessionA = new FakeSession()
+    const sessionB = new FakeSession()
+    sessionB.snapshot = {
+      ...sessionB.snapshot,
+      remoteSignalingId: 'sig-peer-b',
+      expectedRemoteStableId: 'peer-b'
+    }
+    const bridgeA = new WebRtcMeshPeerBridge({ session: sessionA, remotePeerId: 'peer-a', randomId: () => 'sub-a' })
+    const bridgeB = new WebRtcMeshPeerBridge({ session: sessionB, remotePeerId: 'peer-b', randomId: () => 'sub-b' })
+    sessionA.emit(hello())
+    sessionB.emit(hello())
+    const calls: Array<{ peerId: string; payload: unknown }> = []
+    const snapshots: string[] = []
+    const watcher = subscribeLightweightRemoteProjectionInvalidations({
+      events: mergedBridgeEvents([bridgeA, bridgeB]),
+      pageSize: 1,
+      catalogClientForPeer(peerId) {
+        return {
+          async getExportCatalog(payload) {
+            calls.push({ peerId, payload })
+            return projectionPageForPeer(peerId, `${peerId}.search`)
+          }
+        }
+      },
+      onSnapshot(snapshot) {
+        snapshots.push(snapshot.providerPeerId)
+      }
+    })
+    expect(sessionA.sent[0]).toMatchObject({ type: 'subscribe', id: 'sub-a', topics: ['Tooling.ProjectionInvalidated'] })
+    expect(sessionB.sent[0]).toMatchObject({ type: 'subscribe', id: 'sub-b', topics: ['Tooling.ProjectionInvalidated'] })
+    sessionA.emit({ type: 'subscribed', id: 'sub-a', subscription_id: 'sub-a', accepted: true, accepted_topics: ['Tooling.ProjectionInvalidated'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    sessionB.emit({ type: 'subscribed', id: 'sub-b', subscription_id: 'sub-b', accepted: true, accepted_topics: ['Tooling.ProjectionInvalidated'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    await watcher.ready
+    sessionB.emit({ type: 'event', topic: 'Tooling.ProjectionInvalidated', params: projectionInvalidationForPeer('peer-b') })
+    sessionA.emit({ type: 'event', topic: 'Tooling.ProjectionInvalidated', params: projectionInvalidationForPeer('peer-a') })
+    await vi.waitFor(() => expect(snapshots).toEqual(['peer-b', 'peer-a']))
+    watcher.close('test')
+    await flush()
+
+    expect(calls.map((call) => call.peerId)).toEqual(['peer-b', 'peer-a'])
+    expect(calls).not.toContainEqual(expect.objectContaining({ peerId: 'default-peer' }))
+    expect(calls[0]!.payload).toMatchObject({ cursor: null, page_size: 1 })
   })
 
   it('rejects empty correlation IDs for scoped event topics after protocol hello', async () => {
@@ -1663,3 +1712,143 @@ describe('WebRtcMeshPeerBridge', () => {
   })
 
 })
+
+function mergedBridgeEvents(bridges: readonly WebRtcMeshPeerBridge[]) {
+  return {
+    subscribe() {
+      const controllers = bridges.map(() => new AbortController())
+      const streams = bridges.map((bridge, index) => bridge.subscribe({
+        peerId: index === 0 ? 'peer-a' : 'peer-b',
+        stream: 'generic',
+        topics: ['Tooling.ProjectionInvalidated'],
+        candidates: [],
+        signal: controllers[index]!.signal
+      } as any))
+      const queue: AuroraEvent<unknown>[] = []
+      const waiters: Array<() => void> = []
+      let closed = false
+      const wake = () => {
+        for (const waiter of waiters.splice(0)) waiter()
+      }
+      for (const stream of streams) {
+        void (async () => {
+          for await (const event of stream) {
+            queue.push(eventFromUnknown(event, {
+              kind: 'Tooling.ProjectionInvalidated',
+              transport: 'mesh'
+            }))
+            wake()
+          }
+        })().catch(() => undefined)
+      }
+      return createEventSubscription(async function* () {
+        while (!closed) {
+          const next = queue.shift()
+          if (next) {
+            yield next
+            continue
+          }
+          await new Promise<void>((resolve) => waiters.push(resolve))
+        }
+      }(), () => {
+        closed = true
+        for (const controller of controllers) controller.abort()
+        wake()
+      }, Promise.all(streams.map((stream) => stream.ready)).then(() => undefined))
+    }
+  }
+}
+
+function projectionInvalidationForPeer(peerId: string): ToolingProjectionInvalidated {
+  return {
+    provider_peer_id: peerId,
+    service_instance_id: `remote:${peerId}:Tooling`,
+    authority_revision: {
+      catalog_revision: 1,
+      export_policy_revision: 1,
+      auth_grant_revision: 1,
+      manifest_revision: 1,
+      switch_revision: 1,
+      protocol_revision: 1
+    },
+    reason_code: 'projection_changed',
+    correlation_id: `corr-${peerId}`
+  }
+}
+
+function projectionPageForPeer(peerId: string, toolName: string): ToolingGetExportCatalogResponse {
+  const tool = remoteProjectionTool(peerId, toolName)
+  const digest = computeProjectionChecksum([tool], [], [])
+  const page = {
+    ok: true,
+    provider_peer_id: peerId,
+    service_instance_id: `remote:${peerId}:Tooling`,
+    selected_protocol_tier: 'projection_v1' as const,
+    authority_revision: projectionInvalidationForPeer(peerId).authority_revision,
+    projection_revision: `revision-${peerId}`,
+    projection_digest: digest,
+    page_index: 0,
+    page_size: 1,
+    page_hash: '0'.repeat(64),
+    tools: [tool],
+    blocked_tools: [],
+    retirements: [],
+    complete: true as const,
+    next_cursor: null,
+    total_count: 1,
+    final_checksum: digest
+  }
+  return { ...page, page_hash: computeProjectionPageHash(page) } as ToolingGetExportCatalogResponse
+}
+
+function remoteProjectionTool(peerId: string, name: string): ToolingProjectionToolInfo {
+  const serviceInstanceId = `remote:${peerId}:Tooling`
+  return {
+    name,
+    local_name: name,
+    global_tool_id: canonicalToolGlobalId(peerId, name),
+    tool_id_scheme: 'aurora-tool',
+    tool_id_version: 1,
+    tool_contract_id: name,
+    share_group_id: name,
+    share_group_label: name,
+    legacy_global_tool_ids: [],
+    exportable: true,
+    provider_peer_id: peerId,
+    provider_service_instance_id: serviceInstanceId,
+    provider_label: null,
+    provider_granted_permissions: null,
+    provider_available: true,
+    namespace: 'remote',
+    display_name: name,
+    aliases: [],
+    description: name,
+    args_schema: { type: 'object' },
+    schema: { type: 'object' },
+    argument_visibility: {},
+    source_type: 'mesh_peer',
+    source: 'mesh_peer',
+    source_id: serviceInstanceId,
+    trust_tier: 'trusted',
+    capability_class: 'read',
+    resource_scope: [],
+    execution_location: 'remote',
+    safety_class: 'standard',
+    risk_class: 'standard',
+    data_egress: false,
+    mutating: false,
+    external: false,
+    admin: false,
+    privacy_hints: [],
+    required_permissions: ['Tooling.ExecuteTool'],
+    confirmation_required: false,
+    rate_limit_hints: null,
+    provenance: {
+      provider_peer_id: peerId,
+      provider_service_instance_id: serviceInstanceId,
+      provider_kind: 'mesh_peer',
+      source: 'unknown',
+      advertised_name: name
+    }
+  }
+}

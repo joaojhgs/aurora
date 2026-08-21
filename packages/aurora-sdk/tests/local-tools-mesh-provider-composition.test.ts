@@ -189,9 +189,7 @@ describe('mesh-node local Tooling provider composition', () => {
       'Tooling.GetTools',
       'Tooling.PrepareExecution'
     ])
-    expect(composition.peerHostRegistry.listEvents().map((event) => event.topic)).toEqual([
-      'Tooling.ProjectionInvalidated'
-    ])
+    expect(composition.peerHostRegistry.listEvents()).toEqual([])
     const manifest = await composition.peerHost.startEpoch('peer-a', authenticatedPeerContext)
     expect(JSON.stringify(manifest)).toContain('Tooling.ExecuteTool')
     expect(
@@ -244,6 +242,7 @@ describe('mesh-node local Tooling provider composition', () => {
       authorityResolver: resolver,
       authorizationStore,
       exportDecision: { isShared: () => true },
+      projectionInvalidationSource: projectionInvalidationSource(),
       audit: () => undefined,
       cursorSecret: 'cursor-secret-1234',
       clock: () => 1_000,
@@ -266,6 +265,62 @@ describe('mesh-node local Tooling provider composition', () => {
       ...projectionInvalidated(),
       tools: [{ name: 'echo' }]
     })).toThrow()
+  })
+
+  it('emits metadata-only projection invalidations from a real sharing source', async () => {
+    const { resolver, authorizationStore } = authorityFromGrants([grant({
+      allowedMethodIds: [...grant().allowedMethodIds, 'Tooling.ProjectionInvalidated']
+    })], 'peer-a')
+    const source = projectionInvalidationSource()
+    const composition = createMeshNodeLocalToolProvider({
+      nodeMode: 'mesh-node',
+      localPeerId: 'provider',
+      nodeName: 'Provider',
+      registry: registryWithEcho(),
+      authorityResolver: resolver,
+      authorizationStore,
+      exportDecision: { isShared: () => true },
+      projectionInvalidationSource: source,
+      audit: () => undefined,
+      cursorSecret: 'cursor-secret-1234',
+      clock: () => 1_000,
+      randomId: () => 'event-1'
+    })
+    const event = composition.peerHostRegistry.getEvent('Tooling.ProjectionInvalidated')
+    expect(event).toBeDefined()
+    if (!event) throw new Error('projection invalidation event missing')
+    const emitted: unknown[] = []
+    const abort = new AbortController()
+    const handle = await composition.peerHostRegistry.openSubscription(event, {
+      id: 'sub-1',
+      topic: 'Tooling.ProjectionInvalidated',
+      remotePeerId: 'peer-a',
+      authenticatedPeerContext,
+      topics: ['Tooling.ProjectionInvalidated'],
+      correlationIds: [],
+      ttlSeconds: 60,
+      signal: abort.signal,
+      receivedAtMs: 1_000,
+      emit: async (payload) => {
+        emitted.push(payload)
+        return true
+      }
+    })
+
+    expect(emitted).toEqual([])
+    source.emitFeature()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]).toMatchObject({
+      provider_peer_id: 'provider',
+      service_instance_id: 'local:provider:Tooling',
+      reason_code: 'projection_changed',
+      correlation_id: 'sub-1:event-1'
+    })
+    expect(JSON.stringify(emitted[0])).not.toContain('tools')
+    await handle?.close('test')
+    abort.abort()
   })
 
   it('passes the local owner approval policy into the provider execution gate', async () => {
@@ -635,5 +690,28 @@ function projectionInvalidated(patch: Record<string, unknown> = {}): Record<stri
     reason_code: 'catalog_changed',
     correlation_id: 'corr-invalidation',
     ...patch
+  }
+}
+
+function projectionInvalidationSource() {
+  const featureListeners = new Set<() => void>()
+  const policyListeners = new Set<() => void>()
+  return {
+    subscribe(listener: () => void): () => void {
+      featureListeners.add(listener)
+      listener()
+      return () => featureListeners.delete(listener)
+    },
+    subscribeApprovalPolicies(listener: () => void): () => void {
+      policyListeners.add(listener)
+      listener()
+      return () => policyListeners.delete(listener)
+    },
+    emitFeature(): void {
+      for (const listener of [...featureListeners]) listener()
+    },
+    emitPolicy(): void {
+      for (const listener of [...policyListeners]) listener()
+    }
   }
 }
