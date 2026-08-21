@@ -4779,7 +4779,7 @@ describe("Tauri CI/E2E route gates", () => {
     expect(diagnosticsRoute.state).not.toBe("available-remote");
     expect(diagnosticsRoute.routeable).toBe(false);
     expect(diagnosticsRoute.disabled).toBe(true);
-    expect(diagnosticsRoute.evidenceSources).toEqual(["pending SDK request"]);
+    expect(diagnosticsRoute.evidenceSources).toEqual(["Page is not ready"]);
   });
 
   it("e2e:runtime resolves embedded deep links to production pages without optimistic route availability", async () => {

@@ -35,6 +35,10 @@ const approvedClientFactoryFiles = new Set([
   // itself; it must invoke commands and listen for status events without routing
   // through the production AuroraClient factory.
   'apps/aurora-tauri/src/desktop-native-voice-e2e.ts',
+  // The desktop mesh E2E harness is dynamically imported only by the explicit
+  // VITE_AURORA_DESKTOP_LIVE_E2E build and must exercise the native invoke
+  // boundary directly to prove the WebView transport is not browser-backed.
+  'apps/aurora-tauri/src/desktop-live-e2e.ts',
   'apps/aurora-web/app/aurora-client.ts',
   'packages/aurora-sdk/src/http.ts',
   'packages/aurora-sdk/src/mock.ts',
