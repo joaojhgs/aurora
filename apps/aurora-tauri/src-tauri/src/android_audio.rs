@@ -1,8 +1,8 @@
 //! Android JNI binding for the shared Rust-native PCM ingress.
 
 use aurora_voice_native::{
-    AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult, AndroidTtsReferenceProfile,
-    AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
+    AndroidAssistantRouteMode, AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult,
+    AndroidTtsReferenceProfile, AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
     CancellationToken, SpeechCatalogTask, SpeechModelCatalog, SpeechPackManager,
     SpeechPackManagerConfig, TtsVoiceCatalog,
 };
@@ -553,6 +553,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     gateway: JString<'_>,
     bearer: JString<'_>,
     remote_audio_consent: jboolean,
+    assistant_route_mode: JString<'_>,
+    preferred_stable_peer_id: JString<'_>,
 ) -> jlong {
     let Some(gateway) = string_from_jni(&mut env, gateway) else {
         return 0;
@@ -560,7 +562,14 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     let Some(bearer) = string_from_jni(&mut env, bearer) else {
         return 0;
     };
+    let Some(assistant_route_mode) = string_from_jni(&mut env, assistant_route_mode) else {
+        return 0;
+    };
+    let preferred_stable_peer_id = optional_string_from_jni(&mut env, preferred_stable_peer_id);
     let Ok(gateway) = Url::parse(&gateway) else {
+        return 0;
+    };
+    let Ok(assistant_route_mode) = AndroidAssistantRouteMode::parse(&assistant_route_mode) else {
         return 0;
     };
     let auth = if bearer.is_empty() {
@@ -568,7 +577,12 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let config = AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0);
+    let Ok(config) =
+        AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0)
+            .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
+    else {
+        return 0;
+    };
     AndroidVoiceSession::new(config, 8, 4_096, 16)
         .map(|session| Box::into_raw(Box::new(session)) as jlong)
         .unwrap_or(0)
@@ -584,6 +598,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     gateway: JString<'_>,
     bearer: JString<'_>,
     remote_audio_consent: jboolean,
+    assistant_route_mode: JString<'_>,
+    preferred_stable_peer_id: JString<'_>,
     pack_store_root: JString<'_>,
     stt_model_id: JString<'_>,
     tts_voice_id: JString<'_>,
@@ -603,6 +619,10 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     let Some(bearer) = string_from_jni(&mut env, bearer) else {
         return 0;
     };
+    let Some(assistant_route_mode) = string_from_jni(&mut env, assistant_route_mode) else {
+        return 0;
+    };
+    let preferred_stable_peer_id = optional_string_from_jni(&mut env, preferred_stable_peer_id);
     let Some(pack_store_root) = string_from_jni(&mut env, pack_store_root) else {
         return 0;
     };
@@ -615,12 +635,15 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     let Ok(gateway) = Url::parse(&gateway) else {
         return 0;
     };
+    let Ok(assistant_route_mode) = AndroidAssistantRouteMode::parse(&assistant_route_mode) else {
+        return 0;
+    };
     let auth = if bearer.is_empty() {
         aurora_voice_native::GatewayAuth::None
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let mut config = AndroidVoiceSessionConfig::with_local_pack_selection(
+    let Ok(mut config) = AndroidVoiceSessionConfig::with_local_pack_selection(
         gateway,
         auth,
         remote_audio_consent != 0,
@@ -632,7 +655,11 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         optional_string_from_jni(&mut env, wake_phrase_id),
         optional_string_from_jni(&mut env, wake_phrase_text),
         optional_string_from_jni(&mut env, wake_phrase_revision),
-    );
+    )
+    .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
+    else {
+        return 0;
+    };
     let reference_text = optional_string_from_jni(&mut env, tts_reference_text);
     let _reference_revision = optional_string_from_jni(&mut env, tts_reference_revision);
     if tts_reference_sample_rate_hz > 0 {

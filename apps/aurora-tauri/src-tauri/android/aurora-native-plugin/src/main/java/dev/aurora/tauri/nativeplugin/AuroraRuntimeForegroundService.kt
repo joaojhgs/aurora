@@ -106,6 +106,13 @@ data class AuroraVoiceNativeConfig(
     val gateway: String,
     val bearer: String,
     val remoteAudioConsent: Boolean,
+    val assistantRouteMode: String,
+    val preferredStablePeerId: String?,
+)
+
+private data class AuroraVoiceRouteProfile(
+    val mode: String,
+    val preferredStablePeerId: String?,
 )
 
 object AuroraVoiceNativeConfigStore {
@@ -147,7 +154,14 @@ object AuroraVoiceNativeConfigStore {
             ?.let { decrypt(it) }
             ?.toBooleanStrictOrNull()
             ?: false
-        return AuroraVoiceNativeConfig(validatedGateway, bearer, remoteAudioConsent)
+        val routeProfile = activeVoiceRouteProfile(context)
+        return AuroraVoiceNativeConfig(
+            validatedGateway,
+            bearer,
+            remoteAudioConsent,
+            routeProfile?.mode ?: "http-only",
+            routeProfile?.preferredStablePeerId,
+        )
     }
 
     fun setRemoteAudioConsent(context: Context, granted: Boolean) {
@@ -167,6 +181,40 @@ object AuroraVoiceNativeConfigStore {
         val loopback = host == "127.0.0.1" || host == "localhost"
         require(scheme == "https" || (scheme == "http" && loopback)) { "voice_gateway_invalid" }
         return gateway
+    }
+
+    private fun activeVoiceRouteProfile(context: Context): AuroraVoiceRouteProfile? {
+        val raw = context.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val profile = activeProfile(root) ?: return null
+        val home = profile.optJSONObject("homeConnection")
+        val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
+            ?: profile.optString("mode").takeIf { it.isNotBlank() }
+            ?: return null
+        if (mode !in setOf("http-only", "webrtc-preferred")) return null
+        val homeWebRtc = home?.optJSONObject("webrtcProfile")
+        val profileWebRtc = profile.optJSONObject("webrtcProfile")
+        val peerId = home?.optString("homePeerId")?.takeIf { it.isNotBlank() }
+            ?: homeWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+            ?: profileWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+        return AuroraVoiceRouteProfile(mode, peerId)
+    }
+
+    private fun activeProfile(root: JSONObject): JSONObject? {
+        val activeProfileId = root.optString("activeProfileId", "").takeIf { it.isNotBlank() }
+        val byId = activeProfileId?.let { profileId ->
+            val profileMap = root.optJSONObject("profiles")
+            val profileArray = root.optJSONArray("profiles")
+            profileMap?.optJSONObject(profileId)
+                ?: profileArray?.let { profiles ->
+                    (0 until profiles.length())
+                        .mapNotNull { index -> profiles.optJSONObject(index) }
+                        .firstOrNull { item -> item.optString("id") == profileId }
+                }
+        }
+        return byId ?: root.optJSONObject("activeProfile") ?: root.optJSONObject("profile")
     }
 
     private fun encrypt(value: String): String {
@@ -371,6 +419,8 @@ private class AuroraNativeVoiceSessionBridge(
     gateway: String,
     bearer: String,
     remoteAudioConsent: Boolean,
+    assistantRouteMode: String,
+    preferredStablePeerId: String?,
     packStoreRoot: String? = null,
     sttModelId: String? = null,
     ttsVoiceId: String? = null,
@@ -386,6 +436,8 @@ private class AuroraNativeVoiceSessionBridge(
             gateway,
             bearer,
             remoteAudioConsent,
+            assistantRouteMode,
+            preferredStablePeerId.orEmpty(),
             packStoreRoot,
             sttModelId,
             ttsVoiceId,
@@ -400,7 +452,13 @@ private class AuroraNativeVoiceSessionBridge(
             ttsReference?.revision.orEmpty(),
         )
     } else {
-        nativeCreate(gateway, bearer, remoteAudioConsent)
+        nativeCreate(
+            gateway,
+            bearer,
+            remoteAudioConsent,
+            assistantRouteMode,
+            preferredStablePeerId.orEmpty(),
+        )
     }
 
     fun start(): Long {
@@ -461,11 +519,19 @@ private class AuroraNativeVoiceSessionBridge(
         }
     }
 
-    private external fun nativeCreate(gateway: String, bearer: String, remoteAudioConsent: Boolean): Long
+    private external fun nativeCreate(
+        gateway: String,
+        bearer: String,
+        remoteAudioConsent: Boolean,
+        assistantRouteMode: String,
+        preferredStablePeerId: String,
+    ): Long
     private external fun nativeCreateWithPackSelection(
         gateway: String,
         bearer: String,
         remoteAudioConsent: Boolean,
+        assistantRouteMode: String,
+        preferredStablePeerId: String,
         packStoreRoot: String,
         sttModelId: String,
         ttsVoiceId: String,
@@ -1421,6 +1487,8 @@ class AuroraRuntimeForegroundService : Service() {
                 nativeConfig.gateway,
                 nativeConfig.bearer,
                 nativeConfig.remoteAudioConsent,
+                nativeConfig.assistantRouteMode,
+                nativeConfig.preferredStablePeerId,
                 auroraSpeechPackStoreRoot(this).path,
                 sttModelId,
                 ttsVoiceId,
@@ -1437,6 +1505,8 @@ class AuroraRuntimeForegroundService : Service() {
             nativeConfig.gateway,
             nativeConfig.bearer,
             nativeConfig.remoteAudioConsent,
+            nativeConfig.assistantRouteMode,
+            nativeConfig.preferredStablePeerId,
         )
     }
 

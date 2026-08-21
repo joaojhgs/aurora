@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::fmt;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -296,6 +297,305 @@ impl TransportError {
             Self::Timeout => "timeout",
             Self::Cancelled => "cancelled",
         }
+    }
+}
+
+/// Non-secret routing hints for a native mesh assistant turn.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NativeMeshAssistantRoute {
+    preferred_stable_peer_id: Option<String>,
+}
+
+impl NativeMeshAssistantRoute {
+    pub fn new(preferred_stable_peer_id: Option<String>) -> Result<Self, TransportError> {
+        if let Some(peer_id) = preferred_stable_peer_id.as_deref() {
+            validate_identifier(peer_id)?;
+        }
+        Ok(Self {
+            preferred_stable_peer_id,
+        })
+    }
+
+    pub fn preferred_stable_peer_id(&self) -> Option<&str> {
+        self.preferred_stable_peer_id.as_deref()
+    }
+}
+
+/// Bounded process-local mesh transport settings. Debug output contains no
+/// peer credentials, session payloads, or transcript data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeMeshAssistantTransportOptions {
+    route: NativeMeshAssistantRoute,
+    limits: TransportLimits,
+}
+
+impl NativeMeshAssistantTransportOptions {
+    pub fn new(
+        route: NativeMeshAssistantRoute,
+        limits: TransportLimits,
+    ) -> Result<Self, TransportError> {
+        Ok(Self {
+            route,
+            limits: limits.validate()?,
+        })
+    }
+
+    pub fn route(&self) -> &NativeMeshAssistantRoute {
+        &self.route
+    }
+
+    pub fn limits(&self) -> TransportLimits {
+        self.limits
+    }
+}
+
+/// Typed mesh request for `Orchestrator.ExternalUserInput`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeMeshExternalUserInput {
+    payload: Value,
+    request_id: String,
+    idempotency_key: String,
+    timeout: Duration,
+}
+
+impl NativeMeshExternalUserInput {
+    pub fn payload(&self) -> &Value {
+        &self.payload
+    }
+
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn idempotency_key(&self) -> &str {
+        &self.idempotency_key
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+/// Typed mesh request for `Orchestrator.Interrupt`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeMeshInterruptRequest {
+    payload: Value,
+    request_id: String,
+    idempotency_key: String,
+    timeout: Duration,
+}
+
+impl NativeMeshInterruptRequest {
+    pub fn payload(&self) -> &Value {
+        &self.payload
+    }
+
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn idempotency_key(&self) -> &str {
+        &self.idempotency_key
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+/// Per-session mesh transport installed by the Tauri native integration.
+#[async_trait(?Send)]
+pub trait NativeMeshAssistantTransport {
+    async fn external_user_input(
+        &mut self,
+        request: NativeMeshExternalUserInput,
+        cancellation: CancellationToken,
+    ) -> Result<Value, TransportError>;
+
+    async fn interrupt(
+        &mut self,
+        request: NativeMeshInterruptRequest,
+        cancellation: CancellationToken,
+    ) -> Result<Value, TransportError>;
+}
+
+/// Process-local factory for assistant mesh transport instances.
+pub trait NativeMeshAssistantTransportFactory: Send + Sync {
+    fn create(
+        &self,
+        options: NativeMeshAssistantTransportOptions,
+    ) -> Result<Box<dyn NativeMeshAssistantTransport>, TransportError>;
+}
+
+static MESH_ASSISTANT_TRANSPORT_FACTORY: OnceLock<
+    Mutex<Option<Arc<dyn NativeMeshAssistantTransportFactory>>>,
+> = OnceLock::new();
+
+pub fn install_native_mesh_assistant_transport_factory(
+    factory: Arc<dyn NativeMeshAssistantTransportFactory>,
+) {
+    let slot = MESH_ASSISTANT_TRANSPORT_FACTORY.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = slot.lock() {
+        *guard = Some(factory);
+    }
+}
+
+pub fn clear_native_mesh_assistant_transport_factory() {
+    if let Some(slot) = MESH_ASSISTANT_TRANSPORT_FACTORY.get() {
+        if let Ok(mut guard) = slot.lock() {
+            *guard = None;
+        }
+    }
+}
+
+fn native_mesh_assistant_transport_factory(
+) -> Result<Arc<dyn NativeMeshAssistantTransportFactory>, TransportError> {
+    let slot = MESH_ASSISTANT_TRANSPORT_FACTORY.get_or_init(|| Mutex::new(None));
+    slot.lock()
+        .map_err(|_| TransportError::RequestFailed)?
+        .as_ref()
+        .cloned()
+        .ok_or(TransportError::UnknownMethod)
+}
+
+/// Speech transport backed by a process-local native WebRTC mesh session.
+pub struct NativeMeshAssistantSpeechTransport {
+    transport: Box<dyn NativeMeshAssistantTransport>,
+    limits: TransportLimits,
+    active_assistant: Option<ActiveAssistantTurn>,
+}
+
+impl fmt::Debug for NativeMeshAssistantSpeechTransport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NativeMeshAssistantSpeechTransport")
+            .field("limits", &self.limits)
+            .field("active_assistant", &self.active_assistant.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl NativeMeshAssistantSpeechTransport {
+    pub fn new(
+        route: NativeMeshAssistantRoute,
+        limits: TransportLimits,
+    ) -> Result<Self, TransportError> {
+        let options = NativeMeshAssistantTransportOptions::new(route, limits)?;
+        let transport = native_mesh_assistant_transport_factory()?.create(options.clone())?;
+        Ok(Self {
+            transport,
+            limits: options.limits(),
+            active_assistant: None,
+        })
+    }
+
+    async fn invoke_assistant_turn(
+        &mut self,
+        request: AssistantTurnRequest,
+        cancellation: CancellationToken,
+    ) -> Result<AssistantTurnResponse, TransportError> {
+        if request.stream {
+            return Err(TransportError::InvalidConfiguration);
+        }
+        let generation = request.generation;
+        let result = async {
+            let request_payload = assistant_external_user_input(&request)?;
+            let interrupt_ids = assistant_interrupt_ids(&request)?;
+            self.active_assistant = Some(ActiveAssistantTurn {
+                generation,
+                session_id: request.session_id.clone(),
+                request_id: request.request_id.clone(),
+                interrupt_request_id: interrupt_ids.request_id,
+                interrupt_idempotency_key: interrupt_ids.idempotency_key,
+            });
+            let mesh_request = NativeMeshExternalUserInput {
+                payload: request_payload,
+                request_id: request.request_id.clone(),
+                idempotency_key: request.correlation_id.clone(),
+                timeout: self.limits.request_timeout,
+            };
+            let response = await_timed(
+                self.transport
+                    .external_user_input(mesh_request, cancellation.clone()),
+                &cancellation,
+                self.limits.request_timeout,
+            )
+            .await??;
+            let response = assistant_response_value(response)?;
+            validate_optional_response_id(&response, "session_id", &request.session_id)?;
+            validate_optional_response_id(&response, "request_id", &request.request_id)?;
+            validate_optional_response_id(&response, "correlation_id", &request.correlation_id)?;
+            let text = required_string(&response, "text").ok_or(TransportError::InvalidResponse)?;
+            if text.is_empty() {
+                return Err(TransportError::InvalidResponse);
+            }
+            self.active_assistant = None;
+            Ok(AssistantTurnResponse {
+                text,
+                session_id: optional_string(&response, "session_id"),
+                request_id: optional_string(&response, "request_id"),
+                correlation_id: optional_string(&response, "correlation_id"),
+            })
+        }
+        .await;
+        if result.is_err() {
+            let _ = self.cancel_session(generation).await;
+        }
+        result
+    }
+}
+
+#[async_trait(?Send)]
+impl SpeechTransport for NativeMeshAssistantSpeechTransport {
+    async fn assistant_turn(
+        &mut self,
+        request: AssistantTurnRequest,
+        cancellation: CancellationToken,
+    ) -> Result<AssistantTurnResponse, VoiceCoreError> {
+        self.invoke_assistant_turn(request, cancellation)
+            .await
+            .map_err(map_transport_error)
+    }
+
+    async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
+        if self
+            .active_assistant
+            .as_ref()
+            .is_none_or(|active| active.generation != generation)
+        {
+            return Err(VoiceCoreError::TransportFault {
+                code: "no_active_session".to_owned(),
+            });
+        }
+        let active =
+            self.active_assistant
+                .take()
+                .ok_or_else(|| VoiceCoreError::TransportFault {
+                    code: "no_active_session".to_owned(),
+                })?;
+        let payload = assistant_interrupt_payload(&active).map_err(map_transport_error)?;
+        let request = NativeMeshInterruptRequest {
+            payload,
+            request_id: active.interrupt_request_id,
+            idempotency_key: active.interrupt_idempotency_key,
+            timeout: self.limits.request_timeout,
+        };
+        let cancellation = CancellationToken::new();
+        let response = await_timed(
+            self.transport.interrupt(request, cancellation.clone()),
+            &cancellation,
+            self.limits.request_timeout,
+        )
+        .await
+        .map_err(map_transport_error)?
+        .map_err(map_transport_error)?;
+        let response = assistant_interrupt_response_value(response).map_err(map_transport_error)?;
+        if required_string(&response, "status").is_none() {
+            return Err(VoiceCoreError::TransportFault {
+                code: "invalid_response".to_owned(),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -648,23 +948,7 @@ impl NativeGatewayTransport {
         if request.transcript.is_empty() {
             return Err(TransportError::InvalidPayload);
         }
-        let descriptor = method_by_id(ids::ORCHESTRATOR_EXTERNAL_USER_INPUT)
-            .ok_or(TransportError::UnknownMethod)?;
-        let payload = serde_json::json!({
-            "text": request.transcript,
-            "source": ASSISTANT_SOURCE,
-            "stream": request.stream,
-            "session_id": request.session_id,
-            "request_id": request.request_id,
-            "correlation_id": request.correlation_id,
-            "client_tts_playback": true,
-        });
-        let payload = normalize_generated_contract(descriptor.input_schema_id, payload)
-            .map_err(|_| TransportError::InvalidPayload)?;
-        let typed_request: models::OrchestratorProcessRequest =
-            serde_json::from_value(payload.clone()).map_err(|_| TransportError::InvalidPayload)?;
-        let payload =
-            serde_json::to_value(typed_request).map_err(|_| TransportError::InvalidPayload)?;
+        let payload = assistant_external_user_input(&request)?;
         let options = NativeRequestOptions::new(request.request_id.clone())?
             .with_idempotency_key(request.correlation_id.clone())?;
         let interrupt_ids = assistant_interrupt_ids(&request)?;
@@ -683,10 +967,7 @@ impl NativeGatewayTransport {
                 &cancellation,
             )
             .await?;
-        let typed_response: models::OrchestratorResponse =
-            serde_json::from_value(response).map_err(|_| TransportError::InvalidResponse)?;
-        let response =
-            serde_json::to_value(typed_response).map_err(|_| TransportError::InvalidResponse)?;
+        let response = assistant_response_value(response)?;
         validate_optional_response_id(&response, "session_id", &request.session_id)?;
         validate_optional_response_id(&response, "request_id", &request.request_id)?;
         validate_optional_response_id(&response, "correlation_id", &request.correlation_id)?;
@@ -730,33 +1011,7 @@ impl SpeechTransport for NativeGatewayTransport {
                 .ok_or_else(|| VoiceCoreError::TransportFault {
                     code: "no_active_session".to_owned(),
                 })?;
-        let descriptor = method_by_id(ids::ORCHESTRATOR_INTERRUPT).ok_or_else(|| {
-            VoiceCoreError::TransportFault {
-                code: "unknown_method".to_owned(),
-            }
-        })?;
-        let payload = serde_json::json!({
-            "session_id": active.session_id,
-            "request_id": active.request_id,
-            "reason": "user_interrupt",
-            "scopes": ["generation", "session", "tool_call", "tts_playback"],
-        });
-        let payload =
-            normalize_generated_contract(descriptor.input_schema_id, payload).map_err(|_| {
-                VoiceCoreError::TransportFault {
-                    code: "invalid_payload".to_owned(),
-                }
-            })?;
-        let typed_request: models::OrchestratorInterruptRequest =
-            serde_json::from_value(payload.clone()).map_err(|_| {
-                VoiceCoreError::TransportFault {
-                    code: "invalid_payload".to_owned(),
-                }
-            })?;
-        let payload =
-            serde_json::to_value(typed_request).map_err(|_| VoiceCoreError::TransportFault {
-                code: "invalid_payload".to_owned(),
-            })?;
+        let payload = assistant_interrupt_payload(&active).map_err(map_transport_error)?;
         let options = NativeRequestOptions::new(active.interrupt_request_id)
             .and_then(|options| options.with_idempotency_key(active.interrupt_idempotency_key))
             .map_err(map_transport_error)?;
@@ -770,14 +1025,7 @@ impl SpeechTransport for NativeGatewayTransport {
             )
             .await
             .map_err(map_transport_error)?;
-        let typed_response: models::OrchestratorInterruptResponse =
-            serde_json::from_value(response).map_err(|_| VoiceCoreError::TransportFault {
-                code: "invalid_response".to_owned(),
-            })?;
-        let response =
-            serde_json::to_value(typed_response).map_err(|_| VoiceCoreError::TransportFault {
-                code: "invalid_response".to_owned(),
-            })?;
+        let response = assistant_interrupt_response_value(response).map_err(map_transport_error)?;
         if required_string(&response, "status").is_none() {
             return Err(VoiceCoreError::TransportFault {
                 code: "invalid_response".to_owned(),
@@ -794,6 +1042,59 @@ struct ActiveAssistantTurn {
     request_id: String,
     interrupt_request_id: String,
     interrupt_idempotency_key: String,
+}
+
+fn assistant_external_user_input(request: &AssistantTurnRequest) -> Result<Value, TransportError> {
+    validate_identifier(&request.session_id)?;
+    validate_identifier(&request.request_id)?;
+    validate_identifier(&request.correlation_id)?;
+    if request.transcript.is_empty() {
+        return Err(TransportError::InvalidPayload);
+    }
+    let descriptor =
+        method_by_id(ids::ORCHESTRATOR_EXTERNAL_USER_INPUT).ok_or(TransportError::UnknownMethod)?;
+    let payload = serde_json::json!({
+        "text": request.transcript,
+        "source": ASSISTANT_SOURCE,
+        "stream": request.stream,
+        "session_id": request.session_id,
+        "request_id": request.request_id,
+        "correlation_id": request.correlation_id,
+        "client_tts_playback": true,
+    });
+    let payload = normalize_generated_contract(descriptor.input_schema_id, payload)
+        .map_err(|_| TransportError::InvalidPayload)?;
+    let typed_request: models::OrchestratorProcessRequest =
+        serde_json::from_value(payload.clone()).map_err(|_| TransportError::InvalidPayload)?;
+    serde_json::to_value(typed_request).map_err(|_| TransportError::InvalidPayload)
+}
+
+fn assistant_response_value(response: Value) -> Result<Value, TransportError> {
+    let typed_response: models::OrchestratorResponse =
+        serde_json::from_value(response).map_err(|_| TransportError::InvalidResponse)?;
+    serde_json::to_value(typed_response).map_err(|_| TransportError::InvalidResponse)
+}
+
+fn assistant_interrupt_payload(active: &ActiveAssistantTurn) -> Result<Value, TransportError> {
+    let descriptor =
+        method_by_id(ids::ORCHESTRATOR_INTERRUPT).ok_or(TransportError::UnknownMethod)?;
+    let payload = serde_json::json!({
+        "session_id": active.session_id,
+        "request_id": active.request_id,
+        "reason": "user_interrupt",
+        "scopes": ["generation", "session", "tool_call", "tts_playback"],
+    });
+    let payload = normalize_generated_contract(descriptor.input_schema_id, payload)
+        .map_err(|_| TransportError::InvalidPayload)?;
+    let typed_request: models::OrchestratorInterruptRequest =
+        serde_json::from_value(payload.clone()).map_err(|_| TransportError::InvalidPayload)?;
+    serde_json::to_value(typed_request).map_err(|_| TransportError::InvalidPayload)
+}
+
+fn assistant_interrupt_response_value(response: Value) -> Result<Value, TransportError> {
+    let typed_response: models::OrchestratorInterruptResponse =
+        serde_json::from_value(response).map_err(|_| TransportError::InvalidResponse)?;
+    serde_json::to_value(typed_response).map_err(|_| TransportError::InvalidResponse)
 }
 
 fn map_transport_error(error: TransportError) -> VoiceCoreError {
@@ -1312,6 +1613,75 @@ mod tests {
     use super::*;
     use aurora_voice_core::AssistantTurnNamespace;
 
+    static MESH_TEST_GUARD: Mutex<()> = Mutex::new(());
+
+    #[derive(Default)]
+    struct MeshTestState {
+        options: Vec<NativeMeshAssistantTransportOptions>,
+        external_inputs: Vec<NativeMeshExternalUserInput>,
+        interrupts: Vec<NativeMeshInterruptRequest>,
+        response: Option<Value>,
+        interrupt_response: Option<Value>,
+        delay: Option<Duration>,
+    }
+
+    struct RecordingMeshFactory {
+        state: Arc<Mutex<MeshTestState>>,
+    }
+
+    impl NativeMeshAssistantTransportFactory for RecordingMeshFactory {
+        fn create(
+            &self,
+            options: NativeMeshAssistantTransportOptions,
+        ) -> Result<Box<dyn NativeMeshAssistantTransport>, TransportError> {
+            self.state.lock().expect("mesh state").options.push(options);
+            Ok(Box::new(RecordingMeshTransport {
+                state: Arc::clone(&self.state),
+            }))
+        }
+    }
+
+    struct RecordingMeshTransport {
+        state: Arc<Mutex<MeshTestState>>,
+    }
+
+    #[async_trait(?Send)]
+    impl NativeMeshAssistantTransport for RecordingMeshTransport {
+        async fn external_user_input(
+            &mut self,
+            request: NativeMeshExternalUserInput,
+            _cancellation: CancellationToken,
+        ) -> Result<Value, TransportError> {
+            let delay = {
+                let mut state = self.state.lock().expect("mesh state");
+                state.external_inputs.push(request);
+                state.delay
+            };
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
+            self.state
+                .lock()
+                .expect("mesh state")
+                .response
+                .clone()
+                .ok_or(TransportError::RequestFailed)
+        }
+
+        async fn interrupt(
+            &mut self,
+            request: NativeMeshInterruptRequest,
+            _cancellation: CancellationToken,
+        ) -> Result<Value, TransportError> {
+            let mut state = self.state.lock().expect("mesh state");
+            state.interrupts.push(request);
+            state
+                .interrupt_response
+                .clone()
+                .ok_or(TransportError::RequestFailed)
+        }
+    }
+
     struct FixtureServer {
         base_url: Url,
         request: mpsc::Receiver<String>,
@@ -1475,6 +1845,177 @@ mod tests {
             Generation(generation),
             transcript,
         )
+    }
+
+    fn assistant_response_value_for(request: &AssistantTurnRequest, text: &str) -> Value {
+        serde_json::json!({
+            "text": text,
+            "metadata": {},
+            "session_id": request.session_id,
+            "request_id": request.request_id,
+            "correlation_id": request.correlation_id,
+        })
+    }
+
+    fn interrupt_response_value_for(request: &AssistantTurnRequest) -> Value {
+        serde_json::json!({
+            "audit_event": "orchestrator.interrupt.requested",
+            "event_topic": "Orchestrator.Interrupted",
+            "idempotent": true,
+            "interrupt_id": "interrupt-1",
+            "status": "cancelled",
+            "request_id": request.request_id,
+            "session_id": request.session_id,
+            "requested_scopes": ["generation", "session", "tool_call", "tts_playback"],
+            "results": [],
+            "secrets_redacted": true,
+        })
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn mesh_assistant_turn_uses_registered_factory_and_typed_external_input() {
+        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        clear_native_mesh_assistant_transport_factory();
+        let turn = assistant_request(31, "hello mesh");
+        let state = Arc::new(Mutex::new(MeshTestState {
+            response: Some(assistant_response_value_for(&turn, "mesh response")),
+            interrupt_response: Some(interrupt_response_value_for(&turn)),
+            ..MeshTestState::default()
+        }));
+        install_native_mesh_assistant_transport_factory(Arc::new(RecordingMeshFactory {
+            state: Arc::clone(&state),
+        }));
+        let route =
+            NativeMeshAssistantRoute::new(Some("stable-peer-1".to_owned())).expect("mesh route");
+        let limits = TransportLimits {
+            request_timeout: Duration::from_secs(7),
+            ..TransportLimits::default()
+        };
+        let mut transport =
+            NativeMeshAssistantSpeechTransport::new(route, limits).expect("mesh transport");
+
+        let response =
+            SpeechTransport::assistant_turn(&mut transport, turn.clone(), CancellationToken::new())
+                .await
+                .expect("mesh assistant response");
+
+        assert_eq!(response.text, "mesh response");
+        let state = state.lock().expect("mesh state");
+        assert_eq!(state.options.len(), 1);
+        assert_eq!(
+            state.options[0].route().preferred_stable_peer_id(),
+            Some("stable-peer-1")
+        );
+        assert_eq!(state.external_inputs.len(), 1);
+        let request = &state.external_inputs[0];
+        assert_eq!(request.request_id(), turn.request_id);
+        assert_eq!(request.idempotency_key(), turn.correlation_id);
+        assert_eq!(request.timeout(), Duration::from_secs(7));
+        assert_eq!(
+            required_string(request.payload(), "text").as_deref(),
+            Some("hello mesh")
+        );
+        assert_eq!(
+            required_string(request.payload(), "source").as_deref(),
+            Some(ASSISTANT_SOURCE)
+        );
+        assert_eq!(state.interrupts.len(), 0);
+        drop(state);
+        clear_native_mesh_assistant_transport_factory();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn mesh_assistant_turn_cancels_active_turn_after_invalid_response() {
+        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        clear_native_mesh_assistant_transport_factory();
+        let turn = assistant_request(32, "bad mesh");
+        let mut invalid_response = assistant_response_value_for(&turn, "wrong id");
+        invalid_response["session_id"] = Value::String("other-session".to_owned());
+        let state = Arc::new(Mutex::new(MeshTestState {
+            response: Some(invalid_response),
+            interrupt_response: Some(interrupt_response_value_for(&turn)),
+            ..MeshTestState::default()
+        }));
+        install_native_mesh_assistant_transport_factory(Arc::new(RecordingMeshFactory {
+            state: Arc::clone(&state),
+        }));
+        let route = NativeMeshAssistantRoute::new(None).expect("mesh route");
+        let mut transport =
+            NativeMeshAssistantSpeechTransport::new(route, TransportLimits::default())
+                .expect("mesh transport");
+
+        let error =
+            SpeechTransport::assistant_turn(&mut transport, turn.clone(), CancellationToken::new())
+                .await
+                .expect_err("invalid mesh response");
+
+        assert_eq!(
+            error,
+            VoiceCoreError::TransportFault {
+                code: "invalid_response".to_owned()
+            }
+        );
+        let state = state.lock().expect("mesh state");
+        assert_eq!(state.interrupts.len(), 1);
+        let interrupt = &state.interrupts[0];
+        assert!(interrupt.request_id().starts_with("voice-interrupt-32-"));
+        assert!(interrupt
+            .idempotency_key()
+            .starts_with("voice-interrupt-idem-"));
+        assert_eq!(
+            required_string(interrupt.payload(), "session_id").as_deref(),
+            Some(turn.session_id.as_str())
+        );
+        drop(state);
+        clear_native_mesh_assistant_transport_factory();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn mesh_assistant_turn_maps_timeout_without_leaking_payloads() {
+        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        clear_native_mesh_assistant_transport_factory();
+        let turn = assistant_request(33, "slow mesh");
+        let state = Arc::new(Mutex::new(MeshTestState {
+            response: Some(assistant_response_value_for(&turn, "late")),
+            interrupt_response: Some(interrupt_response_value_for(&turn)),
+            delay: Some(Duration::from_millis(50)),
+            ..MeshTestState::default()
+        }));
+        install_native_mesh_assistant_transport_factory(Arc::new(RecordingMeshFactory {
+            state: Arc::clone(&state),
+        }));
+        let limits = TransportLimits {
+            request_timeout: Duration::from_millis(1),
+            ..TransportLimits::default()
+        };
+        let route = NativeMeshAssistantRoute::new(None).expect("mesh route");
+        let mut transport =
+            NativeMeshAssistantSpeechTransport::new(route, limits).expect("mesh transport");
+
+        let error = SpeechTransport::assistant_turn(&mut transport, turn, CancellationToken::new())
+            .await
+            .expect_err("timeout");
+
+        assert_eq!(
+            error,
+            VoiceCoreError::TransportFault {
+                code: "timeout".to_owned()
+            }
+        );
+        let debug = format!("{transport:?}");
+        assert!(!debug.contains("slow mesh"));
+        clear_native_mesh_assistant_transport_factory();
+    }
+
+    #[test]
+    fn mesh_assistant_route_rejects_invalid_preferred_peer_and_missing_factory() {
+        let _guard = MESH_TEST_GUARD.lock().expect("mesh test guard");
+        clear_native_mesh_assistant_transport_factory();
+        assert!(NativeMeshAssistantRoute::new(Some("bad peer".to_owned())).is_err());
+        let route = NativeMeshAssistantRoute::new(Some("peer.ok".to_owned())).expect("route");
+        let error = NativeMeshAssistantSpeechTransport::new(route, TransportLimits::default())
+            .expect_err("missing mesh factory");
+        assert_eq!(error, TransportError::UnknownMethod);
     }
 
     #[tokio::test]

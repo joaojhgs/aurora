@@ -15,7 +15,8 @@ use crate::{build_installed_tts_provider, build_installed_tts_provider_with_refe
 use crate::{
     AndroidAudioInput, AndroidAudioOutput, AndroidCaptureControl, AndroidPcmIngress, GatewayAuth,
     MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
-    NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
+    NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer,
+    NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, TransportLimits,
 };
 use async_trait::async_trait;
 #[cfg(any(test, all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
@@ -24,8 +25,8 @@ use aurora_voice_core::EngineError;
 use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
     CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
-    RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
-    VoiceCoreError, VoiceRuntime, VoiceState,
+    RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechTransport, TimestampMicros,
+    VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
 };
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
@@ -66,7 +67,7 @@ type RuntimeCore = VoiceRuntime<
     AndroidAudioInput,
     AndroidFiniteSttProvider,
     AndroidTtsProvider,
-    NativeGatewayTransport,
+    AndroidAssistantTransport,
     AndroidAudioOutput,
     AndroidSessionSink,
 >;
@@ -76,7 +77,7 @@ type RuntimeCore = VoiceRuntime<
     AndroidAudioInput,
     NativeGatewayFiniteStt,
     NativeGatewayTtsSynthesizer,
-    NativeGatewayTransport,
+    AndroidAssistantTransport,
     AndroidAudioOutput,
     AndroidSessionSink,
 >;
@@ -141,6 +142,32 @@ enum AndroidTtsProvider {
     Gateway(Box<NativeGatewayTtsSynthesizer>),
 }
 
+enum AndroidAssistantTransport {
+    Gateway(NativeGatewayTransport),
+    Mesh(NativeMeshAssistantSpeechTransport),
+}
+
+#[async_trait(?Send)]
+impl SpeechTransport for AndroidAssistantTransport {
+    async fn assistant_turn(
+        &mut self,
+        request: aurora_voice_core::AssistantTurnRequest,
+        cancellation: CancellationToken,
+    ) -> Result<aurora_voice_core::AssistantTurnResponse, VoiceCoreError> {
+        match self {
+            Self::Gateway(transport) => transport.assistant_turn(request, cancellation).await,
+            Self::Mesh(transport) => transport.assistant_turn(request, cancellation).await,
+        }
+    }
+
+    async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
+        match self {
+            Self::Gateway(transport) => transport.cancel_session(generation).await,
+            Self::Mesh(transport) => transport.cancel_session(generation).await,
+        }
+    }
+}
+
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 type AndroidWakeRuntimeParts = (
     SherpaVadProvider<NativeVadBackend>,
@@ -196,6 +223,8 @@ pub struct AndroidVoiceSessionConfig {
     gateway: Url,
     auth: GatewayAuth,
     remote_audio_consent: bool,
+    assistant_route_mode: AndroidAssistantRouteMode,
+    preferred_stable_peer_id: Option<String>,
     pack_store_root: Option<PathBuf>,
     stt_model_id: Option<String>,
     vad_model_id: Option<String>,
@@ -267,6 +296,8 @@ impl AndroidVoiceSessionConfig {
             gateway,
             auth,
             remote_audio_consent,
+            assistant_route_mode: AndroidAssistantRouteMode::HttpOnly,
+            preferred_stable_peer_id: None,
             pack_store_root: None,
             stt_model_id: None,
             vad_model_id: None,
@@ -278,6 +309,20 @@ impl AndroidVoiceSessionConfig {
             #[cfg(feature = "native-sherpa-tts")]
             tts_reference_profile: None,
         }
+    }
+
+    pub fn with_assistant_route(
+        mut self,
+        mode: AndroidAssistantRouteMode,
+        preferred_stable_peer_id: Option<String>,
+    ) -> Result<Self, AndroidVoiceSessionCommandError> {
+        if let Some(peer_id) = preferred_stable_peer_id.as_deref() {
+            NativeMeshAssistantRoute::new(Some(peer_id.to_owned()))
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        }
+        self.assistant_route_mode = mode;
+        self.preferred_stable_peer_id = preferred_stable_peer_id;
+        Ok(self)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -298,6 +343,8 @@ impl AndroidVoiceSessionConfig {
             gateway,
             auth,
             remote_audio_consent,
+            assistant_route_mode: AndroidAssistantRouteMode::HttpOnly,
+            preferred_stable_peer_id: None,
             pack_store_root: Some(pack_store_root.into()),
             stt_model_id: Some(stt_model_id.into()),
             vad_model_id,
@@ -320,6 +367,22 @@ impl AndroidVoiceSessionConfig {
     #[cfg(all(test, feature = "native-sherpa-tts"))]
     fn tts_reference_profile(&self) -> Option<&AndroidTtsReferenceProfile> {
         self.tts_reference_profile.as_ref()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AndroidAssistantRouteMode {
+    HttpOnly,
+    WebRtcPreferred,
+}
+
+impl AndroidAssistantRouteMode {
+    pub fn parse(value: &str) -> Result<Self, AndroidVoiceSessionCommandError> {
+        match value {
+            "" | "http-only" => Ok(Self::HttpOnly),
+            "webrtc-preferred" => Ok(Self::WebRtcPreferred),
+            _ => Err(AndroidVoiceSessionCommandError::Unavailable),
+        }
     }
 }
 
@@ -607,9 +670,7 @@ fn build_local_runtime(
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let policy = microphone_policy(config)?;
     let limits = transport_limits(policy);
-    let transport_for_assistant =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
-            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let transport_for_assistant = build_assistant_transport(config, limits)?;
     let mut runtime = VoiceRuntime::new(
         input,
         AndroidFiniteSttProvider::Local(Box::new(stt)),
@@ -740,9 +801,7 @@ fn build_gateway_runtime(
     let transport_for_tts =
         NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    let transport_for_assistant =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
-            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let transport_for_assistant = build_assistant_transport(config, limits)?;
     let stt = NativeGatewayFiniteStt::new(
         transport_for_stt,
         NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
@@ -769,6 +828,26 @@ fn build_gateway_runtime(
         ANDROID_RUNTIME_ID,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+}
+
+fn build_assistant_transport(
+    config: &AndroidVoiceSessionConfig,
+    limits: TransportLimits,
+) -> Result<AndroidAssistantTransport, AndroidVoiceSessionCommandError> {
+    match config.assistant_route_mode {
+        AndroidAssistantRouteMode::HttpOnly => {
+            NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+                .map(AndroidAssistantTransport::Gateway)
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+        }
+        AndroidAssistantRouteMode::WebRtcPreferred => NativeMeshAssistantSpeechTransport::new(
+            NativeMeshAssistantRoute::new(config.preferred_stable_peer_id.clone())
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+            limits,
+        )
+        .map(AndroidAssistantTransport::Mesh)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable),
+    }
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]

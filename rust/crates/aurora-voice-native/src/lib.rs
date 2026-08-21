@@ -33,8 +33,8 @@ pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
 #[cfg(feature = "native-sherpa-tts")]
 pub use android_session::AndroidTtsReferenceProfile;
 pub use android_session::{
-    AndroidVoiceSession, AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig,
-    AndroidVoiceSessionPhase, AndroidVoiceSessionStatus,
+    AndroidAssistantRouteMode, AndroidVoiceSession, AndroidVoiceSessionCommandError,
+    AndroidVoiceSessionConfig, AndroidVoiceSessionPhase, AndroidVoiceSessionStatus,
 };
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};
@@ -77,8 +77,12 @@ pub use speech_pack_manager::{
     SpeechPackManagerConfig,
 };
 pub use transport::{
+    clear_native_mesh_assistant_transport_factory, install_native_mesh_assistant_transport_factory,
     GatewayAuth, GatewayEvent, MicrophoneAudioPolicy, NativeEventStream,
     NativeGatewayEndpointClass, NativeGatewayMicrophoneAudioProfile, NativeGatewayTransport,
-    NativeRequestOptions, SseSubscription, TransportError, TransportLimits,
+    NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, NativeMeshAssistantTransport,
+    NativeMeshAssistantTransportFactory, NativeMeshAssistantTransportOptions,
+    NativeMeshExternalUserInput, NativeMeshInterruptRequest, NativeRequestOptions, SseSubscription,
+    TransportError, TransportLimits,
 };
 pub use trust::Ed25519TrustStore;
