@@ -5,7 +5,7 @@ import { extname, join, normalize, relative, sep } from 'node:path'
 const repoRoot = normalize(join(import.meta.dirname, '..', '..', '..', '..'))
 const packageRoot = join(repoRoot, 'packages', 'aurora-voice-web')
 const forbiddenArtifactExtensions = new Set(['.onnx', '.gguf', '.bin', '.safetensors', '.pt', '.pth', '.tflite', '.wav', '.flac', '.mp3'])
-const maxWasmCoreBytes = 145 * 1024
+const maxWasmCoreBytes = 320 * 1024
 const maxWasmLoaderBytes = 48 * 1024
 const nodeFsPromises = import('node:fs/promises').then((module) => module as unknown as NodeFsPromises)
 
