@@ -4379,7 +4379,13 @@ class RTCClient:
         return False
 
     async def _handle_signaling_departure(self, peer: str, *, reason: str) -> None:
-        """Stop reconnecting to a signaling session the broker says is gone."""
+        """Stop stale negotiation without mistaking signaling loss for RTC loss.
+
+        MQTT last-will presence can fire while a mobile WebView is suspended,
+        even though its native WebRTC data channel remains open.  Once the
+        data channel is established it is the authoritative liveness signal;
+        its close callback performs the normal peer/provider cleanup.
+        """
         reconnect_task = self._peer_reconnect_tasks.pop(peer, None)
         if reconnect_task and reconnect_task is not asyncio.current_task():
             reconnect_task.cancel()
@@ -4388,6 +4394,13 @@ class RTCClient:
         self._offer_in_progress.discard(peer)
 
         pc = self._pcs.get(peer)
+        channel = self._peer_data_channels.get(peer)
+        if pc is not None and getattr(channel, "readyState", None) == "open":
+            log_info(
+                f"RTCClient: Signaling peer {peer} departed ({reason}); "
+                "preserving open data channel"
+            )
+            return
         if pc is not None:
             log_info(f"RTCClient: Signaling peer {peer} departed ({reason})")
             self._reconnect_suppressed_pcs.add(pc)
@@ -4800,16 +4813,19 @@ class RTCClient:
         peer_name: str,
         clear_pairing_inbound: bool,
     ) -> None:
-        existing_session = self._stable_peer_sessions.get(stable_peer_id)
-        if existing_session and existing_session != peer and existing_session in self._pcs:
-            raise PairingProtocolError("Stable mesh identity is already active on another session")
-
         identity = await self._auth_service.build_identity_from_token(
             token,
             source="webrtc_peer",
         )
         if identity is None:
             raise PairingProtocolError("Authenticated token did not resolve an identity")
+        existing_session = self._stable_peer_sessions.get(stable_peer_id)
+        if existing_session and existing_session != peer and existing_session in self._pcs:
+            await self._retire_replaced_stable_session(
+                stable_peer_id=stable_peer_id,
+                replaced_session_peer_id=existing_session,
+                replacement_session_peer_id=peer,
+            )
         stable_peer_id = self._remember_stable_peer_id(peer, stable_peer_id, peer_name)
         self._peer_tokens[peer] = token
         self._peer_tokens[stable_peer_id] = token
@@ -4856,6 +4872,68 @@ class RTCClient:
             # endpoint is still anonymous. Requesting the remote manifest here
             # makes the later approval converge both sides immediately.
             self._request_manifest(stable_peer_id, reason="authentication")
+
+    async def _retire_replaced_stable_session(
+        self,
+        *,
+        stable_peer_id: str,
+        replaced_session_peer_id: str,
+        replacement_session_peer_id: str,
+    ) -> None:
+        """Retire an open signaling session after its successor proves identity.
+
+        Signaling presence may disappear while a mobile native data channel is
+        still healthy, so departure alone deliberately preserves that channel.
+        Once another transport has cryptographically authenticated as the same
+        stable peer, however, the preserved session is stale.  Removing it from
+        ``_pcs`` before closing makes its delayed aiortc callback a no-op instead
+        of allowing old-session cleanup to erase the authenticated replacement.
+        Stable authority and saved credentials are intentionally preserved and
+        refreshed by the caller on the successor session.
+        """
+
+        replaced_pc = self._pcs.get(replaced_session_peer_id)
+        if replaced_pc is None:
+            return
+
+        log_info(
+            "RTCClient: Replacing preserved session "
+            f"{replaced_session_peer_id} for stable peer {stable_peer_id}"
+        )
+        self._reconnect_suppressed_pcs.add(replaced_pc)
+        self._negotiation_retry_pcs.discard(replaced_pc)
+        self._cancel_stale_stable_peer_session_tasks(
+            stable_peer_id,
+            replacement_session_peer_id,
+        )
+        self._cancel_negotiation_watchdog(replaced_session_peer_id, replaced_pc)
+        self._offer_in_progress.discard(replaced_session_peer_id)
+        self._resolve_peer_rpc_calls(replaced_session_peer_id)
+        self._cancel_peer_rpc_work(replaced_session_peer_id)
+        self._clear_pairing_state(replaced_session_peer_id, replaced_pc)
+
+        self._pcs.pop(replaced_session_peer_id, None)
+        self._peer_acl.pop(replaced_session_peer_id, None)
+        self._peer_tokens.pop(replaced_session_peer_id, None)
+        self._rpc_handlers.pop(replaced_session_peer_id, None)
+        self._peer_send_fns.pop(replaced_session_peer_id, None)
+        self._peer_data_channels.pop(replaced_session_peer_id, None)
+        self._cleanup_peer_protocol_state(replaced_session_peer_id, stable_peer_id)
+        self._cancel_provider_lease_task(
+            stable_peer_id,
+            session_peer_id=replaced_session_peer_id,
+        )
+        self._peer_names.pop(replaced_session_peer_id, None)
+        self._peer_claimed_stable_ids.pop(replaced_session_peer_id, None)
+        self._peer_claimed_names.pop(replaced_session_peer_id, None)
+        self._peer_auth_challenges.pop(replaced_session_peer_id, None)
+        self._peer_stable_ids.pop(replaced_session_peer_id, None)
+
+        try:
+            with contextlib.suppress(Exception):
+                await self._close_peer_connection(replaced_pc)
+        finally:
+            self._reconnect_suppressed_pcs.discard(replaced_pc)
 
     async def _handle_reconnect_proof(
         self,

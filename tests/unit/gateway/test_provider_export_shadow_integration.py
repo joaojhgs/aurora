@@ -533,6 +533,7 @@ async def test_disconnect_preserves_authority_for_reconnect() -> None:
     await _drain_shadow(client)
     assert client._provider_export_cache.peer_entry_count("recipient-peer") == 1
     authority_watermarks = dict(client._provider_export_cache._authority)
+    client._peer_data_channels["signaling-peer"].readyState = "closed"
 
     await client._handle_signaling_departure("signaling-peer", reason="test departure")
 
@@ -543,7 +544,7 @@ async def test_disconnect_preserves_authority_for_reconnect() -> None:
 
 
 @pytest.mark.asyncio
-async def test_active_signaling_departure_invalidates_entries_without_authority_reset() -> None:
+async def test_open_channel_survives_signaling_departure_with_provider_projection() -> None:
     client = _client()
     _install_manifest_sender(client)
     assert client.apply_peer_authority_changed(
@@ -560,12 +561,15 @@ async def test_active_signaling_departure_invalidates_entries_without_authority_
     await _drain_shadow(client)
     authority_watermarks = dict(client._provider_export_cache._authority)
     pc = AsyncMock()
+    channel = MagicMock()
+    channel.readyState = "open"
     client._pcs["signaling-peer"] = pc
+    client._peer_data_channels["signaling-peer"] = channel
 
     await client._handle_signaling_departure("signaling-peer", reason="test departure")
 
-    pc.close.assert_awaited_once()
-    assert client._provider_export_cache.peer_entry_count("recipient-peer") == 0
+    pc.close.assert_not_awaited()
+    assert client._provider_export_cache.peer_entry_count("recipient-peer") == 1
     assert client._provider_export_cache._authority == authority_watermarks
     assert client._provider_export_authority["recipient-peer"].revision == 6
 

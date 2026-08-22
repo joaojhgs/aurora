@@ -532,6 +532,85 @@ async def test_valid_reconnect_proof_authenticates_and_promotes_stable_identity(
 
 
 @pytest.mark.asyncio
+async def test_reconnect_proof_replaces_preserved_departed_session(mock_deps):
+    """A proven successor retires the open channel preserved across MQTT departure."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-session"
+    client.set_mesh_identity("stable-local-peer", "Local Aurora")
+    client._audit = AsyncMock()
+    stable_peer = "stable-remote-peer"
+    old_peer = "old-remote-session"
+    new_peer = "new-remote-session"
+    old_pc = MagicMock()
+    old_pc.close = AsyncMock()
+    old_channel = MockDataChannel()
+    old_identity = Identity(
+        principal_id="remote-user",
+        principal_name="Remote Aurora",
+        is_admin=False,
+        effective_perms=frozenset({"read"}),
+        device_id="remote-device",
+        source="webrtc_peer",
+    )
+    saved_credential = {
+        "token": "saved-secret",
+        "token_id": "saved-token-id",
+    }
+    client._pcs[old_peer] = old_pc
+    client._peer_data_channels[old_peer] = old_channel
+    client._peer_send_fns[old_peer] = MagicMock()
+    client._peer_acl[old_peer] = old_identity
+    client._peer_acl[stable_peer] = old_identity
+    client._peer_stable_ids[old_peer] = stable_peer
+    client._stable_peer_sessions[stable_peer] = old_peer
+    client._saved_auth_tokens[stable_peer] = saved_credential
+
+    await client._handle_signaling_departure(old_peer, reason="presence_departed")
+
+    assert client._pcs[old_peer] is old_pc
+    old_pc.close.assert_not_awaited()
+
+    new_pc = MagicMock()
+    new_channel = MockDataChannel()
+    install_pairing_transport(
+        client,
+        new_peer,
+        new_pc,
+        remote_stable_peer_id=stable_peer,
+        remote_node_name="Remote Aurora",
+    )
+    record = install_reconnect_challenge(client, new_peer, new_pc, challenge="ab" * 32)
+    token = Token(
+        id="token-id-123",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="remote-device",
+        user_id="remote-user",
+        scopes=["read"],
+    )
+    auth_service.verify_mesh_reconnect_proof.return_value = token
+    auth_service.build_identity_from_token.return_value = old_identity
+
+    await client._handle_reconnect_proof(
+        new_peer,
+        new_pc,
+        new_channel,
+        reconnect_proof_for(record),
+    )
+
+    old_pc.close.assert_awaited_once()
+    assert old_peer not in client._pcs
+    assert old_peer not in client._peer_data_channels
+    assert old_peer not in client._peer_send_fns
+    assert old_peer not in client._peer_stable_ids
+    assert client._stable_peer_sessions[stable_peer] == new_peer
+    assert client._peer_acl[new_peer] == old_identity
+    assert client._peer_acl[stable_peer] == old_identity
+    assert client._saved_auth_tokens[stable_peer] is saved_credential
+
+
+@pytest.mark.asyncio
 async def test_invalid_reconnect_proof_starts_bilateral_pairing(mock_deps):
     """A stale/revoked proof repairs trust through a fresh shared-SAS flow."""
     settings, bus, registry, auth_service = mock_deps

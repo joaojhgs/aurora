@@ -126,7 +126,7 @@ async def test_empty_retained_presence_reports_departed_peer_from_topic():
 
 
 @pytest.mark.asyncio
-async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
+async def test_signaling_departure_during_negotiation_closes_and_suppresses_pc_retry():
     rtc_client = MagicMock()
     rtc_client._peer_reconnect_tasks = {}
     rtc_client._negotiation_watchdogs = {}
@@ -178,6 +178,45 @@ async def test_signaling_departure_cancels_reconnect_and_suppresses_pc_retry():
     assert events == ["unavailable", "invalidate"]
     rtc_client._close_peer_connection.assert_awaited_once_with(pc)
     pc.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_signaling_departure_preserves_open_data_channel():
+    rtc_client = MagicMock()
+    rtc_client._peer_reconnect_tasks = {}
+    rtc_client._negotiation_watchdogs = {}
+    rtc_client._offer_in_progress = set()
+    rtc_client._pcs = {}
+    rtc_client._peer_data_channels = {}
+    rtc_client._reconnect_suppressed_pcs = set()
+    rtc_client._cancel_negotiation_watchdog = MagicMock()
+    rtc_client._stable_peer_id_for_session = MagicMock(return_value="stable-live")
+    rtc_client._send_local_provider_unavailable = AsyncMock()
+    rtc_client._invalidate_provider_export_peer = MagicMock()
+    rtc_client._close_peer_connection = AsyncMock()
+
+    from app.services.gateway.webrtc.rtc_client import RTCClient
+
+    peer = "live-session"
+    pc = MagicMock()
+    channel = MagicMock()
+    channel.readyState = "open"
+    rtc_client._pcs[peer] = pc
+    rtc_client._peer_data_channels[peer] = channel
+    retry_task = asyncio.create_task(asyncio.sleep(60))
+    rtc_client._peer_reconnect_tasks[peer] = retry_task
+
+    await RTCClient._handle_signaling_departure(
+        rtc_client,
+        peer,
+        reason="broker will",
+    )
+
+    assert retry_task.cancelled()
+    assert pc not in rtc_client._reconnect_suppressed_pcs
+    rtc_client._send_local_provider_unavailable.assert_not_awaited()
+    rtc_client._invalidate_provider_export_peer.assert_not_called()
+    rtc_client._close_peer_connection.assert_not_awaited()
 
 
 @pytest.mark.asyncio
