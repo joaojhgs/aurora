@@ -131,6 +131,8 @@ describe('desktop client bundle artifact proof', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-desktop-client-pnpm-'))
     const envPath = join(root, 'frontend-env.json')
     const pnpmStub = join(root, 'pnpm')
+    const productionEnv = { ...process.env }
+    delete productionEnv.VITE_AURORA_DESKTOP_LIVE_E2E
     mkdirSync(join(packageRoot, 'dist', 'assets'), { recursive: true })
     writeFileSync(
       join(packageRoot, 'dist', 'assets', 'stale-live-hook.js'),
@@ -145,7 +147,7 @@ describe('desktop client bundle artifact proof', () => {
     const result = spawnSync(process.execPath, [buildFrontend], {
       cwd: packageRoot,
       env: {
-        ...process.env,
+        ...productionEnv,
         PATH: `${root}${delimiter}${process.env.PATH ?? ''}`,
         AURORA_TAURI_ALLOWED_REMOTE_ORIGINS:
           'https://unused-gateway.example.invalid wss://signaling.example.invalid',
