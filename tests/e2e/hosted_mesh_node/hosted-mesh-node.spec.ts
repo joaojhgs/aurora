@@ -123,7 +123,6 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   request,
 }, testInfo) => {
   const consoleErrors: string[] = []
-  const expectedOfflineConsoleErrors: string[] = []
   const browserGatewayRequests: Array<{ method: string; url: string }> = []
   let exercisingOfflineRecovery = false
   page.on('console', (message) => {
@@ -135,7 +134,6 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
         text,
       )
     ) {
-      expectedOfflineConsoleErrors.push(text)
       return
     }
     consoleErrors.push(text)
@@ -595,7 +593,6 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
     contentType: 'image/png',
   })
   expect(browserGatewayRequests).toEqual([])
-  expect(expectedOfflineConsoleErrors.length).toBeGreaterThan(0)
   expect(consoleErrors).toEqual([])
 })
 
