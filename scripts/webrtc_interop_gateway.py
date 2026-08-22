@@ -91,6 +91,8 @@ PYTHON_MESH_PEER_ID = "python-gateway-g009"
 AC18_FORGED_FRAME_PEER_ID = "forged-ac18-frame-peer"
 AC18_PROVIDER_SERVICE_INSTANCE_ID = f"local:{BROWSER_MESH_PEER_ID}:Tooling"
 AC18_GLOBAL_TOOL_ID = f"aurora-tool:v1:{BROWSER_MESH_PEER_ID}:Tooling:{AC18_TOOL_CONTRACT_ID}"
+NATIVE_DEVICE_TOOL_CONTRACT_ID = "aurora.local.native.get_device_status.v1"
+NATIVE_DEVICE_TOOL_LOCAL_NAME = "native.get_device_status"
 INTEROP_SERVICE_PERMISSION = "Gateway.G009Interop"
 AC18_SHARED_HARNESS_PERMISSIONS = (
     "Config.use",
@@ -155,6 +157,27 @@ def build_ac18_mesh_config(*, timeout_seconds: float) -> MeshConfig:
     )
 
 
+def build_native_device_mesh_config(*, timeout_seconds: float) -> MeshConfig:
+    """Build the mesh policy for a dynamically identified native-device provider."""
+
+    config = build_ac18_mesh_config(timeout_seconds=timeout_seconds)
+    return config.model_copy(
+        update={
+            "services": {
+                **config.services,
+                "Tooling": MeshServicePolicy(
+                    export=MeshServiceExportPolicy(share=False),
+                    routing=MeshServiceRoutingPolicy(
+                        allowed_provider_peer_ids=None,
+                        prefer="network",
+                        fallback="error",
+                    ),
+                ),
+            }
+        }
+    )
+
+
 def build_ac18_browser_authority_snapshot(peer_id: str) -> MeshPeerAuthoritySnapshot:
     """Build the exact recipient authority needed by the live browser interop harness."""
 
@@ -172,6 +195,20 @@ def install_ac18_authority_refresh(rtc: Any) -> None:
 
     async def _refresh(peer_id: str) -> bool:
         if peer_id != BROWSER_MESH_PEER_ID:
+            return False
+        result = rtc.apply_trusted_peer_authority_snapshot(
+            build_ac18_browser_authority_snapshot(peer_id)
+        )
+        return bool(getattr(result, "applied", False))
+
+    rtc.set_authority_refresh_callback(_refresh)
+
+
+def install_native_device_authority_refresh(rtc: Any) -> None:
+    """Seed bounded harness grants for whichever native peer pairs."""
+
+    async def _refresh(peer_id: str) -> bool:
+        if not peer_id or peer_id == PYTHON_MESH_PEER_ID:
             return False
         result = rtc.apply_trusted_peer_authority_snapshot(
             build_ac18_browser_authority_snapshot(peer_id)
@@ -826,6 +863,8 @@ def build_gateway_report(
     manifest_sent: bool,
     ac18_local_tool_provider: bool,
     ac18_reverse_tool: dict[str, Any] | None,
+    native_device_tool_probe: bool,
+    native_device_tool: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Build the redacted Python-peer report consumed by the aggregate scanner."""
     return {
@@ -859,12 +898,218 @@ def build_gateway_report(
             "enabled": ac18_local_tool_provider,
             "status": "not-run" if ac18_local_tool_provider else "disabled",
         },
+        "nativeDeviceToolProbeEnabled": native_device_tool_probe,
+        "nativeDeviceToolEvidence": native_device_tool
+        or {
+            "enabled": native_device_tool_probe,
+            "status": "not-run" if native_device_tool_probe else "disabled",
+        },
         "largeRpcRecords": bus.large_rpc_records,
         "streamRecords": bus.stream_records,
         "requests": bus.requests,
         "publishes": bus.publish_records,
         "diagnostics": diagnostics,
         "secretsRedacted": True,
+    }
+
+
+async def run_native_device_tool_probe(
+    *,
+    peer_id: str,
+    peer_registry: PeerRegistry,
+    peer_bridge: PeerBridge,
+    timeout: float,
+    ready_path: Path,
+    trigger_path: Path,
+) -> dict[str, Any]:
+    """Prepare in foreground, then execute the bounded native tool on a trigger."""
+
+    public_call_methods: list[str] = []
+    probe_id = f"native-device-status-{int(time.time() * 1000)}"
+    deadline = time.monotonic() + timeout
+    last_status = "missing"
+
+    def base_evidence(status: str) -> dict[str, Any]:
+        return {
+            "enabled": True,
+            "status": status,
+            "peerId": peer_id,
+            "peerStatus": last_status,
+            "toolingServiceAdvertised": (
+                peer_registry.get_peer_service(peer_id, "Tooling") is not None
+            ),
+            "publicCallMethods": list(public_call_methods),
+            "publicCallCount": len(public_call_methods),
+            "peerBridgeCallPath": "PeerBridge.call",
+            "privateRpcCallUsed": False,
+            "directServiceCallUsed": False,
+            "httpFallbackUsed": False,
+        }
+
+    async def public_call(
+        method: str,
+        payload: dict[str, Any],
+        correlation_id: str,
+    ) -> QueryResult:
+        public_call_methods.append(method)
+        return await peer_bridge.call(
+            peer_id,
+            method,
+            payload,
+            timeout=min(15.0, timeout),
+            correlation_id=correlation_id,
+            principal_id=f"mesh:{AC18_FORGED_FRAME_PEER_ID}",
+            effective_perms=[],
+            identity_source="android_native_background_e2e_forged_frame",
+            method_type="use",
+            caller_peer_id=AC18_FORGED_FRAME_PEER_ID,
+            auth_grant_revision=999,
+            manifest_revision=999,
+        )
+
+    while time.monotonic() < deadline:
+        peer = peer_registry.get_peer(peer_id)
+        last_status = getattr(peer, "status", "missing") if peer is not None else "missing"
+        lease = peer_registry.get_provider_lease(peer_id)
+        if (
+            last_status == "negotiated"
+            and peer_registry.get_peer_service(peer_id, "Tooling") is not None
+            and lease is not None
+            and lease.available is True
+        ):
+            break
+        await asyncio.sleep(0.1)
+    else:
+        return base_evidence("provider-not-ready")
+
+    discovery_attempts = 0
+    discovered_tool: dict[str, Any] | None = None
+    discovery = QueryResult(ok=False, error="provider is not ready")
+    discovery_deadline = min(deadline, time.monotonic() + 15.0)
+    while time.monotonic() < discovery_deadline:
+        discovery_attempts += 1
+        discovery = await public_call(
+            ToolingMethods.GET_TOOLS,
+            {"query": NATIVE_DEVICE_TOOL_LOCAL_NAME, "top_k": 10},
+            f"{probe_id}-discovery-{discovery_attempts}",
+        )
+        discovery_response = discovery.data if isinstance(discovery.data, dict) else {}
+        discovered_tools = discovery_response.get("tools")
+        discovered_tool = (
+            next(
+                (
+                    candidate
+                    for candidate in discovered_tools
+                    if isinstance(candidate, dict)
+                    and candidate.get("tool_contract_id") == NATIVE_DEVICE_TOOL_CONTRACT_ID
+                    and candidate.get("local_name") == NATIVE_DEVICE_TOOL_LOCAL_NAME
+                    and candidate.get("provider_peer_id") == peer_id
+                ),
+                None,
+            )
+            if isinstance(discovered_tools, list)
+            else None
+        )
+        if discovery.ok and discovered_tool is not None:
+            break
+        retryable_error = (
+            discovery.error is not None and "provider is not ready" in discovery.error.lower()
+        )
+        if not discovery.ok and not retryable_error:
+            break
+        await asyncio.sleep(0.1)
+
+    if not discovery.ok or discovered_tool is None:
+        return {
+            **base_evidence("discovery-failed"),
+            "discoveryAttempts": discovery_attempts,
+            "queryResultOk": discovery.ok,
+            "queryResultError": discovery.error,
+        }
+
+    global_tool_id = str(discovered_tool.get("global_tool_id") or "")
+    provider_service_instance_id = str(discovered_tool.get("provider_service_instance_id") or "")
+    if not global_tool_id or not provider_service_instance_id:
+        return base_evidence("discovery-invalid")
+
+    prepare_payload = {
+        "tool_name": global_tool_id,
+        "arguments": {},
+        "correlation_id": probe_id,
+        "caller_peer_id": AC18_FORGED_FRAME_PEER_ID,
+        "caller_permissions": [],
+    }
+    prepare = await public_call(
+        ToolingMethods.PREPARE_EXECUTION,
+        prepare_payload,
+        f"{probe_id}-prepare",
+    )
+    prepare_response = prepare.data if isinstance(prepare.data, dict) else {}
+    args_schema_hash = prepare_response.get("args_schema_hash")
+    prepare_ok = (
+        prepare.ok
+        and prepare_response.get("ok") is True
+        and isinstance(args_schema_hash, str)
+        and re.fullmatch(r"[0-9a-f]{64}", args_schema_hash) is not None
+        and prepare_response.get("global_tool_id") == global_tool_id
+        and prepare_response.get("provider_peer_id") == peer_id
+        and prepare_response.get("provider_service_instance_id") == provider_service_instance_id
+    )
+    if not prepare_ok or not isinstance(args_schema_hash, str):
+        return {
+            **base_evidence("prepare-failed"),
+            "queryResultOk": prepare.ok,
+            "queryResultError": prepare.error,
+        }
+
+    write_json(
+        ready_path,
+        {
+            "status": "prepared",
+            "peerId": peer_id,
+            "toolContractId": NATIVE_DEVICE_TOOL_CONTRACT_ID,
+            "globalToolId": global_tool_id,
+            "providerServiceInstanceId": provider_service_instance_id,
+            "preparedAt": now(),
+            "secretsRedacted": True,
+        },
+    )
+
+    while time.monotonic() < deadline and not trigger_path.exists():
+        await asyncio.sleep(0.1)
+    if not trigger_path.exists():
+        return base_evidence("trigger-timeout")
+
+    result = await public_call(
+        ToolingMethods.EXECUTE_TOOL,
+        {
+            **prepare_payload,
+            "expected_args_schema_hash": args_schema_hash,
+        },
+        probe_id,
+    )
+    response = result.data if isinstance(result.data, dict) else {}
+    response_data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    passed = (
+        result.ok
+        and response.get("ok") is True
+        and response.get("status") == "success"
+        and response.get("global_tool_id") == global_tool_id
+        and response_data.get("online") is True
+        and isinstance(response_data.get("platform"), str)
+    )
+    return {
+        **base_evidence("passed" if passed else "failed"),
+        "discoveryAttempts": discovery_attempts,
+        "method": ToolingMethods.EXECUTE_TOOL,
+        "toolContractId": NATIVE_DEVICE_TOOL_CONTRACT_ID,
+        "globalToolId": global_tool_id,
+        "providerServiceInstanceId": provider_service_instance_id,
+        "queryResultOk": result.ok,
+        "queryResultError": result.error,
+        "toolResponse": response,
+        "identityClaimOverriddenByAuthenticatedChannel": True,
+        "triggerObserved": True,
     }
 
 
@@ -1206,16 +1451,23 @@ async def main() -> int:
     parser.add_argument("--stun", action="append", default=[])
     parser.add_argument("--turn", action="append", default=[])
     parser.add_argument("--timeout", type=float, default=45.0)
+    parser.add_argument("--native-device-probe-ready")
+    parser.add_argument("--native-device-probe-trigger")
     args = parser.parse_args()
 
     if not args.room_secret:
         raise SystemExit("WEBRTC_INTEROP_ROOM_SECRET is required")
+    if bool(args.native_device_probe_ready) != bool(args.native_device_probe_trigger):
+        raise SystemExit(
+            "--native-device-probe-ready and --native-device-probe-trigger must be used together"
+        )
 
     ready_path = Path(args.ready)
     done_path = Path(args.done)
     report_path = Path(args.report)
     token_value = os.environ.get("WEBRTC_INTEROP_TOKEN", "interop-browser-token-value-not-written")
     ac18_local_tool_provider = env_flag(AC18_LOCAL_TOOL_PROVIDER_ENV)
+    native_device_tool_probe = bool(args.native_device_probe_ready)
     gateway_http_probe_socket, gateway_http_probe_port = reserve_gateway_http_probe_port()
     registry = InteropRegistry()
     bus = InteropBus(registry, token_value)
@@ -1267,11 +1519,18 @@ async def main() -> int:
     rtc.set_mesh_identity(PYTHON_MESH_PEER_ID, "G009 Python Gateway")
     peer_registry: PeerRegistry | None = None
     peer_bridge: PeerBridge | None = None
-    if ac18_local_tool_provider:
-        mesh_config = build_ac18_mesh_config(timeout_seconds=args.timeout)
+    if ac18_local_tool_provider or native_device_tool_probe:
+        mesh_config = (
+            build_native_device_mesh_config(timeout_seconds=args.timeout)
+            if native_device_tool_probe
+            else build_ac18_mesh_config(timeout_seconds=args.timeout)
+        )
         peer_registry = PeerRegistry(mesh_config)
         peer_bridge = PeerBridge(rtc, peer_registry)
-        install_ac18_authority_refresh(rtc)
+        if native_device_tool_probe:
+            install_native_device_authority_refresh(rtc)
+        else:
+            install_ac18_authority_refresh(rtc)
         rtc.configure_mesh(mesh_config, peer_registry, peer_bridge)
         await peer_registry.start()
 
@@ -1321,6 +1580,8 @@ async def main() -> int:
     started_at = time.monotonic()
     ac18_reverse_tool: dict[str, Any] | None = None
     ac18_probe_task: asyncio.Task[dict[str, Any]] | None = None
+    native_device_tool: dict[str, Any] | None = None
+    native_device_probe_task: asyncio.Task[dict[str, Any]] | None = None
     event_sent = False
     tts_event_sent = False
     wrong_corr_interest = False
@@ -1353,8 +1614,8 @@ async def main() -> int:
                     revoked_reconnect_failures += 1
             for peer in rtc.get_connected_peers():
                 stable = str(peer.get("stable_peer_id") or "")
+                session_peer_id = str(peer.get("peer_id") or "")
                 if stable == BROWSER_MESH_PEER_ID and peer.get("session_active") is True:
-                    session_peer_id = str(peer.get("peer_id") or "")
                     if (
                         ac18_local_tool_provider
                         and ac18_probe_task is None
@@ -1428,8 +1689,34 @@ async def main() -> int:
                             ),
                         )
                         tts_event_sent = True
+                if (
+                    native_device_tool_probe
+                    and stable
+                    and stable != PYTHON_MESH_PEER_ID
+                    and peer.get("session_active") is True
+                    and native_device_probe_task is None
+                    and peer_registry is not None
+                    and peer_bridge is not None
+                    and rtc.peer_supports_capability(
+                        session_peer_id,
+                        CAP_PROVIDER_LEASE_V1,
+                    )
+                ):
+                    native_device_probe_task = asyncio.create_task(
+                        run_native_device_tool_probe(
+                            peer_id=stable,
+                            peer_registry=peer_registry,
+                            peer_bridge=peer_bridge,
+                            timeout=max(1.0, deadline - time.monotonic()),
+                            ready_path=Path(args.native_device_probe_ready),
+                            trigger_path=Path(args.native_device_probe_trigger),
+                        ),
+                        name=f"webrtc-interop-native-device:{args.lane}",
+                    )
             if ac18_probe_task is not None and ac18_probe_task.done():
                 ac18_reverse_tool = ac18_probe_task.result()
+            if native_device_probe_task is not None and native_device_probe_task.done():
+                native_device_tool = native_device_probe_task.result()
             await asyncio.sleep(0.1)
 
         if ac18_probe_task is not None and ac18_reverse_tool is None:
@@ -1440,6 +1727,17 @@ async def main() -> int:
                 )
             except TimeoutError:
                 ac18_reverse_tool = {
+                    "enabled": True,
+                    "status": "not-completed",
+                }
+        if native_device_probe_task is not None and native_device_tool is None:
+            try:
+                native_device_tool = await asyncio.wait_for(
+                    asyncio.shield(native_device_probe_task),
+                    timeout=min(15.0, max(1.0, args.timeout)),
+                )
+            except TimeoutError:
+                native_device_tool = {
                     "enabled": True,
                     "status": "not-completed",
                 }
@@ -1463,6 +1761,8 @@ async def main() -> int:
                 manifest_sent=manifest_sent,
                 ac18_local_tool_provider=ac18_local_tool_provider,
                 ac18_reverse_tool=ac18_reverse_tool,
+                native_device_tool_probe=native_device_tool_probe,
+                native_device_tool=native_device_tool,
             ),
         )
     finally:
@@ -1470,6 +1770,10 @@ async def main() -> int:
             ac18_probe_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ac18_probe_task
+        if native_device_probe_task is not None and not native_device_probe_task.done():
+            native_device_probe_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await native_device_probe_task
         if peer_bridge is not None:
             await peer_bridge.cancel_all()
         await rtc.close()

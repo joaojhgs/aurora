@@ -43,12 +43,15 @@ from scripts.webrtc_interop_gateway import (
     InteropRegistry,
     build_ac18_mesh_config,
     build_gateway_report,
+    build_native_device_mesh_config,
     build_ready_payload,
     can_connect,
     install_ac18_authority_refresh,
+    install_native_device_authority_refresh,
     non_host_ice_candidate,
     reserve_gateway_http_probe_port,
     run_ac18_reverse_browser_tool_probe,
+    run_native_device_tool_probe,
 )
 
 TOKEN = "g009.test-token-that-must-never-be-reported"
@@ -377,6 +380,8 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
         manifest_sent=True,
         ac18_local_tool_provider=False,
         ac18_reverse_tool=None,
+        native_device_tool_probe=False,
+        native_device_tool=None,
     )
     serialized = json.dumps(report, sort_keys=True)
 
@@ -394,6 +399,7 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
     }
     assert report["ac18LocalToolProviderEnabled"] is False
     assert report["ac18ReverseToolEvidence"] == {"enabled": False, "status": "disabled"}
+    assert report["nativeDeviceToolEvidence"] == {"enabled": False, "status": "disabled"}
     assert report["secretsRedacted"] is True
     assert TOKEN not in serialized
 
@@ -424,6 +430,16 @@ def test_ac18_mesh_config_shares_harness_services_and_routes_tooling_to_browser(
     assert tooling_policy.routing.prefer == "network"
     assert tooling_policy.routing.fallback == "error"
     assert tooling_policy.routing.allowed_provider_peer_ids == (BROWSER_MESH_PEER_ID,)
+
+
+def test_native_device_mesh_config_accepts_the_paired_provider_dynamically() -> None:
+    mesh_config = build_native_device_mesh_config(timeout_seconds=12.5)
+
+    tooling_policy = mesh_config.services["Tooling"]
+    assert tooling_policy.export.share is False
+    assert tooling_policy.routing.prefer == "network"
+    assert tooling_policy.routing.fallback == "error"
+    assert tooling_policy.routing.allowed_provider_peer_ids is None
 
 
 @pytest.mark.asyncio
@@ -458,6 +474,32 @@ async def test_ac18_authority_refresh_seeds_exact_grants_through_public_rtc_api(
     assert authority_snapshot.disposition == "present"
     assert authority_snapshot.state == "active"
     assert authority_snapshot.effective_permissions == AC18_SHARED_HARNESS_PERMISSIONS
+
+
+@pytest.mark.asyncio
+async def test_native_device_authority_refresh_accepts_only_nonlocal_peers() -> None:
+    class _ApplyResult:
+        applied = True
+
+    class _PublicRtcOnly:
+        def __init__(self) -> None:
+            self.callback = None
+            self.applied_events: list[object] = []
+
+        def set_authority_refresh_callback(self, callback):
+            self.callback = callback
+
+        def apply_trusted_peer_authority_snapshot(self, snapshot):
+            self.applied_events.append(snapshot)
+            return _ApplyResult()
+
+    rtc = _PublicRtcOnly()
+    install_native_device_authority_refresh(rtc)
+
+    assert rtc.callback is not None
+    assert await rtc.callback("android-peer") is True
+    assert await rtc.callback(PYTHON_MESH_PEER_ID) is False
+    assert rtc.applied_events[0].peer_id == "android-peer"
 
 
 class _Ac18ReadyRegistry:
@@ -597,3 +639,190 @@ async def test_ac18_browser_tool_probe_discovers_prepares_executes_and_fails_clo
     assert evidence["identityOverride"]["frameCallerPeerIdOverridden"] is True
     assert evidence["identityOverride"]["observedCallerPeerId"] == PYTHON_MESH_PEER_ID
     assert evidence["negativeProbe"]["failClosedWithoutHandler"] is True
+
+
+class _NativeReadyRegistry:
+    def __init__(self) -> None:
+        self.peer = PeerState(peer_id="android-peer", status="negotiated")
+        self.lease = ProviderLeaseState(
+            peer_id="android-peer",
+            connection_epoch="epoch-2",
+            availability_revision=1,
+            issued_at_ms=1,
+            expires_at_ms=60_000,
+            available=True,
+            lease_required=True,
+        )
+
+    def get_peer(self, peer_id: str) -> PeerState | None:
+        return self.peer if peer_id == "android-peer" else None
+
+    def get_provider_lease(self, peer_id: str) -> ProviderLeaseState | None:
+        return self.lease if peer_id == "android-peer" else None
+
+    def get_peer_service(self, peer_id: str, module: str) -> object | None:
+        return object() if peer_id == "android-peer" and module == "Tooling" else None
+
+
+class _NativeRecordingPeerBridge:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, object]]] = []
+        self.schema_hash = "b" * 64
+        self.global_tool_id = (
+            "aurora-tool:v1:android-peer:Tooling:aurora.local.native.get_device_status.v1"
+        )
+
+    async def call(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: dict[str, object],
+        **_options: object,
+    ) -> QueryResult:
+        self.calls.append((peer_id, topic, payload))
+        if topic == ToolingMethods.GET_TOOLS:
+            return QueryResult(
+                ok=True,
+                data={
+                    "tools": [
+                        {
+                            "tool_contract_id": "aurora.local.native.get_device_status.v1",
+                            "local_name": "native.get_device_status",
+                            "global_tool_id": self.global_tool_id,
+                            "provider_peer_id": "android-peer",
+                            "provider_service_instance_id": "local:android-peer:Tooling",
+                        }
+                    ],
+                    "count": 1,
+                },
+            )
+        if topic == ToolingMethods.PREPARE_EXECUTION:
+            return QueryResult(
+                ok=True,
+                data={
+                    "ok": True,
+                    "policy_decision": {"allowed": True},
+                    "args_schema_hash": self.schema_hash,
+                    "global_tool_id": self.global_tool_id,
+                    "provider_peer_id": "android-peer",
+                    "provider_service_instance_id": "local:android-peer:Tooling",
+                },
+            )
+        return QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "status": "success",
+                "global_tool_id": self.global_tool_id,
+                "data": {
+                    "platform": "android",
+                    "online": True,
+                    "availableCapabilities": [],
+                },
+            },
+        )
+
+
+class _NativeWarmingPeerBridge(_NativeRecordingPeerBridge):
+    def __init__(self) -> None:
+        super().__init__()
+        self.discovery_attempts = 0
+
+    async def call(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: dict[str, object],
+        **options: object,
+    ) -> QueryResult:
+        if topic == ToolingMethods.GET_TOOLS:
+            self.discovery_attempts += 1
+            if self.discovery_attempts == 1:
+                self.calls.append((peer_id, topic, payload))
+                return QueryResult(ok=False, error="provider is not ready")
+        return await super().call(peer_id, topic, payload, **options)
+
+
+class _NativeRejectedPeerBridge(_NativeRecordingPeerBridge):
+    async def call(
+        self,
+        peer_id: str,
+        topic: str,
+        payload: dict[str, object],
+        **options: object,
+    ) -> QueryResult:
+        self.calls.append((peer_id, topic, payload))
+        return QueryResult(ok=False, error="permission denied")
+
+
+@pytest.mark.asyncio
+async def test_native_device_probe_prepares_then_waits_for_background_trigger(tmp_path) -> None:
+    ready_path = tmp_path / "native-ready.json"
+    trigger_path = tmp_path / "native-trigger"
+    trigger_path.touch()
+    bridge = _NativeRecordingPeerBridge()
+
+    evidence = await run_native_device_tool_probe(
+        peer_id="android-peer",
+        peer_registry=_NativeReadyRegistry(),  # type: ignore[arg-type]
+        peer_bridge=bridge,  # type: ignore[arg-type]
+        timeout=1,
+        ready_path=ready_path,
+        trigger_path=trigger_path,
+    )
+
+    assert evidence["status"] == "passed"
+    assert ready_path.exists()
+    assert [topic for _, topic, _ in bridge.calls] == [
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+    ]
+    execute_payload = bridge.calls[-1][2]
+    assert execute_payload["expected_args_schema_hash"] == bridge.schema_hash
+    assert evidence["triggerObserved"] is True
+    assert evidence["toolResponse"]["data"]["platform"] == "android"
+
+
+@pytest.mark.asyncio
+async def test_native_device_probe_retries_while_provider_is_warming(tmp_path) -> None:
+    trigger_path = tmp_path / "native-trigger"
+    trigger_path.touch()
+    bridge = _NativeWarmingPeerBridge()
+
+    evidence = await run_native_device_tool_probe(
+        peer_id="android-peer",
+        peer_registry=_NativeReadyRegistry(),  # type: ignore[arg-type]
+        peer_bridge=bridge,  # type: ignore[arg-type]
+        timeout=1,
+        ready_path=tmp_path / "native-ready.json",
+        trigger_path=trigger_path,
+    )
+
+    assert evidence["status"] == "passed"
+    assert evidence["discoveryAttempts"] == 2
+    assert [topic for _, topic, _ in bridge.calls] == [
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.GET_TOOLS,
+        ToolingMethods.PREPARE_EXECUTION,
+        ToolingMethods.EXECUTE_TOOL,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_native_device_probe_does_not_retry_a_permanent_rejection(tmp_path) -> None:
+    bridge = _NativeRejectedPeerBridge()
+
+    evidence = await run_native_device_tool_probe(
+        peer_id="android-peer",
+        peer_registry=_NativeReadyRegistry(),  # type: ignore[arg-type]
+        peer_bridge=bridge,  # type: ignore[arg-type]
+        timeout=1,
+        ready_path=tmp_path / "native-ready.json",
+        trigger_path=tmp_path / "native-trigger",
+    )
+
+    assert evidence["status"] == "discovery-failed"
+    assert evidence["discoveryAttempts"] == 1
+    assert evidence["queryResultError"] == "permission denied"
+    assert [topic for _, topic, _ in bridge.calls] == [ToolingMethods.GET_TOOLS]
