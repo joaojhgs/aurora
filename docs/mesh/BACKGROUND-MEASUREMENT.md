@@ -16,7 +16,7 @@ result that says so, never a substituted number.**
 ## Running it
 
 ```bash
-pnpm --filter @aurora/tauri-ui android:background:measure -- \
+pnpm --filter @aurora/tauri-ui android:background:measure \
   --duration 600 --sample-interval 30 --peer-counts 0 --lifecycles foreground,background
 ```
 
@@ -142,30 +142,48 @@ now with `blockedBy: "no_peer_driver"`: this harness reads what Android
 reports and does not itself establish device connections, so it will not
 label a scenario with a device count it did not set up.
 
-### What was actually measured for R3, and what was not
+### Qualifying an R3 measurement
 
-The R3 soak was run on Waydroid, and Waydroid is **not a physical
-device**. A container does not reproduce Doze, app standby buckets or
-OEM process killing, which are exactly what a background-survival claim
-rests on. Its report carries `physicalPowerReadings: false` and
-`physicalThermalReadings: false` so it cannot be mistaken for one.
+A qualifying run must use the maintained Android client APK built from the
+same revision as the harness. The x86_64 build uses the complete Android
+Sherpa runtime directory, not the generated project's partial library folder:
 
-Beyond that, the run could not exercise R3 at all. Installing a build
-containing it requires an Android APK, and the APK build fails in
-`aurora-voice-sherpa-sys` for want of the sherpa-onnx CI artifact
-(`AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR`), which is not present in
-this environment. The package installed on the device predates R3. So the
-report is a harness and shape check against a pre-R3 build, and both R3
-dimensions correctly report `no_signal_observed`.
+```bash
+AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR="$PWD/.artifacts/sherpa-onnx/android-runtime-build/runtime/x86_64" \
+VITE_AURORA_NATIVE_WEBRTC_TRANSPORT_V1=1 \
+VITE_AURORA_DESKTOP_LIVE_E2E=1 \
+VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \
+pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64
 
-**R3's acceptance criterion -- an adb-driven background soak on the
-physical device -- is therefore unverified.** It needs the sherpa
-artifact to build an APK, and real hardware to run it on.
+pnpm --filter @aurora/tauri-ui android:verify:client:apk
+```
+
+The run must then prove all of the following against one live paired session:
+
+1. the device advertises the local bounded tool through the ordinary mesh
+   service catalog;
+2. the remote peer discovers and prepares that tool through `PeerBridge.call`
+   while the app is foregrounded;
+3. the app is moved to the background before the remote peer executes it;
+4. the report records both a held `connectedDevice` foreground reason and at
+   least one `background_tool_call` marker; and
+5. after force-stop and relaunch, the saved profile reconnects to the same live
+   peer without another pairing flow.
+
+An APK build, artifact scan, foreground-only call, direct service invocation,
+or report with `no_signal_observed` does not satisfy that proof.
+
+Waydroid is still **not a physical device**. Its container does not reproduce
+Doze, app standby buckets, OEM process killing, physical battery draw, or a
+thermal HAL. Its report therefore remains a protocol, memory, service-hold,
+and process-survival check; it cannot close the physical-device power and
+survival acceptance gate.
 
 ## What still needs a physical device
 
-R3's own acceptance requires an adb-driven background soak on the physical
-device. R5 supplies the harness for that run; it does not substitute for it.
+The release acceptance gate requires an adb-driven background soak on a
+physical device. R5 supplies the harness for that run; Waydroid does not
+substitute for it.
 Battery and thermal numbers for R6 must come from a `deviceClass: "physical"`
 report. A Waydroid report is a shape and memory/survival check only — its
 `physicalPowerReadings` and `physicalThermalReadings` flags are `false` precisely
