@@ -62,6 +62,7 @@ import {
   createAuroraTauriRuntime,
   loadTauriRemoteAssistantTools,
   reportMeshSessionCleanupFailure,
+  resolveTauriSurfaceProfile,
   usesNativeWebRtcPrimitive,
   type AuroraThinConnectionProfile,
 } from "./aurora-client";
@@ -5293,6 +5294,25 @@ describe("native WebRTC transport rollout flag", () => {
     isMobile: false,
     supportsNativeWebRtcBridge: false,
   };
+
+  it("carries the known mobile runtime mode into Android transport selection", () => {
+    const profile = resolveTauriSurfaceProfile(
+      "mobile-native",
+      "Mozilla/5.0 (Linux; Android 13; WayDroid) AppleWebKit/537.36",
+    );
+
+    expect(profile.isAndroid).toBe(true);
+    expect(profile.isMobile).toBe(true);
+    expect(profile.usesNativeShell).toBe(true);
+    expect(profile.supportsNativeWebRtcBridge).toBe(true);
+    expect(
+      usesNativeWebRtcPrimitive({
+        rolloutFlags: { native_webrtc_transport_v1: true },
+        surfaceProfile: profile,
+        hasWebViewPeerConnection: true,
+      }),
+    ).toBe(true);
+  });
 
   it("turns the native transport off from the one flag", () => {
     // On a shell whose WebView has no RTCPeerConnection, the Rust transport is

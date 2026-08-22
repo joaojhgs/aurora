@@ -1287,7 +1287,7 @@ function createTauriWebThinRuntime({
   meshNodeServices?: TauriMeshNodeServices | null | undefined;
 }): BrowserWebThinRuntime {
   let runtime: BrowserWebThinRuntime;
-  const surfaceProfile = currentAuroraSurfaceProfile();
+  const surfaceProfile = resolveTauriSurfaceProfile(runtimeMode);
   const rolloutFlags = tauriWebRtcRolloutFlags();
   const usesNativePeerConnection = usesNativeWebRtcPrimitive({
     rolloutFlags,
@@ -2292,11 +2292,19 @@ function tauriNativePlatform(): string {
   return "desktop";
 }
 
-function currentAuroraSurfaceProfile() {
+export function resolveTauriSurfaceProfile(
+  runtimeMode?: string,
+  userAgent = typeof navigator === "undefined" ? undefined : navigator.userAgent,
+) {
   return getAuroraSurfaceProfile({
+    runtimeMode,
     transportKind: DEFAULT_THIN_CONNECTION_MODE,
-    userAgent: typeof navigator === "undefined" ? undefined : navigator.userAgent,
+    userAgent,
   });
+}
+
+function currentAuroraSurfaceProfile() {
+  return resolveTauriSurfaceProfile();
 }
 
 async function androidForegroundStatus(): Promise<AndroidForegroundRuntimeStatus | null> {
