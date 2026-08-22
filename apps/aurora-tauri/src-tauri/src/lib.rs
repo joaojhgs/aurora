@@ -8882,6 +8882,35 @@ pub fn run() {
             aurora_shutdown
         ])
         .on_window_event(move |window, event| {
+            #[cfg(mobile)]
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Suspended) {
+                let app = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(state) = app.try_state::<mesh_session::MeshSessionState>() {
+                        state.mark_surface_backgrounded().await;
+                        eprintln!(
+                            "aurora.mesh surface_lifecycle source=native_suspended lifecycle=background"
+                        );
+                    }
+                });
+            }
+            #[cfg(mobile)]
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Resumed) {
+                let app = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(state) = app.try_state::<mesh_session::MeshSessionState>() {
+                        state.mark_surface_resumed().await;
+                        let _ = app.emit_to(
+                            "main",
+                            mesh_session::MESH_SURFACE_RESUMED_EVENT,
+                            (),
+                        );
+                        eprintln!(
+                            "aurora.mesh surface_lifecycle source=native_resumed lifecycle=awaiting_webview_drain"
+                        );
+                    }
+                });
+            }
             #[cfg(desktop)]
             {
                 if window.label() == "main" && matches!(event, tauri::WindowEvent::Focused(true)) {

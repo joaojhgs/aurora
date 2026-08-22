@@ -106,10 +106,41 @@ describe("Tauri native WebRTC fallback", () => {
     expect(
       nativeTransportHandleForRemoteSignalingId("signal-exact-peer"),
     ).toEqual({ peerConnectionId: 7, dataChannelId: 8 });
-    expect(deliverNativeTransportFrame(8, { type: "event", id: "replay-1" }))
+    expect(deliverNativeTransportFrame(8, {
+      kind: "json",
+      frame: { type: "event", id: "replay-1" },
+    }))
       .toBe(true);
     expect(onMessage).toHaveBeenCalledWith({
       data: '{"type":"event","id":"replay-1"}',
+    });
+    expect(deliverNativeTransportFrame(8, {
+      kind: "nativeBinary",
+      payloadBase64: "AQID",
+    })).toBe(true);
+    expect(onMessage).toHaveBeenLastCalledWith({
+      data: expect.any(ArrayBuffer),
+    });
+    expect(new Uint8Array(onMessage.mock.lastCall?.[0].data as ArrayBuffer))
+      .toEqual(new Uint8Array([1, 2, 3]));
+    expect(deliverNativeTransportFrame(8, {
+      kind: "json",
+      frame: {
+        __auroraNativeDataChannelFrame: {
+          version: 1,
+          binary: true,
+          payloadBase64: "AQID",
+        },
+      },
+    })).toBe(true);
+    expect(onMessage).toHaveBeenLastCalledWith({
+      data: JSON.stringify({
+        __auroraNativeDataChannelFrame: {
+          version: 1,
+          binary: true,
+          payloadBase64: "AQID",
+        },
+      }),
     });
     expect(
       nativeTransportHandleForRemoteSignalingId("signal-other-peer"),

@@ -257,6 +257,20 @@ describe('native capability local tool pack', () => {
       'permissions',
       'diagnostics'
     ]))
+
+    const registry = new LocalToolRegistry({ stablePeerId: 'provider' })
+    registerNativeCapabilityTools({
+      registry,
+      capabilities: {
+        [AURORA_NATIVE_TOOL_IDS.getDeviceStatus]: capability('native.device_status', 'available')
+      },
+      handlers: {
+        [AURORA_NATIVE_TOOL_IDS.getDeviceStatus]: () => ({ online: true })
+      }
+    })
+    expect(registry.resolvePublicId(AURORA_NATIVE_TOOL_IDS.getDeviceStatus)?.schemaHash).toBe(
+      'dfe3a795fdff4e8cd9adf5061ad0eee952b7aec9f0811a7e3756717181a4e740'
+    )
   })
 })
 

@@ -16,6 +16,8 @@ const nativeDownloaderPath = 'rust/crates/aurora-voice-native/src/downloader.rs'
 const permissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
 const liveTestPermissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-voice-live-e2e.toml'
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
+const tauriLibPath = 'apps/aurora-tauri/src-tauri/src/lib.rs'
+const meshSessionPath = 'apps/aurora-tauri/src-tauri/src/mesh_session.rs'
 
 function repoText(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8')
@@ -911,6 +913,44 @@ describe('Android native voice route policy', () => {
     expect(listenerBody).toContain('payload.foreground === false || payload.focused === false')
     expect(listenerBody).toContain('payload.backgroundWakeword !== true')
     expect(listenerBody).toContain('AURORA_RELEASE_FOCUSED_MEDIA_EVENT')
+  })
+
+  it('exposes redacted live foreground reasons through the Android service dump hook', () => {
+    const service = repoText(voiceStorePath)
+    const dumpBody = service.slice(
+      service.indexOf('override fun dump('),
+      service.indexOf('override fun onCreate()', service.indexOf('override fun dump(')),
+    )
+
+    expect(dumpBody).toContain('aurora.runtime.running=')
+    expect(dumpBody).toContain('aurora.runtime.foregroundReasons=')
+    expect(dumpBody).toContain('aurora.runtime.foregroundServiceTypeMask=')
+    expect(dumpBody).toContain('AuroraRuntimeForegroundLedger.activeReasons()')
+    expect(dumpBody).not.toContain('VOICE_BEARER_KEY')
+    expect(dumpBody).not.toContain('THIN_PROFILE_KEY')
+  })
+
+  it('gates the mesh dispatcher with the native mobile lifecycle', () => {
+    const tauriLib = repoText(tauriLibPath)
+    const meshSession = repoText(meshSessionPath)
+    const windowEventBody = tauriLib.slice(
+      tauriLib.indexOf('.on_window_event(move |window, event|'),
+      tauriLib.indexOf('.run(tauri::generate_context!())'),
+    )
+    const suspendBody = meshSession.slice(
+      meshSession.indexOf('pub async fn mark_surface_backgrounded'),
+      meshSession.indexOf('pub async fn begin_native_assistant_call', meshSession.indexOf('pub async fn mark_surface_backgrounded')),
+    )
+
+    expect(windowEventBody).toContain('tauri::WindowEvent::Suspended')
+    expect(windowEventBody).toContain('state.mark_surface_backgrounded().await')
+    expect(windowEventBody).toContain('tauri::WindowEvent::Resumed')
+    expect(windowEventBody).toContain('state.mark_surface_resumed().await')
+    expect(windowEventBody).toContain('MESH_SURFACE_RESUMED_EVENT')
+    expect(suspendBody).toContain('SurfaceLifecycle::Background')
+    expect(suspendBody).toContain('native_surface_backgrounded = true')
+    expect(suspendBody).toContain('native_surface_backgrounded = false')
+    expect(meshSession).toContain('lifecycle == SurfaceLifecycle::Foreground && self.native_surface_backgrounded')
   })
 
   it('keeps assistant role selection behind the explicit request command', () => {

@@ -2221,6 +2221,10 @@ interface RuntimePeerRegistry {
   disconnectPeer(peerId: string, reason?: string): Promise<void>
   setPeerPriority(peerId: string, priority: { userPinned?: boolean; dependedUpon?: boolean }): void
   applyConnectionBudget?(reason?: 'connection_budget' | 'surface_suspended' | 'user_requested'): Promise<void>
+  nativeDataChannelCodec(peerId: string): {
+    version: 'aes-256-gcm-nonce-prefix-v1'
+    key: Uint8Array
+  } | null
 }
 
 interface MultiPeerHarness {
@@ -2374,6 +2378,36 @@ async function driveMeshSasPrompt(
 describe('browser WebRTC runtime peer registry', {
   timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
 }, () => {
+  it('clones only the active data-channel key for trusted native composition', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha'])
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+
+    const first = harness.registry.nativeDataChannelCodec('peer-alpha')
+    expect(first).toMatchObject({ version: 'aes-256-gcm-nonce-prefix-v1' })
+    expect(first?.key).toHaveLength(32)
+    expect(JSON.stringify(harness.registry.roster())).not.toContain('key')
+
+    first?.key.fill(0)
+    const second = harness.registry.nativeDataChannelCodec('peer-alpha')
+    expect(second?.key.some((byte) => byte !== 0)).toBe(true)
+    expect(harness.registry.nativeDataChannelCodec('unknown-peer')).toBeNull()
+
+    second?.key.fill(0)
+    await harness.runtime.close()
+    expect(harness.registry.nativeDataChannelCodec('peer-alpha')).toBeNull()
+  })
+
+  it('does not install a native encrypted codec when app-layer E2EE is disabled', async () => {
+    const harness = makeMultiPeerHarness(['a-alpha'])
+    await harness.registry.connectPeer({
+      ...meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'),
+      requireAppLayerE2ee: false
+    })
+
+    expect(harness.registry.nativeDataChannelCodec('peer-alpha')).toBeNull()
+    await harness.runtime.close()
+  })
+
   it('holds two authorized sessions at once and derives the single-peer snapshot from the primary', async () => {
     const harness = makeMultiPeerHarness(['a-alpha', 'a-beta'])
     await saveMeshPeerCredential(harness, 'peer-alpha', 'a-alpha', 'z-alpha')

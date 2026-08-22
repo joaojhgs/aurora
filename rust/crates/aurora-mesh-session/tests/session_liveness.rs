@@ -14,12 +14,13 @@ use aurora_mesh_authority::authority::{
 };
 use aurora_mesh_authority::types::PeerHostAuthorizationDecision;
 use aurora_mesh_session::{
-    background_executable_methods, background_execution_for, execute_background_tooling_call,
-    frames_served_by_rust_today, inbound_frame_ownership, is_pairing_frame, BackgroundCapability,
-    BackgroundToolingProviderContext, CallOutcome, FrameOwner, InboundDisposition,
-    MeshSessionError, MeshSessionRegistry, SurfaceLifecycle, INBOUND_FRAME_OWNERSHIP,
-    MAX_QUEUED_FRAMES_PER_PEER, ORCHESTRATION_DEFERRED_CODE, ORCHESTRATION_DEFERRED_MESSAGE,
-    ORCHESTRATION_DEFERRED_REASON, RETRY_WHEN_PEER_FOREGROUND,
+    background_executable_methods, background_execution_for, classify_background_tooling_result,
+    execute_background_tooling_call, frames_served_by_rust_today, inbound_frame_ownership,
+    is_pairing_frame, BackgroundCapability, BackgroundToolingProviderContext,
+    BackgroundToolingResult, CallOutcome, FrameOwner, InboundDisposition, MeshSessionError,
+    MeshSessionRegistry, SurfaceLifecycle, INBOUND_FRAME_OWNERSHIP, MAX_QUEUED_FRAMES_PER_PEER,
+    ORCHESTRATION_DEFERRED_CODE, ORCHESTRATION_DEFERRED_MESSAGE, ORCHESTRATION_DEFERRED_REASON,
+    RETRY_WHEN_PEER_FOREGROUND,
 };
 use serde_json::{json, Value};
 
@@ -424,12 +425,12 @@ fn a_backgrounded_export_catalog_uses_sdk_canonical_projection_hashes() {
     );
     assert_eq!(
         result["projection_digest"],
-        json!("9ad51599ef087b4d905ff0623c0ffd352e363fee93726e383695759dde1ca507")
+        json!("3b96166bc506453626eb7c6486c62ee91a07e2987e5f060e54ab23ed130ebc20")
     );
     assert_eq!(result["final_checksum"], result["projection_digest"]);
     assert_eq!(
         result["page_hash"],
-        json!("2856a37168e7a72c218cc89a2cef471f83f97cbe04da6c31d9d82d5dc0a486fb")
+        json!("3864d7d1da503829fa8a7a54e976fdd19f5c4ac34c881c41a0f589ddeb7e3a54")
     );
 }
 
@@ -533,27 +534,58 @@ fn background_prepare_and_execute_validate_arguments_and_output_shape() {
         json!("approval_not_supported")
     );
 
-    let execute = json!({
+    let prepare = json!({
         "type": "call",
-        "id": "c-execute",
-        "method": "Tooling.ExecuteTool",
+        "id": "c-prepare-success",
+        "method": "Tooling.PrepareExecution",
         "params": {
             "tool_name": "native.get_device_status",
             "arguments": {}
         }
     });
     let InboundDisposition::Authorize(pending) = registry
-        .accept_inbound(PEER_A, &execute, 5_100)
+        .accept_inbound(PEER_A, &prepare, 5_050)
         .expect("bound peer")
     else {
         panic!("expected an authorization hop");
     };
     let decision = allowed_method_with_tools(
+        "Tooling.PrepareExecution",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+    let prepared = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed prepare success");
+    let schema_hash = prepared["result"]["args_schema_hash"]
+        .as_str()
+        .expect("prepare returns the tool schema hash");
+    assert_eq!(
+        schema_hash, "dfe3a795fdff4e8cd9adf5061ad0eee952b7aec9f0811a7e3756717181a4e740",
+        "the native catalog must use the SDK toolSchemaHash contract"
+    );
+
+    let execute = json!({
+        "type": "call",
+        "id": "c-execute",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "native.get_device_status",
+            "arguments": {},
+            "expected_args_schema_hash": schema_hash
+        }
+    });
+    let InboundDisposition::Authorize(execute_pending) = registry
+        .accept_inbound(PEER_A, &execute, 5_100)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let execute_decision = allowed_method_with_tools(
         "Tooling.ExecuteTool",
         &["aurora.local.native.get_device_status.v1"],
     );
-    let successful = execute_background_tooling_call(&pending, &decision, &native_context())
-        .expect("typed execution success");
+    let successful =
+        execute_background_tooling_call(&execute_pending, &execute_decision, &native_context())
+            .expect("typed execution success");
     assert_eq!(successful["result"]["ok"], json!(true));
     assert_eq!(successful["result"]["status"], json!("success"));
     assert_eq!(successful["result"]["data"]["platform"], json!("linux"));
@@ -567,18 +599,104 @@ fn background_prepare_and_execute_validate_arguments_and_output_shape() {
         json!("a4833b03832be7d4b326c53bf57893cd4697450aa2fe3caf404c98793a2c0cd5")
     );
 
+    let schema_mismatch = json!({
+        "type": "call",
+        "id": "c-schema-mismatch",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "native.get_device_status",
+            "arguments": {},
+            "expected_args_schema_hash": "0".repeat(64)
+        }
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &schema_mismatch, 5_200)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.ExecuteTool",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+    let denied = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed schema mismatch denial");
+    assert_eq!(denied["result"]["ok"], json!(false));
+    assert_eq!(
+        denied["result"]["error_code"],
+        json!("args_schema_hash_mismatch")
+    );
+
     let invalid_context = BackgroundToolingProviderContext {
         native_manifest: json!({ "capabilities": {} }),
         ..native_context()
     };
-    let failed = execute_background_tooling_call(&pending, &decision, &invalid_context)
-        .expect("typed execution failure");
+    let failed =
+        execute_background_tooling_call(&execute_pending, &execute_decision, &invalid_context)
+            .expect("typed execution failure");
     assert_eq!(failed["result"]["ok"], json!(false));
     assert_eq!(failed["result"]["status"], json!("failed"));
     assert_eq!(
         failed["result"]["error_code"],
         json!("native_manifest_invalid")
     );
+}
+
+#[test]
+fn schema_hash_denial_is_not_counted_as_a_served_background_call() {
+    let mut registry = registry_with(&[PEER_A]);
+    registry.set_lifecycle(SurfaceLifecycle::Background);
+    let frame = json!({
+        "type": "call",
+        "id": "c-schema-mismatch-counter",
+        "method": "Tooling.ExecuteTool",
+        "params": {
+            "tool_name": "native.get_device_status",
+            "arguments": {},
+            "expected_args_schema_hash": "0".repeat(64)
+        }
+    });
+    let InboundDisposition::Authorize(pending) = registry
+        .accept_inbound(PEER_A, &frame, 5_000)
+        .expect("bound peer")
+    else {
+        panic!("expected an authorization hop");
+    };
+    let decision = allowed_method_with_tools(
+        "Tooling.ExecuteTool",
+        &["aurora.local.native.get_device_status.v1"],
+    );
+
+    assert!(matches!(
+        registry
+            .settle_call(&pending, &decision)
+            .expect("bound peer"),
+        CallOutcome::Serve { .. }
+    ));
+    assert_eq!(registry.snapshot()["peers"][0]["servedCalls"], json!(0));
+
+    let denied = execute_background_tooling_call(&pending, &decision, &native_context())
+        .expect("typed schema mismatch denial");
+    let result = classify_background_tooling_result(&pending.method_id, &denied);
+    assert_eq!(result, BackgroundToolingResult::Denied);
+    assert!(registry.record_background_tooling_result(&pending, result));
+
+    let snapshot = registry.snapshot();
+    assert_eq!(snapshot["peers"][0]["servedCalls"], json!(0));
+    assert_eq!(snapshot["peers"][0]["deniedCalls"], json!(1));
+    assert_eq!(snapshot["peers"][0]["failedCalls"], json!(0));
+
+    assert!(registry.unbind(PEER_A));
+    registry.set_lifecycle(SurfaceLifecycle::Foreground);
+    let _ = registry.finish_resume();
+    registry
+        .bind(PEER_A, 99, Some(context_for(PEER_A)))
+        .expect("replacement session binds in foreground");
+    assert!(
+        !registry.record_background_tooling_result(&pending, BackgroundToolingResult::Served),
+        "a late result must not be credited to a replacement connection"
+    );
+    assert_eq!(registry.snapshot()["peers"][0]["servedCalls"], json!(0));
 }
 
 #[test]

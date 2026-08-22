@@ -485,6 +485,7 @@ dependencies = [
  "tokio",
  "url",
  "webrtc",
+ "zeroize",
 ]
 
 [[package]]

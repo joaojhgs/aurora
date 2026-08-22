@@ -153,6 +153,30 @@ describe('Aurora WebRTC crypto', () => {
     await expect(decodeJsonPayload(encrypted.payload, { key: keys.kSig })).resolves.toEqual(vector.aead.plaintext)
   }, 20_000)
 
+  it('matches the native Rust background codec wire vector', async () => {
+    const key = new Uint8Array(Array.from({ length: 32 }, (_value, index) => index))
+    const nonce = new Uint8Array(Array.from({ length: 12 }, (_value, index) => 32 + index))
+    const frame = {
+      type: 'call',
+      id: 'call-1',
+      method: 'Tooling.ExecuteTool',
+      params: { tool_id: 'device.status', arguments: {} }
+    }
+    const encoded = await encodeJsonPayload(frame, { key, nonce })
+
+    expect(bytesToHex(encoded.payload)).toBe(
+      '202122232425262728292a2ba918d2091cfd3834381f23a2ad3ad8dbb92dcea6a5e3028200db5d3065a8336c01e68a60ac1f178e7b9202fb366e318d9a4f8ffbee59790ea10e5d316ec26bafb94bbe29acecc7e2e4058578d2391b5bf7f35672de98e330bc3ba35e6f6fbcf020355c31bd29fb9dbdef863dd88bb06e1e42b4ad63df34068a77292a40fec674'
+    )
+    await expect(decodeJsonPayload(encoded.payload, { key, encrypted: true }))
+      .resolves.toEqual(frame)
+
+    const rustSerdeOrderPayload = hexToBytes(
+      '202122232425262728292a2ba918cf144ea2386d7b102ee3f03ad8dbbd2c98f4e8e441d44ea2037d25e3306e5bcb9d61ed5041bf409201fe7a253db883588de3e91e171aec030d7a39df6fb3ac55ef31edeac9b4ff05864be4345d43efb55761c192e57be13cb64b6e69edfe7f780c22b134fbd1f3bec766cf9aef6e9b1df1b0bf325d3772938e9c8fc0d761'
+    )
+    await expect(decodeJsonPayload(rustSerdeOrderPayload, { key, encrypted: true }))
+      .resolves.toEqual(frame)
+  })
+
   it('rejects padded base64url and compares bytes without early length success', () => {
     expect(() => base64UrlDecode('abc=')).toThrow(/base64url/u)
     expect(constantTimeEqual(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3]))).toBe(true)

@@ -892,35 +892,42 @@ mod native {
                 channel: Arc::clone(&channel),
             },
         );
+        let data_channel_send_lock = Arc::new(Mutex::new(()));
         store
             .data_channel_send_locks
             .write()
             .await
-            .insert(data_channel_id, Arc::new(Mutex::new(())));
+            .insert(data_channel_id, Arc::clone(&data_channel_send_lock));
 
         let message_app = app.clone();
         let message_channel = Arc::clone(&channel);
+        let message_send_lock = Arc::clone(&data_channel_send_lock);
         channel.on_message(Box::new(move |message| {
             let app = message_app.clone();
             let channel = Arc::clone(&message_channel);
+            let send_lock = Arc::clone(&message_send_lock);
             Box::pin(async move {
                 let binary = !message.is_string;
-                let payload = if message.is_string {
-                    String::from_utf8_lossy(&message.data).into_owned()
-                } else {
-                    BASE64.encode(&message.data)
-                };
 
                 // R3's interception point. A frozen webview issues no commands,
                 // so what Rust owns has to be decided here, before anything is
                 // emitted. Everything the dispatcher does not claim -- binary
-                // traffic, an unbound channel, a frame the section 3 table does
-                // not name -- falls through to the emit below exactly as it did
-                // before R3.
-                match route_inbound_frame(&app, data_channel_id, &payload, binary).await {
+                // traffic on an unbound/unencrypted channel, or a frame the
+                // section 3 table does not name -- falls through to the emit
+                // below exactly as it did before R3.
+                match route_inbound_frame(&app, data_channel_id, &message.data, binary).await {
                     crate::mesh_session::InboundRouting::Answer(answers) => {
+                        let _send_guard = send_lock.lock().await;
                         for answer in answers {
-                            if let Err(error) = channel.send_text(answer).await {
+                            let result = match answer {
+                                crate::mesh_session::OutboundDataChannelFrame::Text(text) => {
+                                    channel.send_text(text).await
+                                }
+                                crate::mesh_session::OutboundDataChannelFrame::Binary(bytes) => {
+                                    channel.send(&Bytes::from(bytes)).await
+                                }
+                            };
+                            if let Err(error) = result {
                                 emit_error(
                                     &app,
                                     peer_connection_id,
@@ -935,6 +942,12 @@ mod native {
                     crate::mesh_session::InboundRouting::Parked => return,
                     crate::mesh_session::InboundRouting::Emit => {}
                 }
+
+                let payload = if message.is_string {
+                    String::from_utf8_lossy(&message.data).into_owned()
+                } else {
+                    BASE64.encode(&message.data)
+                };
 
                 emit_to_main(
                     &app,
@@ -1120,7 +1133,7 @@ mod native {
     async fn route_inbound_frame(
         app: &AppHandle,
         data_channel_id: u64,
-        payload: &str,
+        payload: &[u8],
         binary: bool,
     ) -> crate::mesh_session::InboundRouting {
         use tauri::Manager;

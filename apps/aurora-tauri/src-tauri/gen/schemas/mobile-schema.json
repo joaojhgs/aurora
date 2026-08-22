@@ -819,10 +819,10 @@
           "markdownDescription": "Allow the maintained debug-only desktop native voice test to exercise the tray voice control path."
         },
         {
-          "description": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
+          "description": "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime.",
           "type": "string",
           "const": "aurora-native-webrtc",
-          "markdownDescription": "Allow the Python-free desktop thin shell to use the Linux native RTCPeerConnection/DataChannel fallback when the packaged WebKitGTK runtime omits the browser WebRTC API. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
+          "markdownDescription": "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
         },
         {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",

@@ -95,6 +95,7 @@ import {
 import {
   installMeshSessionRuntimeLink,
   type MeshSessionCleanupFailure,
+  type MeshSurfaceLifecycleFailure,
 } from "./mesh-session-link";
 import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
 import {
@@ -153,6 +154,18 @@ export function reportMeshSessionCleanupFailure(
     phase: failure.phase,
     attempt: failure.attempt,
     final: failure.final,
+  });
+}
+
+export function reportMeshSessionLifecycleFailure(
+  failure: Pick<
+    MeshSurfaceLifecycleFailure,
+    "phase" | "requestedLifecycle"
+  >,
+): void {
+  console.warn("Aurora native mesh lifecycle update failed", {
+    phase: failure.phase,
+    requestedLifecycle: failure.requestedLifecycle,
   });
 }
 
@@ -1363,7 +1376,10 @@ function createTauriWebThinRuntime({
         ...(typeof document === "undefined"
           ? {}
           : { lifecycleTarget: document }),
+        subscribeNativeResume: async (listener) =>
+          await listen("aurora://mesh-surface-resumed", () => listener()),
         onCleanupFailure: reportMeshSessionCleanupFailure,
+        onLifecycleFailure: reportMeshSessionLifecycleFailure,
       })
     : null;
   if (meshSessionLink) {

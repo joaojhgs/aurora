@@ -29,6 +29,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
+import java.io.FileDescriptor
+import java.io.PrintWriter
 import java.net.URI
 import java.security.KeyStore
 import java.util.concurrent.LinkedBlockingQueue
@@ -1053,6 +1055,23 @@ class AuroraRuntimeForegroundService : Service() {
                 updateNotification(captureSnapshot)
             }
         }
+    }
+
+    /**
+     * Exposes only the live, non-sensitive service state needed by the adb
+     * background harness. Android 13 omits the foreground-service type mask
+     * from some ActivityManager dumps, while `dumpsys activity service` calls
+     * this standard Service hook directly.
+     */
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<String>) {
+        super.dump(fd, writer, args)
+        val reasons = AuroraRuntimeForegroundLedger.activeReasons()
+        writer.println("aurora.runtime.running=$running")
+        writer.println("aurora.runtime.foregroundReasons=${reasons.joinToString(",") { it.id }}")
+        writer.println(
+            "aurora.runtime.foregroundServiceTypeMask=" +
+                foregroundServiceTypes(reasons).toString(16).padStart(8, '0'),
+        )
     }
 
     override fun onCreate() {

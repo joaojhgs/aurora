@@ -21,6 +21,7 @@ import {
   type MeshPeerCredentialRecord,
   type MeshPeerRegistryController,
   type MeshPeerRosterSnapshot,
+  type NativeDataChannelCodec,
   type WebRtcPeerCredentialStore,
   type PeerConnectionController,
   type PeerConnectionSnapshot,
@@ -610,6 +611,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     const subscribe = this.peer?.subscribeRoster
     if (!subscribe) return () => undefined
     return subscribe.call(this.peer, listener)
+  }
+
+  /** Trusted native-composition seam; the returned key clone is never rendered. */
+  nativeDataChannelCodec(peerId: string): NativeDataChannelCodec | null {
+    return this.peer?.nativeDataChannelCodec?.(peerId) ?? null
   }
 
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {

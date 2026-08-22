@@ -550,14 +550,22 @@ export function nativeTransportHandleForRemoteSignalingId(
 }
 
 /** Reinject one Rust-parked JSON frame through its exact live data channel. */
+export type NativeTransportDrainFrame =
+  | { readonly kind: "json"; readonly frame: unknown }
+  | { readonly kind: "nativeBinary"; readonly payloadBase64: string };
+
 export function deliverNativeTransportFrame(
   dataChannelId: number,
-  frame: unknown,
+  drained: NativeTransportDrainFrame,
 ): boolean {
   for (const channel of liveNativeDataChannels) {
     const handles = channel.nativeTransportHandles();
     if (handles?.dataChannelId !== dataChannelId) continue;
-    channel.message(JSON.stringify(frame));
+    channel.message(
+      drained.kind === "nativeBinary"
+        ? base64ToArrayBuffer(drained.payloadBase64)
+        : JSON.stringify(drained.frame),
+    );
     return true;
   }
   return false;

@@ -42,6 +42,10 @@ function fakeDocument(visibilityState: DocumentVisibilityState = "visible") {
   };
 }
 
+function jsonDrain(frame: unknown) {
+  return { kind: "json" as const, frame };
+}
+
 describe("mesh session link", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -70,6 +74,7 @@ describe("mesh session link", () => {
             authenticatedPeerContext: { selector: { claimantPeerId: "peer-a" } },
             localPeerId: null,
             providerServiceInstanceId: null,
+            nativeDataChannelCodec: null,
             advertisedMethodIds: [],
             manifestMethodsReady: true,
             primary: false,
@@ -111,6 +116,71 @@ describe("mesh session link", () => {
     expect(calls).toEqual([
       { command: "aurora_mesh_session_unbind", args: { request: { peerId: "peer-b" } } },
     ]);
+  });
+
+  it("hands Rust a short-lived clone of the active native data-channel key", async () => {
+    const transmitted: Record<string, unknown>[] = [];
+    const keyClones: Uint8Array[] = [];
+    const invoke = (async (command: string, args?: Record<string, unknown>) => {
+      if (command === "aurora_mesh_session_bind") {
+        transmitted.push(structuredClone(args?.request as Record<string, unknown>));
+      }
+      return command === "aurora_mesh_session_set_lifecycle"
+        ? { lifecycle: "foreground", drained: [] }
+        : { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+    const peer = {
+      subscribeRoster(listener: (roster: {
+        peers: Array<{
+          peerId: string;
+          primary: boolean;
+          snapshot: { state: string; connectedSignalingPeerId: string };
+        }>;
+      }) => void) {
+        listener({
+          peers: [{
+            peerId: "peer-a",
+            primary: true,
+            snapshot: {
+              state: "authorized",
+              connectedSignalingPeerId: "signal-a",
+            },
+          }],
+        });
+        return () => undefined;
+      },
+      nativeDataChannelCodec() {
+        const key = new Uint8Array(32).fill(7);
+        keyClones.push(key);
+        return { version: "aes-256-gcm-nonce-prefix-v1" as const, key };
+      },
+      async getManifest() {
+        return { services: [{ methods: ["Tooling.ExecuteTool"] }] };
+      },
+    };
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer,
+      handleForRemoteSignalingId: () => ({
+        peerConnectionId: 4,
+        dataChannelId: 12,
+      }),
+      deliverFrame: () => true,
+    });
+
+    await vi.waitFor(() => expect(transmitted.length).toBeGreaterThanOrEqual(1));
+    expect(transmitted.at(-1)).toMatchObject({
+      nativeDataChannelCodec: {
+        version: "aes-256-gcm-nonce-prefix-v1",
+        keyEpoch: 12,
+        keyBytes: new Array(32).fill(7),
+      },
+    });
+    expect(keyClones.length).toBeGreaterThanOrEqual(1);
+    expect(keyClones.every((key) => key.every((byte) => byte === 0))).toBe(true);
+
+    await link.close();
   });
 
   it("sends the lifecycle the dispatcher understands", async () => {
@@ -164,10 +234,34 @@ describe("mesh session link", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("re-announces foreground after a native mobile resume", async () => {
+    const target = fakeDocument("visible");
+    const { invoke, calls } = recordingInvoke({
+      lifecycle: "foreground",
+      drained: [],
+    });
+
+    const stop = observeMeshSurfaceLifecycle({ invoke, target });
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+    stop.nativeResume();
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(
+      calls.map(
+        (call) =>
+          (call.args as { request: { lifecycle: string } }).request.lifecycle,
+      ),
+    ).toEqual(["foreground", "foreground"]);
+    stop();
+  });
+
   it("hands back frames parked while the surface slept, in order", async () => {
     const target = fakeDocument("visible");
     const drained = [
-      { peerId: "peer-a", frames: [{ id: "e-1" }, { id: "e-2" }] },
+      {
+        peerId: "peer-a",
+        frames: [jsonDrain({ id: "e-1" }), jsonDrain({ id: "e-2" })],
+      },
     ];
     const { invoke } = recordingInvoke({ lifecycle: "foreground", drained });
     const onDrained = vi.fn();
@@ -185,14 +279,14 @@ describe("mesh session link", () => {
       if (command === "aurora_mesh_session_set_lifecycle") {
         return {
           lifecycle: "resuming",
-          drained: [{ peerId: "peer-a", frames: [{ id: "a-1" }] }],
+          drained: [{ peerId: "peer-a", frames: [jsonDrain({ id: "a-1" })] }],
         };
       }
       finishCount += 1;
       return finishCount === 1
         ? {
             lifecycle: "resuming",
-            drained: [{ peerId: "peer-a", frames: [{ id: "a-2" }] }],
+            drained: [{ peerId: "peer-a", frames: [jsonDrain({ id: "a-2" })] }],
           }
         : { lifecycle: "foreground", drained: [] };
     }) as MeshSessionInvoke;
@@ -213,7 +307,10 @@ describe("mesh session link", () => {
       "aurora_mesh_session_finish_resume",
       "aurora_mesh_session_finish_resume",
     ]);
-    expect(delivered).toEqual([{ id: "a-1" }, { id: "a-2" }]);
+    expect(delivered).toEqual([
+      jsonDrain({ id: "a-1" }),
+      jsonDrain({ id: "a-2" }),
+    ]);
     stop();
   });
 
@@ -226,7 +323,7 @@ describe("mesh session link", () => {
       return command === "aurora_mesh_session_set_lifecycle"
         ? {
             lifecycle: "resuming",
-            drained: [{ peerId: "peer-a", frames: [{ id: "a-1" }] }],
+            drained: [{ peerId: "peer-a", frames: [jsonDrain({ id: "a-1" })] }],
           }
         : { lifecycle: "foreground", drained: [] };
     }) as MeshSessionInvoke;
@@ -246,14 +343,28 @@ describe("mesh session link", () => {
     stop();
   });
 
-  it("treats a failing dispatcher as an awake surface rather than throwing", async () => {
+  it("reports a failing lifecycle command without changing the safe-direction behavior", async () => {
     const target = fakeDocument("hidden");
+    const error = new Error("command unavailable");
+    const onLifecycleFailure = vi.fn(() => {
+      throw new Error("diagnostic sink unavailable");
+    });
     const invoke = (async () => {
-      throw new Error("command unavailable");
+      throw error;
     }) as MeshSessionInvoke;
 
-    expect(() => observeMeshSurfaceLifecycle({ invoke, target })).not.toThrow();
-    await Promise.resolve();
+    expect(() => observeMeshSurfaceLifecycle({
+      invoke,
+      target,
+      onLifecycleFailure,
+    })).not.toThrow();
+    await vi.waitFor(() => {
+      expect(onLifecycleFailure).toHaveBeenCalledWith({
+        phase: "set_lifecycle",
+        requestedLifecycle: "background",
+        error,
+      });
+    });
   });
 
   it("binds multiple authorized peers to exact signaling channels and replays per peer", async () => {
@@ -275,9 +386,9 @@ describe("mesh session link", () => {
               ? [
                   {
                     peerId: "peer-a",
-                    frames: [{ id: "a-1" }, { id: "a-2" }],
+                    frames: [jsonDrain({ id: "a-1" }), jsonDrain({ id: "a-2" })],
                   },
-                  { peerId: "peer-b", frames: [{ id: "b-1" }] },
+                  { peerId: "peer-b", frames: [jsonDrain({ id: "b-1" })] },
                 ]
               : [],
         };
@@ -387,9 +498,9 @@ describe("mesh session link", () => {
     target.emit("visibilitychange");
     await vi.waitFor(() => expect(delivered).toHaveLength(3));
     expect(delivered).toEqual([
-      { dataChannelId: 11, frame: { id: "a-1" } },
-      { dataChannelId: 11, frame: { id: "a-2" } },
-      { dataChannelId: 22, frame: { id: "b-1" } },
+      { dataChannelId: 11, frame: jsonDrain({ id: "a-1" }) },
+      { dataChannelId: 11, frame: jsonDrain({ id: "a-2" }) },
+      { dataChannelId: 22, frame: jsonDrain({ id: "b-1" }) },
     ]);
 
     handles.set("signal-a-2", { peerConnectionId: 3, dataChannelId: 33 });
@@ -881,7 +992,7 @@ describe("mesh session link", () => {
           lifecycle,
           drained:
             lifecycle === "foreground"
-              ? [{ peerId: "peer-a", frames: [{ id: "stale-frame" }] }]
+              ? [{ peerId: "peer-a", frames: [jsonDrain({ id: "stale-frame" })] }]
               : [],
         };
       }

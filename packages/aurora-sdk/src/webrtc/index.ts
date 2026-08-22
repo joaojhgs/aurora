@@ -242,6 +242,7 @@ export type { MeshPeerBridgeRouterOptions } from './mesh-bridge-router.js'
 export {
   CONNECT_IS_SINGLE_PEER_REASON,
   MeshPeerSessionRegistry,
+  NATIVE_DATA_CHANNEL_CODEC_V1,
   PEER_ALREADY_REGISTERED_REASON,
   connectIsSinglePeerError,
   peerAlreadyRegisteredError
@@ -251,6 +252,7 @@ export type {
   MeshPeerConnectionBudget,
   MeshPeerConnectionPolicy,
   MeshPeerLifecycleState,
+  NativeDataChannelCodec,
   MeshPeerPriorityUpdate,
   MeshPeerRegistryController,
   MeshPeerRosterEntry,

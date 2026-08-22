@@ -32,24 +32,33 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
 #[cfg(test)]
 use aurora_contracts::ids;
 use aurora_mesh_authority::types::{PeerHostAuthorizeRequest, PeerHostErrorBody};
 use aurora_mesh_session::{
-    error_frame, execute_background_tooling_call, BackgroundToolingProviderContext, CallOutcome,
-    DeviceLinkAction, DeviceLinkLedger, InboundDisposition, MeshSessionRegistry, PendingCall,
-    QueuedFrame, SurfaceLifecycle,
+    classify_background_tooling_result, error_frame, execute_background_tooling_call,
+    BackgroundToolingProviderContext, BackgroundToolingResult, CallOutcome, DeviceLinkAction,
+    DeviceLinkLedger, InboundDisposition, MeshSessionRegistry, PendingCall, QueuedFrame,
+    SurfaceLifecycle,
 };
 use aurora_voice_native::TransportError;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{oneshot, Mutex};
+use zeroize::{Zeroize, Zeroizing};
 
 /// Event the shell emits when the background dispatcher has something the
 /// webview must see once it wakes: drained frames, and the fact of a call
 /// having been answered while it slept.
 const MESH_SESSION_EVENT: &str = "aurora://mesh-session";
+#[cfg(mobile)]
+pub(crate) const MESH_SURFACE_RESUMED_EVENT: &str = "aurora://mesh-surface-resumed";
 
 /// Marker line the R5 harness counts to measure background tool serving.
 ///
@@ -63,6 +72,12 @@ const NATIVE_ASSISTANT_ABANDONED_TTL_MS: i64 = 5 * 60 * 1000;
 const NATIVE_ASSISTANT_ABANDONED_MAX: usize = 256;
 const RETIRED_CHANNEL_TTL_MS: i64 = 5 * 60 * 1000;
 const RETIRED_CHANNEL_MAX: usize = 128;
+const NATIVE_DATA_CHANNEL_CODEC_V1: &str = "aes-256-gcm-nonce-prefix-v1";
+const AES_GCM_NONCE_BYTES: usize = 12;
+const AES_GCM_TAG_BYTES: usize = 16;
+const MAX_DATA_CHANNEL_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
+const BACKGROUND_CALL_REPLAY_TTL_MS: i64 = 5 * 60 * 1000;
+const BACKGROUND_CALL_REPLAY_MAX: usize = 256;
 
 /// The registry, plus what the shell needs to route back to a channel.
 #[derive(Clone, Default)]
@@ -73,6 +88,13 @@ pub struct MeshSessionState {
 #[derive(Default)]
 struct MeshSessionInner {
     registry: MeshSessionRegistry,
+    /// Android/iOS lifecycle owns the lower bound on surface availability.
+    ///
+    /// A WebView can report `visible` after the Activity has entered
+    /// `onPause`. Holding this flag prevents that stale browser observation
+    /// from promoting the dispatcher until the native `Resumed` event proves
+    /// that the surface is available again.
+    native_surface_backgrounded: bool,
     /// Which stable peer id a data channel carries, once TypeScript said so.
     channel_peers: HashMap<u64, String>,
     /// Reverse of `channels`, so an answer can find its way back out.
@@ -97,14 +119,51 @@ struct MeshSessionInner {
     provider_peer_id: Option<String>,
     /// Local Tooling service instance id used in background projections.
     provider_service_instance_id: Option<String>,
+    /// Per-peer background call ids and their settled answers.
+    ///
+    /// AES-GCM authenticates bytes but does not make a remote mutation
+    /// idempotent. Keeping this bounded cache prevents a retransmitted call id
+    /// from executing twice while still returning the original semantic answer.
+    background_call_replays: HashMap<(String, String), BackgroundCallReplayEntry>,
+    background_call_replay_sequence: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 struct MeshSessionPeerBinding {
     data_channel_id: u64,
     advertised_method_ids: BTreeSet<String>,
     manifest_methods_ready: bool,
     primary: bool,
+    data_channel_codec: Option<Arc<NativeDataChannelCodec>>,
+}
+
+#[derive(Clone)]
+struct NativeDataChannelCodec {
+    key_epoch: u64,
+    key: Zeroizing<[u8; 32]>,
+}
+
+#[derive(Clone, Debug)]
+struct BackgroundCallReplayEntry {
+    expires_at_ms: i64,
+    sequence: u64,
+    state: BackgroundCallReplayState,
+}
+
+#[derive(Clone, Debug)]
+enum BackgroundCallReplayState {
+    Pending,
+    Answer {
+        frames: Vec<Value>,
+        replay_after_resume: bool,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum BackgroundCallReplayDecision {
+    Execute,
+    Pending,
+    Answer(Vec<Value>),
 }
 
 #[derive(Debug)]
@@ -133,7 +192,7 @@ pub struct NativeAssistantPendingCall {
     pub response: oneshot::Receiver<Result<Value, TransportError>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshSessionBindRequest {
     peer_id: String,
@@ -158,6 +217,92 @@ pub struct MeshSessionBindRequest {
     /// Whether this peer is the primary eligible route for this local surface.
     #[serde(default)]
     primary: bool,
+    /// Derived payload key only. Room secret, signaling key and root key never
+    /// cross this boundary.
+    #[serde(default)]
+    native_data_channel_codec: Option<NativeDataChannelCodecRequest>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeDataChannelCodecRequest {
+    version: String,
+    key_epoch: u64,
+    key_bytes: Vec<u8>,
+}
+
+impl NativeDataChannelCodec {
+    fn try_from_request(mut request: NativeDataChannelCodecRequest) -> Result<Self, String> {
+        let result = if request.version != NATIVE_DATA_CHANNEL_CODEC_V1 {
+            Err("unsupported native data-channel codec version".to_owned())
+        } else if request.key_bytes.len() != 32 {
+            Err("native data-channel codec key must be 32 bytes".to_owned())
+        } else {
+            let mut key = [0_u8; 32];
+            key.copy_from_slice(&request.key_bytes);
+            Ok(Self {
+                key_epoch: request.key_epoch,
+                key: Zeroizing::new(key),
+            })
+        };
+        request.key_bytes.zeroize();
+        result
+    }
+
+    #[cfg(test)]
+    fn new(key_epoch: u64, key_bytes: Vec<u8>) -> Result<Self, String> {
+        Self::try_from_request(NativeDataChannelCodecRequest {
+            version: NATIVE_DATA_CHANNEL_CODEC_V1.to_owned(),
+            key_epoch,
+            key_bytes,
+        })
+    }
+
+    fn open_json(&self, payload: &[u8]) -> Result<Value, String> {
+        if payload.len() < AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES
+            || payload.len() > MAX_DATA_CHANNEL_PAYLOAD_BYTES
+        {
+            return Err("encrypted data-channel payload length is invalid".to_owned());
+        }
+        let (nonce, ciphertext_and_tag) = payload.split_at(AES_GCM_NONCE_BYTES);
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref())
+            .map_err(|_| "native data-channel codec key is invalid".to_owned())?;
+        let plaintext = cipher
+            .decrypt(Nonce::from_slice(nonce), ciphertext_and_tag)
+            .map_err(|_| "encrypted data-channel payload could not be opened".to_owned())?;
+        serde_json::from_slice(&plaintext)
+            .map_err(|_| "encrypted data-channel payload is not valid JSON".to_owned())
+    }
+
+    fn seal_json(&self, frame: &Value) -> Result<Vec<u8>, String> {
+        let mut nonce = [0_u8; AES_GCM_NONCE_BYTES];
+        getrandom::getrandom(&mut nonce)
+            .map_err(|_| "native data-channel nonce generation failed".to_owned())?;
+        self.seal_json_with_nonce(frame, nonce)
+    }
+
+    fn seal_json_with_nonce(
+        &self,
+        frame: &Value,
+        nonce: [u8; AES_GCM_NONCE_BYTES],
+    ) -> Result<Vec<u8>, String> {
+        let plaintext = serde_json::to_vec(frame)
+            .map_err(|_| "native data-channel frame is not serializable".to_owned())?;
+        if plaintext.len() + AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES
+            > MAX_DATA_CHANNEL_PAYLOAD_BYTES
+        {
+            return Err("native data-channel frame exceeds maximum size".to_owned());
+        }
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref())
+            .map_err(|_| "native data-channel codec key is invalid".to_owned())?;
+        let ciphertext_and_tag = cipher
+            .encrypt(Nonce::from_slice(&nonce), plaintext.as_ref())
+            .map_err(|_| "native data-channel frame could not be sealed".to_owned())?;
+        let mut payload = Vec::with_capacity(AES_GCM_NONCE_BYTES + ciphertext_and_tag.len());
+        payload.extend_from_slice(&nonce);
+        payload.extend_from_slice(&ciphertext_and_tag);
+        Ok(payload)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -177,7 +322,19 @@ pub struct MeshSessionLifecycleRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MeshSessionDrain {
     peer_id: String,
-    frames: Vec<Value>,
+    frames: Vec<MeshSessionDrainFrame>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum MeshSessionDrainFrame {
+    Json {
+        frame: Value,
+    },
+    NativeBinary {
+        #[serde(rename = "payloadBase64")]
+        payload_base64: String,
+    },
 }
 
 /// Bind a data channel to the stable peer id it carries.
@@ -189,7 +346,7 @@ pub struct MeshSessionDrain {
 pub async fn aurora_mesh_session_bind(
     app: AppHandle,
     state: State<'_, MeshSessionState>,
-    request: MeshSessionBindRequest,
+    mut request: MeshSessionBindRequest,
 ) -> Result<Value, String> {
     let context = match request.authenticated_peer_context {
         Some(value) if !value.is_null() => {
@@ -197,8 +354,19 @@ pub async fn aurora_mesh_session_bind(
         }
         _ => None,
     };
+    let requested_codec = request
+        .native_data_channel_codec
+        .take()
+        .map(NativeDataChannelCodec::try_from_request)
+        .transpose()?
+        .map(Arc::new);
     let now_ms = current_time_ms();
     let mut inner = state.inner.lock().await;
+    let data_channel_codec = inner.resolve_data_channel_codec(
+        &request.peer_id,
+        request.data_channel_id,
+        requested_codec,
+    )?;
     inner
         .registry
         .bind(&request.peer_id, request.peer_connection_id, context)
@@ -211,6 +379,7 @@ pub async fn aurora_mesh_session_bind(
             advertised_method_ids: request.advertised_method_ids.into_iter().collect(),
             manifest_methods_ready: request.manifest_methods_ready,
             primary: request.primary,
+            data_channel_codec,
         },
     );
     if let Some(local_peer_id) = request.local_peer_id {
@@ -272,11 +441,12 @@ pub async fn aurora_mesh_session_set_lifecycle(
         other => return Err(format!("unknown lifecycle {other}")),
     };
     let mut inner = state.inner.lock().await;
-    let drained = inner.registry.set_lifecycle(lifecycle);
+    let drained = inner.set_surface_lifecycle(lifecycle);
     let current = inner.registry.lifecycle();
     Ok(json!({
         "lifecycle": current.as_str(),
-        "drained": drained_payload(drained),
+        "drained": drained_payload(&inner, drained)?,
+        "nativeBackgroundHeld": inner.native_surface_backgrounded,
     }))
 }
 
@@ -286,11 +456,12 @@ pub async fn aurora_mesh_session_finish_resume(
     state: State<'_, MeshSessionState>,
 ) -> Result<Value, String> {
     let mut inner = state.inner.lock().await;
-    let drained = inner.registry.finish_resume();
+    let drained = inner.finish_surface_resume();
     let current = inner.registry.lifecycle();
     Ok(json!({
         "lifecycle": current.as_str(),
-        "drained": drained_payload(drained),
+        "drained": drained_payload(&inner, drained)?,
+        "nativeBackgroundHeld": inner.native_surface_backgrounded,
     }))
 }
 
@@ -300,15 +471,41 @@ pub async fn aurora_mesh_session_snapshot(
     state: State<'_, MeshSessionState>,
 ) -> Result<Value, String> {
     let inner = state.inner.lock().await;
-    Ok(inner.registry.snapshot())
+    let mut snapshot = inner.registry.snapshot();
+    if let Some(object) = snapshot.as_object_mut() {
+        object.insert(
+            "nativeBackgroundHeld".to_owned(),
+            Value::Bool(inner.native_surface_backgrounded),
+        );
+    }
+    Ok(snapshot)
 }
 
-fn drained_payload(drained: Vec<(String, Vec<QueuedFrame>)>) -> Vec<MeshSessionDrain> {
+fn drained_payload(
+    inner: &MeshSessionInner,
+    drained: Vec<(String, Vec<QueuedFrame>)>,
+) -> Result<Vec<MeshSessionDrain>, String> {
     drained
         .into_iter()
-        .map(|(peer_id, frames)| MeshSessionDrain {
-            peer_id,
-            frames: frames.into_iter().map(|queued| queued.frame).collect(),
+        .map(|(peer_id, frames)| {
+            let codec = inner
+                .peer_bindings
+                .get(&peer_id)
+                .and_then(|binding| binding.data_channel_codec.as_ref());
+            let frames = frames
+                .into_iter()
+                .map(|queued| match codec {
+                    Some(codec) => codec.seal_json(&queued.frame).map(|payload| {
+                        MeshSessionDrainFrame::NativeBinary {
+                            payload_base64: BASE64.encode(payload),
+                        }
+                    }),
+                    None => Ok(MeshSessionDrainFrame::Json {
+                        frame: queued.frame,
+                    }),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(MeshSessionDrain { peer_id, frames })
         })
         .collect()
 }
@@ -318,6 +515,161 @@ fn default_manifest_methods_ready() -> bool {
 }
 
 impl MeshSessionInner {
+    fn resolve_data_channel_codec(
+        &self,
+        peer_id: &str,
+        data_channel_id: u64,
+        requested: Option<Arc<NativeDataChannelCodec>>,
+    ) -> Result<Option<Arc<NativeDataChannelCodec>>, String> {
+        let existing = self.peer_bindings.get(peer_id);
+        let Some(requested) = requested else {
+            // Manifest hydration may rebind metadata on the same channel. Do
+            // not downgrade an already-installed encrypted codec merely because
+            // an older composition caller omitted the optional field.
+            return Ok(existing
+                .filter(|binding| binding.data_channel_id == data_channel_id)
+                .and_then(|binding| binding.data_channel_codec.clone()));
+        };
+        if requested.key_epoch != data_channel_id {
+            return Err("native data-channel codec epoch does not match its channel".to_owned());
+        }
+        if let Some(current) = existing.and_then(|binding| binding.data_channel_codec.as_ref()) {
+            if requested.key_epoch < current.key_epoch {
+                return Err("native data-channel codec epoch is stale".to_owned());
+            }
+            if requested.key_epoch == current.key_epoch
+                && requested.key.as_ref() != current.key.as_ref()
+            {
+                return Err("native data-channel codec key changed within one epoch".to_owned());
+            }
+        }
+        Ok(Some(requested))
+    }
+
+    fn set_surface_lifecycle(
+        &mut self,
+        lifecycle: SurfaceLifecycle,
+    ) -> Vec<(String, Vec<QueuedFrame>)> {
+        if lifecycle == SurfaceLifecycle::Foreground && self.native_surface_backgrounded {
+            return Vec::new();
+        }
+        self.registry.set_lifecycle(lifecycle)
+    }
+
+    fn finish_surface_resume(&mut self) -> Vec<(String, Vec<QueuedFrame>)> {
+        if self.native_surface_backgrounded {
+            return Vec::new();
+        }
+        self.registry.finish_resume()
+    }
+
+    fn surface_is_backgrounded(&self) -> bool {
+        self.native_surface_backgrounded || self.registry.lifecycle().is_background()
+    }
+
+    fn begin_background_call(
+        &mut self,
+        peer_id: &str,
+        call_id: &str,
+        now_ms: i64,
+    ) -> BackgroundCallReplayDecision {
+        if let Some(decision) = self.background_call_replay(peer_id, call_id, now_ms, true) {
+            return decision;
+        }
+        let key = (peer_id.to_owned(), call_id.to_owned());
+        self.background_call_replay_sequence = self.background_call_replay_sequence.wrapping_add(1);
+        self.background_call_replays.insert(
+            key,
+            BackgroundCallReplayEntry {
+                expires_at_ms: now_ms.saturating_add(BACKGROUND_CALL_REPLAY_TTL_MS),
+                sequence: self.background_call_replay_sequence,
+                state: BackgroundCallReplayState::Pending,
+            },
+        );
+        self.prune_background_call_replays(now_ms);
+        BackgroundCallReplayDecision::Execute
+    }
+
+    fn background_call_replay(
+        &mut self,
+        peer_id: &str,
+        call_id: &str,
+        now_ms: i64,
+        background: bool,
+    ) -> Option<BackgroundCallReplayDecision> {
+        self.prune_background_call_replays(now_ms);
+        let key = (peer_id.to_owned(), call_id.to_owned());
+        let decision =
+            self.background_call_replays
+                .get(&key)
+                .and_then(|entry| match &entry.state {
+                    BackgroundCallReplayState::Pending => {
+                        Some(BackgroundCallReplayDecision::Pending)
+                    }
+                    BackgroundCallReplayState::Answer {
+                        frames,
+                        replay_after_resume,
+                    } if background || *replay_after_resume => {
+                        Some(BackgroundCallReplayDecision::Answer(frames.clone()))
+                    }
+                    BackgroundCallReplayState::Answer { .. } => None,
+                });
+        if decision.is_none()
+            && self.background_call_replays.get(&key).is_some_and(|entry| {
+                matches!(
+                    entry.state,
+                    BackgroundCallReplayState::Answer {
+                        replay_after_resume: false,
+                        ..
+                    }
+                )
+            })
+        {
+            self.background_call_replays.remove(&key);
+        }
+        decision
+    }
+
+    fn finish_background_call(
+        &mut self,
+        peer_id: &str,
+        call_id: &str,
+        frames: Vec<Value>,
+        now_ms: i64,
+        replay_after_resume: bool,
+    ) {
+        let key = (peer_id.to_owned(), call_id.to_owned());
+        let Some(entry) = self.background_call_replays.get_mut(&key) else {
+            return;
+        };
+        entry.expires_at_ms = now_ms.saturating_add(BACKGROUND_CALL_REPLAY_TTL_MS);
+        entry.state = BackgroundCallReplayState::Answer {
+            frames,
+            replay_after_resume,
+        };
+    }
+
+    fn abandon_background_call(&mut self, peer_id: &str, call_id: &str) {
+        self.background_call_replays
+            .remove(&(peer_id.to_owned(), call_id.to_owned()));
+    }
+
+    fn prune_background_call_replays(&mut self, now_ms: i64) {
+        self.background_call_replays
+            .retain(|_, entry| entry.expires_at_ms > now_ms);
+        while self.background_call_replays.len() > BACKGROUND_CALL_REPLAY_MAX {
+            let Some(oldest) = self
+                .background_call_replays
+                .iter()
+                .min_by_key(|(_, entry)| entry.sequence)
+                .map(|(key, _)| key.clone())
+            else {
+                break;
+            };
+            self.background_call_replays.remove(&oldest);
+        }
+    }
+
     /// Match the foreground service's connected-device reason to whether any
     /// session is actually being held, and report whether it is held now.
     ///
@@ -650,44 +1002,90 @@ pub enum InboundRouting {
     /// Hand it to the webview, as before R3.
     Emit,
     /// Rust answered it. These go back out on the same channel, in order.
-    Answer(Vec<String>),
+    Answer(Vec<OutboundDataChannelFrame>),
     /// Rust parked it. Nothing goes out and nothing is emitted.
     Parked,
+}
+
+pub enum OutboundDataChannelFrame {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
+enum FrameRouting {
+    Emit,
+    Answer {
+        frames: Vec<Value>,
+        replay_after_resume: bool,
+    },
 }
 
 /// Decide what happens to one inbound data-channel payload.
 ///
 /// Called from `native_webrtc`'s `on_message` before anything reaches the
 /// webview. A payload that is not a bound peer's JSON frame is passed straight
-/// through, so binary traffic, unbound channels and anything the section 3
-/// table does not name behave exactly as they did before R3.
+/// through. Once an encrypted codec is bound, authenticated binary frames are
+/// opened here and Rust answers them with encrypted binary frames on the exact
+/// same channel; ciphertext is never logged or exposed through snapshots.
 pub async fn route_inbound(
     app: &AppHandle,
     state: &MeshSessionState,
     data_channel_id: u64,
-    payload: &str,
+    payload: &[u8],
     binary: bool,
     now_ms: i64,
 ) -> InboundRouting {
-    if binary {
-        return InboundRouting::Emit;
-    }
     let mut inner = state.inner.lock().await;
     inner.prune_expiring_markers(now_ms);
-    let Ok(frame) = serde_json::from_str::<Value>(payload) else {
-        return InboundRouting::Emit;
-    };
     let Some(peer_id) = inner.channel_peers.get(&data_channel_id).cloned() else {
         let retired_peer = inner
             .retired_channel_peers
             .get(&data_channel_id)
             .map(|retired| retired.peer_id.clone());
+        if binary && retired_peer.is_some() {
+            return InboundRouting::Parked;
+        }
+        let Ok(frame) = serde_json::from_slice::<Value>(payload) else {
+            return InboundRouting::Emit;
+        };
         return match retired_peer {
             Some(peer_id) if stale_channel_should_swallow(&peer_id, &frame) => {
                 InboundRouting::Parked
             }
             _ => InboundRouting::Emit,
         };
+    };
+    let codec = inner
+        .peer_bindings
+        .get(&peer_id)
+        .filter(|binding| binding.data_channel_id == data_channel_id)
+        .and_then(|binding| binding.data_channel_codec.as_ref());
+    let frame = if binary {
+        let Some(codec) = codec else {
+            return InboundRouting::Emit;
+        };
+        match codec.open_json(payload) {
+            Ok(frame) => frame,
+            Err(_) => {
+                eprintln!(
+                    "aurora.mesh inbound_frame_rejected binary=true bytes={} reason=authentication_or_format",
+                    payload.len()
+                );
+                return InboundRouting::Parked;
+            }
+        }
+    } else {
+        if codec.is_some() {
+            eprintln!(
+                "aurora.mesh inbound_frame_rejected binary=false bytes={} reason=codec_mismatch",
+                payload.len()
+            );
+            return InboundRouting::Parked;
+        }
+        let Ok(frame) = serde_json::from_slice::<Value>(payload) else {
+            return InboundRouting::Emit;
+        };
+        frame
     };
     if inner.settle_native_assistant_response(&peer_id, data_channel_id, &frame, now_ms)
         == NativeAssistantFrameDisposition::Consumed
@@ -701,21 +1099,115 @@ pub async fn route_inbound(
         Err(_) => return InboundRouting::Emit,
     };
 
-    match disposition {
-        InboundDisposition::Answer(frames) => InboundRouting::Answer(encode(frames)),
-        InboundDisposition::Dispatch | InboundDisposition::Unknown => InboundRouting::Emit,
+    let routing = match disposition {
+        InboundDisposition::Answer(frames) => FrameRouting::Answer {
+            frames,
+            replay_after_resume: true,
+        },
+        InboundDisposition::Dispatch | InboundDisposition::Unknown => FrameRouting::Emit,
         InboundDisposition::Queued { depth } => {
             let _ = depth;
-            InboundRouting::Parked
+            return InboundRouting::Parked;
         }
         InboundDisposition::Overflow(answer) => match answer {
-            Some(frame) => InboundRouting::Answer(encode(vec![frame])),
-            None => InboundRouting::Parked,
+            Some(frame) => FrameRouting::Answer {
+                frames: vec![frame],
+                replay_after_resume: true,
+            },
+            None => return InboundRouting::Parked,
         },
         InboundDisposition::Authorize(pending) => {
-            let background = inner.registry.lifecycle().is_background();
+            let background = inner.surface_is_backgrounded();
+            if let Some(replay) =
+                inner.background_call_replay(&peer_id, &pending.call_id, now_ms, background)
+            {
+                match replay {
+                    BackgroundCallReplayDecision::Pending => return InboundRouting::Parked,
+                    BackgroundCallReplayDecision::Answer(frames) => {
+                        drop(inner);
+                        return finalize_routing(
+                            state,
+                            data_channel_id,
+                            binary,
+                            FrameRouting::Answer {
+                                frames,
+                                replay_after_resume: true,
+                            },
+                        )
+                        .await;
+                    }
+                    BackgroundCallReplayDecision::Execute => unreachable!("stored replay"),
+                }
+            }
+            if background {
+                debug_assert_eq!(
+                    inner.begin_background_call(&peer_id, &pending.call_id, now_ms),
+                    BackgroundCallReplayDecision::Execute
+                );
+            }
             drop(inner);
-            settle(app, state, *pending, background).await
+            let pending = *pending;
+            let routing = settle(app, state, pending.clone(), background).await;
+            if background {
+                let mut inner = state.inner.lock().await;
+                match &routing {
+                    FrameRouting::Answer {
+                        frames,
+                        replay_after_resume,
+                    } => inner.finish_background_call(
+                        &pending.peer_id,
+                        &pending.call_id,
+                        frames.clone(),
+                        now_ms,
+                        *replay_after_resume,
+                    ),
+                    FrameRouting::Emit => {
+                        inner.abandon_background_call(&pending.peer_id, &pending.call_id)
+                    }
+                }
+            }
+            routing
+        }
+    };
+    finalize_routing(state, data_channel_id, binary, routing).await
+}
+
+async fn finalize_routing(
+    state: &MeshSessionState,
+    data_channel_id: u64,
+    binary: bool,
+    routing: FrameRouting,
+) -> InboundRouting {
+    match routing {
+        FrameRouting::Emit => InboundRouting::Emit,
+        FrameRouting::Answer { frames, .. } if !binary => InboundRouting::Answer(
+            frames
+                .into_iter()
+                .map(|frame| OutboundDataChannelFrame::Text(frame.to_string()))
+                .collect(),
+        ),
+        FrameRouting::Answer { frames, .. } => {
+            let inner = state.inner.lock().await;
+            let Some(peer_id) = inner.channel_peers.get(&data_channel_id) else {
+                return InboundRouting::Parked;
+            };
+            let Some(codec) = inner
+                .peer_bindings
+                .get(peer_id)
+                .filter(|binding| binding.data_channel_id == data_channel_id)
+                .and_then(|binding| binding.data_channel_codec.as_ref())
+            else {
+                return InboundRouting::Parked;
+            };
+            let mut answers = Vec::with_capacity(frames.len());
+            for frame in frames {
+                let Ok(payload) = codec.seal_json(&frame) else {
+                    eprintln!("aurora.mesh outbound_frame_rejected binary=true reason=seal_failed");
+                    return InboundRouting::Parked;
+                };
+                answers.push(OutboundDataChannelFrame::Binary(payload));
+            }
+            InboundRouting::Answer(answers)
         }
     }
 }
@@ -747,6 +1239,28 @@ pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: 
 }
 
 impl MeshSessionState {
+    /// Conservatively downgrade the native dispatcher when the mobile window
+    /// is suspended. The native Tauri window event is emitted by Android's
+    /// activity lifecycle even when the WebView is already frozen.
+    ///
+    /// This intentionally does not promote the dispatcher on resume. The
+    /// WebView resume command owns the ordered drain and acknowledgement loop.
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    pub async fn mark_surface_backgrounded(&self) {
+        let mut inner = self.inner.lock().await;
+        inner.native_surface_backgrounded = true;
+        let _ = inner.registry.set_lifecycle(SurfaceLifecycle::Background);
+    }
+
+    /// Release the native background hold after Android/iOS reports a real
+    /// resume. The WebView is then prompted through
+    /// [`MESH_SURFACE_RESUMED_EVENT`] to perform the existing ordered drain;
+    /// native code never discards queued frames by promoting on its own.
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    pub async fn mark_surface_resumed(&self) {
+        self.inner.lock().await.native_surface_backgrounded = false;
+    }
+
     #[cfg(test)]
     pub async fn begin_native_assistant_call(
         &self,
@@ -855,6 +1369,7 @@ impl MeshSessionState {
                     .collect(),
                 manifest_methods_ready,
                 primary,
+                data_channel_codec: None,
             },
         );
         inner.provider_peer_id = local_peer_id.map(str::to_owned);
@@ -938,19 +1453,22 @@ async fn settle(
     state: &MeshSessionState,
     pending: PendingCall,
     background: bool,
-) -> InboundRouting {
+) -> FrameRouting {
     let decision = authorize(app, &pending.authorize).await;
     let mut inner = state.inner.lock().await;
     let outcome = match inner.registry.settle_call(&pending, &decision) {
         Ok(outcome) => outcome,
-        Err(_) => return InboundRouting::Emit,
+        Err(_) => return FrameRouting::Emit,
     };
     match outcome {
         CallOutcome::Denied(frame) => {
             if background {
                 log_background_tool_call(&pending, "denied");
             }
-            InboundRouting::Answer(encode(vec![frame]))
+            FrameRouting::Answer {
+                frames: vec![frame],
+                replay_after_resume: true,
+            }
         }
         CallOutcome::Deferred(frame) => {
             if background {
@@ -965,45 +1483,69 @@ async fn settle(
                     }),
                 );
             }
-            InboundRouting::Answer(encode(vec![frame]))
+            FrameRouting::Answer {
+                frames: vec![frame],
+                replay_after_resume: false,
+            }
         }
         CallOutcome::Serve { .. } => {
             let Some(provider_peer_id) = inner.provider_peer_id.clone() else {
+                let _ = inner
+                    .registry
+                    .record_background_tooling_result(&pending, BackgroundToolingResult::Failed);
                 log_background_tool_call(&pending, "failed_provider_identity_missing");
-                return InboundRouting::Answer(encode(vec![bridge_error_frame(
-                    &pending.call_id,
-                    503,
-                    "provider_identity_missing",
-                )]));
+                return FrameRouting::Answer {
+                    frames: vec![bridge_error_frame(
+                        &pending.call_id,
+                        503,
+                        "provider_identity_missing",
+                    )],
+                    replay_after_resume: true,
+                };
             };
             let Some(provider_service_instance_id) = inner.provider_service_instance_id.clone()
             else {
+                let _ = inner
+                    .registry
+                    .record_background_tooling_result(&pending, BackgroundToolingResult::Failed);
                 log_background_tool_call(&pending, "failed_provider_identity_missing");
-                return InboundRouting::Answer(encode(vec![bridge_error_frame(
-                    &pending.call_id,
-                    503,
-                    "provider_identity_missing",
-                )]));
+                return FrameRouting::Answer {
+                    frames: vec![bridge_error_frame(
+                        &pending.call_id,
+                        503,
+                        "provider_identity_missing",
+                    )],
+                    replay_after_resume: true,
+                };
             };
             drop(inner);
             let Some(native) = app.try_state::<crate::AuroraMobileNativePlugin<tauri::Wry>>()
             else {
+                record_background_result(state, &pending, BackgroundToolingResult::Failed).await;
                 log_background_tool_call(&pending, "failed_native_manifest_missing");
-                return InboundRouting::Answer(encode(vec![bridge_error_frame(
-                    &pending.call_id,
-                    503,
-                    "native_manifest_unavailable",
-                )]));
+                return FrameRouting::Answer {
+                    frames: vec![bridge_error_frame(
+                        &pending.call_id,
+                        503,
+                        "native_manifest_unavailable",
+                    )],
+                    replay_after_resume: true,
+                };
             };
             let native_manifest = match crate::native_capability_manifest_value(native).await {
                 Ok(value) => value,
                 Err(_) => {
+                    record_background_result(state, &pending, BackgroundToolingResult::Failed)
+                        .await;
                     log_background_tool_call(&pending, "failed_native_manifest_unavailable");
-                    return InboundRouting::Answer(encode(vec![bridge_error_frame(
-                        &pending.call_id,
-                        503,
-                        "native_manifest_unavailable",
-                    )]));
+                    return FrameRouting::Answer {
+                        frames: vec![bridge_error_frame(
+                            &pending.call_id,
+                            503,
+                            "native_manifest_unavailable",
+                        )],
+                        replay_after_resume: true,
+                    };
                 }
             };
             let provider = BackgroundToolingProviderContext {
@@ -1011,19 +1553,48 @@ async fn settle(
                 provider_service_instance_id,
                 native_manifest,
             };
-            let frame = match execute_background_tooling_call(&pending, &decision, &provider) {
-                Ok(frame) => {
-                    log_background_tool_call(&pending, "served");
-                    frame
-                }
-                Err(_) => {
-                    log_background_tool_call(&pending, "failed_contract_invalid");
-                    bridge_error_frame(&pending.call_id, 400, "background_tooling_contract_invalid")
-                }
-            };
-            InboundRouting::Answer(encode(vec![frame]))
+            let (frame, result) =
+                match execute_background_tooling_call(&pending, &decision, &provider) {
+                    Ok(frame) => {
+                        let result = classify_background_tooling_result(&pending.method_id, &frame);
+                        (frame, result)
+                    }
+                    Err(_) => (
+                        bridge_error_frame(
+                            &pending.call_id,
+                            400,
+                            "background_tooling_contract_invalid",
+                        ),
+                        BackgroundToolingResult::Failed,
+                    ),
+                };
+            record_background_result(state, &pending, result).await;
+            log_background_tool_call(&pending, background_result_marker(result));
+            FrameRouting::Answer {
+                frames: vec![frame],
+                replay_after_resume: true,
+            }
         }
-        CallOutcome::Orchestrate { .. } => InboundRouting::Emit,
+        CallOutcome::Orchestrate { .. } => FrameRouting::Emit,
+    }
+}
+
+async fn record_background_result(
+    state: &MeshSessionState,
+    pending: &PendingCall,
+    result: BackgroundToolingResult,
+) {
+    let mut inner = state.inner.lock().await;
+    let _ = inner
+        .registry
+        .record_background_tooling_result(pending, result);
+}
+
+fn background_result_marker(result: BackgroundToolingResult) -> &'static str {
+    match result {
+        BackgroundToolingResult::Served => "served",
+        BackgroundToolingResult::Denied => "denied",
+        BackgroundToolingResult::Failed => "failed_execution",
     }
 }
 
@@ -1045,19 +1616,14 @@ fn bridge_error_frame(call_id: &str, code: u16, reason_code: &str) -> Value {
 
 /// One line per inbound call answered without the webview.
 ///
-/// Deliberately counts denials and deferrals as well as served calls: all three
-/// are the device answering a remote tool call while backgrounded, which is
-/// what the soak is measuring. A denial that never reached the wire would look
-/// identical to a dead session from the other end.
+/// Every semantic outcome is logged for diagnosis, but the soak qualifies only
+/// `served`: denied, deferred, and failed outcomes have distinct markers and
+/// counters so they cannot masquerade as successful background execution.
 fn log_background_tool_call(pending: &PendingCall, outcome: &str) {
     println!(
         "aurora.mesh {BACKGROUND_TOOL_CALL_MARKER} outcome={outcome} method={}",
         pending.method_id
     );
-}
-
-fn encode(frames: Vec<Value>) -> Vec<String> {
-    frames.iter().map(Value::to_string).collect()
 }
 
 /// Put the authorization question to the one authority.
@@ -1122,6 +1688,35 @@ mod tests {
             .build()
             .expect("test runtime")
             .block_on(future)
+    }
+
+    #[test]
+    fn native_suspend_marks_the_dispatcher_background_without_promoting_it() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state.mark_surface_backgrounded().await;
+            {
+                let mut inner = state.inner.lock().await;
+                assert!(inner.native_surface_backgrounded);
+                assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Background);
+                assert!(inner
+                    .set_surface_lifecycle(SurfaceLifecycle::Foreground)
+                    .is_empty());
+                assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Background);
+                assert!(inner.finish_surface_resume().is_empty());
+                assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Background);
+            }
+            state.mark_surface_backgrounded().await;
+            state.mark_surface_resumed().await;
+            let mut inner = state.inner.lock().await;
+            assert!(!inner.native_surface_backgrounded);
+            assert!(inner
+                .set_surface_lifecycle(SurfaceLifecycle::Foreground)
+                .is_empty());
+            assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Resuming);
+            assert!(inner.finish_surface_resume().is_empty());
+            assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Foreground);
+        });
     }
 
     #[test]
@@ -1510,5 +2105,165 @@ mod tests {
             assert_eq!(pending.peer_id, "peer-interrupt");
             assert_eq!(pending.data_channel_id, 20);
         });
+    }
+
+    #[test]
+    fn native_data_channel_codec_opens_sdk_vector_and_seals_decode_compatible_json() {
+        let key = std::array::from_fn::<_, 32, _>(|index| index as u8);
+        let nonce = std::array::from_fn::<_, 12, _>(|index| (32 + index) as u8);
+        let sdk_vector = hex_bytes(
+            "202122232425262728292a2ba918d2091cfd3834381f23a2ad3ad8dbb92dcea6a5e3028200db5d3065a8336c01e68a60ac1f178e7b9202fb366e318d9a4f8ffbee59790ea10e5d316ec26bafb94bbe29acecc7e2e4058578d2391b5bf7f35672de98e330bc3ba35e6f6fbcf020355c31bd29fb9dbdef863dd88bb06e1e42b4ad63df34068a77292a40fec674",
+        );
+        let rust_vector = hex_bytes(
+            "202122232425262728292a2ba918cf144ea2386d7b102ee3f03ad8dbbd2c98f4e8e441d44ea2037d25e3306e5bcb9d61ed5041bf409201fe7a253db883588de3e91e171aec030d7a39df6fb3ac55ef31edeac9b4ff05864be4345d43efb55761c192e57be13cb64b6e69edfe7f780c22b134fbd1f3bec766cf9aef6e9b1df1b0bf325d3772938e9c8fc0d761",
+        );
+        let frame = json!({
+            "type": "call",
+            "id": "call-1",
+            "method": "Tooling.ExecuteTool",
+            "params": {"tool_id": "device.status", "arguments": {}}
+        });
+        let codec = NativeDataChannelCodec::new(7, key.to_vec()).expect("codec");
+
+        assert_eq!(
+            codec.open_json(&sdk_vector).expect("open SDK vector"),
+            frame
+        );
+        assert_eq!(
+            codec
+                .seal_json_with_nonce(&frame, nonce)
+                .expect("seal Rust vector"),
+            rust_vector
+        );
+        assert_eq!(
+            codec.open_json(&rust_vector).expect("open Rust vector"),
+            frame
+        );
+
+        let mut tampered = sdk_vector;
+        *tampered.last_mut().expect("tag byte") ^= 1;
+        assert!(codec.open_json(&tampered).is_err());
+        assert!(codec
+            .open_json(&vec![0; MAX_DATA_CHANNEL_PAYLOAD_BYTES + 1])
+            .is_err());
+    }
+
+    #[test]
+    fn native_data_channel_codec_rejects_epoch_rollback_and_in_epoch_key_change() {
+        let mut inner = MeshSessionInner::default();
+        let installed =
+            Arc::new(NativeDataChannelCodec::new(10, vec![7; 32]).expect("installed native codec"));
+        inner.peer_bindings.insert(
+            "peer-a".to_owned(),
+            MeshSessionPeerBinding {
+                data_channel_id: 10,
+                advertised_method_ids: BTreeSet::new(),
+                manifest_methods_ready: true,
+                primary: true,
+                data_channel_codec: Some(installed.clone()),
+            },
+        );
+
+        let preserved = inner
+            .resolve_data_channel_codec("peer-a", 10, None)
+            .expect("metadata refresh preserves codec")
+            .expect("preserved codec");
+        assert!(Arc::ptr_eq(&installed, &preserved));
+
+        let same_epoch =
+            Arc::new(NativeDataChannelCodec::new(10, vec![7; 32]).expect("same-epoch codec"));
+        assert!(inner
+            .resolve_data_channel_codec("peer-a", 10, Some(same_epoch))
+            .is_ok());
+
+        let changed_key =
+            Arc::new(NativeDataChannelCodec::new(10, vec![8; 32]).expect("changed-key codec"));
+        assert!(inner
+            .resolve_data_channel_codec("peer-a", 10, Some(changed_key))
+            .is_err());
+
+        let stale = Arc::new(NativeDataChannelCodec::new(9, vec![9; 32]).expect("stale codec"));
+        assert!(inner
+            .resolve_data_channel_codec("peer-a", 9, Some(stale))
+            .is_err());
+
+        let successor =
+            Arc::new(NativeDataChannelCodec::new(11, vec![11; 32]).expect("successor codec"));
+        assert!(inner
+            .resolve_data_channel_codec("peer-a", 11, Some(successor))
+            .is_ok());
+    }
+
+    #[test]
+    fn background_call_replay_cache_is_bounded_and_peer_scoped() {
+        let mut inner = MeshSessionInner::default();
+        assert_eq!(
+            inner.begin_background_call("peer-a", "call-1", 100),
+            BackgroundCallReplayDecision::Execute
+        );
+        assert_eq!(
+            inner.begin_background_call("peer-a", "call-1", 101),
+            BackgroundCallReplayDecision::Pending
+        );
+        let answer = vec![json!({"type": "result", "id": "call-1", "result": {"ok": true}})];
+        inner.finish_background_call("peer-a", "call-1", answer.clone(), 102, true);
+        assert_eq!(
+            inner.background_call_replay("peer-a", "call-1", 103, false),
+            Some(BackgroundCallReplayDecision::Answer(answer.clone()))
+        );
+        assert_eq!(
+            inner.begin_background_call("peer-a", "call-1", 103),
+            BackgroundCallReplayDecision::Answer(answer)
+        );
+        assert_eq!(
+            inner.begin_background_call("peer-b", "call-1", 103),
+            BackgroundCallReplayDecision::Execute
+        );
+        assert_eq!(
+            inner.begin_background_call(
+                "peer-a",
+                "call-1",
+                102 + BACKGROUND_CALL_REPLAY_TTL_MS + 1,
+            ),
+            BackgroundCallReplayDecision::Execute
+        );
+    }
+
+    #[test]
+    fn deferred_background_replay_expires_when_the_surface_resumes() {
+        let mut inner = MeshSessionInner::default();
+        let answer = vec![json!({
+            "type": "error",
+            "id": "call-deferred",
+            "error": {"reason_code": "orchestration_deferred"}
+        })];
+        assert_eq!(
+            inner.begin_background_call("peer-a", "call-deferred", 100),
+            BackgroundCallReplayDecision::Execute
+        );
+        inner.finish_background_call("peer-a", "call-deferred", answer.clone(), 101, false);
+        assert_eq!(
+            inner.background_call_replay("peer-a", "call-deferred", 102, true),
+            Some(BackgroundCallReplayDecision::Answer(answer))
+        );
+        assert_eq!(
+            inner.background_call_replay("peer-a", "call-deferred", 103, false),
+            None
+        );
+        assert_eq!(
+            inner.begin_background_call("peer-a", "call-deferred", 104),
+            BackgroundCallReplayDecision::Execute
+        );
+    }
+
+    fn hex_bytes(value: &str) -> Vec<u8> {
+        value
+            .as_bytes()
+            .chunks_exact(2)
+            .map(|pair| {
+                let text = std::str::from_utf8(pair).expect("hex utf8");
+                u8::from_str_radix(text, 16).expect("hex byte")
+            })
+            .collect()
     }
 }

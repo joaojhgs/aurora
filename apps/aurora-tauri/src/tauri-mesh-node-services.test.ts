@@ -333,12 +333,21 @@ describe("Tauri mesh node services", () => {
       correlation_id: "corr-native-1",
     }, peerHostCallContext(TOOLING_METHODS.prepareExecution, nowMs));
     expect(prepareOutput).toMatchObject({ ok: true, correlation_id: "corr-native-1" });
+    if (
+      typeof prepareOutput !== "object"
+      || prepareOutput === null
+      || !("args_schema_hash" in prepareOutput)
+      || typeof prepareOutput.args_schema_hash !== "string"
+    ) {
+      throw new Error("expected prepare to return an args schema hash");
+    }
 
     nowMs = 1_001;
     const executeOutput = await services.localToolProvider.peerHostRegistry.dispatch(execute, {
       tool_name: AURORA_NATIVE_TOOL_IDS.getDeviceStatus,
       arguments: {},
       correlation_id: "corr-native-1",
+      expected_args_schema_hash: prepareOutput.args_schema_hash,
     }, peerHostCallContext(TOOLING_METHODS.executeTool, nowMs));
     expect(executeOutput).toMatchObject({ ok: true, status: "success", correlation_id: "corr-native-1" });
 

@@ -29,6 +29,21 @@ export const PEER_ALREADY_REGISTERED_REASON = 'peer_already_registered'
 /** Machine-readable reason for the single-device Connect refusal. */
 export const CONNECT_IS_SINGLE_PEER_REASON = 'connect_is_single_peer'
 
+/** Wire codec the trusted native shell may install for one live data channel. */
+export const NATIVE_DATA_CHANNEL_CODEC_V1 = 'aes-256-gcm-nonce-prefix-v1' as const
+
+/**
+ * A short-lived clone of the payload key for native background dispatch.
+ *
+ * This object is deliberately absent from roster/snapshot serialization. The
+ * caller owns the clone and must zero it immediately after the native bind
+ * command has copied it into zeroizing Rust storage.
+ */
+export interface NativeDataChannelCodec {
+  readonly version: typeof NATIVE_DATA_CHANNEL_CODEC_V1
+  readonly key: Uint8Array
+}
+
 /**
  * How many devices this surface is allowed to hold at once.
  *
@@ -159,6 +174,8 @@ export interface MeshPeerRegistryController {
   setPeerPriority(peerId: string, priority: MeshPeerPriorityUpdate): void
   notePeerUsed(peerId: string): void
   applyConnectionBudget(): Promise<void>
+  /** Trusted native-composition seam; never include its result in diagnostics. */
+  nativeDataChannelCodec(peerId: string): NativeDataChannelCodec | null
 }
 
 export class MeshPeerSessionRegistry {

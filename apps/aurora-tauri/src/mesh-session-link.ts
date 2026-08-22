@@ -18,7 +18,10 @@
  * never which implementation runs.
  */
 
-import { openNativeTransportHandles } from "./native-webrtc";
+import {
+  openNativeTransportHandles,
+  type NativeTransportDrainFrame,
+} from "./native-webrtc";
 
 export type MeshSurfaceLifecycle = "foreground" | "background";
 export type MeshSessionDispatcherLifecycle =
@@ -31,18 +34,27 @@ export interface MeshSessionInvoke {
 
 export interface MeshSessionDrain {
   readonly peerId: string;
-  readonly frames: readonly unknown[];
+  readonly frames: readonly NativeTransportDrainFrame[];
 }
 
 export interface MeshSessionLifecycleResult {
   readonly lifecycle: MeshSessionDispatcherLifecycle;
   readonly drained: readonly MeshSessionDrain[];
+  readonly nativeBackgroundHeld?: boolean;
 }
 
 export interface MeshSessionBindResult {
   readonly peerId: string;
   readonly sessions: number;
   readonly deviceLinkHeld: boolean;
+}
+
+export interface MeshSessionNativeDataChannelCodec {
+  readonly version: "aes-256-gcm-nonce-prefix-v1";
+  /** Monotonic native data-channel id; prevents stale bind rollback. */
+  readonly keyEpoch: number;
+  /** Mutable only so the trusted composition caller can wipe the IPC clone. */
+  readonly keyBytes: number[];
 }
 
 /** Why a binding was not attempted. Machine-readable, never shown to anyone. */
@@ -80,6 +92,7 @@ export async function bindMeshSessionPeer(
     readonly advertisedMethodIds?: readonly string[];
     readonly manifestMethodsReady?: boolean;
     readonly primary?: boolean;
+    readonly nativeDataChannelCodec?: MeshSessionNativeDataChannelCodec;
   } = {},
 ): Promise<MeshSessionBindResult> {
   const handles = options.handles ?? soleNativeTransportHandle();
@@ -91,6 +104,7 @@ export async function bindMeshSessionPeer(
       authenticatedPeerContext: options.authenticatedPeerContext ?? null,
       localPeerId: options.localPeerId ?? null,
       providerServiceInstanceId: options.providerServiceInstanceId ?? null,
+      nativeDataChannelCodec: options.nativeDataChannelCodec ?? null,
       advertisedMethodIds: [...(options.advertisedMethodIds ?? [])],
       manifestMethodsReady: options.manifestMethodsReady ?? true,
       primary: options.primary ?? false,
@@ -140,6 +154,8 @@ export async function finishMeshSurfaceResume(
 
 export interface ObserveMeshSurfaceLifecycleOptions {
   readonly invoke: MeshSessionInvoke;
+  /** Receives a redacted, non-throwing diagnostic when lifecycle IPC fails. */
+  readonly onLifecycleFailure?: (failure: MeshSurfaceLifecycleFailure) => void;
   /**
    * Receives frames that were parked while this surface slept, in order.
    * Return false until every frame is safely back on its exact channel.
@@ -154,10 +170,18 @@ export interface ObserveMeshSurfaceLifecycleOptions {
   >;
 }
 
+export interface MeshSurfaceLifecycleFailure {
+  readonly phase: "set_lifecycle" | "finish_resume" | "deliver_drained";
+  readonly requestedLifecycle: MeshSurfaceLifecycle;
+  readonly error: unknown;
+}
+
 export interface MeshSurfaceLifecycleStop {
   (): void;
   /** Retry a resume batch that the consumer previously could not deliver. */
   retryResume(): void;
+  /** Re-announce foreground after a native mobile resume releases its hold. */
+  nativeResume(): void;
 }
 
 /**
@@ -173,7 +197,10 @@ export function observeMeshSurfaceLifecycle(
 ): MeshSurfaceLifecycleStop {
   const target = options.target ?? globalThis.document;
   if (!target) {
-    return Object.assign(() => undefined, { retryResume: () => undefined });
+    return Object.assign(() => undefined, {
+      retryResume: () => undefined,
+      nativeResume: () => undefined,
+    });
   }
 
   let last: MeshSurfaceLifecycle | null = null;
@@ -181,8 +208,29 @@ export function observeMeshSurfaceLifecycle(
   let resumeBlocked = false;
   let operationQueue: Promise<void> = Promise.resolve();
 
+  const reportFailure = (failure: MeshSurfaceLifecycleFailure): void => {
+    try {
+      options.onLifecycleFailure?.(failure);
+    } catch {
+      // Diagnostics must never change the safe-direction lifecycle behavior.
+    }
+  };
+
   const enqueue = (operation: () => Promise<void>): void => {
     operationQueue = operationQueue.then(operation).catch(() => undefined);
+  };
+
+  const invokeLifecycle = async <T>(
+    phase: "set_lifecycle" | "finish_resume",
+    requestedLifecycle: MeshSurfaceLifecycle,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await operation();
+    } catch (error) {
+      reportFailure({ phase, requestedLifecycle, error });
+      throw error;
+    }
   };
 
   const drainResume = async (
@@ -192,20 +240,41 @@ export function observeMeshSurfaceLifecycle(
     while (!stopped) {
       if (result.drained.length > 0) {
         resumeBlocked = true;
-        const accepted = await options.onDrained?.(result.drained);
+        let accepted: boolean | void;
+        try {
+          accepted = await options.onDrained?.(result.drained);
+        } catch (error) {
+          reportFailure({
+            phase: "deliver_drained",
+            requestedLifecycle: "foreground",
+            error,
+          });
+          throw error;
+        }
         if (accepted === false) return;
         resumeBlocked = false;
       }
       if (result.lifecycle !== "resuming") return;
-      result = await finishMeshSurfaceResume(options.invoke);
+      result = await invokeLifecycle(
+        "finish_resume",
+        "foreground",
+        () => finishMeshSurfaceResume(options.invoke),
+      );
     }
   };
 
-  const apply = (lifecycle: MeshSurfaceLifecycle): void => {
-    if (lifecycle === last) return;
+  const apply = (
+    lifecycle: MeshSurfaceLifecycle,
+    force = false,
+  ): void => {
+    if (!force && lifecycle === last) return;
     last = lifecycle;
     enqueue(async () => {
-      const result = await setMeshSurfaceLifecycle(options.invoke, lifecycle);
+      const result = await invokeLifecycle(
+        "set_lifecycle",
+        lifecycle,
+        () => setMeshSurfaceLifecycle(options.invoke, lifecycle),
+      );
       if (lifecycle === "foreground") await drainResume(result);
     });
   };
@@ -225,8 +294,16 @@ export function observeMeshSurfaceLifecycle(
     enqueue(async () => {
       if (!resumeBlocked || stopped || last !== "foreground") return;
       resumeBlocked = false;
-      await drainResume(await finishMeshSurfaceResume(options.invoke));
+      await drainResume(await invokeLifecycle(
+        "finish_resume",
+        "foreground",
+        () => finishMeshSurfaceResume(options.invoke),
+      ));
     });
+  };
+  stop.nativeResume = (): void => {
+    if (stopped) return;
+    apply("foreground", true);
   };
   return stop;
 }
@@ -273,6 +350,15 @@ export interface MeshSessionRuntimePeer {
       readonly methods?: readonly string[];
     }[];
   } | null>;
+  /**
+   * Trusted native-composition seam. Older/non-native controllers may omit it;
+   * production native WebRTC controllers implement it and tests cover the
+   * encrypted path. The returned clone is wiped after the bind IPC completes.
+   */
+  nativeDataChannelCodec?(peerId: string): {
+    readonly version: "aes-256-gcm-nonce-prefix-v1";
+    readonly key: Uint8Array;
+  } | null;
 }
 
 export interface MeshSessionRuntimeLinkOptions {
@@ -283,15 +369,22 @@ export interface MeshSessionRuntimeLinkOptions {
   readonly handleForRemoteSignalingId: (
     remoteSignalingId: string,
   ) => { peerConnectionId: number; dataChannelId: number } | null;
-  readonly deliverFrame: (dataChannelId: number, frame: unknown) => boolean;
+  readonly deliverFrame: (
+    dataChannelId: number,
+    frame: NativeTransportDrainFrame,
+  ) => boolean;
   readonly lifecycleTarget?: Pick<
     Document,
     "addEventListener" | "removeEventListener" | "visibilityState"
   >;
+  readonly subscribeNativeResume?: (
+    listener: () => void,
+  ) => Promise<() => void>;
   readonly unbindRetryDelaysMs?: readonly number[];
   /** Delays between manifest hydration retries; injected for deterministic tests. */
   readonly manifestRetryDelaysMs?: readonly number[];
   readonly onCleanupFailure?: (failure: MeshSessionCleanupFailure) => void;
+  readonly onLifecycleFailure?: (failure: MeshSurfaceLifecycleFailure) => void;
 }
 
 export interface MeshSessionRuntimeLink {
@@ -349,11 +442,13 @@ export function installMeshSessionRuntimeLink(
   const retiringBindings = new Map<string, RetiringMeshSessionBinding>();
   const manifestHydrations = new Map<string, ManifestHydration>();
   const lastCleanupFailures = new Map<string, MeshSessionCleanupFailure>();
-  const pendingDrains = new Map<string, unknown[]>();
+  const pendingDrains = new Map<string, NativeTransportDrainFrame[]>();
   let closed = false;
   let latestRoster: MeshSessionRoster = { peers: [] };
   let reconcileQueue: Promise<void> = Promise.resolve();
   let lifecycleStop: MeshSurfaceLifecycleStop | null = null;
+  let nativeResumeUnlisten: (() => void) | null = null;
+  let nativeResumeSubscription: Promise<void> = Promise.resolve();
   const unbindRetryDelaysMs =
     options.unbindRetryDelaysMs ?? DEFAULT_UNBIND_RETRY_DELAYS_MS;
   const manifestRetryDelaysMs =
@@ -532,40 +627,58 @@ export function installMeshSessionRuntimeLink(
     advertisedMethodIds: readonly string[],
     manifestMethodsReady: boolean,
   ): Promise<void> => {
-    const signature = JSON.stringify({
-      peerConnectionId: handles.peerConnectionId,
-      dataChannelId: handles.dataChannelId,
-      authenticatedPeerContext: rosterPeer.authenticatedPeerContext ?? null,
-      localPeerId: options.localPeerId ?? null,
-      providerServiceInstanceId: options.providerServiceInstanceId ?? null,
-      advertisedMethodIds,
-      manifestMethodsReady,
-      primary: rosterPeer.primary,
-    });
-    const existing = bindings.get(rosterPeer.peerId);
-    if (existing?.signature === signature) return;
-    if (existing && existing.dataChannelId !== handles.dataChannelId) {
-      await retirePeer(rosterPeer.peerId);
-      if (retiringBindings.has(rosterPeer.peerId)) return;
+    const nativeCodec = options.peer.nativeDataChannelCodec?.(rosterPeer.peerId) ?? null;
+    const keyBytes = nativeCodec ? Array.from(nativeCodec.key) : null;
+    try {
+      const signature = JSON.stringify({
+        peerConnectionId: handles.peerConnectionId,
+        dataChannelId: handles.dataChannelId,
+        authenticatedPeerContext: rosterPeer.authenticatedPeerContext ?? null,
+        localPeerId: options.localPeerId ?? null,
+        providerServiceInstanceId: options.providerServiceInstanceId ?? null,
+        nativeDataChannelCodecVersion: nativeCodec?.version ?? null,
+        nativeDataChannelCodecEpoch: nativeCodec ? handles.dataChannelId : null,
+        advertisedMethodIds,
+        manifestMethodsReady,
+        primary: rosterPeer.primary,
+      });
+      const existing = bindings.get(rosterPeer.peerId);
+      if (existing?.signature === signature) return;
+      if (existing && existing.dataChannelId !== handles.dataChannelId) {
+        await retirePeer(rosterPeer.peerId);
+        if (retiringBindings.has(rosterPeer.peerId)) return;
+      }
+      await bindMeshSessionPeer(options.invoke, rosterPeer.peerId, {
+        handles,
+        authenticatedPeerContext: rosterPeer.authenticatedPeerContext,
+        ...(options.localPeerId !== undefined
+          ? { localPeerId: options.localPeerId }
+          : {}),
+        ...(options.providerServiceInstanceId !== undefined
+          ? { providerServiceInstanceId: options.providerServiceInstanceId }
+          : {}),
+        ...(nativeCodec && keyBytes
+          ? {
+              nativeDataChannelCodec: {
+                version: nativeCodec.version,
+                keyEpoch: handles.dataChannelId,
+                keyBytes,
+              },
+            }
+          : {}),
+        advertisedMethodIds,
+        manifestMethodsReady,
+        primary: rosterPeer.primary,
+      });
+      bindings.set(rosterPeer.peerId, {
+        signature,
+        dataChannelId: handles.dataChannelId,
+      });
+      flushPeer(rosterPeer.peerId);
+    } finally {
+      nativeCodec?.key.fill(0);
+      keyBytes?.fill(0);
     }
-    await bindMeshSessionPeer(options.invoke, rosterPeer.peerId, {
-      handles,
-      authenticatedPeerContext: rosterPeer.authenticatedPeerContext,
-      ...(options.localPeerId !== undefined
-        ? { localPeerId: options.localPeerId }
-        : {}),
-      ...(options.providerServiceInstanceId !== undefined
-        ? { providerServiceInstanceId: options.providerServiceInstanceId }
-        : {}),
-      advertisedMethodIds,
-      manifestMethodsReady,
-      primary: rosterPeer.primary,
-    });
-    bindings.set(rosterPeer.peerId, {
-      signature,
-      dataChannelId: handles.dataChannelId,
-    });
-    flushPeer(rosterPeer.peerId);
   };
 
   const currentManifestTarget = (
@@ -793,10 +906,22 @@ export function installMeshSessionRuntimeLink(
   lifecycleStop = observeMeshSurfaceLifecycle({
     invoke: options.invoke,
     onDrained: retainDrains,
+    ...(options.onLifecycleFailure
+      ? { onLifecycleFailure: options.onLifecycleFailure }
+      : {}),
     ...(options.lifecycleTarget !== undefined
       ? { target: options.lifecycleTarget }
       : {}),
   });
+  if (options.subscribeNativeResume) {
+    nativeResumeSubscription = options
+      .subscribeNativeResume(() => lifecycleStop?.nativeResume())
+      .then((unlisten) => {
+        if (closed) unlisten();
+        else nativeResumeUnlisten = unlisten;
+      })
+      .catch(() => undefined);
+  }
 
   return {
     async close(): Promise<void> {
@@ -806,6 +931,9 @@ export function installMeshSessionRuntimeLink(
         unsubscribeRoster();
         lifecycleStop?.();
         lifecycleStop = null;
+        await nativeResumeSubscription;
+        nativeResumeUnlisten?.();
+        nativeResumeUnlisten = null;
         for (const peerId of [...manifestHydrations.keys()]) {
           cancelManifestHydration(peerId);
         }

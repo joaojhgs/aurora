@@ -60,10 +60,12 @@ import { WebRtcMeshPeerBridge } from './mesh-peer-bridge.js'
 import { MeshPeerBridgeRouter } from './mesh-bridge-router.js'
 import {
   MeshPeerSessionRegistry,
+  NATIVE_DATA_CHANNEL_CODEC_V1,
   type MeshPeerConnectionBudget,
   type MeshDiscoveredPeer,
   type MeshPeerConnectionPolicy,
   type MeshPeerLifecycleState,
+  type NativeDataChannelCodec,
   type MeshPeerPriorityUpdate,
   type MeshPeerRegistryController,
   type MeshPeerRosterSnapshot,
@@ -424,6 +426,17 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     this.rosterListeners.add(listener)
     listener(this.roster())
     return () => this.rosterListeners.delete(listener)
+  }
+
+  nativeDataChannelCodec(peerId: string): NativeDataChannelCodec | null {
+    const entry = this.registry.findByPeerId(peerId)
+    if (!entry?.keyMaterial || !resolveAppLayerE2eeEnabled(entry.profile, this.options)) {
+      return null
+    }
+    return {
+      version: NATIVE_DATA_CHANNEL_CODEC_V1,
+      key: new Uint8Array(entry.keyMaterial.kData)
+    }
   }
 
   async getManifest(peerId: string): Promise<import('../mesh.js').MeshPeerManifest | null> {

@@ -134,6 +134,9 @@ pub struct QueuedFrame {
 pub struct PendingCall {
     /// Peer the call arrived from.
     pub peer_id: String,
+    /// Native connection that accepted the call. Result accounting uses this
+    /// to avoid crediting a replacement session after a concurrent reconnect.
+    pub connection_id: u64,
     /// Correlation id to answer on.
     pub call_id: String,
     /// Method the caller named.
@@ -225,8 +228,6 @@ const NATIVE_GET_DEVICE_STATUS_CONTRACT_ID: &str = "aurora.local.native.get_devi
 const NATIVE_GET_DEVICE_STATUS_LOCAL_NAME: &str = "native.get_device_status";
 const NATIVE_GET_DEVICE_STATUS_PERMISSION: &str = "Native.GetDeviceStatus";
 const NATIVE_GET_DEVICE_STATUS_GLOBAL_FALLBACK: &str = "global:native.get_device_status";
-const EMPTY_ARGS_SCHEMA_HASH: &str =
-    "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
 
 /// Methods Rust can complete without the webview, sorted.
 ///
@@ -280,6 +281,52 @@ pub fn execute_background_tooling_call(
         None => Err(ContractParseError::UnknownSchema(pending.method_id.clone())),
     }?;
     Ok(result)
+}
+
+/// Semantic outcome of a Rust-owned background tooling response.
+///
+/// A contract-valid result frame is not necessarily a successful execution:
+/// policy and schema denials are represented as typed result payloads. Keeping
+/// this classification beside the executor prevents transport callers from
+/// treating every serializable response as a served call.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackgroundToolingResult {
+    /// The requested catalog/preparation operation completed, or an execute
+    /// operation returned `success`/`dry_run` with `ok: true`.
+    Served,
+    /// The operation returned a typed policy, schema, or not-found denial.
+    Denied,
+    /// The operation could not be completed after authorization.
+    Failed,
+}
+
+/// Classify a background tooling result frame by its typed payload semantics.
+#[must_use]
+pub fn classify_background_tooling_result(
+    method_id: &str,
+    frame: &Value,
+) -> BackgroundToolingResult {
+    let Some(result) = frame.get("result") else {
+        return BackgroundToolingResult::Failed;
+    };
+    match result.get("ok").and_then(Value::as_bool) {
+        Some(false) => {
+            if result.get("status").and_then(Value::as_str) == Some("failed") {
+                BackgroundToolingResult::Failed
+            } else {
+                BackgroundToolingResult::Denied
+            }
+        }
+        Some(true) if method_id == ids::TOOLING_EXECUTE_TOOL => {
+            match result.get("status").and_then(Value::as_str) {
+                Some("success" | "dry_run") => BackgroundToolingResult::Served,
+                _ => BackgroundToolingResult::Failed,
+            }
+        }
+        Some(true) => BackgroundToolingResult::Served,
+        None if method_id == ids::TOOLING_GET_TOOLS => BackgroundToolingResult::Served,
+        None => BackgroundToolingResult::Failed,
+    }
 }
 
 fn tooling_get_tools(
@@ -510,7 +557,7 @@ fn native_tool_info(context: &BackgroundToolingProviderContext) -> Value {
             "batteryLevel": { "type": "number", "minimum": 0, "maximum": 1 },
             "charging": { "type": "boolean" }
         },
-        "required": ["platform", "availableCapabilities", "online"],
+        "required": [],
         "additionalProperties": false,
     });
     json!({
@@ -556,6 +603,14 @@ fn native_tool_info(context: &BackgroundToolingProviderContext) -> Value {
     })
 }
 
+fn native_tool_schema_hash(tool_info: &Value) -> String {
+    sha256_hex(&json!({
+        "args_schema": tool_info["args_schema"],
+        "schema": tool_info["schema"],
+        "argument_visibility": tool_info["argument_visibility"],
+    }))
+}
+
 fn prepare_native_execution(
     request: &Value,
     decision: &PeerHostAuthorizationDecision,
@@ -564,6 +619,7 @@ fn prepare_native_execution(
     let reason = native_prepare_denial_reason(request, decision, context);
     let allowed = reason.is_none();
     let tool_info = native_tool_info(context);
+    let args_schema_hash = native_tool_schema_hash(&tool_info);
     let arguments = request
         .get("arguments")
         .cloned()
@@ -606,7 +662,7 @@ fn prepare_native_execution(
         "provider_service_instance_id": context.provider_service_instance_id,
         "global_tool_id": tool_info["global_tool_id"],
         "local_tool_name": NATIVE_GET_DEVICE_STATUS_LOCAL_NAME,
-        "args_schema_hash": EMPTY_ARGS_SCHEMA_HASH,
+        "args_schema_hash": args_schema_hash,
         "source": "core",
         "source_id": "native.capability",
         "trust_tier": "trusted",
@@ -650,10 +706,11 @@ fn native_prepare_denial_reason(
     {
         return Some("argument_schema_invalid");
     }
+    let tool_info = native_tool_info(context);
     if request
         .get("expected_args_schema_hash")
         .and_then(Value::as_str)
-        .is_some_and(|hash| hash != EMPTY_ARGS_SCHEMA_HASH)
+        .is_some_and(|hash| hash != native_tool_schema_hash(&tool_info))
     {
         return Some("args_schema_hash_mismatch");
     }
@@ -848,6 +905,7 @@ pub struct MeshPeerSession {
     served_calls: u64,
     deferred_calls: u64,
     denied_calls: u64,
+    failed_calls: u64,
 }
 
 impl MeshPeerSession {
@@ -896,6 +954,7 @@ impl MeshPeerSession {
             "servedCalls": self.served_calls,
             "deferredCalls": self.deferred_calls,
             "deniedCalls": self.denied_calls,
+            "failedCalls": self.failed_calls,
         })
     }
 }
@@ -982,6 +1041,7 @@ impl MeshSessionRegistry {
                 served_calls: 0,
                 deferred_calls: 0,
                 denied_calls: 0,
+                failed_calls: 0,
             });
         // Refreshing the context on reconnect is allowed; widening a grant is
         // not, and cannot happen here because no grant is stored.
@@ -1151,7 +1211,6 @@ impl MeshSessionRegistry {
             && background_execution_for(&pending.method_id)
                 .is_some_and(|_| execution_allowed_for_decision(&pending.method_id, decision))
         {
-            session.served_calls += 1;
             return Ok(CallOutcome::Serve {
                 execution: background_execution_for(&pending.method_id).expect("checked above"),
                 call_id: pending.call_id.clone(),
@@ -1168,6 +1227,28 @@ impl MeshSessionRegistry {
         Ok(CallOutcome::Orchestrate {
             call_id: pending.call_id.clone(),
         })
+    }
+
+    /// Record the semantic result after a Rust-owned background operation has
+    /// actually completed. Selection for native execution alone is not proof
+    /// that the tool was served successfully.
+    pub fn record_background_tooling_result(
+        &mut self,
+        pending: &PendingCall,
+        result: BackgroundToolingResult,
+    ) -> bool {
+        let Some(session) = self.sessions.get_mut(&pending.peer_id) else {
+            return false;
+        };
+        if session.connection_id != pending.connection_id {
+            return false;
+        }
+        match result {
+            BackgroundToolingResult::Served => session.served_calls += 1,
+            BackgroundToolingResult::Denied => session.denied_calls += 1,
+            BackgroundToolingResult::Failed => session.failed_calls += 1,
+        }
+        true
     }
 
     /// Per-peer counters, for the roster projection and the soak report.
@@ -1230,6 +1311,7 @@ impl MeshSessionRegistry {
         let identity = inbound_identity(frame, peer_id);
         Some(PendingCall {
             peer_id: peer_id.to_owned(),
+            connection_id: session.connection_id,
             call_id,
             params: frame.get("params").cloned().unwrap_or_else(|| json!({})),
             authorize: PeerHostAuthorizeRequest {
