@@ -85,6 +85,17 @@ def test_live_gateway_runs_reverse_tool_probe_without_blocking_the_peer_loop() -
     assert "ac18_reverse_tool = await run_ac18_reverse_browser_tool_probe(" not in source
 
 
+def test_live_gateway_persists_native_probe_report_before_peer_teardown() -> None:
+    source = inspect.getsource(__import__("scripts.webrtc_interop_gateway", fromlist=["main"]).main)
+
+    completed_probe = source.index("native_device_tool = native_device_probe_task.result()")
+    interim_report = source.index("_write_report_snapshot()", completed_probe)
+    peer_loop_sleep = source.index("await asyncio.sleep(0.1)", interim_report)
+    peer_teardown = source.index("await rtc.close()", peer_loop_sleep)
+
+    assert completed_probe < interim_report < peer_loop_sleep < peer_teardown
+
+
 def test_registry_response_is_sorted_and_digest_is_stable() -> None:
     registry = InteropRegistry()
 

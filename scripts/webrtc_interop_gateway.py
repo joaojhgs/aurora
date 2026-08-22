@@ -1588,6 +1588,32 @@ async def main() -> int:
     wildcard_interest = False
     revoked_reconnect_failures = 0
     manifest_sent = False
+
+    def _write_report_snapshot() -> None:
+        diagnostics = rtc.get_diagnostics().model_dump(mode="json")
+        write_json(
+            report_path,
+            build_gateway_report(
+                lane=args.lane,
+                started_at=now(),
+                duration_ms=round((time.monotonic() - started_at) * 1000),
+                gateway_http_reachable=can_connect("127.0.0.1", gateway_http_probe_port),
+                diagnostics=diagnostics,
+                bus=bus,
+                event_sent=event_sent,
+                tts_event_sent=tts_event_sent,
+                wrong_correlation_interested=wrong_corr_interest,
+                wildcard_interested=wildcard_interest,
+                revoked_reconnect_failures=revoked_reconnect_failures,
+                reconnect_proof_results=auth.reconnect_proof_results,
+                manifest_sent=manifest_sent,
+                ac18_local_tool_provider=ac18_local_tool_provider,
+                ac18_reverse_tool=ac18_reverse_tool,
+                native_device_tool_probe=native_device_tool_probe,
+                native_device_tool=native_device_tool,
+            ),
+        )
+
     try:
         await rtc.start(join_room=True)
 
@@ -1715,8 +1741,16 @@ async def main() -> int:
                     )
             if ac18_probe_task is not None and ac18_probe_task.done():
                 ac18_reverse_tool = ac18_probe_task.result()
-            if native_device_probe_task is not None and native_device_probe_task.done():
+            if (
+                native_device_probe_task is not None
+                and native_device_probe_task.done()
+                and native_device_tool is None
+            ):
                 native_device_tool = native_device_probe_task.result()
+                # Publish the completed public-call evidence while the peer remains
+                # connected. The background survival harness can then inspect a
+                # stable report without racing report creation against teardown.
+                _write_report_snapshot()
             await asyncio.sleep(0.1)
 
         if ac18_probe_task is not None and ac18_reverse_tool is None:
@@ -1742,29 +1776,7 @@ async def main() -> int:
                     "status": "not-completed",
                 }
 
-        diagnostics = rtc.get_diagnostics().model_dump(mode="json")
-        write_json(
-            report_path,
-            build_gateway_report(
-                lane=args.lane,
-                started_at=now(),
-                duration_ms=round((time.monotonic() - started_at) * 1000),
-                gateway_http_reachable=can_connect("127.0.0.1", gateway_http_probe_port),
-                diagnostics=diagnostics,
-                bus=bus,
-                event_sent=event_sent,
-                tts_event_sent=tts_event_sent,
-                wrong_correlation_interested=wrong_corr_interest,
-                wildcard_interested=wildcard_interest,
-                revoked_reconnect_failures=revoked_reconnect_failures,
-                reconnect_proof_results=auth.reconnect_proof_results,
-                manifest_sent=manifest_sent,
-                ac18_local_tool_provider=ac18_local_tool_provider,
-                ac18_reverse_tool=ac18_reverse_tool,
-                native_device_tool_probe=native_device_tool_probe,
-                native_device_tool=native_device_tool,
-            ),
-        )
+        _write_report_snapshot()
     finally:
         if ac18_probe_task is not None and not ac18_probe_task.done():
             ac18_probe_task.cancel()
