@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error The Node-executed .mjs harness intentionally has no TS build output.
-import { BACKGROUND_TOOL_CALL_MARKER, buildReport, classifyAndroidDevice, countBackgroundToolCalls, decodeForegroundServiceTypes, parseArgs, parseBatteryState, parseMeminfoTotalPssKb, parseRuntimeServiceState, parseThermalState, summariseReportForConsole, summariseScenario } from '../scripts/android-background-measurement.mjs'
+import { BACKGROUND_TOOL_CALL_MARKER, buildReport, classifyAndroidDevice, countBackgroundToolCalls, decodeForegroundServiceTypes, parseArgs, parseBatteryState, parseMeminfoTotalPssKb, parseRuntimeServiceState, parseThermalState, qualificationExitCode, summariseNativeBackgroundProof, summariseReportForConsole, summariseScenario } from '../scripts/android-background-measurement.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
@@ -70,6 +70,17 @@ function serviceDump(typesHex: string, isForeground = true): string {
 `
 }
 
+function api33ServiceDump(reasons: string, typesHex: string): string {
+  return `ACTIVITY MANAGER SERVICES (dumpsys activity service)
+  * ServiceRecord{1a2b3c4 u0 dev.aurora.desktop/dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService}
+    packageName=dev.aurora.desktop
+    isForeground=true foregroundId=4203 foregroundNoti=Notification(channel=aurora_voice_capture)
+  aurora.runtime.running=true
+  aurora.runtime.foregroundReasons=${reasons}
+  aurora.runtime.foregroundServiceTypeMask=${typesHex}
+`
+}
+
 function sample(overrides: Record<string, unknown> = {}) {
   return {
     elapsedSeconds: 0,
@@ -126,12 +137,27 @@ describe('android background measurement parsers', () => {
       isForeground: true,
       foregroundServiceTypes: ['connectedDevice', 'microphone'],
       foregroundServiceTypeMask: 0x90,
+      foregroundReasons: [],
+      foregroundReasonsReported: false,
     })
     expect(parseRuntimeServiceState('ACTIVITY MANAGER SERVICES\n')).toEqual({
       present: false,
       isForeground: false,
       foregroundServiceTypes: [],
       foregroundServiceTypeMask: 0,
+      foregroundReasons: [],
+      foregroundReasonsReported: false,
+    })
+  })
+
+  it('reads live semantic reasons when API 33 omits the service type field', () => {
+    expect(parseRuntimeServiceState(api33ServiceDump('device_link', '00000010'))).toEqual({
+      present: true,
+      isForeground: true,
+      foregroundServiceTypes: ['connectedDevice'],
+      foregroundServiceTypeMask: 0x10,
+      foregroundReasons: ['device_link'],
+      foregroundReasonsReported: true,
     })
   })
 
@@ -202,7 +228,7 @@ describe('android background measurement reporting', () => {
     expect(dimensions.backgroundToolCalls).toMatchObject({ status: 'not_yet_available', blockedBy: 'no_signal_observed', observed: 0 })
   })
 
-  it('starts measuring R3 dimensions the moment the signals appear', () => {
+  it('keeps a Rust marker unqualified until public and native evidence agrees', () => {
     const scenario = {
       peerCount: 0,
       lifecycle: 'background',
@@ -216,7 +242,44 @@ describe('android background measurement reporting', () => {
     }
     const dimensions = summariseScenario(scenario, waydroid)
     expect(dimensions.deviceLinkSurvival).toEqual({ status: 'measured', lastHeldSeconds: 45 })
-    expect(dimensions.backgroundToolCalls).toEqual({ status: 'measured', observed: 4 })
+    expect(dimensions.backgroundToolCalls).toMatchObject({ status: 'observed_unqualified', observed: 4 })
+  })
+
+  it('measures a held device link from the service reason on API 33', () => {
+    const scenario = {
+      peerCount: 0,
+      lifecycle: 'background',
+      durationSeconds: 60,
+      status: 'measured',
+      backgroundToolCallsObserved: 1,
+      samples: [
+        sample({ elapsedSeconds: 0, service: parseRuntimeServiceState(api33ServiceDump('device_link', '00000010')) }),
+        sample({ elapsedSeconds: 60, service: parseRuntimeServiceState(api33ServiceDump('device_link', '00000010')) }),
+      ],
+    }
+    expect(summariseScenario(scenario, waydroid).deviceLinkSurvival).toEqual({
+      status: 'measured',
+      lastHeldSeconds: 60,
+    })
+  })
+
+  it('does not mistake the API 33 default service type for a held device link', () => {
+    const scenario = {
+      peerCount: 0,
+      lifecycle: 'background',
+      durationSeconds: 60,
+      status: 'measured',
+      backgroundToolCallsObserved: 0,
+      samples: [
+        sample({ elapsedSeconds: 0, service: parseRuntimeServiceState(api33ServiceDump('', '00000010')) }),
+        sample({ elapsedSeconds: 60, service: parseRuntimeServiceState(api33ServiceDump('', '00000010')) }),
+      ],
+    }
+
+    expect(summariseScenario(scenario, waydroid).deviceLinkSurvival).toMatchObject({
+      status: 'not_yet_available',
+      blockedBy: 'no_signal_observed',
+    })
   })
 
   it('records a death rather than rounding it into the window', () => {
@@ -271,7 +334,8 @@ describe('android background measurement reporting', () => {
       ],
     })
 
-    expect(report.formatVersion).toBe(1)
+    expect(report.formatVersion).toBe(2)
+    expect(report.status).toBe('measured')
     expect(report.workstream).toBe('R5')
     expect(report.device).toMatchObject({
       deviceClass: 'waydroid-container',
@@ -290,6 +354,146 @@ describe('android background measurement reporting', () => {
   })
 })
 
+describe('native background proof qualification', () => {
+  const peerId = 'python-gateway-g009'
+  const snapshot = (
+    servedCalls: number,
+    deferredCalls = 0,
+    deniedCalls = 0,
+    failedCalls = 0,
+    connectionId = 17,
+  ) => ({
+    lifecycle: 'foreground',
+    peers: [{ peerId, connectionId, servedCalls, deferredCalls, deniedCalls, failedCalls }],
+  })
+  const scenario = {
+    dimensions: {
+      survival: { survivedWholeWindow: true, windowSeconds: 130 },
+      deviceLinkSurvival: { status: 'measured', lastHeldSeconds: 130 },
+      backgroundToolCalls: { status: 'measured', observed: 1 },
+    },
+  }
+  const gatewayReport = { nativeDeviceToolEvidence: { status: 'passed' } }
+
+  it('passes only when the same Rust peer served the background call', () => {
+    expect(summariseNativeBackgroundProof({
+      peerId,
+      beforeSnapshot: snapshot(3),
+      afterSnapshot: snapshot(4),
+      scenario,
+      gatewayReport,
+    })).toMatchObject({
+      status: 'passed',
+      counters: { markerCount: 1, servedCallsDelta: 1, deferredCallsDelta: 0, deniedCallsDelta: 0, failedCallsDelta: 0 },
+    })
+  })
+
+  it('rejects gateway payload success when Rust served nothing', () => {
+    expect(summariseNativeBackgroundProof({
+      peerId,
+      beforeSnapshot: snapshot(3),
+      afterSnapshot: snapshot(3),
+      scenario,
+      gatewayReport,
+    })).toMatchObject({ status: 'failed', checks: { publicGatewayCallPassed: true, rustServedCall: false } })
+  })
+
+  it('rejects a replacement native session and a device link that did not survive the window', () => {
+    const droppedLinkScenario = {
+      dimensions: {
+        ...scenario.dimensions,
+        deviceLinkSurvival: { status: 'measured', lastHeldSeconds: 120 },
+      },
+    }
+    expect(summariseNativeBackgroundProof({
+      peerId,
+      beforeSnapshot: snapshot(3),
+      afterSnapshot: snapshot(4, 0, 0, 0, 18),
+      scenario: droppedLinkScenario,
+      gatewayReport,
+    })).toMatchObject({
+      status: 'failed',
+      checks: { sameNativePeer: false, deviceLinkHeld: false },
+    })
+  })
+
+  it('rejects missing markers and deferred, denied, or failed calls', () => {
+    const missingMarker = {
+      dimensions: {
+        ...scenario.dimensions,
+        backgroundToolCalls: { status: 'not_yet_available', observed: 0 },
+      },
+    }
+    expect(summariseNativeBackgroundProof({
+      peerId,
+      beforeSnapshot: snapshot(3),
+      afterSnapshot: snapshot(4, 1, 1, 1),
+      scenario: missingMarker,
+      gatewayReport,
+    })).toMatchObject({
+      status: 'failed',
+      checks: {
+        backgroundMarkerObserved: false,
+        noDeferredCall: false,
+        noDeniedCall: false,
+        noFailedCall: false,
+      },
+    })
+  })
+
+  it('keeps a marker-present report failed when the public Gateway call failed', () => {
+    const waydroid = classifyAndroidDevice({ 'ro.product.device': 'waydroid_x86_64' })
+    const report = buildReport({
+      device: {
+        serial: 'waydroid',
+        props: {
+          'ro.product.device': 'waydroid_x86_64',
+          'ro.product.cpu.abi': 'x86_64',
+          'ro.build.version.sdk': '33',
+        },
+        classification: waydroid,
+      },
+      appId: 'dev.aurora.desktop',
+      args: { durationSeconds: 130, sampleIntervalSeconds: 10, peerCounts: [1], lifecycles: ['background'] },
+      scenarios: [{
+        peerCount: 1,
+        lifecycle: 'background',
+        durationSeconds: 130,
+        status: 'measured',
+        backgroundToolCallsObserved: 1,
+        samples: [
+          sample({ elapsedSeconds: 0, service: parseRuntimeServiceState(api33ServiceDump('device_link', '00000010')) }),
+          sample({ elapsedSeconds: 130, service: parseRuntimeServiceState(api33ServiceDump('device_link', '00000010')) }),
+        ],
+        nativeBackgroundEvidence: {
+          peerId,
+          beforeSnapshot: snapshot(3),
+          afterSnapshot: snapshot(4),
+          gatewayReport: { nativeDeviceToolEvidence: { status: 'failed' } },
+        },
+      }],
+    })
+
+    expect(report.status).toBe('failed')
+    expect(report.scenarios[0].nativeBackgroundProof).toMatchObject({
+      status: 'failed',
+      checks: { publicGatewayCallPassed: false, rustServedCall: true },
+    })
+    expect(report.scenarios[0].dimensions.backgroundToolCalls).toMatchObject({
+      status: 'not_qualified',
+      blockedBy: 'native_background_proof_failed',
+      observed: 1,
+    })
+    expect(summariseReportForConsole(report)).toContain('native background proof: failed')
+    expect(qualificationExitCode(report)).toBe(1)
+  })
+
+  it('keeps measured and qualified reports successful for automation', () => {
+    expect(qualificationExitCode({ status: 'measured' })).toBe(0)
+    expect(qualificationExitCode({ status: 'passed' })).toBe(0)
+  })
+})
+
 describe('android background measurement options', () => {
   it('defaults to the documented settings and validates the rest', () => {
     expect(parseArgs([])).toMatchObject({
@@ -301,9 +505,18 @@ describe('android background measurement options', () => {
     })
     expect(parseArgs(['--duration', '60', '--peer-counts', '0,1,2', '--lifecycles', 'background']))
       .toMatchObject({ durationSeconds: 60, peerCounts: [0, 1, 2], lifecycles: ['background'] })
+    expect(parseArgs([
+      '--peer-counts', '1',
+      '--lifecycles', 'background',
+      '--native-peer-id', 'peer-a',
+      '--native-before-snapshot', 'before.json',
+      '--native-after-snapshot', 'after.json',
+      '--gateway-report', 'gateway.json',
+    ])).toMatchObject({ nativePeerId: 'peer-a', nativeBeforeSnapshot: 'before.json' })
     expect(() => parseArgs(['--duration', '0'])).toThrow(/positive/u)
     expect(() => parseArgs(['--lifecycles', 'doze'])).toThrow(/foreground and background/u)
     expect(() => parseArgs(['--peer-counts', '-1'])).toThrow(/non-negative/u)
+    expect(() => parseArgs(['--native-peer-id', 'peer-a'])).toThrow(/requires/u)
   })
 
   it('selects the Waydroid device by description instead of a hardcoded address', () => {
