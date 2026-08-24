@@ -2218,7 +2218,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 757
+        "line": 774
       }
     },
     {
@@ -2233,7 +2233,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 1965
+        "line": 1997
       }
     },
     {
