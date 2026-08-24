@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::{
     path_bytes_for_tts, ErrorCode, OfflineTtsConfig, OfflineTtsGenerationConfig,
-    OfflineTtsModelKind, TtsAudio, TtsError, DEFAULT_TTS_NUM_STEPS, MAX_TTS_CALLBACK_CHUNK_SAMPLES,
+    OfflineTtsModelKind, TtsAudio, TtsError, DEFAULT_TTS_NUM_STEPS, MAX_TTS_AUDIO_SAMPLES,
 };
 
 #[repr(C)]
@@ -305,6 +305,7 @@ impl OfflineTts {
         let mut callback_state = CallbackState {
             cancellation,
             invalid_audio: false,
+            resource_limit: false,
             cancelled: false,
         };
         let audio = unsafe {
@@ -316,6 +317,10 @@ impl OfflineTts {
                 (&mut callback_state as *mut CallbackState<'_>).cast::<c_void>(),
             )
         };
+        if callback_state.resource_limit {
+            destroy_generated_audio_if_present(audio);
+            return Err(TtsError::NativeAudioTooLong);
+        }
         if callback_state.invalid_audio {
             destroy_generated_audio_if_present(audio);
             return Err(TtsError::NativeInvalidAudio);
@@ -378,6 +383,7 @@ impl Drop for GeneratedAudioHandle {
 struct CallbackState<'a> {
     cancellation: &'a AtomicBool,
     invalid_audio: bool,
+    resource_limit: bool,
     cancelled: bool,
 }
 
@@ -395,16 +401,20 @@ extern "C" fn progress_callback(
         state.cancelled = true;
         return 0;
     }
-    if !(0..=MAX_TTS_CALLBACK_CHUNK_SAMPLES).contains(&n) {
+    let Ok(sample_count) = usize::try_from(n) else {
+        state.invalid_audio = true;
+        return 0;
+    };
+    if sample_count > MAX_TTS_AUDIO_SAMPLES {
+        state.resource_limit = true;
+        return 0;
+    }
+    if sample_count > 0 && samples.is_null() {
         state.invalid_audio = true;
         return 0;
     }
-    if n > 0 && samples.is_null() {
-        state.invalid_audio = true;
-        return 0;
-    }
-    if n > 0 {
-        let slice = unsafe { std::slice::from_raw_parts(samples, n as usize) };
+    if sample_count > 0 {
+        let slice = unsafe { std::slice::from_raw_parts(samples, sample_count) };
         if slice
             .iter()
             .any(|sample| !sample.is_finite() || !(-1.0..=1.0).contains(sample))
@@ -432,4 +442,63 @@ fn path_cstring(path: &std::path::Path, empty_code: ErrorCode) -> Result<CString
 
 fn string_cstring(value: &str, code: ErrorCode) -> Result<CString, TtsError> {
     CString::new(value).map_err(|_| TtsError::InvalidConfig { code })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn callback_state(cancellation: &AtomicBool) -> CallbackState<'_> {
+        CallbackState {
+            cancellation,
+            invalid_audio: false,
+            resource_limit: false,
+            cancelled: false,
+        }
+    }
+
+    #[test]
+    fn progress_callback_accepts_sentence_batches_within_audio_contract() {
+        let cancellation = AtomicBool::new(false);
+        let samples = vec![0.0; 192_001];
+        let mut state = callback_state(&cancellation);
+
+        let result = progress_callback(
+            samples.as_ptr(),
+            i32::try_from(samples.len()).expect("sample count"),
+            0.5,
+            (&mut state as *mut CallbackState<'_>).cast::<c_void>(),
+        );
+
+        assert_eq!(result, 1);
+        assert!(!state.invalid_audio);
+        assert!(!state.resource_limit);
+        assert!(!state.cancelled);
+    }
+
+    #[test]
+    fn progress_callback_distinguishes_resource_limits_from_invalid_audio() {
+        let cancellation = AtomicBool::new(false);
+        let mut oversized = callback_state(&cancellation);
+        let oversized_result = progress_callback(
+            std::ptr::null(),
+            i32::try_from(MAX_TTS_AUDIO_SAMPLES + 1).expect("oversized sample count"),
+            0.5,
+            (&mut oversized as *mut CallbackState<'_>).cast::<c_void>(),
+        );
+        assert_eq!(oversized_result, 0);
+        assert!(oversized.resource_limit);
+        assert!(!oversized.invalid_audio);
+
+        let mut invalid = callback_state(&cancellation);
+        let invalid_result = progress_callback(
+            std::ptr::null(),
+            1,
+            0.5,
+            (&mut invalid as *mut CallbackState<'_>).cast::<c_void>(),
+        );
+        assert_eq!(invalid_result, 0);
+        assert!(invalid.invalid_audio);
+        assert!(!invalid.resource_limit);
+    }
 }

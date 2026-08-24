@@ -13,6 +13,8 @@ use std::sync::{
 };
 use thiserror::Error;
 
+const MAX_TTS_RECOVERY_SEGMENTS: usize = 32;
+
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
     BoundTtsSynthesisRequest, BoundVadRequest, EngineError, FiniteSttAudio, FiniteSttAudioBuilder,
@@ -21,7 +23,8 @@ pub use aurora_voice_engine::{
     RouteTtsBinding, RouteTtsSynthesisRequest, StreamResetReason, StreamingAudioFrame,
     TaskCapability, TaskPackBinding, TaskProvider, TaskReadiness, TaskRequest, TtsSynthesisConfig,
     TtsSynthesisPort, TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
-    VadStreamProvider, VoiceTask, MONO_CHANNELS, VAD_SAMPLE_RATE_HZ, VAD_WINDOW_SIZE_SAMPLES,
+    VadStreamProvider, VoiceTask, MONO_CHANNELS, TTS_MAX_TEXT_BYTES, VAD_SAMPLE_RATE_HZ,
+    VAD_WINDOW_SIZE_SAMPLES,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -461,6 +464,109 @@ pub struct AssistantTurnResponse {
     pub session_id: Option<String>,
     pub request_id: Option<String>,
     pub correlation_id: Option<String>,
+}
+
+fn project_spoken_text(text: &str) -> Result<String, EngineError> {
+    let mut spoken = String::with_capacity(text.len().min(TTS_MAX_TEXT_BYTES));
+    let mut pending_space = false;
+
+    for character in text.trim().chars() {
+        if character.is_control() || character.is_whitespace() {
+            pending_space = !spoken.is_empty();
+            continue;
+        }
+
+        if pending_space {
+            if spoken.len() == TTS_MAX_TEXT_BYTES {
+                break;
+            }
+            spoken.push(' ');
+            pending_space = false;
+        }
+
+        if spoken.len().saturating_add(character.len_utf8()) > TTS_MAX_TEXT_BYTES {
+            break;
+        }
+        spoken.push(character);
+    }
+
+    if spoken.is_empty() {
+        return Err(EngineError::InvalidRequest);
+    }
+    Ok(spoken)
+}
+
+fn split_spoken_segment(text: &str) -> Option<(String, String)> {
+    if text.chars().count() < 2 {
+        return None;
+    }
+
+    let midpoint = text.len() / 2;
+    let lower_bound = text.len() / 4;
+    let upper_bound = text.len().saturating_mul(3) / 4;
+    let mut sentence_boundary = None;
+    let mut whitespace_boundary = None;
+
+    for (index, character) in text.char_indices() {
+        let boundary = if matches!(character, '.' | '!' | '?' | ';' | ':') {
+            index.saturating_add(character.len_utf8())
+        } else if character.is_whitespace() {
+            index
+        } else {
+            continue;
+        };
+        if boundary <= lower_bound || boundary >= upper_bound {
+            continue;
+        }
+        let distance = boundary.abs_diff(midpoint);
+        let candidate = (distance, boundary);
+        if matches!(character, '.' | '!' | '?' | ';' | ':') {
+            if sentence_boundary.is_none_or(|current| candidate < current) {
+                sentence_boundary = Some(candidate);
+            }
+        } else if whitespace_boundary.is_none_or(|current| candidate < current) {
+            whitespace_boundary = Some(candidate);
+        }
+    }
+
+    let split_at = sentence_boundary
+        .or(whitespace_boundary)
+        .map(|(_, boundary)| boundary)
+        .or_else(|| {
+            text.char_indices()
+                .map(|(index, _)| index)
+                .filter(|index| *index > 0)
+                .min_by_key(|index| index.abs_diff(midpoint))
+        })?;
+    let left = text[..split_at].trim().to_owned();
+    let right = text[split_at..].trim().to_owned();
+    (!left.is_empty() && !right.is_empty()).then_some((left, right))
+}
+
+fn bound_tts_synthesis_request(
+    binding: &TtsSynthesisProviderBinding,
+    text: String,
+    config: &TtsSynthesisConfig,
+    generation: Generation,
+) -> Result<BoundTtsSynthesisRequest, EngineError> {
+    match binding {
+        TtsSynthesisProviderBinding::LocalTask(binding) => {
+            let task_request = BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::TextToSpeech,
+                    language: None,
+                    generation: generation.0,
+                },
+                binding.as_ref().clone(),
+            )?;
+            BoundTtsSynthesisRequest::new(task_request, text, config.clone())
+        }
+        TtsSynthesisProviderBinding::Route(route) => BoundTtsSynthesisRequest::new_route(
+            RouteTtsSynthesisRequest::new(route.clone(), None, generation.0)?,
+            text,
+            config.clone(),
+        ),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1856,6 +1962,9 @@ where
             TimestampMicros(at.0.saturating_add(3)),
         )
         .await?;
+        // Assistant results are retained at transport fidelity. Local synthesis has a finite,
+        // stricter input contract, so only the spoken rendition is normalized and bounded.
+        let spoken_text = project_spoken_text(&response.text)?;
         let tts_binding = self.tts.synthesis_binding()?;
         let tts_config = TtsSynthesisConfig::new(
             "default",
@@ -1865,49 +1974,68 @@ where
             None,
         )?;
         self.tts.warm_synthesis(tts_binding.clone()).await?;
-        let tts_request = match tts_binding {
-            TtsSynthesisProviderBinding::LocalTask(binding) => {
-                let task_request = BoundTaskRequest::new(
-                    TaskRequest {
-                        task: VoiceTask::TextToSpeech,
-                        language: None,
-                        generation: lease.generation.0,
-                    },
-                    *binding,
-                )?;
-                BoundTtsSynthesisRequest::new(task_request, response.text.clone(), tts_config)?
+        let mut pending_segments = VecDeque::from([spoken_text]);
+        let mut synthesized_segments = Vec::new();
+        while let Some(segment) = pending_segments.pop_front() {
+            cancellation.check()?;
+            let request = bound_tts_synthesis_request(
+                &tts_binding,
+                segment.clone(),
+                &tts_config,
+                lease.generation,
+            )?;
+            match self
+                .tts
+                .synthesize_text(request, &|| cancellation.is_cancelled())
+                .await
+            {
+                Ok(audio) => synthesized_segments.push(audio),
+                Err(EngineError::ResourceLimit) => {
+                    cancellation.check()?;
+                    let Some((left, right)) = split_spoken_segment(&segment) else {
+                        return Err(VoiceCoreError::Engine(EngineError::ResourceLimit));
+                    };
+                    if synthesized_segments
+                        .len()
+                        .saturating_add(pending_segments.len())
+                        .saturating_add(2)
+                        > MAX_TTS_RECOVERY_SEGMENTS
+                    {
+                        return Err(VoiceCoreError::Engine(EngineError::ResourceLimit));
+                    }
+                    pending_segments.push_front(right);
+                    pending_segments.push_front(left);
+                }
+                Err(error) => return Err(VoiceCoreError::Engine(error)),
             }
-            TtsSynthesisProviderBinding::Route(route) => BoundTtsSynthesisRequest::new_route(
-                RouteTtsSynthesisRequest::new(route, None, lease.generation.0)?,
-                response.text.clone(),
-                tts_config,
-            )?,
-        };
-        let audio = self
-            .tts
-            .synthesize_text(tts_request, &|| cancellation.is_cancelled())
-            .await?;
-        cancellation.check()?;
-        let playback_context = AudioPlaybackContext {
-            generation: lease.generation,
-            route_revision: lease.route_revision,
-            started_at: TimestampMicros(at.0.saturating_add(4)),
-        };
-        let receipt = self
-            .output
-            .play(playback_context, audio, &|| cancellation.is_cancelled())
-            .await?;
-        cancellation.check()?;
-        if receipt.generation != lease.generation || receipt.route_revision != lease.route_revision
-        {
-            return Err(VoiceCoreError::StaleGeneration);
+        }
+
+        let mut completed_at = TimestampMicros(at.0.saturating_add(4));
+        for audio in synthesized_segments {
+            cancellation.check()?;
+            let playback_context = AudioPlaybackContext {
+                generation: lease.generation,
+                route_revision: lease.route_revision,
+                started_at: completed_at,
+            };
+            let receipt = self
+                .output
+                .play(playback_context, audio, &|| cancellation.is_cancelled())
+                .await?;
+            cancellation.check()?;
+            if receipt.generation != lease.generation
+                || receipt.route_revision != lease.route_revision
+            {
+                return Err(VoiceCoreError::StaleGeneration);
+            }
+            completed_at = receipt.completed_at;
         }
         self.transition_emit(
             VoiceState::Idle,
             TransitionReason::PlaybackEnded,
             lease.generation,
             lease.route_revision,
-            receipt.completed_at,
+            completed_at,
         )
         .await?;
         Ok(response.text)
@@ -2444,6 +2572,10 @@ mod tests {
     struct FakeEngine {
         transcript: String,
         transcribed: Rc<RefCell<Vec<Vec<f32>>>>,
+        synthesized_text: Rc<RefCell<Vec<String>>>,
+        tts_text_limit: Rc<RefCell<Option<usize>>>,
+        tts_error: Rc<RefCell<Option<EngineError>>>,
+        tts_cancel_on_resource: Rc<RefCell<Option<CancellationToken>>>,
         stt_cancelled: Rc<RefCell<Vec<u64>>>,
         tts_cancelled: Rc<RefCell<Vec<u64>>>,
     }
@@ -2453,13 +2585,36 @@ mod tests {
             Self {
                 transcript: transcript.to_owned(),
                 transcribed: Rc::new(RefCell::new(Vec::new())),
+                synthesized_text: Rc::new(RefCell::new(Vec::new())),
+                tts_text_limit: Rc::new(RefCell::new(None)),
+                tts_error: Rc::new(RefCell::new(None)),
+                tts_cancel_on_resource: Rc::new(RefCell::new(None)),
                 stt_cancelled: Rc::new(RefCell::new(Vec::new())),
                 tts_cancelled: Rc::new(RefCell::new(Vec::new())),
             }
         }
 
+        fn with_tts_text_limit(self, max_bytes: usize) -> Self {
+            *self.tts_text_limit.borrow_mut() = Some(max_bytes);
+            self
+        }
+
+        fn with_tts_error(self, error: EngineError) -> Self {
+            *self.tts_error.borrow_mut() = Some(error);
+            self
+        }
+
+        fn with_tts_resource_cancellation(self, cancellation: CancellationToken) -> Self {
+            *self.tts_cancel_on_resource.borrow_mut() = Some(cancellation);
+            self
+        }
+
         fn transcribed_audio(&self) -> Vec<Vec<f32>> {
             self.transcribed.borrow().clone()
+        }
+
+        fn synthesized_text(&self) -> Vec<String> {
+            self.synthesized_text.borrow().clone()
         }
     }
 
@@ -2530,6 +2685,22 @@ mod tests {
             if cancellation() {
                 return Err(EngineError::Cancelled);
             }
+            self.synthesized_text
+                .borrow_mut()
+                .push(request.text().to_owned());
+            if let Some(error) = self.tts_error.borrow().clone() {
+                return Err(error);
+            }
+            if self
+                .tts_text_limit
+                .borrow()
+                .is_some_and(|limit| request.text().len() > limit)
+            {
+                if let Some(token) = self.tts_cancel_on_resource.borrow().as_ref() {
+                    token.cancel();
+                }
+                return Err(EngineError::ResourceLimit);
+            }
             let chunk = TtsAudioChunk::new(
                 &request,
                 1,
@@ -2589,6 +2760,7 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
     struct FakeAudioOutput {
         played: Rc<RefCell<Vec<Generation>>>,
     }
@@ -2598,6 +2770,10 @@ mod tests {
             Self {
                 played: Rc::new(RefCell::new(Vec::new())),
             }
+        }
+
+        fn played_generations(&self) -> Vec<Generation> {
+            self.played.borrow().clone()
         }
     }
 
@@ -3283,6 +3459,36 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn spoken_text_projection_normalizes_controls_and_respects_utf8_limit() {
+        assert_eq!(
+            project_spoken_text("  hello\n\tworld\u{7}again  "),
+            Ok("hello world again".to_owned())
+        );
+        assert_eq!(
+            project_spoken_text("\n\t\u{7}\r"),
+            Err(EngineError::InvalidRequest)
+        );
+
+        let response = format!("{}🙂tail", "a".repeat(TTS_MAX_TEXT_BYTES - 1));
+        let spoken = project_spoken_text(&response).expect("bounded spoken text");
+        assert_eq!(spoken.len(), TTS_MAX_TEXT_BYTES - 1);
+        assert!(!spoken.contains('🙂'));
+    }
+
+    #[test]
+    fn spoken_text_split_prefers_balanced_sentence_boundaries() {
+        let text = "First sentence stays concise. Second sentence is also concise. Third sentence finishes the answer.";
+        let (left, right) = split_spoken_segment(text).expect("balanced split");
+
+        assert_eq!(
+            format!("{left} {right}"),
+            project_spoken_text(text).expect("spoken projection")
+        );
+        assert!(left.ends_with('.'));
+        assert!(left.len().abs_diff(right.len()) < text.len() / 2);
+    }
+
     type TestRuntime = VoiceRuntime<
         FakeAudioInput,
         FakeEngine,
@@ -3401,6 +3607,153 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn push_to_talk_preserves_full_response_while_bounding_spoken_text(
+    ) -> Result<(), VoiceCoreError> {
+        let response = format!("{}🙂tail", "a".repeat(TTS_MAX_TEXT_BYTES - 1));
+        let engine = FakeEngine::new("spoken transcript");
+        let tts_probe = engine.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new(&response),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "spoken-projection-test",
+        )?;
+
+        let returned = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(returned, response);
+        let synthesized = tts_probe.synthesized_text();
+        assert_eq!(synthesized.len(), 1);
+        assert_eq!(synthesized[0].len(), TTS_MAX_TEXT_BYTES - 1);
+        assert!(!synthesized[0].contains('🙂'));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn push_to_talk_bisects_and_plays_only_resource_limited_speech(
+    ) -> Result<(), VoiceCoreError> {
+        let response = "First sentence stays concise. Second sentence is also concise. Third sentence finishes the answer.";
+        let engine = FakeEngine::new("spoken transcript").with_tts_text_limit(64);
+        let tts_probe = engine.clone();
+        let output = FakeAudioOutput::new();
+        let output_probe = output.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new(response),
+            output,
+            FakeEventSink::default(),
+            "test",
+            "spoken-resource-recovery-test",
+        )?;
+
+        let returned = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(returned, response);
+        let attempts = tts_probe.synthesized_text();
+        assert_eq!(attempts.first().map(String::as_str), Some(response));
+        let successful = attempts
+            .iter()
+            .filter(|segment| segment.len() <= 64)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(successful.join(" "), response);
+        assert_eq!(output_probe.played_generations().len(), successful.len());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn push_to_talk_does_not_retry_or_play_provider_faults() -> Result<(), VoiceCoreError> {
+        let engine =
+            FakeEngine::new("spoken transcript").with_tts_error(EngineError::ProviderFault {
+                code: EngineFaultCode::Native,
+            });
+        let tts_probe = engine.clone();
+        let output = FakeAudioOutput::new();
+        let output_probe = output.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("Provider faults stay terminal."),
+            output,
+            FakeEventSink::default(),
+            "test",
+            "spoken-provider-fault-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::Engine(EngineError::ProviderFault {
+                code: EngineFaultCode::Native
+            }))
+        ));
+        assert_eq!(tts_probe.synthesized_text().len(), 1);
+        assert!(output_probe.played_generations().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn push_to_talk_cancellation_stops_resource_recovery_before_playback(
+    ) -> Result<(), VoiceCoreError> {
+        let cancellation = CancellationToken::new();
+        let engine = FakeEngine::new("spoken transcript")
+            .with_tts_text_limit(32)
+            .with_tts_resource_cancellation(cancellation.clone());
+        let tts_probe = engine.clone();
+        let output = FakeAudioOutput::new();
+        let output_probe = output.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("This response is deliberately long enough to require splitting."),
+            output,
+            FakeEventSink::default(),
+            "test",
+            "spoken-resource-cancellation-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                cancellation,
+            )
+            .await;
+
+        assert_eq!(result, Err(VoiceCoreError::Cancelled));
+        assert_eq!(tts_probe.synthesized_text().len(), 1);
+        assert!(output_probe.played_generations().is_empty());
+        Ok(())
     }
 
     #[tokio::test]

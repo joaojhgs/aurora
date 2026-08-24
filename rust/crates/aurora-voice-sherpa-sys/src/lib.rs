@@ -270,8 +270,6 @@ const MAX_TTS_EXTRA_BYTES: usize = 4096;
 #[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
 const DEFAULT_TTS_NUM_STEPS: i32 = 5;
 const MAX_TTS_AUDIO_SAMPLES: usize = 2_880_000;
-#[cfg(all(feature = "native-tts", not(target_arch = "wasm32")))]
-const MAX_TTS_CALLBACK_CHUNK_SAMPLES: i32 = 192_000;
 #[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]
 const MAX_OFFLINE_STT_TEXT_BYTES: usize = 16_384;
 #[cfg(all(feature = "native-stt", not(target_arch = "wasm32")))]

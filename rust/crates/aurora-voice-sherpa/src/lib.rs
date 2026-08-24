@@ -99,6 +99,8 @@ pub enum SherpaAdapterError {
     InvalidPhraseMap,
     #[error("invalid transcript")]
     InvalidTranscript,
+    #[error("resource limit")]
+    ResourceLimit,
     #[error("cancelled")]
     Cancelled,
     #[error("backend fault: {code}")]
@@ -120,6 +122,7 @@ impl SherpaAdapterError {
             | Self::InvalidSegment
             | Self::InvalidPhraseMap
             | Self::InvalidTranscript => EngineError::InvalidRequest,
+            Self::ResourceLimit => EngineError::ResourceLimit,
             Self::Cancelled => EngineError::Cancelled,
             Self::BackendFault { code } => EngineError::ProviderFault {
                 code: code.as_engine_fault(),
@@ -3174,11 +3177,13 @@ mod native_tts_backend {
                 code: EngineFaultCode::HostUnavailable,
             },
             aurora_voice_sherpa_sys::TtsError::InvalidConfig { .. }
-            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. }
-            | aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
-            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
+            | aurora_voice_sherpa_sys::TtsError::InvalidText { .. } => EngineError::InvalidRequest,
+            aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong => EngineError::ResourceLimit,
+            aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
             | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
-                EngineError::InvalidRequest
+                EngineError::ProviderFault {
+                    code: EngineFaultCode::Native,
+                }
             }
             aurora_voice_sherpa_sys::TtsError::Cancelled => EngineError::Cancelled,
             _ => EngineError::ProviderFault {
@@ -3198,15 +3203,50 @@ mod native_tts_backend {
             | aurora_voice_sherpa_sys::TtsError::InvalidText { .. } => {
                 SherpaAdapterError::InvalidConfig
             }
+            aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong => {
+                SherpaAdapterError::ResourceLimit
+            }
             aurora_voice_sherpa_sys::TtsError::NativeInvalidAudio
-            | aurora_voice_sherpa_sys::TtsError::NativeAudioTooLong
             | aurora_voice_sherpa_sys::TtsError::NativeInvalidSpeakerCount => {
-                SherpaAdapterError::InvalidAudio
+                SherpaAdapterError::BackendFault {
+                    code: BackendFaultCode::NativeFault,
+                }
             }
             aurora_voice_sherpa_sys::TtsError::Cancelled => SherpaAdapterError::Cancelled,
             _ => SherpaAdapterError::BackendFault {
                 code: BackendFaultCode::NativeFault,
             },
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn native_tts_preserves_resource_limits_and_provider_faults() {
+            assert_eq!(
+                native_tts_error(NativeTtsError::NativeAudioTooLong),
+                EngineError::ResourceLimit
+            );
+            assert_eq!(
+                native_tts_adapter_error(NativeTtsError::NativeAudioTooLong),
+                SherpaAdapterError::ResourceLimit
+            );
+
+            let provider_fault = EngineError::ProviderFault {
+                code: EngineFaultCode::Native,
+            };
+            assert_eq!(
+                native_tts_error(NativeTtsError::NativeInvalidAudio),
+                provider_fault
+            );
+            assert_eq!(
+                native_tts_adapter_error(NativeTtsError::NativeInvalidAudio),
+                SherpaAdapterError::BackendFault {
+                    code: BackendFaultCode::NativeFault,
+                }
+            );
         }
     }
 }
