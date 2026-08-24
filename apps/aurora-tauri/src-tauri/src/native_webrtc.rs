@@ -382,6 +382,24 @@ pub async fn send_native_text_data_channel(
     }
 }
 
+pub async fn send_native_binary_data_channel(
+    app: AppHandle,
+    state: &NativeWebRtcState,
+    data_channel_id: u64,
+    payload: Vec<u8>,
+) -> Result<(), NativeWebRtcSendError> {
+    #[cfg(aurora_native_webrtc)]
+    {
+        return native::send_data_channel_binary_now(app, &state.inner, data_channel_id, payload)
+            .await;
+    }
+    #[cfg(not(aurora_native_webrtc))]
+    {
+        let _ = (app, state, data_channel_id, payload);
+        Err(NativeWebRtcSendError::NotSupported)
+    }
+}
+
 #[tauri::command]
 pub async fn aurora_native_webrtc_data_channel_close(
     state: State<'_, NativeWebRtcState>,
@@ -698,13 +716,50 @@ mod native {
         data_channel_id: u64,
         payload: String,
     ) -> Result<(), NativeWebRtcSendError> {
+        send_data_channel_now(
+            app,
+            store,
+            data_channel_id,
+            NativeSendPayload::Text(payload),
+        )
+        .await
+    }
+
+    pub(super) async fn send_data_channel_binary_now(
+        app: AppHandle,
+        store: &Arc<NativeWebRtcStore>,
+        data_channel_id: u64,
+        payload: Vec<u8>,
+    ) -> Result<(), NativeWebRtcSendError> {
+        send_data_channel_now(
+            app,
+            store,
+            data_channel_id,
+            NativeSendPayload::Binary(payload),
+        )
+        .await
+    }
+
+    async fn send_data_channel_now(
+        app: AppHandle,
+        store: &Arc<NativeWebRtcStore>,
+        data_channel_id: u64,
+        payload: NativeSendPayload,
+    ) -> Result<(), NativeWebRtcSendError> {
         let (peer_connection_id, channel, send_lock) =
             data_channel_with_send_lock(store, data_channel_id)
                 .await
                 .map_err(|_| NativeWebRtcSendError::ChannelUnavailable)?;
-        ensure_within_message_ceiling(payload.len())?;
+        ensure_within_message_ceiling(match &payload {
+            NativeSendPayload::Binary(bytes) => bytes.len(),
+            NativeSendPayload::Text(text) => text.len(),
+        })?;
         let _send_guard = send_lock.lock().await;
-        match channel.send_text(payload).await {
+        let result = match payload {
+            NativeSendPayload::Binary(bytes) => channel.send(&Bytes::from(bytes)).await,
+            NativeSendPayload::Text(text) => channel.send_text(text).await,
+        };
+        match result {
             Ok(_) => {
                 emit_to_main(
                     &app,

@@ -5,13 +5,13 @@ describe("native Android voice port", () => {
   it("routes status and turn controls through the foreground service commands", async () => {
     const invoke = vi.fn(async (command: string, _args?: Record<string, unknown>): Promise<unknown> => {
       if (command.endsWith("status")) {
-        return { startable: true, backgroundStartable: true, running: true, captureActive: true, backgroundSessionActive: true };
+        return { startable: true, backgroundStartable: true, running: true, captureActive: true, backgroundSessionActive: true, focusedVoiceActive: false };
       }
-      return { status: { startable: true, backgroundStartable: true, running: false, captureActive: false } };
+      return { status: { startable: true, backgroundStartable: true, running: false, captureActive: false, focusedVoiceActive: false } };
     });
     const port = createTauriNativeAndroidVoicePort(invoke);
 
-    await expect(port.status()).resolves.toMatchObject({ phase: "listening", available: true });
+    await expect(port.status()).resolves.toMatchObject({ phase: "idle", available: true, backgroundActive: true });
     await expect(port.start({ remoteAudioConsent: false })).resolves.toMatchObject({ phase: "idle" });
     await expect(port.finish()).resolves.toMatchObject({ phase: "idle" });
     await expect(port.cancel()).resolves.toMatchObject({ phase: "idle" });
@@ -38,6 +38,7 @@ describe("native Android voice port", () => {
       running: true,
       captureActive: true,
       backgroundSessionActive: false,
+      focusedVoiceActive: true,
     }));
     const port = createTauriNativeAndroidVoicePort(invoke);
 
@@ -63,6 +64,7 @@ describe("native Android voice port", () => {
       running: true,
       captureActive: true,
       backgroundSessionActive: true,
+      focusedVoiceActive: false,
     }));
     const port = createTauriNativeAndroidVoicePort(invoke);
 
@@ -71,6 +73,50 @@ describe("native Android voice port", () => {
       phase: "listening",
       running: true,
       captureActive: true,
+      backgroundActive: true,
+    });
+  });
+
+  it("does not treat a device-link-only foreground service as focused voice capture", async () => {
+    const invoke = vi.fn(async (): Promise<unknown> => ({
+      startable: true,
+      backgroundStartable: true,
+      running: true,
+      captureActive: false,
+      runtimeActive: false,
+      backgroundSessionActive: false,
+      foregroundReasons: ["device_link"],
+      focusedVoiceActive: false,
+    }));
+    const port = createTauriNativeAndroidVoicePort(invoke);
+
+    await expect(port.status()).resolves.toMatchObject({
+      available: true,
+      phase: "idle",
+      running: false,
+      captureActive: false,
+      backgroundActive: false,
+    });
+  });
+
+  it("reports externally started background assistant capture on the normal status path", async () => {
+    const invoke = vi.fn(async (): Promise<unknown> => ({
+      startable: false,
+      backgroundStartable: false,
+      running: true,
+      captureActive: true,
+      runtimeActive: true,
+      backgroundSessionActive: true,
+      foregroundReasons: ["device_link", "voice"],
+      focusedVoiceActive: false,
+    }));
+    const port = createTauriNativeAndroidVoicePort(invoke);
+
+    await expect(port.status()).resolves.toMatchObject({
+      available: true,
+      phase: "idle",
+      running: false,
+      captureActive: false,
       backgroundActive: true,
     });
   });
@@ -84,6 +130,7 @@ describe("native Android voice port", () => {
         backgroundStartable: true,
         running: false,
         captureActive: false,
+        focusedVoiceActive: false,
         runtimePhase: "idle",
         state: "available",
         reason: "foreground_service_startable",

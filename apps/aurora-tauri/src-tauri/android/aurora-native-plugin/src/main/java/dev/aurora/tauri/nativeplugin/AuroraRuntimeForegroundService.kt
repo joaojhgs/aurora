@@ -52,6 +52,11 @@ private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
 private const val MAX_CHUNK_SAMPLES = 4_096
 private const val VOICE_CAPTURE_FRAME_SAMPLES = SAMPLE_RATE_HZ / 10
+// Android emulators and headless devices can expose an AudioTrack sink that
+// accepts construction/play but never makes blocking writes return. Bound the
+// host write so a stalled sink is reported to the Rust runtime as a playback
+// failure instead of leaving the assistant turn in "speaking" indefinitely.
+private const val VOICE_PLAYBACK_WRITE_TIMEOUT_MILLIS = 2_000L
 // Debug-only deterministic ingress expires 120 seconds after its last explicit
 // harness heartbeat, restoring live capture if the harness exits unexpectedly.
 private const val VOICE_LIVE_TEST_INGRESS_MAX_HOLD_MILLIS = 120_000L
@@ -269,6 +274,7 @@ private interface AuroraPcmIngressBridge : AutoCloseable {
 private interface AuroraPcmOutputBridge : AutoCloseable {
     fun drainPcm(): ShortArray
     fun acknowledgeDrained()
+    fun failPlayback(errorCode: String)
 }
 
 data class AuroraVoiceCaptureSnapshot(
@@ -388,6 +394,11 @@ private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
         if (current != 0L) nativeAcknowledgeDrained(current)
     }
 
+    override fun failPlayback(errorCode: String) {
+        val current = handle
+        if (current != 0L) nativeFailPlayback(current, errorCode)
+    }
+
     fun queuedChunks(): Long {
         val current = handle
         return if (current == 0L) 0L else nativeStats(current).getOrElse(0) { 0L }
@@ -405,6 +416,7 @@ private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
     private external fun nativeCreate(capacityChunks: Int): Long
     private external fun nativeDrainPcm(handle: Long): ShortArray
     private external fun nativeAcknowledgeDrained(handle: Long)
+    private external fun nativeFailPlayback(handle: Long, errorCode: String)
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)
@@ -507,6 +519,11 @@ private class AuroraNativeVoiceSessionBridge(
         if (current != 0L) nativeAcknowledgeDrained(current)
     }
 
+    override fun failPlayback(errorCode: String) {
+        val current = handle
+        if (current != 0L) nativeFailPlayback(current, errorCode)
+    }
+
     override fun stats(): LongArray {
         val current = handle
         return if (current == 0L) LongArray(11) else nativeStats(current)
@@ -555,6 +572,7 @@ private class AuroraNativeVoiceSessionBridge(
     private external fun nativeClearIngress(handle: Long): Int
     private external fun nativeDrainPcm(handle: Long): ShortArray
     private external fun nativeAcknowledgeDrained(handle: Long)
+    private external fun nativeFailPlayback(handle: Long, errorCode: String)
     private external fun nativeStats(handle: Long): LongArray
     private external fun nativeClose(handle: Long)
     private external fun nativeFree(handle: Long)
@@ -602,6 +620,7 @@ private class AuroraAudioPlayback(
                 .setBufferSizeInBytes(SAMPLE_RATE_HZ * 2 / 2)
                 .build()
         } catch (_: RuntimeException) {
+            bridge.failPlayback("android_audio_track_write_failed")
             running.set(false)
             return
         }
@@ -614,16 +633,55 @@ private class AuroraAudioPlayback(
                     Thread.sleep(10L)
                     continue
                 }
-                currentTrack.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                if (!writeChunkBounded(currentTrack, samples)) {
+                    if (running.get()) {
+                        bridge.failPlayback("android_audio_track_write_failed")
+                    }
+                    running.set(false)
+                    break
+                }
                 bridge.acknowledgeDrained()
             }
         } catch (_: RuntimeException) {
+            if (running.get()) {
+                bridge.failPlayback("android_audio_track_write_failed")
+            }
             running.set(false)
+        } catch (_: InterruptedException) {
+            if (running.get()) {
+                bridge.failPlayback("android_audio_track_write_failed")
+            }
+            running.set(false)
+            Thread.currentThread().interrupt()
         } finally {
             runCatching { currentTrack.stop() }
             currentTrack.release()
             track = null
         }
+    }
+
+    private fun writeChunkBounded(currentTrack: AudioTrack, samples: ShortArray): Boolean {
+        var offset = 0
+        var lastProgressMillis = SystemClock.elapsedRealtime()
+        while (running.get() && offset < samples.size) {
+            val written = currentTrack.write(
+                samples,
+                offset,
+                samples.size - offset,
+                AudioTrack.WRITE_NON_BLOCKING,
+            )
+            if (written > 0) {
+                offset += written
+                lastProgressMillis = SystemClock.elapsedRealtime()
+                continue
+            }
+            if (written < 0) return false
+            if (SystemClock.elapsedRealtime() - lastProgressMillis >= VOICE_PLAYBACK_WRITE_TIMEOUT_MILLIS) {
+                return false
+            }
+            Thread.sleep(10L)
+        }
+        return offset == samples.size
     }
 
     override fun close() {
@@ -1021,6 +1079,9 @@ class AuroraRuntimeForegroundService : Service() {
     @Volatile
     private var backgroundWakeLock: PowerManager.WakeLock? = null
 
+    @Volatile
+    private var backgroundSessionRearmEnabled = false
+
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         val durableBackgroundSession = backgroundSessionRequested()
         when (change) {
@@ -1144,6 +1205,7 @@ class AuroraRuntimeForegroundService : Service() {
             return serviceRestartMode()
         }
         backgroundSessionActive = backgroundSession
+        backgroundSessionRearmEnabled = durableBackgroundSession
         captureError = null
         captureSnapshot = emptySnapshot(null)
         if (!requestAudioFocus(durableBackgroundSession)) {
@@ -1588,6 +1650,7 @@ class AuroraRuntimeForegroundService : Service() {
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
         releaseBackgroundWakeLock()
         backgroundSessionActive = false
+        backgroundSessionRearmEnabled = false
         invalidateNativeVoiceInitialization()
         running = false
         finishHandler.removeCallbacksAndMessages(null)
@@ -1653,6 +1716,7 @@ class AuroraRuntimeForegroundService : Service() {
 
     private fun releaseNativeVoiceResourcesAsync() {
         backgroundSessionActive = false
+        backgroundSessionRearmEnabled = false
         val captureToClose = capture
         val playbackToClose = playback
         val nativeSession = session
@@ -1661,6 +1725,9 @@ class AuroraRuntimeForegroundService : Service() {
         playback = null
         session = null
         sessionGeneration = 0L
+        captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)
+        abandonAudioFocus()
+        audioFocusRequest = null
         if (captureToClose == null && playbackToClose == null && nativeSession == null) return
         try {
             nativeLifecycleExecutor.execute {
@@ -1707,6 +1774,7 @@ class AuroraRuntimeForegroundService : Service() {
         val nativeSession = session ?: return
         clearBackgroundSessionPersistence()
         backgroundSessionActive = false
+        backgroundSessionRearmEnabled = false
         val captureToClose = capture
         val generationToFinish = sessionGeneration
         try {
@@ -1768,7 +1836,12 @@ class AuroraRuntimeForegroundService : Service() {
         val errorCode = auroraVoiceRuntimeError(
             stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0L },
         )
-        if (backgroundSessionActive && capture != null && isRecoverableBackgroundTurn(errorCode)) {
+        if (
+            backgroundSessionRearmEnabled &&
+            backgroundSessionActive &&
+            capture != null &&
+            isRecoverableBackgroundTurn(errorCode)
+        ) {
             rearmBackgroundSession(nativeSession, stats)
             return
         }
@@ -1802,7 +1875,10 @@ class AuroraRuntimeForegroundService : Service() {
         try {
             nativeLifecycleExecutor.execute {
                 val restartedGeneration = if (
-                    !destroyed && backgroundSessionActive && session === nativeSession
+                    !destroyed &&
+                    backgroundSessionRearmEnabled &&
+                    backgroundSessionActive &&
+                    session === nativeSession
                 ) {
                     runCatching {
                         if (nativeSession.clearIngress()) nativeSession.startBackground() else 0L
@@ -1829,7 +1905,12 @@ class AuroraRuntimeForegroundService : Service() {
         nativeSession: AuroraNativeVoiceSessionBridge,
         restartedGeneration: Long,
     ) {
-        if (destroyed || !backgroundSessionActive || session !== nativeSession) return
+        if (
+            destroyed ||
+            !backgroundSessionRearmEnabled ||
+            !backgroundSessionActive ||
+            session !== nativeSession
+        ) return
         if (restartedGeneration == 0L) {
             captureError = "voice_runtime_unavailable"
             captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)
@@ -1861,14 +1942,14 @@ class AuroraRuntimeForegroundService : Service() {
         acceptedSamples = stats?.getOrElse(1) { current.acceptedSamples } ?: current.acceptedSamples,
         droppedChunks = stats?.getOrElse(2) { current.droppedChunks } ?: current.droppedChunks,
         discontinuities = stats?.getOrElse(3) { current.discontinuities } ?: current.discontinuities,
-        queuedChunks = stats?.getOrElse(4) { current.queuedChunks } ?: current.queuedChunks,
+        queuedChunks = stats?.getOrElse(4) { 0L } ?: 0L,
         runtimeActive = false,
         runtimePhase = stats?.let {
             auroraVoiceRuntimePhase(it.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0L })
         } ?: if (errorCode != null) "faulted" else "idle",
         sessionGeneration = stats?.getOrElse(VOICE_STATS_SESSION_GENERATION_INDEX) {
-            current.sessionGeneration
-        } ?: current.sessionGeneration,
+            0L
+        } ?: 0L,
         completedTurns = stats?.getOrElse(VOICE_STATS_COMPLETED_TURNS_INDEX) {
             current.completedTurns
         } ?: current.completedTurns,
@@ -1876,8 +1957,8 @@ class AuroraRuntimeForegroundService : Service() {
             current.failedTurns
         } ?: current.failedTurns,
         queuedOutputChunks = stats?.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) {
-            current.queuedOutputChunks
-        } ?: current.queuedOutputChunks,
+            0L
+        } ?: 0L,
         errorCode = errorCode ?: stats?.let {
             auroraVoiceRuntimeError(it.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0 })
         } ?: current.errorCode,
@@ -2079,7 +2160,9 @@ class AuroraRuntimeForegroundService : Service() {
     private fun stopAfterTerminalFailure(startId: Int? = null) {
         clearBackgroundSessionPersistence()
         backgroundSessionActive = false
+        backgroundSessionRearmEnabled = false
         invalidateNativeVoiceInitialization()
+        releaseNativeVoiceResourcesAsync()
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
         val remaining = AuroraRuntimeForegroundLedger.activeReasons()
         if (remaining.isNotEmpty()) {

@@ -12,7 +12,7 @@ use aurora_voice_native::{
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
-use crate::mesh_session::{MeshSessionState, NativeAssistantPendingCall};
+use crate::mesh_session::{MeshSessionState, NativeAssistantPendingCall, OutboundDataChannelFrame};
 use crate::native_webrtc::{self, NativeWebRtcState};
 
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -20,6 +20,11 @@ const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[async_trait(?Send)]
 trait NativeMeshAssistantFrameSender: Send + Sync {
     async fn send_text(&self, data_channel_id: u64, payload: String) -> Result<(), TransportError>;
+    async fn send_binary(
+        &self,
+        data_channel_id: u64,
+        payload: Vec<u8>,
+    ) -> Result<(), TransportError>;
 }
 
 struct NativeWebRtcMeshAssistantFrameSender {
@@ -31,6 +36,21 @@ struct NativeWebRtcMeshAssistantFrameSender {
 impl NativeMeshAssistantFrameSender for NativeWebRtcMeshAssistantFrameSender {
     async fn send_text(&self, data_channel_id: u64, payload: String) -> Result<(), TransportError> {
         native_webrtc::send_native_text_data_channel(
+            self.app.clone(),
+            &self.state,
+            data_channel_id,
+            payload,
+        )
+        .await
+        .map_err(|_| TransportError::RequestFailed)
+    }
+
+    async fn send_binary(
+        &self,
+        data_channel_id: u64,
+        payload: Vec<u8>,
+    ) -> Result<(), TransportError> {
+        native_webrtc::send_native_binary_data_channel(
             self.app.clone(),
             &self.state,
             data_channel_id,
@@ -174,17 +194,28 @@ impl TauriNativeMeshAssistantTransport {
             .await?;
         let peer_id = pending.peer_id.clone();
         let frame = assistant_call_frame(method_id, request_id, idempotency_key, payload, &pending);
-        let encoded = serde_json::to_string(&frame).map_err(|_| TransportError::InvalidPayload)?;
+        let encoded = serde_json::to_vec(&frame).map_err(|_| TransportError::InvalidPayload)?;
         if encoded.len() > self.options.limits().max_request_bytes {
             self.mesh_state
                 .cancel_native_assistant_call(&peer_id, request_id)
                 .await;
             return Err(TransportError::RequestTooLarge);
         }
-        if let Err(error) = self
-            .sender
-            .send_text(pending.data_channel_id, encoded)
+        let outbound = match self
+            .mesh_state
+            .encode_native_assistant_frame(&peer_id, pending.data_channel_id, &frame)
             .await
+        {
+            Ok(outbound) => outbound,
+            Err(error) => {
+                self.mesh_state
+                    .cancel_native_assistant_call(&peer_id, request_id)
+                    .await;
+                return Err(error);
+            }
+        };
+        if let Err(error) =
+            send_outbound_frame(&self.sender, pending.data_channel_id, outbound).await
         {
             self.mesh_state
                 .cancel_native_assistant_call(&peer_id, request_id)
@@ -196,7 +227,14 @@ impl TauriNativeMeshAssistantTransport {
             .checked_sub(started.elapsed())
             .unwrap_or(Duration::ZERO);
         if remaining_timeout.is_zero() {
-            send_cancel_frame(&self.sender, pending.data_channel_id, request_id).await;
+            send_cancel_frame(
+                &self.mesh_state,
+                &self.sender,
+                &peer_id,
+                pending.data_channel_id,
+                request_id,
+            )
+            .await;
             self.mesh_state
                 .abandon_native_assistant_call(&peer_id, request_id)
                 .await;
@@ -279,13 +317,13 @@ async fn await_response(
                 return Ok(value);
             }
             _ = &mut timeout => {
-                send_cancel_frame(&sender, data_channel_id, request_id).await;
+                send_cancel_frame(mesh_state, &sender, &peer_id, data_channel_id, request_id).await;
                 mesh_state.abandon_native_assistant_call(&peer_id, request_id).await;
                 return Err(TransportError::Timeout);
             }
             _ = tokio::time::sleep(CANCEL_POLL_INTERVAL) => {
                 if cancellation.is_cancelled() {
-                    send_cancel_frame(&sender, data_channel_id, request_id).await;
+                    send_cancel_frame(mesh_state, &sender, &peer_id, data_channel_id, request_id).await;
                     mesh_state.abandon_native_assistant_call(&peer_id, request_id).await;
                     return Err(TransportError::Cancelled);
                 }
@@ -294,18 +332,37 @@ async fn await_response(
     }
 }
 
-async fn send_cancel_frame(
+async fn send_outbound_frame(
     sender: &Arc<dyn NativeMeshAssistantFrameSender>,
+    data_channel_id: u64,
+    frame: OutboundDataChannelFrame,
+) -> Result<(), TransportError> {
+    match frame {
+        OutboundDataChannelFrame::Text(payload) => sender.send_text(data_channel_id, payload).await,
+        OutboundDataChannelFrame::Binary(payload) => {
+            sender.send_binary(data_channel_id, payload).await
+        }
+    }
+}
+
+async fn send_cancel_frame(
+    mesh_state: &MeshSessionState,
+    sender: &Arc<dyn NativeMeshAssistantFrameSender>,
+    peer_id: &str,
     data_channel_id: u64,
     request_id: &str,
 ) {
-    let Ok(frame) = serde_json::to_string(&json!({
+    let frame = json!({
         "type": "cancel",
         "id": request_id,
-    })) else {
+    });
+    let Ok(frame) = mesh_state
+        .encode_native_assistant_frame(peer_id, data_channel_id, &frame)
+        .await
+    else {
         return;
     };
-    let _ = sender.send_text(data_channel_id, frame).await;
+    let _ = send_outbound_frame(sender, data_channel_id, frame).await;
 }
 
 fn assistant_call_frame(
@@ -351,11 +408,16 @@ pub fn install_for_app(app: &tauri::App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aes_gcm::{
+        aead::{Aead, KeyInit},
+        Aes256Gcm, Nonce,
+    };
     use std::sync::Mutex;
 
     #[derive(Default)]
     struct RecordingSender {
         frames: Mutex<Vec<(u64, String)>>,
+        binary_frames: Mutex<Vec<(u64, Vec<u8>)>>,
     }
 
     #[async_trait(?Send)]
@@ -368,6 +430,18 @@ mod tests {
             self.frames
                 .lock()
                 .expect("frames")
+                .push((data_channel_id, payload));
+            Ok(())
+        }
+
+        async fn send_binary(
+            &self,
+            data_channel_id: u64,
+            payload: Vec<u8>,
+        ) -> Result<(), TransportError> {
+            self.binary_frames
+                .lock()
+                .expect("binary frames")
                 .push((data_channel_id, payload));
             Ok(())
         }
@@ -400,6 +474,71 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
         panic!("timed out waiting for {count} frames");
+    }
+
+    fn open_test_frame(key: &[u8; 32], payload: &[u8]) -> Value {
+        let (nonce, ciphertext) = payload.split_at(12);
+        let cipher = Aes256Gcm::new_from_slice(key).expect("test key");
+        let plaintext = cipher
+            .decrypt(Nonce::from_slice(nonce), ciphertext)
+            .expect("encrypted frame");
+        serde_json::from_slice(&plaintext).expect("JSON frame")
+    }
+
+    #[test]
+    fn invoke_encrypts_call_and_cancel_frames_for_an_encrypted_session() {
+        block_on(async {
+            let mesh_state = MeshSessionState::default();
+            let key = [7_u8; 32];
+            mesh_state
+                .test_bind_native_assistant_peer_with_codec(
+                    "peer-a",
+                    42,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                    key.to_vec(),
+                )
+                .await;
+            let sender = Arc::new(RecordingSender::default());
+            let mut transport = TauriNativeMeshAssistantTransport {
+                mesh_state: mesh_state.clone(),
+                sender: sender.clone(),
+                options: mesh_route(),
+                active_peer_id: None,
+            };
+
+            assert_eq!(
+                transport
+                    .invoke(NativeMeshInvokeRequest {
+                        method_id: ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        request_id: "request-encrypted",
+                        idempotency_key: "idem-encrypted",
+                        payload: &json!({"text": "hello"}),
+                        timeout: Duration::from_millis(5),
+                        cancellation: CancellationToken::new(),
+                        preferred_peer_id: None,
+                        require_advertised_method: true,
+                    })
+                    .await
+                    .expect_err("timeout"),
+                TransportError::Timeout
+            );
+
+            assert!(sender.frames.lock().expect("frames").is_empty());
+            let binary_frames = sender.binary_frames.lock().expect("binary frames").clone();
+            assert_eq!(binary_frames.len(), 2);
+            assert_eq!(binary_frames[0].0, 42);
+            assert_eq!(binary_frames[1].0, 42);
+            let call = open_test_frame(&key, &binary_frames[0].1);
+            assert_eq!(call["type"], "call");
+            assert_eq!(call["method"], ids::ORCHESTRATOR_EXTERNAL_USER_INPUT);
+            assert_eq!(call["id"], "request-encrypted");
+            assert_eq!(
+                open_test_frame(&key, &binary_frames[1].1),
+                json!({"type": "cancel", "id": "request-encrypted"})
+            );
+        });
     }
 
     #[test]

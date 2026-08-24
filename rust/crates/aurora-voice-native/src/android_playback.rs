@@ -30,6 +30,7 @@ struct Inner {
     final_sequence: Option<u64>,
     last_drained: Option<(u64, bool)>,
     completed_generation: Option<Generation>,
+    failure_code: Option<String>,
     closed: bool,
 }
 
@@ -75,6 +76,25 @@ impl AndroidAudioOutput {
         }
     }
 
+    /// Report that the Android playback host could not deliver queued audio.
+    ///
+    /// The failure remains sticky for this output instance so the active or
+    /// next playback call terminates instead of accepting audio that cannot be
+    /// heard. The owning voice session is then rebuilt by the Android service.
+    pub fn fail_playback(&self, code: impl Into<String>) {
+        if let Ok(mut inner) = self.inner.lock() {
+            if inner.closed {
+                return;
+            }
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+            inner.failure_code = Some(code.into());
+        }
+    }
+
     pub fn queued_chunks(&self) -> usize {
         self.inner.lock().map_or(0, |inner| inner.queue.len())
     }
@@ -86,6 +106,7 @@ impl AndroidAudioOutput {
             inner.final_sequence = None;
             inner.last_drained = None;
             inner.completed_generation = None;
+            inner.failure_code = None;
             inner.closed = true;
         }
     }
@@ -123,6 +144,9 @@ impl AudioOutput for AndroidAudioOutput {
                 .inner
                 .lock()
                 .map_err(|_| VoiceCoreError::LockPoisoned)?;
+            if let Some(code) = inner.failure_code.clone() {
+                return Err(VoiceCoreError::TransportFault { code });
+            }
             if inner.closed {
                 return Err(VoiceCoreError::BufferClosed);
             }
@@ -154,6 +178,9 @@ impl AudioOutput for AndroidAudioOutput {
                         .inner
                         .lock()
                         .map_err(|_| VoiceCoreError::LockPoisoned)?;
+                    if let Some(code) = inner.failure_code.clone() {
+                        return Err(VoiceCoreError::TransportFault { code });
+                    }
                     if inner.closed {
                         return Err(VoiceCoreError::BufferClosed);
                     }
@@ -182,7 +209,7 @@ impl AudioOutput for AndroidAudioOutput {
                     .await?;
                 return Err(VoiceCoreError::Cancelled);
             }
-            let (completed, closed) = {
+            let (completed, closed, failure_code) = {
                 let inner = self
                     .inner
                     .lock()
@@ -190,8 +217,12 @@ impl AudioOutput for AndroidAudioOutput {
                 (
                     inner.completed_generation == Some(context.generation),
                     inner.closed,
+                    inner.failure_code.clone(),
                 )
             };
+            if let Some(code) = failure_code {
+                return Err(VoiceCoreError::TransportFault { code });
+            }
             if completed {
                 break;
             }
@@ -345,5 +376,40 @@ mod tests {
         let receipt = play.await.expect("play");
         assert_eq!(receipt.chunk_count, 3);
         assert_eq!(receipt.sample_count, 768);
+    }
+
+    #[tokio::test]
+    async fn playback_host_failure_faults_without_acknowledging_unplayed_audio() {
+        let mut output = AndroidAudioOutput::new(1);
+        let host = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, audio(), &|| false));
+
+        let chunk = loop {
+            if let Some(chunk) = host.drain_chunk() {
+                break chunk;
+            }
+            tokio::select! {
+                result = &mut play => {
+                    panic!("play completed before the host drained audio: {result:?}")
+                }
+                _ = tokio::time::sleep(Duration::from_millis(1)) => {}
+            }
+        };
+        assert!(chunk.final_chunk);
+
+        host.fail_playback("android_audio_track_write_failed");
+
+        assert_eq!(
+            play.await.expect_err("unplayed audio must fail the turn"),
+            VoiceCoreError::TransportFault {
+                code: "android_audio_track_write_failed".to_owned(),
+            },
+        );
+        assert!(host.drain_chunk().is_none());
     }
 }

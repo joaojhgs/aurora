@@ -1356,6 +1356,7 @@ describe('Assistant hosted browser voice runtime', () => {
   it('cancels native mobile push-to-talk when background status does not answer after hiding', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening'))
     nativeMobileVoice.backgroundStatus.mockImplementation(() => new Promise<NativeMobileVoiceStatus>(() => undefined))
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
@@ -1378,6 +1379,7 @@ describe('Assistant hosted browser voice runtime', () => {
   it('keeps native mobile focused push-to-talk foreground-only when hidden', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening'))
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
     const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
@@ -1396,6 +1398,58 @@ describe('Assistant hosted browser voice runtime', () => {
 
     await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
     expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+  })
+
+  it('cancels native mobile processing when the app is hidden', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('processing'))
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+  })
+
+  it('does not cancel native mobile voice on hide when Android reports no focused capture', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue({
+      ...nativeMobileStatus('idle'),
+      available: true,
+      running: false,
+      captureActive: false,
+      backgroundActive: false,
+    })
+    nativeMobileVoice.backgroundStatus.mockImplementation(() => new Promise<NativeMobileVoiceStatus>(() => undefined))
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => expect(nativeMobileVoice.status).toHaveBeenCalled())
+    expect(nativeMobileVoice.cancel).not.toHaveBeenCalled()
+    expect(nativeMobileVoice.backgroundStatus).toHaveBeenCalledTimes(1)
   })
 
   it('does not expose a native background voice action on pure web', () => {
@@ -2451,6 +2505,7 @@ function createDeferredSubscribeNativeDesktopVoicePort(): NativeDesktopVoicePort
 }
 
 function createNativeMobileVoicePort(): NativeMobileVoicePort & {
+  status: ReturnType<typeof vi.fn>
   start: ReturnType<typeof vi.fn>
   finish: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>

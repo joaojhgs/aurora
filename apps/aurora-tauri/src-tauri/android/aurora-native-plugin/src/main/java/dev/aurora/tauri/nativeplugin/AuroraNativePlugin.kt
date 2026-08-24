@@ -594,8 +594,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val status = voiceForegroundServiceStatusObject()
         if (
             args.backgroundSession &&
-            status.getBoolean("running") &&
-            !status.getBoolean("backgroundSessionActive")
+            status.getBoolean("focusedVoiceActive")
         ) {
             val ret = JSObject()
             ret.put("started", false)
@@ -1514,11 +1513,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         } else {
             false
         }
-        val roleHeld = if (sdkSupportsRole) {
-            roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
-        } else {
-            false
-        }
+        val roleHeld = activity.applicationContext.isAuroraAssistantRoleHeld()
         val handlesAssistActivity = packageHandlesAssist()
         val declaresVoiceInteractionService = packageDeclaresVoiceInteractionService()
         val packageQualified = handlesAssistActivity && declaresVoiceInteractionService
@@ -1539,7 +1534,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("oemUnavailable", oemUnavailable)
         ret.put("fallbackAvailable", true)
         ret.put("reason", assistantRoleReason(sdkSupportsRole, roleAvailable, packageQualified, roleHeld, oemUnavailable))
-        ret.put("evidenceSource", "android-rolemanager-package-manager")
+        ret.put("evidenceSource", "android-rolemanager-secure-assistant-setting-package-manager")
         ret.put("secretsRedacted", true)
         return ret
     }
@@ -2651,9 +2646,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && backgroundRuntimeReady
         val ret = JSObject()
         ret.put("platform", "android")
-        ret.put("running", AuroraRuntimeForegroundService.running)
-        ret.put("backgroundSessionActive", AuroraRuntimeForegroundService.backgroundSessionActive)
         val capture = AuroraRuntimeForegroundService.captureSnapshot
+        val running = AuroraRuntimeForegroundService.running
+        val backgroundSessionActive = AuroraRuntimeForegroundService.backgroundSessionActive
+        val foregroundReasons = AuroraRuntimeForegroundService.activeForegroundReasonIds()
+        val focusedVoiceActive = running &&
+            !backgroundSessionActive &&
+            (capture.captureActive || capture.runtimeActive || "voice" in foregroundReasons)
+        ret.put("running", running)
+        ret.put("backgroundSessionActive", backgroundSessionActive)
+        ret.put("focusedVoiceActive", focusedVoiceActive)
         ret.put("captureActive", capture.captureActive)
         ret.put("microphoneSignalDetected", capture.microphoneSignalDetected)
         ret.put("captureBackend", "android-audiorecord-rust-queue")
@@ -2675,7 +2677,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("notificationsGranted", notificationsGranted)
         ret.put("notificationReady", notificationReady)
         ret.put("notificationsSuppressed", !notificationReady || AuroraRuntimeForegroundService.notificationsSuppressed)
-        ret.put("foregroundReasons", org.json.JSONArray(AuroraRuntimeForegroundService.activeForegroundReasonIds()))
+        ret.put("foregroundReasons", org.json.JSONArray(foregroundReasons))
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
         ret.put("nativeSessionReady", nativeRouteReady)

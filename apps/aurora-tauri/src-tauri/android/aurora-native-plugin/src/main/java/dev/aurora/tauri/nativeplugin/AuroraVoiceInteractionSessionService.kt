@@ -1,12 +1,12 @@
 package dev.aurora.tauri.nativeplugin
 
-import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.service.voice.VoiceInteractionSessionService
+import android.util.Log
 
 class AuroraVoiceInteractionSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession =
@@ -22,8 +22,7 @@ private class AuroraVoiceInteractionSession(
             hide()
             return
         }
-        val roleManager = context.getSystemService(RoleManager::class.java)
-        if (roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) != true) {
+        if (!context.isAuroraAssistantRoleHeld()) {
             hide()
             return
         }
@@ -37,6 +36,8 @@ private class AuroraVoiceInteractionSession(
                 @Suppress("DEPRECATION")
                 this@AuroraVoiceInteractionSession.context.startService(intent)
             }
+        }.onFailure { error ->
+            Log.w("AuroraVoiceSession", "voice_service_start_failed error=${error.javaClass.simpleName}")
         }
         hide()
     }

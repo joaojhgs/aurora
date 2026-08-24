@@ -10,6 +10,8 @@ const voiceStorePath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraRuntimeForegroundService.kt'
 const assistActivityPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraAssistActivity.kt'
+const assistantRolePath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraAssistantRole.kt'
 const speechPackPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeSpeechPacks.kt'
 const nativeDownloaderPath = 'rust/crates/aurora-voice-native/src/downloader.rs'
@@ -142,6 +144,7 @@ describe('Android native voice route policy', () => {
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml',
     )
     const assistActivity = repoText(assistActivityPath)
+    const assistantRole = repoText(assistantRolePath)
     const assistantService = repoText(
       'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt',
     )
@@ -158,12 +161,15 @@ describe('Android native voice route policy', () => {
     expect(manifest).toContain('android.permission.WAKE_LOCK')
     expect(assistantService).toContain('action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT')
     expect(assistantService).not.toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent')
-    expect(assistActivity).toContain('if (!isAuroraAssistantRoleHeld())')
-    expect(assistActivity).toContain('roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)')
-    expect(assistActivity).toContain('ComponentName.unflattenFromString')
-    expect(assistActivity.indexOf('if (!isAuroraAssistantRoleHeld())')).toBeLessThan(
+    expect(assistActivity).toContain('if (!applicationContext.isAuroraAssistantRoleHeld())')
+    expect(assistActivity.indexOf('if (!applicationContext.isAuroraAssistantRoleHeld())')).toBeLessThan(
       assistActivity.indexOf('ACTION_START_ASSISTANT'),
     )
+    expect(assistantService).toContain('if (!context.isAuroraAssistantRoleHeld())')
+    expect(assistantService).toContain('voice_service_start_failed')
+    expect(assistantRole).toContain('roleManager?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true')
+    expect(assistantRole).toContain('Settings.Secure.getString(contentResolver, "assistant")')
+    expect(assistantRole).toContain('ComponentName.unflattenFromString')
 
     const backgroundReadinessBody = foregroundService.slice(
       foregroundService.indexOf('private fun isBackgroundVoiceSessionAvailable()'),
@@ -291,8 +297,7 @@ describe('Android native voice route policy', () => {
     expect(pluginStopBody).toContain('action = AuroraRuntimeForegroundService.ACTION_STOP')
     expect(pluginStopBody).toContain('activity.startService(stopIntent)')
     expect(pluginStopBody).not.toContain('activity.stopService(')
-    expect(pluginStartBody).toContain('status.getBoolean("running")')
-    expect(pluginStartBody).toContain('!status.getBoolean("backgroundSessionActive")')
+    expect(pluginStartBody).toContain('status.getBoolean("focusedVoiceActive")')
     expect(pluginStartBody).toContain('ret.put("started", false)')
     expect(pluginStartBody).toContain('ret.put("reason", "foreground_voice_busy")')
     expect(foregroundService).not.toContain('override fun onTrimMemory')
@@ -378,6 +383,16 @@ describe('Android native voice route policy', () => {
     expect(closeResourcesBody).toContain('nativeSession.cancel(generationToCancel)')
     expect(closeResourcesBody).toContain('nativeSession?.close()')
     expect(releaseBody).toContain('nativeLifecycleExecutor.execute')
+    expect(releaseBody).toContain('captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)')
+    expect(releaseBody).toContain('abandonAudioFocus()')
+    expect(releaseBody).toContain('audioFocusRequest = null')
+    expect(foregroundService).toContain(
+      'sessionGeneration = stats?.getOrElse(VOICE_STATS_SESSION_GENERATION_INDEX)',
+    )
+    expect(foregroundService).toContain('} ?: 0L,')
+    expect(foregroundService).toContain(
+      'queuedOutputChunks = stats?.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX)',
+    )
     expect(releaseBody).not.toContain('Thread(')
     expect(releaseBody).not.toContain('clearBackgroundSessionPersistence()')
     for (const detach of [
@@ -458,12 +473,19 @@ describe('Android native voice route policy', () => {
       foregroundService.indexOf('private fun rearmBackgroundSession'),
       foregroundService.indexOf('private fun terminalSnapshot'),
     )
+    const stopBody = foregroundService.slice(
+      foregroundService.indexOf('private fun stopAfterTerminalFailure'),
+      foregroundService.indexOf('private fun stopForegroundAndRemoveNotification'),
+    )
 
     expect(foregroundService).toMatch(/var backgroundSessionActive: Boolean = false\s+private set/)
+    expect(foregroundService).toContain('private var backgroundSessionRearmEnabled = false')
     expect(onStartBody).toContain('backgroundSessionActive = backgroundSession')
+    expect(onStartBody).toContain('backgroundSessionRearmEnabled = durableBackgroundSession')
     expect(attachBody).toMatch(/else if \(backgroundSessionActive\) \{\s*awaitFinishedSession\(\)/)
     expect(finishedBody).toContain('auroraVoiceRuntimeError(')
     expect(finishedBody).toContain('isRecoverableBackgroundTurn(errorCode)')
+    expect(finishedBody).toContain('backgroundSessionRearmEnabled &&')
     expect(finishedBody).toContain('rearmBackgroundSession(nativeSession, stats)')
     expect(finishedBody).toContain('stopAfterTerminalFailure()')
     expect(rearmBody).toContain('nativeLifecycleExecutor.execute')
@@ -476,6 +498,20 @@ describe('Android native voice route policy', () => {
     expect(rearmBody).toContain('awaitFinishedSession()')
     expect(rearmBody).not.toContain('createNativeVoiceSession(')
     expect(rearmBody).not.toContain('capture?.close()')
+    expect(stopBody).toContain('backgroundSessionRearmEnabled = false')
+    expect(stopBody).toContain('releaseNativeVoiceResourcesAsync()')
+    expect(stopBody.indexOf('releaseNativeVoiceResourcesAsync()')).toBeLessThan(
+      stopBody.indexOf('AuroraRuntimeForegroundLedger.activeReasons()'),
+    )
+    expect(foregroundService).toContain(
+      'private const val VOICE_PLAYBACK_WRITE_TIMEOUT_MILLIS = 2_000L',
+    )
+    expect(foregroundService).toContain('AudioTrack.WRITE_NON_BLOCKING')
+    expect(foregroundService).not.toContain('drainWithoutPlayback')
+    expect(foregroundService).toContain('fun failPlayback(errorCode: String)')
+    expect(foregroundService).toContain('bridge.failPlayback("android_audio_track_write_failed")')
+    expect(foregroundService).toContain('if (!writeChunkBounded(currentTrack, samples))')
+    expect(foregroundService).toContain('bridge.acknowledgeDrained()')
 
     for (const code of ['wake_not_detected', 'speech_not_detected', 'speech_timeout']) {
       expect(nativeSession).toContain(`"${code}"`)

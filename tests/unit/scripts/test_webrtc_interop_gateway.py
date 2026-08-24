@@ -27,12 +27,14 @@ from app.shared.contracts.models.auth import (
     build_mesh_reconnect_proof_message,
 )
 from app.shared.contracts.models.gateway import GatewayMethods
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.tooling import ToolingMethods
 from scripts.webrtc_interop_gateway import (
     AC18_FORGED_FRAME_PEER_ID,
     AC18_GLOBAL_TOOL_ID,
     AC18_PROVIDER_SERVICE_INSTANCE_ID,
     AC18_SHARED_HARNESS_PERMISSIONS,
+    ASSISTANT_RESPONSE_TEXT,
     BROWSER_MESH_PEER_ID,
     MUTATE_TOPIC,
     MUTATION_COUNT_TOPIC,
@@ -107,6 +109,16 @@ def test_registry_response_is_sorted_and_digest_is_stable() -> None:
     assert modules == ["Auth", "Config", "G009Interop", "Gateway", "Orchestrator", "TTS"]
     assert first.digest == second.digest
     assert len(first.digest) == 64
+
+    orchestrator = next(module for module in first.modules if module.module == "Orchestrator")
+    methods = {method.bus_topic: method for method in orchestrator.methods}
+    for topic in (
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        OrchestratorMethods.INTERRUPT,
+    ):
+        assert methods[topic].exposure == "both"
+        assert methods[topic].method_type == "use"
+        assert methods[topic].required_perms == ["Orchestrator.use"]
 
 
 def test_registry_snapshot_is_projection_ready_and_matches_harness_policy() -> None:
@@ -227,6 +239,88 @@ async def test_bus_registry_and_pairing_round_trip() -> None:
         "origin": None,
         "correlation_id": "registry-correlation",
     }
+
+
+@pytest.mark.asyncio
+async def test_bus_serves_typed_native_mesh_assistant_round_trip_without_raw_transcript() -> None:
+    bus = make_bus()
+    transcript = "Confirm Android assistant mesh."
+
+    result = await bus.request(
+        OrchestratorMethods.EXTERNAL_USER_INPUT,
+        {
+            "text": transcript,
+            "source": "native_voice",
+            "stream": False,
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "correlation_id": "correlation-1",
+            "client_tts_playback": True,
+        },
+        correlation_id="correlation-1",
+    )
+
+    assert result.ok is True
+    assert result.data == {
+        "text": ASSISTANT_RESPONSE_TEXT,
+        "session_id": "session-1",
+        "request_id": "request-1",
+        "correlation_id": "correlation-1",
+        "metadata": {"provider": "g009-interop"},
+    }
+    assert bus.assistant_records == [
+        {
+            "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+            "source": "native_voice",
+            "stream": False,
+            "clientTtsPlayback": True,
+            "sessionIdPresent": True,
+            "requestIdPresent": True,
+            "correlationIdPresent": True,
+            "inputTextChars": len(transcript),
+            "inputTextSha256": hashlib.sha256(transcript.encode()).hexdigest(),
+            "responseTextChars": len(ASSISTANT_RESPONSE_TEXT),
+            "responseTextSha256": hashlib.sha256(ASSISTANT_RESPONSE_TEXT.encode()).hexdigest(),
+        }
+    ]
+    assert transcript not in json.dumps(bus.assistant_records)
+
+
+@pytest.mark.asyncio
+async def test_bus_serves_typed_native_mesh_assistant_interrupt() -> None:
+    bus = make_bus()
+
+    result = await bus.request(
+        OrchestratorMethods.INTERRUPT,
+        {
+            "scopes": ["generation", "tts_playback"],
+            "session_id": "session-1",
+            "request_id": "request-1",
+            "reason": "user_interrupt",
+        },
+    )
+
+    assert result.ok is True
+    assert result.data["status"] == "no_active_work"
+    assert result.data["requested_scopes"] == ["generation", "tts_playback"]
+    assert result.data["results"] == [
+        {"scope": "generation", "status": "no_active_work", "message": "", "cancelled_count": 0},
+        {
+            "scope": "tts_playback",
+            "status": "no_active_work",
+            "message": "",
+            "cancelled_count": 0,
+        },
+    ]
+    assert bus.assistant_records == [
+        {
+            "method": OrchestratorMethods.INTERRUPT,
+            "sessionIdPresent": True,
+            "requestIdPresent": True,
+            "requestedScopes": ["generation", "tts_playback"],
+            "status": "no_active_work",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -359,6 +453,12 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
     bus.mutation_counts["mutation-1"] = 1
     bus.mutation_records["mutation-1"] = {"execution_count": 1}
     bus.revoked = True
+    bus.assistant_records.append(
+        {
+            "method": OrchestratorMethods.EXTERNAL_USER_INPUT,
+            "inputTextSha256": hashlib.sha256(b"synthetic transcript").hexdigest(),
+        }
+    )
     bus.requests.append(
         {
             "topic": GatewayMethods.GET_REGISTRY,
@@ -411,6 +511,7 @@ def test_gateway_report_preserves_evidence_and_redacts_credentials() -> None:
     assert report["ac18LocalToolProviderEnabled"] is False
     assert report["ac18ReverseToolEvidence"] == {"enabled": False, "status": "disabled"}
     assert report["nativeDeviceToolEvidence"] == {"enabled": False, "status": "disabled"}
+    assert report["assistantRecords"] == bus.assistant_records
     assert report["secretsRedacted"] is True
     assert TOKEN not in serialized
 

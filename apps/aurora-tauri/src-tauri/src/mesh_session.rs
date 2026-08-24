@@ -1007,6 +1007,7 @@ pub enum InboundRouting {
     Parked,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum OutboundDataChannelFrame {
     Text(String),
     Binary(Vec<u8>),
@@ -1315,6 +1316,29 @@ impl MeshSessionState {
         }
     }
 
+    pub async fn encode_native_assistant_frame(
+        &self,
+        peer_id: &str,
+        data_channel_id: u64,
+        frame: &Value,
+    ) -> Result<OutboundDataChannelFrame, TransportError> {
+        let inner = self.inner.lock().await;
+        let binding = inner
+            .peer_bindings
+            .get(peer_id)
+            .filter(|binding| binding.data_channel_id == data_channel_id)
+            .ok_or(TransportError::RequestFailed)?;
+        match binding.data_channel_codec.as_ref() {
+            Some(codec) => codec
+                .seal_json(frame)
+                .map(OutboundDataChannelFrame::Binary)
+                .map_err(|_| TransportError::RequestFailed),
+            None => serde_json::to_string(frame)
+                .map(OutboundDataChannelFrame::Text)
+                .map_err(|_| TransportError::InvalidPayload),
+        }
+    }
+
     pub async fn cancel_native_assistant_call(&self, peer_id: &str, request_id: &str) {
         let mut inner = self.inner.lock().await;
         inner.remove_native_assistant_call(peer_id, request_id);
@@ -1344,6 +1368,35 @@ impl MeshSessionState {
             true,
         )
         .await;
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn test_bind_native_assistant_peer_with_codec(
+        &self,
+        peer_id: &str,
+        data_channel_id: u64,
+        advertised_method_ids: &[&str],
+        primary: bool,
+        local_peer_id: Option<&str>,
+        key_bytes: Vec<u8>,
+    ) {
+        self.test_bind_native_assistant_peer(
+            peer_id,
+            data_channel_id,
+            advertised_method_ids,
+            primary,
+            local_peer_id,
+        )
+        .await;
+        let codec =
+            Arc::new(NativeDataChannelCodec::new(data_channel_id, key_bytes).expect("test codec"));
+        self.inner
+            .lock()
+            .await
+            .peer_bindings
+            .get_mut(peer_id)
+            .expect("test peer binding")
+            .data_channel_codec = Some(codec);
     }
 
     #[cfg(test)]

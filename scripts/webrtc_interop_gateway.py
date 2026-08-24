@@ -68,7 +68,14 @@ from app.shared.contracts.models.gateway import (  # noqa: E402
     ServiceAnnouncement,
 )
 from app.shared.contracts.models.mesh import MeshPeerAuthoritySnapshot  # noqa: E402
-from app.shared.contracts.models.orchestrator import OrchestratorMethods  # noqa: E402
+from app.shared.contracts.models.orchestrator import (  # noqa: E402
+    OrchestratorInterruptRequest,
+    OrchestratorInterruptResponse,
+    OrchestratorInterruptScopeResult,
+    OrchestratorMethods,
+    OrchestratorProcessRequest,
+    OrchestratorResponse,
+)
 from app.shared.contracts.models.tooling import ToolingMethods  # noqa: E402
 from app.shared.contracts.models.tts import TTSMethods  # noqa: E402
 from app.shared.models.db import Token  # noqa: E402
@@ -76,6 +83,7 @@ from app.shared.models.db import Token  # noqa: E402
 SAFE_EVENT_TOPIC = ConfigMethods.UPDATED
 TTS_EVENT_TOPIC = TTSMethods.AUDIO_CHUNK
 ASSISTANT_EVENT_TOPIC = OrchestratorMethods.RESPONSE
+ASSISTANT_RESPONSE_TEXT = "Aurora mesh assistant round trip confirmed."
 MUTATE_TOPIC = "G009Interop.Mutate"
 MUTATION_COUNT_TOPIC = "G009Interop.MutationCount"
 REVOKE_TOPIC = "G009Interop.RevokeCredential"
@@ -309,6 +317,20 @@ class InteropRegistry:
                     required_perms=["Orchestrator.use"],
                 ),
                 MethodInfo(
+                    name="ExternalUserInput",
+                    bus_topic=OrchestratorMethods.EXTERNAL_USER_INPUT,
+                    exposure="both",
+                    method_type="use",
+                    required_perms=["Orchestrator.use"],
+                ),
+                MethodInfo(
+                    name="Interrupt",
+                    bus_topic=OrchestratorMethods.INTERRUPT,
+                    exposure="both",
+                    method_type="use",
+                    required_perms=["Orchestrator.use"],
+                ),
+                MethodInfo(
                     name="StreamInferChat",
                     bus_topic=OrchestratorMethods.STREAM_INFER_CHAT,
                     exposure="both",
@@ -491,6 +513,7 @@ class InteropBus:
         self.revoked = False
         self.large_rpc_records: list[dict[str, Any]] = []
         self.stream_records: dict[str, dict[str, Any]] = {}
+        self.assistant_records: list[dict[str, Any]] = []
 
     async def request(self, topic: str, payload: Any = None, **kwargs: Any) -> QueryResult:
         params = (
@@ -509,6 +532,57 @@ class InteropBus:
         )
         if topic == GatewayMethods.GET_REGISTRY:
             return QueryResult(ok=True, data=self.registry.registry_response())
+        if topic == OrchestratorMethods.EXTERNAL_USER_INPUT:
+            request = OrchestratorProcessRequest.model_validate(params)
+            response = OrchestratorResponse(
+                text=ASSISTANT_RESPONSE_TEXT,
+                session_id=request.session_id,
+                request_id=request.request_id,
+                correlation_id=request.correlation_id,
+                metadata={"provider": "g009-interop"},
+            )
+            self.assistant_records.append(
+                {
+                    "method": topic,
+                    "source": request.source,
+                    "stream": request.stream,
+                    "clientTtsPlayback": request.client_tts_playback,
+                    "sessionIdPresent": request.session_id is not None,
+                    "requestIdPresent": request.request_id is not None,
+                    "correlationIdPresent": request.correlation_id is not None,
+                    "inputTextChars": len(request.text),
+                    "inputTextSha256": hashlib.sha256(request.text.encode()).hexdigest(),
+                    "responseTextChars": len(response.text),
+                    "responseTextSha256": hashlib.sha256(response.text.encode()).hexdigest(),
+                }
+            )
+            return QueryResult(ok=True, data=response.model_dump(mode="json"))
+        if topic == OrchestratorMethods.INTERRUPT:
+            request = OrchestratorInterruptRequest.model_validate(params)
+            response = OrchestratorInterruptResponse(
+                interrupt_id=f"interop-interrupt-{len(self.assistant_records) + 1}",
+                status="no_active_work",
+                requested_scopes=request.scopes,
+                results=[
+                    OrchestratorInterruptScopeResult(
+                        scope=scope,
+                        status="no_active_work",
+                    )
+                    for scope in request.scopes
+                ],
+                session_id=request.session_id,
+                request_id=request.request_id,
+            )
+            self.assistant_records.append(
+                {
+                    "method": topic,
+                    "sessionIdPresent": request.session_id is not None,
+                    "requestIdPresent": request.request_id is not None,
+                    "requestedScopes": list(request.scopes),
+                    "status": response.status,
+                }
+            )
+            return QueryResult(ok=True, data=response.model_dump(mode="json"))
         if topic == AuthMethods.PAIRING_START:
             session_id = str(params.get("pairing_session_id") or "")
             code = f"interop-handle-{len(self.pairing) + 1}"
@@ -906,6 +980,7 @@ def build_gateway_report(
         },
         "largeRpcRecords": bus.large_rpc_records,
         "streamRecords": bus.stream_records,
+        "assistantRecords": bus.assistant_records,
         "requests": bus.requests,
         "publishes": bus.publish_records,
         "diagnostics": diagnostics,

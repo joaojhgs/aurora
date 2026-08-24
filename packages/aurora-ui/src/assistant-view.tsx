@@ -1197,6 +1197,20 @@ export function AssistantView({
           return
         }
         void (async () => {
+          const statusRequest = nativeMobileVoice?.status?.()
+          const status = statusRequest
+            ? await withTimeout(
+                statusRequest,
+                NATIVE_MOBILE_BACKGROUND_STATUS_TIMEOUT_MS,
+                new Error('Native mobile status timed out')
+              ).catch(() => null)
+            : null
+          if (status?.backgroundActive === true) {
+            nativeMobileBackgroundWakeActiveRef.current = true
+            setNativeMobileBackgroundWakeActive(true)
+            return
+          }
+          if (status && !status.running) return
           const backgroundStatusRequest = nativeMobileVoice?.backgroundStatus?.()
           const backgroundStatus = backgroundStatusRequest
             ? await withTimeout(

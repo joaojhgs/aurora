@@ -45,9 +45,9 @@ function parseStatus(
 ): NativeMobileVoiceStatus {
   const record = isRecord(value) ? value : {};
   const nested = isRecord(record.status) ? record.status : record;
-  const running = nested.running === true;
   const captureActive = nested.captureActive === true;
   const backgroundSessionActive = nested.backgroundSessionActive === true;
+  const focusedVoiceActive = nested.focusedVoiceActive === true;
   const captureError = typeof nested.captureError === "string" && nested.captureError.trim()
     ? nested.captureError
     : null;
@@ -60,13 +60,13 @@ function parseStatus(
     || nested.runtimePhase === "faulted"
     || nested.state === "faulted";
   const background = options.background === true;
-  const active = background ? backgroundSessionActive : running;
+  const active = background ? backgroundSessionActive : focusedVoiceActive;
   const statusCaptureActive = background
     ? backgroundSessionActive && captureActive
-    : captureActive;
+    : focusedVoiceActive && captureActive;
   const available = background
     ? nested.backgroundStartable === true || backgroundSessionActive
-    : nested.startable === true || running;
+    : nested.startable === true || focusedVoiceActive || backgroundSessionActive;
   const phase: NativeMobileVoicePhase = !available
     ? "unavailable"
     : faulted
@@ -81,7 +81,7 @@ function parseStatus(
     phase,
     running: active,
     captureActive: statusCaptureActive,
-    backgroundActive: background && backgroundSessionActive,
+    backgroundActive: backgroundSessionActive,
     reasonCode,
     redacted: true,
   };

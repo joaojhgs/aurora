@@ -503,6 +503,22 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeFailPlayback(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    error_code: JString<'_>,
+) {
+    let Some(output) = output_from_handle(handle) else {
+        return;
+    };
+    let Some(error_code) = string_from_jni(&mut env, error_code) else {
+        return;
+    };
+    output.fail_playback(error_code);
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeStats(
     env: JNIEnv<'_>,
     _class: JClass<'_>,
@@ -812,6 +828,22 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     if let Some(session) = session_from_handle(handle) {
         session.output().acknowledge_drained();
     }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFailPlayback(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    error_code: JString<'_>,
+) {
+    let Some(session) = session_from_handle(handle) else {
+        return;
+    };
+    let Some(error_code) = string_from_jni(&mut env, error_code) else {
+        return;
+    };
+    session.output().fail_playback(error_code);
 }
 
 #[no_mangle]

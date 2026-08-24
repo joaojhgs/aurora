@@ -413,6 +413,13 @@ type ManifestHydration = {
   exhausted: boolean;
 };
 
+type PendingHandleBinding = {
+  readonly remoteSignalingId: string;
+  attempts: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  exhausted: boolean;
+};
+
 const DEFAULT_UNBIND_RETRY_DELAYS_MS = [100, 500, 2_000] as const;
 const DEFAULT_MANIFEST_RETRY_DELAYS_MS = [100, 500, 2_000] as const;
 
@@ -441,6 +448,7 @@ export function installMeshSessionRuntimeLink(
   const bindings = new Map<string, ActiveMeshSessionBinding>();
   const retiringBindings = new Map<string, RetiringMeshSessionBinding>();
   const manifestHydrations = new Map<string, ManifestHydration>();
+  const pendingHandleBindings = new Map<string, PendingHandleBinding>();
   const lastCleanupFailures = new Map<string, MeshSessionCleanupFailure>();
   const pendingDrains = new Map<string, NativeTransportDrainFrame[]>();
   let closed = false;
@@ -458,6 +466,12 @@ export function installMeshSessionRuntimeLink(
     const hydration = manifestHydrations.get(peerId);
     if (hydration?.retryTimer) clearTimeout(hydration.retryTimer);
     manifestHydrations.delete(peerId);
+  };
+
+  const cancelPendingHandleBinding = (peerId: string): void => {
+    const pending = pendingHandleBindings.get(peerId);
+    if (pending?.retryTimer) clearTimeout(pending.retryTimer);
+    pendingHandleBindings.delete(peerId);
   };
 
   const reportCleanupFailure = (
@@ -553,6 +567,7 @@ export function installMeshSessionRuntimeLink(
 
   const retirePeer = async (peerId: string): Promise<void> => {
     cancelManifestHydration(peerId);
+    cancelPendingHandleBinding(peerId);
     const existing = bindings.get(peerId);
     if (existing) {
       bindings.delete(peerId);
@@ -891,15 +906,61 @@ export function installMeshSessionRuntimeLink(
         if (bindings.has(rosterPeer.peerId)) {
           await retirePeer(rosterPeer.peerId);
         }
+        scheduleHandleBindingRetry(rosterPeer);
         continue;
       }
+      cancelPendingHandleBinding(rosterPeer.peerId);
       await bindRosterPeer(rosterPeer, handles, [], false);
       hydrateManifest(rosterPeer, handles);
     }
   };
 
+  const scheduleHandleBindingRetry = (
+    rosterPeer: MeshSessionRosterPeer,
+  ): void => {
+    const remoteSignalingId = rosterPeer.snapshot.connectedSignalingPeerId;
+    if (!remoteSignalingId || retiringBindings.has(rosterPeer.peerId)) return;
+    const existing = pendingHandleBindings.get(rosterPeer.peerId);
+    const pending =
+      existing?.remoteSignalingId === remoteSignalingId
+        ? existing
+        : {
+            remoteSignalingId,
+            attempts: 0,
+            retryTimer: null,
+            exhausted: false,
+          };
+    pendingHandleBindings.set(rosterPeer.peerId, pending);
+    if (pending.retryTimer || pending.exhausted) return;
+    const delayMs = manifestRetryDelaysMs[Math.max(0, pending.attempts)];
+    if (delayMs === undefined) {
+      pending.exhausted = true;
+      return;
+    }
+    pending.attempts += 1;
+    pending.retryTimer = setTimeout(() => {
+      if (pendingHandleBindings.get(rosterPeer.peerId) !== pending) return;
+      pending.retryTimer = null;
+      reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
+    }, delayMs);
+  };
+
   const scheduleReconcile = (roster: MeshSessionRoster): void => {
     latestRoster = roster;
+    // The SDK emits a fresh roster snapshot when a peer manifest changes. A
+    // completed retry budget therefore applies only until that next peer
+    // event; keeping it terminal would leave Rust on the provisional empty
+    // method set even after the authorized manifest becomes available.
+    for (const hydration of manifestHydrations.values()) {
+      if (!hydration.exhausted) continue;
+      hydration.attempts = 0;
+      hydration.exhausted = false;
+    }
+    for (const pending of pendingHandleBindings.values()) {
+      if (!pending.exhausted) continue;
+      pending.attempts = 0;
+      pending.exhausted = false;
+    }
     reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
   };
   const unsubscribeRoster = options.peer.subscribeRoster(scheduleReconcile);
@@ -936,6 +997,9 @@ export function installMeshSessionRuntimeLink(
         nativeResumeUnlisten = null;
         for (const peerId of [...manifestHydrations.keys()]) {
           cancelManifestHydration(peerId);
+        }
+        for (const peerId of [...pendingHandleBindings.keys()]) {
+          cancelPendingHandleBinding(peerId);
         }
         await reconcileQueue;
       }
