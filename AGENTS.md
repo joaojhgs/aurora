@@ -527,7 +527,7 @@ make clean                       # Remove temp files
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora** (24387 symbols, 86284 relationships, 300 execution flows).
+This project is indexed by GitNexus as **aurora-mesh-parity-implementation** (29830 symbols, 105580 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
