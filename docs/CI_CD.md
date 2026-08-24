@@ -35,7 +35,8 @@ uv run pytest tests/performance -v
 
 # TypeScript packages
 pnpm install --frozen-lockfile
-pnpm --filter @aurora/client test && pnpm --filter @aurora/client build
+pnpm --filter @aurora/mesh-authority-web build && pnpm --filter @aurora/mesh-authority-web test && pnpm --filter @aurora/mesh-authority-web typecheck
+pnpm --filter @aurora/client build && pnpm --filter @aurora/client test && pnpm --filter @aurora/client typecheck
 pnpm --filter @aurora/client test:resilience
 pnpm --filter @aurora/ui test && pnpm --filter @aurora/ui test:accessibility && pnpm --filter @aurora/ui build
 pnpm --filter @aurora/web test && pnpm --filter @aurora/web build

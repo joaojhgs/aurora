@@ -66,6 +66,12 @@ jobs:
       - name: Install Playwright browser runtimes
         run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - name: Build, test, and typecheck browser mesh authority
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/mesh-authority-web test
+          pnpm --filter @aurora/mesh-authority-web typecheck
+
       - name: Build, test, and typecheck SDK
         run: |
           pnpm --filter @aurora/client build
