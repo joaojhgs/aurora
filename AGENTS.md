@@ -203,6 +203,17 @@ make integration       # Integration tests
 make coverage          # Coverage report
 ```
 
+Mesh pairing, reconnect, revocation, route access, and mobile background claims
+must graduate from unit/integration checks to live service boundaries before
+acceptance. Use `pnpm test:hosted-peer:live` for the hosted browser full
+`main.py` Python stack; do not substitute a mock server for acceptance evidence.
+Use Waydroid for the final local Android packaged WebView/native Rust gate only
+after cheaper suites pass, and rerun it on an integration branch only when that
+branch has a substantial source delta affecting Android native, Rust mesh
+session, SDK transport, pairing, reconnect, revocation, foreground-service, or
+lifecycle behavior. iOS runtime/WebRTC evidence requires macOS/Xcode CI or a
+macOS runner; Linux checks are policy/source guards only.
+
 ### Android Device Selection
 
 - Use Waydroid as the default Android target for local development, quick iteration, APK install/launch, logcat, screenshots, and interactive or scripted test runs. It is the fast, GPU-accelerated device on this host.
