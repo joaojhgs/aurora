@@ -4,6 +4,13 @@ Bring the web and mobile thin runtimes to the same multi-peer behaviour as the P
 node, and move the mobile connection onto the native Rust stack so it survives the
 background. Connect stays a deliberate single-peer restriction, not an architectural one.
 
+**Implementation status:** complete on `mesh-parity-implementation`. The automated release
+gates and the requested Waydroid full-stack acceptance pass against the real `main.py`
+supervisor with a local CPU model. Waydroid proves protocol behaviour, service hold,
+process survival, reconnect, and bounded background tool serving; it does not replace the
+separate physical-device Doze, OEM-kill, battery, or thermal release gate documented in
+[`BACKGROUND-MEASUREMENT.md`](BACKGROUND-MEASUREMENT.md).
+
 ## Current state (already committed on this branch)
 
 - `f3ede57a` — local **forget device**: `forgetSavedPeer()` in
@@ -94,12 +101,14 @@ manifest ACK, provider leases, event subscriptions.
   id and pairing state; Connect pre-selects the origin peer; Mesh allows several.
 - **W6 — Connect restriction.** One policy check in the peer registry, not a structural
   limit. Budgets live in R6.
-- **W7 — per-peer trust lifecycle.** Pairing, approval and forget per peer; prune orphaned
+- **W7 — per-peer trust lifecycle. Implemented.** Pairing, approval and forget per peer; prune orphaned
   rows left when a reinstall mints a new stable id (`localStablePeerId` is
   `aurora-thin-${crypto.randomUUID()}`, so clear-data reinstalls orphan the old row on
   Python — visible today as two hosted-web rows). Python needs the same pruning.
-- **W8 — concurrency hardening and parity audit.** Walk the Python per-peer state map
+- **W8 — concurrency hardening and parity audit. Implemented.** Walk the Python per-peer state map
   (`rtc_client.py:391–515`) subsystem by subsystem; every row green or a written exclusion.
+  The completed audit covers 83 fields, has no unresolved gaps, and records the two
+  non-applicable exclusions in [`W8-PYTHON-SDK-PARITY-AUDIT.md`](W8-PYTHON-SDK-PARITY-AUDIT.md).
 
 ## Track B — native runtime and background
 
@@ -131,6 +140,12 @@ manifest ACK, provider leases, event subscriptions.
   120s stale window, answers a remote tool call with the same authorization decision it
   would make in foreground, and drains queued frames in order on resume with no re-pairing
   — verified by an adb-driven background soak on the physical device.
+  **Local acceptance complete:** the current x86_64 Android build stayed backgrounded on
+  Waydroid beyond the 120-second stale window, served `native.get_device_status` through the
+  real Python Tooling API with the same native connection, logged the Rust served marker,
+  kept one connected-device notification, drained its ordered queue on resume, and
+  reconnected without pairing after both app force-stop and full server restart. The
+  physical-device release gate remains separate as described above.
 - **R4 — one foreground service, one notification.** Prerequisite for observing R3.
   Generalise `AuroraVoiceForegroundService` into one runtime service with reference-counted
   reasons; add `FOREGROUND_SERVICE_CONNECTED_DEVICE` and
@@ -148,10 +163,13 @@ manifest ACK, provider leases, event subscriptions.
   and cross-language fixtures.
 - **R7 — iOS background profile.** Parity with a smaller budget; suspend-and-resume is the
   expected path, not a failure.
-- **R8 — system assistant reaches the mesh.** `ROLE_ASSISTANT`, `AuroraAssistActivity` and
-  the voice interaction services exist; the join is missing. Scope to one path: the
-  invocation routes to the peer serving the assistant capability and answers, with no
-  visible reconnect and no second notification.
+- **R8 — system assistant reaches the mesh. Implemented.** `ROLE_ASSISTANT`,
+  `AuroraAssistActivity`, and the voice interaction services route one scoped system
+  assistant path through the native session and paired mesh to the selected assistant
+  provider. Repeated starts are serialized, late callbacks are session-scoped, and the
+  completed Waydroid run proved two uninterrupted real-server turns plus successful turns
+  after app force-stop and full server restart, without a visible reconnect or a second
+  notification.
 - **R9 — remaining shared mesh core. Parked** on a written ESP32 constrained-peer profile.
 
 ## Sequencing
@@ -164,7 +182,7 @@ manifest ACK, provider leases, event subscriptions.
 - **M5** R4, R5 — foreground service and measurement
 - **M6** R3 — background sessions and tools
 - **M7** R6, R7 — budgets and iOS
-- **M8** R8, W7, W8 — assistant, lifecycle, hardening
+- **M8** R8, W7, W8 — assistant, lifecycle, hardening — complete
 
 ## Constraints
 
