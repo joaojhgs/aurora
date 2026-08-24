@@ -176,9 +176,7 @@ async def test_persisted_env_password_is_not_rotated_on_restart(
         restarted_manager = ConfigManager()
         settings = Settings()
         settings.webrtc.room = "stable-room"
-        settings.webrtc.password = restarted_manager.get(
-            "services.gateway.webrtc.password"
-        )
+        settings.webrtc.password = restarted_manager.get("services.gateway.webrtc.password")
 
         saved_values = {}
         mock_api = _mock_config_api(saved_values)
