@@ -676,7 +676,7 @@ function buildServiceRows(
       instanceId: service.instance_id,
       providerLabel: primary ? providerLabel(primary) : `${adminModuleLabel(service.module)} target pending`,
       routeState: primary?.availability ?? 'unsupported',
-      routeReason: primary ? routeReason(primary) : 'Capability catalog does not advertise this service as executable.',
+      routeReason: primary ? routeReason(primary) : 'This service is not available for actions.',
       privacyClass: primary?.privacyClass ?? 'public',
       methods: serviceMethods,
       controls: ['restart', 'reload', 'stop'].map((verb) =>
@@ -699,7 +699,7 @@ function buildContractRows(
         providerLabel: capability ? providerLabel(capability) : `${adminModuleLabel(method.module)} target pending`,
         backendCoverage: backendCoverage(method, capability),
         privacyClass: capability?.privacyClass ?? privacyForMethod(method),
-        routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.',
+        routeReason: capability ? routeReason(capability) : 'This action is not available for this service.',
         liveRegistryStatus: (capability ? 'live-registry' : 'registry-only') as AdminContractRow['liveRegistryStatus'],
         conformanceStatus: contractConformance(method, capability),
         generatedRoutePath: method.routePath,

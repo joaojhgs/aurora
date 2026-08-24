@@ -16,6 +16,7 @@ export const PRODUCTION_COPY_FORBIDDEN_TERMS = [
   term('provider-consumer-role', /\b(?:provider|consumer|hybrid)\b/iu, ['provider', 'consumer', 'hybrid']),
   term('route-counts', /\b\d+\s*\/\s*\d+\s+routes?\b|\broute counts?\b/iu, ['0/22 routes', 'route count']),
   term('manifest', /\bmanifest\b/iu),
+  term('catalog', /\bcatalogs?\b/iu),
   term('contract', /\bcontracts?\b/iu),
   term('protocol', /\bprotocol\b/iu),
   term('transport', /\btransport\b/iu),

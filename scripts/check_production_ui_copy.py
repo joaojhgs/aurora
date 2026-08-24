@@ -39,6 +39,7 @@ FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("provider-consumer-role", re.compile(r"\b(?:provider|consumer|hybrid)\b", re.I)),
     ("route-counts", re.compile(r"\b\d+\s*/\s*\d+\s+routes?\b|\broute counts?\b", re.I)),
     ("manifest", re.compile(r"\bmanifest\b", re.I)),
+    ("catalog", re.compile(r"\bcatalogs?\b", re.I)),
     ("contract", re.compile(r"\bcontracts?\b", re.I)),
     ("protocol", re.compile(r"\bprotocol\b", re.I)),
     ("transport", re.compile(r"\btransport\b", re.I)),

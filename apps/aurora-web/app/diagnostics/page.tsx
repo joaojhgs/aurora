@@ -208,6 +208,8 @@ function buildProbes(input: {
   catalog: DiagnosticResult<CapabilityCatalogResponse>
   route: DiagnosticResult<RouteExplainResponse>
 }): ProbeRow[] {
+  const availableFeatures = input.catalog
+
   return [
     {
       name: 'Service List',
@@ -223,8 +225,8 @@ function buildProbes(input: {
     },
     {
       name: 'Available Features',
-      state: input.catalog.data?.actions.length ? 'available-local' : stateFromResult(input.catalog),
-      summary: input.catalog.data ? `${countText(input.catalog.data.actions.length, 'action')}; sensitive details removed: ${yesNo(input.catalog.data.secrets_redacted)}` : unavailableText(input.catalog.error),
+      state: availableFeatures.data?.actions.length ? 'available-local' : stateFromResult(availableFeatures),
+      summary: availableFeatures.data ? `${countText(availableFeatures.data.actions.length, 'action')}; sensitive details removed: ${yesNo(availableFeatures.data.secrets_redacted)}` : unavailableText(availableFeatures.error),
       details: 'Feature and action readiness'
     },
     {

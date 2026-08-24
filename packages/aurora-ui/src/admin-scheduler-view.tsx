@@ -273,7 +273,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
       targetLabel: selectedTarget.label
     })
     if (!actionSpec) {
-      setOperation({ status: 'failed', message: 'Select a Tooling catalog entry and provide valid JSON arguments before scheduling a tool action.', auditReceipt: null })
+      setOperation({ status: 'failed', message: 'Select a tool and provide valid JSON arguments before scheduling the action.', auditReceipt: null })
       return
     }
     const payload: SchedulerScheduleActionRequest = {
@@ -338,7 +338,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-action">Action</label>
                 <select id="scheduler-action" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={actionKind} onChange={(event) => setActionKind(event.currentTarget.value as 'orchestrator.user_input' | 'tooling.execute')} disabled={!snapshot.createControl.available}>
                   <option value="orchestrator.user_input">Assistant prompt</option>
-                  <option value="tooling.execute">Tooling catalog action</option>
+                  <option value="tooling.execute">Tool action</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -357,7 +357,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
             ) : (
               <div className="flex flex-col gap-3 sm:col-span-2">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-tool">Tooling catalog entry</label>
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="scheduler-tool">Tool</label>
                   <select id="scheduler-tool" className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm" value={selectedTool?.id ?? ''} onChange={(event) => setSelectedToolId(event.currentTarget.value)} disabled={!snapshot.createControl.available || snapshot.toolOptions.length === 0}>
                     {snapshot.toolOptions.map((tool) => (
                       <option key={tool.id} value={tool.id} disabled={tool.disabled}>{tool.label}</option>

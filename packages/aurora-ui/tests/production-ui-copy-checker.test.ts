@@ -57,7 +57,7 @@ describe('production UI copy checker', () => {
             <p>services/gateway/api/port uses fall-back fall_back raw daemon</p>
             <button title="services-orchestrator-llm-provider">Open</button>
             <input aria-label="services.orchestrator.llm.provider key  path" />
-            <span>room/password remote_console remote  console mesh/node mesh  node runtime_tier runtime  tier HTTP WSS WebRTC Orchestrator</span>
+            <span>room/password remote_console remote  console mesh/node mesh  node runtime_tier runtime  tier HTTP WSS WebRTC Orchestrator Catalog</span>
           </section>
         )
       }
@@ -79,6 +79,7 @@ describe('production UI copy checker', () => {
       'http',
       'webrtc-wss',
       'orchestrator',
+      'catalog',
     ]) {
       expect(result.stderr).toContain(term)
     }

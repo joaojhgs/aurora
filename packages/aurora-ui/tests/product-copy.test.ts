@@ -59,6 +59,7 @@ describe('production product copy', () => {
       ['WebView bridge', 'webview'],
       ['Daemon status', 'daemon'],
       ['Orchestrator state', 'orchestrator'],
+      ['Service catalog', 'catalog'],
       ['Raw response', 'raw'],
       ['HTTP endpoint', 'http'],
       ['WSS signaling', 'webrtc-wss'],

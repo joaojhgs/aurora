@@ -59,8 +59,10 @@ describe('admin route checkpoint status', () => {
     const snapshot = await buildAdminServicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const markup = renderToStaticMarkup(<AdminContractsView snapshot={snapshot} />)
     const copy = renderedCopy(markup)
+    const serviceActionsNavItem = auroraEmbeddedNavItems.find((item) => item.id === 'contracts')
 
     expect(snapshot.loadState).toBe('ready')
+    expect(serviceActionsNavItem?.label).toBe('Service actions')
     expect(snapshot.contracts.map((contract) => contract.busTopic)).toContain('Auth.AuditLog')
     expect(copy).toContain('Service actions')
     expect(copy).toContain('Access Audit Log')

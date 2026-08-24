@@ -205,7 +205,7 @@ export async function buildRoutePolicySnapshot(
     generatedAt: catalog?.generated_at ?? null,
     secretsRedacted: catalog?.secrets_redacted ?? (scenarios.some((scenario) => scenario.evaluation?.preview.secretsRedacted) || true),
     routeState: route.disabled ? route.state : 'available-local',
-    routeReason: route.disabled ? presentableSignal(route.explanation) : 'Mesh route policy screen is backed by Aurora route explain and capability catalog responses.',
+    routeReason: route.disabled ? presentableSignal(route.explanation) : 'Aurora is ready to choose a device for each action.',
     policyCapabilityState: policyCapability ? capabilityAvailability(policyCapability) : allFailed ? 'unsupported' : 'degraded',
     policyCapabilityReason: policyCapability
       ? capabilityReason(policyCapability)

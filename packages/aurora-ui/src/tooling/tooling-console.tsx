@@ -566,7 +566,7 @@ function PolicyCommandBar({
         <Badge variant="outline" className="gap-1"><Lock size={14} aria-hidden />Confirmation required for high-risk policy changes</Badge>
         <Badge variant="outline" className="gap-1"><FileDiff size={14} aria-hidden />Managed by Aurora</Badge>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5" aria-label="Source catalog lifecycle">
+      <div className="flex flex-wrap items-center gap-1.5" aria-label="Source availability">
         <Badge variant="outline" className="gap-1"><Network size={14} aria-hidden />Shared tool list</Badge>
         <Badge variant="outline">Changes are tracked for connected devices</Badge>
         <Badge variant="outline">Unavailable tools block scheduled use</Badge>
