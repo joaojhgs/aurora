@@ -260,7 +260,7 @@
       "handler": "process_external_input",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 542
+        "line": 558
       },
       "exposure": "external",
       "method_type": "use",
@@ -281,7 +281,7 @@
       "handler": "infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 612
+        "line": 635
       },
       "exposure": "external",
       "method_type": "use",
@@ -302,7 +302,7 @@
       "handler": "stream_infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 641
+        "line": 664
       },
       "exposure": "external",
       "method_type": "use",
@@ -323,7 +323,7 @@
       "handler": "ingest_context",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 669
+        "line": 692
       },
       "exposure": "external",
       "method_type": "use",
@@ -344,7 +344,7 @@
       "handler": "list_pending_tool_approvals",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 857
+        "line": 880
       },
       "exposure": "external",
       "method_type": "use",
@@ -365,7 +365,7 @@
       "handler": "resume_tool_approval",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 908
+        "line": 931
       },
       "exposure": "external",
       "method_type": "use",
@@ -386,7 +386,7 @@
       "handler": "interrupt_assistant",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1059
+        "line": 1082
       },
       "exposure": "external",
       "method_type": "use",
@@ -407,7 +407,7 @@
       "handler": "get_model_runtime",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1186
+        "line": 1209
       },
       "exposure": "external",
       "method_type": "use",
@@ -428,7 +428,7 @@
       "handler": "get_model_catalog",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1230
+        "line": 1253
       },
       "exposure": "external",
       "method_type": "use",
@@ -449,7 +449,7 @@
       "handler": "get_model_operation",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1258
+        "line": 1281
       },
       "exposure": "external",
       "method_type": "use",
@@ -470,7 +470,7 @@
       "handler": "import_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1285
+        "line": 1308
       },
       "exposure": "external",
       "method_type": "manage",
@@ -491,7 +491,7 @@
       "handler": "download_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1301
+        "line": 1324
       },
       "exposure": "external",
       "method_type": "manage",
@@ -512,7 +512,7 @@
       "handler": "benchmark_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1317
+        "line": 1340
       },
       "exposure": "external",
       "method_type": "manage",
