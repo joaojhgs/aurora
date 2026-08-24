@@ -268,6 +268,129 @@ describe('Assistant focused WebView microphone policy', () => {
     expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1)
   })
 
+  it('does not cancel Android assistant-owned voice when the page hides before ASSIST starts', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'mobile-native',
+            transportKind: 'native-mobile',
+            nativePlatform: 'android',
+            nativeVoicePresent: true,
+            nativeVoiceAvailable: true,
+          })}
+          nativeMobileVoice={nativeMobileVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+
+    nativeMobileVoice.status.mockClear()
+    nativeMobileVoice.cancel.mockClear()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    setDocumentVisibility('hidden')
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(nativeMobileVoice.status).not.toHaveBeenCalled()
+    expect(nativeMobileVoice.cancel).not.toHaveBeenCalled()
+  })
+
+  it('does not claim Android assistant-owned voice after observing active native capture', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'mobile-native',
+            transportKind: 'native-mobile',
+            nativePlatform: 'android',
+            nativeVoicePresent: true,
+            nativeVoiceAvailable: true,
+          })}
+          nativeMobileVoice={nativeMobileVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => expect(nativeMobileVoice.status).toHaveBeenCalledTimes(1))
+
+    nativeMobileVoice.cancel.mockClear()
+    setDocumentVisibility('hidden')
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(nativeMobileVoice.cancel).not.toHaveBeenCalled()
+  })
+
+  it('cancels Android UI-owned focused voice when the page hides', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <AssistantView
+          client={client}
+          route={assistantRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            runtimeMode: 'mobile-native',
+            transportKind: 'native-mobile',
+            nativePlatform: 'android',
+            nativeVoicePresent: true,
+            nativeVoiceAvailable: true,
+          })}
+          nativeMobileVoice={nativeMobileVoice}
+        />
+      )
+      await Promise.resolve()
+    })
+    await act(async () => {
+      findButton(container, 'Push to talk').click()
+      await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+      await Promise.resolve()
+    })
+
+    nativeMobileVoice.status.mockClear()
+    nativeMobileVoice.cancel.mockClear()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    setDocumentVisibility('hidden')
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await vi.waitFor(() => expect(nativeMobileVoice.cancel).toHaveBeenCalledTimes(1))
+    })
+  })
+
   it('cancels a pending Android native start that resolves after unmount', async () => {
     let resolveStart: ((status: NativeMobileVoiceStatus) => void) | undefined
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
@@ -469,4 +592,11 @@ function renderedElementCopy(root: HTMLElement): string {
       .filter((value): value is string => Boolean(value))
   ))
   return [root.textContent ?? '', ...attributes].join(' ').replace(/\s+/g, ' ').trim()
+}
+
+function setDocumentVisibility(value: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value,
+  })
 }

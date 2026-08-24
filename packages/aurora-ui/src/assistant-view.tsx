@@ -1192,6 +1192,11 @@ export function AssistantView({
       }
       if (usesNativeMobileVoice) {
         if (nativeMobileBackgroundWakeActiveRef.current || nativeMobileBackgroundStartTokenRef.current !== null) return
+        const ownsFocusedMobileTurn = isUiOwnedNativeMobileFocusedTurnActive(
+          activeVoiceSessionRef.current,
+          nativeMobileVoiceStartInFlightRef.current
+        )
+        if (!ownsFocusedMobileTurn) return
         if (nativeRelease) {
           void cancelNativeMobileVoice()
           return
@@ -3085,6 +3090,8 @@ export function AssistantView({
         return false
       }
       setVoiceCaptureStatus('listening')
+      activeVoiceSessionRef.current = 'native-mobile-focused'
+      ownedVoiceSessionIdsRef.current.add('native-mobile-focused')
       return true
     } catch {
       if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) return false
@@ -6249,6 +6256,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): P
 
 function isNativeMobileBackgroundCaptureActive(status: NativeMobileVoiceStatus): boolean {
   return status.backgroundActive === true && status.captureActive
+}
+
+function isUiOwnedNativeMobileFocusedTurnActive(
+  activeSessionId: string | null,
+  startInFlight: boolean,
+): boolean {
+  if (startInFlight) return true
+  return activeSessionId !== null && activeSessionId !== 'native-mobile-background'
 }
 
 function waitFor(ms: number): Promise<void> {
