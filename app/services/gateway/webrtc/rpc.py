@@ -13,7 +13,7 @@ import json
 import math
 import re
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -116,12 +116,16 @@ def _utf8_byte_length(value: str) -> int:
     return len(value.encode("utf-8"))
 
 
-def _public_service_error_reason_code(error: str | None) -> str:
+def _public_service_error_reason_code(error: str | None, data: Any = None) -> str:
     """Return only a stable, peer-safe reason code for a service failure."""
 
-    if error == "projection_restart_required":
-        return "snapshot_revision_changed"
-    return canonical_mesh_rollout_reason(error) or _SERVICE_REQUEST_ERROR_REASON_CODE
+    data_reason = data.get("reason_code") if isinstance(data, Mapping) else None
+    for candidate in (data_reason, error):
+        if candidate == "projection_restart_required":
+            return "snapshot_revision_changed"
+        if public_reason := canonical_mesh_rollout_reason(candidate):
+            return public_reason
+    return _SERVICE_REQUEST_ERROR_REASON_CODE
 
 
 def parse_webrtc_json_frame(
@@ -1798,7 +1802,7 @@ class RPCHandler:
                     500,
                     _SERVICE_REQUEST_ERROR_MESSAGE,
                     correlation_id=correlation_id,
-                    reason_code=_public_service_error_reason_code(res.error),
+                    reason_code=_public_service_error_reason_code(res.error, res.data),
                 )
 
         except TimeoutError:

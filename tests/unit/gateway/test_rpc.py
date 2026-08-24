@@ -1021,6 +1021,34 @@ async def test_handle_call_preserves_only_public_mesh_reason_codes(
 
 
 @pytest.mark.asyncio
+async def test_handle_call_preserves_public_mesh_reason_code_from_error_data(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    method_info = MethodInfo(name="Fail", exposure="external")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(
+        ok=False,
+        error="No available device can handle this action.",
+        data={"reason_code": "method_not_shared"},
+    )
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider)
+
+    await handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Fail"}))
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["error"] == {
+        "code": 500,
+        "message": "Service request failed",
+        "reason_code": "method_not_shared",
+    }
+
+
+@pytest.mark.asyncio
 async def test_handle_call_exception_is_redacted(rpc_handler, mock_registry, mock_bus):
     method_info = MethodInfo(name="Explode", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
