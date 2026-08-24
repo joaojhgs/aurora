@@ -11554,6 +11554,9 @@ mod tests {
         let interaction_session = include_str!(
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraVoiceInteractionSessionService.kt"
         );
+        let assistant_role = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraAssistantRole.kt"
+        );
         let rust_source = include_str!("lib.rs");
         for required in [
             "AudioRecord.Builder()",
@@ -11705,6 +11708,20 @@ mod tests {
         let build_manifest = include_str!("../build.rs");
         assert!(build_manifest.contains("aurora_android_voice_live_test_inject_pcm"));
         assert!(plugin.contains("backendAudioEvidenceRequired"));
+        let finish_start = service
+            .find("private fun finishNativeSession()")
+            .expect("finishNativeSession exists");
+        let finish_body = &service[finish_start..];
+        let native_finish = finish_body
+            .find("nativeSession.finish(generationToFinish)")
+            .expect("finish calls native session finish");
+        let capture_close = finish_body
+            .find("captureToClose?.close()")
+            .expect("finish closes Android capture");
+        assert!(
+            native_finish < capture_close,
+            "explicit assistant finish must signal native end-of-input before closing Android capture"
+        );
         assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.VAD,"));
         assert!(service.contains("isActivePackReady(AuroraSpeechPackTask.KWS,"));
         assert!(service.contains("background_voice_unavailable"));
@@ -11720,7 +11737,9 @@ mod tests {
             "hide()",
         ] {
             assert!(
-                interaction_session.contains(required) || service.contains(required),
+                interaction_session.contains(required) ||
+                    assistant_role.contains(required) ||
+                    service.contains(required),
                 "missing Android assistant-session contract: {required}"
             );
         }

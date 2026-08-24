@@ -1039,8 +1039,7 @@ struct AndroidSessionSink {
 impl RuntimeEventSink for AndroidSessionSink {
     async fn snapshot(&mut self, snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
         if let Ok(mut status) = self.status.lock() {
-            status.phase = phase_for_state(snapshot.state);
-            status.generation = Some(snapshot.generation);
+            update_session_phase(&mut status, snapshot.state, snapshot.generation);
         }
         Ok(())
     }
@@ -1048,12 +1047,31 @@ impl RuntimeEventSink for AndroidSessionSink {
     async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError> {
         if let RuntimeEvent::State { transition } = event {
             if let Ok(mut status) = self.status.lock() {
-                status.phase = phase_for_state(transition.to);
-                status.generation = Some(transition.generation);
+                update_session_phase(&mut status, transition.to, transition.generation);
             }
         }
         Ok(())
     }
+}
+
+fn update_session_phase(
+    status: &mut AndroidVoiceSessionStatus,
+    state: VoiceState,
+    generation: Generation,
+) {
+    let phase = phase_for_state(state);
+    // Runtime cleanup always emits Stopping -> Idle before returning an error.
+    // Keep the last active work phase until finish_status classifies the result;
+    // otherwise a TTS/playback failure is incorrectly reported as an STT failure.
+    if !status.active
+        || !matches!(
+            phase,
+            AndroidVoiceSessionPhase::Stopping | AndroidVoiceSessionPhase::Idle
+        )
+    {
+        status.phase = phase;
+    }
+    status.generation = Some(generation);
 }
 
 fn phase_for_state(state: VoiceState) -> AndroidVoiceSessionPhase {
@@ -1109,7 +1127,7 @@ fn finish_status(
                 status.failed_turns = status.failed_turns.saturating_add(1);
                 let code = error_code(&error, terminal_phase);
                 eprintln!(
-                    "aurora_android_voice_turn_failed phase={terminal_phase:?} reason={code}"
+                    "aurora_android_voice_turn_failed phase={terminal_phase:?} reason={code} error={error}"
                 );
                 status.last_error = Some(code.to_owned());
             }
@@ -1207,6 +1225,26 @@ mod tests {
         assert!(status.active);
         assert_eq!(status.phase, AndroidVoiceSessionPhase::Idle);
         assert_eq!(status.generation, Some(generation));
+    }
+
+    #[test]
+    fn cleanup_transitions_preserve_the_failed_work_stage_until_result_classification() {
+        let generation = Generation(7);
+        let mut status = AndroidVoiceSessionStatus {
+            active: true,
+            ..AndroidVoiceSessionStatus::default()
+        };
+
+        update_session_phase(&mut status, VoiceState::Speaking, generation);
+        update_session_phase(&mut status, VoiceState::Stopping, generation);
+        update_session_phase(&mut status, VoiceState::Idle, generation);
+
+        assert_eq!(status.phase, AndroidVoiceSessionPhase::Speaking);
+        assert_eq!(status.generation, Some(generation));
+
+        status.active = false;
+        update_session_phase(&mut status, VoiceState::Idle, generation);
+        assert_eq!(status.phase, AndroidVoiceSessionPhase::Idle);
     }
 
     #[test]
