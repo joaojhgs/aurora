@@ -65,6 +65,42 @@ pytest tests/unit/gateway/test_rpc.py::test_handle_call_success  # By test
 pytest -n auto                          # Parallel execution
 ```
 
+## Live Mesh and Mobile Gates
+
+Use mocks only for unit-level behavior. Pairing, reconnect, revocation, scoped
+route access, WebRTC data paths, and mobile background behavior must eventually
+be proved against real service boundaries before they are reported as accepted.
+
+For hosted-browser mesh coverage, the maintained full-service gate is:
+
+```bash
+pnpm test:hosted-peer:live
+```
+
+That command starts an isolated thread-mode `main.py` Python stack with Auth,
+DB, Gateway, Tooling, WebRTC signaling, and the hosted shell. It is the current
+replacement for mock-server acceptance in this area; use the
+`pnpm test:web-thin:live` alias only for compatibility with older scripts.
+
+For Android packaged WebView/WebRTC coverage, use Waydroid as the local default
+device after unit, integration, SDK, Rust, and artifact-proof checks are already
+green:
+
+```bash
+pnpm --filter @aurora/tauri-ui android:webrtc:interop
+```
+
+Rerun the Waydroid full-stack/background E2E gate when Android native, Rust mesh
+session, SDK transport, pairing, reconnect, revocation, foreground-service, or
+mobile lifecycle code changed. If an integration branch already contains the
+same commits and only documentation or CI metadata moved, record the existing
+Waydroid evidence and let CI own the platform matrix instead of repeating the
+device run.
+
+iOS build, simulator smoke, and MobileSafari/WKWebView WebRTC interop are
+macOS/Xcode gates owned by CI or a macOS runner. Linux policy/source checks are
+useful guards, but they are not iOS runtime proof.
+
 ---
 
 ## Test Markers
