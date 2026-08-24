@@ -131,6 +131,75 @@ describe('one Aurora in the notification shade', () => {
     expect(release).toContain('if (!running) return')
   })
 
+  it('restarts an assistant invocation after the previous native turn finishes tearing down', () => {
+    const service = repoText(servicePath)
+    const onStart = sliceBetween(
+      service,
+      'override fun onStartCommand',
+      'private fun isBackgroundVoiceSessionAvailable',
+    )
+    const pendingStart = sliceBetween(
+      service,
+      'private fun resumePendingAssistantStart()',
+      'private fun isBackgroundVoiceSessionAvailable',
+    )
+    const attach = sliceBetween(
+      service,
+      'private fun attachNativeVoiceSession(',
+      'private fun invalidateNativeVoiceInitialization()',
+    )
+    const initialize = sliceBetween(
+      service,
+      'private fun beginNativeVoiceInitialization(',
+      'private fun createNativeVoiceSession(',
+    )
+    const completeInitialization = sliceBetween(
+      service,
+      'private fun completeNativeVoiceInitialization()',
+      'override fun onDestroy()',
+    )
+    const finish = sliceBetween(
+      service,
+      'private fun finishNativeSession()',
+      'private fun handleFinishedSessionStats(',
+    )
+    const handleFinished = sliceBetween(
+      service,
+      'private fun handleFinishedSessionStats(',
+      'private fun rearmBackgroundSession(',
+    )
+    const destroy = sliceBetween(service, 'override fun onDestroy()', 'override fun onBind(')
+    const terminal = sliceBetween(
+      service,
+      'private fun stopAfterTerminalFailure',
+      'private fun stopForegroundAndRemoveNotification',
+    )
+
+    expect(onStart).toContain('if (intent?.action == ACTION_START_ASSISTANT)')
+    expect(onStart).toContain('pendingAssistantStartId = startId')
+    expect(onStart).toContain('invalidateNativeVoiceInitialization()')
+    expect(onStart).toContain('releaseNativeVoiceResourcesAsync()')
+    expect(onStart).toContain('resumePendingAssistantStart()')
+    expect(pendingStart).toContain('if (capture != null || session != null || initializationInFlight.get()) return')
+    expect(pendingStart).toContain('pendingAssistantStartId = null')
+    expect(pendingStart).toContain('startNativeVoiceSession(')
+    expect(initialize).toContain('if (destroyed || generation != initializationGeneration)')
+    expect(initialize).toContain('completeNativeVoiceInitialization()')
+    expect(initialize).not.toContain('initializationInFlight.set(false)\n                return@Runnable')
+    expect(attach).toContain('completeNativeVoiceInitialization()')
+    expect(completeInitialization).toContain('initializationInFlight.set(false)')
+    expect(completeInitialization).toContain('finishHandler.post { resumePendingAssistantStart() }')
+    expect(finish).toContain('if (session !== nativeSession)')
+    expect(finish).toContain('resumePendingAssistantStart()')
+    expect(finish).toContain('awaitFinishedSession(nativeSession)')
+    expect(finish).toContain('if (session !== nativeSession) {')
+    expect(handleFinished).toContain(
+      'finishHandler.postDelayed({ awaitFinishedSession(nativeSession) }, 100L)',
+    )
+    expect(destroy).toContain('pendingAssistantStartId = null')
+    expect(terminal).toContain('pendingAssistantStartId = null')
+  })
+
   it('declares both foreground service types and claims only the ones it may', () => {
     const canonicalManifest = repoText(canonicalManifestPath)
     const merge = repoText(manifestMergePath)

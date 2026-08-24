@@ -257,8 +257,9 @@ describe('Android native voice route policy', () => {
     expect(onStartBody).toContain('val stickyRestart = intent == null && persistedBackgroundRequest')
     expect(onStartBody).toContain('if (intent == null && !stickyRestart)')
     expect(onStartBody).toContain('val durableBackgroundSession = explicitBackgroundStart || stickyRestart ||')
-    expect(onStartBody).toContain(
-      'val backgroundSession = durableBackgroundSession || intent?.action == ACTION_START_ASSISTANT',
+    expect(onStartBody).toContain('val backgroundSession = durableBackgroundSession')
+    expect(onStartBody).not.toContain(
+      'durableBackgroundSession || intent?.action == ACTION_START_ASSISTANT',
     )
     expect(onStartBody).toContain('if (durableBackgroundSession && !enableDurableBackgroundSession())')
     expect(onStartBody).toContain('return serviceRestartMode()')

@@ -1053,6 +1053,7 @@ class AuroraRuntimeForegroundService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private val finishHandler = Handler(Looper.getMainLooper())
     private val initializationInFlight = AtomicBoolean(false)
+    private var pendingAssistantStartId: Int? = null
     private val lastNotificationText = AtomicReference<String?>(null)
     private val nativeLifecycleExecutor = ThreadPoolExecutor(
         0,
@@ -1177,7 +1178,10 @@ class AuroraRuntimeForegroundService : Service() {
         }
         val durableBackgroundSession = explicitBackgroundStart || stickyRestart ||
             (backgroundSessionActive && backgroundSessionRequested())
-        val backgroundSession = durableBackgroundSession || intent?.action == ACTION_START_ASSISTANT
+        // ACTION_START_ASSISTANT is already an explicit Android assistant
+        // invocation. It must capture that utterance immediately; only an
+        // explicit or restored durable listener waits for Aurora's wake word.
+        val backgroundSession = durableBackgroundSession
         running = true
         AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.VOICE)
         enterForeground("Starting microphone…")
@@ -1192,6 +1196,17 @@ class AuroraRuntimeForegroundService : Service() {
             return START_NOT_STICKY
         }
         if (capture != null || session != null || initializationInFlight.get()) {
+            if (intent?.action == ACTION_START_ASSISTANT) {
+                // Android may deliver a new assistant invocation while the
+                // previous focused turn is still tearing down. Preserve the
+                // latest invocation and start it once the serialized native
+                // lifecycle queue has released the previous session.
+                pendingAssistantStartId = startId
+                invalidateNativeVoiceInitialization()
+                releaseNativeVoiceResourcesAsync()
+                resumePendingAssistantStart()
+                return serviceRestartMode()
+            }
             if (explicitBackgroundStart && !backgroundSessionActive) {
                 // Reject the competing mode change without tearing down the
                 // foreground session that already owns the microphone.
@@ -1204,6 +1219,14 @@ class AuroraRuntimeForegroundService : Service() {
             }
             return serviceRestartMode()
         }
+        return startNativeVoiceSession(backgroundSession, durableBackgroundSession, startId)
+    }
+
+    private fun startNativeVoiceSession(
+        backgroundSession: Boolean,
+        durableBackgroundSession: Boolean,
+        startId: Int,
+    ): Int {
         backgroundSessionActive = backgroundSession
         backgroundSessionRearmEnabled = durableBackgroundSession
         captureError = null
@@ -1220,6 +1243,21 @@ class AuroraRuntimeForegroundService : Service() {
         }
         beginNativeVoiceInitialization(backgroundSession, startId)
         return serviceRestartMode()
+    }
+
+    private fun resumePendingAssistantStart() {
+        val startId = pendingAssistantStartId ?: return
+        if (destroyed) {
+            pendingAssistantStartId = null
+            return
+        }
+        if (capture != null || session != null || initializationInFlight.get()) return
+        pendingAssistantStartId = null
+        startNativeVoiceSession(
+            backgroundSession = false,
+            durableBackgroundSession = false,
+            startId = startId,
+        )
     }
 
     private fun isBackgroundVoiceSessionAvailable(): Boolean {
@@ -1495,7 +1533,7 @@ class AuroraRuntimeForegroundService : Service() {
             }.getOrNull()
             if (destroyed || generation != initializationGeneration) {
                 closeNativeResources(null, null, nativeSession, 0L)
-                initializationInFlight.set(false)
+                completeNativeVoiceInitialization()
                 return@Runnable
             }
             val startedGeneration = nativeSession?.let {
@@ -1512,7 +1550,7 @@ class AuroraRuntimeForegroundService : Service() {
             }
             if (!posted) {
                 closeNativeResources(null, null, sessionToAttach, startedGeneration)
-                initializationInFlight.set(false)
+                completeNativeVoiceInitialization()
             }
         }
         try {
@@ -1599,10 +1637,10 @@ class AuroraRuntimeForegroundService : Service() {
     ) {
         if (destroyed || generation != initializationGeneration) {
             closeOrphanNativeSessionAsync(nativeSession, startedGeneration)
-            initializationInFlight.set(false)
+            completeNativeVoiceInitialization()
             return
         }
-        initializationInFlight.set(false)
+        completeNativeVoiceInitialization()
         if (nativeSession == null) {
             captureError = "voice_runtime_unavailable"
             stopAfterTerminalFailure(startId)
@@ -1644,8 +1682,18 @@ class AuroraRuntimeForegroundService : Service() {
         initializationGeneration += 1L
     }
 
+    private fun completeNativeVoiceInitialization() {
+        initializationInFlight.set(false)
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            resumePendingAssistantStart()
+        } else {
+            finishHandler.post { resumePendingAssistantStart() }
+        }
+    }
+
     override fun onDestroy() {
         destroyed = true
+        pendingAssistantStartId = null
         if (activeInstance === this) activeInstance = null
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
         releaseBackgroundWakeLock()
@@ -1779,15 +1827,19 @@ class AuroraRuntimeForegroundService : Service() {
         val generationToFinish = sessionGeneration
         try {
             nativeLifecycleExecutor.execute {
-                val captureCloseFailed = runCatching { captureToClose?.close() }.isFailure
                 val finishFailed = generationToFinish == 0L || runCatching {
                     nativeSession.finish(generationToFinish)
                 }.fold(onSuccess = { it != 0 }, onFailure = { true })
-                if (captureCloseFailed || finishFailed) {
-                    captureError = "voice_runtime_shutdown_failed"
-                }
+                val captureCloseFailed = runCatching { captureToClose?.close() }.isFailure
                 finishHandler.post {
-                    if (finishFailed) stopSelf() else awaitFinishedSession()
+                    if (session !== nativeSession) {
+                        resumePendingAssistantStart()
+                        return@post
+                    }
+                    if (captureCloseFailed || finishFailed) {
+                        captureError = "voice_runtime_shutdown_failed"
+                    }
+                    if (finishFailed) stopSelf() else awaitFinishedSession(nativeSession)
                 }
             }
             capture = null
@@ -1800,9 +1852,17 @@ class AuroraRuntimeForegroundService : Service() {
     }
 
     private fun awaitFinishedSession() {
-        if (destroyed) return
         val nativeSession = session ?: run {
             stopAfterTerminalFailure()
+            return
+        }
+        awaitFinishedSession(nativeSession)
+    }
+
+    private fun awaitFinishedSession(nativeSession: AuroraNativeVoiceSessionBridge) {
+        if (destroyed) return
+        if (session !== nativeSession) {
+            resumePendingAssistantStart()
             return
         }
         try {
@@ -1830,7 +1890,7 @@ class AuroraRuntimeForegroundService : Service() {
         val active = stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0L } != 0L
         val queuedOutput = stats.getOrElse(VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX) { 0L }
         if (active || queuedOutput > 0L) {
-            finishHandler.postDelayed({ awaitFinishedSession() }, 100L)
+            finishHandler.postDelayed({ awaitFinishedSession(nativeSession) }, 100L)
             return
         }
         val errorCode = auroraVoiceRuntimeError(
@@ -2158,6 +2218,7 @@ class AuroraRuntimeForegroundService : Service() {
      * the one Aurora entry in place instead of Aurora gaining a second one.
      */
     private fun stopAfterTerminalFailure(startId: Int? = null) {
+        pendingAssistantStartId = null
         clearBackgroundSessionPersistence()
         backgroundSessionActive = false
         backgroundSessionRearmEnabled = false
