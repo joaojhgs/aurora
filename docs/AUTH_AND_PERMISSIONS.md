@@ -88,10 +88,13 @@ Mesh access is not equivalent to local trust. A peer must pass pairing/authentic
 Runtime-role mesh nodes keep pairing and provider authorization separate:
 
 - Pairing establishes stable peer identity, bilateral approval, and the reconnect credential relationship.
-- Provider-side authorization stores verifier records and peer-specific grants separately from claimant/outbound credential storage.
+- Non-admin pairing approvals cannot grant the global `"*"` wildcard. Only
+  admin pairing normalizes a device or peer grant to `["*"]`.
+- Provider-side authorization stores verifier records and peer-specific grants separately from claimant/outbound credential storage. The decision engine is the Rust `aurora-mesh-authority` core on native and the same core compiled to WebAssembly on web; TypeScript supplies storage adapters and host handlers but does not keep a second grant evaluator.
 - The provider stores only SHA-256 verifier material for inbound reconnect and returns any raw bearer material once to the claimant.
 - Grants control which local methods, local tool contract IDs, capability packs, and resource scopes a peer may discover or invoke.
 - Revocation rejects outstanding challenges, blocks new calls, and cancels active work tied to the revoked credential or grant.
+- Auth startup performs only bounded orphaned mesh-row pruning through the typed DB contract. Rows with a principal/device/token link, active trust state, or reconnect material are retained; retention/max-row limits apply and pruning failure leaves data intact.
 
 Hosted browser stores verifier secrets through the encrypted WebCrypto-backed vault and keeps grant metadata in the lightweight local-data repository. Tauri desktop, Android, and iOS use OS secure storage for verifier material and the shared lightweight local-data repository for redacted/encrypted grant metadata. Memory fallback is session-only and must not claim durable reconnect.
 

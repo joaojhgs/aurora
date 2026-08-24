@@ -204,6 +204,19 @@ Internal bus access is explicit to the Tauri command implementation. The SDK pre
 
 ## Mesh
 
+The SDK runtime is multi-peer for mesh-node profiles. `WebRtcPeerRuntime` keeps
+one session per stable peer, `WebRtcMeshBridgeRouter` selects the peer-bound
+bridge requested by routing, and `WebRtcPeerHost` keeps manifest, ACK, lease,
+pending-work, subscription, and connection-epoch state per recipient. Connect
+profiles remain intentionally single-home-peer.
+
+Grant and permission decisions are not implemented twice in TypeScript. Native
+Tauri clients call the Rust `aurora-mesh-authority` command surface; hosted web
+uses the same Rust core through `@aurora/mesh-authority-web`. TypeScript retains
+session/roster orchestration, durable storage adapters, provider handlers, and
+manifest/lease transport. Stale or cross-peer authority evidence fails closed,
+and each `WebRtcMeshPeerBridge` remains bound to one `remotePeerId`.
+
 ```ts
 import { AuroraClient, MeshP2PTransport } from '@aurora/client'
 

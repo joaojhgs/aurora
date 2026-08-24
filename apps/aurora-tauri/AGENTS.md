@@ -37,11 +37,33 @@ Run targeted SDK and Python gateway/auth tests before live-device E2E. Then run 
 
 Never weaken fail-closed assertions, authorization checks, transport isolation, manifest evidence, redaction checks, retry/reconnect expectations, or revocation checks to make a harness pass.
 
+Native surfaces must use the Rust authority/session path for mesh permissions,
+reconnect, and background-safe serving. Tauri exposes this through
+`aurora_mesh_authority_*` and `aurora_mesh_session_*` commands; JavaScript
+hydrates storage and renders state, but it must not become a second grant
+evaluator. Android background claims require the native session snapshots,
+foreground-service `connectedDevice` reason, `background_tool_call` marker, and
+Gateway result to refer to the same paired peer.
+
 The hosted-browser acceptance lane must use the real Python service stack, not a
 mock server: `pnpm test:hosted-peer:live` starts an isolated thread-mode
 `main.py` Auth/DB/Gateway/Tooling/WebRTC node and proves invite import, SAS,
 bilateral approval, scoped route access, Mesh refresh, reload reconnect, and
 zero browser Gateway HTTP fallback through production boundaries.
+
+Rust is the single mesh permission authority on Tauri/native and through the
+WASM adapter on browser/WebView surfaces. TypeScript keeps durable storage,
+profile/roster orchestration, and foreground session composition; the native
+Rust mesh session owns native DataChannel interception, per-peer background
+queues, liveness, and exact-peer assistant dispatch. A native session token or
+connected transport is not authentication evidence by itself: SDK/Auth pairing,
+the bound peer context, current grant revision, and manifest/lease state still
+govern every call. Never create a second TypeScript permission evaluator.
+
+Foreground WebView push-to-talk remains WebView-owned when focused. Android
+background device-link/assistant service behavior uses the native foreground
+service plus Rust mesh/voice sessions and one reference-counted notification.
+Do not claim durable background behavior from WebView lifecycle state alone.
 
 ### Native shell, Rust, Android/iOS plugin, manifest, or packaging changes
 
@@ -96,6 +118,10 @@ Android client APK/AAB capabilities must never grant it.
 - Rebuild/reinstall native artifacts only after native inputs change or at the release-candidate gate.
 - Use stable emulator/device targets and fixed, explicit reverse ports. Do not switch to a physical device when an emulator is the declared test target.
 - Run independent package tests/typechecks concurrently when they do not share mutable fixtures. Run live scenarios sequentially on one emulator and never overlap tests that share application data, ports, MQTT rooms, or native processes.
+- Use Waydroid for local Android protocol/background iteration after unit,
+  package, and artifact gates are green. Treat Waydroid as protocol and service
+  evidence; physical-device Doze, OEM kill, battery, and thermal evidence remain
+  separate release gates.
 
 Warm iteration state is a speed optimization, not release evidence. The final gate must repeat required journeys from deterministic clean state.
 

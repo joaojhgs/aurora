@@ -23,7 +23,13 @@ Shared Aurora React UI
   -> typed Aurora service and event contracts
 ```
 
-The recommended direct-peer transport keeps Aurora's signaling, cryptography, pairing, reconnect, RPC, and routing implementation in the TypeScript/browser layer. The same implementation runs in a normal browser, a desktop Tauri WebView, and Android/iOS WebViews. Rust, Kotlin, and Swift should normally supply only capabilities that browsers cannot safely or durably own, such as secure credential storage, lifecycle/background services, OS integrations, and platform permission evidence.
+The direct-peer transport keeps signaling, session/roster orchestration, pairing
+flow, RPC, and routing in the shared TypeScript/WebView layer. Grant evaluation,
+execution policy, reconnect challenges, and revocation use the Rust mesh
+authority on Tauri and the same core through WebAssembly in browsers. Native
+Rust/Kotlin/Swift also own secure storage, lifecycle/background services, OS
+integrations, and platform permission evidence; Android's bound Rust mesh
+session handles the bounded work that must survive a frozen WebView.
 
 A full Rust Aurora WebRTC protocol remains rejected because it would duplicate signaling/auth/mesh behavior and reduce cross-platform reuse. One measured exception now exists: common Linux WebKitGTK packages can omit the `RTCPeerConnection` DOM feature. The desktop client therefore injects a narrow Rust `webrtc-rs` peer-connection/DataChannel primitive only when that browser API is absent; the TypeScript protocol above it is unchanged.
 
@@ -44,11 +50,11 @@ retired.
 
 ## Current progress marker
 
-As of 2026-08-06, the shared TypeScript/WebView WebRTC direction is implemented as runtime-role work rather than only roadmap work. The runtime supports hosted web, desktop Tauri client, Android client, and the iOS source path with `http-only`, `webrtc-only`, and `webrtc-preferred` modes. Runtime profiles select remote-console or mesh-node behavior independently from physical surface; Python remains the full authoritative service runtime, while TypeScript/native mesh-node capability packs are deliberately bounded.
+As of 2026-08-24, the shared WebView WebRTC direction is implemented as runtime-role work rather than only roadmap work. The runtime supports hosted web, desktop Tauri client, Android client, and the iOS source path with `http-only`, `webrtc-only`, and `webrtc-preferred` modes. Runtime profiles select remote-console or mesh-node behavior independently from physical surface. Mesh-node profiles have a per-peer session registry/router, while Connect profiles remain single-home-peer. Python remains the full authoritative service runtime; Rust is the single mesh grant/permission authority on native and through WebAssembly on web.
 
-Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. The hosted Chromium product-flow gate, hosted mesh-node gate, and web persistence gate also pass against a real Python peer and prove invite-first onboarding, bilateral approval, scoped WebRTC route/Mesh reads, zero browser Gateway HTTP fallback, encrypted browser persistence, and reload reconnect. Desktop Linux now substitutes a package-local Rust peer primitive only when WebKitGTK lacks `RTCPeerConnection`; all Aurora protocol and security behavior stays in the shared TypeScript implementation. The packaged Linux desktop live E2E passes with runtime invite, bilateral matching SAS, scoped non-admin authorization, native Rust fallback, distinct role-switch sessions, restart/reconnect, revocation fail-closed, no Python child process or sidecar, and zero forbidden compiled endpoints/secrets. Desktop, Android, and iOS client packaging uses runtime-configurable HTTP/HTTPS/WS/WSS endpoint profiles instead of compiling operator Gateway/signaling URLs into artifacts.
+Direct, configured-STUN, and forced-TURN live interop with the Python Gateway passes in Chromium, Firefox, and Playwright WebKit while the Python HTTP API is disabled. The hosted Chromium product-flow gate, hosted mesh-node gate, and web persistence gate also pass against a real Python peer and prove invite-first onboarding, bilateral approval, scoped WebRTC route/Mesh reads, zero browser Gateway HTTP fallback, encrypted browser persistence, and reload reconnect. Desktop Linux substitutes a package-local Rust peer primitive when WebKitGTK lacks `RTCPeerConnection`; TypeScript keeps protocol/session orchestration while the Rust authority owns permission decisions. The packaged Linux desktop live E2E passes with runtime invite, bilateral matching SAS, scoped non-admin authorization, native Rust fallback, distinct role-switch sessions, restart/reconnect, revocation fail-closed, no Python child process or sidecar, and zero forbidden compiled endpoints/secrets. Desktop, Android, and iOS client packaging uses runtime-configurable endpoint profiles instead of compiling operator Gateway/signaling URLs into artifacts.
 
-Remaining release-readiness proof is platform-bound. Packaged Linux desktop live E2E is proven, but packaged macOS and Windows live proof remains external platform evidence. Android client source, build, preflight, debug APK, and universal debug AAB artifact gates pass, and a packaged API 30 `MainActivity` launch smoke now passes on the workspace emulator. That smoke does not establish packaged-WebView/Chrome pairing, direct/STUN/TURN, background lifecycle, signing/store, or physical-device behavior. iOS policy/source/frontend/overlay checks pass on Linux, but simulator, MobileSafari, packaged WKWebView, Swift runtime smoke, signing, and App Store evidence require macOS with Xcode plus the needed simulator/runtime/toolchain prerequisites. Durable mobile background wakeword, broader packaged-WebView network certification, release signing, and physical-device direct/STUN/TURN proof remain unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
+Remaining release-readiness proof is platform-bound. Packaged Linux desktop live E2E is proven, but packaged macOS and Windows live proof remains external platform evidence. Android source/build/APK/AAB gates and API 30 launch smoke pass. Waydroid full-stack acceptance also passes against the real Python service for pairing, background native ping/tool serving, ordered resume, force-stop/server-restart recovery, and assistant turns. Waydroid does not establish physical Doze, OEM kill policy, battery/thermal behavior, signing/store readiness, or every direct/STUN/TURN radio path. iOS policy/source/frontend/overlay checks pass on Linux, but simulator, MobileSafari, packaged WKWebView, Swift runtime smoke, signing, and App Store evidence require macOS/Xcode. Durable mobile background wakeword remains unclaimed. See [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`mesh/THIN-CLIENT-MESH-PARITY-PLAN.md`](mesh/THIN-CLIENT-MESH-PARITY-PLAN.md), and [`mesh/BACKGROUND-MEASUREMENT.md`](mesh/BACKGROUND-MEASUREMENT.md).
 
 ## Client catalog
 
@@ -215,17 +221,15 @@ evidence.
 - Run physical Android and iOS device tests that pair each mobile client with
   an external Python peer across direct, STUN, and TURN-relayed paths.
 
-**Current exit:** Android client source, native-policy, bundle, generated-project
-sync, preflight, debug APK, universal debug AAB proof, and packaged API 30
-application-launch smoke exist, and the KVM-backed API 35 CI lane owns both
-packaged-WebView and no-CDP Android-browser Python-peer WebRTC interop. The
-workspace emulator does not yet provide passing WebRTC interop or
-physical-device evidence. iOS client
-source/permission/Keychain/profile wiring plus Linux-safe frontend, policy, and
-overlay gates pass, and the same macOS job owns MobileSafari and
-packaged-Tauri-WKWebView external-Python direct interop. Android
-KVM/physical-device reports, macOS simulator/runtime reports, physical-device,
-STUN, and TURN proof are still pending.
+**Current exit:** Android source/native-policy/bundle/generated-project/preflight,
+debug APK, universal debug AAB, and API 30 launch gates pass. Waydroid also
+passes the packaged full-stack pairing, background native serving, ordered
+resume, force-stop/server-restart recovery, and assistant-role path against the
+real Python service. The KVM-backed API 35 CI lane still owns the dedicated
+packaged-WebView and no-CDP Android-browser direct/STUN/TURN matrix, and physical
+device power/survival evidence remains pending. iOS source, permission,
+Keychain/profile wiring, and Linux-safe frontend/policy/overlay gates pass; the
+macOS job owns MobileSafari and packaged-Tauri-WKWebView runtime evidence.
 
 ### R6 — Native-enhanced mobile capabilities
 

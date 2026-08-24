@@ -4,7 +4,14 @@
 
 **Last reviewed:** 2026-08-01
 
-This document describes the implemented browser/WebView WebRTC protocol shared by hosted web thin, desktop Tauri thin, Android thin, and the iOS thin source path. Python remains the reference peer for room/signaling/auth semantics; TypeScript implements signaling, cryptography, pairing, reconnect, RPC, and transport policy and consumes Python-owned protocol fixtures. Linux desktop thin uses the same TypeScript protocol through a narrow native `RTCPeerConnection`/`RTCDataChannel` adapter when the system WebKitGTK build does not expose those DOM APIs.
+This document describes the implemented browser/WebView WebRTC protocol shared
+by hosted web, desktop Tauri, Android, and the iOS source path. Python remains
+the reference peer for room/signaling/auth semantics. TypeScript implements
+signaling, session/roster orchestration, pairing flow, RPC, and transport policy;
+the Rust `aurora-mesh-authority` core owns grants, permission evaluation,
+reconnect challenges, execution policy, and revocation on native and through
+WebAssembly on web. Linux desktop uses the shared protocol through a native
+`RTCPeerConnection`/`RTCDataChannel` adapter when WebKitGTK omits those DOM APIs.
 
 ## Runtime scope
 
@@ -12,7 +19,7 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Signaling: MQTT over WebSocket/WSS in browser/WebView clients; MQTT topics carry room/app/channel presence, offers, answers, ICE candidates, and departure frames.
 - Peer transport: one ordered `RTCDataChannel` labeled `aurora-rpc`.
 - Application payloads: Aurora RPC calls/results/errors, streams, cancellation, manifests/auth frames, scoped subscribe/unsubscribe, events, fragmentation, and reconnect proof frames.
-- Live-proven peers: Chromium, Firefox, and Playwright-WebKit browser SDKs to the Python Gateway RTC client/RPC handler across direct, configured-STUN, and forced-TURN lanes with the Python HTTP API disabled.
+- Live-proven peers: Chromium, Firefox, and Playwright-WebKit browser SDKs to the Python Gateway RTC client/RPC handler across direct, configured-STUN, and forced-TURN lanes with the Python HTTP API disabled; packaged Linux desktop; and packaged Android on Waydroid for the local full-stack pairing/background/recovery/assistant acceptance boundary.
 
 ## Reference implementations
 
@@ -22,8 +29,11 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 | Python peer protocol/signaling/runtime | `app/services/gateway/webrtc/` |
 | TypeScript contract descriptor | `packages/aurora-sdk/src/webrtc-protocol-contract.ts` |
 | TypeScript runtime | `packages/aurora-sdk/src/webrtc/` |
+| Rust mesh authority | `rust/crates/aurora-mesh-authority/` |
+| WebAssembly authority adapter | `packages/aurora-mesh-authority-web/` |
 | Shared WebView wrapper | `packages/aurora-ui/src/web-thin-runtime.ts` |
 | Linux Tauri peer-primitive adapter | `apps/aurora-tauri/src/native-webrtc.ts`, `apps/aurora-tauri/src-tauri/src/native_webrtc.rs` |
+| Tauri native authority/session | `apps/aurora-tauri/src-tauri/src/mesh_authority.rs`, `apps/aurora-tauri/src-tauri/src/mesh_session.rs` |
 | Golden fixtures | `tests/fixtures/webrtc_web_thin_protocol_vectors.json` |
 | Fixture generator | `scripts/generate_webrtc_protocol_fixtures.py` |
 
@@ -42,6 +52,7 @@ This document describes the implemented browser/WebView WebRTC protocol shared b
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.
 - After authentication, a narrow redacted bootstrap-read allowlist may bypass mesh service-export projection so a thin client can discover its own identity, peer state, registry/services/health/topology, Mesh/WebRTC diagnostics, capability graph/catalog, and route explanation before choosing a shared service route. Normal exposure and RBAC checks still apply; for example `Auth.ListPendingPairings` still requires `Auth.manage`, `Gateway.GetCapabilityCatalog` still requires Gateway permission, and secret-bearing invite configuration is not in the bypass.
 - Provider manifests are recipient-specific projections. A TypeScript peer host does not accept generated method calls until the remote structured ACK partitions every advertised service as compatible, incompatible, or unused; every required service must be compatible, and the ACK must match the active protocol/tier, projection digest, registry revision, export-policy revision, and auth-grant revision. A stale ACK may retransmit the same pending manifest only through the bounded retry path; it never activates the provider.
+- Authority contexts, manifest/lease state, connection epochs, pending work, and subscriptions are peer-bound. One peer's ACK, reconnect proof, or grant revision can never activate or authorize another peer.
 - A successful ACK starts an epoch-bound, monotonically revised provider lease. Renewal keeps the same epoch and raises the availability revision; `provider_unavailable` is the ordered tombstone for suspend, authority loss, or shutdown. Calls fail closed before handler dispatch while the provider is unacknowledged, unavailable, or revoked.
 - Call, stream, and subscription work IDs share one active reservation space. A duplicate ID cannot overwrite another kind of work; it is rejected while the original reservation remains active. Revocation, cancellation, timeout, and disconnect close the original owner, and a call ID is not reusable until its handler or stream has actually returned.
 - Fragmentation/backpressure and scoped-event extensions are activated only from the authenticated intersection of the local and remote `protocol_hello` capability sets. A local rollout gate therefore cannot be overridden by a remote advertisement.
@@ -71,7 +82,7 @@ broadcasts.
 - WebRTC modules stay behind `@aurora/client/webrtc` or lazy WebView runtime imports. HTTP-only and desktop-local code must not import MQTT/WebRTC dependencies at SDK root.
 - Native browser crypto/WebCrypto is used where available; test/runtime adapters inject deterministic crypto and fake peer connections.
 - The Linux Tauri fallback pins `webrtc@0.11.0` only under the Linux Cargo target. Its Rust DTLS/ICE/SCTP implementation is linked into the application binary; it does not add a GStreamer or system WebRTC runtime dependency. macOS/iOS use OS WKWebView, Android uses System WebView, and Windows installers provision WebView2.
-- The native bridge is deliberately not a second Aurora protocol implementation. It owns offer/answer descriptions, ICE candidates, connection state, one ordered DataChannel, backpressure state, and redacted stats only; MQTT signaling, SAS, application-layer encryption, reconnect proof, route authorization, and RPC framing remain in TypeScript.
+- The desktop native WebRTC primitive is deliberately not a second Aurora protocol implementation: it owns offer/answer descriptions, ICE candidates, connection state, an ordered DataChannel, backpressure, and redacted stats. Tauri mobile additionally binds the authenticated native DataChannel into the Rust mesh session so bounded ping/tool serving, queueing, liveness, and exact-peer assistant dispatch can survive a frozen WebView. SAS/session orchestration and RPC contracts remain shared; permission decisions remain in the Rust authority.
 - Authenticated catalog/registry/graph replies can exceed one megabyte and include generated permission arrays larger than 256 entries. The bounded parser therefore allows arrays up to 4096 entries while retaining the negotiated 8 MiB logical-message cap; larger arrays still fail closed.
 - Linux native IPC uses a 90-second request budget and service-routing bootstrap uses 60 seconds so fragmented capability snapshots can complete without weakening protocol size limits or retry semantics.
 

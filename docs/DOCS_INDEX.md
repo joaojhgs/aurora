@@ -77,6 +77,12 @@ This index separates current documentation from historical/provenance material. 
 | [`AMBIENT_TRANSCRIPTION.md`](AMBIENT_TRANSCRIPTION.md) | Partial | Config and coordinator behavior exist; durable ambient logging service is not implemented. |
 | [`MESH_GAP_E2E_HARNESS.md`](MESH_GAP_E2E_HARNESS.md) | Current bounded harness | Transport E2E harness, not a full physical-device proof. |
 | [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md) | Current | Mesh v2 migration, RBAC review, fail-closed reverse migration, rollback, and rollout diagnostics. |
+| [`mesh/THIN-CLIENT-MESH-PARITY-PLAN.md`](mesh/THIN-CLIENT-MESH-PARITY-PLAN.md) | Current bounded check | Completed mesh parity workstreams, local acceptance evidence, and the remaining physical-device release gate. |
+| [`mesh/NATIVE-TYPESCRIPT-BOUNDARY.md`](mesh/NATIVE-TYPESCRIPT-BOUNDARY.md) | Current | Ownership boundary for TypeScript session/roster state, Rust authority, and native background serving. |
+| [`mesh/BACKGROUND-MEASUREMENT.md`](mesh/BACKGROUND-MEASUREMENT.md) | Current bounded check | Android adb background measurement report format, Waydroid limits, and physical-device evidence requirements. |
+| [`mesh/INVARIANT-TEST-COVERAGE.md`](mesh/INVARIANT-TEST-COVERAGE.md) | Current bounded check | Mesh security invariant coverage ledger and mutation-confirmed/read-and-run boundaries. |
+| [`mesh/W7-ORPHANED-PEER-ROW-PRUNING.md`](mesh/W7-ORPHANED-PEER-ROW-PRUNING.md) | Current | Safe orphaned peer row pruning rule and rejected unsafe approaches. |
+| [`mesh/W8-PYTHON-SDK-PARITY-AUDIT.md`](mesh/W8-PYTHON-SDK-PARITY-AUDIT.md) | Current bounded check | Python RTCClient per-peer state versus SDK thin-runtime parity audit. |
 | [`SDK_BACKEND_CONFORMANCE_CI.md`](SDK_BACKEND_CONFORMANCE_CI.md) | Current bounded check | Prevents SDK/backend fixture drift, not a live production certification. |
 
 ## Archive and provenance

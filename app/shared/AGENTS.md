@@ -65,6 +65,12 @@ The ACL subsystem used by Gateway, Auth, and any permission-checking code.
 - `audit_event(db_manager, event, principal_id, details, ip_address)` -- log audit event
 - Failures are logged but never raise (audit must not break the request)
 
+Peer identity and mesh authority contexts cross shared boundaries only as typed,
+redacted contract data. They are part of authorization, not generic connection
+metadata: never add a shared helper that infers trust from transport presence,
+rewrites `remote_peer_id`, or drops authority/manifest revision fields. Follow
+the Auth, Gateway, and contracts guides for those changes.
+
 ### `shared/config/` -- ConfigAPI
 
 - `interface.py` -- `ConfigAPI` singleton for bus-backed config access
