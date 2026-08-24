@@ -1034,6 +1034,54 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     await harness.runtime.close()
   })
 
+  it('starts a fresh SAS transcript after an incomplete pairing transport is replaced', async () => {
+    const harness = makeRuntimeHarness({ mode: 'webrtc-only' })
+    await prepareSasPairing(harness)
+    const auth = (harness.runtime.peer as any).session.options.auth
+
+    auth.resetTransport()
+
+    expect(auth.handshake).toBeNull()
+    expect(auth.pairing).toBeNull()
+    expect(auth.pairingHandle).toBeNull()
+    expect(auth.inboundPairingHandle).toBeNull()
+    expect(auth.issuedInboundCredential).toBeNull()
+    expect(auth.localSasConfirmed).toBe(false)
+    expect(auth.approvedSharedFeatureIds).toEqual([])
+
+    const sent: Record<string, unknown>[] = []
+    const context = {
+      localSignalingId: 'a-local',
+      remoteSignalingId: 'z-remote',
+      localStableId: 'local-stable',
+      remoteStableId: 'peer-remote',
+      offerSdp: 'replacement-offer-sdp',
+      answerSdp: 'replacement-answer-sdp',
+      sendControlFrame: async (frame: unknown) => { sent.push(frame as Record<string, unknown>) },
+    }
+    await auth.startPairing(context)
+    expect(sent[0]).toMatchObject({ type: 'pairing_v2_commit' })
+
+    const binding = await deriveChannelBinding({
+      appId: 'aurora',
+      room: 'room-1',
+      offererSignalingId: 'a-local',
+      answererSignalingId: 'z-remote',
+      offerSdp: 'replacement-offer-sdp',
+      answerSdp: 'replacement-answer-sdp',
+    })
+    const remote = new PairingSasHandshake({
+      channelBindingSha256: binding,
+      localIdentity: pairingIdentity({ role: 'answerer', stablePeerId: 'peer-remote', signalingPeerId: 'z-remote', nodeName: 'Remote node' }),
+      expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: 'a-local', nodeName: 'Thin Shell' }),
+    })
+    remote.acceptCommit(sent[0] as any)
+
+    await expect(auth.handleFrame(await remote.commitMessage(), context)).resolves.toBeUndefined()
+    expect(sent[1]).toMatchObject({ type: 'pairing_v2_reveal' })
+    await harness.runtime.close()
+  })
+
   it('does not clear a newer pairing prompt when an older approval finishes late', async () => {
     const harness = makeRuntimeHarness({ mode: 'webrtc-only' })
     let finishApproval!: () => void

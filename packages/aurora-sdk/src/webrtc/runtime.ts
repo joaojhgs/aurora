@@ -1127,48 +1127,30 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       pending.resolve(null)
     }
     this.pendingCalls.clear()
-    // Authentication is bound to the current SDP/DataChannel. Preserve the
-    // user's in-flight pairing decision, but require both trust directions to
-    // complete again before application traffic is authorized on a new one.
+    // Every SAS value and approval is bound to the exact SDP/DataChannel
+    // transcript. A replacement transport must derive and approve a new SAS;
+    // retaining the old handshake makes the first new commit look stale. Any
+    // credential already delivered remains durable in the authority store and
+    // can authenticate through reconnect proof without this session cache.
+    this.handshake = null
+    this.handshakePromise = null
+    this.pairing = null
+    this.sentCommit = false
+    this.commitPromise = null
+    this.sentReveal = false
     this.sentAuthFrame = false
     this.awaitingGatewayHello = false
+    this.pairingHandle = null
+    this.inboundPairingHandle = null
+    this.issuedInboundCredential = null
+    this.localSasConfirmed = false
+    this.approvedSharedFeatureIds = []
     this.remoteAuthenticatedByReconnectProof = false
     this.remoteAuthenticated = false
     this.remoteAuthenticatedContext = undefined
     this.outboundAuthenticationRequired = false
     this.gatewayHelloReceived = false
-    const preservePairingState = !this.pairingCompleted && (
-      this.pairing !== null
-      || this.pairingHandle !== null
-      || this.localSasConfirmed
-      || this.issuedInboundCredential !== null
-      || this.inboundPairingHandle !== null
-      || this.pairingConnectPromise !== null
-    )
-    if (!preservePairingState) {
-      this.handshake = null
-      this.handshakePromise = null
-      this.pairing = null
-      this.sentCommit = false
-      this.commitPromise = null
-      this.sentReveal = false
-      this.sentAuthFrame = false
-      this.awaitingGatewayHello = false
-      this.pairingHandle = null
-      this.inboundPairingHandle = null
-      this.issuedInboundCredential = null
-      this.localSasConfirmed = false
-      this.approvedSharedFeatureIds = []
-      this.remoteAuthenticatedByReconnectProof = false
-      this.pairingCompleted = false
-      this.pairingConnectPromise = null
-      return
-    }
-    if (!this.handshake && this.pairing) {
-      this.handshake = null
-    }
-    this.handshakePromise = null
-    this.commitPromise = null
+    this.pairingCompleted = false
     this.pairingConnectPromise = null
   }
 

@@ -509,6 +509,8 @@ class RTCClient:
         )
         self._peer_protocol_hellos: dict[str, Any] = {}
         self._peer_protocols: dict[str, NegotiatedPeerProtocol] = {}
+        self._manifest_sync_pending_protocol: set[str] = set()
+        self._manifest_protocol_timeout_tasks: dict[str, asyncio.Task[None]] = {}
         self._fragment_reassembler = FragmentReassembler(limits=PeerProtocolLimits())
         self._fragment_reassemblers: dict[str, FragmentReassembler] = {}
         self._flow_controllers: dict[str, DataChannelFlowController] = {}
@@ -619,9 +621,11 @@ class RTCClient:
         """Drop G002 negotiated protocol state for one disconnected peer only."""
 
         stable = stable_peer_id or self._stable_peer_id_for_session(session_peer_id)
+        self._cancel_manifest_protocol_timeout(stable)
         for key in {session_peer_id, stable}:
             self._peer_protocol_hellos.pop(key, None)
             self._peer_protocols.pop(key, None)
+            self._manifest_sync_pending_protocol.discard(key)
             self._event_subscriptions.cleanup_peer(key)
             with contextlib.suppress(Exception):
                 self._fragment_reassembler.cleanup_peer(key)
@@ -662,8 +666,101 @@ class RTCClient:
         for key in {session_peer_id, stable_peer_id}:
             self._peer_protocol_hellos[key] = remote_hello
             self._peer_protocols[key] = negotiated
+        self._cancel_manifest_protocol_timeout(stable_peer_id)
+        if stable_peer_id in self._manifest_sync_pending_protocol:
+            self._manifest_sync_pending_protocol.discard(stable_peer_id)
+            if negotiated.supports(CAP_FRAGMENTATION_V1):
+
+                async def _resume_manifest_sync() -> None:
+                    current_session = self._session_for_peer_id(stable_peer_id)
+                    if (
+                        not self._mesh_enabled
+                        or not self._peer_registry
+                        or current_session != session_peer_id
+                        or self._peer_acl.get(session_peer_id, ANONYMOUS) == ANONYMOUS
+                        or not self._is_peer_session_active(session_peer_id)
+                    ):
+                        return
+                    if await self._send_manifest(stable_peer_id, force_send=True):
+                        self._request_manifest(
+                            stable_peer_id,
+                            reason="protocol negotiation",
+                        )
+
+                task = asyncio.create_task(
+                    _resume_manifest_sync(),
+                    name=f"manifest-after-protocol:{stable_peer_id[:8]}",
+                )
+                self._provider_export_tasks.add(task)
+                task.add_done_callback(self._provider_export_tasks.discard)
+            else:
+                self._record_diagnostic_error(
+                    "manifest_fragmentation_unsupported",
+                    "Peer does not support fragmentation required by the manifest",
+                    session_peer_id,
+                )
         if negotiated.supports(CAP_PROVIDER_LEASE_V1) and self._peer_registry:
             asyncio.create_task(self._peer_registry.require_provider_lease(stable_peer_id))
+
+    def _schedule_manifest_protocol_timeout(
+        self,
+        stable_peer_id: str,
+        session_peer_id: str,
+    ) -> None:
+        existing = self._manifest_protocol_timeout_tasks.get(stable_peer_id)
+        if existing is not None and not existing.done():
+            return
+
+        async def report_timeout() -> None:
+            current = asyncio.current_task()
+            try:
+                await asyncio.sleep(self._auth_timeout)
+                if (
+                    stable_peer_id not in self._manifest_sync_pending_protocol
+                    or self._session_for_peer_id(stable_peer_id) != session_peer_id
+                    or not self._is_peer_session_active(session_peer_id)
+                ):
+                    return
+                message = "Peer did not negotiate fragmentation required by the manifest"
+                self._record_diagnostic_error(
+                    "manifest_protocol_negotiation_timeout",
+                    message,
+                    session_peer_id,
+                )
+                log_warning(
+                    "RTCClient: Manifest protocol negotiation timed out for peer "
+                    f"{self._peer_label(stable_peer_id)}"
+                )
+                await self._audit(
+                    "mesh.manifest_protocol_negotiation_timeout",
+                    details={
+                        "peer_id": stable_peer_id,
+                        "secrets_redacted": True,
+                    },
+                )
+            finally:
+                if self._manifest_protocol_timeout_tasks.get(stable_peer_id) is current:
+                    self._manifest_protocol_timeout_tasks.pop(stable_peer_id, None)
+
+        task = asyncio.create_task(
+            report_timeout(),
+            name=f"manifest-protocol-timeout:{stable_peer_id[:8]}",
+        )
+        self._manifest_protocol_timeout_tasks[stable_peer_id] = task
+        self._provider_export_tasks.add(task)
+        task.add_done_callback(self._provider_export_tasks.discard)
+
+    def _cancel_manifest_protocol_timeout(self, stable_peer_id: str) -> None:
+        task = self._manifest_protocol_timeout_tasks.pop(stable_peer_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _cancel_manifest_protocol_timeouts(self) -> None:
+        tasks = tuple(self._manifest_protocol_timeout_tasks.values())
+        self._manifest_protocol_timeout_tasks.clear()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
     def _handle_fragment_frame(self, peer_id: str, frame: dict[str, Any]) -> str | None:
         """Accept one authenticated fragment and return completed logical JSON if ready."""
@@ -1216,10 +1313,20 @@ class RTCClient:
             return False
         encoded_len = len(text.encode("utf-8"))
         protocol = self._peer_protocols.get(session_peer_id)
-        if encoded_len > PeerProtocolLimits().max_logical_bytes:
+        default_limits = PeerProtocolLimits()
+        if encoded_len > default_limits.max_logical_bytes:
             self._record_diagnostic_error(
                 "datachannel_payload_oversize",
                 "Payload exceeds maximum logical size",
+                session_peer_id,
+            )
+            return False
+        if encoded_len > default_limits.fragment_payload_bytes and (
+            protocol is None or not protocol.supports(CAP_FRAGMENTATION_V1)
+        ):
+            self._record_diagnostic_error(
+                "datachannel_fragmentation_unavailable",
+                "Payload requires negotiated DataChannel fragmentation",
                 session_peer_id,
             )
             return False
@@ -1892,6 +1999,8 @@ class RTCClient:
         if shadow_tasks:
             await asyncio.gather(*shadow_tasks, return_exceptions=True)
         self._provider_export_tasks.clear()
+        self._manifest_sync_pending_protocol.clear()
+        self._manifest_protocol_timeout_tasks.clear()
         unavailable_tasks = [
             queue.task for queue in self._local_provider_unavailable_tasks.values()
         ]
@@ -2494,6 +2603,8 @@ class RTCClient:
 
         self._mesh_enabled = False
         self._mesh_config = None
+        self._manifest_sync_pending_protocol.clear()
+        self._cancel_manifest_protocol_timeouts()
         self._cancel_manifest_reannounce_retries()
         self._invalidate_provider_export_all(reason_code="mesh_disabled")
         if policy_provider is not None:
@@ -3781,8 +3892,28 @@ class RTCClient:
             aurora_version=_get_package_version(),
         )
         msg = manifest_to_dict(manifest)
+        payload = json.dumps(msg)
         projection_size = sum(len(service.methods) for service in manifest.shared_services)
         advertised_services = tuple(sorted(service.module for service in manifest.shared_services))
+        protocol = self._peer_protocols.get(session_peer_id)
+        if len(payload.encode("utf-8")) > PeerProtocolLimits().fragment_payload_bytes:
+            if protocol is None:
+                self._manifest_sync_pending_protocol.add(stable_peer_id)
+                self._schedule_manifest_protocol_timeout(stable_peer_id, session_peer_id)
+                log_debug(
+                    "RTCClient: Deferred large manifest until protocol negotiation "
+                    f"for peer {self._peer_label(stable_peer_id)}"
+                )
+                return False
+            if not protocol.supports(CAP_FRAGMENTATION_V1):
+                self._manifest_sync_pending_protocol.discard(stable_peer_id)
+                self._record_diagnostic_error(
+                    "manifest_fragmentation_unsupported",
+                    "Peer does not support fragmentation required by the manifest",
+                    session_peer_id,
+                )
+                return False
+        self._manifest_sync_pending_protocol.discard(stable_peer_id)
         pending_ack = self._manifest_ack_expectations.get(stable_peer_id)
         pending_matches_projection = self._manifest_expectation_matches_projection(
             stable_peer_id,
@@ -3842,7 +3973,7 @@ class RTCClient:
                 compatible_services=(),
             )
             self._manifest_ack_expectations[stable_peer_id] = expected_ack
-        sent = await self.send_to_peer_async(session_peer_id, json.dumps(msg))
+        sent = await self.send_to_peer_async(session_peer_id, payload)
         if self._rollout_metrics is not None:
             self._rollout_metrics.record(
                 "manifest_sent" if sent else "manifest_failed",
@@ -4867,11 +4998,12 @@ class RTCClient:
 
         if self._mesh_enabled and self._peer_registry:
             await self._peer_registry.register_peer(stable_peer_id, peer_name)
-            await self._send_manifest(stable_peer_id)
+            manifest_sent = await self._send_manifest(stable_peer_id)
             # The first local approval can send a manifest while the other
             # endpoint is still anonymous. Requesting the remote manifest here
             # makes the later approval converge both sides immediately.
-            self._request_manifest(stable_peer_id, reason="authentication")
+            if manifest_sent:
+                self._request_manifest(stable_peer_id, reason="authentication")
 
     async def _retire_replaced_stable_session(
         self,

@@ -25,7 +25,11 @@ from app.services.gateway.service import (
 )
 from app.services.gateway.webrtc.pairing_sas import PairingProtocolError
 from app.services.gateway.webrtc.peer_protocol import (
+    CAP_FRAGMENTATION_V1,
     CAP_PROVIDER_LEASE_V1,
+    FRAGMENT_FRAME_TYPE,
+    FragmentReassembler,
+    PeerProtocolLimits,
     build_protocol_hello,
     negotiate_protocol,
 )
@@ -1420,6 +1424,104 @@ async def test_send_manifest_wire_path_uses_ready_projection_filtered_to_recipie
         readiness="ready",
     )
     assert projection.routable is False
+
+
+@pytest.mark.asyncio
+async def test_large_manifest_timeout_is_visible_then_late_protocol_sends_fragmented(
+    monkeypatch,
+) -> None:
+    client = _client()
+    client._auth_timeout = 0.01
+    client._peer_registry = MagicMock()
+    assert client.apply_peer_authority_changed(
+        MeshPeerAuthorityChangedEvent(
+            peer_id="peer-a",
+            auth_grant_revision=1,
+            disposition="present",
+            state="active",
+            effective_permissions=("TTS.*",),
+            reason="approved",
+        )
+    )
+    channel = client._peer_data_channels["session-a"]
+    client._peer_send_fns["session-a"] = channel.send
+    client._registry = None
+    monkeypatch.setattr(
+        "app.shared.contracts.registry.list_modules",
+        lambda: {
+            "TTS": _mesh_module(
+                "TTS",
+                "TTS.Synthesize",
+                feature_id="speech_synthesis",
+                permission="TTS.*",
+                method_name="Synthesize",
+            )
+        },
+    )
+    monkeypatch.setattr("app.shared.contracts.registry._get_package_version", lambda: "1.0.0")
+    from app.services.gateway.mesh import negotiation as negotiation_module
+
+    original_manifest_to_dict = negotiation_module.manifest_to_dict
+
+    def padded_manifest_to_dict(manifest):
+        payload = original_manifest_to_dict(manifest)
+        payload["padding"] = "x" * (PeerProtocolLimits().fragment_payload_bytes + 1)
+        return payload
+
+    monkeypatch.setattr(negotiation_module, "manifest_to_dict", padded_manifest_to_dict)
+    client._schedule_provider_export_shadow = MagicMock()
+    client.retry_tooling_projection_invalidation = MagicMock(return_value=True)
+    mesh_config = MeshConfig(
+        enabled=True,
+        services={"TTS": mesh_policy(share=True)},
+    )
+
+    assert await client._send_manifest("peer-a", mesh_config=mesh_config) is False
+    assert channel.sent == []
+    assert "peer-a" in client._manifest_sync_pending_protocol
+    assert "peer-a" not in client._manifest_ack_expectations
+    timeout_tasks = [
+        task
+        for task in client._provider_export_tasks
+        if task.get_name().startswith("manifest-protocol-timeout:")
+    ]
+    assert len(timeout_tasks) == 1
+    await asyncio.gather(*timeout_tasks)
+    assert "peer-a" in client._manifest_sync_pending_protocol
+    assert any(
+        error.code == "manifest_protocol_negotiation_timeout" for error in client._diagnostic_errors
+    )
+
+    client._handle_protocol_hello(
+        "session-a",
+        build_protocol_hello(
+            role="hybrid",
+            capabilities=(CAP_FRAGMENTATION_V1,),
+            limits=PeerProtocolLimits(),
+        ),
+    )
+    resume_tasks = [
+        task
+        for task in client._provider_export_tasks
+        if task.get_name().startswith("manifest-after-protocol:")
+    ]
+    assert len(resume_tasks) == 1
+    await asyncio.gather(*resume_tasks)
+
+    wire_frames = [json.loads(payload) for payload in channel.sent]
+    fragment_frames = [frame for frame in wire_frames if frame.get("type") == FRAGMENT_FRAME_TYPE]
+    assert len(fragment_frames) > 1
+    reassembler = FragmentReassembler(limits=PeerProtocolLimits())
+    completed = None
+    for frame in fragment_frames:
+        completed = reassembler.receive("peer-a", frame) or completed
+    assert completed is not None
+    assert json.loads(completed)["padding"].startswith("x")
+    assert any(frame.get("type") == "manifest_request" for frame in wire_frames)
+    assert "peer-a" not in client._manifest_sync_pending_protocol
+    assert not any(
+        error.code == "datachannel_fragmentation_unavailable" for error in client._diagnostic_errors
+    )
 
 
 @pytest.mark.asyncio

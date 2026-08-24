@@ -162,6 +162,41 @@ async def test_existing_password_not_overwritten(mock_gateway_service):
 
 
 @pytest.mark.asyncio
+async def test_persisted_env_password_is_not_rotated_on_restart(
+    mock_gateway_service, monkeypatch, tmp_path
+):
+    """An env-backed room password remains effective when config.json is empty."""
+    from app.services.config.config_manager import ConfigManager
+
+    original_manager = ConfigManager._instance
+    ConfigManager._instance = None
+    monkeypatch.setenv("AURORA_CONFIG_FILE", str(tmp_path / "config.json"))
+    monkeypatch.setenv("AURORA_WEBRTC_PASSWORD", "stable-env-room-password")
+    try:
+        restarted_manager = ConfigManager()
+        settings = Settings()
+        settings.webrtc.room = "stable-room"
+        settings.webrtc.password = restarted_manager.get(
+            "services.gateway.webrtc.password"
+        )
+
+        saved_values = {}
+        mock_api = _mock_config_api(saved_values)
+        with patch(_PATCH_CONFIG_API, return_value=mock_api):
+            persisted = await mock_gateway_service._persist_webrtc_credentials(
+                settings,
+                provision_app_id=False,
+            )
+
+        assert persisted is True
+        assert settings.webrtc.password == "stable-env-room-password"
+        assert "services.gateway.webrtc.password" not in saved_values
+        mock_api.aupdate_config.assert_not_awaited()
+    finally:
+        ConfigManager._instance = original_manager
+
+
+@pytest.mark.asyncio
 async def test_fresh_mesh_webrtc_identity_gets_non_placeholder_credentials(
     mock_gateway_service,
 ):

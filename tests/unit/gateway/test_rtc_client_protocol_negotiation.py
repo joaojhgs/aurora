@@ -1008,6 +1008,21 @@ async def test_send_to_peer_async_legacy_sends_small_unfragmented() -> None:
 
 
 @pytest.mark.asyncio
+async def test_send_to_peer_async_rejects_large_unnegotiated_frame() -> None:
+    client = _client()
+    channel = FakeDataChannel()
+    client._peer_data_channels["legacy-peer"] = channel  # noqa: SLF001
+    payload = "x" * (PeerProtocolLimits().fragment_payload_bytes + 1)
+
+    assert await client.send_to_peer_async("legacy-peer", payload) is False
+
+    assert channel.sent == []
+    assert (  # noqa: SLF001
+        client._diagnostic_errors[0].code == "datachannel_fragmentation_unavailable"
+    )
+
+
+@pytest.mark.asyncio
 async def test_scheduled_rpc_response_uses_fragmented_ordered_send_path() -> None:
     client = _client()
     limits = _small_limits()
@@ -1069,6 +1084,7 @@ def test_protocol_cleanup_is_scoped_to_disconnected_peer() -> None:
     protocol = negotiate_protocol(hello, hello)
     client._remember_stable_peer_id("session-a", "stable-a", "A")  # noqa: SLF001
     client._remember_stable_peer_id("session-b", "stable-b", "B")  # noqa: SLF001
+    client._manifest_sync_pending_protocol.update({"stable-a", "stable-b"})  # noqa: SLF001
     for key in ("session-a", "stable-a", "session-b", "stable-b"):
         client._peer_protocols[key] = protocol  # noqa: SLF001
     frame_a = fragment_message("abcdefghi", message_id="cleanup-a", limits=limits)[0]
@@ -1083,5 +1099,7 @@ def test_protocol_cleanup_is_scoped_to_disconnected_peer() -> None:
     assert "session-a" not in client._peer_protocols  # noqa: SLF001
     assert "stable-a" not in client._peer_protocols  # noqa: SLF001
     assert "session-b" in client._peer_protocols  # noqa: SLF001
+    assert "stable-a" not in client._manifest_sync_pending_protocol  # noqa: SLF001
+    assert "stable-b" in client._manifest_sync_pending_protocol  # noqa: SLF001
     assert "stable-a" not in client._fragment_reassemblers  # noqa: SLF001
     assert client._fragment_reassemblers["stable-b"].incomplete_count("stable-b") == 1  # noqa: SLF001
