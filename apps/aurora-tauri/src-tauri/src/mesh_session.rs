@@ -1101,20 +1101,40 @@ pub async fn route_inbound(
     };
 
     let routing = match disposition {
-        InboundDisposition::Answer(frames) => FrameRouting::Answer {
-            frames,
-            replay_after_resume: true,
-        },
-        InboundDisposition::Dispatch | InboundDisposition::Unknown => FrameRouting::Emit,
+        InboundDisposition::Answer(frames) => {
+            return finalize_routing_after_unlock(
+                inner,
+                state,
+                data_channel_id,
+                binary,
+                FrameRouting::Answer {
+                    frames,
+                    replay_after_resume: true,
+                },
+            )
+            .await;
+        }
+        InboundDisposition::Dispatch | InboundDisposition::Unknown => {
+            return InboundRouting::Emit;
+        }
         InboundDisposition::Queued { depth } => {
             let _ = depth;
             return InboundRouting::Parked;
         }
         InboundDisposition::Overflow(answer) => match answer {
-            Some(frame) => FrameRouting::Answer {
-                frames: vec![frame],
-                replay_after_resume: true,
-            },
+            Some(frame) => {
+                return finalize_routing_after_unlock(
+                    inner,
+                    state,
+                    data_channel_id,
+                    binary,
+                    FrameRouting::Answer {
+                        frames: vec![frame],
+                        replay_after_resume: true,
+                    },
+                )
+                .await;
+            }
             None => return InboundRouting::Parked,
         },
         InboundDisposition::Authorize(pending) => {
@@ -1170,6 +1190,20 @@ pub async fn route_inbound(
             routing
         }
     };
+    finalize_routing(state, data_channel_id, binary, routing).await
+}
+
+async fn finalize_routing_after_unlock(
+    inner: tokio::sync::MutexGuard<'_, MeshSessionInner>,
+    state: &MeshSessionState,
+    data_channel_id: u64,
+    binary: bool,
+    routing: FrameRouting,
+) -> InboundRouting {
+    // Binary replies need the channel codec from this same state. Release the
+    // routing guard before the encoder reacquires it; retaining it here would
+    // self-deadlock the data-channel callback and every later native call.
+    drop(inner);
     finalize_routing(state, data_channel_id, binary, routing).await
 }
 
@@ -2157,6 +2191,45 @@ mod tests {
                 .expect("interrupt-capable peer selected");
             assert_eq!(pending.peer_id, "peer-interrupt");
             assert_eq!(pending.data_channel_id, 20);
+        });
+    }
+
+    #[test]
+    fn encrypted_answer_releases_routing_lock_before_encoding() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            state
+                .test_bind_native_assistant_peer_with_codec(
+                    "peer-a",
+                    10,
+                    &[],
+                    true,
+                    None,
+                    vec![7; 32],
+                )
+                .await;
+            let inner = state.inner.lock().await;
+            let routed = tokio::time::timeout(
+                std::time::Duration::from_millis(100),
+                finalize_routing_after_unlock(
+                    inner,
+                    &state,
+                    10,
+                    true,
+                    FrameRouting::Answer {
+                        frames: vec![json!({"type": "pong", "id": "ping-1"})],
+                        replay_after_resume: true,
+                    },
+                ),
+            )
+            .await
+            .expect("encrypted answer must not deadlock");
+
+            let InboundRouting::Answer(frames) = routed else {
+                panic!("encrypted answer must be routed back to the data channel");
+            };
+            assert_eq!(frames.len(), 1);
+            assert!(matches!(frames[0], OutboundDataChannelFrame::Binary(_)));
         });
     }
 
