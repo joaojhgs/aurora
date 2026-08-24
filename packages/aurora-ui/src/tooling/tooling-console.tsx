@@ -460,7 +460,7 @@ function backendGrantRow(grant: ToolApprovalGrantModel, sources: ToolingSourceMo
     scope: grant.scope,
     status: grant.status,
     principal: grant.principalId ?? 'local-principal',
-    expires: grant.expiresAt ? new Date(grant.expiresAt * 1000).toISOString() : 'backend default',
+    expires: grant.expiresAt ? new Date(grant.expiresAt * 1000).toISOString() : 'Aurora default',
     evidence: grant.reason ?? grant.id
   }
 }
@@ -1103,7 +1103,7 @@ interface ToolPolicyTag {
   tone: BadgeTone
 }
 
-/** Effective per-tool policy derived from the catalog card (trust tier, approval and dry-run flags). */
+/** Effective per-tool policy derived from source trust, approval, and dry-run flags. */
 function toolPolicyTag(tool: ToolApprovalCardModel): ToolPolicyTag {
   if (tool.blockReasonCode === 'permission_denied' || tool.blockReasonCode === 'recipient_missing_tool_permissions') {
     return { label: 'missing permission', tone: 'danger' }

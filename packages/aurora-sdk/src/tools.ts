@@ -847,7 +847,7 @@ function normalizeToolEntry(
     provenanceProviderToolId: stringOrNull(tool.provenance?.provider_tool_id),
     name: tool.display_name ?? tool.local_name ?? tool.global_tool_id,
     localToolName: tool.local_name ?? null,
-    description: tool.description ?? 'Tool metadata is available from the backend catalog.',
+    description: tool.description ?? 'Tool details are available from Aurora.',
     providerLabel: tool.provider_label ?? provider?.label ?? 'provider pending',
     providerPeerId,
     serviceInstanceId,

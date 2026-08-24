@@ -319,7 +319,7 @@ export function buildAuditRows(tools: ToolApprovalCardModel[], schedulerJobs: No
     action: auditActionForTool(tool),
     actor: tool.providerPeerId ?? 'local-peer',
     target: tool.name,
-    timestamp: 'catalog snapshot',
+    timestamp: 'Aurora snapshot',
     status: tool.state,
     correlationId: tool.correlationId ?? 'pending',
     policyDecisionId: tool.policyDecisionId ?? 'not reported'
@@ -498,7 +498,7 @@ function grantStatusForTool(tool: ToolApprovalCardModel): ToolingGrantRow['statu
 }
 
 function formatExpiry(expiresAt: ToolApprovalCardModel['expiresAt']): string {
-  if (!expiresAt) return 'backend default'
+  if (!expiresAt) return 'Aurora default'
   if (typeof expiresAt === 'number') return new Date(expiresAt * 1000).toISOString()
   return expiresAt
 }
@@ -510,5 +510,5 @@ function auditActionForTool(tool: ToolApprovalCardModel): string {
   if (tool.state === 'replay-rejected') return 'Replay rejected'
   if (tool.state === 'unavailable') return 'Device unavailable'
   if (tool.approvalRequired) return 'Approval requested'
-  return 'Catalog reviewed'
+  return 'Reviewed'
 }

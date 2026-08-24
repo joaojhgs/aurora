@@ -4587,7 +4587,7 @@ export const modelRuntimeCatalogFixture: ModelRuntimeCatalogResponse = {
       enabled: true,
       selected: true,
       health: 'healthy',
-      health_reason: 'Local runtime loaded from backend catalog.',
+      health_reason: 'Local runtime loaded from Aurora.',
       model_id: 'llama-3-8b-instruct',
       source: 'local-filesystem',
       license: 'user-provided',
