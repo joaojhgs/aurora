@@ -594,9 +594,15 @@ The following endpoints bypass authentication:
 - `POST /api/Auth/PairingConnect`
 - `POST /api/Auth/PairingExchange`
 
-## WebView WebRTC thin-client interoperability
+## WebView WebRTC client interoperability
 
-The Gateway WebRTC stack is now interoperable with the TypeScript browser/WebView runtime used by hosted web thin, desktop Tauri thin, and Android thin. The shared runtime supports `http-only`, `webrtc-only`, and `webrtc-preferred`; WebRTC modes use MQTT signaling and the `aurora-rpc` `RTCDataChannel` for Aurora RPC/events.
+The Gateway WebRTC stack interoperates with the shared browser/WebView runtime
+used by hosted web, desktop Tauri, and Android. The runtime supports
+`http-only`, `webrtc-only`, and `webrtc-preferred`; WebRTC modes use MQTT
+signaling and the `aurora-rpc` DataChannel for Aurora RPC/events. Mesh-node
+profiles keep one session and bridge per stable peer; Connect profiles remain
+single-home-peer. Grant/permission decisions use the Rust mesh authority on
+native and the same core through WebAssembly on web.
 
 The required browser matrix covers direct, configured-STUN, and forced-TURN Chromium, Firefox, and Playwright-WebKit browser ↔ Python Gateway sessions:
 
@@ -642,6 +648,13 @@ These methods are the **only** RPC calls that anonymous (unauthenticated) WebRTC
 - `device_name` — Human-readable device name for the admin approval screen
 - `remote_peer_id` — (Optional) The initiator's stable `mesh_identity.peer_id`; used by the responder to auto-trigger **bilateral pairing** (Phase 2)
 - `remote_node_name` — (Optional) The initiator's node name for logging
+- `pairing_session_id` — Required for a trusted mesh-originated flow; the SHA-256 session identifier bound to the bilateral SAS transcript/channel context
+
+Every mesh pairing step preserves the same `pairing_session_id` and
+`remote_peer_id`. Conflicting duplicate sessions, mismatched
+verifier/claimant identities, or stale channel bindings fail closed. Non-admin
+pairing approval cannot grant the global `"*"` wildcard; only an admin pairing
+normalizes the resulting grant to `["*"]`.
 
 **`PairingExchangeResponse`** includes:
 - `access_token` — JWT/token for subsequent authenticated API calls

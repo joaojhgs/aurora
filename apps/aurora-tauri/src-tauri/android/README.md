@@ -1,8 +1,20 @@
 # Aurora Android Native Plugin
 
-This directory holds the Android side of the future Aurora Tauri mobile plugin. It follows the official Tauri 2 mobile plugin shape: Kotlin native code extends `app.tauri.plugin.Plugin`, is annotated with `@TauriPlugin`, and exposes methods annotated with `@Command`.
+This directory holds the production Android side of Aurora's Tauri mobile
+plugin. It follows the official Tauri 2 mobile plugin shape: Kotlin native code
+extends `app.tauri.plugin.Plugin`, is annotated with `@TauriPlugin`, and exposes
+methods annotated with `@Command`.
 
-The plugin reports Android package, permission, role, and fallback-entrypoint state to the Rust/JS bridge and now contains the native foreground path: one reference-counted `AuroraRuntimeForegroundService` carries both microphone capture and held device connections behind a single notification, Kotlin owns AudioRecord/AudioTrack and lifecycle controls while the Rust voice session owns bounded PCM, generations, typed Gateway routing, cancellation, and redacted status. Product capabilities remain evidence-gated until Android OS, emulator, and physical-device checks pass.
+The plugin reports Android package, permission, role, and fallback-entrypoint
+state to the Rust/JS bridge and contains the native foreground path: one
+reference-counted `AuroraRuntimeForegroundService` carries microphone capture
+and held device connections behind a single notification. Kotlin owns
+AudioRecord/AudioTrack, role entrypoints, and lifecycle controls; Rust owns the
+bounded voice and mesh sessions, per-peer queue/liveness state, typed Gateway
+routing, cancellation, and redacted status. Waydroid has exercised this path
+against the real `main.py` service, including background device-link serving,
+force-stop/restart recovery, and assistant turns. Physical-device Doze, OEM
+kill policy, battery, and thermal qualification remain separate release gates.
 
 `pnpm android:sync-native-plugin` copies this source into the generated Tauri
 Android app and applies the canonical Aurora manifest fragments. The app
@@ -48,16 +60,27 @@ The Android provider reports status for:
 
 File read/write/pick are reported as `degraded` until a scoped Android file/share intake task wires a native picker contract. Foreground service microphone remains `needs_native_permission` until both microphone and foreground-service microphone permission evidence is present. The foreground service only proves an Android OS foreground constraint and notification channel path; UI must still require backend audio/session evidence before claiming listening/transcription. Share sheet and deep links are native-declared but still require backend context ingestion before UI can claim that a file, URL, or message was processed. Widget, shortcut, and quick tile entrypoints are fallback open paths whose placement and invocation remain user/OEM controlled. Fallback entrypoints remain present when the assistant role is not held.
 
-## Emulator Smoke
+## Waydroid and emulator smoke
 
-After Tauri Android generation wires this module into the app, smoke test with an emulator/device:
+After Tauri Android generation wires this module into the app, use Waydroid as
+the normal local target and select its serial from `adb devices -l`. Build and
+install the generated package before probing the role/capability surface:
 
 ```bash
 pnpm --filter @aurora/tauri-ui tauri android build
-adb install apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/debug/app-debug.apk
-adb shell cmd role holders android.app.role.ASSISTANT
+adb -s "$WAYDROID_SERIAL" install apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/debug/app-debug.apk
+adb -s "$WAYDROID_SERIAL" shell cmd role holders android.app.role.ASSISTANT
 ```
 
 Then call the JS transport command path for `getNativeCapabilityManifest()` / `androidAssistantRoleStatus`, `localLightInferenceStatus`, `requestAndroidPermission('aurora.android.microphone')`, `voiceForegroundServiceStatus`, and `entrypointPayload`, or invoke the plugin commands from the Tauri mobile shell test harness and record the returned payload. Expected results must distinguish `roleAvailable`, `packageQualified`, `roleHeld`, `requestable`, `denied`, and `oemUnavailable`; include mic/notification/biometric/local-network/foreground-service/foreground-voice/file/share/deep-link/widget/shortcut/quick-tile states; include local-light inference as `degraded` with backend model catalog and device/model proof requirements; include redacted entrypoint descriptors and `lastEntrypointPayload`; and keep fallback entrypoints present when `roleHeld=false`.
 
 The CI smoke harness reads chunked `aurora_android_native_plugin_payload_*` log markers and reassembles them before JSON validation. Do not rely on a single full-payload logcat line; Android log output can truncate long JSON lines before the parser sees them.
+
+For mesh/background/assistant acceptance, run the maintained package scripts
+only after Python, SDK, UI, and Rust suites pass. The live server must be the
+full `uv run python main.py` stack; a mock server is not acceptance evidence.
+Use clean app state for pairing/revocation recovery claims, keep one explicit
+device serial, and retain the redacted report. Rerun this expensive gate on an
+integration branch only when its source delta can affect Android native, Rust
+mesh/voice session, SDK pairing/transport, foreground-service, or lifecycle
+behavior.

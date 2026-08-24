@@ -198,14 +198,15 @@ Tauri desktop packages stage a Python sidecar using `apps/aurora-tauri/scripts/p
 
 Legacy `*:thin` package scripts remain compatibility aliases for the neutral `*:client` scripts. Do not use the Python builder's internal `thin` dependency profile as evidence that a package is Python-free; Python-free client artifacts are the `desktop-client`, Android client, and iOS client bundle lanes.
 
-Android client artifact proof is package-content evidence, not device-runtime
-evidence. Current-main x86_64 debug APK and universal four-ABI debug AAB scans
-pass with no Python/sidecar/endpoint/secrets, and a packaged API 30 application
-launch smoke passes on the workspace emulator. No API 35 packaged-WebView or
-Chrome WebRTC report is claimed from that launch-only smoke; run the API 35
-workflow or an authorized physical device for those lanes. iOS client source,
-policy, frontend, and overlay gates are Linux-safe, but simulator, Swift
-runtime, signing, and App Store proof require macOS/Xcode.
+Android client artifact proof remains package-content evidence, distinct from
+device runtime evidence. Current x86_64 debug APK and universal four-ABI debug
+AAB scans pass with no Python/sidecar/endpoint/secrets, API 30 launch smoke
+passes, and a separate Waydroid full-stack run passes the maintained
+mesh/background/recovery/assistant boundary against the real Python service.
+That does not replace the dedicated API 35 WebView/Chrome direct/STUN/TURN lane
+or physical-device power/survival qualification. iOS source, policy, frontend,
+and overlay gates are Linux-safe, but simulator, Swift runtime, signing, and App
+Store proof require macOS/Xcode.
 
 See [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) for sidecar build mechanics and signing boundaries.
 

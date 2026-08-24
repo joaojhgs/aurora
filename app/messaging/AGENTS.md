@@ -204,6 +204,12 @@ Even with `mesh=True`, the event won't forward unless the module has `share: tru
 - **Does a remote instance need to know?** -> `mesh=True`
 - **Hardware-bound, high-frequency, or purely local?** -> default (`mesh=False`)
 
+Peer identity, authenticated-context, grant/authority revision, manifest, and
+lease fields are security-critical routing state, not incidental transport
+metadata. Preserve their typed models and per-peer correlation across MeshBus;
+follow the Auth and Gateway guides before adding, rewriting, or forwarding such
+fields. A missing or mismatched authority context must fail closed.
+
 ---
 
 ## Runtime Singletons

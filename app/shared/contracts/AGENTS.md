@@ -138,6 +138,24 @@ async def handle_request(self, data: TTSRequest) -> TTSResponse:
 ### MeshEvents (`mesh.py`)
 `PEER_APPROVED`, `PEER_PERMISSIONS_UPDATED`
 
+### Mesh lifecycle frames
+
+WebRTC lifecycle/control frame names that cross Python, TypeScript, and Rust
+must stay in the generated protocol fixtures. `mesh_peer_standby_v1` is the
+budget-shedding signal: it means the peer is intentionally standing by and the
+credential should be retained. Add or change lifecycle frame names only with
+the Python protocol contract, SDK protocol vectors, Rust ownership tests, and
+documentation updated together.
+
+`models/mesh.py` also owns the typed mesh/session authority evidence used by
+negotiation, provider eligibility, routing, and tooling projections. When these
+models change, update every Python/SDK/native descriptor or fixture consumer
+and document any new authority-change event here. Preserve stable peer IDs,
+recipient IDs, authority/grant revisions, manifest revisions, and reason codes;
+do not replace them with untyped dictionaries or literal topics. Inventory and
+interop tests must prove that stale or cross-peer authority evidence is
+rejected.
+
 ### ConfigMethods (`config.py`)
 `GET`, `SET`, `UPDATED`, `ERROR`, `SET_PLUGIN`, `GET_PLUGIN`, `VALIDATE`, `RELOAD_SERVICE`, `HEALTH_CHECK`
 

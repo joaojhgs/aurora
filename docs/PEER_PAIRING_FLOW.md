@@ -215,12 +215,26 @@ The new device sends its name to the Gateway to begin pairing. When the request 
 {
     "device_name": "John's iPhone",
     "remote_peer_id": "a1b2c3d4-...",   // Stable UUID of the requesting peer
-    "remote_node_name": "living-room"     // Human-readable peer name
+    "remote_node_name": "living-room",    // Human-readable peer name
+    "room_name": "home-mesh",
+    "pairing_session_id": "<64-char transcript hash>",
+    "verification_code": "123456"
 }
 
 // Response (200)
-{ "code": "482937", "expires_in_seconds": 300 }
+{
+  "code": "<opaque pairing handle>",
+  "expires_in_seconds": 300,
+  "pairing_session_id": "<same transcript hash>",
+  "verification_code": "123456"
+}
 ```
+
+For a trusted mesh DataChannel call, `room_name`, `remote_peer_id`,
+`pairing_session_id`, and `verification_code` are transport-bound values
+injected/overwritten by the Gateway RPC handler. They are not trusted from an
+arbitrary caller payload. Basic HTTP device pairing continues to use the opaque
+pairing handle without mesh transcript fields.
 
 **What happens server-side:**
 1. **Rate limiting** — max 5 attempts per client IP. Returns `429` if exceeded.
@@ -236,6 +250,9 @@ The new device sends its name to the Gateway to begin pairing. When the request 
        "approved_by": None,
        "remote_peer_id": "a1b2c3d4-...",    # Empty string if not a mesh peer
        "remote_node_name": "living-room",    # Empty string if not a mesh peer
+       "room_name": "home-mesh",
+       "pairing_session_id": "<64-char transcript hash>",
+       "verification_code": "123456",
    }
    ```
 4. **Bus event:** `Auth.PairingRequested` is published with `PairingRequestedEvent` payload so the UI and mesh subsystem can react (e.g., display a notification to the admin).
@@ -299,7 +316,12 @@ The admin (on a separate already-authenticated session — e.g., web dashboard o
    request["granted_permissions"] = permissions or config_defaults
    request["granted_is_admin"] = is_admin
    ```
-4. **Permission fallback:** If `permissions` is `None` (not provided), the system uses `_default_device_permissions` from the Gateway config. If `permissions` is `[]` (explicitly empty), the device gets zero permissions.
+4. **Permission fallback and wildcard guard:** If `permissions` is `None`
+   (not provided), the system uses `_default_device_permissions` from the
+   Gateway config. If `permissions` is `[]` (explicitly empty), the device gets
+   zero permissions. Non-admin approvals may not grant the global `"*"`
+   wildcard; only an approval marked `is_admin: true` may normalize the device's
+   grant to `["*"]`.
 5. **Mesh peer sync:** If the pairing request has a `remote_peer_id` (i.e., it came from a mesh peer), the system also updates the `mesh_peers` table — setting `outbound_status = 'approved'` and `outbound_permissions` to the granted permissions. This ensures the mesh peer table stays in sync with the pairing approval.
 6. **Audit event:** `pairing.approved` with the approving admin's ID, granted permissions, and admin flag.
 
@@ -366,7 +388,8 @@ Once the device detects `status: "approved"`, it exchanges the code for a perman
    }
    ```
    - **Admin devices** get `scopes: ["*"]` (full access).
-   - **Non-admin devices** get `scopes` = exactly the granted permissions.
+   - **Non-admin devices** get `scopes` = exactly the granted permissions and
+     cannot receive the global `"*"` wildcard.
 
 5. **Outbound FK linking (mesh peers):** If the pairing request has a `remote_peer_id`, the system writes the outbound foreign keys to `mesh_peers`:
    ```sql
@@ -718,7 +741,7 @@ Every passing run asserts:
 - wildcard and wrong-correlation event deliveries are blocked;
 - report/output secret scans pass with secrets redacted.
 
-The direct, STUN, and forced-TURN lanes are live-proven in Chromium, Firefox, and Playwright WebKit. This remains bounded foreground harness evidence, not universal browser certification, packaged-WebView certification, or physical-mobile proof. Android thin has build/native-policy proof but no local emulator/physical runtime smoke in this environment. iOS remains preflight/planned.
+The direct, STUN, and forced-TURN lanes are live-proven in Chromium, Firefox, and Playwright WebKit. Hosted and Linux desktop live paths are also proven against the real Python service. Android Waydroid acceptance proves packaged pairing, reconnect, background native ping/tool serving, ordered resume, app force-stop recovery, server restart recovery, and assistant turns through the paired mesh. These remain bounded harness and Waydroid evidence, not universal browser certification, physical-device Doze/OEM-kill/power/thermal proof, signing/store evidence, or iOS proof. iOS runtime validation remains macOS/Xcode-bound.
 
 ## WebRTC Peer Lifecycle
 
@@ -869,7 +892,13 @@ When authentication is enabled, the RTCClient enforces a strict **auth gate** on
 
 ### Pairing Over WebRTC DataChannel
 
-Devices that connect via WebRTC can complete the pairing flow directly over the DataChannel using RPC calls, without needing the HTTP API. For mesh peers, `remote_peer_id` and `remote_node_name` are included to enable bilateral pairing and mesh_peers DB tracking.
+Devices that connect via WebRTC can complete the pairing flow directly over the
+DataChannel without the HTTP API. Mesh flows bind the stable
+`remote_peer_id`, room, verification code, and `pairing_session_id` to the same
+SAS transcript. Connect and exchange must echo that session id; a conflicting
+duplicate, cross-peer claimant/verifier, or stale channel binding is rejected.
+The Gateway overwrites those fields from its transport context before bus
+dispatch.
 
 ```
 New Device              RTCClient (Gateway)          Admin
@@ -1297,7 +1326,7 @@ The peer pairing system in Aurora provides a **secure, auditable, and permission
 1. **Pairing** is a 4-step code-based handshake: start → poll → approve → exchange.
 2. **Bilateral mesh pairing** extends this to a 2-phase process (forward + reverse) for P2P mesh connections, each phase requiring independent admin approval.
 3. **Authentication** uses bearer tokens (HTTP) or DataChannel auth messages (WebRTC).
-4. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes.
+4. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes. Non-admin pairing approvals cannot grant global `"*"`; only admin pairing normalizes to `["*"]`.
 5. **Consolidated trust stores** — mesh_peers and auth tables (users/devices/tokens) are bidirectionally synced via outbound FKs. Permission changes through any admin interface propagate to both stores.
 6. **Live updates** are supported for WebRTC peers via admin-triggered permission refresh and mesh peer management API.
 7. **Every action** is recorded in the audit log for security compliance.

@@ -351,7 +351,14 @@ After IOS-002/IOS-003/IOS-004 add the Swift plugin and Xcode-managed App Intent/
 
 ## Android client baseline
 
-Android support now includes an official Tauri mobile generated project, synced Kotlin native plugin, and Python-free Android client APK/AAB build lane. Android client mode reuses the shared WebView HTTP/WebRTC runtime; the native layer supplies capability evidence, Keystore-backed peer credential/proof storage, foreground WebView microphone policy, lifecycle release policy, and platform entrypoints.
+Android support includes an official Tauri mobile generated project, synced
+Kotlin native plugin, and Python-free Android client APK/AAB build lane. Android
+client mode reuses the shared WebView HTTP/WebRTC runtime while Rust supplies
+the single mesh authority and native per-peer session/queue used when the
+WebView is backgrounded. The Kotlin layer supplies capability evidence,
+Keystore-backed peer credential/proof storage, one reference-counted foreground
+service for microphone and connected-device reasons, lifecycle controls,
+assistant-role integration, and platform entrypoints.
 
 ```bash
 pnpm --filter @aurora/tauri-ui android:init
@@ -365,7 +372,15 @@ pnpm --filter @aurora/tauri-ui android:build:voice-live:apk
 pnpm --filter @aurora/tauri-ui android:voice:live
 ```
 
-Current artifact proof passes for the generated debug APK and AAB and reports no Python/sidecar content. The shared Tauri capability intentionally does not grant `updater:default`; updater artifact generation remains desktop packaging configuration, not a WebView permission. Local Android runtime smoke still requires Java, Android SDK/NDK, an emulator or physical device, and KVM/device access where applicable. If those are absent, mark runtime smoke as pending rather than claiming device proof.
+Current artifact proof passes for the generated debug APK and AAB and reports no
+Python/sidecar content. The shared Tauri capability intentionally does not grant
+`updater:default`; updater artifact generation remains desktop packaging
+configuration, not a WebView permission. Waydroid local acceptance has passed
+against the uninterrupted full `main.py` Python stack for pairing, reconnect,
+background ping/tool serving, ordered resume, app force-stop recovery, server
+restart recovery, and Android assistant turns. This does not replace a physical
+device for Doze, OEM kill policy, battery, thermal, signing/store, or radio-path
+qualification.
 
 `android:build:voice-live:apk` builds the same unsigned Android client with one additional debug-only capability for the maintained voice lane. Normal Android client APK/AAB builds do not grant the PCM injector. `android:voice:live` installs that debug APK on a connected Android device or Waydroid target, drives the real WebView bridge, selects and activates the requested speech packs, verifies non-silent Android microphone capture, and injects a bounded PCM fixture through the same Rust ingress queue to prove completed foreground and wakeword turns through STT, Gateway, TTS, and playback. It also proves background capture, wake-lock retention, sticky restart after process death, and force-stop recovery on one serial-scoped device at a time. The fixture command is additionally rejected by non-debuggable packages.
 

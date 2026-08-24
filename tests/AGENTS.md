@@ -191,6 +191,20 @@ def gateway_setup():
 
 Do NOT use `patch` context managers for these singletons -- they don't persist outside the `with` block for FastAPI request handling.
 
+## Mesh parity and mobile evidence
+
+- Pairing, reconnect, revocation, route selection, lifecycle, and background
+  serving changes should be covered first by targeted Python gateway/auth tests,
+  SDK WebRTC tests, Rust crate tests, and Tauri command tests before live
+  Android E2E.
+- Do not replace real-server mesh tests with mock-only proof. Full-stack
+  acceptance for this branch used the real `main.py` supervisor and a local CPU
+  model; mocks are useful for unit isolation only.
+- Waydroid is the default local Android target for package/background protocol
+  evidence. Report it as Waydroid evidence, not physical-device evidence.
+  Physical-device Doze, OEM process-kill, battery, and thermal gates require a
+  `deviceClass: "physical"` background measurement report.
+
 ---
 
 ## Test Database
