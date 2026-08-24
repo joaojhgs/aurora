@@ -564,6 +564,52 @@ async def test_stream_infer_chat_provider_model_override_allowed_with_remote_inf
 
 
 @pytest.mark.asyncio
+async def test_stream_infer_chat_exception_is_redacted(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+):
+    method_info = _orchestrator_method_info(
+        "StreamInferChat",
+        OrchestratorMethods.STREAM_INFER_CHAT,
+        OrchestratorInferChatRequest,
+    )
+    _registry_with_method(mock_registry, "Orchestrator", method_info)
+    secret = "token=super-secret-native-stream-error"
+
+    async def failing_stream_request(*_args, **_kwargs):
+        raise RuntimeError(secret)
+        yield  # pragma: no cover - keeps this function an async generator
+
+    mock_bus.stream_request = failing_stream_request
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        _make_acl_with_perms("Orchestrator.use"),
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "stream-inference-error",
+                "method": OrchestratorMethods.STREAM_INFER_CHAT,
+                "params": {"messages": [{"role": "user", "content": "hi"}]},
+            }
+        )
+    )
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["error"] == {
+        "code": 500,
+        "message": "Response stream failed",
+        "reason_code": "response_stream_failed",
+    }
+    assert secret not in json.dumps(response)
+
+
+@pytest.mark.asyncio
 async def test_on_message_invalid_json(rpc_handler):
     await rpc_handler.on_message("invalid json")
     rpc_handler._send.assert_not_called()
@@ -901,20 +947,66 @@ async def test_handle_scheduler_methods_inject_trusted_remote_provenance(
 
 
 @pytest.mark.asyncio
-async def test_handle_call_bus_error(rpc_handler, mock_registry, mock_bus):
+async def test_handle_call_bus_error_is_redacted(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    audit_fn = AsyncMock()
     method_info = MethodInfo(name="Fail", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(
         module="Svc", version="1.0", methods=[method_info]
     )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        audit_fn=audit_fn,
+    )
 
-    mock_bus.request.return_value = QueryResult(ok=False, error="Something went wrong")
+    secret = "api_key=super-secret-service-error"
+    mock_bus.request.return_value = QueryResult(ok=False, error=secret)
 
-    await rpc_handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Fail"}))
+    await handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Fail"}))
 
-    response = json.loads(rpc_handler._send.call_args[0][0])
+    response = json.loads(mock_send_fn.call_args.args[0])
     assert response["type"] == "error"
-    assert response["error"]["message"] == "Something went wrong"
+    assert response["error"] == {
+        "code": 500,
+        "message": "Service request failed",
+        "reason_code": "service_request_failed",
+    }
     assert response["correlation_id"] == "1"
+    assert secret not in json.dumps(response)
+
+    audit_fn.assert_awaited_once()
+    audit_details = audit_fn.await_args.args[2]
+    assert audit_details["details"]["service_error"] is True
+    assert secret not in json.dumps(audit_details)
+
+
+@pytest.mark.asyncio
+async def test_handle_call_exception_is_redacted(rpc_handler, mock_registry, mock_bus):
+    method_info = MethodInfo(name="Explode", exposure="external")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    secret = "token=super-secret-exception"
+    mock_bus.request.side_effect = RuntimeError(secret)
+
+    await rpc_handler.on_message(
+        json.dumps({"type": "call", "id": "exception-1", "method": "Svc.Explode"})
+    )
+
+    response = json.loads(rpc_handler._send.call_args.args[0])
+    assert response["error"] == {
+        "code": 500,
+        "message": "Service request failed",
+        "reason_code": "service_request_failed",
+    }
+    assert secret not in json.dumps(response)
 
 
 @pytest.mark.asyncio
@@ -1172,6 +1264,33 @@ async def test_handle_call_streaming(rpc_handler, mock_registry, mock_bus):
     assert calls[0] == {"type": "chunk", "id": "s1", "data": "part1"}
     assert calls[1] == {"type": "chunk", "id": "s1", "data": "part2"}
     assert calls[2] == {"type": "eof", "id": "s1"}
+
+
+@pytest.mark.asyncio
+async def test_handle_call_stream_error_is_redacted(rpc_handler, mock_registry, mock_bus):
+    method_info = MethodInfo(name="Stream", exposure="external")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    secret = "api_key=super-secret-stream-error"
+
+    async def failing_stream():
+        raise RuntimeError(secret)
+        yield  # pragma: no cover - keeps this function an async generator
+
+    mock_bus.request.return_value = QueryResult(ok=True, data=failing_stream())
+
+    await rpc_handler.on_message(
+        json.dumps({"type": "call", "id": "stream-error", "method": "Svc.Stream"})
+    )
+
+    response = json.loads(rpc_handler._send.call_args.args[0])
+    assert response["error"] == {
+        "code": 500,
+        "message": "Response stream failed",
+        "reason_code": "response_stream_failed",
+    }
+    assert secret not in json.dumps(response)
 
 
 # ── Mesh sharing gate tests ─────────────────────────────────────────────

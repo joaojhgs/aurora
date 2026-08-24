@@ -81,6 +81,10 @@ _ID_MAX = 128
 _METHOD_MAX = 256
 _TOPIC_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
 _HEX_64_RE = re.compile(r"^[0-9a-f]{64}$")
+_SERVICE_REQUEST_ERROR_MESSAGE = "Service request failed"
+_SERVICE_REQUEST_ERROR_REASON_CODE = "service_request_failed"
+_STREAM_RESPONSE_ERROR_MESSAGE = "Response stream failed"
+_STREAM_RESPONSE_ERROR_REASON_CODE = "response_stream_failed"
 _DOWNSTREAM_VALIDATED_TYPES = frozenset(
     {
         "auth",
@@ -1624,12 +1628,16 @@ class RPCHandler:
                             correlation_id=correlation_id,
                         )
                         return
-                    log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
+                    log_error(
+                        f"RPCHandler: Stream failed for {method_name} "
+                        f"correlation_id={correlation_id} error_type={type(e).__name__}"
+                    )
                     self._send_error(
                         req_id,
                         500,
-                        f"Stream error: {e}",
+                        _STREAM_RESPONSE_ERROR_MESSAGE,
                         correlation_id=correlation_id,
+                        reason_code=_STREAM_RESPONSE_ERROR_REASON_CODE,
                     )
                     return
 
@@ -1733,12 +1741,16 @@ class RPCHandler:
                             self._send_chunk(req_id, chunk)
                         self._send(json.dumps({"type": "eof", "id": req_id}))
                     except Exception as e:
-                        log_error(f"RPCHandler: Error during stream of {method_name}: {e}")
+                        log_error(
+                            f"RPCHandler: Stream failed for {method_name} "
+                            f"correlation_id={correlation_id} error_type={type(e).__name__}"
+                        )
                         self._send_error(
                             req_id,
                             500,
-                            f"Stream error: {e}",
+                            _STREAM_RESPONSE_ERROR_MESSAGE,
                             correlation_id=correlation_id,
+                            reason_code=_STREAM_RESPONSE_ERROR_REASON_CODE,
                         )
                 else:
                     result_data = res.data
@@ -1770,13 +1782,14 @@ class RPCHandler:
                     correlation_id=correlation_id,
                     status="error",
                     principal_id=identity.principal_id,
-                    details={"error": res.error, "params": params},
+                    details={"service_error": bool(res.error), "params": params},
                 )
                 self._send_error(
                     req_id,
                     500,
-                    res.error or "Service request failed",
+                    _SERVICE_REQUEST_ERROR_MESSAGE,
                     correlation_id=correlation_id,
+                    reason_code=_SERVICE_REQUEST_ERROR_REASON_CODE,
                 )
 
         except TimeoutError:
@@ -1796,8 +1809,8 @@ class RPCHandler:
             )
         except Exception as e:
             log_error(
-                f"RPCHandler: Error executing RPC {method_name}: {e} "
-                f"correlation_id={correlation_id}"
+                f"RPCHandler: Error executing RPC {method_name} "
+                f"correlation_id={correlation_id} error_type={type(e).__name__}"
             )
             await self._audit_rpc_event(
                 "mesh.rpc.error",
@@ -1805,9 +1818,15 @@ class RPCHandler:
                 correlation_id=correlation_id,
                 status="exception",
                 principal_id=identity.principal_id,
-                details={"error": str(e), "params": params},
+                details={"error_type": type(e).__name__, "params": params},
             )
-            self._send_error(req_id, 500, str(e), correlation_id=correlation_id)
+            self._send_error(
+                req_id,
+                500,
+                _SERVICE_REQUEST_ERROR_MESSAGE,
+                correlation_id=correlation_id,
+                reason_code=_SERVICE_REQUEST_ERROR_REASON_CODE,
+            )
         finally:
             # Decrement active remote call count for capacity tracking
             if capacity_acquired:
