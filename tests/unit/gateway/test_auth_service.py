@@ -733,6 +733,15 @@ async def test_pairing_admin_device(auth_service):
 
 
 @pytest.mark.asyncio
+async def test_pairing_default_wildcard_requires_explicit_admin(auth_service):
+    auth_service._default_device_permissions = ["*"]
+    pairing_code = await auth_service.start_pairing("DefaultAdminDevice", "127.0.0.1")
+
+    assert await auth_service.approve_pairing(pairing_code, "admin-id") is False
+    assert auth_service.pairing_requests[pairing_code]["status"] == "pending"
+
+
+@pytest.mark.asyncio
 async def test_pairing_expiration(auth_service):
     pairing_code = await auth_service.start_pairing("Device", "127.0.0.1")
 

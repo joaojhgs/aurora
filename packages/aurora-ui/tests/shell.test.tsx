@@ -4054,6 +4054,53 @@ describe('Aurora production shell', () => {
     }))
   })
 
+  it('maps wildcard pairing approval to an explicit administrator grant', () => {
+    const pairing = pairingEntry({ request_id: 'pairing-admin', code: '654321' })
+    const approvePairing = buildMeshPeerAdminAction(
+      { peerId: pairing.remote_peer_id, nodeName: pairing.remote_node_name, pendingPairing: pairing },
+      'approve',
+      { reason: 'Administrator access confirmed', permissions: '*' },
+    )
+
+    expect(approvePairing).toEqual(expect.objectContaining({
+      methodId: 'Auth.PairingApprove',
+      payload: { code: '654321', permissions: ['*'], is_admin: true },
+    }))
+  })
+
+  it('uses exact non-admin permissions for the full tool access sharing preset', async () => {
+    const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
+    const onConfigChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      await act(async () => root.render(
+        <MeshPeersView
+          snapshot={{ ...snapshot, config: { ...snapshot.config, editable: true } }}
+          route={meshRoute()}
+          ownsLocalNodeState
+          onConfigChange={onConfigChange}
+        />,
+      ))
+      const settings = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Device network settings'))
+      await act(async () => settings?.click())
+      const fullTools = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.trim() === 'Full tool access')
+      await act(async () => fullTools?.click())
+
+      expect(onConfigChange).toHaveBeenCalledWith([{
+        keyPath: 'services.auth.default_pairing_permissions',
+        value: ['Orchestrator.use', 'Tooling.GetTools', 'Tooling.ExecuteTool'],
+      }])
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('maps RouteSheet SDK error codes to user-facing messages', () => {
     const errorMessage = routeSheetErrorMessage(new AuroraError({ code: 'privacy_blocked', message: 'blocked' }))
 

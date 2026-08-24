@@ -2722,7 +2722,11 @@ function EnumToggle({ value, options, disabled, onChange, ariaLabel }: { value: 
 const SHARE_SCOPE_PRESETS: { value: string; label: string; permissions: string[] }[] = [
   { value: 'view-only', label: 'View only', permissions: [] },
   { value: 'assistant-use', label: 'Assistant use', permissions: ['Orchestrator.use'] },
-  { value: 'full-tools', label: 'Full tool access', permissions: ['*'] },
+  {
+    value: 'full-tools',
+    label: 'Full tool access',
+    permissions: ['Orchestrator.use', 'Tooling.GetTools', 'Tooling.ExecuteTool'],
+  },
 ]
 
 function currentShareScope(permissions: string[]): string {
@@ -3745,12 +3749,13 @@ export function buildMeshPeerAdminAction(
       peer.pendingPairing.device_name ? `device:${peer.pendingPairing.device_name}` : null,
     ].filter((value): value is string => Boolean(value))
     if (action === 'approve') {
+      const permissions = parseMeshPermissionList(input.permissions ?? '')
       return {
         methodId: AUTH_METHODS.pairingApprove,
         payload: {
           code: peer.pendingPairing.code,
-          permissions: parseMeshPermissionList(input.permissions ?? ''),
-          is_admin: false,
+          permissions,
+          is_admin: permissions?.includes('*') ?? false,
         },
         reason,
         reauthConfirmed: Boolean(input.reauthConfirmed),

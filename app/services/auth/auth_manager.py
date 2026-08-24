@@ -1094,11 +1094,16 @@ class AuthManager:
         if request.get("status") != "pending":
             return False
 
-        resolved_perms = (
+        resolved_perms = list(
             permissions if permissions is not None else self._default_device_permissions
         )
         if is_admin:
             resolved_perms = ["*"]
+        elif "*" in resolved_perms:
+            log_warning(
+                "Refusing pairing approval with wildcard permissions without admin authority"
+            )
+            return False
 
         # A SAS-bound mesh approval is durable only when the exact room row and
         # every authority graph already linked to it commit together.

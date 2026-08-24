@@ -820,6 +820,34 @@ async def test_pairing_approval_targets_its_exact_room() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pairing_approval_rejects_non_admin_wildcard_before_persistence() -> None:
+    bus = SimpleNamespace(publish=AsyncMock(), request=AsyncMock())
+    manager = AuthManager(bus)
+    manager._db_request = AsyncMock()
+    expires_at = datetime.now() + timedelta(minutes=5)
+    manager.pairing_requests["pairing-code"] = {
+        "id": "request-id",
+        "remote_peer_id": "stable-peer",
+        "remote_node_name": "peer",
+        "room_name": "room-b",
+        "status": "pending",
+        "expires_at": expires_at,
+    }
+
+    approved = await manager.approve_pairing(
+        "pairing-code",
+        user_id="admin-user",
+        permissions=["*"],
+        is_admin=False,
+    )
+
+    assert approved is False
+    assert manager.pairing_requests["pairing-code"]["status"] == "pending"
+    manager._db_request.assert_not_awaited()
+    bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_pairing_memory_does_not_advance_for_uncommitted_room() -> None:
     manager = AuthManager(SimpleNamespace())
     manager._db_request = AsyncMock(return_value={"success": True, "approved_rooms": ["room-a"]})
