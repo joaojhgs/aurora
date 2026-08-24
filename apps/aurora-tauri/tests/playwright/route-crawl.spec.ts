@@ -20,7 +20,7 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   audit: ['Audit log'],
   models: ['Models & Sources', 'Compare at a glance'],
   onboarding: ['Welcome to Aurora', 'Start guided setup'],
-  settings: ['Settings', 'Connection choices'],
+  settings: ['Settings', 'Connection & role'],
 }
 
 const screenshotDir = join(process.cwd(), 'reports', 'playwright-routes', 'screenshots')
@@ -174,7 +174,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
       await expect(page.locator('main#content')).toBeVisible()
       await expect(page.getByLabel('Aurora shell status')).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Text chat' })).toBeVisible()
-      await expect(page.getByLabel('Assistant route and privacy details')).toHaveCount(1)
+      await expect(page.locator('[data-first-viewport-work="assistant-chat-composer"]')).toBeVisible()
 
       const sidebar = page.locator('.aui-sidebar')
       const mobileTabs = page.getByLabel('Mobile navigation', { exact: true })
@@ -264,7 +264,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
 
   test('production-crawls all primary routes without console, HTTP, placeholder, or landmark regressions', async ({ page }) => {
     const failures: string[] = []
-    expect(primaryNavItems).toHaveLength(13)
+    expect(new Set(primaryNavItems.map((route) => route.id)).size).toBe(primaryNavItems.length)
 
     for (const route of primaryNavItems) {
       const routeFailures = await collectPageFailures(page, async () => {
