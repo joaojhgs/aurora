@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import os
 from datetime import datetime
@@ -109,9 +110,24 @@ The chatbot agent is the main agent coordinator in the graph.
 # Init LLM (lazy initialization)
 llm = None
 _llm_initialized = False
+_llm_init_lock = asyncio.Lock()
 
 
 async def _initialize_llm() -> None:
+    """Serialize lazy LLM initialization and reuse a completed model."""
+
+    if _llm_initialized:
+        log_debug("LLM already initialized, skipping initialization")
+        return
+
+    async with _llm_init_lock:
+        if _llm_initialized:
+            log_debug("LLM initialized by another request")
+            return
+        await _initialize_llm_unlocked()
+
+
+async def _initialize_llm_unlocked() -> None:
     """Initialize the LLM based on configuration.
 
     This is called lazily on first use to ensure ConfigService is ready.
@@ -122,7 +138,7 @@ async def _initialize_llm() -> None:
         log_debug("LLM already initialized, skipping initialization")
         return
 
-    _llm_initialized = True
+    llm = None
     log_info("Starting LLM initialization...")
 
     raw_llm_config: dict | None = None
@@ -395,8 +411,10 @@ async def _initialize_llm() -> None:
                 llm = None
 
     if llm is not None:
+        _llm_initialized = True
         log_info(f"✅ LLM successfully initialized with provider: {provider}")
     else:
+        _llm_initialized = False
         log_error(f"❌ Failed to initialize LLM with provider: {provider}")
 
 

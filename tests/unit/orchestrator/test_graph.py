@@ -1599,11 +1599,21 @@ class TestGraphOrchestratorProcessing:
         graph_orchestrator.graph = MagicMock()
         graph_orchestrator.graph.ainvoke = AsyncMock(return_value=mock_response)
 
-        result = await graph_orchestrator.stream_graph_updates(
-            "Hello", tts_result=False, thread_id="session-1"
-        )
+        with (
+            patch("app.services.orchestrator.graph.log_info") as mock_log_info,
+            patch("app.services.orchestrator.graph.log_debug") as mock_log_debug,
+        ):
+            result = await graph_orchestrator.stream_graph_updates(
+                "Hello", tts_result=False, thread_id="session-1"
+            )
 
         assert result == "Test response"
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert "Test response" not in rendered_logs
+        assert "bytes=13" in rendered_logs
+        rendered_debug_logs = "\n".join(str(call) for call in mock_log_debug.call_args_list)
+        assert "Hello" not in rendered_debug_logs
+        assert "bytes=5" in rendered_debug_logs
         graph_orchestrator.graph.ainvoke.assert_called_once()
         assert (
             graph_orchestrator.graph.ainvoke.await_args.kwargs["config"]["configurable"][
@@ -1986,9 +1996,19 @@ class TestGraphOrchestratorProcessing:
         graph_orchestrator.graph = MagicMock()
         graph_orchestrator.graph.ainvoke = AsyncMock(return_value=mock_response)
 
-        result = await graph_orchestrator.process_text_input("Hello", thread_id="chat:abc")
+        with (
+            patch("app.services.orchestrator.graph.log_info") as mock_log_info,
+            patch("app.services.orchestrator.graph.log_debug") as mock_log_debug,
+        ):
+            result = await graph_orchestrator.process_text_input("Hello", thread_id="chat:abc")
 
         assert result == "Text response"
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert "Text response" not in rendered_logs
+        assert "bytes=13" in rendered_logs
+        rendered_debug_logs = "\n".join(str(call) for call in mock_log_debug.call_args_list)
+        assert "Hello" not in rendered_debug_logs
+        assert "bytes=5" in rendered_debug_logs
         assert (
             graph_orchestrator.graph.ainvoke.await_args.kwargs["config"]["configurable"][
                 "thread_id"

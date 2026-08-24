@@ -93,9 +93,12 @@ class TestOrchestratorServiceTranscriptionHandling:
 
         envelope = Envelope(type="event", payload=event)  # Pass the BaseModel directly, not dict
 
-        with patch.object(
-            orchestrator_service, "_process_input", new_callable=AsyncMock
-        ) as mock_process:
+        with (
+            patch.object(
+                orchestrator_service, "_process_input", new_callable=AsyncMock
+            ) as mock_process,
+            patch("app.services.orchestrator.service.log_info") as mock_log_info,
+        ):
             await orchestrator_service._on_transcription(envelope)
 
             # Verify process_input was called with correct arguments (including session_id)
@@ -107,6 +110,10 @@ class TestOrchestratorServiceTranscriptionHandling:
                 correlation_id="test-session",
                 stream=True,
             )
+
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert "Hello Aurora" not in rendered_logs
+        assert "bytes=12" in rendered_logs
 
     @pytest.mark.asyncio
     async def test_on_transcription_with_non_final_text(self, orchestrator_service):
@@ -603,6 +610,23 @@ class TestOrchestratorServiceUserInputHandling:
             )
 
     @pytest.mark.asyncio
+    async def test_on_user_input_logs_shape_without_input_content(self, orchestrator_service):
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+
+        sensitive_input = "private UI prompt"
+        request = OrchestratorProcessRequest(text=sensitive_input, session_id="ui-session")
+
+        with (
+            patch.object(orchestrator_service, "_process_input", new_callable=AsyncMock),
+            patch("app.services.orchestrator.service.log_info") as mock_log_info,
+        ):
+            await orchestrator_service.process_user_input(request)
+
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert sensitive_input not in rendered_logs
+        assert f"bytes={len(sensitive_input.encode('utf-8'))}" in rendered_logs
+
+    @pytest.mark.asyncio
     async def test_on_user_input_propagates_explicit_client_tts_playback(
         self, orchestrator_service
     ):
@@ -690,6 +714,31 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_provider_id=None,
                 inference_model_id=None,
             )
+
+    @pytest.mark.asyncio
+    async def test_on_external_input_logs_shape_without_input_content(self, orchestrator_service):
+        from app.shared.contracts.models.orchestrator import OrchestratorProcessRequest
+
+        sensitive_input = "private external prompt"
+        request = OrchestratorProcessRequest(
+            text=sensitive_input,
+            session_id="external-session",
+        )
+
+        with (
+            patch.object(
+                orchestrator_service,
+                "_process_input",
+                new_callable=AsyncMock,
+                return_value="response",
+            ),
+            patch("app.services.orchestrator.service.log_info") as mock_log_info,
+        ):
+            await orchestrator_service.process_external_input(request)
+
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert sensitive_input not in rendered_logs
+        assert f"bytes={len(sensitive_input.encode('utf-8'))}" in rendered_logs
 
     @pytest.mark.asyncio
     async def test_external_input_uses_request_id_as_approval_session(self, orchestrator_service):
@@ -1142,6 +1191,32 @@ class TestOrchestratorServiceInputProcessing:
             from app.shared.contracts.models.orchestrator import OrchestratorMethods
 
             assert first_call[0][0] == OrchestratorMethods.RESPONSE
+
+    @pytest.mark.asyncio
+    async def test_process_input_logs_response_shape_without_response_content(
+        self, orchestrator_service
+    ):
+        sensitive_input = "private user prompt"
+        sensitive_response = "private assistant response"
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_updates = AsyncMock(
+            return_value=sensitive_response
+        )
+
+        with (
+            patch("app.services.orchestrator.service.log_info") as mock_log_info,
+            patch("app.services.orchestrator.service.log_debug") as mock_log_debug,
+        ):
+            await orchestrator_service._process_input(
+                text=sensitive_input, source="ui", session_id="test-session"
+            )
+
+        rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
+        assert sensitive_response not in rendered_logs
+        assert f"bytes={len(sensitive_response.encode('utf-8'))}" in rendered_logs
+        rendered_debug_logs = "\n".join(str(call) for call in mock_log_debug.call_args_list)
+        assert sensitive_input not in rendered_debug_logs
+        assert f"bytes={len(sensitive_input.encode('utf-8'))}" in rendered_debug_logs
 
     @pytest.mark.asyncio
     async def test_process_input_with_end_response(self, orchestrator_service, mock_bus):

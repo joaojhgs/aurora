@@ -161,26 +161,17 @@ class ChatLlamaCpp(BaseChatModel):
     emojis. At most one of grammar_path and grammar should be passed in.
     """
 
-    verbose: bool = True
+    verbose: bool = False
     """Print verbose output to stderr."""
 
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
         """Validate that llama-cpp-python library is installed."""
-        # First try the standard llama_cpp import
-        try:
-            from llama_cpp import Llama, LlamaGrammar
-        except ImportError:
-            # If that fails, try the CUDA-specific import
-            try:
-                from llama_cpp_cuda import Llama, LlamaGrammar
-            except ImportError:
-                # If both fail, raise an error
-                raise ImportError(
-                    "Could not import llama-cpp-python library. "
-                    "Please install the llama-cpp-python library to "
-                    "use this embedding model: pip install llama-cpp-python"
-                ) from None
+        from app.services.orchestrator.llama_cpp_compat import load_llama_cpp_backend
+
+        backend = load_llama_cpp_backend()
+        llama_class = backend.Llama
+        llama_grammar_class = backend.LlamaGrammar
 
         model_path = self.model_path
         model_param_names = [
@@ -209,7 +200,7 @@ class ChatLlamaCpp(BaseChatModel):
         model_params.update(self.model_kwargs)
 
         try:
-            self.client = Llama(model_path, **model_params)
+            self.client = llama_class(model_path, **model_params)
         except Exception as e:
             raise ValueError(
                 f"Could not load Llama model from path: {model_path}. Received error {e}"
@@ -223,9 +214,9 @@ class ChatLlamaCpp(BaseChatModel):
                 f"{grammar=} and {grammar_path=}."
             )
         elif isinstance(self.grammar, str):
-            self.grammar = LlamaGrammar.from_string(self.grammar)
+            self.grammar = llama_grammar_class.from_string(self.grammar)
         elif self.grammar_path:
-            self.grammar = LlamaGrammar.from_file(self.grammar_path)
+            self.grammar = llama_grammar_class.from_file(self.grammar_path)
         else:
             pass
         return self

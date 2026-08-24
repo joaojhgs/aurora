@@ -480,8 +480,14 @@ class OrchestratorService(BaseService):
         try:
             event = STTUserSpeechCaptured.model_validate(env.payload)
 
+            input_bytes = len(event.text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t"
+                for character in event.text
+            )
             log_info(
-                f"   Validated event: session={event.session_id}, text='{event.text}', is_final={event.is_final}"
+                f"   Validated event: session={event.session_id}, is_final={event.is_final}, "
+                f"bytes={input_bytes}, unsupported_control={has_unsupported_control}"
             )
 
             # Only process final transcriptions
@@ -489,7 +495,10 @@ class OrchestratorService(BaseService):
                 log_info("   Skipping non-final transcription")
                 return
 
-            log_info(f"Processing transcription: {event.text}")
+            log_info(
+                "Processing transcription: "
+                f"bytes={input_bytes}, unsupported_control={has_unsupported_control}"
+            )
             voice_request_id = event.session_id or f"voice-{uuid4().hex}"
             await self._process_input(
                 event.text,
@@ -515,7 +524,14 @@ class OrchestratorService(BaseService):
     async def process_user_input(self, cmd: OrchestratorProcessRequest) -> EmptyOutput:
         """Handle UI user input command."""
         try:
-            log_info(f"Processing UI input: {cmd.text}")
+            input_bytes = len(cmd.text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t" for character in cmd.text
+            )
+            log_info(
+                "Processing UI input: "
+                f"bytes={input_bytes}, unsupported_control={has_unsupported_control}"
+            )
             process_kwargs: dict[str, Any] = {}
             if cmd.client_tts_playback is not None:
                 process_kwargs["response_metadata"] = {
@@ -563,7 +579,14 @@ class OrchestratorService(BaseService):
         )
         try:
             source = cmd.source or "external"
-            log_info(f"Processing external input: {cmd.text}")
+            input_bytes = len(cmd.text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t" for character in cmd.text
+            )
+            log_info(
+                "Processing external input: "
+                f"bytes={input_bytes}, unsupported_control={has_unsupported_control}"
+            )
             metadata: dict[str, Any] = {"source": source, "stream": cmd.stream}
             if cmd.client_tts_playback is not None:
                 metadata["client_tts_playback"] = cmd.client_tts_playback
@@ -1387,7 +1410,14 @@ class OrchestratorService(BaseService):
             source=source,
         )
         try:
-            log_debug(f"Processing input from {source}: {text}")
+            input_bytes = len(text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t" for character in text
+            )
+            log_debug(
+                f"Processing input from {source}: "
+                f"bytes={input_bytes}, unsupported_control={has_unsupported_control}"
+            )
 
             # Run LangGraph agent via orchestrator instance
             # DON'T use TTS internally - orchestrator handles TTS via message bus
@@ -1456,7 +1486,15 @@ class OrchestratorService(BaseService):
                     inference_override=inference_override,
                 )
 
-            log_info(f"🤖 LLM response: {response_text[:100]}...")
+            response_bytes = len(response_text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t"
+                for character in response_text
+            )
+            log_info(
+                "🤖 LLM response: "
+                f"bytes={response_bytes}, unsupported_control={has_unsupported_control}"
+            )
 
             # If we got a response, emit it. LangGraph's END sentinel is a
             # successful terminal state, not a user-visible assistant answer.

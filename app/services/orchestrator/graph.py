@@ -160,6 +160,15 @@ def _chunk_text(chunk: Any) -> str:
     return ""
 
 
+def _text_log_shape(value: Any) -> str:
+    """Return non-content metadata suitable for privacy-preserving logs."""
+    text = str(value)
+    unsupported_control = any(
+        not character.isprintable() and character not in "\n\r\t" for character in text
+    )
+    return f"bytes={len(text.encode('utf-8'))}, unsupported_control={unsupported_control}"
+
+
 def _graph_input(
     input_content: Any, inference_override: dict[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -1690,7 +1699,7 @@ class GraphOrchestrator:
             interrupt: Whether to interrupt current playback
         """
         try:
-            log_debug(f"Sending TTS request via bus: {text[:50]}...")
+            log_debug(f"Sending TTS request via bus: {_text_log_shape(text)}")
             await self.bus.publish(
                 TTSMethods.REQUEST,
                 TTSRequest(text=text, interrupt=interrupt),
@@ -1748,7 +1757,7 @@ class GraphOrchestrator:
                 }
             )
             try:
-                log_debug(f"Graph: Streaming input: {str(input_content)[:30]}...")
+                log_debug(f"Graph: Streaming input: {_text_log_shape(input_content)}")
                 async for raw_event in self.graph.astream_events(
                     input=_graph_input(input_content, inference_override),
                     config=config,
@@ -1866,7 +1875,7 @@ class GraphOrchestrator:
                     yield approval_event
 
             if final_text != "END":
-                log_info(f"Jarvis stream complete: {final_text[:100]}...")
+                log_info(f"Jarvis stream complete: {_text_log_shape(final_text)}")
         finally:
             for pending_id in turn_pending_ids:
                 self._release_pending_resolution_waiter(pending_id)
@@ -2013,9 +2022,11 @@ class GraphOrchestrator:
         input_content = user_input
         if hasattr(user_input, "text"):
             input_content = user_input.text
-            log_debug(f"Graph: Processing input from custom object: {input_content[:30]}...")
+            log_debug(
+                f"Graph: Processing input from custom object: {_text_log_shape(input_content)}"
+            )
         else:
-            log_debug(f"Graph: Processing input: {str(user_input)[:30]}...")
+            log_debug(f"Graph: Processing input: {_text_log_shape(user_input)}")
 
         # Invoke the graph
         thread_id = self._checkpoint_thread_id(thread_id)
@@ -2044,7 +2055,14 @@ class GraphOrchestrator:
         text = response["messages"][-1].content
 
         if text != "END":
-            log_info(f"Jarvis: {text[:100]}...")
+            response_bytes = len(text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t" for character in text
+            )
+            log_info(
+                "Graph: Assistant response ready: "
+                f"bytes={response_bytes}, unsupported_control={has_unsupported_control}"
+            )
             # Send to TTS via bus if requested
             if tts_result:
                 await self._send_tts_via_bus(text)
@@ -2074,9 +2092,11 @@ class GraphOrchestrator:
         input_content = user_input
         if hasattr(user_input, "text"):
             input_content = user_input.text
-            log_debug(f"Graph: Processing UI text input from object: {input_content[:30]}...")
+            log_debug(
+                f"Graph: Processing UI text input from object: {_text_log_shape(input_content)}"
+            )
         else:
-            log_debug(f"Graph: Processing UI text input: {str(user_input)[:30]}...")
+            log_debug(f"Graph: Processing UI text input: {_text_log_shape(user_input)}")
 
         # Invoke the graph
         thread_id = self._checkpoint_thread_id(thread_id)
@@ -2105,7 +2125,14 @@ class GraphOrchestrator:
         text = response["messages"][-1].content
 
         if text != "END":
-            log_info(f"Jarvis (UI text response): {text[:100]}...")
+            response_bytes = len(text.encode("utf-8"))
+            has_unsupported_control = any(
+                not character.isprintable() and character not in "\n\r\t" for character in text
+            )
+            log_info(
+                "Graph: Assistant UI response ready: "
+                f"bytes={response_bytes}, unsupported_control={has_unsupported_control}"
+            )
         else:
             log_debug("Graph: Response was END, not processing further")
 
