@@ -1505,8 +1505,19 @@ class _WorkerRtcRuntime:
         )
         response = await asyncio.wait_for(future, timeout=10)
         error = response.get("error") if isinstance(response.get("error"), dict) else {}
+        structured_reason = str(error.get("reason_code") or "")
         message = str(error.get("message") or response.get("message") or "")
-        if message == "Service or method is not shared" or message == "Method is not shared":
+        if structured_reason in {
+            "provider_mesh_tooling_disabled",
+            "consumer_mesh_tooling_disabled",
+            "snapshot_revision_changed",
+            "projection_authority_unknown",
+            "unsafe_downgrade_blocked",
+        }:
+            reason = structured_reason
+        elif structured_reason == "projection_restart_required":
+            reason = "snapshot_revision_changed"
+        elif message == "Service or method is not shared" or message == "Method is not shared":
             reason = "method_not_shared"
         elif message == "Authentication required":
             reason = "authentication_required"

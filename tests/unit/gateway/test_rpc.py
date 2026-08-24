@@ -988,6 +988,39 @@ async def test_handle_call_bus_error_is_redacted(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_error", "public_reason_code"),
+    [
+        ("provider_mesh_tooling_disabled", "provider_mesh_tooling_disabled"),
+        ("projection_restart_required", "snapshot_revision_changed"),
+    ],
+)
+async def test_handle_call_preserves_only_public_mesh_reason_codes(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+    service_error,
+    public_reason_code,
+):
+    method_info = MethodInfo(name="Fail", exposure="external")
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="Svc", version="1.0", methods=[method_info]
+    )
+    mock_bus.request.return_value = QueryResult(ok=False, error=service_error)
+    handler = RPCHandler(mock_bus, mock_registry, mock_send_fn, mock_acl_provider)
+
+    await handler.on_message(json.dumps({"type": "call", "id": "1", "method": "Svc.Fail"}))
+
+    response = json.loads(mock_send_fn.call_args.args[0])
+    assert response["error"] == {
+        "code": 500,
+        "message": "Service request failed",
+        "reason_code": public_reason_code,
+    }
+
+
+@pytest.mark.asyncio
 async def test_handle_call_exception_is_redacted(rpc_handler, mock_registry, mock_bus):
     method_info = MethodInfo(name="Explode", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(

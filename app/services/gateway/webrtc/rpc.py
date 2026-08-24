@@ -52,6 +52,7 @@ from app.shared.contracts.models.stt import (
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.speech_routing import compute_speech_route_requirement_digest_for_payload
+from app.shared.mesh.observability import canonical_mesh_rollout_reason
 from app.shared.mesh.tracing import (
     audit_details_hash,
     ensure_correlation_id,
@@ -113,6 +114,14 @@ _PAIRING_V2_TYPES = frozenset(
 
 def _utf8_byte_length(value: str) -> int:
     return len(value.encode("utf-8"))
+
+
+def _public_service_error_reason_code(error: str | None) -> str:
+    """Return only a stable, peer-safe reason code for a service failure."""
+
+    if error == "projection_restart_required":
+        return "snapshot_revision_changed"
+    return canonical_mesh_rollout_reason(error) or _SERVICE_REQUEST_ERROR_REASON_CODE
 
 
 def parse_webrtc_json_frame(
@@ -1789,7 +1798,7 @@ class RPCHandler:
                     500,
                     _SERVICE_REQUEST_ERROR_MESSAGE,
                     correlation_id=correlation_id,
-                    reason_code=_SERVICE_REQUEST_ERROR_REASON_CODE,
+                    reason_code=_public_service_error_reason_code(res.error),
                 )
 
         except TimeoutError:
