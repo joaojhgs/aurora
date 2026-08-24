@@ -37,6 +37,12 @@ Run targeted SDK and Python gateway/auth tests before live-device E2E. Then run 
 
 Never weaken fail-closed assertions, authorization checks, transport isolation, manifest evidence, redaction checks, retry/reconnect expectations, or revocation checks to make a harness pass.
 
+The hosted-browser acceptance lane must use the real Python service stack, not a
+mock server: `pnpm test:hosted-peer:live` starts an isolated thread-mode
+`main.py` Auth/DB/Gateway/Tooling/WebRTC node and proves invite import, SAS,
+bilateral approval, scoped route access, Mesh refresh, reload reconnect, and
+zero browser Gateway HTTP fallback through production boundaries.
+
 ### Native shell, Rust, Android/iOS plugin, manifest, or packaging changes
 
 Run native preflight and artifact-specific tests. Rebuild the affected native artifact. A frontend-only TypeScript/CSS change should normally use hot reload and should not pay the native packaging cost until the release-candidate build.
@@ -69,6 +75,9 @@ pnpm --filter @aurora/tauri-ui android:webrtc:mobile-browser
 # Run only at the WebRTC slice/final gate
 pnpm --filter @aurora/tauri-ui android:webrtc:interop
 
+# Full-service hosted browser pairing/reconnect gate
+pnpm test:hosted-peer:live
+
 # Desktop live client/thin surface
 pnpm --filter @aurora/tauri-ui test:desktop-client:live
 ```
@@ -89,6 +98,15 @@ Android client APK/AAB capabilities must never grant it.
 - Run independent package tests/typechecks concurrently when they do not share mutable fixtures. Run live scenarios sequentially on one emulator and never overlap tests that share application data, ports, MQTT rooms, or native processes.
 
 Warm iteration state is a speed optimization, not release evidence. The final gate must repeat required journeys from deterministic clean state.
+
+Waydroid is the local Android default for packaged WebView, native Rust, and
+background-service acceptance after cheaper suites pass. Repeat the Waydroid
+full-stack/background E2E gate only when the branch under validation changes
+Android native code, Rust mesh session code, SDK transport/pairing/reconnect
+behavior, foreground-service ownership, or lifecycle/background handling. If an
+integration branch already contains the same source commits and the remaining
+delta is documentation or CI metadata, keep the prior Waydroid evidence and let
+remote Android/iOS CI provide fresh platform results.
 
 ## Fail Fast Before Long E2E Runs
 
@@ -130,7 +148,7 @@ Run the expensive matrix once the intended code is stable, and repeat it only af
 7. Assistant local and Dispatch execution, remote peer model selection, conversation persistence, canonical tool-call rendering, scrolling, composer, history, navigation, and safe-area behavior.
 8. Android packaged WebView and standalone-browser WebRTC evidence.
 9. Hosted web client/node management and desktop local/client live paths affected by the change.
-10. One final push followed by macOS/iOS build, simulator, smoke, and WebRTC jobs when those platforms are in scope.
+10. One final push followed by remote Android/iOS build, simulator, smoke, and WebRTC jobs when those platforms are in scope. iOS runtime evidence requires macOS/Xcode; Linux-side policy/source checks are not a substitute.
 
 After a release-gate failure, rerun the smallest reproducer while fixing it. When green, rerun the failed gate and every downstream gate affected by the fix; do not restart unrelated completed gates unless the fix crosses their shared boundary.
 

@@ -186,11 +186,20 @@ manifest ACK, provider leases, event subscriptions.
 
 ## Constraints
 
-- Do **not** push. Commit coherent, verified slices as you go.
-- Leave `AGENTS.md`, `CLAUDE.md` and untracked `.claude/skills/gitnexus/**` alone.
-- Another agent is concurrently editing HTTPS/voice files on the parent branch:
-  `apps/aurora-web/**`, `packages/aurora-ui/src/{assistant-view,browser-speech-pack,platform-surface,voice-settings-view}.ts*`
-  and their tests. Do not revert or absorb those.
+- The historical implementation phase originally used a local-only branch and
+  deferred pushing. That constraint is superseded once a maintainer explicitly
+  requests push/dispatch; at that point commit all completed slices, push the
+  branch, and move the commits onto `feat/ui-multiplatform-integration` as
+  individual commits rather than a squash or merge commit.
+- Treat generated dependency/build output as transient unless a tracked docs or
+  contract file explicitly owns it. Temporary app build directories, reports,
+  logs, and screenshots stay ignored artifacts.
+- The integration branch is the release/integration surface. If it already
+  contains the same mesh-parity source commits, do not repeat Waydroid solely
+  because of docs or CI metadata movement; record the existing Waydroid
+  acceptance and monitor CI. Rerun Waydroid only for a substantial integration
+  delta that can affect Android native, Rust mesh session, SDK transport,
+  pairing, reconnect, revocation, foreground-service, or lifecycle behavior.
 - Follow the root `AGENTS.md` as the development contract. Typed bus contracts only, no
   literal topics. No `VITE_AURORA_RUNTIME_MODE`.
 - Verify before claiming completion; if tests fail, say so with the output.
