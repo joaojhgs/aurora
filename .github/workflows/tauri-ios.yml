@@ -90,7 +90,7 @@ jobs:
 
       - name: Apply release artifact version
         if: inputs.release_version != ''
-        run: node scripts/set_tauri_release_version.mjs "${{ inputs.release_version }}"
+        run: node scripts/set_release_version.mjs "${{ inputs.release_version }}"
 
       - name: Install CocoaPods
         run: |

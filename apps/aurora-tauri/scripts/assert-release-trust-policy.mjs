@@ -21,6 +21,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const srcTauriRoot = join(packageRoot, 'src-tauri')
 const args = process.argv.slice(2)
+const unsignedSourceGate = args.includes('--unsigned-source-gate')
 
 const reportPath = resolve(
   readOption('--report') ??
@@ -30,7 +31,7 @@ const expectedWorkflowCommand =
   readOption('--expected-workflow-command') ??
   'pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy'
 const expectedPackageScriptName = 'verify:static-release-trust-policy'
-const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
+const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs --unsigned-source-gate'
 const expectedDependencyInventoryPackageScriptName = 'verify:release-dependency-inventory'
 const expectedDependencyInventoryPackageScriptCommand = 'node ../../scripts/generate_release_dependency_inventory.mjs'
 const expectedDependencyInventoryWorkflowCommand =
@@ -227,6 +228,14 @@ console.log(`Release trust static policy passed. Report: ${safeDisplayPath(repor
 function validateUpdaterPolicy(value) {
   const updater = value.plugins?.updater
   const bundle = value.bundle ?? {}
+  if (unsignedSourceGate) {
+    check(
+      'bundle-updater-artifacts-disabled-for-unsigned-release',
+      bundle.createUpdaterArtifacts === false,
+      'Unsigned releases must not create updater artifacts that imply a signed update channel.',
+    )
+    return
+  }
   check('bundle-updater-artifacts', bundle.createUpdaterArtifacts === true, 'Tauri bundle.createUpdaterArtifacts must be true.')
   check('updater-config-present', Boolean(updater), 'Tauri updater plugin configuration must be present.')
   if (!updater) return
@@ -325,8 +334,10 @@ function validateReleaseArtifacts({ id, label, artifactClass, paths, expectedSha
     return {
       id,
       status: 'unsupported',
-      releaseBlocking: true,
-      detail: `${label} release artifact byte-hash evidence is absent from this static policy gate run.`,
+      releaseBlocking: !unsignedSourceGate,
+      detail: unsignedSourceGate
+        ? `${label} package bytes are validated by the canonical post-build release manifest gate.`
+        : `${label} release artifact byte-hash evidence is absent from this static policy gate run.`,
       artifacts: [],
     }
   }
@@ -1299,22 +1310,59 @@ function findDirectChildKeyBlocks(lines, start, end, parentIndent) {
 }
 
 function inspectReleaseProducingJobs(lines, directJobs) {
-  if (!exactKeySet(directJobs.map((job) => job.key), ['release-readiness', 'create-release'])) {
+  const jobNames = directJobs.map((job) => job.key)
+  const legacyJobSet = ['release-readiness', 'create-release']
+  const canonicalProductJobSet = [
+    'release-readiness',
+    'build-portable-packages',
+    'build-desktop-packages',
+    'build-android-packages',
+    'build-ios-package',
+    'validate-containers',
+    'create-release',
+    'publish-release-assets',
+    'publish-containers',
+  ]
+  const canonicalProductWorkflow = exactKeySet(jobNames, canonicalProductJobSet)
+  if (!exactKeySet(jobNames, legacyJobSet) && !canonicalProductWorkflow) {
     return ['release-jobs:canonical-job-set']
   }
   const releaseJobs = directJobs.filter((job) => job.key === 'create-release' || jobContainsReleaseSignal(lines, job))
   const createReleaseJobs = releaseJobs.filter((job) => job.key === 'create-release')
   const errors = []
   if (releaseJobs.length !== 1 || createReleaseJobs.length !== 1) errors.push('release-jobs:canonical-create-release')
-  if (createReleaseJobs.length === 1) errors.push(...inspectCreateReleaseJob(lines, createReleaseJobs[0]))
+  if (createReleaseJobs.length === 1) {
+    errors.push(...inspectCreateReleaseJob(lines, createReleaseJobs[0], canonicalProductWorkflow))
+  }
   return errors
 }
 
 function inspectLocalJobStructure(lines, directJobs) {
   const errors = []
+  const reusableBuildJobs = new Map([
+    ['build-desktop-packages', './.github/workflows/tauri-desktop.yml'],
+    ['build-android-packages', './.github/workflows/tauri-android.yml'],
+    ['build-ios-package', './.github/workflows/tauri-ios.yml'],
+    ['validate-containers', './.github/workflows/docker-build.yml'],
+    ['publish-containers', './.github/workflows/docker-build.yml'],
+  ])
   for (const job of directJobs) {
     const keys = findDirectChildKeyBlocks(lines, job.start + 1, job.end, job.indent)
-    if (keys.some((block) => block.key === 'uses' || block.key === 'secrets')) errors.push(`job:${job.key}:reusable`)
+    const uses = keys.filter((block) => block.key === 'uses')
+    const secrets = keys.filter((block) => block.key === 'secrets')
+    const expectedReusableWorkflow = reusableBuildJobs.get(job.key)
+    if (expectedReusableWorkflow) {
+      if (
+        uses.length !== 1 ||
+        unquoteYamlScalar(uses[0].value.trim()) !== expectedReusableWorkflow ||
+        secrets.length > 0 ||
+        keys.some((block) => block.key === 'steps' || block.key === 'runs-on')
+      ) {
+        errors.push(`job:${job.key}:reusable`)
+      }
+    } else if (uses.length > 0 || secrets.length > 0) {
+      errors.push(`job:${job.key}:reusable`)
+    }
     if (job.key === 'create-release') {
       if (keys.some((block) => block.key === 'strategy' || block.key === 'matrix')) errors.push('create-release:matrix')
       if (!keys.some((block) => block.key === 'steps')) errors.push('create-release:steps')
@@ -1323,7 +1371,7 @@ function inspectLocalJobStructure(lines, directJobs) {
   return errors
 }
 
-function inspectCreateReleaseJob(lines, createRelease) {
+function inspectCreateReleaseJob(lines, createRelease, canonicalProductWorkflow) {
   const errors = []
   const keys = findDirectChildKeyBlocks(lines, createRelease.start + 1, createRelease.end, createRelease.indent)
   errors.push(...duplicateKeys(keys.map((block) => block.key)).map((key) => `create-release:${key}`))
@@ -1331,7 +1379,17 @@ function inspectCreateReleaseJob(lines, createRelease) {
     errors.push('create-release:job-shape')
   }
   const needs = keys.filter((block) => block.key === 'needs')
-  if (needs.length !== 1 || unquoteYamlScalar(needs[0].value.trim()) !== 'release-readiness') {
+  const expectedNeeds = canonicalProductWorkflow
+    ? [
+        'release-readiness',
+        'build-portable-packages',
+        'build-desktop-packages',
+        'build-android-packages',
+        'build-ios-package',
+        'validate-containers',
+      ]
+    : ['release-readiness']
+  if (needs.length !== 1 || !exactKeySet(readYamlScalarSequence(lines, needs[0]), expectedNeeds)) {
     errors.push('create-release:needs')
   }
   const ifBlocks = keys.filter((block) => block.key === 'if')
@@ -1348,6 +1406,21 @@ function inspectCreateReleaseJob(lines, createRelease) {
     errors.push('create-release:semantic-release-action')
   }
   return errors
+}
+
+function readYamlScalarSequence(lines, block) {
+  if (block.value) return [unquoteYamlScalar(block.value.trim())]
+  const values = []
+  const childIndent = directChildIndent(lines, block.start + 1, block.end, block.indent)
+  if (childIndent === null) return values
+  for (let index = block.start + 1; index < block.end; index += 1) {
+    const code = stripYamlComment(lines[index])
+    if (!code.trim() || indentationOf(code) !== childIndent) continue
+    const match = /^\s*-\s+([^\s].*)$/u.exec(code)
+    if (!match || parseYamlMappingKey(match[1])) return []
+    values.push(unquoteYamlScalar(match[1].trim()))
+  }
+  return values
 }
 
 function jobContainsReleaseSignal(lines, job) {
@@ -1563,6 +1636,7 @@ function parseSteps(lines, start, end, stepsIndent) {
 
 function parseStep(lines) {
   const step = {
+    id: '',
     name: '',
     runCommands: [],
     uses: '',
@@ -1639,6 +1713,7 @@ function parseStep(lines) {
       seenEnvKeys.clear()
       continue
     }
+    if (key === 'id') step.id = value
     if (key === 'name') step.name = value
     if (key === 'uses') step.uses = value
     if (key === 'if') step.if = value
@@ -1834,6 +1909,20 @@ function hasCanonicalPregateSetupSequence(steps) {
 }
 
 function hasCanonicalCreateReleaseSteps(steps) {
+  const semanticReleaseWith = {
+    github_token: '${{ secrets.PAT_RELEASE || github.token }}',
+    git_committer_name: 'github-actions[bot]',
+    git_committer_email: 'github-actions[bot]@users.noreply.github.com',
+    verbosity: '2',
+    strict: 'true',
+    force: "${{ inputs.release_type != 'auto' && inputs.release_type || '' }}",
+    prerelease: '${{ inputs.prerelease == true }}',
+    prerelease_token: 'rc',
+  }
+  const semanticReleaseOptions = {
+    name: 'Python Semantic Release',
+    env: { GH_TOKEN: '${{ secrets.PAT_RELEASE || github.token }}' },
+  }
   return steps.length === 3 &&
     isExactUsesStep(steps[0], 'actions/checkout@v4', {
       'fetch-depth': '0',
@@ -1843,25 +1932,27 @@ function hasCanonicalCreateReleaseSteps(steps) {
       'git config --global user.name "github-actions[bot]"',
       'git config --global user.email "github-actions[bot]@users.noreply.github.com"',
     ].join('\n'), { name: 'Configure Git' }) &&
-    isExactUsesStep(steps[2], 'python-semantic-release/python-semantic-release@v10.4.1', {
-      github_token: '${{ secrets.PAT_RELEASE || github.token }}',
-      git_committer_name: 'github-actions[bot]',
-      git_committer_email: 'github-actions[bot]@users.noreply.github.com',
-      verbosity: '2',
-      strict: 'true',
-      force: "${{ inputs.release_type != 'auto' && inputs.release_type || '' }}",
-      prerelease: '${{ inputs.prerelease == true }}',
-      prerelease_token: 'rc',
-    }, {
-      name: 'Python Semantic Release',
-      env: { GH_TOKEN: '${{ secrets.PAT_RELEASE || github.token }}' },
-    })
+    (
+      isExactUsesStep(
+        steps[2],
+        'python-semantic-release/python-semantic-release@v10.4.1',
+        semanticReleaseWith,
+        semanticReleaseOptions,
+      ) ||
+      isExactUsesStep(
+        steps[2],
+        'python-semantic-release/python-semantic-release@v10.4.1',
+        semanticReleaseWith,
+        { ...semanticReleaseOptions, id: 'release' },
+      )
+    )
 }
 
 function hasCanonicalCreateReleaseJobShape(lines, createRelease, keys) {
-  const expectedKeys = ['name', 'runs-on', 'needs', 'if', 'timeout-minutes', 'permissions', 'steps']
+  const requiredKeys = ['name', 'runs-on', 'needs', 'if', 'timeout-minutes', 'permissions', 'steps']
+  const actualKeys = keys.map((block) => block.key)
   if (hasUnsupportedDirectChildKeySyntax(lines, createRelease.start + 1, createRelease.end, createRelease.indent) ||
-    !exactKeySet(keys.map((block) => block.key), expectedKeys)) {
+    (!exactKeySet(actualKeys, requiredKeys) && !exactKeySet(actualKeys, [...requiredKeys, 'outputs']))) {
     return false
   }
 
@@ -1893,9 +1984,10 @@ function hasCanonicalCreateReleaseJobShape(lines, createRelease, keys) {
 }
 
 function hasCanonicalReleaseReadinessJobShape(lines, readiness, keys) {
-  const expectedKeys = ['name', 'runs-on', 'timeout-minutes', 'steps']
+  const requiredKeys = ['name', 'runs-on', 'timeout-minutes', 'steps']
+  const actualKeys = keys.map((block) => block.key)
   if (hasUnsupportedDirectChildKeySyntax(lines, readiness.start + 1, readiness.end, readiness.indent) ||
-    !exactKeySet(keys.map((block) => block.key), expectedKeys)) {
+    (!exactKeySet(actualKeys, requiredKeys) && !exactKeySet(actualKeys, [...requiredKeys, 'outputs']))) {
     return false
   }
   const valueFor = (key) => unquoteYamlScalar(keys.find((block) => block.key === key)?.value.trim() ?? '')
@@ -1928,11 +2020,13 @@ function hasCanonicalWorkflowPermissions(lines, permissionBlocks) {
 function isExactUsesStep(step, uses, withValues, options = {}) {
   const expectedKeys = []
   if (options.name) expectedKeys.push('name')
+  if (options.id) expectedKeys.push('id')
   expectedKeys.push('uses')
   if (options.env) expectedKeys.push('env')
   if (Object.keys(withValues).length) expectedKeys.push('with')
   return step.uses === uses &&
     step.name === (options.name ?? '') &&
+    step.id === (options.id ?? '') &&
     step.runCommands.length === 0 &&
     step.duplicateErrors.length === 0 &&
     exactKeySet(step.keys, expectedKeys) &&

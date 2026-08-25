@@ -15,7 +15,7 @@ on:
         default: false
         type: boolean
       dry_run:
-        description: "Validate release without creating a tag/release"
+        description: "Build and validate every package without publishing"
         required: false
         default: true
         type: boolean
@@ -32,6 +32,9 @@ jobs:
     name: Release readiness checks
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+      tag: ${{ steps.semver.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +98,14 @@ jobs:
           path: apps/aurora-tauri/reports/release-trust-policy.json
           if-no-files-found: error
 
+      - name: Require main for publication
+        if: inputs.dry_run == false
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Product releases may only be published from main" >&2
+            exit 1
+          fi
+
       - name: Run lightweight release check
         run: |
           uv run make check-config-generated
@@ -112,34 +123,167 @@ jobs:
         with:
           name: static-release-rollback-policy-report
           path: apps/aurora-tauri/reports/release-rollback-plan-policy.json
+          retention-days: 7
 
       - name: Check next semantic version
         id: semver
         run: |
-          release_args=(--print --no-commit --no-tag --no-push --no-vcs-release)
+          release_args=(--no-commit --no-tag --no-push --no-vcs-release)
           if [ "${{ inputs.release_type }}" != "auto" ]; then
             release_args+=(--${{ inputs.release_type }})
           fi
           if [ "${{ inputs.prerelease }}" = "true" ]; then
             release_args+=(--as-prerelease --prerelease-token rc)
           fi
-          version=$(uv run semantic-release version "${release_args[@]}")
-          if [ -z "$version" ]; then
-            echo "semantic-release produced an empty version" >&2
+          version=$(uv run semantic-release --strict version --print "${release_args[@]}")
+          tag=$(uv run semantic-release --strict version --print-tag "${release_args[@]}")
+          if [ -z "$version" ] || [ "$tag" != "v$version" ]; then
+            echo "semantic-release produced an inconsistent version/tag pair" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Release candidate version: $version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Release candidate: $tag"
+
+  build-portable-packages:
+    name: Build Python and standalone web packages
+    runs-on: ubuntu-latest
+    needs: release-readiness
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install release dependencies
+        run: |
+          uv sync --extra build
+          pnpm install --frozen-lockfile
+
+      - name: Apply canonical package version
+        run: node scripts/set_release_version.mjs "${{ needs.release-readiness.outputs.version }}"
+
+      - name: Build Python wheel and source distribution
+        run: uv build --out-dir release-portable/python
+
+      - name: Install pinned Emscripten SDK
+        run: |
+          git clone --depth 1 --branch 4.0.23 https://github.com/emscripten-core/emsdk.git "${{ runner.temp }}/emsdk"
+          "${{ runner.temp }}/emsdk/emsdk" install 4.0.23
+          "${{ runner.temp }}/emsdk/emsdk" activate 4.0.23
+
+      - name: Build pinned neutral Sherpa browser engine and standalone web package
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: "2"
+        run: |
+          source "${{ runner.temp }}/emsdk/emsdk_env.sh"
+          artifact_root="${{ runner.temp }}/aurora-browser-source"
+          patched_root="${{ runner.temp }}/aurora-browser-patched"
+          engine_root="${{ runner.temp }}/aurora-browser-engine"
+          tts_root="${{ runner.temp }}/aurora-browser-tts"
+          python tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py \
+            --artifact-root "$artifact_root" \
+            --output-root "$engine_root" \
+            --download-source \
+            --skip-stage
+          python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \
+            --archive "$artifact_root/sources/sherpa-onnx-v1.13.5.tar.gz" \
+            --staging-root "$patched_root" \
+            --json
+          source_root="$patched_root/sherpa-onnx-1.13.5"
+          python tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py \
+            --artifact-root "$artifact_root" \
+            --source-root "$source_root" \
+            --output-root "$engine_root" \
+            --build \
+            --skip-stage
+          AURORA_SHERPA_SOURCE_ROOT="$source_root" \
+          AURORA_SHERPA_WASM_TTS_ROOT="$tts_root" \
+          AURORA_SHERPA_WASM_TTS_NEUTRAL=1 \
+            tools/voice-runtime/build_sherpa_wasm_tts.sh
+          python tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py \
+            --artifact-root "$artifact_root" \
+            --source-root "$source_root" \
+            --tts-artifact-root "$tts_root" \
+            --output-root "$engine_root"
+          mkdir -p release-portable/web
+          AURORA_BROWSER_ENGINE_RELEASE_DIR="$engine_root" \
+          AURORA_WEB_RELEASE_ARTIFACT="$GITHUB_WORKSPACE/release-portable/web/aurora-web-${{ needs.release-readiness.outputs.version }}.tar.gz" \
+          AURORA_WEB_RELEASE_REPORT="$GITHUB_WORKSPACE/release-portable/web/aurora-web-${{ needs.release-readiness.outputs.version }}.json" \
+            pnpm --filter @aurora/web package:unsigned
+
+      - name: Upload portable release packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-release-portable
+          path: release-portable/**
+          if-no-files-found: error
+          retention-days: 7
+
+  build-desktop-packages:
+    name: Build desktop packages
+    needs: release-readiness
+    uses: ./.github/workflows/tauri-desktop.yml
+    with:
+      release_version: ${{ needs.release-readiness.outputs.version }}
+
+  build-android-packages:
+    name: Build Android packages
+    needs: release-readiness
+    uses: ./.github/workflows/tauri-android.yml
+    with:
+      release_version: ${{ needs.release-readiness.outputs.version }}
+
+  build-ios-package:
+    name: Build iOS simulator package
+    needs: release-readiness
+    uses: ./.github/workflows/tauri-ios.yml
+    with:
+      release_version: ${{ needs.release-readiness.outputs.version }}
+
+  validate-containers:
+    name: Validate container images
+    needs: release-readiness
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      publish_images: false
+      release_version: ${{ needs.release-readiness.outputs.version }}
 
   create-release:
     name: Create semantic release
     runs-on: ubuntu-latest
-    needs: release-readiness
+    needs:
+      - release-readiness
+      - build-portable-packages
+      - build-desktop-packages
+      - build-android-packages
+      - build-ios-package
+      - validate-containers
     if: success() && inputs.dry_run == false
     timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -153,6 +297,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Python Semantic Release
+        id: release
         uses: python-semantic-release/python-semantic-release@v10.4.1
         env:
           GH_TOKEN: ${{ secrets.PAT_RELEASE || github.token }}
@@ -165,3 +310,96 @@ jobs:
           force: ${{ inputs.release_type != 'auto' && inputs.release_type || '' }}
           prerelease: ${{ inputs.prerelease == true }}
           prerelease_token: rc
+
+  publish-release-assets:
+    name: Publish canonical package set
+    runs-on: ubuntu-latest
+    needs:
+      - release-readiness
+      - create-release
+      - build-portable-packages
+      - build-desktop-packages
+      - build-android-packages
+      - build-ios-package
+    if: success() && inputs.dry_run == false && needs.create-release.outputs.released == 'true'
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download desktop packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tauri-desktop-client-*
+          path: release-artifacts/desktop
+          merge-multiple: true
+
+      - name: Download Android packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aurora-release-android-*
+          path: release-artifacts/android
+          merge-multiple: true
+
+      - name: Download iOS simulator package
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aurora-ios-client-simulator
+          path: release-artifacts/ios
+          merge-multiple: true
+
+      - name: Download portable packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aurora-release-portable
+          path: release-artifacts/portable
+          merge-multiple: true
+
+      - name: Validate version, source, checksums, and package inventory
+        run: |
+          expected_version="${{ needs.release-readiness.outputs.version }}"
+          if [ "${{ needs.create-release.outputs.version }}" != "$expected_version" ]; then
+            echo "Released version does not match the version embedded in platform packages" >&2
+            exit 1
+          fi
+          tag="${{ needs.create-release.outputs.tag }}"
+          if [ "$tag" != "${{ needs.release-readiness.outputs.tag }}" ]; then
+            echo "Released tag does not match the readiness tag" >&2
+            exit 1
+          fi
+          git fetch origin "refs/tags/$tag:refs/tags/$tag"
+          release_commit=$(git rev-list -n 1 "$tag")
+          node scripts/prepare_release_assets.mjs \
+            --root release-artifacts \
+            --version "$expected_version" \
+            --tag "$tag" \
+            --source-commit "$GITHUB_SHA" \
+            --release-commit "$release_commit"
+
+      - name: Upload release packages
+        env:
+          GH_TOKEN: ${{ secrets.PAT_RELEASE || github.token }}
+        run: |
+          tag="${{ needs.create-release.outputs.tag }}"
+          gh release view "$tag" >/dev/null
+          mapfile -t assets < release-artifacts/RELEASE-ASSETS.txt
+          gh release upload "$tag" "${assets[@]}" --clobber
+
+  publish-containers:
+    name: Publish container images
+    needs:
+      - release-readiness
+      - create-release
+      - publish-release-assets
+    if: success() && inputs.dry_run == false && needs.create-release.outputs.released == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      publish_images: true
+      release_version: ${{ needs.release-readiness.outputs.version }}

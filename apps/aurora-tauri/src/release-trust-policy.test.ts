@@ -16,7 +16,7 @@ const repoRoot = resolve(packageRoot, '..', '..')
 const script = join(packageRoot, 'scripts', 'assert-release-trust-policy.mjs')
 const expectedTrustCommand = 'pnpm --dir apps/aurora-tauri run verify:static-release-trust-policy'
 const expectedPackageScriptName = 'verify:static-release-trust-policy'
-const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs'
+const expectedPackageScriptCommand = 'node scripts/assert-release-trust-policy.mjs --unsigned-source-gate'
 const expectedDependencyInventoryPackageScriptName = 'verify:release-dependency-inventory'
 const expectedDependencyInventoryPackageScriptCommand = 'node ../../scripts/generate_release_dependency_inventory.mjs'
 const expectedDependencyInventoryCommand = 'pnpm --dir apps/aurora-tauri run verify:release-dependency-inventory'
@@ -145,6 +145,36 @@ function writeArtifact(path: string, content: string) {
 }
 
 describe('release trust static policy guard', () => {
+  it('accepts the canonical multi-platform workflow as an unsigned source gate', () => {
+    const fixture = createFixture()
+    writeJson(fixture.config, {
+      bundle: { createUpdaterArtifacts: false },
+    })
+    writeFileSync(
+      fixture.workflow,
+      readFileSync(join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
+    )
+
+    const result = runPolicy(fixture, ['--unsigned-source-gate'])
+
+    expect(result.status).toBe(0)
+    const report = readReport(fixture)
+    expect(report.status).toBe('passed')
+    expect(report.releaseBlocked).toBe(false)
+    expect(report.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'bundle-updater-artifacts-disabled-for-unsigned-release',
+        status: 'passed',
+      }),
+      expect.objectContaining({ id: 'workflow-create-release-needs-readiness', status: 'passed' }),
+      expect.objectContaining({ id: 'workflow-jobs-local-only', status: 'passed' }),
+    ]))
+    expect(report.unsupportedChecks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'android-artifact-hash', releaseBlocking: false }),
+      expect.objectContaining({ id: 'ios-artifact-hash', releaseBlocking: false }),
+    ]))
+  })
+
   it('reports the current repo as statically blocked without claiming signature or store proof', () => {
     const fixture = createFixture()
     const result = spawnSync(process.execPath, [

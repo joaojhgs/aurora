@@ -479,7 +479,7 @@ dev = [
     "coverage[toml]",     # For comprehensive test coverage reporting
     
     # Release management
-    "python-semantic-release>=10.4.1",  # Automated versioning and changelog
+    "python-semantic-release==10.4.1",  # Keep local version/build behavior identical to the release action
     "commitizen>=3.0.0",               # Enforce conventional commits
     "toml>=0.10.2",                    # For version file parsing
     "requests>=2.32.0",                # For GitHub API calls
@@ -789,6 +789,24 @@ ignore_missing_imports = true
 version_toml = ["pyproject.toml:project.version"]
 version_variables = [
     "app/__init__.py:__version__",
+]
+build_command = "node scripts/set_release_version.mjs \"$NEW_VERSION\""
+assets = [
+    "VERSION",
+    "package.json",
+    "apps/aurora-tauri/package.json",
+    "apps/aurora-web/package.json",
+    "apps/aurora-tauri/src-tauri/Cargo.toml",
+    "apps/aurora-tauri/src-tauri/Cargo.lock",
+    "apps/aurora-tauri/src-tauri/tauri.conf.json",
+    "packages/aurora-mesh-authority-web/package.json",
+    "packages/aurora-sdk/package.json",
+    "packages/aurora-ui/package.json",
+    "packages/aurora-ui/src/version.ts",
+    "packages/aurora-voice-web/package.json",
+    "packages/aurora-sdk/src/generated/backend-contracts.schema.json",
+    "packages/aurora-sdk/src/generated/backend-contracts.zod.ts",
+    "packages/aurora-sdk/src/generated/backend-contracts.manifest.json",
 ]
 version_pattern = [
     "readme.md:Aurora Voice Assistant v{version}",
