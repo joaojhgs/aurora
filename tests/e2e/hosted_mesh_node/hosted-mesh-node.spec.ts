@@ -124,19 +124,9 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
 }, testInfo) => {
   const consoleErrors: string[] = []
   const browserGatewayRequests: Array<{ method: string; url: string }> = []
-  let exercisingOfflineRecovery = false
   page.on('console', (message) => {
     if (message.type() !== 'error') return
-    const text = message.text()
-    if (
-      exercisingOfflineRecovery &&
-      /WebSocket connection .*\/mqtt.*(?:ERR_INTERNET_DISCONNECTED|Data frame received after close)/u.test(
-        text,
-      )
-    ) {
-      return
-    }
-    consoleErrors.push(text)
+    consoleErrors.push(message.text())
   })
   page.on('pageerror', (error) => consoleErrors.push(error.message))
   page.on('request', (browserRequest) => {
@@ -496,8 +486,7 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(page.locator('[aria-labelledby="mesh-peers-title"]')).toContainText(expectedNodeName)
   expect(browserGatewayRequests).toHaveLength(requestsBeforeRefresh)
 
-  exercisingOfflineRecovery = true
-  await page.context().setOffline(true)
+  await page.goto('about:blank', { waitUntil: 'load' })
   await waitFor(
     async () => {
       const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
@@ -506,10 +495,10 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
       )
       return liveDiagnosticFor(diagnostics.peers ?? [], browserPeerId) === null
     },
-    'Python sees browser mesh-node leave while browser is offline',
+    'Python sees browser mesh-node leave after its page closes',
     120_000,
   )
-  await page.context().setOffline(false)
+  await page.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
   await waitFor(
     async () => {
       const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
@@ -518,11 +507,12 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
       )
       return liveDiagnosticFor(diagnostics.peers ?? [], browserPeerId)
     },
-    'browser mesh-node reconnects after network returns',
+    'browser mesh-node reconnects from its persisted profile after reopening',
     120_000,
   )
-  await page.waitForTimeout(500)
-  exercisingOfflineRecovery = false
+  await expect(
+    page.getByRole('button', { name: 'Review & approve' }),
+  ).toHaveCount(0)
 
   await confirmedAdminPost(
     request,
