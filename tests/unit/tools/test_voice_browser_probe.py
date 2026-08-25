@@ -9,6 +9,7 @@ MODULE_PATH = (
     / "browser-probe"
     / "run_phase4_browser_probe.py"
 )
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def load_runner() -> ModuleType:
@@ -57,6 +58,25 @@ def test_worker_uses_dedicated_worker_and_real_vad_asr_assets() -> None:
     assert "results.kws && results.kws.ok" in runner.INDEX_HTML
     assert "workerScope && sharedArrayBuffer && crossOriginIsolated" in runner.INDEX_HTML
     assert "workers[0].worker.postMessage" in runner.INDEX_HTML
+
+
+def test_wasm_tts_builder_stages_every_browser_runtime_asset() -> None:
+    build_script = (REPO_ROOT / "tools/voice-runtime/build_sherpa_wasm_tts.sh").read_text(
+        encoding="utf-8"
+    )
+    stage_script = (
+        REPO_ROOT / "tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py"
+    ).read_text(encoding="utf-8")
+
+    required_assets = (
+        "sherpa-onnx-wasm-main-tts.js",
+        "sherpa-onnx-wasm-main-tts.wasm",
+        "sherpa-onnx-tts.js",
+        "sherpa-onnx-tts.worker.js",
+    )
+    for asset in required_assets:
+        assert f'"$INSTALL_ROOT/{asset}"' in build_script
+        assert asset in stage_script
 
 
 def test_probe_result_passes_requires_every_runtime_gate() -> None:

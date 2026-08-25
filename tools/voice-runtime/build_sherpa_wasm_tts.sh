@@ -59,5 +59,6 @@ cp -f \
   "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.js" \
   "$INSTALL_ROOT/sherpa-onnx-wasm-main-tts.wasm" \
   "$INSTALL_ROOT/sherpa-onnx-tts.js" \
+  "$INSTALL_ROOT/sherpa-onnx-tts.worker.js" \
   "$DEST/"
 echo "staged WASM TTS assets in $DEST"
