@@ -417,6 +417,12 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain(
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk"',
     )
+    expect(androidWorkflow).toContain(
+      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:gigaspeech pnpm --filter @aurora/tauri-ui android:voice:live',
+    )
+    expect(androidWorkflow).not.toContain(
+      'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" \\\n',
+    )
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
