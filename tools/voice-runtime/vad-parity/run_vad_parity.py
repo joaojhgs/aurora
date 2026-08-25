@@ -609,7 +609,9 @@ def find_model_path(artifact_root: Path) -> Path:
         path = artifact_root / candidate
         if path.is_file():
             return candidate
-    matches = sorted(artifact_root.glob("sources/extracted/sherpa-onnx-1.13.4*/wasm/vad*/assets/silero_vad.onnx"))
+    matches = sorted(
+        artifact_root.glob("sources/extracted/sherpa-onnx-1.13.4*/wasm/vad*/assets/silero_vad.onnx")
+    )
     if matches:
         return matches[0].relative_to(artifact_root)
     return VAD_MODEL_CANDIDATES[0]
@@ -969,7 +971,9 @@ def browser_capabilities_ok(result: dict[str, Any]) -> bool:
     )
 
 
-def physical_device_claims_ok(native: dict[str, Any], browser_results: list[dict[str, Any]]) -> bool:
+def physical_device_claims_ok(
+    native: dict[str, Any], browser_results: list[dict[str, Any]]
+) -> bool:
     return native.get("physical_device_claim") is False and all(
         result.get("physical_device_claim") is False for result in browser_results
     )

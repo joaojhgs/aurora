@@ -15,15 +15,11 @@ from pathlib import Path
 from typing import Any
 
 SHERPA_REPOSITORY = "k2-fsa/sherpa-onnx"
-ASR_RELEASE_API_URL = (
-    f"https://api.github.com/repos/{SHERPA_REPOSITORY}/releases/tags/asr-models"
-)
+ASR_RELEASE_API_URL = f"https://api.github.com/repos/{SHERPA_REPOSITORY}/releases/tags/asr-models"
 ASR_CHECKSUM_URL = (
     f"https://github.com/{SHERPA_REPOSITORY}/releases/download/asr-models/checksum.txt"
 )
-KWS_RELEASE_API_URL = (
-    f"https://api.github.com/repos/{SHERPA_REPOSITORY}/releases/tags/kws-models"
-)
+KWS_RELEASE_API_URL = f"https://api.github.com/repos/{SHERPA_REPOSITORY}/releases/tags/kws-models"
 KWS_CHECKSUM_URL = (
     f"https://github.com/{SHERPA_REPOSITORY}/releases/download/kws-models/checksum.txt"
 )
@@ -34,9 +30,7 @@ WHISPER_LANGUAGE_URL = (
     "https://raw.githubusercontent.com/"
     f"{WHISPER_REPOSITORY}/{WHISPER_LANGUAGE_COMMIT}/{WHISPER_LANGUAGE_PATH}"
 )
-WHISPER_LANGUAGE_SHA256 = (
-    "3b48e361a7e95b4ec0356ca6d72bba635778aa10269153136ee7bc34cae30b85"
-)
+WHISPER_LANGUAGE_SHA256 = "3b48e361a7e95b4ec0356ca6d72bba635778aa10269153136ee7bc34cae30b85"
 
 MAX_SOURCE_BYTES = 5 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 3 * 1024 * 1024 * 1024
@@ -108,17 +102,13 @@ ASR_PINS = ReleasePins(
     release_id=130_628_817,
     release_tag="asr-models",
     checksum_asset_id=424_735_889,
-    checksum_sha256=(
-        "4e34edcb64434bcf533afaee9dcc14b5b2f9c277ed3a745f263e79a4464b28d0"
-    ),
+    checksum_sha256=("4e34edcb64434bcf533afaee9dcc14b5b2f9c277ed3a745f263e79a4464b28d0"),
 )
 KWS_PINS = ReleasePins(
     release_id=145_831_594,
     release_tag="kws-models",
     checksum_asset_id=424_703_304,
-    checksum_sha256=(
-        "284637b2b9fec1287aca10315dcc960710c6ec14224fb1dfa9fe427e77eb6c18"
-    ),
+    checksum_sha256=("284637b2b9fec1287aca10315dcc960710c6ec14224fb1dfa9fe427e77eb6c18"),
 )
 
 
@@ -198,7 +188,9 @@ def _parse_whisper_languages(payload: bytes) -> list[str]:
         node.value
         for node in tree.body
         if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "LANGUAGES" for target in node.targets)
+        and any(
+            isinstance(target, ast.Name) and target.id == "LANGUAGES" for target in node.targets
+        )
     ]
     if len(dictionaries) != 1:
         raise CatalogGenerationError("Whisper language table is missing")
@@ -476,9 +468,7 @@ def _args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(
-            "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json"
-        ),
+        default=Path("rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json"),
     )
     parser.add_argument("--check", action="store_true")
     return parser.parse_args()

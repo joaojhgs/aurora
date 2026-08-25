@@ -93,9 +93,7 @@ def validate_workflow(path: Path) -> None:
 def main() -> int:
     args = _args()
     if args.check_workflow:
-        validate_workflow(
-            REPO_ROOT / ".github/workflows/sherpa-pockettts-language-packs.yml"
-        )
+        validate_workflow(REPO_ROOT / ".github/workflows/sherpa-pockettts-language-packs.yml")
     manifest = build_checksum_manifest(args.artifact_dir)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
