@@ -131,7 +131,6 @@ jobs:
       # apps/aurora-tauri/src-tauri/vendor/webrtc-dtls.
       - name: Run native transport interop lanes
         env:
-          AURORA_NATIVE_INTEROP_PYTHON: python3
           AURORA_NATIVE_INTEROP_REQUIRE_BROWSER: 1
         run: scripts/webrtc_native_interop.sh
 
