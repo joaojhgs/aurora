@@ -1,7 +1,15 @@
 name: Tauri Android Verification
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        description: "SemVer embedded in unsigned release artifacts"
+        required: false
+        default: ""
+        type: string
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "apps/aurora-tauri/**"
       - "app/messaging/mesh_bus.py"
@@ -17,8 +25,11 @@ on:
       - "app/shared/config/**"
       - "app/shared/contracts/**"
       - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "packages/aurora-ui/**"
       - "packages/aurora-voice-web/**"
+      - "rust/crates/**"
+      - "tools/voice-runtime/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
       - "scripts/webrtc_interop_scan.py"
@@ -98,6 +109,10 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Apply release artifact version
+        if: inputs.release_version != ''
+        run: node scripts/set_tauri_release_version.mjs "${{ inputs.release_version }}"
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
@@ -106,6 +121,7 @@ jobs:
 
       - name: Build shared UI packages
         run: |
+          pnpm --filter @aurora/mesh-authority-web build
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
@@ -141,7 +157,12 @@ jobs:
           echo "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/x86_64" >> "$GITHUB_ENV"
 
       - name: Build Android client x86_64 debug APK
+        if: inputs.release_version == ''
         run: pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64
+
+      - name: Build Android client universal debug APK for release
+        if: inputs.release_version != ''
+        run: pnpm --filter @aurora/tauri-ui android:build:client:apk
 
       - name: Verify Android client debug APK contents
         run: pnpm --filter @aurora/tauri-ui android:verify:client:apk

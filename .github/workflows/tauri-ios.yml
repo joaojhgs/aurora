@@ -1,6 +1,13 @@
 name: Tauri iOS Baseline
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        description: "SemVer embedded in unsigned release artifacts"
+        required: false
+        default: ""
+        type: string
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
@@ -17,9 +24,10 @@ on:
       - "app/shared/config/**"
       - "app/shared/contracts/**"
       - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "packages/aurora-ui/**"
       - "packages/aurora-voice-web/**"
-      - "rust/crates/aurora-voice-*/**"
+      - "rust/crates/**"
       - "tools/voice-runtime/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
@@ -80,6 +88,10 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Apply release artifact version
+        if: inputs.release_version != ''
+        run: node scripts/set_tauri_release_version.mjs "${{ inputs.release_version }}"
+
       - name: Install CocoaPods
         run: |
           if ! command -v pod >/dev/null 2>&1; then
@@ -136,6 +148,7 @@ jobs:
 
       - name: Build Tauri workspace dependencies
         run: |
+          pnpm --filter @aurora/mesh-authority-web build
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
@@ -161,6 +174,18 @@ jobs:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui ios:build:client:simulator
+
+      - name: Archive unsigned iOS simulator app
+        run: |
+          APP_PATH="$(node apps/aurora-tauri/scripts/ios-simulator-smoke.mjs --print-app-path)"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" apps/aurora-tauri/reports/Aurora-iOS-Simulator.zip
+
+      - name: Upload unsigned iOS simulator package
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-client-simulator
+          path: apps/aurora-tauri/reports/Aurora-iOS-Simulator.zip
+          if-no-files-found: error
 
       - name: Upload iOS client build provenance
         uses: actions/upload-artifact@v4

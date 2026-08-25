@@ -9,6 +9,7 @@ on:
       - "scripts/check_sdk_backend_conformance.py"
       - "scripts/sdk_zod_codegen.py"
       - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "rust/crates/aurora-contracts/**"
       - "tests/fixtures/local_speech/runtime/contracts/**"
       - "modules/ui-mock-reference/lib/aurora/**"
@@ -83,8 +84,22 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Set up Rust for browser mesh authority
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser mesh toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build browser mesh authority for SDK conformance
+        run: pnpm --filter @aurora/mesh-authority-web build
 
       - name: Typecheck SDK generated contract surface
         run: pnpm --filter @aurora/client typecheck

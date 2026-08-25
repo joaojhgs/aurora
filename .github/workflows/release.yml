@@ -99,6 +99,7 @@ jobs:
         run: |
           uv run make check-config-generated
           uv run ruff check app tests scripts
+          pnpm --filter @aurora/mesh-authority-web build
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
           pnpm --filter @aurora/tauri-ui verify:static-release-rollback-policy
@@ -115,11 +116,14 @@ jobs:
       - name: Check next semantic version
         id: semver
         run: |
-          if [ "${{ inputs.release_type }}" = "auto" ]; then
-            version=$(uv run semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release)
-          else
-            version=$(uv run semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release --${{ inputs.release_type }})
+          release_args=(--print --no-commit --no-tag --no-push --no-vcs-release)
+          if [ "${{ inputs.release_type }}" != "auto" ]; then
+            release_args+=(--${{ inputs.release_type }})
           fi
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            release_args+=(--as-prerelease --prerelease-token rc)
+          fi
+          version=$(uv run semantic-release version "${release_args[@]}")
           if [ -z "$version" ]; then
             echo "semantic-release produced an empty version" >&2
             exit 1
@@ -156,7 +160,8 @@ jobs:
           github_token: ${{ secrets.PAT_RELEASE || github.token }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
-          root_options: -vv --strict
+          verbosity: "2"
+          strict: true
           force: ${{ inputs.release_type != 'auto' && inputs.release_type || '' }}
           prerelease: ${{ inputs.prerelease == true }}
           prerelease_token: rc

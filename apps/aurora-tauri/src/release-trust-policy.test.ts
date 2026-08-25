@@ -1786,7 +1786,8 @@ ${step}
           github_token: \${{ secrets.PAT_RELEASE || github.token }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
-          root_options: -vv --strict
+          verbosity: "2"
+          strict: true
           force: \${{ inputs.release_type != 'auto' && inputs.release_type || '' }}
           prerelease: \${{ inputs.prerelease == true }}
           prerelease_token: rc
@@ -2943,7 +2944,8 @@ jobs:
           github_token: \${{ secrets.PAT_RELEASE || github.token }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
-          root_options: -vv --strict
+          verbosity: "2"
+          strict: true
           force: \${{ inputs.release_type != 'auto' && inputs.release_type || '' }}
           prerelease: \${{ inputs.prerelease == true }}
           prerelease_token: rc

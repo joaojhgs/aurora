@@ -38,6 +38,11 @@ let appPath = ''
 let capturedLog = ''
 let screenshotEvidence = null
 
+if (process.argv.includes('--print-app-path')) {
+  process.stdout.write(`${resolveSimulatorApp()}\n`)
+  process.exit(0)
+}
+
 try {
   appPath = resolveSimulatorApp()
   selectedDevice = selectSimulatorDevice(

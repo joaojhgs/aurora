@@ -17,7 +17,8 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `tauri-ios-release.yml` | iOS policy/signing preflight. | Linux policy-only validation plus an optional macOS signing dry run that builds the same pinned patched native voice runtime for an iOS device target. |
 | `performance.yml` | Scheduled/manual performance and resilience. | Python performance tests and SDK offline/reconnect/resilience checks. |
 | `docker-build.yml` | Container and process-mode topology validation. | `docker-compose.process.yml` config validation, per-service image builds; pushes only on tags or explicit manual request. |
-| `release.yml` | Manual semantic release. | Lightweight release readiness checks, optional semantic-release publication. |
+| `release.yml` | Strict signed semantic release. | Enforces updater/signing trust policy, builds the release frontend, and publishes only when the configured desktop/mobile signing evidence is complete. |
+| `release-unsigned.yml` | Manual unsigned cross-platform release. | Reuses the desktop, Android, and iOS build workflows to collect Linux, macOS, Windows, APK, AAB, and iOS simulator packages. Dry-run is the default; publication is allowed only from `main`, and the release includes checksums plus an explicit unsigned-artifact notice. |
 | `sherpa-pockettts-language-packs.yml` | Temporary PocketTTS pack publisher. | `workflow_dispatch` or GitHub release only; converts English 2026-04 and French 24l packs and uploads checksummed artifacts. Remove the convert job after stable release URLs exist. |
 | `required-check-aliases.yml` | Temporary branch-protection compatibility. | Waits for the canonical required jobs (`Quality / Python lint, format, and generated config` and `Python Tests / Unit, integration, and E2E tests`) and copies their conclusions into the stale check names. Unconditional success is not allowed. |
 
@@ -122,7 +123,11 @@ The repository no longer keeps one-off issue-specific gate generator workflows f
 
 ## Release and signing policy
 
-Default desktop/mobile CI builds are unsigned and intended for validation only. Android pull-request CI uses `android:preflight:ci` after `android:init`: it requires the generated Android project but does not require keystore secrets. Python installed in the Android and iOS simulator jobs is an external protocol peer used only by E2E tests; APK/AAB/iOS client artifact proof remains independently Python-free. Package signing, notarization, App Store Connect, and Play upload remain explicit release operations requiring platform secrets; Android release readiness uses `android:preflight:strict`.
+Default desktop/mobile CI builds are unsigned. Android pull-request CI uses `android:preflight:ci` after `android:init`: it requires the generated Android project but does not require keystore secrets. Python installed in the Android and iOS simulator jobs is an external protocol peer used only by E2E tests; APK/AAB/iOS client artifact proof remains independently Python-free.
+
+`release-unsigned.yml` is the no-secret packaging path. It builds every supported package class through the reusable platform workflows, defaults to a non-publishing dry run, and permits creating a GitHub release only when dispatched from `main`. Published unsigned releases carry `SHA256SUMS` and `UNSIGNED-ARTIFACTS.txt`; they are install/test artifacts and are not code-signed, notarized, Play-uploaded, or App-Store-uploaded.
+
+`release.yml` remains the strict signed release path. It deliberately fails until production updater keys/endpoints and Android/iOS artifact hashes satisfy the trust policy. Package signing, notarization, App Store Connect, and Play upload therefore remain explicit release operations requiring platform secrets; Android signed-release readiness uses `android:preflight:strict`.
 
 ## Final quality gate structure
 

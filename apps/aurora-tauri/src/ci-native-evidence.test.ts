@@ -384,7 +384,8 @@ describe('Tauri CI native evidence contract', () => {
       androidWorkflow.indexOf('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64'),
     )
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64')
-    expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk\n')
+    expect(androidWorkflow).toContain('if: inputs.release_version != \'\'')
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:apk')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:build:client:aab')
     expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:verify:client:aab')

@@ -148,6 +148,30 @@ describe('iOS simulator smoke runner', () => {
       `simctl install ios-simulator-1 ${fixture.appPath}`,
     )
   })
+
+  it('prints the preferred simulator app path without launching a simulator', () => {
+    const fixture = createFixture({ useGeneratedAppTree: true })
+    const otherAppPath = join(
+      fixture.searchRoot,
+      'build',
+      'newer-device-build',
+      'Other.app',
+    )
+    mkdirSync(otherAppPath, { recursive: true })
+    writeFileSync(join(otherAppPath, 'Info.plist'), '<plist/>')
+
+    const result = spawnSync(process.execPath, [smokeScript, '--print-app-path'], {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        AURORA_IOS_SIMULATOR_SEARCH_ROOT: fixture.searchRoot,
+      },
+      encoding: 'utf8',
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout.trim()).toBe(fixture.appPath)
+  })
 })
 
 function createFixture(

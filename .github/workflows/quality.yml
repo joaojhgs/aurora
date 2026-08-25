@@ -78,6 +78,7 @@ jobs:
 
       - name: Build SDK and shared UI for downstream package resolution
         run: |
+          pnpm --filter @aurora/mesh-authority-web build
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
 
