@@ -277,9 +277,9 @@ export function collectInteropAssertionFailures(
   check(
     (result.errorEvidence.message ?? '').includes(
       expectations.expectedErrorMessage ??
-        'intentional interop RPC failure',
+        'Service request failed',
     ),
-    'intentional RPC error message was not preserved',
+    'intentional RPC error was not redacted to the product-safe message',
   )
   check(
     result.largeRpcEvidence.requestBytes === 512 * 1024,

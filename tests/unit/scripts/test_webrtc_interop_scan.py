@@ -217,7 +217,7 @@ def _passing_reports() -> tuple[dict[str, object], dict[str, object]]:
         "errorEvidence": {
             "rejected": True,
             "code": "unknown",
-            "message": "intentional interop RPC failure",
+            "message": "Service request failed",
         },
         "largeRpcEvidence": {
             "requestBytes": 512 * 1024,
@@ -888,6 +888,7 @@ def test_aggregate_rejects_incomplete_http_disabled_proof(
         ("browser_manifest", "serviceCount", 0),
         ("browser_error", "rejected", False),
         ("browser_error", "code", "validation"),
+        ("browser_error", "message", "intentional interop RPC failure"),
         ("browser_large", "resultBytes", 1),
         ("browser_large", "sentFragmentCount", 1),
         ("browser_stream", "completedChunks", []),

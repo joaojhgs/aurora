@@ -398,7 +398,7 @@ def build_interop_report(
     error_ok = (
         error_evidence.get("rejected") is True
         and error_evidence.get("code") == "unknown"
-        and "intentional interop rpc failure" in str(error_evidence.get("message") or "").lower()
+        and error_evidence.get("message") == "Service request failed"
     )
     large_rpc_ok = (
         large_rpc.get("requestBytes") == 512 * 1024

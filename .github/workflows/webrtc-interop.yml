@@ -14,6 +14,7 @@ on:
       - "app/shared/auth/**"
       - "app/shared/contracts/**"
       - "packages/aurora-sdk/src/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "packages/aurora-ui/src/**"
       - "packages/aurora-voice-web/**"
       - "apps/aurora-web/app/**"
@@ -27,6 +28,7 @@ on:
       - "scripts/hosted_thin_shell_e2e.sh"
       - "scripts/webrtc_interop*"
       - "scripts/webrtc_native_interop.sh"
+      - "scripts/webrtc_native_android_interop.sh"
       - "tests/e2e/webrtc_native_interop/**"
       - "apps/aurora-tauri/src-tauri/src/native_webrtc.rs"
       - "package.json"
@@ -72,6 +74,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      - name: Build browser mesh authority
+        run: pnpm --filter @aurora/mesh-authority-web build
+
       - name: Run the hosted peer UI against the full Python service
         run: pnpm test:hosted-peer:live
 
@@ -111,8 +116,6 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          targets: aarch64-linux-android
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -123,11 +126,6 @@ jobs:
       - name: Install Python peer dependencies
         run: uv sync --frozen
 
-      # Guards the mobile port: the native stack has to keep building for
-      # Android, which is now a platform the transport actually ships to.
-      - name: Check the native WebRTC stack for Android
-        run: cargo check --manifest-path tests/e2e/webrtc_native_interop/peer/Cargo.toml --target aarch64-linux-android
-
       # All three lanes gate. The DTLS named-curve fix that used to keep the
       # browser lanes informational ships vendored in
       # apps/aurora-tauri/src-tauri/vendor/webrtc-dtls.
@@ -136,3 +134,54 @@ jobs:
           AURORA_NATIVE_INTEROP_PYTHON: python3
           AURORA_NATIVE_INTEROP_REQUIRE_BROWSER: 1
         run: scripts/webrtc_native_interop.sh
+
+  android-native-transport-interop:
+    name: Android native webrtc-rs transport interop
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "ndk;27.0.12077973" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Export Android NDK path
+        run: echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-linux-android
+
+      - name: Run native WebRTC transport interop on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 1200
+          script: scripts/webrtc_native_android_interop.sh
+
+      - name: Upload Android native interop report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webrtc-native-android-interop
+          path: reports/webrtc-native-android/
+          if-no-files-found: warn
