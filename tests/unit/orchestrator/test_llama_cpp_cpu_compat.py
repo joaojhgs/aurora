@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import sys
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,7 +15,51 @@ from app.services.orchestrator.agents import chatbot
 from app.shared.config.models import Orchestrator as OrchestratorConfig
 
 
-def test_function_call_handler_imports_with_standard_llama_cpp_only(monkeypatch):
+@pytest.fixture
+def standard_llama_cpp_backend(monkeypatch):
+    """Install a minimal standard backend without requiring the optional wheel."""
+
+    backend = ModuleType("llama_cpp")
+    backend.llama = ModuleType("llama_cpp.llama")
+    backend.llama_grammar = ModuleType("llama_cpp.llama_grammar")
+    backend.llama_types = ModuleType("llama_cpp.llama_types")
+    chat_format = ModuleType("llama_cpp.llama_chat_format")
+
+    def passthrough(*args, **kwargs):
+        return args, kwargs
+
+    def register_chat_completion_handler(_name):
+        return lambda handler: handler
+
+    chat_format._convert_completion_to_chat = passthrough
+    chat_format._convert_completion_to_chat_function = passthrough
+    chat_format._convert_text_completion_logprobs_to_chat = passthrough
+    chat_format._grammar_for_response_format = passthrough
+    chat_format.register_chat_completion_handler = register_chat_completion_handler
+    modules = {
+        "llama_cpp": backend,
+        "llama_cpp.llama": backend.llama,
+        "llama_cpp.llama_grammar": backend.llama_grammar,
+        "llama_cpp.llama_types": backend.llama_types,
+        "llama_cpp.llama_chat_format": chat_format,
+    }
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    handler_name = "app.services.orchestrator.chat_llama_cpp_fn_handler"
+    existing_handler = sys.modules.pop(handler_name, None)
+    try:
+        yield backend
+    finally:
+        sys.modules.pop(handler_name, None)
+        if existing_handler is not None:
+            sys.modules[handler_name] = existing_handler
+
+
+def test_function_call_handler_imports_with_standard_llama_cpp_only(
+    monkeypatch,
+    standard_llama_cpp_backend,
+):
     """The optional CUDA distribution must not be required by CPU installs."""
 
     real_import = __import__
@@ -33,7 +77,9 @@ def test_function_call_handler_imports_with_standard_llama_cpp_only(monkeypatch)
     assert handler.llama.__name__.startswith("llama_cpp")
 
 
-def test_function_call_handler_log_shape_does_not_expose_content():
+def test_function_call_handler_log_shape_does_not_expose_content(
+    standard_llama_cpp_backend,
+):
     handler = importlib.import_module("app.services.orchestrator.chat_llama_cpp_fn_handler")
     sensitive_text = "private llama prompt"
 
@@ -81,7 +127,10 @@ def test_llama_cpp_backend_does_not_mask_transitive_import_failure(monkeypatch):
     assert imports == ["llama_cpp"]
 
 
-def test_function_handler_does_not_mask_chat_format_import_failure(monkeypatch):
+def test_function_handler_does_not_mask_chat_format_import_failure(
+    monkeypatch,
+    standard_llama_cpp_backend,
+):
     real_import_module = importlib.import_module
     module_name = "app.services.orchestrator.chat_llama_cpp_fn_handler"
     existing_handler = sys.modules.get(module_name)
@@ -105,7 +154,10 @@ def test_function_handler_does_not_mask_chat_format_import_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_llama_cpp_initialization_retries_after_transient_import_failure(monkeypatch):
+async def test_llama_cpp_initialization_retries_after_transient_import_failure(
+    monkeypatch,
+    standard_llama_cpp_backend,
+):
     """A failed first import must not poison LLM initialization for the process."""
 
     raw_services = {
