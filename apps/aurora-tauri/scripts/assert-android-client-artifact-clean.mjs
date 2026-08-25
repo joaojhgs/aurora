@@ -19,7 +19,7 @@ const mobileMeshCapabilityPath = join(
   'aurora-mobile-mesh.json',
 )
 const expectedCapabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
-const expectedAndroidAbis = ['arm64-v8a', 'x86_64']
+const defaultAndroidAbis = ['arm64-v8a', 'x86_64']
 const requiredNativeSpeechLibraries = [
   'libonnxruntime.so',
   'libsherpa-onnx-c-api.so',
@@ -29,6 +29,17 @@ const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? 'apk'
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
+}
+const buildMode = readOption('--build-mode') ?? 'debug'
+if (!['debug', 'release'].includes(buildMode)) {
+  throw new Error(`--build-mode must be debug or release, got ${buildMode}`)
+}
+const expectedAbis = (readOption('--expected-abis') ?? (kind === 'aab' ? defaultAndroidAbis.join(',') : ''))
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+if (expectedAbis.some((abi) => !defaultAndroidAbis.includes(abi))) {
+  throw new Error(`--expected-abis must contain only ${defaultAndroidAbis.join(', ')}`)
 }
 const explicitArtifact = readOption('--artifact') ?? process.env.AURORA_ANDROID_CLIENT_ARTIFACT ?? process.env.AURORA_ANDROID_THIN_ARTIFACT
 const allowMissingArtifact = args.includes('--allow-missing-artifact')
@@ -82,6 +93,8 @@ const proof = {
   generatedAt: new Date().toISOString(),
   bundleMode: 'android-client',
   kind,
+  buildMode,
+  expectedAbis,
   artifact: artifact ? redacted(artifact) : null,
   artifactRoot: redacted(artifactRoot),
   allowMissingArtifact,
@@ -190,6 +203,8 @@ function loadAndroidThinConfig() {
   const provenance = JSON.parse(provenanceRaw)
   if (provenance.bundleMode !== 'android-client') failures.push('Android client build provenance has wrong bundleMode')
   if (provenance.kind !== kind) failures.push(`Android client build provenance kind mismatch: expected ${kind}, got ${provenance.kind}`)
+  const provenanceMode = provenance.buildMode ?? 'debug'
+  if (provenanceMode !== buildMode) failures.push(`Android client build provenance mode mismatch: expected ${buildMode}, got ${provenanceMode}`)
   if (provenance.sourceConfigWritten !== false) failures.push('Android client build provenance must come from a temp config, not a source-tree generated config')
   const config = provenance.config
   if (!config || typeof config !== 'object') {
@@ -274,7 +289,7 @@ function checkNativeSpeechRuntime(entries) {
     .map((entry) => entry.match(auroraLibraryPattern)?.[1])
     .filter(Boolean))]
     .sort()
-  const requiredAbis = kind === 'aab' ? expectedAndroidAbis : packagedAbis
+  const requiredAbis = expectedAbis.length ? expectedAbis : packagedAbis
   const missing = []
 
   if (packagedAbis.length === 0) {
@@ -286,6 +301,10 @@ function checkNativeSpeechRuntime(entries) {
       if (!entries.includes(entry)) missing.push(entry)
     }
   }
+  const unexpectedAbis = packagedAbis.filter((abi) => !requiredAbis.includes(abi))
+  for (const abi of unexpectedAbis) {
+    failures.push(`${kind.toUpperCase()} archive includes unexpected ABI ${abi}`)
+  }
   for (const entry of missing) {
     failures.push(`${kind.toUpperCase()} archive is missing required native speech library ${entry}`)
   }
@@ -293,6 +312,7 @@ function checkNativeSpeechRuntime(entries) {
     packagedAbis,
     requiredAbis,
     requiredLibraries: requiredNativeSpeechLibraries,
+    unexpectedAbis,
     missing,
   }
 }
@@ -348,7 +368,6 @@ function findArtifact(ext) {
   if (!existsSync(artifactRoot)) return null
   const candidates = collectFiles(artifactRoot)
     .filter((path) => path.endsWith(`.${ext}`))
-    .filter((path) => !path.endsWith(`-unsigned.${ext}`))
 
   const preferred = candidates.filter((path) => isPreferredGeneratedArtifact(path, ext))
   if (preferred.length === 1) return preferred[0]
@@ -366,9 +385,14 @@ function findArtifact(ext) {
 function isPreferredGeneratedArtifact(path, ext) {
   const normalized = path.replace(/\\/g, '/')
   const basename = normalized.split('/').pop() ?? ''
-  if (!basename.includes('universal-debug')) return false
-  if (ext === 'apk') return normalized.includes('/outputs/apk/universal/debug/')
-  if (ext === 'aab') return normalized.includes('/outputs/bundle/universalDebug/')
+  if (buildMode === 'debug') {
+    if (!basename.includes('debug')) return false
+    if (ext === 'apk') return normalized.includes('/outputs/apk/') && normalized.includes('/debug/')
+    if (ext === 'aab') return normalized.includes('/outputs/bundle/') && normalized.toLowerCase().includes('debug')
+  }
+  if (!basename.includes('release')) return false
+  if (ext === 'apk') return normalized.includes('/outputs/apk/') && normalized.includes('/release/')
+  if (ext === 'aab') return normalized.includes('/outputs/bundle/') && normalized.toLowerCase().includes('release')
   return false
 }
 

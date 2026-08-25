@@ -46,6 +46,7 @@ const args = process.argv.slice(2)
 const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.includes('--apk') ? 'apk' : 'apk')
 const target = readOption('--target')
 const voiceLiveTest = args.includes('--voice-live-test')
+const buildMode = args.includes('--release') ? 'release' : 'debug'
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
@@ -90,7 +91,8 @@ try {
   run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)
   cleanAndroidBuildOutputs()
 
-  const buildArgs = ['tauri', 'android', 'build', '--debug']
+  const buildArgs = ['tauri', 'android', 'build']
+  if (buildMode === 'debug') buildArgs.push('--debug')
   if (kind === 'apk') buildArgs.push('--apk')
   else buildArgs.push('--aab')
   buildArgs.push('--target', ...targets)
@@ -103,6 +105,7 @@ try {
     generatedAt: new Date().toISOString(),
     bundleMode: voiceLiveTest ? 'android-client-voice-live-test' : 'android-client',
     kind,
+    buildMode,
     target: target ?? 'universal',
     targets,
     configPath: '<temp-android-client-config>',

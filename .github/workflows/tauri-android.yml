@@ -111,7 +111,7 @@ jobs:
 
       - name: Apply release artifact version
         if: inputs.release_version != ''
-        run: node scripts/set_tauri_release_version.mjs "${{ inputs.release_version }}"
+        run: node scripts/set_release_version.mjs "${{ inputs.release_version }}"
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -156,30 +156,29 @@ jobs:
           echo "AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/arm64-v8a" >> "$GITHUB_ENV"
           echo "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/x86_64" >> "$GITHUB_ENV"
 
-      - name: Build Android client x86_64 debug APK
-        if: inputs.release_version == ''
+      - name: Build Android client x86_64 debug APK for CI
         run: pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64
-
-      - name: Build Android client universal debug APK for release
-        if: inputs.release_version != ''
-        run: pnpm --filter @aurora/tauri-ui android:build:client:apk
 
       - name: Verify Android client debug APK contents
         run: pnpm --filter @aurora/tauri-ui android:verify:client:apk
 
       - name: Upload Android client APK proof
+        if: inputs.release_version == ''
         uses: actions/upload-artifact@v4
         with:
           name: aurora-android-client-apk-proof
           path: apps/aurora-tauri/reports/android-client-apk-artifact-proof.json
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Android client debug APK
+        if: inputs.release_version == ''
         uses: actions/upload-artifact@v4
         with:
           name: aurora-android-client-debug-apk
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+          retention-days: 7
 
       - name: Retain Android client smoke APK
         run: |
@@ -199,25 +198,83 @@ jobs:
           fi
           cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk
 
-      - name: Build Android client debug AAB
+      - name: Build Android local native voice x86_64 live APK
+        run: pnpm --filter @aurora/tauri-ui android:build:voice-live:apk:x86_64
+
+      - name: Retain Android local native voice live APK
+        run: |
+          APK_OUTPUT_ROOT=apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk
+          mapfile -t VOICE_APKS < <(
+            find "$APK_OUTPUT_ROOT" -type f \
+              \( -path '*/x86_64/debug/*.apk' -o -path '*/universal/debug/*.apk' \) \
+              -print | sort
+          )
+          if [ "${#VOICE_APKS[@]}" -ne 1 ]; then
+            printf 'Expected exactly one Android native voice live APK; found %s\n' "${#VOICE_APKS[@]}" >&2
+            printf '%s\n' "${VOICE_APKS[@]}" >&2
+            exit 1
+          fi
+          cp "${VOICE_APKS[0]}" apps/aurora-tauri/reports/android-native-voice-live.apk
+
+      - name: Build Android client arm64 release APK
+        if: inputs.release_version != ''
+        run: pnpm --filter @aurora/tauri-ui android:build:client:apk:arm64:release
+
+      - name: Verify Android client arm64 release APK contents
+        if: inputs.release_version != ''
+        run: pnpm --filter @aurora/tauri-ui android:verify:client:apk:arm64:release
+
+      - name: Upload Android arm64 unsigned release APK
+        if: inputs.release_version != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-release-android-arm64-unsigned-apk
+          path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build Android client debug AAB for CI
+        if: inputs.release_version == ''
         run: pnpm --filter @aurora/tauri-ui android:build:client:aab
 
+      - name: Build Android client release AAB
+        if: inputs.release_version != ''
+        run: pnpm --filter @aurora/tauri-ui android:build:client:aab:release
+
       - name: Verify Android client debug AAB contents
+        if: inputs.release_version == ''
         run: pnpm --filter @aurora/tauri-ui android:verify:client:aab
 
+      - name: Verify Android client release AAB contents
+        if: inputs.release_version != ''
+        run: pnpm --filter @aurora/tauri-ui android:verify:client:aab:release
+
       - name: Upload Android client AAB proof
+        if: inputs.release_version == ''
         uses: actions/upload-artifact@v4
         with:
           name: aurora-android-client-aab-proof
           path: apps/aurora-tauri/reports/android-client-aab-artifact-proof.json
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Android client debug AAB
+        if: inputs.release_version == ''
         uses: actions/upload-artifact@v4
         with:
           name: aurora-android-client-debug-aab
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Android unsigned release AAB
+        if: inputs.release_version != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-release-android-unsigned-aab
+          path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Android 11 baseline WebView and native payload E2E
         uses: reactivecircus/android-emulator-runner@v2
@@ -244,6 +301,12 @@ jobs:
           script: |
             pnpm --filter @aurora/tauri-ui android:smoke
             AURORA_ANDROID_MOBILE_WEBRTC_LANE=turn pnpm --filter @aurora/tauri-ui android:webrtc:interop
+            AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" \
+              AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny \
+              AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 \
+              AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 \
+              AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:gigaspeech \
+              pnpm --filter @aurora/tauri-ui android:voice:live
 
       - name: Upload Android to Python WebRTC evidence
         if: always()

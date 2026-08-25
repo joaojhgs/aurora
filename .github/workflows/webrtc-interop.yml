@@ -20,6 +20,8 @@ on:
       - "apps/aurora-web/app/**"
       - "apps/aurora-web/package.json"
       - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
+      - "apps/aurora-tauri/src-tauri/android/**"
+      - "rust/crates/aurora-voice-native/**"
       - "tests/e2e/webrtc_interop/**"
       - "tests/e2e/hosted_peer/**"
       - "tests/e2e/hosted_mesh_node/**"

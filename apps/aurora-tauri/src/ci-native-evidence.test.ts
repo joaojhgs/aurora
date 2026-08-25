@@ -269,6 +269,9 @@ describe('Tauri CI native evidence contract', () => {
       expect(command, `${name} must sync canonical native plugin before build`).toContain('android:sync-native-plugin')
     }
     expect(packageJson.scripts['android:build:client:apk']).toBe('node ./scripts/build-android-client-bundle.mjs --kind apk')
+    expect(packageJson.scripts['android:build:voice-live:apk:x86_64']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind apk --target x86_64 --voice-live-test',
+    )
     expect(packageJson.scripts['android:build:thin:apk']).toBe('pnpm android:build:client:apk')
     expect(packageJson.scripts['android:build:thin:apk']).not.toBe('node ./scripts/build-android-thin-bundle.mjs --kind apk')
     expect(packageJson.scripts['android:build:client:apk:arm64']).toBe(
@@ -395,6 +398,12 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain("-path '*/universal/debug/*.apk'")
     expect(androidWorkflow).toContain('if [ "${#SMOKE_APKS[@]}" -ne 1 ]; then')
     expect(androidWorkflow).toContain('cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk')
+    expect(androidWorkflow).toContain(
+      'pnpm --filter @aurora/tauri-ui android:build:voice-live:apk:x86_64',
+    )
+    expect(androidWorkflow).toContain(
+      'cp "${VOICE_APKS[0]}" apps/aurora-tauri/reports/android-native-voice-live.apk',
+    )
     expect(androidWorkflow).not.toContain(
       'apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/x86_64/debug/app-x86_64-debug.apk',
     )
@@ -405,6 +414,10 @@ describe('Tauri CI native evidence contract', () => {
     expect(androidWorkflow).toContain(
       'AURORA_ANDROID_APK: ${{ github.workspace }}/apps/aurora-tauri/reports/android-client-smoke.apk',
     )
+    expect(androidWorkflow).toContain(
+      'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk"',
+    )
+    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')

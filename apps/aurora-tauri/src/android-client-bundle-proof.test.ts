@@ -106,8 +106,9 @@ function runProof(
   context: AndroidClientProofContext,
   kind: AndroidClientKind,
   artifact: string,
+  extraArgs: string[] = [],
 ) {
-  return spawnSync(process.execPath, [proof, '--kind', kind, '--artifact', artifact], {
+  return spawnSync(process.execPath, [proof, '--kind', kind, '--artifact', artifact, ...extraArgs], {
     cwd: packageRoot,
     encoding: 'utf8',
     env: androidClientEnv(context, kind),
@@ -118,8 +119,9 @@ function runProofAuto(
   context: AndroidClientProofContext,
   kind: AndroidClientKind,
   artifactRoot: string,
+  extraArgs: string[] = [],
 ) {
-  return spawnSync(process.execPath, [proof, '--kind', kind], {
+  return spawnSync(process.execPath, [proof, '--kind', kind, ...extraArgs], {
     cwd: packageRoot,
     encoding: 'utf8',
     env: androidClientEnv(context, kind, {
@@ -423,6 +425,7 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(provenance).toMatchObject({
       bundleMode: 'android-client',
       kind: 'aab',
+      buildMode: 'debug',
       target: 'universal',
       targets: ['aarch64', 'x86_64'],
       sourceConfigWritten: false,
@@ -439,6 +442,33 @@ if (argv[0] === 'build:frontend:android-client') {
       'aurora-mobile-mesh',
     ])
     expect(provenance.configSha256).toBe(createHash('sha256').update(`${JSON.stringify(provenance.config, null, 2)}\n`).digest('hex'))
+
+    const releaseResult = spawnSync(
+      process.execPath,
+      [buildClient, '--kind', 'apk', '--target', 'aarch64', '--release'],
+      {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        env: androidClientEnv(context, 'apk', {
+          PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          ASDF_JAVA_VERSION: undefined,
+          JAVA_HOME: undefined,
+          AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        }),
+      },
+    )
+    expect(releaseResult.status, releaseResult.stderr).toBe(0)
+    const releaseCalls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).slice(-4)
+    expect(releaseCalls[3].argv.join(' ')).toBe(
+      'tauri android build --apk --target aarch64 --config ' + releaseCalls[3].argv.at(-1),
+    )
+    expect(releaseCalls[3].argv).not.toContain('--debug')
+    expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
+      buildMode: 'release',
+      kind: 'apk',
+      target: 'aarch64',
+      targets: ['aarch64'],
+    })
   }, 30_000)
 
   it('auto-discovers generated universal debug APK and AAB artifacts from nested Tauri output paths', () => {
@@ -461,6 +491,34 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(readFileSync(context.aabProofPath, 'utf8')).toContain(
       'app-universal-debug.aab',
     )
+  })
+
+  it('auto-discovers unsigned release artifacts and enforces the declared ABIs', () => {
+    const context = createAndroidClientProofContext()
+    prepareAndroidClient(context)
+    const root = mkdtempSync(join(tmpdir(), 'aurora-android-release-generated-'))
+    const apk = join(root, 'apk', 'arm64', 'release', 'app-arm64-release-unsigned.apk')
+    const aab = join(root, 'bundle', 'universalRelease', 'app-universal-release.aab')
+    writeZip(apk, [
+      'AndroidManifest.xml',
+      'classes.dex',
+      ...androidNativeLibraryEntries('apk', ['arm64-v8a']),
+    ])
+    writeZip(aab, [
+      'base/manifest/AndroidManifest.xml',
+      'base/dex/classes.dex',
+      ...androidNativeLibraryEntries('aab'),
+    ])
+
+    const apkResult = runProofAuto(context, 'apk', root, [
+      '--build-mode', 'release', '--expected-abis', 'arm64-v8a',
+    ])
+    const aabResult = runProofAuto(context, 'aab', root, [
+      '--build-mode', 'release', '--expected-abis', 'arm64-v8a,x86_64',
+    ])
+
+    expect(apkResult.status, apkResult.stderr).toBe(0)
+    expect(aabResult.status, aabResult.stderr).toBe(0)
   })
 
   it('fails closed when auto-discovery finds ambiguous generated artifacts', () => {
@@ -798,9 +856,15 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(packageJson.scripts['android:build:voice-live:apk']).toBe(
       'node ./scripts/build-android-client-bundle.mjs --kind apk --voice-live-test',
     )
+    expect(packageJson.scripts['android:build:voice-live:apk:x86_64']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind apk --target x86_64 --voice-live-test',
+    )
     expect(packageJson.scripts['android:build:thin:apk']).toBe('pnpm android:build:client:apk')
     expect(packageJson.scripts['android:build:client:apk:arm64']).toBe(
       'node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64',
+    )
+    expect(packageJson.scripts['android:build:client:apk:arm64:release']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind apk --target aarch64 --release',
     )
     expect(packageJson.scripts['android:build:thin:apk:arm64']).toBe('pnpm android:build:client:apk:arm64')
     expect(packageJson.scripts['android:build:client:apk:x86_64']).toBe(
@@ -808,6 +872,9 @@ if (argv[0] === 'build:frontend:android-client') {
     )
     expect(packageJson.scripts['android:build:thin:apk:x86_64']).toBe('pnpm android:build:client:apk:x86_64')
     expect(packageJson.scripts['android:build:client:aab']).toBe('node ./scripts/build-android-client-bundle.mjs --kind aab')
+    expect(packageJson.scripts['android:build:client:aab:release']).toBe(
+      'node ./scripts/build-android-client-bundle.mjs --kind aab --release',
+    )
     expect(packageJson.scripts['android:build:thin:aab']).toBe('pnpm android:build:client:aab')
     const buildSource = readFileSync(buildClient, 'utf8')
     expect(buildSource).toContain('AURORA_TAURI_ANDROID_CLIENT_CONFIG_PATH')
@@ -815,6 +882,7 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(buildSource).toContain("run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])")
     expect(buildSource).toContain("const target = readOption('--target')")
     expect(buildSource).toContain("const voiceLiveTest = args.includes('--voice-live-test')")
+    expect(buildSource).toContain("const buildMode = args.includes('--release') ? 'release' : 'debug'")
     expect(buildSource).toContain('AURORA_TAURI_ANDROID_VOICE_LIVE_TEST: voiceLiveTest')
     expect(buildSource).toContain("target: target ?? 'universal'")
     expect(buildSource).toContain("const defaultAndroidTargets = ['aarch64', 'x86_64']")
