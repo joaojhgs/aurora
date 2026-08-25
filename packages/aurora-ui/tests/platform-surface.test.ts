@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAuroraSurfaceProfile, runtimeModeFromTransportKind, shouldShowForSurface } from '../src/platform-surface'
+import { getAuroraSurfaceProfile, runtimeModeFromTransportKind, shouldShowForSurface, surfaceCanConfigureBackgroundWake } from '../src/platform-surface'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 describe('Aurora surface profile regression coverage', () => {
@@ -198,6 +198,8 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(desktopLocal.voiceCapture.detail)).toEqual([])
     expect(hosted.voiceCapture.wakewordOwner).toBe('webview-focused')
     expect(hosted.voiceCapture.wakewordRequiresFocus).toBe(true)
+    expect(surfaceCanConfigureBackgroundWake(hosted)).toBe(false)
+    expect(surfaceCanConfigureBackgroundWake(desktopLocal)).toBe(false)
     expect(hosted.localSpeechPack).toMatchObject({
       state: 'disabled',
       availabilityState: 'unsupported',
@@ -407,16 +409,20 @@ describe('Aurora surface profile regression coverage', () => {
       wakewordOwner: 'native-desktop',
       wakewordRequiresFocus: false,
     })
+    expect(surfaceCanConfigureBackgroundWake(desktop)).toBe(true)
     expect(android.voiceCapture).toMatchObject({
       wakewordOwner: 'mobile-native',
       wakewordRequiresFocus: false,
     })
+    expect(surfaceCanConfigureBackgroundWake(android)).toBe(true)
     expect(missingKws.voiceCapture.wakewordOwner).toBe('unavailable')
+    expect(surfaceCanConfigureBackgroundWake(missingKws)).toBe(false)
     expect(ios.voiceCapture).toMatchObject({
       focusedPushToTalkOwner: 'mobile-native',
       wakewordOwner: 'mobile-native',
       wakewordRequiresFocus: false,
     })
+    expect(surfaceCanConfigureBackgroundWake(ios)).toBe(true)
     expect(findForbiddenProductionCopyTerms(desktop.voiceCapture.detail)).toEqual([])
     expect(findForbiddenProductionCopyTerms(android.voiceCapture.detail)).toEqual([])
     expect(findForbiddenProductionCopyTerms(ios.voiceCapture.detail)).toEqual([])

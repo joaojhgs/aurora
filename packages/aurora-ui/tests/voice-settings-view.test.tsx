@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient, GeneratedBackendMethodOutput, JsonObject, JsonValue } from '@aurora/client'
 import { VoiceSettingsView, type VoiceSettingsViewProps } from '../src/voice-settings-view'
+import { getAuroraSurfaceProfile } from '../src/platform-surface'
 import { SettingsView } from '../src/settings-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { AuroraShellSnapshot, RouteAvailability } from '../src/shell-data'
@@ -13,6 +14,12 @@ import { snapshotFromGraph } from '../src/shell-data'
 import type { AuroraRuntimeProfileV2 } from '../src/runtime-profile'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Element.prototype.scrollIntoView = () => undefined
 
 type SpeechLanguage = string
 type InstallStatus = 'installed' | 'not_found' | 'queued' | 'rejected' | 'revision_conflict' | 'unchanged'
@@ -931,7 +938,11 @@ describe('VoiceSettingsView', () => {
     expect(local.container.querySelector('[aria-label="Spoken reply summary"]')).toBeNull()
     expect(local.container.textContent).not.toContain('Spoken reply voices')
     expect(local.container.textContent).not.toContain('Voices available to Aurora')
-    expect(local.container.textContent).toContain('Wake phrase')
+    expect(local.container.textContent).toContain('Listening and speaking')
+    expect(local.container.textContent).toContain('Primary language')
+    expect(local.container.textContent).toContain('Voice language')
+    expect(local.container.textContent).not.toContain('Wake phrase')
+    expect(local.container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
     await local.unmount()
 
     const operate = await renderVoiceSettings(client, { hideOnDeviceSections: true })
@@ -1268,18 +1279,8 @@ describe('VoiceSettingsView', () => {
       runtimeProfile: meshVoiceRuntimeProfile(),
     })
 
-    await act(async () => {
-      buttonByText(container, 'Use listening start').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Use wake phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Use transcription').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
+    await chooseSearchableOption(container, 'Choose listening start', 'Speech start')
+    await chooseSearchableOption(container, 'Choose transcription', 'English transcription')
 
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(1, {
       vad: {
@@ -1288,22 +1289,17 @@ describe('VoiceSettingsView', () => {
       },
     })
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(2, {
-      kws: {
-        packId: 'wake.aurora',
-        packRevision: 'wake-rev-1',
-      },
-    })
-    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(3, {
       stt: {
         packId: 'whisper.tiny.en',
         packRevision: 'stt-rev-1',
       },
     })
     const text = visibleText(container)
-    expect(text).toContain('On-device speech')
+    expect(text).toContain('Listening and speaking')
     expect(text).not.toContain('vad.webrtc')
     expect(text).not.toContain('wake.aurora')
     expect(text).not.toContain('whisper.tiny.en')
+    expect(container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
     assertNoForbiddenCopy(text)
     await unmount()
   })
@@ -1387,18 +1383,9 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
 
-    await act(async () => {
-      buttonByText(container, 'Add').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Add voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Add voice sample').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
+    await chooseSearchableOption(container, 'Choose transcription', 'English transcription')
+    await chooseSearchableOption(container, 'Choose spoken voice', 'Ava')
+    await chooseSearchableOption(container, 'Choose spoken voice', 'Pocket voice')
     expect(select).toHaveBeenCalledTimes(2)
     expect(visibleText(container)).toContain('Add a short WAV recording of the voice to clone.')
     expect(visibleText(container)).not.toContain('Spoken words')
@@ -1471,8 +1458,8 @@ describe('VoiceSettingsView', () => {
     })
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledTimes(3)
     const text = visibleText(container)
-    expect(text).toContain('On-device speech')
-    expect(text).toContain('On-device voices')
+    expect(text).toContain('Listening and speaking')
+    expect(text).toContain('Spoken voice')
     expect(text).toContain('Voice sample saved.')
     expect(text).not.toContain('Voice choice updated.')
     expect(text).not.toContain('whisper.tiny.en')
@@ -1520,15 +1507,12 @@ describe('VoiceSettingsView', () => {
     })
     await flushReactWork()
 
-    const beforeClickText = visibleText(container)
-    expect(beforeClickText).toContain('Speech start')
-    expect(beforeClickText).toContain('English transcription')
+    expect(select).not.toHaveBeenCalled()
+    await openSearchableChoice(container, 'Choose listening start')
+    expect(document.body.textContent).toContain('Speech start')
     expect(select).not.toHaveBeenCalled()
 
-    await act(async () => {
-      buttonByText(container, 'Add').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
+    await chooseSearchableOption(container, 'Choose transcription', 'English transcription')
 
     expect(select).toHaveBeenCalledTimes(1)
     expect(select).toHaveBeenCalledWith(expect.objectContaining({
@@ -1571,18 +1555,8 @@ describe('VoiceSettingsView', () => {
       runtimeProfile: remoteVoiceRuntimeProfile(),
     })
 
-    await act(async () => {
-      buttonByText(container, 'Use listening start').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Use wake phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
-    await act(async () => {
-      buttonByText(container, 'Use transcription').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
+    await chooseSearchableOption(container, 'Choose listening start', 'Speech start')
+    await chooseSearchableOption(container, 'Choose transcription', 'English transcription')
 
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(1, {
       vad: {
@@ -1591,22 +1565,17 @@ describe('VoiceSettingsView', () => {
       },
     })
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(2, {
-      kws: {
-        packId: 'wake.aurora',
-        packRevision: 'wake-rev-1',
-      },
-    })
-    expect(onLocalSpeechSelectionConfirmed).toHaveBeenNthCalledWith(3, {
       stt: {
         packId: 'whisper.tiny.en',
         packRevision: 'stt-rev-1',
       },
     })
     const text = visibleText(container)
-    expect(text).toContain('On-device speech')
+    expect(text).toContain('Listening and speaking')
     expect(text).not.toContain('vad.webrtc')
     expect(text).not.toContain('wake.aurora')
     expect(text).not.toContain('whisper.tiny.en')
+    expect(container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
     assertNoForbiddenCopy(text)
     await unmount()
   })
@@ -1646,7 +1615,9 @@ describe('VoiceSettingsView', () => {
     })
 
     const text = visibleText(container)
-    expect(text).not.toContain('On-device speech')
+    expect(container.querySelector('button[aria-label="Choose listening start"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Choose transcription"]')).toBeNull()
     expect(buttonsByText(container, 'Use listening start')).toHaveLength(0)
     expect(buttonsByText(container, 'Use wake phrase')).toHaveLength(0)
     expect(buttonsByText(container, 'Use transcription')).toHaveLength(0)
@@ -1691,7 +1662,9 @@ describe('VoiceSettingsView', () => {
     })
 
     const text = visibleText(container)
-    expect(text).not.toContain('On-device speech')
+    expect(container.querySelector('button[aria-label="Choose listening start"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Choose transcription"]')).toBeNull()
     expect(buttonsByText(container, 'Use listening start')).toHaveLength(0)
     expect(buttonsByText(container, 'Use wake phrase')).toHaveLength(0)
     expect(buttonsByText(container, 'Use transcription')).toHaveLength(0)
@@ -1845,16 +1818,12 @@ describe('VoiceSettingsView', () => {
     })
     const { container, unmount } = await renderVoiceSettings(client, {
       runtimeProfile,
+      surfaceProfile: desktopLocalWakeSurfaceProfile(),
       onLocalSpeechSelectionConfirmed,
     })
 
     expect(visibleText(container)).toContain('Wake phrase')
-    expect(visibleText(container)).toContain('Hey Aurora')
-    expect(visibleText(container)).toContain('Selected')
-    await act(async () => {
-      buttonByText(container, 'Use phrase').dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushReactWork()
+    await chooseSearchableOption(container, 'Choose wake phrase', 'Hey Aurora')
 
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
       vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
@@ -1881,6 +1850,124 @@ describe('VoiceSettingsView', () => {
     expect(text).not.toContain('sherpa-kws-zipformer-gigaspeech.en')
     expect(text).not.toContain('kws-rev-2')
     assertNoForbiddenCopy(text)
+    await unmount()
+  })
+
+  it('filters speech choices from this-device language prefs instead of the connected server', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const runtimeProfile = meshVoiceRuntimeProfile()
+    runtimeProfile.localNode.primaryLanguage = 'en'
+    runtimeProfile.localNode.voiceLanguage = 'auto'
+    const client = voiceClient({
+      capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }),
+    })
+    const get = vi.spyOn(client.config, 'get')
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile,
+      onLocalSpeechSelectionConfirmed,
+      localSpeechCatalog: multilingualSpeechCatalog(),
+    })
+    await flushReactWork()
+
+    expect(get).not.toHaveBeenCalled()
+    expect(visibleText(container)).toContain('Primary language')
+    expect(visibleText(container)).toContain('Voice language')
+    expect(visibleText(container)).toContain('English')
+    expect(visibleText(container)).toContain('Automatic')
+    await openSearchableChoice(container, 'Choose primary language')
+    expect(document.body.textContent).toContain('German')
+    expect(document.body.textContent).toContain('Japanese')
+    expect(document.body.textContent).toContain('French')
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('English transcription')
+    await openSearchableChoice(container, 'Choose transcription')
+    expect(document.body.textContent).toContain('English transcription')
+    expect(document.body.textContent).not.toContain('German transcription')
+    await unmount()
+  })
+
+  it('persists this-device primary and voice language on the local profile', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const client = voiceClient({
+      capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile: meshVoiceRuntimeProfile(),
+      onLocalSpeechSelectionConfirmed,
+      localSpeechCatalog: multilingualSpeechCatalog(),
+    })
+    await flushReactWork()
+
+    await chooseSearchableOption(container, 'Choose primary language', 'German')
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({}, { primaryLanguage: 'de' })
+    await chooseSearchableOption(container, 'Choose voice language', 'Japanese')
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({}, { voiceLanguage: 'ja' })
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('Japanese transcription')
+    await chooseSearchableOption(container, 'Choose voice language', 'Automatic')
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenLastCalledWith({}, { voiceLanguage: 'auto' })
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('German transcription')
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
+  it('pins listening and speaking to a saved voice language even when primary language differs', async () => {
+    const runtimeProfile = meshVoiceRuntimeProfile()
+    runtimeProfile.localNode.primaryLanguage = 'en'
+    runtimeProfile.localNode.voiceLanguage = 'de'
+    const client = voiceClient({
+      capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile,
+      onLocalSpeechSelectionConfirmed: vi.fn(),
+      localSpeechCatalog: multilingualSpeechCatalog(),
+    })
+    await flushReactWork()
+
+    expect(buttonByAriaLabel(container, 'Choose primary language').textContent).toContain('English')
+    expect(buttonByAriaLabel(container, 'Choose voice language').textContent).toContain('German')
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('German transcription')
+    await openSearchableChoice(container, 'Choose transcription')
+    expect(document.body.textContent).toContain('German transcription')
+    expect(document.body.textContent).not.toContain('English transcription')
+    await unmount()
+  })
+
+  it('hides wake-word setup on focused web and thin browser surfaces', async () => {
+    const client = voiceClient({
+      capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile: meshVoiceRuntimeProfile(),
+      surfaceProfile: browserCatalogSurfaceProfile(),
+      onLocalSpeechSelectionConfirmed: vi.fn(),
+      localSpeechCatalog: {
+        available: true,
+        listCatalog: vi.fn(async () => ({
+          state: 'ready' as const,
+          items: [{
+            task: 'kws' as const,
+            packId: 'kws.en',
+            packVersion: 'kws-rev-1',
+            displayName: 'English wake words',
+            language: 'en-us',
+          }, {
+            task: 'stt' as const,
+            packId: 'whisper.tiny.en',
+            packVersion: 'stt-rev-1',
+            displayName: 'English transcription',
+            language: 'en-us',
+          }],
+        })),
+        listReferenceProfiles: vi.fn(async () => []),
+        select: vi.fn(),
+      },
+    })
+    await flushReactWork()
+
+    expect(container.querySelector('button[aria-label="Choose wake words"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Choose wake phrase"]')).toBeNull()
+    expect(visibleText(container)).not.toContain('Wake words')
+    expect(container.querySelector('button[aria-label="Choose transcription"]')).not.toBeNull()
     await unmount()
   })
 })
@@ -1940,6 +2027,7 @@ function voiceClient(overrides: {
       execute: adminExecute
     },
     config: {
+      get: async () => ({ ok: true, data: { config: { primary_language: 'en' } } }),
       getSchemaMetadata: async () => ({ ok: true, data: { fields: [], secrets_redacted: true } }),
       applyChange: async () => ({ ok: true, data: { success: true } })
     },
@@ -2121,6 +2209,52 @@ async function renderVoiceSettings(client: AuroraClient, props: Partial<Omit<Voi
   }
 }
 
+function multilingualSpeechCatalog(): NonNullable<VoiceSettingsViewProps['localSpeechCatalog']> {
+  return {
+    available: true,
+    listCatalog: vi.fn(async () => ({
+      state: 'ready' as const,
+      items: [{
+        task: 'stt' as const,
+        packId: 'whisper.tiny.en',
+        packVersion: 'stt-rev-1',
+        displayName: 'English transcription',
+        language: 'en-us',
+      }, {
+        task: 'stt' as const,
+        packId: 'whisper.tiny.de',
+        packVersion: 'stt-rev-de',
+        displayName: 'German transcription',
+        language: 'de-de',
+      }, {
+        task: 'stt' as const,
+        packId: 'whisper.tiny.ja',
+        packVersion: 'stt-rev-ja',
+        displayName: 'Japanese transcription',
+        language: 'ja-jp',
+      }, {
+        task: 'tts' as const,
+        packId: 'piper.fr',
+        packVersion: 'tts-fr-1',
+        displayName: 'French voice',
+        language: 'fr-fr',
+        voiceId: 'fr-voice',
+        voiceRevision: 'v1',
+      }, {
+        task: 'tts' as const,
+        packId: 'piper.ja',
+        packVersion: 'tts-ja-1',
+        displayName: 'Japanese voice',
+        language: 'ja-jp',
+        voiceId: 'ja-voice',
+        voiceRevision: 'v1',
+      }],
+    })),
+    listReferenceProfiles: vi.fn(async () => []),
+    select: vi.fn(),
+  }
+}
+
 function meshVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
   return {
     version: 2,
@@ -2145,6 +2279,22 @@ function meshVoiceRuntimeProfile(): AuroraRuntimeProfileV2 {
       },
     },
   }
+}
+
+function desktopLocalWakeSurfaceProfile(): NonNullable<VoiceSettingsViewProps['surfaceProfile']> {
+  return getAuroraSurfaceProfile({
+    runtimeMode: 'desktop-local',
+    transportKind: 'tauri-local',
+    nativePlatform: 'linux',
+    nodeMode: 'mesh-node',
+    runtimeTier: 'python-full',
+    enabledCapabilityPacks: ['foreground-voice'],
+    localSpeechPackState: 'ready',
+    localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+    nativeVoicePresent: true,
+    nativeVoiceAvailable: true,
+    nativeWakewordAvailable: true,
+  })
 }
 
 function browserCatalogSurfaceProfile(): NonNullable<VoiceSettingsViewProps['surfaceProfile']> {
@@ -2259,6 +2409,47 @@ function availableRoute(snapshot: AuroraShellSnapshot, id: string): RouteAvailab
     blockers: [],
     explanation: 'Ready'
   }
+}
+
+function buttonByAriaLabel(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = container.querySelector(`button[aria-label="${label}"]`)
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}`)
+  return button
+}
+
+async function openSearchableChoice(container: HTMLElement, ariaLabel: string): Promise<void> {
+  const trigger = buttonByAriaLabel(container, ariaLabel)
+  if (trigger.getAttribute('aria-expanded') === 'true') return
+  await act(async () => {
+    trigger.click()
+  })
+  await flushReactWork()
+}
+
+function commandItemByLabel(optionLabel: string): HTMLElement | undefined {
+  return [...document.body.querySelectorAll<HTMLElement>('[cmdk-item], [data-slot="command-item"], [role="option"]')]
+    .find((item) => (item.textContent ?? '').includes(optionLabel))
+}
+
+async function chooseSearchableOption(container: HTMLElement, ariaLabel: string, optionLabel: string): Promise<void> {
+  const trigger = buttonByAriaLabel(container, ariaLabel)
+  await act(async () => {
+    trigger.click()
+  })
+  await flushReactWork()
+  let option = commandItemByLabel(optionLabel)
+  if (!option) {
+    await act(async () => {
+      trigger.click()
+    })
+    await flushReactWork()
+    option = commandItemByLabel(optionLabel)
+  }
+  if (!option) throw new Error(`Missing option: ${optionLabel}`)
+  await act(async () => {
+    option.click()
+  })
+  await flushReactWork()
 }
 
 function buttonByText(container: HTMLElement, label: string): HTMLButtonElement {

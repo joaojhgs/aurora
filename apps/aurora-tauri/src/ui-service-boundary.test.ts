@@ -47,6 +47,12 @@ const approvedClientFactoryFiles = new Set([
   'packages/aurora-sdk/src/test-utils.ts'
 ])
 
+const approvedServerFetchFiles = new Set([
+  // This Next.js route is the reviewed same-origin server boundary for hosted
+  // Sherpa assets. It validates both the requested path and final redirect host.
+  'apps/aurora-web/app/aurora-voice-assets/[...path]/route.ts'
+])
+
 const forbiddenClientFactoryPatterns: Array<{ label: string; pattern: RegExp }> = [
   { label: 'AuroraClient construction', pattern: /\bnew\s+AuroraClient\s*\(/ },
   { label: 'HTTP Gateway transport construction', pattern: /\bnew\s+HttpGatewayTransport\s*\(/ },
@@ -142,6 +148,7 @@ describe('UI and Tauri service boundary contract', () => {
       if (approvedClientFactoryFiles.has(rel)) continue
 
       for (const { label, pattern } of forbiddenClientFactoryPatterns) {
+        if (label === 'direct browser fetch' && approvedServerFetchFiles.has(rel)) continue
         expect(text, `${rel} must not bypass the app client factory via ${label}`).not.toMatch(pattern)
       }
     }

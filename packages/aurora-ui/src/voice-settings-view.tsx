@@ -9,9 +9,26 @@ import {
   type JsonObject,
   type JsonValue
 } from '@aurora/client'
+import { ChevronDown } from 'lucide-react'
+import { Button as ChoiceButton } from '#components/ui/button'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '#components/ui/field'
+import { cn } from '#lib/utils'
 import { Button, Card, StatStrip } from './primitives'
 import { safeErrorCopy } from './product-copy'
 import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '#components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '#components/ui/popover'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,8 +40,17 @@ import {
   AlertDialogTitle
 } from '#components/ui/alert-dialog'
 import { Badge } from '#components/ui/badge'
-import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
-import type { AuroraLocalSpeechSelectionProfile, AuroraLocalSpeechTask, AuroraRuntimeProfileV2 } from './runtime-profile'
+import { getAuroraSurfaceProfile, surfaceCanConfigureBackgroundWake, type AuroraSurfaceProfile } from './platform-surface'
+import {
+  AUTO_LOCAL_VOICE_LANGUAGE,
+  DEFAULT_LOCAL_PRIMARY_LANGUAGE,
+  resolveLocalSpeechLanguagePolicy,
+  type AuroraLocalSpeechLanguagePrefs,
+  type AuroraLocalSpeechPreferencesSave,
+  type AuroraLocalSpeechSelectionProfile,
+  type AuroraLocalSpeechTask,
+  type AuroraRuntimeProfileV2,
+} from './runtime-profile'
 import type {
   AuroraBrowserPocketReferenceProfileSummary,
   AuroraBrowserSpeechPackCatalogSelection,
@@ -187,12 +213,90 @@ const TTS_MANAGE_METHODS = {
   delete: 'TTS.DeleteVoiceProfile'
 } as const
 
+interface SearchableChoiceOption {
+  id: string
+  label: string
+  detail?: string | undefined
+  disabled?: boolean | undefined
+}
+
+function SearchableChoice({
+  id,
+  value,
+  options,
+  placeholder,
+  searchPlaceholder,
+  emptyText,
+  ariaLabel,
+  disabled = false,
+  onSelect,
+}: {
+  id: string
+  value: string | null
+  options: readonly SearchableChoiceOption[]
+  placeholder: string
+  searchPlaceholder: string
+  emptyText: string
+  ariaLabel: string
+  disabled?: boolean | undefined
+  onSelect: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find((option) => option.id === value) ?? null
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={(
+          <ChoiceButton
+            id={id}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            aria-label={ariaLabel}
+            className="w-full justify-between font-normal"
+          />
+        )}
+      >
+        <span className={cn('min-w-0 truncate', selected ? 'text-foreground' : 'text-muted-foreground')}>
+          {selected?.label ?? placeholder}
+        </span>
+        <ChevronDown data-icon="inline-end" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(var(--anchor-width),24rem)] p-0">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.id}
+                  value={`${option.label} ${option.detail ?? ''} ${option.id}`}
+                  disabled={option.disabled === true}
+                  data-checked={option.id === value}
+                  onSelect={() => {
+                    if (option.disabled === true) return
+                    onSelect(option.id)
+                    setOpen(false)
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export interface VoiceSettingsViewProps {
   client: AuroraClient
   runtimeProfile?: AuroraRuntimeProfileV2 | null | undefined
   surfaceProfile?: AuroraSurfaceProfile | null | undefined
   localSpeechCatalog?: AuroraLocalSpeechCatalogPort | null | undefined
-  onLocalSpeechSelectionConfirmed?: ((selection: AuroraLocalSpeechSelectionProfile) => void | Promise<void>) | undefined
+  onLocalSpeechSelectionConfirmed?: AuroraLocalSpeechPreferencesSave | undefined
   /** Hide on-device pack and wake-phrase sections when embedding server spoken-reply controls outside local Settings. */
   hideOnDeviceSections?: boolean | undefined
   /** Hide server spoken-reply catalog/admin controls when embedding this view in This-device Settings. */
@@ -223,6 +327,8 @@ export function VoiceSettingsView({
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null)
   const importFileInputRef = useRef<HTMLInputElement | null>(null)
   const [confirmAction, setConfirmAction] = useState<VoiceConfirmation | null>(null)
+  const [speechLanguage, setSpeechLanguage] = useState<string | null>(null)
+  const [voiceLanguage, setVoiceLanguage] = useState<string | null>(null)
   const [adminReason, setAdminReason] = useState('Manage spoken reply voices')
   const [adminReviewConfirmed, setAdminReviewConfirmed] = useState(false)
   const adminReasonValue = adminReason.trim()
@@ -350,13 +456,17 @@ export function VoiceSettingsView({
     Boolean(onLocalSpeechSelectionConfirmed)
     && localSpeechSurfaceCanManageAssets(surfaceProfile)
   ), [onLocalSpeechSelectionConfirmed, surfaceProfile])
+  const canConfigureBackgroundWake = surfaceCanConfigureBackgroundWake(surfaceProfile)
   const localSpeechRows = useMemo(
-    () => canManageLocalSpeechAssets && browserCatalogItems.length > 0
-      ? toBrowserSpeechAssetRows(browserCatalogItems, runtimeProfile?.localNode.localSpeechSelection ?? null, referenceProfiles, false)
-      : canManageLocalSpeechAssets
-        ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack)
-        : [],
-    [browserCatalogItems, canManageLocalSpeechAssets, referenceProfiles, runtimeProfile?.localNode.localSpeechSelection, state.capabilities, surfaceProfile.localSpeechPack],
+    () => {
+      const rows = canManageLocalSpeechAssets && browserCatalogItems.length > 0
+        ? toBrowserSpeechAssetRows(browserCatalogItems, runtimeProfile?.localNode.localSpeechSelection ?? null, referenceProfiles, false)
+        : canManageLocalSpeechAssets
+          ? toLocalSpeechAssetRows(state.capabilities, surfaceProfile.localSpeechPack)
+          : []
+      return canConfigureBackgroundWake ? rows : rows.filter((row) => row.task !== 'kws')
+    },
+    [browserCatalogItems, canConfigureBackgroundWake, canManageLocalSpeechAssets, referenceProfiles, runtimeProfile?.localNode.localSpeechSelection, state.capabilities, surfaceProfile.localSpeechPack],
   )
   const browserTtsRows = useMemo(
     () => canManageLocalSpeechAssets
@@ -374,11 +484,68 @@ export function VoiceSettingsView({
   const wakePhraseOptions = useMemo(() => wakePhraseOptionsFor(runtimeProfile), [runtimeProfile])
   const selectedWakePhraseId = runtimeProfile?.localNode.localSpeechSelection?.wakePhrase?.phraseId ?? null
   const canChooseWakePhrase = Boolean(
-    onLocalSpeechSelectionConfirmed
+    canConfigureBackgroundWake
+    && onLocalSpeechSelectionConfirmed
     && runtimeProfile?.nodeMode === 'mesh-node'
     && surfaceProfile.localSpeechPack.canRunLocalKws
     && runtimeProfile.localNode.localSpeechSelection?.kws
   )
+  const allLocalSpeechRows = useMemo(
+    () => [...localSpeechRows, ...browserTtsRows],
+    [browserTtsRows, localSpeechRows],
+  )
+  const speechLanguageOptions = useMemo(
+    () => speechLanguageChoices(allLocalSpeechRows, speechLanguage),
+    [allLocalSpeechRows, speechLanguage],
+  )
+  const voiceLanguageOptions = useMemo(
+    () => voiceLanguageChoices(allLocalSpeechRows, voiceLanguage, speechLanguage),
+    [allLocalSpeechRows, speechLanguage, voiceLanguage],
+  )
+  const preferredSpeechLanguage = resolveLocalSpeechLanguagePolicy(
+    speechLanguage,
+    voiceLanguage,
+  ).modelLanguage
+  const currentLocalSpeechSelection = runtimeProfile?.localNode.localSpeechSelection ?? null
+  const selectedListeningStart = useMemo(
+    () => selectedSpeechRow(localSpeechRows.filter((row) => row.task === 'vad'), currentLocalSpeechSelection?.vad, referenceProfiles),
+    [currentLocalSpeechSelection?.vad, localSpeechRows, referenceProfiles],
+  )
+  const selectedWakeWords = useMemo(
+    () => selectedSpeechRow(localSpeechRows.filter((row) => row.task === 'kws'), currentLocalSpeechSelection?.kws, referenceProfiles),
+    [currentLocalSpeechSelection?.kws, localSpeechRows, referenceProfiles],
+  )
+  const selectedTranscription = useMemo(
+    () => selectedSpeechRow(localSpeechRows.filter((row) => row.task === 'stt'), currentLocalSpeechSelection?.stt, referenceProfiles),
+    [currentLocalSpeechSelection?.stt, localSpeechRows, referenceProfiles],
+  )
+  const selectedSpokenVoice = useMemo(
+    () => selectedSpeechRow(browserTtsRows, currentLocalSpeechSelection?.tts, referenceProfiles),
+    [browserTtsRows, currentLocalSpeechSelection?.tts, referenceProfiles],
+  )
+  const listeningStartRows = useMemo(
+    () => filterSpeechRowsForLanguage(localSpeechRows.filter((row) => row.task === 'vad'), preferredSpeechLanguage, selectedListeningStart),
+    [localSpeechRows, preferredSpeechLanguage, selectedListeningStart],
+  )
+  const wakeWordRows = useMemo(
+    () => canConfigureBackgroundWake
+      ? filterSpeechRowsForLanguage(localSpeechRows.filter((row) => row.task === 'kws'), preferredSpeechLanguage, selectedWakeWords)
+      : [],
+    [canConfigureBackgroundWake, localSpeechRows, preferredSpeechLanguage, selectedWakeWords],
+  )
+  const transcriptionRows = useMemo(
+    () => filterSpeechRowsForLanguage(localSpeechRows.filter((row) => row.task === 'stt'), preferredSpeechLanguage, selectedTranscription),
+    [localSpeechRows, preferredSpeechLanguage, selectedTranscription],
+  )
+  const spokenVoiceRows = useMemo(
+    () => filterSpeechRowsForLanguage(browserTtsRows, preferredSpeechLanguage, selectedSpokenVoice),
+    [browserTtsRows, preferredSpeechLanguage, selectedSpokenVoice],
+  )
+  const defaultListeningStart = displayedSpeechRow(selectedListeningStart, listeningStartRows)
+  const defaultWakeWords = displayedSpeechRow(selectedWakeWords, wakeWordRows)
+  const defaultTranscription = displayedSpeechRow(selectedTranscription, transcriptionRows)
+  const defaultSpokenVoice = displayedSpeechRow(selectedSpokenVoice, spokenVoiceRows)
+  const showLocalSpeechEditor = !hideOnDeviceSections
 
   useEffect(() => {
     if (!localSpeechCatalog?.available || !canManageLocalSpeechAssets) {
@@ -413,6 +580,32 @@ export function VoiceSettingsView({
       active = false
     }
   }, [localSpeechCatalog, canManageLocalSpeechAssets])
+
+  useEffect(() => {
+    const stored = languageCodeFromText(runtimeProfile?.localNode.primaryLanguage ?? '')
+    if (stored) {
+      setSpeechLanguage(stored)
+      return
+    }
+    setSpeechLanguage((current) => current ?? DEFAULT_LOCAL_PRIMARY_LANGUAGE)
+  }, [runtimeProfile?.localNode.primaryLanguage])
+
+  useEffect(() => {
+    const stored = runtimeProfile?.localNode.voiceLanguage
+    if (typeof stored === 'string' && stored.trim()) {
+      const normalized = stored.trim().toLowerCase().replaceAll('_', '-')
+      if (normalized === AUTO_LOCAL_VOICE_LANGUAGE) {
+        setVoiceLanguage(AUTO_LOCAL_VOICE_LANGUAGE)
+        return
+      }
+      const code = languageCodeFromText(stored)
+      if (code) {
+        setVoiceLanguage(code)
+        return
+      }
+    }
+    setVoiceLanguage((current) => current ?? AUTO_LOCAL_VOICE_LANGUAGE)
+  }, [runtimeProfile?.localNode.voiceLanguage])
 
   async function installProfile(profile: ManagedVoice) {
     if (!profile.installable || actionPending || !adminActionReady) return
@@ -643,6 +836,12 @@ export function VoiceSettingsView({
     }
   }
 
+  function selectLocalSpeechAssetById(rows: readonly LocalSpeechAssetRow[], id: string): Promise<void> {
+    const row = rows.find((candidate) => localSpeechActionKey(candidate) === id)
+    if (!row) return Promise.resolve()
+    return selectLocalSpeechAsset(row)
+  }
+
   function openReferenceEditor(row: LocalSpeechAssetRow): void {
     setReferenceEditor(row)
     setReferenceFile(null)
@@ -736,6 +935,25 @@ export function VoiceSettingsView({
     } catch {
       return false
     }
+  }
+
+  async function persistLocalSpeechLanguages(languages: AuroraLocalSpeechLanguagePrefs): Promise<void> {
+    if (!onLocalSpeechSelectionConfirmed) return
+    try {
+      await onLocalSpeechSelectionConfirmed({}, languages)
+    } catch {
+      setMutationMessage('Language was not saved. Try again.')
+    }
+  }
+
+  function choosePrimaryLanguage(id: string): void {
+    setSpeechLanguage(id)
+    void persistLocalSpeechLanguages({ primaryLanguage: id })
+  }
+
+  function chooseVoiceLanguage(id: string): void {
+    setVoiceLanguage(id)
+    void persistLocalSpeechLanguages({ voiceLanguage: id })
   }
 
   async function chooseWakePhrase(option: WakePhraseOption): Promise<void> {
@@ -854,82 +1072,162 @@ export function VoiceSettingsView({
         </>
       ) : null}
 
-      {!hideOnDeviceSections && (localSpeechRows.length > 0 || state.browserCatalogState === 'loading' || state.browserCatalogState === 'limited') ? (
-        <Card title="On-device speech" description="Speech pieces this device can use locally.">
-          <div className="flex flex-col gap-3">
+      {showLocalSpeechEditor ? (
+        <Card title="Listening and speaking" description="Choose how Aurora listens, understands, and speaks.">
+          <FieldGroup>
             {state.browserCatalogState === 'loading' ? (
               <p className="text-sm text-muted-foreground">Loading speech choices.</p>
             ) : null}
             {state.browserCatalogState === 'limited' ? (
               <p role="status" className="text-sm text-muted-foreground">Speech downloads could not be loaded. Try again.</p>
             ) : null}
-            {localSpeechRows.map((row) => (
-              <div key={`${row.task}:${row.packId}`} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{row.label}</p>
-                  <p className="text-xs text-muted-foreground">{row.copy.detail}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={row.ready ? 'default' : 'secondary'}>{row.ready ? 'Ready' : 'Needs setup'}</Badge>
-                  <Button
-                    variant="outline"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => void selectLocalSpeechAsset(row)}
-                    disabled={actionPending || (!row.ready && !row.selection)}
-                  >
-                    {pendingActionKey === localSpeechActionKey(row) ? 'Updating' : row.ready ? row.copy.action : 'Add'}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      {!hideOnDeviceSections && browserTtsRows.length > 0 ? (
-        <Card title="On-device voices" description="Voices this device can add for spoken replies.">
-          <div className="flex flex-col gap-3">
-            {browserTtsRows.map((row) => (
-              <div key={`${row.task}:${row.packId}:${row.voiceId ?? row.label}`} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{row.label}</p>
-                  <p className="text-xs text-muted-foreground">{row.copy.detail}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={row.ready ? 'default' : 'secondary'}>{row.ready ? 'Ready' : 'Needs setup'}</Badge>
-                  <Button
-                    variant="outline"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => row.needsReferenceProfile ? openReferenceEditor(row) : void selectLocalSpeechAsset(row)}
-                    disabled={actionPending || (!row.ready && !row.selection)}
-                  >
-                    {pendingActionKey === localSpeechActionKey(row)
-                      ? 'Updating'
-                      : row.ready ? 'Use voice' : row.needsReferenceProfile ? 'Add voice sample' : 'Add voice'}
-                  </Button>
-                  {row.referenceProfileId ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => openReferenceEditor(row)}
-                        disabled={actionPending}
-                      >
-                        Replace sample
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => void deleteReferenceVoiceSample(row)}
-                        disabled={actionPending || !localSpeechCatalog?.deleteReferenceProfile}
-                      >
-                        Remove sample
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            ))}
+            <Field>
+              <FieldLabel htmlFor="speech-primary-language">Primary language</FieldLabel>
+              <SearchableChoice
+                id="speech-primary-language"
+                value={speechLanguage ?? DEFAULT_LOCAL_PRIMARY_LANGUAGE}
+                options={speechLanguageOptions}
+                placeholder="Choose a language"
+                searchPlaceholder="Search languages"
+                emptyText="No matching languages."
+                ariaLabel="Choose primary language"
+                disabled={actionPending}
+                onSelect={choosePrimaryLanguage}
+              />
+              <FieldDescription>Used when Aurora needs one language.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="speech-voice-language">Voice language</FieldLabel>
+              <SearchableChoice
+                id="speech-voice-language"
+                value={voiceLanguage ?? AUTO_LOCAL_VOICE_LANGUAGE}
+                options={voiceLanguageOptions}
+                placeholder="Choose voice language"
+                searchPlaceholder="Search voice languages"
+                emptyText="No matching voice languages."
+                ariaLabel="Choose voice language"
+                disabled={actionPending}
+                onSelect={chooseVoiceLanguage}
+              />
+              <FieldDescription>Detect automatically, or keep listening and speaking in one language.</FieldDescription>
+            </Field>
+            {listeningStartRows.length > 0 ? (
+              <Field>
+                <FieldLabel htmlFor="speech-listening-start">Listening start</FieldLabel>
+                <SearchableChoice
+                  id="speech-listening-start"
+                  value={defaultListeningStart ? localSpeechActionKey(defaultListeningStart) : null}
+                  options={speechRowChoiceOptions(listeningStartRows, actionPending)}
+                  placeholder="Choose listening start"
+                  searchPlaceholder="Search listening start"
+                  emptyText="No matching listening start choices."
+                  ariaLabel="Choose listening start"
+                  disabled={actionPending}
+                  onSelect={(id) => void selectLocalSpeechAssetById(listeningStartRows, id)}
+                />
+                <FieldDescription>Helps Aurora notice when speech begins.</FieldDescription>
+              </Field>
+            ) : null}
+            {canConfigureBackgroundWake && wakeWordRows.length > 0 ? (
+              <Field>
+                <FieldLabel htmlFor="speech-wake-words">Wake words</FieldLabel>
+                <SearchableChoice
+                  id="speech-wake-words"
+                  value={defaultWakeWords ? localSpeechActionKey(defaultWakeWords) : null}
+                  options={speechRowChoiceOptions(wakeWordRows, actionPending)}
+                  placeholder="Choose wake words"
+                  searchPlaceholder="Search wake words"
+                  emptyText="No matching wake word choices."
+                  ariaLabel="Choose wake words"
+                  disabled={actionPending}
+                  onSelect={(id) => void selectLocalSpeechAssetById(wakeWordRows, id)}
+                />
+                <FieldDescription>Lets Aurora listen for its wake phrase.</FieldDescription>
+              </Field>
+            ) : null}
+            {canConfigureBackgroundWake ? (
+            <Field>
+              <FieldLabel htmlFor="speech-wake-phrase">Wake phrase</FieldLabel>
+                <SearchableChoice
+                  id="speech-wake-phrase"
+                  value={selectedWakePhraseId}
+                  options={wakePhraseOptions.map((option) => ({
+                    id: option.phraseId,
+                    label: option.label,
+                    detail: option.detail,
+                    disabled: !canChooseWakePhrase,
+                  }))}
+                  placeholder="Choose wake phrase"
+                  searchPlaceholder="Search wake phrases"
+                  emptyText="No matching wake phrases."
+                  ariaLabel="Choose wake phrase"
+                  disabled={actionPending || !canChooseWakePhrase}
+                  onSelect={(id) => {
+                    const option = wakePhraseOptions.find((candidate) => candidate.phraseId === id)
+                    if (option) void chooseWakePhrase(option)
+                  }}
+                />
+                <FieldDescription>
+                  {canChooseWakePhrase
+                    ? 'Choose the phrase Aurora listens for.'
+                    : 'Choose wake words before changing the phrase.'}
+                </FieldDescription>
+              </Field>
+            ) : null}
+            {transcriptionRows.length > 0 ? (
+              <Field>
+                <FieldLabel htmlFor="speech-transcription">Transcription</FieldLabel>
+                <SearchableChoice
+                  id="speech-transcription"
+                  value={defaultTranscription ? localSpeechActionKey(defaultTranscription) : null}
+                  options={speechRowChoiceOptions(transcriptionRows, actionPending)}
+                  placeholder="Choose transcription"
+                  searchPlaceholder="Search transcription"
+                  emptyText="No matching transcription choices."
+                  ariaLabel="Choose transcription"
+                  disabled={actionPending}
+                  onSelect={(id) => void selectLocalSpeechAssetById(transcriptionRows, id)}
+                />
+                <FieldDescription>Turns your speech into text.</FieldDescription>
+              </Field>
+            ) : null}
+            {spokenVoiceRows.length > 0 ? (
+              <Field>
+                <FieldLabel htmlFor="speech-spoken-voice">Spoken voice</FieldLabel>
+                <SearchableChoice
+                  id="speech-spoken-voice"
+                  value={defaultSpokenVoice ? localSpeechActionKey(defaultSpokenVoice) : null}
+                  options={speechRowChoiceOptions(spokenVoiceRows, actionPending)}
+                  placeholder="Choose spoken voice"
+                  searchPlaceholder="Search spoken voices"
+                  emptyText="No matching spoken voices."
+                  ariaLabel="Choose spoken voice"
+                  disabled={actionPending}
+                  onSelect={(id) => void selectLocalSpeechAssetById(spokenVoiceRows, id)}
+                />
+                <FieldDescription>Lets Aurora speak.</FieldDescription>
+                {selectedSpokenVoice?.referenceProfileId ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => openReferenceEditor(selectedSpokenVoice)}
+                      disabled={actionPending}
+                    >
+                      Replace sample
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => void deleteReferenceVoiceSample(selectedSpokenVoice)}
+                      disabled={actionPending || !localSpeechCatalog?.deleteReferenceProfile}
+                    >
+                      Remove sample
+                    </Button>
+                  </div>
+                ) : null}
+              </Field>
+            ) : null}
             {referenceEditor ? (
               <form
                 className="flex flex-col gap-3 rounded-md border border-border/70 p-3"
@@ -977,44 +1275,9 @@ export function VoiceSettingsView({
                 </div>
               </form>
             ) : null}
-          </div>
+          </FieldGroup>
         </Card>
       ) : null}
-
-      {hideOnDeviceSections ? null : (
-      <Card title="Wake phrase" description="Choose the phrase Aurora listens for.">
-        <div className="flex flex-col gap-3">
-          {!canChooseWakePhrase ? (
-            <p className="text-sm text-muted-foreground">Choose a wake language before changing the phrase.</p>
-          ) : null}
-          {wakePhraseOptions.map((option) => {
-            const pending = pendingActionKey === actionKeyFor('default', `wake:${option.phraseId}`)
-            const selected = selectedWakePhraseId === option.phraseId
-            return (
-              <div key={option.phraseId} className="flex flex-col gap-2 border-b border-border/60 pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">{option.detail}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={selected ? 'default' : 'secondary'}>{selected ? 'Selected' : 'Available'}</Badge>
-                  {canChooseWakePhrase && !selected ? (
-                    <Button
-                      variant="outline"
-                      className="h-8 px-3 text-xs"
-                      onClick={() => void chooseWakePhrase(option)}
-                      disabled={actionPending}
-                    >
-                      {pending ? 'Updating' : 'Use phrase'}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </Card>
-      )}
 
       {showServerVoiceSections ? (
         <>
@@ -1321,6 +1584,7 @@ interface LocalSpeechAssetRow {
   profilePackId?: string | undefined
   profilePackRevision?: string | undefined
   label: string
+  language?: string | undefined
   ready: boolean
   needsReferenceProfile?: boolean | undefined
   referenceProfileId?: string | undefined
@@ -1456,6 +1720,7 @@ function toBrowserSpeechAssetRows(
       ...(item.profilePackId ? { profilePackId: item.profilePackId } : {}),
       ...(item.profilePackRevision ? { profilePackRevision: item.profilePackRevision } : {}),
       label: safeVoiceText(item.displayName, `${copy.noun} option ${rows.length + 1}`),
+      ...(item.language ? { language: item.language } : {}),
       ready: referenceProfileReady && (item.active === true || item.cached === true || selected),
       needsReferenceProfile: item.requiresReferenceProfile === true && !referenceProfileReady,
       ...(selectedReferenceProfileId && selectedReferenceProfileReady ? { referenceProfileId: selectedReferenceProfileId } : {}),
@@ -1509,11 +1774,14 @@ function toLocalSpeechAssetRow(
   const revision = safePackId(asset.revision ?? asset.pack_revision)
   if (!packId || !revision) return null
   const copy = localSpeechTaskCopy(task)
+  const label = safeVoiceText(asset.display_name ?? asset.label, `${copy.noun} option ${index + 1}`)
+  const language = languageCodeFromText(asset.display_name ?? asset.label ?? packId)
   return {
     task,
     packId,
     revision,
-    label: safeVoiceText(asset.display_name ?? asset.label, `${copy.noun} option ${index + 1}`),
+    label,
+    ...(language ? { language } : {}),
     ready: asset.ready === true || asset.installed === true,
     copy,
   }
@@ -1589,6 +1857,154 @@ function localSpeechSelectionForRow(
 
 function localSpeechActionKey(row: Pick<LocalSpeechAssetRow, 'packId' | 'task' | 'voiceId'>): string {
   return `local:${row.task}:${row.packId}:${row.voiceId ?? ''}`
+}
+
+const SPEECH_LANGUAGE_ALIASES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ['en', ['english']],
+  ['zh', ['chinese', 'mandarin', 'cantonese']],
+  ['de', ['german']],
+  ['es', ['spanish']],
+  ['fr', ['french']],
+  ['pt', ['portuguese']],
+  ['ja', ['japanese']],
+  ['ko', ['korean']],
+  ['it', ['italian']],
+  ['nl', ['dutch']],
+  ['pl', ['polish']],
+  ['ru', ['russian']],
+  ['ar', ['arabic']],
+  ['hi', ['hindi']],
+]
+
+export function primaryLanguageFromConfig(config: unknown): string {
+  if (!config || typeof config !== 'object') return 'en'
+  const record = config as Record<string, unknown>
+  const nested = record.system
+  const source = nested && typeof nested === 'object' ? nested as Record<string, unknown> : record
+  const raw = source.primary_language
+  return languageCodeFromText(typeof raw === 'string' ? raw : '') ?? 'en'
+}
+
+function speechLanguageChoices(
+  rows: readonly LocalSpeechAssetRow[],
+  preferred: string | null,
+): SearchableChoiceOption[] {
+  const preferredCode = baseLanguageCode(preferred ?? DEFAULT_LOCAL_PRIMARY_LANGUAGE) ?? DEFAULT_LOCAL_PRIMARY_LANGUAGE
+  const codes = new Set<string>([preferredCode])
+  for (const row of rows) {
+    const code = baseLanguageCode(speechLanguageTagFromRow(row) ?? '')
+    if (code) codes.add(code)
+  }
+  return [...codes]
+    .sort((left, right) => {
+      if (left === preferredCode) return -1
+      if (right === preferredCode) return 1
+      const leftLabel = languageLabel(left) ?? left
+      const rightLabel = languageLabel(right) ?? right
+      return leftLabel.localeCompare(rightLabel)
+    })
+    .map((id) => ({ id, label: languageLabel(id) ?? id }))
+}
+
+function voiceLanguageChoices(
+  rows: readonly LocalSpeechAssetRow[],
+  preferredVoice: string | null,
+  preferredPrimary: string | null,
+): SearchableChoiceOption[] {
+  const preferred = preferredVoice === AUTO_LOCAL_VOICE_LANGUAGE
+    ? preferredPrimary
+    : preferredVoice
+  const languages = speechLanguageChoices(rows, preferred)
+  return [
+    { id: AUTO_LOCAL_VOICE_LANGUAGE, label: 'Automatic' },
+    ...languages.filter((option) => option.id !== AUTO_LOCAL_VOICE_LANGUAGE),
+  ]
+}
+
+function filterSpeechRowsForLanguage(
+  rows: readonly LocalSpeechAssetRow[],
+  language: string,
+  selected: LocalSpeechAssetRow | null,
+): LocalSpeechAssetRow[] {
+  const selectedKey = selected ? localSpeechActionKey(selected) : null
+  const matched = rows.filter((row) => (
+    rowMatchesSpeechLanguage(row, language)
+    || (selectedKey !== null && localSpeechActionKey(row) === selectedKey)
+  ))
+  return matched.length > 0 ? matched : [...rows]
+}
+
+function selectedSpeechRow(
+  rows: readonly LocalSpeechAssetRow[],
+  current: AuroraLocalSpeechSelectionProfile[AuroraLocalSpeechTask] | undefined,
+  referenceProfiles: readonly AuroraBrowserPocketReferenceProfileSummary[],
+): LocalSpeechAssetRow | null {
+  if (!current) return null
+  return rows.find((row) => {
+    if (row.selection) return localSpeechSelectionMatches(current, row.selection, referenceProfiles)
+    return row.packId === current.packId && row.revision === current.packRevision
+  }) ?? null
+}
+
+function displayedSpeechRow(
+  selected: LocalSpeechAssetRow | null,
+  rows: readonly LocalSpeechAssetRow[],
+): LocalSpeechAssetRow | null {
+  return selected ?? rows.find((row) => row.ready) ?? rows[0] ?? null
+}
+
+function speechRowChoiceOptions(
+  rows: readonly LocalSpeechAssetRow[],
+  actionPending: boolean,
+): SearchableChoiceOption[] {
+  return rows.map((row) => ({
+    id: localSpeechActionKey(row),
+    label: row.label,
+    detail: row.copy.detail,
+    disabled: actionPending || (!row.ready && !row.selection),
+  }))
+}
+
+function rowMatchesSpeechLanguage(row: LocalSpeechAssetRow, language: string): boolean {
+  const wanted = baseLanguageCode(language)
+  if (!wanted) return false
+  const rowTag = speechLanguageTagFromRow(row)
+  if (!rowTag) return true
+  return baseLanguageCode(rowTag) === wanted
+}
+
+function speechLanguageTagFromRow(row: LocalSpeechAssetRow): string | null {
+  const explicit = typeof row.language === 'string' ? normalizeLanguageTag(row.language.replaceAll('_', '-')) : null
+  if (explicit) return explicit
+  return languageCodeFromText(row.language)
+    ?? languageCodeFromText(row.packId)
+    ?? languageCodeFromText(row.label)
+}
+
+function baseLanguageCode(value: string): string | null {
+  const compact = value.trim()
+  if (!compact) return null
+  const tagged = normalizeLanguageTag(compact.replaceAll('_', '-'))
+  if (tagged) return tagged.split('-')[0]!.toLowerCase()
+  return languageCodeFromText(compact)
+}
+
+function languageCodeFromText(value: string | undefined): string | null {
+  if (!value) return null
+  const compact = value.trim()
+  if (!compact) return null
+  const tagged = normalizeLanguageTag(compact.replaceAll('_', '-'))
+  if (tagged) return tagged.split('-')[0]!.toLowerCase()
+  const first = compact.split(/[\s,/]/u)[0]
+  const firstTag = first ? normalizeLanguageTag(first.replaceAll('_', '-')) : null
+  if (firstTag) return firstTag.split('-')[0]!.toLowerCase()
+  const lower = compact.toLowerCase()
+  for (const [code, names] of SPEECH_LANGUAGE_ALIASES) {
+    if (names.some((name) => lower === name || lower.includes(name))) return code
+  }
+  const suffix = lower.match(/(?:^|[._:-])([a-z]{2})(?:-[a-z0-9]+)?$/u)
+  if (suffix?.[1] && /^[a-z]{2}$/u.test(suffix[1])) return suffix[1]
+  return null
 }
 
 function mergeCatalogProfiles(

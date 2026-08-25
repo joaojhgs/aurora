@@ -28,6 +28,7 @@ import {
   BrowserPersistentPeerCredentialStore,
   activeRuntimeProfile,
   activeThinConnectionProfile,
+  auroraBrowserVoiceAssetFetchUrl,
   createBrowserWebThinRuntime,
   emptyThinProfileDocument,
   emptyRuntimeProfileDocument,
@@ -36,6 +37,7 @@ import {
   getAuroraSurfaceProfile,
   isRuntimeProfileConfigured,
   isThinConnectionProfileConfigured,
+  mergeLocalNodeSpeechPreferences,
   openActiveBrowserSpeechPacks,
   runtimeProfileDocumentToThinDocument,
   runtimeProfileToThinConnectionProfile,
@@ -52,6 +54,7 @@ import {
   type AuroraBrowserSpeechPackTrustSelection,
   type AuroraBrowserSpeechPacksRuntimeStatus,
   type AuroraLocalSpeechCatalogPort,
+  type AuroraLocalSpeechLanguagePrefs,
   type AuroraLocalSpeechSelectionProfile,
   type AuroraRuntimeProfileDocumentV2,
   type AuroraRuntimeProfileV2,
@@ -91,6 +94,17 @@ type BrowserRuntimeCache = {
 
 const ASSISTANT_COMPLETION_ROUTE = '/api/assistant/completion'
 const BROWSER_SPEECH_TRUST_STORAGE_KEY = 'aurora.browserSpeechTrust.v1'
+
+export async function fetchAuroraBrowserVoiceAssetBytes(url: string, signal?: AbortSignal): Promise<Uint8Array> {
+  const target = auroraBrowserVoiceAssetFetchUrl(url)
+  const response = await fetch(target, {
+    cache: 'no-store',
+    redirect: 'follow',
+    ...(signal === undefined ? {} : { signal }),
+  })
+  if (!response.ok) throw new Error('voice_download_unavailable')
+  return new Uint8Array(await response.arrayBuffer())
+}
 
 export interface AuroraBrowserLocalDataContext {
   readonly session: LocalDataSession
@@ -719,6 +733,7 @@ export async function saveAuroraBrowserRuntimeProfile(
 
 export async function saveAuroraBrowserLocalSpeechSelection(
   selection: AuroraLocalSpeechSelectionProfile,
+  languages?: AuroraLocalSpeechLanguagePrefs,
 ): Promise<void> {
   const current = auroraBrowserRuntimeProfile()
   if (!current) throw new Error('Browser runtime profile is unavailable')
@@ -728,12 +743,8 @@ export async function saveAuroraBrowserLocalSpeechSelection(
   await saveAuroraBrowserRuntimeProfile({
     ...current,
     localNode: {
-      ...current.localNode,
+      ...mergeLocalNodeSpeechPreferences(current.localNode, selection, languages),
       enabledCapabilityPacks,
-      localSpeechSelection: {
-        ...current.localNode.localSpeechSelection,
-        ...selection,
-      },
     },
   })
   dispatchBrowserVoicePacksChanged()
@@ -902,6 +913,7 @@ function createBrowserLocalSpeechCatalogPort(): AuroraLocalSpeechCatalogPort {
   }
   return createAuroraBrowserVoiceCatalogPort({
     available: typeof window !== 'undefined',
+    fetchBytes: fetchAuroraBrowserVoiceAssetBytes,
     async afterSelect(receipt, request) {
       await persistBrowserVoiceCatalogSelection(receipt, request)
     },

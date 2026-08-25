@@ -196,12 +196,31 @@ export interface AuroraBrowserSpeechPacksOptions {
 
 export const AURORA_BROWSER_SPEECH_PACK_TASKS: readonly AuroraBrowserSpeechPackTask[] = Object.freeze(['vad', 'kws', 'stt', 'tts'])
 
+export const AURORA_BROWSER_VOICE_ASSET_PROXY_PREFIX = '/aurora-voice-assets'
+const AURORA_BROWSER_VOICE_ASSET_GITHUB_PREFIX = '/k2-fsa/sherpa-onnx/releases/download/'
+
 export interface AuroraBrowserVoiceCatalogPortOptions {
   readonly available?: boolean | undefined
   readonly globalObject?: Parameters<typeof AuroraBrowserModelStoreHost.create>[0]
   readonly trustedAssetOrigins?: readonly string[] | undefined
+  readonly fetchBytes?: ((url: string, signal?: AbortSignal) => Promise<Uint8Array>) | undefined
   readonly afterSelect?: ((receipt: AuroraBrowserSpeechPackInstallReceipt, request: AuroraBrowserSpeechPackInstallRequest) => Promise<void> | void) | undefined
   readonly afterReferenceProfileDeleted?: ((profileId: string) => Promise<void> | void) | undefined
+}
+
+export function auroraBrowserVoiceAssetFetchUrl(assetUrl: string, origin?: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(assetUrl)
+  } catch {
+    return assetUrl
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'github.com') return assetUrl
+  if (!parsed.pathname.startsWith(AURORA_BROWSER_VOICE_ASSET_GITHUB_PREFIX)) return assetUrl
+  if (parsed.pathname.includes('..')) return assetUrl
+  const base = origin ?? (typeof window === 'undefined' ? '' : window.location.origin)
+  if (!base) return assetUrl
+  return `${base}${AURORA_BROWSER_VOICE_ASSET_PROXY_PREFIX}${parsed.pathname}${parsed.search}`
 }
 
 export function createAuroraBrowserVoiceCatalogPort(
@@ -235,6 +254,7 @@ export function createAuroraBrowserVoiceCatalogPort(
         scope: { task: entry.task },
         allowEmbeddedBrowserVoiceCatalogTrust: true,
         trustedAssetOrigins: options.trustedAssetOrigins ?? ['https://github.com'],
+        ...(options.fetchBytes ? { fetchBytes: options.fetchBytes } : {}),
         ...(request.signal ? { signal: request.signal } : {}),
       })
       request.onProgress?.({ state: 'saving' })

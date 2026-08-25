@@ -22,6 +22,7 @@ vi.mock('@aurora/voice-web/browser', () => ({
 }))
 
 import {
+  auroraBrowserVoiceAssetFetchUrl,
   createAuroraBrowserVoiceCatalogPort,
   decodeAuroraPocketReferenceWav,
   deleteAuroraBrowserPocketReferenceProfile,
@@ -509,6 +510,54 @@ describe('createAuroraBrowserVoiceCatalogPort', () => {
     })
     expect(progress).toEqual(['queued', 'downloading', 'saving', 'ready'])
     expect(afterSelect).toHaveBeenCalledWith(receipt, expect.objectContaining({ selection }))
+  })
+
+  it('passes a custom download helper through to pack install', async () => {
+    const host = fakeModelStoreHost()
+    const entry = catalogEntry('standard:piper:en-us-test')
+    const fetchBytes = vi.fn(async () => new Uint8Array([1, 2, 3]))
+    voiceWeb.openExistingHost.mockResolvedValueOnce(null)
+    voiceWeb.createHost.mockResolvedValueOnce(host)
+    voiceWeb.listCatalog.mockReturnValueOnce([entry])
+    voiceWeb.findCatalogEntry.mockReturnValueOnce(entry)
+    voiceWeb.installPack.mockResolvedValueOnce({
+      identity: {
+        packId: 'standard:piper:en-us-test',
+        packVersion: '1.0.0',
+        variantId: 'web-wasm32',
+        scope: { task: 'tts', slotId: 'default' },
+      },
+      files: [],
+      manifestSha256: RELEASE_MANIFEST_SHA256,
+      verificationMode: 'embedded-catalog',
+      verificationKeyId: 'aurora-browser-voice-catalog',
+    })
+    const port = createAuroraBrowserVoiceCatalogPort({ fetchBytes })
+    const catalog = await port.listCatalog()
+    const selection = catalog.items[0]
+    if (!selection) throw new Error('expected catalog item')
+    await port.select({ selection })
+    expect(voiceWeb.installPack).toHaveBeenCalledWith(expect.objectContaining({ fetchBytes }))
+  })
+})
+
+describe('auroraBrowserVoiceAssetFetchUrl', () => {
+  it('rewrites allowlisted GitHub release URLs onto the hosted same-origin proxy', () => {
+    expect(auroraBrowserVoiceAssetFetchUrl(
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2',
+      'https://100.64.0.3:3410',
+    )).toBe('https://100.64.0.3:3410/aurora-voice-assets/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2')
+  })
+
+  it('leaves non-GitHub or off-tree URLs unchanged', () => {
+    expect(auroraBrowserVoiceAssetFetchUrl(
+      'https://example.com/k2-fsa/sherpa-onnx/releases/download/kws-models/pack.tar.bz2',
+      'https://100.64.0.3:3410',
+    )).toBe('https://example.com/k2-fsa/sherpa-onnx/releases/download/kws-models/pack.tar.bz2')
+    expect(auroraBrowserVoiceAssetFetchUrl(
+      'https://github.com/evil/releases/download/kws-models/pack.tar.bz2',
+      'https://100.64.0.3:3410',
+    )).toBe('https://github.com/evil/releases/download/kws-models/pack.tar.bz2')
   })
 })
 

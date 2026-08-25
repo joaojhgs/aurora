@@ -5073,6 +5073,7 @@ function isAllowedAdapterFile(repoRoot: string, file: string): boolean {
   const rel = relative(repoRoot, file)
   return [
     'apps/aurora-web/app/aurora-client.ts',
+    'apps/aurora-web/app/aurora-voice-assets/[...path]/route.ts',
     'apps/aurora-tauri/src/aurora-client.ts',
     'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
     'apps/aurora-tauri/src/mesh-session-link.ts',

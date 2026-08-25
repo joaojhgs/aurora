@@ -414,6 +414,12 @@ export function surfaceOwnsLocalSettings(profile: AuroraSurfaceProfile): boolean
   return profile.physicalKind === 'hosted-web' && profile.ownsLocalNodeState
 }
 
+/** Hands-free wake is owned by native/mobile adapters, not focused web or thin browser capture. */
+export function surfaceCanConfigureBackgroundWake(profile: AuroraSurfaceProfile): boolean {
+  const owner = profile.voiceCapture.wakewordOwner
+  return owner === 'native-desktop' || owner === 'mobile-native' || owner === 'coordinator-daemon'
+}
+
 export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: AuroraSurfaceFeature): boolean {
   switch (feature) {
     case 'desktopCommands':
