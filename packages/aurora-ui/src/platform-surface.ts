@@ -416,6 +416,7 @@ export function surfaceOwnsLocalSettings(profile: AuroraSurfaceProfile): boolean
 
 /** Hands-free wake is owned by native/mobile adapters, not focused web or thin browser capture. */
 export function surfaceCanConfigureBackgroundWake(profile: AuroraSurfaceProfile): boolean {
+  if (profile.isAndroid && profile.supportsMobileNative) return true
   const owner = profile.voiceCapture.wakewordOwner
   return owner === 'native-desktop' || owner === 'mobile-native' || owner === 'coordinator-daemon'
 }
@@ -429,6 +430,7 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
     case 'localSettings':
       return surfaceOwnsLocalSettings(profile)
     case 'localVoice':
+      if (profile.isAndroid && profile.supportsMobileNative) return true
       return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
         || profile.voiceCapture.wakewordOwner !== 'unavailable'
     case 'sidecar':
@@ -543,7 +545,7 @@ export function getAuroraVoiceCapturePolicy(
           canUseWebViewVisualizer: false,
           avoidCoordinatorPushToTalk: true,
           usesBrowserVoiceRuntime: false,
-          detail: 'Voice capture is unavailable on this device right now.'
+          detail: 'Finish voice setup on this device before using push-to-talk.'
         }
       }
       return {

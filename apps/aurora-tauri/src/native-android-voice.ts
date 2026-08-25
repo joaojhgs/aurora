@@ -55,6 +55,8 @@ function parseStatus(
     ? captureError
     : typeof nested.reason === "string"
       ? nested.reason
+      : typeof nested.nativeRouteReason === "string" && nested.nativeRouteReason.trim()
+        ? nested.nativeRouteReason
       : null;
   const faulted = captureError !== null
     || nested.runtimePhase === "faulted"

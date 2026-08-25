@@ -145,6 +145,7 @@ enum AndroidTtsProvider {
 enum AndroidAssistantTransport {
     Gateway(NativeGatewayTransport),
     Mesh(NativeMeshAssistantSpeechTransport),
+    Unavailable,
 }
 
 #[async_trait(?Send)]
@@ -157,6 +158,9 @@ impl SpeechTransport for AndroidAssistantTransport {
         match self {
             Self::Gateway(transport) => transport.assistant_turn(request, cancellation).await,
             Self::Mesh(transport) => transport.assistant_turn(request, cancellation).await,
+            Self::Unavailable => Err(VoiceCoreError::TransportFault {
+                code: "assistant-unavailable".to_owned(),
+            }),
         }
     }
 
@@ -164,6 +168,7 @@ impl SpeechTransport for AndroidAssistantTransport {
         match self {
             Self::Gateway(transport) => transport.cancel_session(generation).await,
             Self::Mesh(transport) => transport.cancel_session(generation).await,
+            Self::Unavailable => Ok(()),
         }
     }
 }
@@ -220,7 +225,7 @@ impl TtsSynthesisPort for AndroidTtsProvider {
     allow(dead_code)
 )]
 pub struct AndroidVoiceSessionConfig {
-    gateway: Url,
+    gateway: Option<Url>,
     auth: GatewayAuth,
     remote_audio_consent: bool,
     assistant_route_mode: AndroidAssistantRouteMode,
@@ -293,7 +298,7 @@ impl AndroidTtsReferenceProfile {
 impl AndroidVoiceSessionConfig {
     pub fn new(gateway: Url, auth: GatewayAuth, remote_audio_consent: bool) -> Self {
         Self {
-            gateway,
+            gateway: Some(gateway),
             auth,
             remote_audio_consent,
             assistant_route_mode: AndroidAssistantRouteMode::HttpOnly,
@@ -316,6 +321,20 @@ impl AndroidVoiceSessionConfig {
         mode: AndroidAssistantRouteMode,
         preferred_stable_peer_id: Option<String>,
     ) -> Result<Self, AndroidVoiceSessionCommandError> {
+        if !matches!(
+            mode,
+            AndroidAssistantRouteMode::WebRtcOnly | AndroidAssistantRouteMode::LocalOnly
+        ) && self.gateway.is_none()
+        {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+        if matches!(mode, AndroidAssistantRouteMode::WebRtcOnly)
+            && preferred_stable_peer_id
+                .as_deref()
+                .is_none_or(|peer_id| peer_id.trim().is_empty())
+        {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
         if let Some(peer_id) = preferred_stable_peer_id.as_deref() {
             NativeMeshAssistantRoute::new(Some(peer_id.to_owned()))
                 .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -328,6 +347,35 @@ impl AndroidVoiceSessionConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn with_local_pack_selection(
         gateway: Url,
+        auth: GatewayAuth,
+        remote_audio_consent: bool,
+        pack_store_root: impl Into<PathBuf>,
+        stt_model_id: impl Into<String>,
+        tts_voice_id: impl Into<String>,
+        vad_model_id: Option<String>,
+        kws_model_id: Option<String>,
+        wake_phrase_id: Option<String>,
+        wake_phrase_text: Option<String>,
+        wake_phrase_revision: Option<String>,
+    ) -> Self {
+        Self::with_local_pack_selection_for_route(
+            Some(gateway),
+            auth,
+            remote_audio_consent,
+            pack_store_root,
+            stt_model_id,
+            tts_voice_id,
+            vad_model_id,
+            kws_model_id,
+            wake_phrase_id,
+            wake_phrase_text,
+            wake_phrase_revision,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_local_pack_selection_for_route(
+        gateway: Option<Url>,
         auth: GatewayAuth,
         remote_audio_consent: bool,
         pack_store_root: impl Into<PathBuf>,
@@ -374,6 +422,8 @@ impl AndroidVoiceSessionConfig {
 pub enum AndroidAssistantRouteMode {
     HttpOnly,
     WebRtcPreferred,
+    WebRtcOnly,
+    LocalOnly,
 }
 
 impl AndroidAssistantRouteMode {
@@ -381,6 +431,8 @@ impl AndroidAssistantRouteMode {
         match value {
             "" | "http-only" => Ok(Self::HttpOnly),
             "webrtc-preferred" => Ok(Self::WebRtcPreferred),
+            "webrtc-only" => Ok(Self::WebRtcOnly),
+            "local-only" => Ok(Self::LocalOnly),
             _ => Err(AndroidVoiceSessionCommandError::Unavailable),
         }
     }
@@ -766,7 +818,11 @@ fn build_gateway_runtime(
     {
         return Err(AndroidVoiceSessionCommandError::Unavailable);
     }
-    let policy = if config.gateway.scheme() == "http" && is_loopback(&config.gateway) {
+    let gateway = config
+        .gateway
+        .as_ref()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let policy = if gateway.scheme() == "http" && is_loopback(gateway) {
         MicrophoneAudioPolicy::LoopbackOnly
     } else {
         if !config.remote_audio_consent {
@@ -796,10 +852,10 @@ fn build_gateway_runtime(
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let limits = transport_limits(policy);
     let transport_for_stt =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+        NativeGatewayTransport::new(gateway.clone(), config.auth.clone(), limits)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let transport_for_tts =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+        NativeGatewayTransport::new(gateway.clone(), config.auth.clone(), limits)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let transport_for_assistant = build_assistant_transport(config, limits)?;
     let stt = NativeGatewayFiniteStt::new(
@@ -836,17 +892,24 @@ fn build_assistant_transport(
 ) -> Result<AndroidAssistantTransport, AndroidVoiceSessionCommandError> {
     match config.assistant_route_mode {
         AndroidAssistantRouteMode::HttpOnly => {
-            NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
+            let gateway = config
+                .gateway
+                .clone()
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+            NativeGatewayTransport::new(gateway, config.auth.clone(), limits)
                 .map(AndroidAssistantTransport::Gateway)
                 .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
         }
-        AndroidAssistantRouteMode::WebRtcPreferred => NativeMeshAssistantSpeechTransport::new(
-            NativeMeshAssistantRoute::new(config.preferred_stable_peer_id.clone())
-                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
-            limits,
-        )
-        .map(AndroidAssistantTransport::Mesh)
-        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable),
+        AndroidAssistantRouteMode::WebRtcPreferred | AndroidAssistantRouteMode::WebRtcOnly => {
+            NativeMeshAssistantSpeechTransport::new(
+                NativeMeshAssistantRoute::new(config.preferred_stable_peer_id.clone())
+                    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+                limits,
+            )
+            .map(AndroidAssistantTransport::Mesh)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+        }
+        AndroidAssistantRouteMode::LocalOnly => Ok(AndroidAssistantTransport::Unavailable),
     }
 }
 
@@ -854,7 +917,14 @@ fn build_assistant_transport(
 fn microphone_policy(
     config: &AndroidVoiceSessionConfig,
 ) -> Result<MicrophoneAudioPolicy, AndroidVoiceSessionCommandError> {
-    if is_loopback(&config.gateway) {
+    if matches!(
+        config.assistant_route_mode,
+        AndroidAssistantRouteMode::WebRtcOnly | AndroidAssistantRouteMode::LocalOnly
+    ) {
+        // The local providers consume microphone PCM on-device. The mesh
+        // assistant receives only the resulting text request.
+        Ok(MicrophoneAudioPolicy::LoopbackOnly)
+    } else if config.gateway.as_ref().is_some_and(is_loopback) {
         Ok(MicrophoneAudioPolicy::LoopbackOnly)
     } else if config.remote_audio_consent {
         Ok(MicrophoneAudioPolicy::ExplicitRemoteConsent)
@@ -1311,6 +1381,85 @@ mod tests {
             CaptureStartReason::PushToTalk
         );
         assert!(!background_eligible(AndroidVoiceStartMode::PushToTalk));
+    }
+
+    #[test]
+    fn webrtc_only_route_requires_a_peer_and_accepts_no_gateway() {
+        assert_eq!(
+            AndroidAssistantRouteMode::parse("webrtc-only").expect("mode"),
+            AndroidAssistantRouteMode::WebRtcOnly,
+        );
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
+            None,
+            GatewayAuth::None,
+            false,
+            "/tmp/aurora-packs",
+            "stt-model",
+            "tts-voice",
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(config
+            .clone()
+            .with_assistant_route(AndroidAssistantRouteMode::WebRtcOnly, None)
+            .is_err());
+        let configured = config
+            .with_assistant_route(
+                AndroidAssistantRouteMode::WebRtcOnly,
+                Some("home-peer".to_owned()),
+            )
+            .expect("native mesh route");
+        assert!(configured.gateway.is_none());
+    }
+
+    #[test]
+    fn local_voice_accepts_no_assistant_route() {
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
+            None,
+            GatewayAuth::None,
+            false,
+            "/tmp/aurora-packs",
+            "stt-model",
+            "tts-voice",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_assistant_route(AndroidAssistantRouteMode::LocalOnly, None)
+        .expect("local voice config");
+        assert!(config.gateway.is_none());
+    }
+
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    #[test]
+    fn webrtc_only_local_voice_never_requires_remote_microphone_consent() {
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
+            None,
+            GatewayAuth::None,
+            false,
+            "/tmp/aurora-packs",
+            "stt-model",
+            "tts-voice",
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_assistant_route(
+            AndroidAssistantRouteMode::WebRtcOnly,
+            Some("home-peer".to_owned()),
+        )
+        .expect("native mesh route");
+        assert_eq!(
+            microphone_policy(&config).expect("local policy"),
+            MicrophoneAudioPolicy::LoopbackOnly,
+        );
     }
 
     #[test]

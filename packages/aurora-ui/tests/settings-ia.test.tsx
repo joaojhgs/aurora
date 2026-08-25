@@ -268,6 +268,21 @@ describe('settings surface filtering', () => {
     })
   }
 
+  it('keeps Android voice setup visible while the native session still needs speech assets', () => {
+    const profile = getAuroraSurfaceProfile({
+      runtimeMode: 'mobile-native',
+      transportKind: 'native-mobile',
+      nativePlatform: 'android',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      nativeVoicePresent: true,
+      nativeVoiceAvailable: false,
+    })
+
+    expect(profile.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+    expect(shouldShowForSurface(profile, 'localVoice')).toBe(true)
+  })
+
   it('shows Overlay & shortcuts on desktop Tauri and hides it on web and mobile', async () => {
     const desktop = await renderSettings(snapshotFor(nativeCapabilityManifestFixture, 'tauri-local'), {})
     expect(desktop.container.textContent).toContain('Overlay & shortcuts')

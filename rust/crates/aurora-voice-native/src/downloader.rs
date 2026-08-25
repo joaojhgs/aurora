@@ -1,5 +1,6 @@
 //! Bounded, resumable native downloads for verified model-pack assets.
 
+#[cfg(not(target_os = "android"))]
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::time::Duration;
@@ -351,29 +352,45 @@ async fn client_for_pinned_url(
     allow_loopback_http: bool,
 ) -> Result<reqwest::Client, DownloadError> {
     let host = source.host_str().ok_or(DownloadError::UnsafeSource)?;
-    let port = source
-        .port_or_known_default()
-        .ok_or(DownloadError::UnsafeSource)?;
-    let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
-    reqwest::Client::builder()
-        // A proxy would bypass the DNS-pinned destination policy below. It also
-        // makes client construction depend on untrusted process proxy variables,
-        // which is unsafe on the bounded JNI worker stack used by Android.
-        .no_proxy()
-        .redirect(reqwest::redirect::Policy::none())
-        .resolve_to_addrs(host, &pinned)
-        .build()
-        .map_err(|_| DownloadError::Request)
+    #[cfg(target_os = "android")]
+    {
+        let _ = allow_loopback_http;
+        if !android_model_download_host_allowed(host) {
+            return Err(DownloadError::UnsafeSource);
+        }
+        reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| DownloadError::Request)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let port = source
+            .port_or_known_default()
+            .ok_or(DownloadError::UnsafeSource)?;
+        let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
+        reqwest::Client::builder()
+            // A proxy would bypass the DNS-pinned destination policy below and make
+            // client construction depend on untrusted process proxy variables.
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve_to_addrs(host, &pinned)
+            .build()
+            .map_err(|_| DownloadError::Request)
+    }
 }
 
+#[cfg(not(target_os = "android"))]
 async fn resolve_public_addrs(
     host: &str,
     port: u16,
     allow_loopback_http: bool,
 ) -> Result<Vec<SocketAddr>, DownloadError> {
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, port))
+    let resolved = tokio::net::lookup_host((host, port))
         .await
-        .map_err(|_| DownloadError::UnsafeSource)?
+        .map_err(|_| DownloadError::UnsafeSource)?;
+    let addrs: Vec<SocketAddr> = resolved
         .filter(|addr| ip_is_permitted(addr.ip(), allow_loopback_http))
         .collect();
     if addrs.is_empty() {
@@ -383,6 +400,15 @@ async fn resolve_public_addrs(
     }
 }
 
+#[cfg(any(target_os = "android", test))]
+fn android_model_download_host_allowed(host: &str) -> bool {
+    matches!(
+        host.to_ascii_lowercase().as_str(),
+        "github.com" | "release-assets.githubusercontent.com" | "objects.githubusercontent.com"
+    )
+}
+
+#[cfg(not(target_os = "android"))]
 fn ip_is_permitted(ip: IpAddr, allow_loopback_http: bool) -> bool {
     match ip {
         IpAddr::V4(ip) => {
@@ -930,6 +956,27 @@ mod tests {
             1,
             false
         ));
+    }
+
+    #[test]
+    fn android_model_download_hosts_are_closed_to_the_github_release_path() {
+        for allowed in [
+            "github.com",
+            "release-assets.githubusercontent.com",
+            "objects.githubusercontent.com",
+            "GITHUB.COM",
+        ] {
+            assert!(android_model_download_host_allowed(allowed), "{allowed}");
+        }
+        for denied in [
+            "raw.githubusercontent.com",
+            "github.example",
+            "github.com.example",
+            "localhost",
+            "127.0.0.1",
+        ] {
+            assert!(!android_model_download_host_allowed(denied), "{denied}");
+        }
     }
 
     #[test]

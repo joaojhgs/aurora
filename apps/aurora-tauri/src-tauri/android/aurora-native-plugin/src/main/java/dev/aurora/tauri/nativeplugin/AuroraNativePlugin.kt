@@ -184,6 +184,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         if (!microphonePermissionRequestInFlight) {
             denyPendingMicRequests()
         }
+        requestFocusedVoiceReleaseOnBackground()
         emitLifecycle("pause")
     }
 
@@ -191,6 +192,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         foreground = false
         focused = false
         denyPendingMicRequests()
+        requestFocusedVoiceReleaseOnBackground()
         emitLifecycle("stop")
     }
 
@@ -584,12 +586,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun voiceForegroundServiceStatus(invoke: Invoke) {
-        invoke.resolve(voiceForegroundServiceStatusObject())
+        invoke.resolve(voiceForegroundServiceStatusWithRouteSync())
     }
 
     @Command
     fun startVoiceForegroundService(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
+        syncNativeVoiceRoute()
         AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
         val status = voiceForegroundServiceStatusObject()
         if (
@@ -630,7 +633,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
         val ret = JSObject()
         ret.put("started", true)
-        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("status", voiceForegroundServiceStatusWithRouteSync())
         ret.put("reason", "foreground_service_start_requested")
         invoke.resolve(ret)
     }
@@ -997,8 +1000,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
         val ret = JSObject()
         ret.put("stopped", stopped)
-        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("status", voiceForegroundServiceStatusWithRouteSync())
         ret.put("reason", if (stopped) "foreground_service_stop_requested" else "foreground_service_not_running")
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun releaseFocusedVoiceOnBackground(invoke: Invoke) {
+        val released = requestFocusedVoiceReleaseOnBackground()
+        val ret = JSObject()
+        ret.put("released", released)
+        ret.put("backgroundSessionActive", AuroraRuntimeForegroundService.backgroundSessionActive)
+        ret.put("secretsRedacted", true)
         invoke.resolve(ret)
     }
 
@@ -1015,7 +1028,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
         val ret = JSObject()
         ret.put("finished", delivered)
-        ret.put("status", voiceForegroundServiceStatusObject())
+        ret.put("status", voiceForegroundServiceStatusWithRouteSync())
         ret.put("reason", if (delivered) "foreground_service_finish_requested" else "foreground_service_not_running")
         invoke.resolve(ret)
     }
@@ -1689,11 +1702,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val installedCount = catalog.count { it.packId in installedPackIds }
         val activeCacheReady = activePack != null &&
             isRecordedPackReadyForRuntime(activePack, installedPackIds, referenceSelectionReady)
-        val routeConfigured = AuroraVoiceNativeConfigStore.isConfigured(activity)
+        val routeConfigured = AuroraVoiceNativeConfigStore.hasAssistantRoute(activity)
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("providerId", "native:mobile-local-light")
-        ret.put("available", activeCacheReady && routeConfigured)
+        ret.put("available", activeCacheReady)
         ret.put("requestable", catalogCount > 0)
         ret.put("modelRuntimeProvider", true)
         ret.put("backendModelCatalogRequired", catalogCount == 0)
@@ -1706,7 +1719,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("modelId", if (activePackId == null) JSONObject.NULL else activePackId)
         ret.put("modelPresent", activeCacheReady)
         ret.put("permissionGranted", true)
-        ret.put("state", if (activeCacheReady && routeConfigured) "ready" else "degraded")
+        ret.put("state", if (activeCacheReady) "ready" else "degraded")
         ret.put("fallbackAvailable", !activeCacheReady)
         ret.put("fallbackProviderId", "local:Orchestrator:llama-cpp")
         ret.put(
@@ -1758,8 +1771,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         installedPackIds: Set<String>,
         referenceSelectionReady: Boolean,
     ): Boolean =
-        AuroraVoiceNativeConfigStore.isConfigured(activity) &&
-            isActivePackReady(AuroraSpeechPackTask.STT, installedPackIds, referenceSelectionReady) &&
+        isActivePackReady(AuroraSpeechPackTask.STT, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.TTS, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.VAD, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.KWS, installedPackIds, referenceSelectionReady) &&
@@ -2629,10 +2641,11 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE))
-        val nativeRouteReady = AuroraVoiceNativeConfigStore.isConfigured(activity)
+        val nativeConfig = AuroraVoiceNativeConfigStore.load(activity)
+        val nativeRouteReady = nativeConfig != null
         val installedPackIds = recordedInstalledPackIds()
         val referenceSelectionReady = ttsReferenceSelection() != null
-        val localDuplexReady = nativeRouteReady &&
+        val localDuplexReady =
             isActivePackReady(AuroraSpeechPackTask.STT, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.TTS, installedPackIds, referenceSelectionReady)
         val backgroundRuntimeReady = localDuplexReady &&
@@ -2640,9 +2653,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             isActivePackReady(AuroraSpeechPackTask.KWS, installedPackIds, referenceSelectionReady) &&
             wakePhraseSelection() != null
         val notificationReady = canPostNotifications()
+        val focusedRuntimeReady = localDuplexReady
         // A denied notification permission degrades the one Aurora shade entry;
         // it never blocks starting, and it never ends a running session.
-        val startable = microphoneGranted && foregroundServiceReady && manifestReady && nativeRouteReady
+        val startable = microphoneGranted && foregroundServiceReady && manifestReady && focusedRuntimeReady
         val backgroundStartable = microphoneGranted && foregroundServiceReady && manifestReady && backgroundRuntimeReady
         val ret = JSObject()
         ret.put("platform", "android")
@@ -2685,12 +2699,30 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("backgroundRuntimeReady", backgroundRuntimeReady)
         ret.put("backgroundStartable", backgroundStartable)
         ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationReady, nativeRouteReady))
-        ret.put("reason", voiceForegroundReason(startable, manifestReady, microphoneGranted, notificationReady, nativeRouteReady))
+        ret.put(
+            "reason",
+            voiceForegroundReason(
+                startable,
+                manifestReady,
+                microphoneGranted,
+                notificationReady,
+                nativeRouteReady,
+                !focusedRuntimeReady,
+            ),
+        )
         ret.put("privacyClass", "raw-audio")
         ret.put("backendAudioEvidenceRequired", !capture.captureActive)
         ret.put("evidenceSource", "android-permission-foreground-service")
         ret.put("secretsRedacted", true)
         return ret
+    }
+
+    private fun voiceForegroundServiceStatusWithRouteSync(): JSObject {
+        val voiceRoute = syncNativeVoiceRoute()
+        return voiceForegroundServiceStatusObject().apply {
+            put("voiceRoute", voiceRoute)
+            put("nativeRouteReason", voiceRoute.optString("reason", "voice_route_unknown"))
+        }
     }
 
     private fun voiceForegroundState(
@@ -2714,11 +2746,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         microphoneGranted: Boolean,
         notificationReady: Boolean,
         nativeSessionReady: Boolean,
+        localSpeechSetupRequired: Boolean,
     ): String {
         if (!manifestReady) return "foreground_service_manifest_missing"
         if (!microphoneGranted) return "microphone_permission_missing"
         if (!notificationReady) return "notification_delivery_unavailable"
         if (!nativeSessionReady) return "native_voice_runtime_missing"
+        if (localSpeechSetupRequired) return "local_speech_setup_required"
         if (startable) return "foreground_service_startable"
         return "foreground_service_degraded"
     }
@@ -3062,7 +3096,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return voiceRouteStatusObject("voice_route_profile_missing")
         }
 
-        val uri = Uri.parse(candidate.gateway)
+        if (candidate.mode == "webrtc-only") {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_configured")
+        }
+
+        val gateway = candidate.gateway ?: run {
+            AuroraVoiceNativeConfigStore.clearRoute(activity)
+            return voiceRouteStatusObject("voice_route_profile_missing")
+        }
+        val uri = Uri.parse(gateway)
         val loopback = uri.host == "127.0.0.1" || uri.host == "localhost" || uri.host == "::1"
         val bearer = candidate.peerId
             ?.let(::loadUnexpiredThinPeerCredential)
@@ -3074,7 +3117,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         return try {
-            AuroraVoiceNativeConfigStore.setRoute(activity, candidate.gateway, bearer)
+            AuroraVoiceNativeConfigStore.setRoute(activity, gateway, bearer)
             voiceRouteStatusObject("voice_route_configured")
         } catch (_: Exception) {
             AuroraVoiceNativeConfigStore.clearRoute(activity)
@@ -3092,20 +3135,21 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val home = profile.optJSONObject("homeConnection")
         val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
             ?: profile.optString("mode").takeIf { it.isNotBlank() }
-        if (mode == null || mode !in setOf("http-only", "webrtc-preferred")) return null
+        if (mode == null || mode !in setOf("http-only", "webrtc-preferred", "webrtc-only")) return null
         val gateway = home?.optString("gatewayUrl")?.trim()?.takeIf { it.isNotBlank() }
             ?: profile.optString("gatewayUrl").trim().takeIf { it.isNotBlank() }
-            ?: return null
         val homeWebRtc = home?.optJSONObject("webrtcProfile")
         val profileWebRtc = profile.optJSONObject("webrtcProfile")
         val peerId = home?.optString("homePeerId")?.takeIf { it.isNotBlank() }
             ?: homeWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
             ?: profileWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
-        return VoiceRouteCandidate(gateway, peerId)
+        if (mode == "webrtc-only" && peerId == null) return null
+        if (mode != "webrtc-only" && gateway == null) return null
+        return VoiceRouteCandidate(mode, gateway, peerId)
     }
 
     private fun voiceRouteStatusObject(reason: String): JSObject {
-        val configured = AuroraVoiceNativeConfigStore.load(activity) != null
+        val configured = AuroraVoiceNativeConfigStore.hasAssistantRoute(activity)
         val ret = JSObject()
         ret.put("platform", "android")
         ret.put("configured", configured)
@@ -3162,6 +3206,28 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun emitLifecycle(phase: String) {
         trigger("aurora://android-lifecycle", lifecycleStatusObject(phase))
+    }
+
+    private fun requestFocusedVoiceReleaseOnBackground(): Boolean {
+        if (AuroraRuntimeForegroundService.backgroundSessionActive ||
+            !AuroraRuntimeForegroundService.foregroundVoiceSessionActive()
+        ) {
+            return false
+        }
+        val stopIntent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
+            action = AuroraRuntimeForegroundService.ACTION_STOP
+        }
+        return runCatching {
+            activity.startService(stopIntent)
+            true
+        }
+            .onFailure { error ->
+                Log.w(
+                    LOG_TAG,
+                    "redacted_focused_voice_release_failed error=${error.javaClass.simpleName}",
+                )
+            }
+            .getOrDefault(false)
     }
 
     private fun denyPendingMicRequests() {
@@ -4088,7 +4154,8 @@ class AndroidVoicePackRemoveArgs {
 }
 
 private data class VoiceRouteCandidate(
-    val gateway: String,
+    val mode: String,
+    val gateway: String?,
     val peerId: String?,
 )
 

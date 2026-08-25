@@ -69,6 +69,16 @@ fn optional_string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<
     })
 }
 
+fn optional_gateway_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<Option<Url>> {
+    let value = string_from_jni(env, value)?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        Some(None)
+    } else {
+        Url::parse(trimmed).ok().map(Some)
+    }
+}
+
 fn float_vec_from_jni(env: &mut JNIEnv<'_>, value: JFloatArray<'_>) -> Option<Vec<f32>> {
     let length = env.get_array_length(&value).ok()?;
     if length <= 0 {
@@ -203,7 +213,9 @@ fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
             Err(error) => {
                 // SpeechPackError messages are deliberately sanitized and never
                 // contain source URLs, local paths, headers, or downloaded bytes.
-                eprintln!("aurora_android_voice_pack_install_failed reason={error}");
+                eprintln!(
+                    "aurora_android_voice_pack_install_failed reason={error} category={error:?}"
+                );
                 false
             }
         }
@@ -572,7 +584,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     assistant_route_mode: JString<'_>,
     preferred_stable_peer_id: JString<'_>,
 ) -> jlong {
-    let Some(gateway) = string_from_jni(&mut env, gateway) else {
+    let Some(Some(gateway)) = optional_gateway_from_jni(&mut env, gateway) else {
         return 0;
     };
     let Some(bearer) = string_from_jni(&mut env, bearer) else {
@@ -582,9 +594,6 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return 0;
     };
     let preferred_stable_peer_id = optional_string_from_jni(&mut env, preferred_stable_peer_id);
-    let Ok(gateway) = Url::parse(&gateway) else {
-        return 0;
-    };
     let Ok(assistant_route_mode) = AndroidAssistantRouteMode::parse(&assistant_route_mode) else {
         return 0;
     };
@@ -628,7 +637,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     tts_reference_text: JString<'_>,
     tts_reference_revision: JString<'_>,
 ) -> jlong {
-    let Some(gateway) = string_from_jni(&mut env, gateway) else {
+    let Some(gateway) = optional_gateway_from_jni(&mut env, gateway) else {
         return 0;
     };
     let Some(bearer) = string_from_jni(&mut env, bearer) else {
@@ -647,9 +656,6 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     let Some(tts_voice_id) = optional_string_from_jni(&mut env, tts_voice_id) else {
         return 0;
     };
-    let Ok(gateway) = Url::parse(&gateway) else {
-        return 0;
-    };
     let Ok(assistant_route_mode) = AndroidAssistantRouteMode::parse(&assistant_route_mode) else {
         return 0;
     };
@@ -658,7 +664,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let Ok(mut config) = AndroidVoiceSessionConfig::with_local_pack_selection(
+    let Ok(mut config) = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
         gateway,
         auth,
         remote_audio_consent != 0,

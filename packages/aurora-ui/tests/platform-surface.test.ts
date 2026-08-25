@@ -416,7 +416,7 @@ describe('Aurora surface profile regression coverage', () => {
     })
     expect(surfaceCanConfigureBackgroundWake(android)).toBe(true)
     expect(missingKws.voiceCapture.wakewordOwner).toBe('unavailable')
-    expect(surfaceCanConfigureBackgroundWake(missingKws)).toBe(false)
+    expect(surfaceCanConfigureBackgroundWake(missingKws)).toBe(true)
     expect(ios.voiceCapture).toMatchObject({
       focusedPushToTalkOwner: 'mobile-native',
       wakewordOwner: 'mobile-native',
@@ -502,7 +502,7 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(mobile.voiceCapture.detail)).toEqual([])
   })
 
-  it('withholds Android voice when the native adapter exists without a ready route', () => {
+  it('keeps Android voice setup visible when the native adapter exists without a ready route', () => {
     const android = getAuroraSurfaceProfile({
       runtimeMode: 'mobile-native',
       transportKind: 'native-mobile',
@@ -514,6 +514,8 @@ describe('Aurora surface profile regression coverage', () => {
     expect(android.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
     expect(android.voiceCapture.wakewordOwner).toBe('unavailable')
     expect(android.voiceCapture.canUseWebViewVisualizer).toBe(false)
+    expect(shouldShowForSurface(android, 'localVoice')).toBe(true)
+    expect(surfaceCanConfigureBackgroundWake(android)).toBe(true)
     expect(findForbiddenProductionCopyTerms(android.voiceCapture.detail)).toEqual([])
   })
 

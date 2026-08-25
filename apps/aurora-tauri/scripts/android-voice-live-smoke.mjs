@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { createServer } from 'node:http'
 import os from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,6 +32,7 @@ const VOICE_TEST_ARCHIVE = {
   model: 'en_GB-cori-medium.onnx',
   config: 'en_GB-cori-medium.onnx.json',
 }
+const PIPER_FIXTURE_TOOL = 'piper-tts==1.2.0'
 const ANDROID_VOICE_SERVICE = 'dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService'
 const ANDROID_VOICE_STOP_ACTION = 'dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE'
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -46,6 +46,7 @@ const DEFAULT_PACK_IDS = {
   kws: 'kws:zipformer:gigaspeech',
 }
 const RECOVERABLE_BACKGROUND_CAPTURE_ERRORS = new Set([
+  'assistant_unavailable',
   'wake_not_detected',
   'speech_not_detected',
   'speech_timeout',
@@ -126,11 +127,9 @@ export function selectAndroidVoicePacks(catalogStatus, {
 }
 
 export function buildAndroidVoiceRuntimeProfile(packs, {
-  gatewayUrl,
   language = 'en',
   profileId = 'aurora-waydroid-voice-live',
 } = {}) {
-  if (!gatewayUrl) throw new Error('Android live voice profile requires a loopback Gateway URL.')
   for (const task of TASKS) {
     if (!packs?.[task]?.packId || !packs[task].engineRuntimeRevision) {
       throw new Error(`Android live voice profile is missing ${task.toUpperCase()} pack metadata.`)
@@ -153,9 +152,8 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
       version: 2,
       id: profileId,
       label: 'Android voice live check',
-      nodeMode: 'remote-console',
-      runtimeTier: 'none',
-      homeConnection: { mode: 'http-only', gatewayUrl },
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
       localNode: {
         nodeName: 'Android voice device',
         stablePeerId: profileId,
@@ -210,10 +208,8 @@ export async function runAndroidVoiceLiveSmoke() {
   const appId = process.env.AURORA_ANDROID_APP_ID ?? DEFAULT_APP_ID
   const apk = process.env.AURORA_ANDROID_APK ? resolve(process.env.AURORA_ANDROID_APK) : findApk()
   const context = { adb, serial, appId }
-  let gateway
   let fixtures
   let webview
-  let reversePort
 
   try {
     if (!apk || !existsSync(apk)) {
@@ -225,9 +221,6 @@ export async function runAndroidVoiceLiveSmoke() {
     grantVoicePermissions(context)
     adbRun(context, ['logcat', '-c'])
 
-    gateway = await createGatewayFixture()
-    reversePort = gateway.port
-    adbRun(context, ['reverse', `tcp:${reversePort}`, `tcp:${reversePort}`])
     launchApp(context)
     webview = await connectInstalledWebview(context)
     const invoke = (command, args) => invokeTauri(webview.client, command, args)
@@ -244,17 +237,16 @@ export async function runAndroidVoiceLiveSmoke() {
     const readyCatalog = await invoke('aurora_android_voice_pack_catalog_status')
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
     const profile = buildAndroidVoiceRuntimeProfile(readyPacks, {
-      gatewayUrl: `http://127.0.0.1:${reversePort}`,
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
     })
     const profileResult = await invoke('aurora_thin_profile_set', { value: JSON.stringify(profile) })
-    if (profileResult?.ok !== true || profileResult?.voiceRoute?.configured !== true) {
-      throw new Error(`Android native voice route was not configured: ${JSON.stringify(profileResult)}`)
+    if (profileResult?.ok !== true || profileResult?.voiceRoute?.configured === true) {
+      throw new Error(`Android local-only voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
 
     fixtures = prepareVoiceFixtures()
-    const foreground = await proveForegroundVoice(context, invoke, gateway, fixtures.foregroundPcm)
-    const background = await proveBackgroundVoice(context, invoke, gateway, fixtures.backgroundPcm)
+    const foreground = await proveForegroundVoice(context, invoke, fixtures.foregroundPcm)
+    const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm)
 
     webview.close()
     webview = null
@@ -288,7 +280,7 @@ export async function runAndroidVoiceLiveSmoke() {
     assertSelectedPacksPersisted(persistedCatalog, readyPacks)
 
     const finalForegroundStart = await resumedInvoke('aurora_android_voice_foreground_service_start', {
-      request: { remoteAudioConsent: true, backgroundSession: false },
+      request: { remoteAudioConsent: false, backgroundSession: false },
     })
     if (finalForegroundStart?.started !== true) {
       throw new Error(`Foreground restart after force-stop was rejected: ${JSON.stringify(finalForegroundStart)}`)
@@ -311,7 +303,7 @@ export async function runAndroidVoiceLiveSmoke() {
         microphoneSignalDetected: background.status.microphoneSignalDetected,
         completedTurns: background.status.completedTurns,
         failedTurns: background.status.failedTurns,
-        gatewayRequests: background.gatewayRequests,
+        localTurnOutcome: background.status.liveOutcome,
         serviceVisible: background.serviceVisible,
         notificationVisible: background.notificationVisible,
         wakeLockHeld: background.wakeLockHeld,
@@ -319,7 +311,7 @@ export async function runAndroidVoiceLiveSmoke() {
       },
       sticky: { ...sticky, acceptedSamples: resumed.acceptedSamples },
       forceStop,
-      gatewayRequests: gateway.requests.map((request) => request.path),
+      assistantRoute: 'local-only',
       finalStatus: summarizeVoiceStatus(await resumedInvoke('aurora_android_voice_foreground_service_status')),
     }
     console.log(JSON.stringify(result, null, 2))
@@ -335,22 +327,19 @@ export async function runAndroidVoiceLiveSmoke() {
   } finally {
     await bestEffortStopVoice(context, webview)
     webview?.close()
-    if (reversePort) adbTry(context, ['reverse', '--remove', `tcp:${reversePort}`])
     adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce'])
     adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP'])
-    await gateway?.close()
     fixtures?.close()
     releaseLock()
   }
 }
 
-async function proveForegroundVoice(context, invoke, gateway, foregroundPcm) {
+async function proveForegroundVoice(context, invoke, foregroundPcm) {
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before)
-  const gatewayRequestsBefore = assistantGatewayRequestCount(gateway)
   await armLiveTestPcmIngress(invoke)
   const start = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: true, backgroundSession: false },
+    request: { remoteAudioConsent: false, backgroundSession: false },
   })
   if (start?.started !== true) throw new Error(`Foreground voice start was rejected: ${JSON.stringify(start)}`)
   const active = await pollVoiceStatus(
@@ -358,9 +347,10 @@ async function proveForegroundVoice(context, invoke, gateway, foregroundPcm) {
     (status) => status.running === true
       && status.captureActive === true
       && status.runtimeActive === true
+      && (status.runtimePhase === 'starting' || status.runtimePhase === 'listening')
       && status.captureBackend === 'android-audiorecord-rust-queue'
-      && status.microphoneSignalDetected === true,
-    'foreground microphone capture',
+      && status.backendAudioEvidenceRequired === false,
+    'foreground native PCM gate',
   )
   if (Number(active.acceptedSamples) !== 0) {
     throw new Error(`Foreground microphone audio entered native ingress before the fixture: ${JSON.stringify(active)}`)
@@ -373,16 +363,14 @@ async function proveForegroundVoice(context, invoke, gateway, foregroundPcm) {
     invoke,
     (status) => status.running !== true
       && status.captureActive !== true
-      && Number(status.completedTurns) > Number(before.completedTurns ?? 0)
-      && Number(status.failedTurns) === Number(before.failedTurns ?? 0),
-    'foreground completed voice turn',
+      && Number(status.acceptedSamples) > Number(before.acceptedSamples ?? 0)
+      && Number(status.failedTurns) > Number(before.failedTurns ?? 0)
+      && status.captureError === 'assistant_unavailable',
+    'foreground local transcription turn',
   )
-  if (assistantGatewayRequestCount(gateway) <= gatewayRequestsBefore) {
-    throw new Error('Foreground voice completed without sending the transcription to the Gateway fixture.')
-  }
 
   const lifecycleStart = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: true, backgroundSession: false },
+    request: { remoteAudioConsent: false, backgroundSession: false },
   })
   if (lifecycleStart?.started !== true) {
     throw new Error(`Foreground lifecycle restart was rejected: ${JSON.stringify(lifecycleStart)}`)
@@ -393,7 +381,6 @@ async function proveForegroundVoice(context, invoke, gateway, foregroundPcm) {
       && status.captureActive === true
       && status.runtimeActive === true
       && status.captureBackend === 'android-audiorecord-rust-queue'
-      && status.microphoneSignalDetected === true
       && Number(status.acceptedSamples) > 0,
     'foreground lifecycle microphone capture',
   )
@@ -418,20 +405,18 @@ async function proveForegroundVoice(context, invoke, gateway, foregroundPcm) {
   return {
     acceptedSamples: lifecycleActive.acceptedSamples,
     captureBackend: active.captureBackend,
-    microphoneSignalDetected: active.microphoneSignalDetected,
     completedTurns: completed.completedTurns,
     failedTurns: completed.failedTurns,
-    gatewayRequests: assistantGatewayRequestCount(gateway) - gatewayRequestsBefore,
+    localTurnOutcome: completed.captureError,
     serviceVisible,
     notificationVisible,
   }
 }
 
-async function proveBackgroundVoice(context, invoke, gateway, backgroundPcm) {
+async function proveBackgroundVoice(context, invoke, backgroundPcm) {
   launchApp(context)
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before, { background: true })
-  const gatewayRequestsBefore = assistantGatewayRequestCount(gateway)
   if (before.backgroundSessionActive === false && before.running === true && before.captureActive === true) {
     await invoke('aurora_android_voice_foreground_service_cancel')
     await pollVoiceStatus(
@@ -442,7 +427,7 @@ async function proveBackgroundVoice(context, invoke, gateway, backgroundPcm) {
   }
   await armLiveTestPcmIngress(invoke)
   const start = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: true, backgroundSession: true },
+    request: { remoteAudioConsent: false, backgroundSession: true },
   })
   if (start?.started !== true) throw new Error(`Background voice start was rejected: ${JSON.stringify(start)}`)
   const active = await pollVoiceStatus(
@@ -454,12 +439,12 @@ async function proveBackgroundVoice(context, invoke, gateway, backgroundPcm) {
   if (Number(active.acceptedSamples) !== 0) {
     throw new Error(`Background microphone audio entered native ingress before the fixture: ${JSON.stringify(active)}`)
   }
-  const completed = await completeBackgroundWakeTurn(invoke, backgroundPcm, active)
-  if (assistantGatewayRequestCount(gateway) <= gatewayRequestsBefore) {
-    throw new Error('Background voice completed without sending the transcription to the Gateway fixture.')
+  const completed = await completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: true })
+  if (completed.liveOutcome !== 'rearmed' || Number(completed.failedTurns) <= Number(active.failedTurns ?? 0)) {
+    throw new Error(`Background local transcription did not re-arm after the optional assistant route was unavailable: ${JSON.stringify(completed)}`)
   }
-  if (completed.microphoneSignalDetected !== true) {
-    throw new Error('Background voice lost the real Android microphone signal before completing the turn.')
+  if (Number(completed.acceptedSamples) <= Number(active.acceptedSamples ?? 0)) {
+    throw new Error('Background native PCM samples were not accepted while completing the local turn.')
   }
   adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
   await sleep(1_500)
@@ -481,7 +466,6 @@ async function proveBackgroundVoice(context, invoke, gateway, backgroundPcm) {
     notificationVisible,
     wakeLockHeld,
     doze,
-    gatewayRequests: assistantGatewayRequestCount(gateway) - gatewayRequestsBefore,
   }
 }
 
@@ -508,7 +492,7 @@ async function proveStickyRestart(context, previousSamples) {
 async function proveForceStopPersistence(context, invoke, packs) {
   launchApp(context)
   const start = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: true, backgroundSession: true },
+    request: { remoteAudioConsent: false, backgroundSession: true },
   })
   if (start?.started !== true) throw new Error(`Background restart before force-stop was rejected: ${JSON.stringify(start)}`)
   await pollVoiceStatus(
@@ -619,7 +603,7 @@ export function backgroundVoiceAcceptsInjectedPcm(status) {
 export function backgroundMicrophoneReadyForInjection(status) {
   return backgroundVoiceAcceptsInjectedPcm(status)
     && status?.captureBackend === 'android-audiorecord-rust-queue'
-    && status?.microphoneSignalDetected === true
+    && status?.backendAudioEvidenceRequired === false
 }
 
 export function classifyBackgroundWakeAttempt(baseline, status) {
@@ -643,7 +627,7 @@ export function classifyBackgroundWakeAttempt(baseline, status) {
   return 'pending'
 }
 
-async function completeBackgroundWakeTurn(invoke, pcm, initialStatus) {
+async function completeBackgroundWakeTurn(invoke, pcm, initialStatus, { acceptRearmed = false } = {}) {
   let last = initialStatus
   let acceptedSamplesAfterPreviousBatch = Number(initialStatus?.acceptedSamples ?? 0)
   for (let attempt = 1; attempt <= MAX_BACKGROUND_WAKE_ATTEMPTS; attempt += 1) {
@@ -669,7 +653,10 @@ async function completeBackgroundWakeTurn(invoke, pcm, initialStatus) {
       if (Number(last.completedTurns) <= Number(initialStatus?.completedTurns ?? 0)) {
         throw new Error(`Android background wake completion counter did not advance: ${JSON.stringify(last)}`)
       }
-      return last
+      return { ...last, liveOutcome: 'completed' }
+    }
+    if (outcome.state === 'rearmed' && acceptRearmed) {
+      return { ...last, liveOutcome: 'rearmed' }
     }
     if (attempt === MAX_BACKGROUND_WAKE_ATTEMPTS) break
   }
@@ -829,35 +816,75 @@ function prepareVoiceFixtures() {
 
 function renderVoiceFixture({ directory, name, text, model, config, trailingSilenceSeconds }) {
   const wav = join(directory, `${name}.wav`)
-  const pcm = join(directory, `${name}.pcm`)
   commandRunWithInput(
-    'uv',
-    ['run', 'piper', '-m', model, '-c', config, '-f', wav, '--sentence-silence', '0.4'],
+    'uvx',
+    ['--from', PIPER_FIXTURE_TOOL, 'piper', '-m', model, '-c', config, '-f', wav, '--sentence-silence', '0.4'],
     `${text}\n`,
     { cwd: WORKSPACE_ROOT, timeoutMs: 5 * 60_000 },
   )
-  const resampleScript = [
-    'import sys',
-    'import numpy as np',
-    'import soundfile as sf',
-    'from scipy.signal import resample_poly',
-    'samples, sample_rate = sf.read(sys.argv[1], dtype="float32", always_2d=False)',
-    'samples = samples.mean(axis=1) if getattr(samples, "ndim", 1) > 1 else samples',
-    'samples = resample_poly(samples, 16000, int(sample_rate))',
-    'samples = np.clip(samples, -1.0, 1.0)',
-    '(samples * 32767.0).astype("<i2").tofile(sys.argv[2])',
-  ].join(';')
-  commandRun(
-    'uv',
-    ['run', 'python', '-c', resampleScript, wav, pcm],
-    { cwd: WORKSPACE_ROOT, timeoutMs: 5 * 60_000 },
-  )
-  const samples = readFileSync(pcm)
+  const samples = wavToPcm16Mono(readFileSync(wav), LIVE_TEST_PCM_SAMPLE_RATE_HZ)
   if (samples.length === 0 || samples.length % 2 !== 0) {
     throw new Error(`Generated Android ${name} voice fixture is not PCM16 mono audio.`)
   }
   const silence = Buffer.alloc(LIVE_TEST_PCM_SAMPLE_RATE_HZ * 2 * trailingSilenceSeconds)
   return Buffer.concat([samples, silence])
+}
+
+export function wavToPcm16Mono(wav, targetSampleRateHz = LIVE_TEST_PCM_SAMPLE_RATE_HZ) {
+  if (!Buffer.isBuffer(wav) || wav.length < 44 || wav.toString('ascii', 0, 4) !== 'RIFF'
+    || wav.toString('ascii', 8, 12) !== 'WAVE') {
+    throw new Error('Android voice fixture is not a RIFF/WAVE file.')
+  }
+
+  let format
+  let samples
+  for (let offset = 12; offset + 8 <= wav.length;) {
+    const id = wav.toString('ascii', offset, offset + 4)
+    const size = wav.readUInt32LE(offset + 4)
+    const dataStart = offset + 8
+    const dataEnd = dataStart + size
+    if (dataEnd > wav.length) throw new Error(`Android voice fixture has a truncated ${id} chunk.`)
+    if (id === 'fmt ') {
+      if (size < 16) throw new Error('Android voice fixture has an invalid format chunk.')
+      format = {
+        encoding: wav.readUInt16LE(dataStart),
+        channels: wav.readUInt16LE(dataStart + 2),
+        sampleRateHz: wav.readUInt32LE(dataStart + 4),
+        blockAlign: wav.readUInt16LE(dataStart + 12),
+        bitsPerSample: wav.readUInt16LE(dataStart + 14),
+      }
+    } else if (id === 'data') {
+      samples = wav.subarray(dataStart, dataEnd)
+    }
+    offset = dataEnd + (size % 2)
+  }
+
+  if (!format || !samples || format.encoding !== 1 || format.bitsPerSample !== 16
+    || format.channels < 1 || format.sampleRateHz < 1
+    || format.blockAlign !== format.channels * 2 || targetSampleRateHz < 1) {
+    throw new Error('Android voice fixture must be PCM16 audio with valid channel and sample-rate metadata.')
+  }
+
+  const sourceFrames = Math.floor(samples.length / format.blockAlign)
+  if (sourceFrames === 0) return Buffer.alloc(0)
+  const targetFrames = Math.max(1, Math.round(sourceFrames * targetSampleRateHz / format.sampleRateHz))
+  const output = Buffer.allocUnsafe(targetFrames * 2)
+  const sampleAt = (frame) => {
+    let total = 0
+    for (let channel = 0; channel < format.channels; channel += 1) {
+      total += samples.readInt16LE(frame * format.blockAlign + channel * 2)
+    }
+    return total / format.channels
+  }
+  for (let frame = 0; frame < targetFrames; frame += 1) {
+    const sourcePosition = frame * format.sampleRateHz / targetSampleRateHz
+    const leftFrame = Math.min(Math.floor(sourcePosition), sourceFrames - 1)
+    const rightFrame = Math.min(leftFrame + 1, sourceFrames - 1)
+    const fraction = sourcePosition - leftFrame
+    const value = Math.round(sampleAt(leftFrame) * (1 - fraction) + sampleAt(rightFrame) * fraction)
+    output.writeInt16LE(Math.max(-32_768, Math.min(32_767, value)), frame * 2)
+  }
+  return output
 }
 
 async function injectLiveTestPcm(invoke, pcm, { backgroundBaseline } = {}) {
@@ -910,10 +937,6 @@ async function armLiveTestPcmIngress(invoke, { required = true } = {}) {
   return accepted
 }
 
-function assistantGatewayRequestCount(gateway) {
-  return gateway?.requests?.filter((request) => request.path === '/api/Orchestrator/ExternalUserInput').length ?? 0
-}
-
 async function bestEffortStopVoice(context, webview) {
   if (!context?.adb || !context?.serial) return
   if (webview?.client) {
@@ -941,83 +964,8 @@ async function bestEffortStopVoice(context, webview) {
   }
 }
 
-async function createGatewayFixture() {
-  const requests = []
-  const server = createServer(async (request, response) => {
-    const body = await readRequestBody(request)
-    let payload = {}
-    if (request.url === '/api/Orchestrator/ExternalUserInput') {
-      let parsed
-      try {
-        parsed = parseGatewayRequestBody(body)
-      } catch (error) {
-        const encoded = JSON.stringify({ error: errorMessage(error) })
-        response.writeHead(400, {
-          'content-type': 'application/json',
-          'content-length': Buffer.byteLength(encoded),
-          'cache-control': 'no-store',
-        })
-        response.end(encoded)
-        return
-      }
-      payload = {
-        text: process.env.AURORA_ANDROID_GATEWAY_REPLY ?? 'Aurora Android voice is ready.',
-        metadata: {},
-        ...(typeof parsed.session_id === 'string' ? { session_id: parsed.session_id } : {}),
-        ...(typeof parsed.request_id === 'string' ? { request_id: parsed.request_id } : {}),
-        ...(typeof parsed.correlation_id === 'string' ? { correlation_id: parsed.correlation_id } : {}),
-      }
-    }
-    requests.push({ method: request.method, path: request.url ?? '/', bytes: Buffer.byteLength(body) })
-    const encoded = JSON.stringify(payload)
-    response.writeHead(200, {
-      'content-type': 'application/json',
-      'content-length': Buffer.byteLength(encoded),
-      'cache-control': 'no-store',
-    })
-    response.end(encoded)
-  })
-  await new Promise((resolvePromise, rejectPromise) => {
-    server.once('error', rejectPromise)
-    server.listen(0, '127.0.0.1', resolvePromise)
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('Android voice Gateway fixture did not bind a TCP port.')
-  return {
-    port: address.port,
-    requests,
-    close: () => new Promise((resolvePromise, rejectPromise) => {
-      server.close((error) => error ? rejectPromise(error) : resolvePromise())
-    }),
-  }
-}
-
-async function readRequestBody(request) {
-  const chunks = []
-  let bytes = 0
-  for await (const chunk of request) {
-    bytes += chunk.length
-    if (bytes > 2 * 1024 * 1024) throw new Error('Android voice Gateway fixture request exceeded 2 MiB.')
-    chunks.push(chunk)
-  }
-  return Buffer.concat(chunks).toString('utf8')
-}
-
 function parseJson(value) {
   try { return JSON.parse(value) } catch { return {} }
-}
-
-export function parseGatewayRequestBody(value) {
-  let parsed
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error('Android voice Gateway request body is not valid JSON.')
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Android voice Gateway request body must be a JSON object.')
-  }
-  return parsed
 }
 
 async function connectInstalledWebview(context) {

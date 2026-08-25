@@ -13,7 +13,7 @@ async function liveSmokeModule() {
     selectAndroidVoicePacks(status: unknown, options?: unknown): Record<string, CatalogEntry>
     buildAndroidVoiceRuntimeProfile(
       packs: Record<string, CatalogEntry>,
-      options: { gatewayUrl: string; language?: string },
+      options?: { language?: string },
     ): RuntimeDocument
     wakePhraseRevision(input: {
       phrase: string
@@ -34,7 +34,7 @@ async function liveSmokeModule() {
     ): boolean
     classifyBackgroundWakeAttempt(baseline: Record<string, unknown>, status: Record<string, unknown>):
       'completed' | 'rearmed' | 'failed' | 'pending'
-    parseGatewayRequestBody(value: string): Record<string, unknown>
+    wavToPcm16Mono(wav: Buffer, targetSampleRateHz?: number): Buffer
     ANDROID_BACKGROUND_WAKE_TEXT: string
     ANDROID_BACKGROUND_COMMAND_TEXT: string
   }>
@@ -57,7 +57,9 @@ interface RuntimeDocument {
   version: number
   activeProfileId: string
   profiles: Array<{
-    homeConnection: { mode: string; gatewayUrl: string }
+    nodeMode: string
+    runtimeTier: string
+    homeConnection?: { mode: string; gatewayUrl: string }
     localNode: {
       localSpeechSelection: Record<string, {
         packId?: string
@@ -163,14 +165,62 @@ describe('Android packaged voice live smoke harness', () => {
     expect(module.notificationIsVisibleFromDump(android16ActiveRecordDump, appId)).toBe(true)
   })
 
-  it('rejects malformed Gateway fixture requests instead of counting them as completed turns', async () => {
-    const module = await liveSmokeModule()
+  it('does not create or reverse a network service for local native voice acceptance', () => {
+    const source = readFileSync(scriptPath, 'utf8')
 
-    expect(module.parseGatewayRequestBody('{"session_id":"session-1"}')).toEqual({
-      session_id: 'session-1',
+    for (const forbidden of [
+      "from 'node:http'",
+      'createGatewayFixture',
+      'assistantGatewayRequestCount',
+      "['reverse'",
+      'http-only',
+      '/api/Orchestrator/ExternalUserInput',
+    ]) {
+      expect(source).not.toContain(forbidden)
+    }
+    expect(source).toContain("assistantRoute: 'local-only'")
+    expect(source).toContain('remoteAudioConsent: false')
+    expect(source).toContain("const PIPER_FIXTURE_TOOL = 'piper-tts==1.2.0'")
+    expect(source).toContain("'uvx',")
+    expect(source).toContain("['--from', PIPER_FIXTURE_TOOL, 'piper'")
+    expect(source).not.toContain("['run', 'piper'")
+    expect(source).not.toContain('soundfile')
+    expect(source).not.toContain('scipy')
+  })
+
+  it('converts fixture WAV audio to dependency-free PCM16 mono at the native sample rate', async () => {
+    const module = await liveSmokeModule()
+    const samples = [
+      [1_000, 3_000],
+      [3_000, 5_000],
+      [5_000, 7_000],
+      [7_000, 9_000],
+    ]
+    const data = Buffer.alloc(samples.length * 4)
+    samples.forEach(([left, right], frame) => {
+      data.writeInt16LE(left!, frame * 4)
+      data.writeInt16LE(right!, frame * 4 + 2)
     })
-    expect(() => module.parseGatewayRequestBody('{')).toThrow('not valid JSON')
-    expect(() => module.parseGatewayRequestBody('[]')).toThrow('must be a JSON object')
+    const wav = Buffer.alloc(44 + data.length)
+    wav.write('RIFF', 0)
+    wav.writeUInt32LE(wav.length - 8, 4)
+    wav.write('WAVEfmt ', 8)
+    wav.writeUInt32LE(16, 16)
+    wav.writeUInt16LE(1, 20)
+    wav.writeUInt16LE(2, 22)
+    wav.writeUInt32LE(8_000, 24)
+    wav.writeUInt32LE(32_000, 28)
+    wav.writeUInt16LE(4, 32)
+    wav.writeUInt16LE(16, 34)
+    wav.write('data', 36)
+    wav.writeUInt32LE(data.length, 40)
+    data.copy(wav, 44)
+
+    const pcm = module.wavToPcm16Mono(wav, 16_000)
+    expect(pcm.length).toBe(16)
+    expect(Array.from({ length: 8 }, (_, index) => pcm.readInt16LE(index * 2))).toEqual([
+      2_000, 3_000, 4_000, 5_000, 6_000, 7_000, 8_000, 8_000,
+    ])
   })
 
   it('ignores historical wake-lock log entries after the active lock is released', async () => {
@@ -197,7 +247,7 @@ describe('Android packaged voice live smoke harness', () => {
 
   it('keeps recoverable background wake misses out of the fatal path', async () => {
     const module = await liveSmokeModule()
-    for (const errorCode of ['wake_not_detected', 'speech_not_detected', 'speech_timeout']) {
+    for (const errorCode of ['assistant_unavailable', 'wake_not_detected', 'speech_not_detected', 'speech_timeout']) {
       expect(module.isRecoverableBackgroundCaptureError(errorCode)).toBe(true)
     }
     for (const errorCode of ['audio_focus_lost', 'voice_runtime_unavailable', '', null]) {
@@ -275,9 +325,16 @@ describe('Android packaged voice live smoke harness', () => {
       ...active,
       runtimePhase: 'starting',
       captureBackend: 'android-audiorecord-rust-queue',
-      microphoneSignalDetected: true,
+      microphoneSignalDetected: false,
+      backendAudioEvidenceRequired: false,
       acceptedSamples: 0,
     })).toBe(true)
+    expect(module.backgroundMicrophoneReadyForInjection({
+      ...active,
+      runtimePhase: 'starting',
+      captureBackend: 'android-audiorecord-rust-queue',
+      backendAudioEvidenceRequired: true,
+    })).toBe(false)
   })
 
   it('re-polls the native gate immediately before every background PCM batch', () => {
@@ -445,16 +502,14 @@ describe('Android packaged voice live smoke harness', () => {
       kws: entry('kws', 'kws:zipformer:gigaspeech', 'en', 17_626_723),
     }
     const profile = module.buildAndroidVoiceRuntimeProfile(packs, {
-      gatewayUrl: 'http://127.0.0.1:38177',
       language: 'en',
     })
     const selection = profile.profiles[0].localNode.localSpeechSelection
 
     expect(profile.version).toBe(2)
-    expect(profile.profiles[0].homeConnection).toEqual({
-      mode: 'http-only',
-      gatewayUrl: 'http://127.0.0.1:38177',
-    })
+    expect(profile.profiles[0].nodeMode).toBe('mesh-node')
+    expect(profile.profiles[0].runtimeTier).toBe('lightweight-ts')
+    expect(profile.profiles[0].homeConnection).toBeUndefined()
     expect(selection.tts).toMatchObject({
       packId: packs.tts.packId,
       packRevision: packs.tts.engineRuntimeRevision,
@@ -484,8 +539,8 @@ describe('Android packaged voice live smoke harness', () => {
       "['shell', 'am', 'crash', '--user', '0', context.appId]",
       "['shell', 'am', 'force-stop', context.appId]",
       "'aurora_android_voice_live_test_inject_pcm'",
-      'Number(status.completedTurns)',
-      'assistantGatewayRequestCount(gateway)',
+      "status.captureError === 'assistant_unavailable'",
+      "acceptRearmed: true",
       'bestEffortStopVoice(context, webview)',
       'wakeLockIsHeld(context)',
       'assertSelectedPacksPersisted',
@@ -501,9 +556,11 @@ describe('Android packaged voice live smoke harness', () => {
       source.indexOf('async function proveBackgroundVoice'),
       source.indexOf('async function proveStickyRestart'),
     )
-    expect(foregroundBody).toContain('microphoneSignalDetected: active.microphoneSignalDetected')
-    expect(foregroundBody).toContain('status.microphoneSignalDetected === true')
-    expect(backgroundBody).toContain('completed.microphoneSignalDetected !== true')
+    expect(foregroundBody).toContain('status.backendAudioEvidenceRequired === false')
+    expect(foregroundBody).toContain('Number(status.acceptedSamples) > Number(before.acceptedSamples ?? 0)')
+    expect(foregroundBody).not.toContain('status.microphoneSignalDetected === true')
+    expect(backgroundBody).toContain('Number(completed.acceptedSamples) <= Number(active.acceptedSamples ?? 0)')
+    expect(backgroundBody).toContain("completed.liveOutcome !== 'rearmed'")
     expect(source).not.toContain(
       "'pm', 'grant', context.appId, 'android.permission.FOREGROUND_SERVICE_MICROPHONE'",
     )

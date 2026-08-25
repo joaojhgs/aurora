@@ -5504,6 +5504,31 @@ pub(crate) fn run_android_plugin_command(
         .map_err(|error| AuroraCommandError::AuroraMobileNativePlugin(error.to_string()))
 }
 
+#[cfg(target_os = "android")]
+fn release_android_focused_voice_on_background(app: &AppHandle) {
+    let Some(native) = app.try_state::<AuroraMobileNativePlugin<tauri::Wry>>() else {
+        return;
+    };
+    let Some(handle) = native.handle.as_ref() else {
+        return;
+    };
+    match handle.run_mobile_plugin::<Value>("releaseFocusedVoiceOnBackground", json!({})) {
+        Ok(payload) => {
+            let released = payload
+                .get("released")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            eprintln!("aurora_android_focused_voice_background_release released={released}");
+        }
+        Err(error) => {
+            eprintln!(
+                "aurora_android_focused_voice_background_release_failed error={}",
+                error
+            );
+        }
+    }
+}
+
 #[cfg(target_os = "ios")]
 fn run_ios_plugin_command(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
@@ -8886,6 +8911,8 @@ pub fn run() {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Suspended) {
                 let app = window.app_handle().clone();
                 tauri::async_runtime::spawn(async move {
+                    #[cfg(target_os = "android")]
+                    release_android_focused_voice_on_background(&app);
                     if let Some(state) = app.try_state::<mesh_session::MeshSessionState>() {
                         state.mark_surface_backgrounded().await;
                         eprintln!(
@@ -11737,9 +11764,9 @@ mod tests {
             "hide()",
         ] {
             assert!(
-                interaction_session.contains(required) ||
-                    assistant_role.contains(required) ||
-                    service.contains(required),
+                interaction_session.contains(required)
+                    || assistant_role.contains(required)
+                    || service.contains(required),
                 "missing Android assistant-session contract: {required}"
             );
         }

@@ -249,9 +249,13 @@ describe('one Aurora in the notification shade', () => {
     expect(readiness).not.toContain('!canPostNotifications()) return false')
 
     const status = sliceBetween(plugin, 'private fun voiceForegroundServiceStatusObject(', 'private fun voiceForegroundState(')
-    expect(status).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && nativeRouteReady')
+    expect(status).toContain('val focusedRuntimeReady = localDuplexReady')
+    expect(status).not.toContain('gatewaySpeechReady')
+    expect(status).not.toContain('val focusedRuntimeReady = nativeRouteReady &&')
+    expect(status).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && focusedRuntimeReady')
     expect(status).toContain('ret.put("notificationsSuppressed"')
     expect(status).toContain('ret.put("foregroundReasons"')
+    expect(status).not.toContain('notificationReady && focusedRuntimeReady')
     // Still reported as degraded so the product can say so.
     const state = sliceBetween(plugin, 'private fun voiceForegroundState(', 'private fun voiceForegroundReason(')
     expect(state).toContain('if (!notificationReady) return "degraded"')

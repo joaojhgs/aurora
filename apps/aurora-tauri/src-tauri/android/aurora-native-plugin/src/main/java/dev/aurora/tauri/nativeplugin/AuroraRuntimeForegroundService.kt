@@ -125,6 +125,9 @@ private data class AuroraVoiceRouteProfile(
 object AuroraVoiceNativeConfigStore {
     fun isConfigured(context: Context): Boolean = load(context) != null
 
+    fun hasAssistantRoute(context: Context): Boolean =
+        load(context)?.assistantRouteMode?.let { it != "local-only" } == true
+
     /**
      * Stores the native voice route without exposing the bearer to the WebView.
      * The caller must have already resolved the route from the persisted runtime
@@ -133,10 +136,17 @@ object AuroraVoiceNativeConfigStore {
     fun setRoute(context: Context, gateway: String, bearer: String) {
         val validatedGateway = validateGateway(gateway)
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
+        val currentGateway = (prefs.getString(VOICE_GATEWAY_KEY, null)
+            ?: prefs.getString(VOICE_GENERIC_GATEWAY_KEY, null))?.let(::decrypt)
+        val currentBearer = (prefs.getString(VOICE_BEARER_KEY, null)
+            ?: prefs.getString(VOICE_GENERIC_BEARER_KEY, null))?.let(::decrypt).orEmpty()
+        val routeChanged = currentGateway != validatedGateway || currentBearer != bearer
         prefs.edit()
             .putString(VOICE_GATEWAY_KEY, encrypt(validatedGateway))
             .putString(VOICE_BEARER_KEY, encrypt(bearer))
-            .remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)
+            .apply {
+                if (routeChanged) remove(VOICE_REMOTE_AUDIO_CONSENT_KEY)
+            }
             .apply()
     }
 
@@ -150,26 +160,58 @@ object AuroraVoiceNativeConfigStore {
     }
 
     fun load(context: Context): AuroraVoiceNativeConfig? {
+        val routeProfile = activeVoiceRouteProfile(context) ?: return localOnlyConfig()
+        if (routeProfile.mode == "webrtc-only") {
+            return AuroraVoiceNativeConfig(
+                gateway = "",
+                bearer = "",
+                remoteAudioConsent = false,
+                assistantRouteMode = routeProfile.mode,
+                preferredStablePeerId = routeProfile.preferredStablePeerId,
+            )
+        }
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
         val gateway = (prefs.getString(VOICE_GATEWAY_KEY, null)
-            ?: prefs.getString(VOICE_GENERIC_GATEWAY_KEY, null))?.let(::decrypt) ?: return null
+            ?: prefs.getString(VOICE_GENERIC_GATEWAY_KEY, null))?.let(::decrypt)
+            ?: return routeFallbackConfig(routeProfile)
         val bearer = (prefs.getString(VOICE_BEARER_KEY, null)
             ?: prefs.getString(VOICE_GENERIC_BEARER_KEY, null))?.let(::decrypt).orEmpty()
-        if (gateway.isBlank()) return null
-        val validatedGateway = runCatching { validateGateway(gateway) }.getOrNull() ?: return null
+        if (gateway.isBlank()) return routeFallbackConfig(routeProfile)
+        val validatedGateway = runCatching { validateGateway(gateway) }.getOrNull()
+            ?: return routeFallbackConfig(routeProfile)
         val remoteAudioConsent = prefs.getString(VOICE_REMOTE_AUDIO_CONSENT_KEY, null)
             ?.let { decrypt(it) }
             ?.toBooleanStrictOrNull()
             ?: false
-        val routeProfile = activeVoiceRouteProfile(context)
         return AuroraVoiceNativeConfig(
             validatedGateway,
             bearer,
             remoteAudioConsent,
-            routeProfile?.mode ?: "http-only",
-            routeProfile?.preferredStablePeerId,
+            routeProfile.mode,
+            routeProfile.preferredStablePeerId,
         )
     }
+
+    private fun routeFallbackConfig(routeProfile: AuroraVoiceRouteProfile): AuroraVoiceNativeConfig =
+        if (routeProfile.mode == "webrtc-preferred" && routeProfile.preferredStablePeerId != null) {
+            AuroraVoiceNativeConfig(
+                gateway = "",
+                bearer = "",
+                remoteAudioConsent = false,
+                assistantRouteMode = "webrtc-only",
+                preferredStablePeerId = routeProfile.preferredStablePeerId,
+            )
+        } else {
+            localOnlyConfig()
+        }
+
+    private fun localOnlyConfig(): AuroraVoiceNativeConfig = AuroraVoiceNativeConfig(
+        gateway = "",
+        bearer = "",
+        remoteAudioConsent = false,
+        assistantRouteMode = "local-only",
+        preferredStablePeerId = null,
+    )
 
     fun setRemoteAudioConsent(context: Context, granted: Boolean) {
         val prefs = context.getSharedPreferences(VOICE_SECURE_STORAGE_PREFS, Context.MODE_PRIVATE)
@@ -200,12 +242,13 @@ object AuroraVoiceNativeConfigStore {
         val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
             ?: profile.optString("mode").takeIf { it.isNotBlank() }
             ?: return null
-        if (mode !in setOf("http-only", "webrtc-preferred")) return null
+        if (mode !in setOf("http-only", "webrtc-preferred", "webrtc-only")) return null
         val homeWebRtc = home?.optJSONObject("webrtcProfile")
         val profileWebRtc = profile.optJSONObject("webrtcProfile")
         val peerId = home?.optString("homePeerId")?.takeIf { it.isNotBlank() }
             ?: homeWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
             ?: profileWebRtc?.optString("expectedStablePeerId")?.takeIf { it.isNotBlank() }
+        if (mode == "webrtc-only" && peerId == null) return null
         return AuroraVoiceRouteProfile(mode, peerId)
     }
 
@@ -323,6 +366,7 @@ private fun auroraVoiceRuntimeError(value: Long): String? = when (value) {
 
 private fun isRecoverableBackgroundTurn(errorCode: String?): Boolean = when (errorCode) {
     null,
+    "assistant_unavailable",
     "wake_not_detected",
     "speech_not_detected",
     "speech_timeout" -> true
@@ -749,7 +793,11 @@ private class AuroraAudioCapture(
         return try {
             val frameCapacity = VOICE_CAPTURE_FRAME_SAMPLES
             val byteCapacity = maxOf(minimumBuffer, frameCapacity * 2)
-            recorder = AudioRecord.Builder()
+            val audioRecordBuilder = AudioRecord.Builder()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioRecordBuilder.setContext(context)
+            }
+            recorder = audioRecordBuilder
                 .setAudioSource(AUDIO_SOURCE)
                 .setAudioFormat(
                     AudioFormat.Builder()
@@ -1274,8 +1322,7 @@ class AuroraRuntimeForegroundService : Service() {
         val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
         val installedPackIds = recordedInstalledPackIds()
         val referenceSelectionReady = ttsReferenceSelection() != null
-        return AuroraVoiceNativeConfigStore.isConfigured(this) &&
-            isActivePackReady(AuroraSpeechPackTask.STT, catalog, installedPackIds, referenceSelectionReady) &&
+        return isActivePackReady(AuroraSpeechPackTask.STT, catalog, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.TTS, catalog, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.VAD, catalog, installedPackIds, referenceSelectionReady) &&
             isActivePackReady(AuroraSpeechPackTask.KWS, catalog, installedPackIds, referenceSelectionReady) &&
@@ -1619,14 +1666,7 @@ class AuroraRuntimeForegroundService : Service() {
                 ttsReference,
             )
         }
-        if (backgroundSession) return null
-        return AuroraNativeVoiceSessionBridge(
-            nativeConfig.gateway,
-            nativeConfig.bearer,
-            nativeConfig.remoteAudioConsent,
-            nativeConfig.assistantRouteMode,
-            nativeConfig.preferredStablePeerId,
-        )
+        return null
     }
 
     private fun attachNativeVoiceSession(
@@ -2301,6 +2341,10 @@ class AuroraRuntimeForegroundService : Service() {
         /** The reasons currently keeping the one Aurora service alive. */
         fun activeForegroundReasonIds(): List<String> =
             AuroraRuntimeForegroundLedger.activeReasons().map { it.id }
+
+        /** Whether a focused or durable native voice session currently holds the service. */
+        fun foregroundVoiceSessionActive(): Boolean =
+            AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
 
         @Volatile
         var captureError: String? = null

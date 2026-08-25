@@ -3067,6 +3067,23 @@ export function AssistantView({
     }
   }
 
+  function nativeMobileVoiceStartFailureCopy(reasonCode: string | null | undefined): string {
+    switch (reasonCode) {
+      case 'local_speech_setup_required':
+      case 'voice_route_profile_missing':
+      case 'native_voice_runtime_missing':
+        return 'Finish voice setup on this device, then try again.'
+      case 'microphone_permission_missing':
+        return 'Allow microphone access for Aurora, then try again.'
+      case 'notification_delivery_unavailable':
+        return 'Allow notifications for Aurora so voice can stay active.'
+      case 'foreground_service_manifest_missing':
+        return 'This Android build cannot start device voice.'
+      default:
+        return 'Voice could not start. Check microphone access on this device.'
+    }
+  }
+
   async function startNativeMobileVoice(): Promise<boolean> {
     const remoteAudioConsent = remoteAudioConsentForCurrentRoute(voiceModel.transcriptionRoute)
     if (remoteAudioConsent === null) return false
@@ -3086,7 +3103,7 @@ export function AssistantView({
       }
       if (!status.available || status.phase === 'unavailable' || status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
-        setLastError('Voice could not start. Check microphone access on this device.')
+        setLastError(nativeMobileVoiceStartFailureCopy(status.reasonCode))
         return false
       }
       setVoiceCaptureStatus('listening')
