@@ -124,7 +124,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Install Python peer dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra gateway
 
       # All three lanes gate. The DTLS named-curve fix that used to keep the
       # browser lanes informational ships vendored in

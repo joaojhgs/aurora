@@ -75,7 +75,7 @@ def test_native_webrtc_workflow_uses_uv_managed_python() -> None:
     workflow = (REPO_ROOT / ".github/workflows/webrtc-interop.yml").read_text(encoding="utf-8")
     runner = (REPO_ROOT / "scripts/webrtc_native_interop.sh").read_text(encoding="utf-8")
 
-    assert "uv sync --frozen" in workflow
+    assert "uv sync --frozen --extra gateway" in workflow
     assert "AURORA_NATIVE_INTEROP_PYTHON: python3" not in workflow
     assert "$repo_root/.venv/bin/python3" in runner
 
