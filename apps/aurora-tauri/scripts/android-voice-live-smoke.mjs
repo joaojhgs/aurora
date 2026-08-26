@@ -779,7 +779,7 @@ export function classifyBackgroundWakeAttempt(baseline, status) {
   return 'pending'
 }
 
-async function completeBackgroundWakeTurn(invoke, pcm, initialStatus, { acceptRearmed = false } = {}) {
+export async function completeBackgroundWakeTurn(invoke, pcm, initialStatus, { acceptRearmed = false } = {}) {
   let last = initialStatus
   let acceptedSamplesAfterPreviousBatch = null
   for (let attempt = 1; attempt <= MAX_BACKGROUND_WAKE_ATTEMPTS; attempt += 1) {
@@ -1089,9 +1089,13 @@ export function backgroundPcmRejectionEndsInjection(rejection, status, baseline,
   const captureOwned = status?.running === true
     && status?.backgroundSessionActive === true
     && status?.captureActive === true
-    && !status?.captureError
   if (!captureOwned) return false
   if (Number(status?.completedTurns ?? 0) > Number(baseline?.completedTurns ?? 0)) return true
+  if (
+    Number(status?.failedTurns ?? 0) > Number(baseline?.failedTurns ?? 0)
+    && isRecoverableBackgroundCaptureError(status?.captureError)
+  ) return true
+  if (status?.captureError) return false
   return status?.runtimeActive === true
     && [
       'processing',

@@ -349,7 +349,7 @@ describe('Android packaged voice live smoke harness', () => {
   it('re-polls the native gate immediately before every background PCM batch', () => {
     const source = readFileSync(scriptPath, 'utf8')
     const turnBody = source.slice(
-      source.indexOf('async function completeBackgroundWakeTurn'),
+      source.indexOf('function completeBackgroundWakeTurn'),
       source.indexOf('async function pollBackgroundWakeAttempt'),
     )
     expect(turnBody).toContain('const baseline = await pollVoiceStatus(')
@@ -393,6 +393,13 @@ describe('Android packaged voice live smoke harness', () => {
       runtimePhase: 'idle',
       completedTurns: 5,
     }, baseline, 12)).toBe(true)
+    expect(module.backgroundPcmRejectionEndsInjection(rejection, {
+      ...baseline,
+      runtimeActive: false,
+      runtimePhase: 'faulted',
+      captureError: 'wake_not_detected',
+      failedTurns: 1,
+    }, baseline, 12)).toBe(true)
 
     expect(module.backgroundPcmRejectionEndsInjection(rejection, baseline, baseline, 0)).toBe(false)
     expect(module.backgroundPcmRejectionEndsInjection(rejection, baseline, baseline, 12)).toBe(false)
@@ -400,6 +407,13 @@ describe('Android packaged voice live smoke harness', () => {
       ...baseline,
       captureActive: false,
       runtimePhase: 'processing',
+    }, baseline, 12)).toBe(false)
+    expect(module.backgroundPcmRejectionEndsInjection(rejection, {
+      ...baseline,
+      runtimeActive: false,
+      runtimePhase: 'faulted',
+      captureError: 'audio_focus_lost',
+      failedTurns: 1,
     }, baseline, 12)).toBe(false)
     expect(module.backgroundPcmRejectionEndsInjection({
       accepted: false,
