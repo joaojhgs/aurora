@@ -18,6 +18,14 @@ async function liveSmokeModule() {
         wakePhrase?: { phraseId: string; phrase: string; language: string }
       },
     ): RuntimeDocument
+    mergeAndroidVoiceRuntimeProfile(
+      existingDocument: RuntimeDocument | null,
+      packs: Record<string, CatalogEntry>,
+      options?: {
+        language?: string
+        wakePhrase?: { phraseId: string; phrase: string; language: string }
+      },
+    ): RuntimeDocument
     wakePhraseRevision(input: {
       phrase: string
       language: string
@@ -64,10 +72,17 @@ interface RuntimeDocument {
   version: number
   activeProfileId: string
   profiles: Array<{
+    id: string
+    label?: string
     nodeMode: string
     runtimeTier: string
-    homeConnection?: { mode: string; gatewayUrl: string }
+    homeConnection?: { mode: string; gatewayUrl: string; peerId?: string }
     localNode: {
+      nodeName?: string
+      stablePeerId: string
+      enabledCapabilityPacks?: string[]
+      meshMembership?: Record<string, unknown>
+      localSpeechPackState?: string
       localSpeechSelection: Record<string, {
         packId?: string
         packRevision?: string
@@ -557,6 +572,64 @@ describe('Android packaged voice live smoke harness', () => {
       packId: packs.kws.packId,
       packRevision: packs.kws.engineRuntimeRevision,
     }))
+  })
+
+  it('preserves provisioned identity, pairing, and mesh state while refreshing voice packs', async () => {
+    const module = await liveSmokeModule()
+    const packs = {
+      stt: entry('stt', 'stt:whisper:tiny', 'multi', 116_204_861),
+      tts: entry('tts', 'standard:piper:en_gb-cori-medium-int8', 'en-gb', 20_768_736),
+      vad: entry('vad', 'vad:silero:current-int8', 'und', 212_860),
+      kws: entry('kws', 'kws:zipformer:gigaspeech', 'en', 17_626_723),
+    }
+    const existing: RuntimeDocument = {
+      version: 2,
+      activeProfileId: 'profile-existing',
+      profiles: [{
+        id: 'profile-existing',
+        label: 'My phone',
+        nodeMode: 'mesh-node',
+        runtimeTier: 'lightweight-ts',
+        homeConnection: {
+          mode: 'webrtc',
+          gatewayUrl: 'https://peer.example.test',
+          peerId: 'aurora-server',
+        },
+        localNode: {
+          nodeName: 'Provisioned phone',
+          stablePeerId: 'aurora-thin-existing',
+          enabledCapabilityPacks: ['tools'],
+          meshMembership: { roomId: 'room-existing' },
+          localSpeechPackState: 'missing',
+          localSpeechSelection: {},
+        },
+      }],
+    }
+
+    const merged = module.mergeAndroidVoiceRuntimeProfile(existing, packs, { language: 'en' })
+
+    expect(merged).not.toBe(existing)
+    expect(merged.activeProfileId).toBe('profile-existing')
+    expect(merged.profiles[0]).toMatchObject({
+      id: 'profile-existing',
+      label: 'My phone',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      homeConnection: existing.profiles[0].homeConnection,
+      localNode: {
+        nodeName: 'Provisioned phone',
+        stablePeerId: 'aurora-thin-existing',
+        enabledCapabilityPacks: ['tools'],
+        meshMembership: { roomId: 'room-existing' },
+        localSpeechPackState: 'ready',
+      },
+    })
+    expect(merged.profiles[0].localNode.localSpeechSelection.stt).toMatchObject({
+      packId: packs.stt.packId,
+      packRevision: packs.stt.engineRuntimeRevision,
+    })
+    expect(existing.profiles[0].localNode.localSpeechPackState).toBe('missing')
+    expect(existing.profiles[0].localNode.localSpeechSelection).toEqual({})
   })
 
   it('lets the live lane select a deterministic wake phrase for the configured KWS pack', async () => {

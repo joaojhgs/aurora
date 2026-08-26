@@ -195,6 +195,42 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
   }
 }
 
+export function mergeAndroidVoiceRuntimeProfile(existingDocument, packs, options = {}) {
+  const existing = cloneRuntimeProfileDocument(existingDocument)
+  const active = existing?.profiles?.find((profile) => profile?.id === existing.activeProfileId)
+  const stablePeerId = active?.localNode?.stablePeerId?.trim()
+  if (!active || !stablePeerId) return buildAndroidVoiceRuntimeProfile(packs, options)
+
+  const voiceProfile = buildAndroidVoiceRuntimeProfile(packs, {
+    ...options,
+    profileId: active.id,
+  }).profiles[0]
+  active.localNode = {
+    ...active.localNode,
+    localSpeechPackState: 'ready',
+    localSpeechSelection: voiceProfile.localNode.localSpeechSelection,
+  }
+  return existing
+}
+
+function cloneRuntimeProfileDocument(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.profiles)) return null
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch {
+    return null
+  }
+}
+
+function parseStoredRuntimeProfile(value) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    return cloneRuntimeProfileDocument(JSON.parse(value))
+  } catch {
+    return null
+  }
+}
+
 export function wakePhraseSelectionFromEnvironment(language = 'en') {
   const phrase = process.env.AURORA_ANDROID_WAKE_PHRASE?.trim()
   if (!phrase) return undefined
@@ -274,18 +310,23 @@ export async function runAndroidVoiceLiveSmoke() {
 
     const readyCatalog = await invoke('aurora_android_voice_pack_catalog_status')
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
-    const profile = buildAndroidVoiceRuntimeProfile(readyPacks, {
+    const storedProfile = await invoke('aurora_thin_profile_get')
+    const profile = mergeAndroidVoiceRuntimeProfile(parseStoredRuntimeProfile(storedProfile?.value), readyPacks, {
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
       wakePhrase: wakePhraseSelectionFromEnvironment(process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en'),
     })
     await armLiveTestPcmIngress(invoke)
     const profileResult = await invoke('aurora_thin_profile_set', { value: JSON.stringify(profile) })
-    if (profileResult?.ok !== true || profileResult?.voiceRoute?.configured === true) {
-      throw new Error(`Android local-only voice profile was not applied: ${JSON.stringify(profileResult)}`)
+    if (profileResult?.ok !== true) {
+      throw new Error(`Android voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
 
+    const activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
+    if (!activeProfile?.localNode?.localSpeechSelection?.wakePhrase?.phrase) {
+      throw new Error('Android voice profile has no active wake phrase after preserving device identity.')
+    }
     fixtures = prepareVoiceFixtures({
-      wakeText: profile.profiles[0].localNode.localSpeechSelection.wakePhrase.phrase,
+      wakeText: activeProfile.localNode.localSpeechSelection.wakePhrase.phrase,
     })
     const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
     const notificationStop = await proveNotificationStop(context, invoke)
