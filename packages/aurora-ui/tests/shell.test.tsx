@@ -2961,6 +2961,59 @@ describe('Aurora production shell', () => {
     }
   })
 
+  it('keeps the measured mesh latency when native WebRTC reports an unmeasured zero placeholder', async () => {
+    const snapshot = await buildMeshPeersSnapshot(
+      new Aurora({ transport: new MockAuroraTransport() }),
+      meshRoute(),
+    )
+    const sourcePeer = snapshot.peers[0]!
+    const thinPeerSnapshot: BrowserWebRtcSnapshot = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
+      nodeName: 'Aurora host',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 1,
+      receivedFragmentCount: 1,
+      updatedAt: '2026-08-26T00:00:00Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }
+    const withMeasuredLatency = {
+      ...snapshot,
+      peers: [{ ...sourcePeer, peerId: 'peer-host', latencyMs: 37.5 }],
+    }
+
+    const reconciled = reconcileMeshPeersWithThinPeer(
+      withMeasuredLatency,
+      thinPeerSnapshot,
+      withMeasuredLatency,
+      {
+        selected: true,
+        localCandidateType: 'host',
+        remoteCandidateType: 'host',
+        category: 'host',
+        roundTripTimeMs: 0,
+        statsSource: 'RTCPeerConnection.getStats',
+        rawAddressRedacted: true,
+      },
+    )
+
+    expect(reconciled.peers.find((peer) => peer.peerId === 'peer-host')?.latencyMs).toBe(37.5)
+  })
+
   it('shows a live negotiated peer as connected when saved inbound trust is not yet mirrored', async () => {
     const snapshot = await buildMeshPeersSnapshot(new Aurora({ transport: new MockAuroraTransport() }), meshRoute())
     const peer = snapshot.peers.find((candidate) => candidate.peerId === 'peer-studio-gpu') ?? snapshot.peers[0]!

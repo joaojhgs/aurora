@@ -43,7 +43,7 @@ const DEFAULT_PACK_IDS = {
   stt: 'stt:whisper:tiny',
   tts: 'standard:piper:en_gb-cori-medium-int8',
   vad: 'vad:silero:current-int8',
-  kws: 'kws:zipformer:gigaspeech',
+  kws: 'kws:zipformer:zh-en-2025',
 }
 const RECOVERABLE_BACKGROUND_CAPTURE_ERRORS = new Set([
   'assistant_unavailable',
@@ -113,12 +113,22 @@ export function selectAndroidVoicePacks(catalogStatus, {
     const installedEntry = candidatePool.find((entry) => entry.installed === true && entry.readyForRuntime === true)
     const activeEntry = candidatePool.find((entry) => entry.installed === true && entry.active === true)
     const defaultEntry = candidatePool.find((entry) => entry.packId === DEFAULT_PACK_IDS[task])
+    const compatibleDefaultEntry = defaultEntry && packMatchesLanguage(defaultEntry, language, task)
+      ? defaultEntry
+      : undefined
+    const installedDefaultEntry = compatibleDefaultEntry?.installed === true
+      && compatibleDefaultEntry.readyForRuntime === true
+      ? compatibleDefaultEntry
+      : undefined
+    const preferredKwsEntry = task === 'kws'
+      ? installedDefaultEntry ?? compatibleDefaultEntry
+      : undefined
     const entry = requestedEntry
+      ?? preferredKwsEntry
       ?? installedLanguageEntry
       ?? languageEntry
       ?? installedEntry
       ?? activeEntry
-      ?? defaultEntry
       ?? candidatePool[0]
     if (!entry) throw new Error(`No installable Android ${task.toUpperCase()} pack is compatible with this device.`)
     selected[task] = entry
@@ -223,7 +233,7 @@ export async function runAndroidVoiceLiveSmoke() {
 
     launchApp(context)
     webview = await connectInstalledWebview(context)
-    const invoke = (command, args) => invokeTauri(webview.client, command, args)
+    let invoke = (command, args) => invokeTauri(webview.client, command, args)
 
     const initialCatalog = await invoke('aurora_android_voice_pack_catalog_status')
     const packs = selectAndroidVoicePacks(initialCatalog, {
@@ -239,13 +249,36 @@ export async function runAndroidVoiceLiveSmoke() {
     const profile = buildAndroidVoiceRuntimeProfile(readyPacks, {
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
     })
+    await armLiveTestPcmIngress(invoke)
     const profileResult = await invoke('aurora_thin_profile_set', { value: JSON.stringify(profile) })
     if (profileResult?.ok !== true || profileResult?.voiceRoute?.configured === true) {
       throw new Error(`Android local-only voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
 
     fixtures = prepareVoiceFixtures()
+    const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
+    const notificationStop = await proveNotificationStop(context, invoke)
+    webview.close()
+    webview = null
+    adbRun(context, ['shell', 'am', 'force-stop', context.appId])
+    launchApp(context)
+    webview = await connectInstalledWebview(context)
+    invoke = (command, args) => invokeTauri(webview.client, command, args)
+    await pollVoiceStatus(
+      invoke,
+      backgroundMicrophoneReadyForInjection,
+      'background restart after foreground app reopen',
+      { allowRecoverableBackgroundErrors: true },
+    )
+    notificationStop.restartedOnReopen = true
+    await stopVoiceAndRequireRelease(context, invoke, { expectUserStop: true })
     const foreground = await proveForegroundVoice(context, invoke, fixtures.foregroundPcm)
+    webview.close()
+    webview = null
+    adbRun(context, ['shell', 'am', 'force-stop', context.appId])
+    launchApp(context)
+    webview = await connectInstalledWebview(context)
+    invoke = (command, args) => invokeTauri(webview.client, command, args)
     const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm)
 
     webview.close()
@@ -263,22 +296,22 @@ export async function runAndroidVoiceLiveSmoke() {
       'sticky background restart',
       { allowRecoverableBackgroundErrors: true },
     )
-    await stopVoiceAndRequireRelease(context, resumedInvoke)
-
     const forceStop = await proveForceStopPersistence(context, resumedInvoke, readyPacks)
     webview.close()
     webview = null
     launchApp(context)
     webview = await connectInstalledWebview(context)
     resumedInvoke = (command, args) => invokeTauri(webview.client, command, args)
-    const afterForceStop = await resumedInvoke('aurora_android_voice_foreground_service_status')
-    if (afterForceStop.running === true) {
-      throw new Error('Android voice service restarted without an explicit start after force-stop.')
-    }
-    assertReadyVoiceStatus(afterForceStop, { background: true })
+    const afterForceStop = await pollVoiceStatus(
+      resumedInvoke,
+      backgroundMicrophoneReadyForInjection,
+      'automatic background restart after force-stop and app reopen',
+      { allowRecoverableBackgroundErrors: true },
+    )
     const persistedCatalog = await resumedInvoke('aurora_android_voice_pack_catalog_status')
     assertSelectedPacksPersisted(persistedCatalog, readyPacks)
 
+    await stopVoiceAndRequireRelease(context, resumedInvoke, { expectUserStop: true })
     const finalForegroundStart = await resumedInvoke('aurora_android_voice_foreground_service_start', {
       request: { remoteAudioConsent: false, backgroundSession: false },
     })
@@ -297,6 +330,7 @@ export async function runAndroidVoiceLiveSmoke() {
       device: deviceMetadata(context, devicesOutput),
       apk: { path: apk, sha256: sha256File(apk) },
       packs: Object.fromEntries(TASKS.map((task) => [task, readyPacks[task].packId])),
+      automaticBackgroundStart,
       foreground,
       background: {
         acceptedSamples: background.status.acceptedSamples,
@@ -309,6 +343,7 @@ export async function runAndroidVoiceLiveSmoke() {
         wakeLockHeld: background.wakeLockHeld,
         doze: background.doze,
       },
+      notificationStop,
       sticky: { ...sticky, acceptedSamples: resumed.acceptedSamples },
       forceStop,
       assistantRoute: 'local-only',
@@ -331,6 +366,23 @@ export async function runAndroidVoiceLiveSmoke() {
     adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP'])
     fixtures?.close()
     releaseLock()
+  }
+}
+
+async function proveAutomaticBackgroundStart(invoke) {
+  const active = await pollVoiceStatus(
+    invoke,
+    backgroundMicrophoneReadyForInjection,
+    'automatic background start after hands-free configuration',
+    { allowRecoverableBackgroundErrors: true },
+  )
+  if (active.backgroundStoppedByUser === true) {
+    throw new Error(`Automatic background start retained a stale user-stop marker: ${JSON.stringify(active)}`)
+  }
+  return {
+    started: true,
+    captureBackend: active.captureBackend,
+    acceptedSamples: active.acceptedSamples,
   }
 }
 
@@ -414,31 +466,15 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
 }
 
 async function proveBackgroundVoice(context, invoke, backgroundPcm) {
-  launchApp(context)
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before, { background: true })
-  if (before.backgroundSessionActive === false && before.running === true && before.captureActive === true) {
-    await invoke('aurora_android_voice_foreground_service_cancel')
-    await pollVoiceStatus(
-      invoke,
-      (status) => status.running !== true && status.captureActive !== true,
-      'foreground cleanup before background start',
-    )
-  }
-  await armLiveTestPcmIngress(invoke)
-  const start = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: false, backgroundSession: true },
-  })
-  if (start?.started !== true) throw new Error(`Background voice start was rejected: ${JSON.stringify(start)}`)
   const active = await pollVoiceStatus(
     invoke,
     backgroundMicrophoneReadyForInjection,
     'background microphone capture',
     { allowRecoverableBackgroundErrors: true },
   )
-  if (Number(active.acceptedSamples) !== 0) {
-    throw new Error(`Background microphone audio entered native ingress before the fixture: ${JSON.stringify(active)}`)
-  }
+  await armLiveTestPcmIngress(invoke)
   const completed = await completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: true })
   if (completed.liveOutcome !== 'rearmed' || Number(completed.failedTurns) <= Number(active.failedTurns ?? 0)) {
     throw new Error(`Background local transcription did not re-arm after the optional assistant route was unavailable: ${JSON.stringify(completed)}`)
@@ -469,6 +505,54 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm) {
   }
 }
 
+async function proveNotificationStop(context, invoke) {
+  await tapNotificationStop(context)
+  const stopped = await pollVoiceStatus(
+    invoke,
+    (status) => status.running !== true
+      && status.captureActive !== true
+      && status.backgroundStoppedByUser === true,
+    'notification Stop action',
+  )
+  await sleep(1_000)
+  const stillStopped = await invoke('aurora_android_voice_foreground_service_status')
+  if (stillStopped.running === true || stillStopped.backgroundStoppedByUser !== true) {
+    throw new Error(`Background voice ignored the notification Stop action: ${JSON.stringify(stillStopped)}`)
+  }
+
+  return {
+    stopped: stopped.backgroundStoppedByUser === true,
+    remainedStoppedUntilReopen: true,
+    restartedOnReopen: false,
+  }
+}
+
+async function tapNotificationStop(context) {
+  adbRun(context, ['shell', 'cmd', 'statusbar', 'expand-notifications'])
+  await sleep(1_000)
+  const hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
+  const action = hierarchy.match(
+    /<node[^>]*text="Stop"[^>]*resource-id="android:id\/action0"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/u,
+  )
+  if (!action) {
+    adbTry(context, ['shell', 'cmd', 'statusbar', 'collapse'])
+    throw new Error('Aurora background voice notification did not expose its Stop action.')
+  }
+  const left = Number(action[1])
+  const top = Number(action[2])
+  const right = Number(action[3])
+  const bottom = Number(action[4])
+  adbRun(context, [
+    'shell',
+    'input',
+    'tap',
+    String(Math.round((left + right) / 2)),
+    String(Math.round((top + bottom) / 2)),
+  ])
+  await sleep(500)
+  adbRun(context, ['shell', 'cmd', 'statusbar', 'collapse'])
+}
+
 async function proveStickyRestart(context, previousSamples) {
   const previousPid = appPid(context)
   if (!previousPid) throw new Error('Android voice process is not running before sticky restart check.')
@@ -491,10 +575,13 @@ async function proveStickyRestart(context, previousSamples) {
 
 async function proveForceStopPersistence(context, invoke, packs) {
   launchApp(context)
-  const start = await invoke('aurora_android_voice_foreground_service_start', {
-    request: { remoteAudioConsent: false, backgroundSession: true },
-  })
-  if (start?.started !== true) throw new Error(`Background restart before force-stop was rejected: ${JSON.stringify(start)}`)
+  const before = await invoke('aurora_android_voice_foreground_service_status')
+  if (before.backgroundSessionActive !== true || before.captureActive !== true) {
+    const start = await invoke('aurora_android_voice_foreground_service_start', {
+      request: { remoteAudioConsent: false, backgroundSession: true },
+    })
+    if (start?.started !== true) throw new Error(`Background restart before force-stop was rejected: ${JSON.stringify(start)}`)
+  }
   await pollVoiceStatus(
     invoke,
     (status) => status.backgroundSessionActive === true && status.captureActive === true && Number(status.acceptedSamples) > 0,
@@ -513,9 +600,15 @@ async function proveForceStopPersistence(context, invoke, packs) {
   }
 }
 
-async function stopVoiceAndRequireRelease(context, invoke) {
+async function stopVoiceAndRequireRelease(context, invoke, { expectUserStop = false } = {}) {
   await invoke('aurora_android_voice_foreground_service_cancel')
-  await pollVoiceStatus(invoke, (status) => status.running !== true && status.captureActive !== true, 'voice stop')
+  await pollVoiceStatus(
+    invoke,
+    (status) => status.running !== true
+      && status.captureActive !== true
+      && (!expectUserStop || status.backgroundStoppedByUser === true),
+    'voice stop',
+  )
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline && wakeLockIsHeld(context)) await sleep(250)
   if (wakeLockIsHeld(context)) throw new Error('Android background voice wake lock remained held after stop.')
@@ -629,7 +722,7 @@ export function classifyBackgroundWakeAttempt(baseline, status) {
 
 async function completeBackgroundWakeTurn(invoke, pcm, initialStatus, { acceptRearmed = false } = {}) {
   let last = initialStatus
-  let acceptedSamplesAfterPreviousBatch = Number(initialStatus?.acceptedSamples ?? 0)
+  let acceptedSamplesAfterPreviousBatch = null
   for (let attempt = 1; attempt <= MAX_BACKGROUND_WAKE_ATTEMPTS; attempt += 1) {
     const baseline = await pollVoiceStatus(
       invoke,
@@ -637,7 +730,8 @@ async function completeBackgroundWakeTurn(invoke, pcm, initialStatus, { acceptRe
       `background PCM gate before wake attempt ${attempt}`,
       { allowRecoverableBackgroundErrors: true },
     )
-    if (Number(baseline.acceptedSamples) !== acceptedSamplesAfterPreviousBatch) {
+    if (acceptedSamplesAfterPreviousBatch != null
+      && Number(baseline.acceptedSamples) !== acceptedSamplesAfterPreviousBatch) {
       throw new Error(
         `Live microphone audio entered native ingress between background fixture attempts: ${JSON.stringify(baseline)}`,
       )
@@ -737,13 +831,24 @@ function packMatchesLanguage(entry, language, task) {
   const normalized = String(entry?.language ?? '').toLocaleLowerCase()
   const target = String(language).toLocaleLowerCase().split(/[-_]/u)[0]
   if (task === 'stt' && normalized === 'multi') return true
-  return normalized === target || normalized.startsWith(`${target}-`) || normalized.startsWith(`${target}_`)
+  return normalized
+    .split(/[\s,/]+/u)
+    .some((candidate) => (
+      candidate === target
+      || candidate.startsWith(`${target}-`)
+      || candidate.startsWith(`${target}_`)
+    ))
 }
 
 function wakeLanguageForPack(entry, fallback) {
   const value = `${entry?.language ?? ''} ${entry?.packId ?? ''}`.toLocaleLowerCase()
-  if (/(^|[\s._:-])(zh|cn|chinese|wenet)([\s._:-]|$)/u.test(value)) return 'zh'
-  if (/(^|[\s._:-])(en|english|giga|gigaspeech)([\s._:-]|$)/u.test(value)) return 'en'
+  const supportsChinese = /(^|[\s._:-])(zh|cn|chinese|wenet)([\s._:-]|$)/u.test(value)
+  const supportsEnglish = /(^|[\s._:-])(en|english|giga|gigaspeech)([\s._:-]|$)/u.test(value)
+  if (supportsChinese && supportsEnglish) {
+    return String(fallback).toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en'
+  }
+  if (supportsChinese) return 'zh'
+  if (supportsEnglish) return 'en'
   return String(fallback).toLocaleLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
@@ -1123,8 +1228,8 @@ function grantVoicePermissions(context) {
 }
 
 function launchApp(context) {
-  const monkey = adbTry(context, ['shell', 'monkey', '-p', context.appId, '-c', 'android.intent.category.LAUNCHER', '1'])
-  if (!monkey.ok) adbRun(context, ['shell', 'am', 'start', '-n', `${context.appId}/.MainActivity`])
+  const activity = `${context.appId}/.MainActivity`
+  adbRun(context, ['shell', 'am', 'start', '-W', '-n', activity])
 }
 
 function appPid(context) {

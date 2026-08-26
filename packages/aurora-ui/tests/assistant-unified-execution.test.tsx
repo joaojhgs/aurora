@@ -20,6 +20,7 @@ import {
   type LightweightProviderResponse,
 } from '@aurora/client/lightweight-orchestrator'
 import {
+  buildEnvelopeAad,
   MemoryLocalDataBackend,
   type EncryptedDataEnvelopeV1,
   type EnvelopeCryptoPort,
@@ -29,6 +30,7 @@ import {
 
 import { AssistantView } from '../src/assistant-view'
 import type { LightweightAssistantDependencies } from '../src/local-assistant/lightweight-assistant'
+import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from '../src/platform-surface'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -319,10 +321,13 @@ describe('unified Assistant execution controls', () => {
     }
     const transport = MockAuroraTransport.empty()
       .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
-    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+    const localData = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, { localData })
 
     await enterPrompt(container, 'first saved chat')
     await waitUntil(() => container.textContent?.includes('Reply to first saved chat') === true)
+    const firstConversationId = (await localData.conversations.listConversations())[0]?.id
+    if (!firstConversationId) throw new Error('missing first saved conversation')
     const newConversation = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.includes('New conversation'))
     if (!newConversation) throw new Error('missing new conversation button')
@@ -333,6 +338,9 @@ describe('unified Assistant execution controls', () => {
 
     await enterPrompt(container, 'second saved chat')
     await waitUntil(() => container.textContent?.includes('Reply to second saved chat') === true)
+    const secondConversationId = (await localData.conversations.listConversations())
+      .find((conversation) => conversation.id !== firstConversationId)?.id
+    if (!secondConversationId) throw new Error('missing second saved conversation')
     const historyTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Open conversations"]')
     if (!historyTrigger) throw new Error('missing mobile conversations trigger')
     await act(async () => {
@@ -356,6 +364,12 @@ describe('unified Assistant execution controls', () => {
 
     await waitUntil(() => container.textContent?.includes('Reply to first saved chat') === true)
     expect(container.textContent).not.toContain('Reply to second saved chat')
+    await waitUntil(async () => {
+      const conversations = await localData.conversations.listConversations()
+      const first = conversations.find((conversation) => conversation.id === firstConversationId)
+      const second = conversations.find((conversation) => conversation.id === secondConversationId)
+      return Boolean(first && second && first.updatedAtMs > second.updatedAtMs)
+    })
     await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]') === null)
   })
 
@@ -928,6 +942,120 @@ describe('unified Assistant execution controls', () => {
     expect(container.textContent).toContain('Action finished.')
     expect(container.textContent).not.toContain('Needs approval')
   })
+
+  it('opens native-persisted background turns after a service restart reuses a generation', async () => {
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        throw new Error('Native-completed background turns must not be redispatched.')
+      },
+    }
+    const firstConversationId = 'voice-conversation-native-first'
+    const secondConversationId = 'voice-conversation-native-second'
+    const envelopeCrypto = new TestEnvelopeCryptoPort()
+    const localData = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    for (const [conversationId, suffix, transcript, response, createdAtMs] of [
+      [firstConversationId, 'first', 'what did aurora hear first', 'Aurora heard the first saved turn.', 1],
+      [secondConversationId, 'second', 'what did aurora hear second', 'Aurora heard the second saved turn.', 3],
+    ] as const) {
+      await localData.conversations.upsertConversation({
+        id: conversationId,
+        profileId: scope.profileId,
+        localNodeId: scope.localNodeId,
+        titleEnvelope: null,
+        createdAtMs,
+        updatedAtMs: createdAtMs + 1,
+        archivedAtMs: null,
+      })
+      for (const [id, sequence, role, text] of [
+        [`voice-user-native-${suffix}`, 0, 'user', transcript],
+        [`voice-assistant-native-${suffix}`, 1, 'assistant', response],
+      ] as const) {
+        await localData.conversations.appendMessage({
+          id,
+          conversationId,
+          sequence,
+          role,
+          contentEnvelope: await envelopeCrypto.encrypt(
+            'local-structured-data',
+            new TextEncoder().encode(text),
+            buildEnvelopeAad({
+              table: 'aurora_messages',
+              recordId: id,
+              field: 'content_envelope_json',
+              profileId: scope.profileId,
+              localNodeId: scope.localNodeId,
+            }),
+          ),
+          toolEnvelope: null,
+          status: 'complete',
+          createdAtMs: createdAtMs + sequence,
+        })
+      }
+    }
+    const nativeStatus: NativeMobileVoiceStatus = {
+      available: true,
+      running: true,
+      captureActive: false,
+      backgroundActive: true,
+      phase: 'listening',
+      reasonCode: null,
+      redacted: true,
+    }
+    const takeBackgroundResult = vi.fn()
+      .mockResolvedValueOnce({
+        generation: 7,
+        transcript: 'what did aurora hear first',
+        assistantText: 'Aurora heard the first saved turn.',
+        errorCode: null,
+        persisted: true,
+        conversationId: firstConversationId,
+        persistenceErrorCode: null,
+      })
+      .mockResolvedValueOnce({
+        generation: 7,
+        transcript: 'what did aurora hear second',
+        assistantText: 'Aurora heard the second saved turn.',
+        errorCode: null,
+        persisted: true,
+        conversationId: secondConversationId,
+        persistenceErrorCode: null,
+      })
+      .mockResolvedValue(null)
+    const nativeMobileVoice: NativeMobileVoicePort = {
+      status: vi.fn(async () => nativeStatus),
+      start: vi.fn(async () => nativeStatus),
+      finish: vi.fn(async () => nativeStatus),
+      cancel: vi.fn(async () => nativeStatus),
+      takeTranscript: vi.fn(async () => null),
+      backgroundStatus: vi.fn(async () => nativeStatus),
+      startBackground: vi.fn(async () => nativeStatus),
+      stopBackground: vi.fn(async () => nativeStatus),
+      takeBackgroundResult,
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider, {
+      localData,
+      envelopeCrypto,
+      nativeMobileVoice,
+      surfaceProfile: getAuroraSurfaceProfile({
+        runtimeMode: 'mobile-native',
+        transportKind: 'native-mobile',
+        nativePlatform: 'android',
+        nativeVoiceAvailable: true,
+        nativeWakewordAvailable: true,
+        localSpeechPackState: 'ready',
+        localSpeechEngineCapabilities: { vad: true, kws: true, stt: true, tts: true },
+      }),
+    })
+
+    await waitUntil(() => takeBackgroundResult.mock.calls.length > 0)
+    await waitUntil(() => container.textContent?.includes('Aurora heard the second saved turn.') === true)
+    expect(container.textContent).not.toContain('Aurora heard the first saved turn.')
+    expect(await localData.conversations.listMessages(firstConversationId)).toHaveLength(2)
+    expect(await localData.conversations.listMessages(secondConversationId)).toHaveLength(2)
+  })
+
 })
 
 async function renderUnifiedAssistant(
@@ -937,7 +1065,9 @@ async function renderUnifiedAssistant(
     tools?: LightweightToolClientPort
     availableTools?: readonly ToolingProjectionToolInfo[]
     localData?: LocalDataSession
+    envelopeCrypto?: EnvelopeCryptoPort
     surfaceProfile?: AuroraSurfaceProfile
+    nativeMobileVoice?: NativeMobileVoicePort
   } = {},
 ): Promise<HTMLElement> {
   client.auth.setApiKeySystem()
@@ -946,7 +1076,7 @@ async function renderUnifiedAssistant(
     provider,
     tools: overrides.tools ?? unusedToolPort(),
     localData,
-    envelopeCrypto: new TestEnvelopeCryptoPort(),
+    envelopeCrypto: overrides.envelopeCrypto ?? new TestEnvelopeCryptoPort(),
     scope,
     availableTools: overrides.availableTools ?? [],
     ids: idSequence(),
@@ -963,6 +1093,9 @@ async function renderUnifiedAssistant(
         executionHost="connected-device"
         localAssistant={localAssistant}
         surfaceProfile={overrides.surfaceProfile}
+        nativeAvailable={overrides.nativeMobileVoice ? true : undefined}
+        nativePlatform={overrides.nativeMobileVoice ? 'android' : undefined}
+        nativeMobileVoice={overrides.nativeMobileVoice}
         initialSession={{ sessionId: null, messages: [] }}
       />
     )

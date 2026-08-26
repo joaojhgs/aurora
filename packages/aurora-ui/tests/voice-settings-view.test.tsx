@@ -1853,6 +1853,58 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
+  it('offers English and Chinese phrases for the bilingual wake-word pack', async () => {
+    const onLocalSpeechSelectionConfirmed = vi.fn()
+    const runtimeProfile = meshVoiceRuntimeProfile()
+    runtimeProfile.localNode.localSpeechPackState = 'ready'
+    runtimeProfile.localNode.localSpeechSelection = {
+      vad: { packId: 'vad-small.en', packRevision: 'vad-rev-1' },
+      kws: {
+        packId: 'kws:zipformer:zh-en-2025',
+        packRevision: 'kws-rev-2',
+      },
+      stt: { packId: 'whisper.en', packRevision: 'stt-rev-3' },
+      tts: {
+        packId: 'piper.en',
+        packRevision: 'pack-rev-4',
+        voiceId: 'standard:piper.en:ava',
+        voiceRevision: 'voice-rev-5',
+      },
+      wakePhrase: {
+        phraseId: 'hey-aurora.en',
+        phrase: 'Hey Aurora',
+        language: 'en',
+        revision: 'wakephrase-v1-old',
+      },
+    }
+    const client = voiceClient({
+      capabilities: capabilities({
+        engine_capabilities: { vad: true, kws: true, stt: true, tts: true },
+      }),
+    })
+    const { container, unmount } = await renderVoiceSettings(client, {
+      runtimeProfile,
+      surfaceProfile: desktopLocalWakeSurfaceProfile(),
+      onLocalSpeechSelectionConfirmed,
+    })
+
+    await chooseSearchableOption(container, 'Choose wake phrase', '你好 Aurora')
+
+    expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith(expect.objectContaining({
+      kws: {
+        packId: 'kws:zipformer:zh-en-2025',
+        packRevision: 'kws-rev-2',
+      },
+      wakePhrase: expect.objectContaining({
+        phraseId: 'ni-hao-aurora.zh',
+        phrase: '你好 Aurora',
+        language: 'zh',
+      }),
+    }))
+    assertNoForbiddenCopy(visibleText(container))
+    await unmount()
+  })
+
   it('filters speech choices from this-device language prefs instead of the connected server', async () => {
     const onLocalSpeechSelectionConfirmed = vi.fn()
     const runtimeProfile = meshVoiceRuntimeProfile()

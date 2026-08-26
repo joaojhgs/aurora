@@ -280,6 +280,55 @@ describe("createTauriNativeSpeechCatalogPort", () => {
     expect(progress).toEqual(["queued", "downloading", "saving", "saving", "ready"]);
   });
 
+  it("allows large Android model downloads to continue beyond the former two-minute timeout", async () => {
+    const mock = transport({
+      downloadAndroidVoicePack: vi.fn(async () => ({
+        started: true,
+        packId: "whisper.large",
+        jobId: "job-large",
+      })),
+      getAndroidVoicePackDownloadStatus: vi.fn()
+        .mockResolvedValueOnce({
+          jobId: "job-large",
+          status: "started",
+          packId: "whisper.large",
+          downloadedBytes: 32,
+          totalBytes: 1_000_000_000,
+        })
+        .mockResolvedValueOnce({
+          jobId: "job-large",
+          status: "completed",
+          packId: "whisper.large",
+          downloadedBytes: 1_000_000_000,
+          totalBytes: 1_000_000_000,
+        }),
+      activateAndroidVoicePack: vi.fn(async () => ({ ok: true })),
+    });
+    const now = vi.spyOn(Date, "now")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(120_001);
+    try {
+      const port = createTauriNativeSpeechCatalogPort({
+        platform: "android",
+        transport: mock,
+        androidPollIntervalMs: 1,
+        sleep: vi.fn(async () => undefined),
+      });
+
+      await expect(port.select({
+        selection: {
+          task: "stt",
+          packId: "whisper.large",
+          packVersion: "2026.08",
+          displayName: "Large speech model",
+        },
+      })).resolves.toMatchObject({ packId: "whisper.large" });
+      expect(mock.getAndroidVoicePackDownloadStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it("selects Android and iOS clone packs with an audio-only reference profile", async () => {
     const android = transport({
       getAndroidVoicePackCatalogStatus: vi.fn(async () => ({

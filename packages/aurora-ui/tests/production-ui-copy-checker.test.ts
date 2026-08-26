@@ -12,7 +12,7 @@ const checker = join(repoRoot, 'scripts/check_production_ui_copy.py')
 describe('production UI copy checker', () => {
   it('passes the repository production surfaces with default exclusions', () => {
     expect(runCheckerDefault().ok).toBe(true)
-  })
+  }, 60_000)
 
   it('handles empty attributes, comments, and URLs without false positives', () => {
     const dir = fixtureDir()

@@ -320,6 +320,9 @@ def _assert_acceptance_report(report):
 def test_two_isolated_process_instances_use_distinct_redis_authority(tmp_path):
     if importlib.util.find_spec("bullmq") is None or importlib.util.find_spec("redis") is None:
         pytest.skip("mode-processes dependencies are not installed")
+    docker_unavailable = _docker_unavailable_reason()
+    if docker_unavailable:
+        pytest.skip(docker_unavailable)
 
     with _isolated_redis_endpoints() as redis_urls:
         report = run_harness(mode="processes", output_dir=tmp_path, redis_urls=redis_urls)
@@ -335,6 +338,25 @@ def test_two_isolated_process_instances_use_distinct_redis_authority(tmp_path):
     )
     assert report["ownership"]["aurora-1"]["process_bus"] == "bullmq"
     assert report["ownership"]["aurora-1"]["rpc_bus"] == "bullmq"
+
+
+def test_process_mode_e2e_skips_when_docker_api_is_unavailable(monkeypatch):
+    def fake_run(cmd, **kwargs):  # noqa: ANN001
+        assert cmd[:2] == ["docker", "info"]
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout="",
+            stderr="permission denied while trying to connect to the docker API",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    reason = _docker_unavailable_reason()
+
+    assert reason is not None
+    assert "Docker is not reachable" in reason
+    assert "permission denied" in reason
 
 
 def test_docker_command_timeout_includes_container_diagnostics(monkeypatch):
@@ -489,6 +511,18 @@ def _isolated_redis_endpoints() -> Iterator[tuple[str, str, str]]:
         yield (urls[0], urls[1], urls[2])
     finally:
         _cleanup_redis_containers(started or names)
+
+
+def _docker_unavailable_reason() -> str | None:
+    completed = _docker_run_raw(
+        ["docker", "info", "--format", "{{.ServerVersion}}"],
+        timeout_s=_env_float("AURORA_G016_DOCKER_INFO_TIMEOUT_S", 10),
+        text=True,
+    )
+    if completed.returncode == 0 and completed.stdout.strip():
+        return None
+    detail = (completed.stderr or completed.stdout or f"exit code {completed.returncode}").strip()
+    return f"Docker is not reachable for isolated Redis process-mode E2E: {detail}"
 
 
 def _start_redis_container(name: str) -> None:

@@ -63,6 +63,8 @@ class FakeNativeWebRtcBridge implements TauriNativeWebRtcBridge {
             remoteCandidateId: "remote",
           },
         } as T;
+      case "aurora_native_webrtc_measure_rtt":
+        return 18.75 as T;
       default:
         return undefined as T;
     }
@@ -271,6 +273,11 @@ describe("Tauri native WebRTC fallback", () => {
       type: "candidate-pair",
       state: "succeeded",
       nominated: true,
+    });
+    await expect(peer.measureRoundTripTime?.()).resolves.toBe(18.75);
+    expect(bridge.calls).toContainEqual({
+      command: "aurora_native_webrtc_measure_rtt",
+      args: { request: { peerConnectionId: 7 } },
     });
   });
 

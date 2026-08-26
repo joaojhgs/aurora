@@ -126,6 +126,7 @@ class FakePeerConnection implements PeerConnectionLike {
   channels: FakeDataChannel[] = []
   candidates: unknown[] = []
   statsReport: Map<string, unknown> = new Map()
+  measuredRoundTripTimeMs: number | undefined
   closed = false
   constructor(readonly offerSdp = 'v=0\r\no=- offer\r\n', readonly answerSdp = 'v=0\r\no=- answer\r\n') {}
   createDataChannel(label: string): DataChannelLike {
@@ -139,6 +140,7 @@ class FakePeerConnection implements PeerConnectionLike {
   async setRemoteDescription(description: any): Promise<void> { this.remoteDescription = description }
   async addIceCandidate(candidate: unknown): Promise<void> { this.candidates.push(candidate) }
   async getStats(): Promise<Map<string, unknown>> { return this.statsReport }
+  async measureRoundTripTime(): Promise<number | undefined> { return this.measuredRoundTripTimeMs }
   close(): void { this.closed = true }
   remoteChannel(channel: FakeDataChannel): void { this.ondatachannel?.({ channel }) }
   localCandidate(candidate: string | null): void { this.onicecandidate?.({ candidate: candidate === null ? null : { candidate } }) }
@@ -352,6 +354,58 @@ describe('WebRtcPeerSession', () => {
       },
       statsSource: 'RTCPeerConnection.getStats',
       rawAddressRedacted: true
+    })
+  })
+
+  it('does not report the native WebRTC zero RTT placeholder as a measurement', async () => {
+    const { session, pc } = await authorizedAnswerer()
+    pc.statsReport = new Map<string, unknown>([
+      ['pair-1', {
+        type: 'candidate-pair',
+        nominated: true,
+        state: 'succeeded',
+        currentRoundTripTime: 0,
+        totalRoundTripTime: 0,
+        localCandidateId: 'local-host',
+        remoteCandidateId: 'remote-host',
+        bytesSent: 10,
+        bytesReceived: 20
+      }],
+      ['local-host', { type: 'local-candidate', candidateType: 'host', protocol: 'udp' }],
+      ['remote-host', { type: 'remote-candidate', candidateType: 'host', protocol: 'udp' }]
+    ])
+
+    const evidence = await session.getSelectedCandidatePairEvidence()
+
+    expect(evidence).toMatchObject({
+      selected: true,
+      category: 'host',
+      statsSource: 'RTCPeerConnection.getStats',
+      rawAddressRedacted: true
+    })
+    expect(evidence).not.toHaveProperty('roundTripTimeMs')
+  })
+
+  it('uses a native application ping instead of the WebRTC zero RTT placeholder', async () => {
+    const { session, pc } = await authorizedAnswerer()
+    pc.measuredRoundTripTimeMs = 18.75
+    pc.statsReport = new Map<string, unknown>([
+      ['pair-1', {
+        type: 'candidate-pair',
+        nominated: true,
+        state: 'succeeded',
+        currentRoundTripTime: 0,
+        localCandidateId: 'local-host',
+        remoteCandidateId: 'remote-host'
+      }],
+      ['local-host', { type: 'local-candidate', candidateType: 'host', protocol: 'udp' }],
+      ['remote-host', { type: 'remote-candidate', candidateType: 'host', protocol: 'udp' }]
+    ])
+
+    await expect(session.getSelectedCandidatePairEvidence()).resolves.toMatchObject({
+      selected: true,
+      category: 'host',
+      roundTripTimeMs: 18.75
     })
   })
 

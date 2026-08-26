@@ -127,12 +127,16 @@ fn ping_is_answered_in_rust_with_the_webview_frozen() {
     registry.set_lifecycle(SurfaceLifecycle::Background);
 
     let disposition = registry
-        .accept_inbound(PEER_A, &json!({ "type": "ping", "id": "p-1" }), 1_000)
+        .accept_inbound(
+            PEER_A,
+            &json!({ "type": "ping", "id": "p-1", "ts": 42.5 }),
+            1_000,
+        )
         .expect("a bound peer may send");
 
     assert_eq!(
         disposition,
-        InboundDisposition::Answer(vec![json!({ "type": "pong", "id": "p-1" })]),
+        InboundDisposition::Answer(vec![json!({ "type": "pong", "id": "p-1", "ts": 42.5 })]),
         "a frozen webview cannot answer a ping, so Rust must"
     );
 }
@@ -157,6 +161,62 @@ fn ping_is_answered_the_same_way_in_both_lifecycles() {
         "runtime is chosen by platform, never by lifecycle: the ping answer must not change shape \
          when the phone goes into a pocket"
     );
+}
+
+#[test]
+fn native_ping_measures_only_the_matching_peer_and_pong() {
+    let mut registry = registry_with(&[PEER_A, PEER_B]);
+
+    let ping = registry.begin_native_ping(PEER_A, 1_000).unwrap();
+    let ping_id = ping["id"].as_str().unwrap().to_owned();
+    assert_eq!(ping["type"], "ping");
+    assert_eq!(ping["ts"], 1.0);
+
+    assert_eq!(
+        registry
+            .accept_native_pong(PEER_B, &json!({"type": "pong", "id": ping_id}), 1_020,)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        registry
+            .accept_native_pong(PEER_A, &json!({"type": "pong", "id": "wrong"}), 1_020,)
+            .unwrap(),
+        None
+    );
+
+    let sample = registry
+        .accept_native_pong(
+            PEER_A,
+            &json!({"type": "pong", "id": ping_id, "ts": 1.0}),
+            1_025,
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(sample.ping_id, ping_id);
+    assert_eq!(sample.round_trip_time_ms, 25);
+    assert_eq!(registry.session(PEER_A).unwrap().last_rtt_ms(), Some(25));
+    assert_eq!(registry.snapshot()["peers"][0]["lastRttMs"], 25);
+}
+
+#[test]
+fn native_ping_cancels_cleanly_and_never_reports_a_zero_placeholder() {
+    let mut registry = registry_with(&[PEER_A]);
+
+    let first = registry.begin_native_ping(PEER_A, 2_000).unwrap();
+    let first_id = first["id"].as_str().unwrap().to_owned();
+    assert!(matches!(
+        registry.begin_native_ping(PEER_A, 2_001),
+        Err(MeshSessionError::NativePingAlreadyPending { .. })
+    ));
+    assert!(registry.cancel_native_ping(PEER_A, &first_id).unwrap());
+
+    let second = registry.begin_native_ping(PEER_A, 3_000).unwrap();
+    let sample = registry
+        .accept_native_pong(PEER_A, &json!({"type": "pong", "id": second["id"]}), 3_000)
+        .unwrap()
+        .unwrap();
+    assert_eq!(sample.round_trip_time_ms, 1);
 }
 
 #[test]
@@ -425,12 +485,12 @@ fn a_backgrounded_export_catalog_uses_sdk_canonical_projection_hashes() {
     );
     assert_eq!(
         result["projection_digest"],
-        json!("3b96166bc506453626eb7c6486c62ee91a07e2987e5f060e54ab23ed130ebc20")
+        json!("19dc849739da70f3d663a039cbe3854911eae63c00d3a9d087a11e163cda6fa7")
     );
     assert_eq!(result["final_checksum"], result["projection_digest"]);
     assert_eq!(
         result["page_hash"],
-        json!("3864d7d1da503829fa8a7a54e976fdd19f5c4ac34c881c41a0f589ddeb7e3a54")
+        json!("17c079d8f866fd5faa3d5f1d09fa1fd8b026fe8c7eba69e1adc88252cfc50dbb")
     );
 }
 

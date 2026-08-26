@@ -418,7 +418,7 @@ describe('Tauri CI native evidence contract', () => {
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk"',
     )
     expect(androidWorkflow).toContain(
-      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:gigaspeech pnpm --filter @aurora/tauri-ui android:voice:live',
+      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 pnpm --filter @aurora/tauri-ui android:voice:live',
     )
     expect(androidWorkflow).not.toContain(
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" \\\n',
@@ -881,6 +881,7 @@ describe('Tauri CI native evidence contract', () => {
     for (const permission of [
       'android.permission.INTERNET',
       'android.permission.ACCESS_NETWORK_STATE',
+      'android.permission.CHANGE_NETWORK_STATE',
       'android.permission.RECORD_AUDIO',
       'android.permission.MODIFY_AUDIO_SETTINGS',
       'android.permission.WAKE_LOCK',

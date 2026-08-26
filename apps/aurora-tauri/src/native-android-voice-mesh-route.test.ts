@@ -76,6 +76,6 @@ describe('Android native assistant mesh route', () => {
 
     expect(source).toContain('intent?.action == ACTION_START_ASSISTANT');
     expect(source).toContain('AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.VOICE)');
-    expect(source).toContain('enterForeground("Starting microphone');
+    expect(source).toContain('enterForeground("Preparing voice');
   });
 });

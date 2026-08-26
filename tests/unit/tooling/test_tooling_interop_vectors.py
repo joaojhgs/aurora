@@ -193,6 +193,129 @@ def test_python_recomputes_projection_checksum_and_page_hash(vectors: dict):
     assert compute_projection_page_hash(page_without_hash) == expected_page_hash
 
 
+def test_python_accepts_native_rust_device_status_projection_hashes():
+    """Keep the native provider's sparse wire DTO bound to Python defaults."""
+
+    page = ToolingGetExportCatalogResponse.model_validate(
+        {
+            "authority_revision": {
+                "auth_grant_revision": 11,
+                "catalog_revision": 1,
+                "export_policy_revision": 11,
+                "manifest_revision": 1,
+                "protocol_revision": 1,
+                "switch_revision": 11,
+            },
+            "complete": True,
+            "final_checksum": "19dc849739da70f3d663a039cbe3854911eae63c00d3a9d087a11e163cda6fa7",
+            "page_hash": "17c079d8f866fd5faa3d5f1d09fa1fd8b026fe8c7eba69e1adc88252cfc50dbb",
+            "page_index": 0,
+            "page_size": 100,
+            "projection_digest": (
+                "19dc849739da70f3d663a039cbe3854911eae63c00d3a9d087a11e163cda6fa7"
+            ),
+            "projection_revision": (
+                "501c3e2c3e341b80ffaff76c566f1c36fc4369d5d0af6c5c9ab6c7b74cd317e5"
+            ),
+            "provider_peer_id": "aurora-local-provider",
+            "selected_protocol_tier": "projection_v1",
+            "service_instance_id": "local:aurora-local-provider:Tooling",
+            "tools": [
+                {
+                    "aliases": [
+                        "aurora.local.native.get_device_status.v1",
+                        "native.get_device_status",
+                    ],
+                    "args_schema": {
+                        "additionalProperties": False,
+                        "properties": {},
+                        "required": [],
+                        "type": "object",
+                    },
+                    "capability_class": "device",
+                    "description": "Return bounded local device availability information.",
+                    "display_name": "Get device status",
+                    "execution_location": "local",
+                    "exportable": True,
+                    "global_tool_id": (
+                        "aurora-tool:v1:aurora-local-provider:Tooling:"
+                        "aurora.local.native.get_device_status.v1"
+                    ),
+                    "legacy_global_tool_ids": ["global:native.get_device_status"],
+                    "local_name": "native.get_device_status",
+                    "name": (
+                        "aurora-tool:v1:aurora-local-provider:Tooling:"
+                        "aurora.local.native.get_device_status.v1"
+                    ),
+                    "namespace": "Tooling",
+                    "provenance": {
+                        "advertised_name": "native.get_device_status",
+                        "provider_peer_id": "aurora-local-provider",
+                        "provider_service_instance_id": (
+                            "local:aurora-local-provider:Tooling"
+                        ),
+                        "provider_tool_id": (
+                            "aurora.local.native.get_device_status.v1"
+                        ),
+                        "source": "core",
+                        "stable_source_id": "native.capability",
+                    },
+                    "provider_available": True,
+                    "provider_granted_permissions": ["Native.GetDeviceStatus"],
+                    "provider_label": "This device",
+                    "provider_peer_id": "aurora-local-provider",
+                    "provider_service_instance_id": "local:aurora-local-provider:Tooling",
+                    "required_permissions": ["Native.GetDeviceStatus"],
+                    "schema": {
+                        "additionalProperties": False,
+                        "properties": {
+                            "availableCapabilities": {
+                                "items": {
+                                    "maxLength": 160,
+                                    "minLength": 1,
+                                    "type": "string",
+                                },
+                                "maxItems": 128,
+                                "type": "array",
+                            },
+                            "batteryLevel": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number",
+                            },
+                            "charging": {"type": "boolean"},
+                            "online": {"type": "boolean"},
+                            "platform": {
+                                "maxLength": 64,
+                                "minLength": 1,
+                                "type": "string",
+                            },
+                        },
+                        "required": [],
+                        "type": "object",
+                    },
+                    "share_group_id": "native.status",
+                    "share_group_label": "Device status",
+                    "source": "core",
+                    "source_id": "native.capability",
+                    "source_type": "local",
+                    "tool_contract_id": "aurora.local.native.get_device_status.v1",
+                    "tool_id_scheme": "aurora-tool",
+                    "tool_id_version": 1,
+                    "trust_tier": "trusted",
+                }
+            ],
+            "total_count": 1,
+        }
+    )
+
+    assert (
+        compute_projection_checksum(page.tools, page.retirements, page.blocked_tools)
+        == page.projection_digest
+    )
+    assert compute_projection_page_hash(page) == page.page_hash
+
+
 @pytest.mark.parametrize(
     "negative_case",
     [case["case"] for case in json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))["negative"]],

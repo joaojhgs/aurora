@@ -12,6 +12,8 @@ const pluginPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'
 const canonicalManifestPath =
   'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/AndroidManifest.xml'
+const notificationIconPath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/res/drawable/ic_aurora_notification.xml'
 const manifestMergePath = 'apps/aurora-tauri/scripts/install-android-native-plugin.mjs'
 const preflightPath = 'apps/aurora-tauri/scripts/android-preflight.mjs'
 
@@ -61,6 +63,17 @@ function shadeCopy(service: string): string[] {
 }
 
 describe('one Aurora in the notification shade', () => {
+  it('keeps microphone PCM flowing while the native engine waits for the wake phrase', () => {
+    const service = repoText(servicePath)
+    const inputGate = sliceBetween(
+      service,
+      'private fun voiceRuntimeAcceptsMicrophoneInput(',
+      '/** JNI handle for the bounded Rust-owned PCM ingress queue. */',
+    )
+
+    expect(inputGate).toContain('1L, 2L, 7L -> true')
+  })
+
   it('keeps a single reference-counted foreground service for voice and connected devices', () => {
     const service = repoText(servicePath)
 
@@ -68,7 +81,7 @@ describe('one Aurora in the notification shade', () => {
     expect(service).toContain('class AuroraRuntimeForegroundService : Service()')
     expect(service.match(/: Service\(\)/gu)?.length ?? 0).toBe(1)
     expect(service.match(/private const val AURORA_RUNTIME_NOTIFICATION_ID = \d+/gu)?.length ?? 0).toBe(1)
-    expect(service.match(/startForeground\(/gu)?.length ?? 0).toBe(2)
+    expect(service.match(/startForeground\(/gu)?.length ?? 0).toBe(3)
     expect(
       sliceBetween(service, 'private fun enterForeground(', 'private fun foregroundServiceTypes('),
     ).toContain('startForeground(')
@@ -133,6 +146,7 @@ describe('one Aurora in the notification shade', () => {
 
   it('restarts an assistant invocation after the previous native turn finishes tearing down', () => {
     const service = repoText(servicePath)
+    const plugin = repoText(pluginPath)
     const onStart = sliceBetween(
       service,
       'override fun onStartCommand',
@@ -198,6 +212,69 @@ describe('one Aurora in the notification shade', () => {
     )
     expect(destroy).toContain('pendingAssistantStartId = null')
     expect(terminal).toContain('pendingAssistantStartId = null')
+    const startCommand = sliceBetween(
+      plugin,
+      'fun startVoiceForegroundService(invoke: Invoke)',
+      'fun injectVoicePcmForLiveTest(invoke: Invoke)',
+    )
+    expect(startCommand).toContain(
+      'else action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT',
+    )
+  })
+
+  it('yields durable wake listening to focused push-to-talk and restores it afterwards', () => {
+    const service = repoText(servicePath)
+    const onStart = sliceBetween(
+      service,
+      'override fun onStartCommand',
+      'private fun isBackgroundVoiceSessionAvailable',
+    )
+    const finish = sliceBetween(
+      service,
+      'private fun finishNativeSession()',
+      'private fun awaitFinishedSession()',
+    )
+    const terminal = sliceBetween(
+      service,
+      'private fun stopAfterTerminalFailure',
+      'private fun stopForegroundAndRemoveNotification',
+    )
+
+    expect(service).toContain('private var resumeBackgroundAfterFocusedTurn = false')
+    expect(onStart).toContain('if (backgroundSessionActive && backgroundSessionRequested())')
+    expect(onStart).toContain('resumeBackgroundAfterFocusedTurn = true')
+    expect(finish).toContain('if (!resumeBackgroundAfterFocusedTurn)')
+    expect(terminal).toContain('restartDurableBackgroundAfterFocusedTurn()')
+    expect(service).toContain('action = ACTION_START_BACKGROUND')
+  })
+
+  it('publishes focused transcription before closing capture and starts the next session fresh', () => {
+    const service = repoText(servicePath)
+    const finish = sliceBetween(
+      service,
+      'private fun finishNativeSession()',
+      'private fun awaitFinishedSession()',
+    )
+    const start = sliceBetween(
+      service,
+      'private fun startNativeVoiceSession(',
+      'private fun resumePendingAssistantStart()',
+    )
+
+    expect(finish).toContain('capture = null')
+    expect(finish).toContain('runtimeActive = true')
+    expect(finish).toContain('runtimePhase = "processing"')
+    expect(finish).toContain('updateNotification(captureSnapshot)')
+    expect(finish.indexOf('capture = null')).toBeLessThan(
+      finish.indexOf('updateNotification(captureSnapshot)'),
+    )
+    expect(finish.indexOf('updateNotification(captureSnapshot)')).toBeLessThan(
+      finish.indexOf('nativeLifecycleExecutor.execute'),
+    )
+    expect(start).toContain('lastNotificationText.set(null)')
+    expect(start.indexOf('lastNotificationText.set(null)')).toBeLessThan(
+      start.indexOf('beginNativeVoiceInitialization('),
+    )
   })
 
   it('declares both foreground service types and claims only the ones it may', () => {
@@ -209,10 +286,12 @@ describe('one Aurora in the notification shade', () => {
     for (const source of [canonicalManifest, merge]) {
       expect(source).toContain('android.permission.FOREGROUND_SERVICE_MICROPHONE')
       expect(source).toContain('android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE')
+      expect(source).toContain('android.permission.CHANGE_NETWORK_STATE')
       expect(source).toContain('android:foregroundServiceType="microphone|connectedDevice"')
       expect(source).toContain('dev.aurora.tauri.nativeplugin.AuroraRuntimeForegroundService')
     }
     expect(preflight).toContain('android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE')
+    expect(preflight).toContain('android.permission.CHANGE_NETWORK_STATE')
     // dataSync is deliberately not used: connectedDevice carries the right
     // meaning and is outside the Android 15 daily budget.
     expect(canonicalManifest).not.toContain('dataSync')
@@ -226,6 +305,11 @@ describe('one Aurora in the notification shade', () => {
     // connected-device-only run never trips the Android 14 type check.
     expect(types).toContain('checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED')
     expect(types).toContain('if (types == 0) types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE')
+
+    const enterForeground = sliceBetween(service, 'private fun enterForeground(', 'private fun foregroundServiceTypes(')
+    expect(enterForeground).toContain('catch (error: SecurityException)')
+    expect(enterForeground).toContain('AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.DEVICE_LINK)')
+    expect(enterForeground).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE')
   })
 
   it('degrades visibly when notifications are denied without ending a session', () => {
@@ -235,7 +319,14 @@ describe('one Aurora in the notification shade', () => {
     expect(service).toContain('var notificationsSuppressed: Boolean = false')
     const update = sliceBetween(service, 'private fun updateNotification(', 'private fun notificationTextFor(')
     expect(update).toContain('notificationsSuppressed = !canPostNotifications()')
-    expect(update).toContain('if (notificationsSuppressed) return')
+    expect(update).toContain('if (notificationsSuppressed) {')
+    expect(update).toContain('lastNotificationText.set(null)')
+    expect(update.indexOf('notificationsSuppressed = !canPostNotifications()')).toBeLessThan(
+      update.indexOf('lastNotificationText.get() == text'),
+    )
+    expect(update.indexOf('manager.notify(')).toBeLessThan(
+      update.lastIndexOf('lastNotificationText.set(text)'),
+    )
     expect(update).not.toContain('stopSelf')
     expect(update).not.toContain('stopAfterTerminalFailure')
 
@@ -252,6 +343,8 @@ describe('one Aurora in the notification shade', () => {
     expect(status).toContain('val focusedRuntimeReady = localDuplexReady')
     expect(status).not.toContain('gatewaySpeechReady')
     expect(status).not.toContain('val focusedRuntimeReady = nativeRouteReady &&')
+    expect(plugin).toContain('private fun hasForegroundServiceConnectedDevicePermission()')
+    expect(plugin).toContain('hasPackagePermission(Manifest.permission.CHANGE_NETWORK_STATE)')
     expect(status).toContain('val startable = microphoneGranted && foregroundServiceReady && manifestReady && focusedRuntimeReady')
     expect(status).toContain('ret.put("notificationsSuppressed"')
     expect(status).toContain('ret.put("foregroundReasons"')
@@ -265,6 +358,7 @@ describe('one Aurora in the notification shade', () => {
 
   it('keeps the one shade entry in product language', () => {
     const service = repoText(servicePath)
+    const notificationIcon = repoText(notificationIconPath)
     const copy = shadeCopy(service)
 
     expect(copy.length).toBeGreaterThanOrEqual(6)
@@ -274,7 +368,36 @@ describe('one Aurora in the notification shade', () => {
       expect(findForbiddenProductionCopyTerms(line).map((term) => term.id), line).toEqual([])
     }
     // The starting text and the Stop action label are user-facing too.
-    expect(findForbiddenProductionCopyTerms('Starting microphone…')).toEqual([])
-    expect(service).toContain('"Starting microphone…"')
+    expect(findForbiddenProductionCopyTerms('Preparing voice…')).toEqual([])
+    expect(service).toContain('"Preparing voice…"')
+    for (const [value, phase] of [
+      ['8L', 'transcribing'],
+      ['9L', 'waiting-for-response'],
+      ['10L', 'preparing-speech'],
+    ]) {
+      expect(service).toContain(`${value} -> "${phase}"`)
+    }
+    for (const stateCopy of [
+      'Say “$wakePhrase” to begin. Tap Stop to end.',
+      'Aurora heard you. Keep speaking.',
+      'Listening. Tap again when finished.',
+      'Understanding what you said…',
+      'Understanding what you said… Tap Stop to end.',
+      'Aurora is thinking…',
+      'Aurora is thinking… Tap Stop to end.',
+      'Preparing the answer to speak…',
+      'Preparing the answer to speak… Tap Stop to end.',
+      'Another app is using the microphone. Aurora will resume automatically.',
+      'Working on your request. Tap Stop to end.',
+      'Aurora is speaking. Tap Stop to end.',
+    ]) {
+      expect(service).toContain(`"${stateCopy}"`)
+    }
+    expect(service).toContain('.setSmallIcon(R.drawable.ic_aurora_notification)')
+    expect(service).not.toContain('resources.getIdentifier(')
+    expect(notificationIcon).toContain('android:fillColor="#FFFFFFFF"')
+    expect(notificationIcon).toContain('android:fillType="evenOdd"')
+    expect(notificationIcon).toContain('M12,1.5L15.1,5.4')
+    expect(notificationIcon).not.toContain('M4,4h40v40h-40z')
   })
 })

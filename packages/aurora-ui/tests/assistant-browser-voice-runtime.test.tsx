@@ -1084,7 +1084,7 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(grantedMobileVoice.start).toHaveBeenCalledWith({ remoteAudioConsent: true })
   })
 
-  it('refreshes native mobile hands-free readiness when wake assets become ready', async () => {
+  it('keeps native mobile hands-free startup out of the assistant route when wake assets become ready', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
     let backgroundAvailable = false
@@ -1123,18 +1123,17 @@ describe('Assistant hosted browser voice runtime', () => {
       await Promise.resolve()
     })
 
-    await vi.waitFor(() => expect(findButtonByText(container, 'Hands-free').hasAttribute('disabled')).toBe(false))
-    await clickButtonByText(container, 'Hands-free')
-    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+    expect(findButtonOrNull(container, 'Hands-free')).toBeNull()
   })
 
-  it('routes native mobile hands-free control through the background port and preserves it when hidden', async () => {
+  it('observes native-owned mobile hands-free state and preserves it when hidden', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
     nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('listening', true))
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => true })
-    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
       nativeMobileVoice,
       nativeAvailable: true,
       nativePlatform: 'android'
@@ -1154,54 +1153,40 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
   })
 
-  it('waits for native mobile background capture before marking hands-free active', async () => {
+  it('temporarily hands native-owned mobile background capture to push-to-talk', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
-    let startRequested = false
-    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
-      startRequested = true
-      return nativeMobileStatus('processing')
-    })
-    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
-      startRequested
-        ? nativeMobileStatus('listening', true)
-        : nativeMobileStatus('idle')
-    ))
-    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('listening', true))
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
       nativeMobileVoice,
       nativeAvailable: true,
       nativePlatform: 'android'
     })
 
-    await clickButtonByText(container, 'Hands-free')
-    await vi.waitFor(() => expect(nativeMobileVoice.startBackground).toHaveBeenCalledTimes(1))
-    await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus.mock.calls.length).toBeGreaterThan(1))
-    expect(findButtonByText(container, 'Stop hands-free')).toBeTruthy()
+    const pushToTalk = await vi.waitFor(() => findButton(container, 'Push to talk'))
+    expect(pushToTalk.hasAttribute('disabled')).toBe(false)
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+    expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+    expect(findButtonOrNull(container, 'Hands-free')).toBeNull()
   })
 
-  it('keeps hands-free inactive when native background capture is not confirmed', async () => {
+  it('does not start mobile hands-free voice from the assistant UI', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
-    let startRequested = false
-    nativeMobileVoice.startBackground.mockImplementationOnce(async () => {
-      startRequested = true
-      return nativeMobileStatus('processing')
-    })
-    nativeMobileVoice.backgroundStatus.mockImplementation(async () => (
-      startRequested
-        ? nativeMobileStatus('unavailable')
-        : nativeMobileStatus('idle')
-    ))
+    nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('idle'))
     const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
       nativeMobileVoice,
       nativeAvailable: true,
       nativePlatform: 'android'
     })
 
-    await clickButtonByText(container, 'Hands-free')
-    await vi.waitFor(() => expect(nativeMobileVoice.stopBackground).toHaveBeenCalledTimes(1))
-    expect(findButtonByText(container, 'Hands-free')).toBeTruthy()
-    expect(container.textContent).toContain('Hands-free voice could not start. Check microphone access on this device.')
+    await vi.waitFor(() => expect(nativeMobileVoice.backgroundStatus).toHaveBeenCalled())
+    expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+    expect(nativeMobileVoice.stopBackground).not.toHaveBeenCalled()
+    expect(findButtonOrNull(container, 'Hands-free')).toBeNull()
   })
 
   it('keeps local native mobile hands-free independent from connected speech consent and selection', async () => {
@@ -1243,7 +1228,7 @@ describe('Assistant hosted browser voice runtime', () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
     nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('listening', true))
-    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
       nativeMobileVoice,
       nativeAvailable: true,
       nativePlatform: 'android'
@@ -1268,10 +1253,10 @@ describe('Assistant hosted browser voice runtime', () => {
     expect(nativeMobileVoice.cancel).not.toHaveBeenCalled()
   })
 
-  it('preserves a pending native mobile hands-free start across lifecycle release and unmount', async () => {
+  it('does not create a native mobile hands-free start while the assistant route unmounts', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
     const nativeMobileVoice = createNativeMobileVoicePort()
-    const container = renderAssistant(client, nativeMobileBackgroundSurface(), undefined, {
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
       nativeMobileVoice,
       nativeAvailable: true,
       nativePlatform: 'android'
@@ -1303,6 +1288,86 @@ describe('Assistant hosted browser voice runtime', () => {
     await clickButton(container, 'Push to talk')
     await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
     expect(nativeMobileVoice.startBackground).not.toHaveBeenCalled()
+  })
+
+  it('submits the final native mobile transcript through the normal assistant path', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    vi.spyOn(client.assistant, 'streamMessage').mockImplementation(async function* () {
+      yield completedUpdate('Voice response ready.')
+    })
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.takeTranscript.mockResolvedValueOnce('hello from native speech')
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await clickButton(container, 'Push to talk')
+    await vi.waitFor(() => expect(nativeMobileVoice.start).toHaveBeenCalledTimes(1))
+    await clickButton(container, 'Stop listening')
+
+    await vi.waitFor(() => expect(nativeMobileVoice.finish).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(nativeMobileVoice.takeTranscript).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(container.textContent).toContain('hello from native speech'))
+    expect(container.textContent).toContain('Voice response ready.')
+  })
+
+  it('reports an unsaved native mobile background wake turn instead of displaying an ephemeral transcript', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const streamMessage = vi.spyOn(client.assistant, 'streamMessage')
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('listening', true))
+    nativeMobileVoice.takeBackgroundResult.mockResolvedValueOnce({
+      generation: 7,
+      transcript: 'what is the meaning of life',
+      assistantText: null,
+      errorCode: 'assistant_unavailable',
+      persisted: false,
+      conversationId: null,
+      persistenceErrorCode: 'native_voice_persistence_failed',
+    })
+    nativeMobileVoice.takeBackgroundResult.mockResolvedValue(null)
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await vi.waitFor(() => expect(nativeMobileVoice.takeBackgroundResult).toHaveBeenCalled())
+    await vi.waitFor(() => expect(container.textContent).toContain('This voice request could not be saved. Try again.'))
+    expect(container.textContent).not.toContain('what is the meaning of life')
+    expect(streamMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not display or redispatch an assistant response when its native background turn was not saved', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport({ fixtures: false }) })
+    const streamMessage = vi.spyOn(client.assistant, 'streamMessage')
+    const nativeMobileVoice = createNativeMobileVoicePort()
+    nativeMobileVoice.status.mockResolvedValue(nativeMobileStatus('listening', true))
+    nativeMobileVoice.backgroundStatus.mockResolvedValue(nativeMobileStatus('listening', true))
+    nativeMobileVoice.takeBackgroundResult.mockResolvedValueOnce({
+      generation: 8,
+      transcript: 'turn on the lights',
+      assistantText: 'The lights are on.',
+      errorCode: null,
+      persisted: false,
+      conversationId: null,
+      persistenceErrorCode: 'native_voice_persistence_failed',
+    })
+    nativeMobileVoice.takeBackgroundResult.mockResolvedValue(null)
+    const container = renderAssistant(client, nativeMobileSurface(), undefined, {
+      nativeMobileVoice,
+      nativeAvailable: true,
+      nativePlatform: 'android'
+    })
+
+    await vi.waitFor(() => expect(nativeMobileVoice.takeBackgroundResult).toHaveBeenCalled())
+    await vi.waitFor(() => expect(container.textContent).toContain('This voice request could not be saved. Try again.'))
+    expect(container.textContent).not.toContain('turn on the lights')
+    expect(container.textContent).not.toContain('The lights are on.')
+    expect(streamMessage).not.toHaveBeenCalled()
   })
 
   it('preserves a pending native mobile push-to-talk start across a visible WebView blur', async () => {
@@ -2508,6 +2573,8 @@ function createNativeMobileVoicePort(): NativeMobileVoicePort & {
   status: ReturnType<typeof vi.fn>
   start: ReturnType<typeof vi.fn>
   finish: ReturnType<typeof vi.fn>
+  takeTranscript: ReturnType<typeof vi.fn>
+  takeBackgroundResult: ReturnType<typeof vi.fn>
   cancel: ReturnType<typeof vi.fn>
   backgroundStatus: ReturnType<typeof vi.fn>
   startBackground: ReturnType<typeof vi.fn>
@@ -2517,6 +2584,8 @@ function createNativeMobileVoicePort(): NativeMobileVoicePort & {
     status: vi.fn(async () => nativeMobileStatus('idle')),
     start: vi.fn(async () => nativeMobileStatus('listening')),
     finish: vi.fn(async () => nativeMobileStatus('processing')),
+    takeTranscript: vi.fn(async () => 'native speech request'),
+    takeBackgroundResult: vi.fn(async () => null),
     cancel: vi.fn(async () => nativeMobileStatus('idle')),
     backgroundStatus: vi.fn(async () => nativeMobileStatus('idle')),
     startBackground: vi.fn(async () => nativeMobileStatus('listening', true)),

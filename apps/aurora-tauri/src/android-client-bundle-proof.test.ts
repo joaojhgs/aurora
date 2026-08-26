@@ -748,6 +748,34 @@ if (argv[0] === 'build:frontend:android-client') {
         ).toBe(readFileSync(join(sourceDir, library), 'utf8'))
       }
     }
+    const staleX86RustLibrary = join(
+      root,
+      'app',
+      'src',
+      'main',
+      'jniLibs',
+      'x86_64',
+      'libaurora_tauri_lib.so',
+    )
+    writeFileSync(staleX86RustLibrary, 'stale x86 rust library\n')
+    const arm64OnlySyncResult = spawnSync(process.execPath, [syncNativePlugin], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+      },
+    })
+    expect(arm64OnlySyncResult.status, arm64OnlySyncResult.stderr).toBe(0)
+    expect(existsSync(staleX86RustLibrary)).toBe(false)
+    for (const library of requiredNativeSpeechLibraries.slice(1)) {
+      expect(
+        readFileSync(join(root, 'app', 'src', 'main', 'jniLibs', 'arm64-v8a', library), 'utf8'),
+      ).toBe(readFileSync(join(arm64NativeLibDir, library), 'utf8'))
+      expect(existsSync(join(root, 'app', 'src', 'main', 'jniLibs', 'x86_64', library))).toBe(false)
+    }
     expect(readFileSync(manifestPath, 'utf8')).toMatch(
       /<activity\b(?=[^>]*android:name="\.MainActivity")(?=[^>]*android:windowSoftInputMode="adjustResize")[^>]*>/,
     )
@@ -755,6 +783,9 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(mainActivity).toContain('ViewCompat.setOnApplyWindowInsetsListener(content)')
     expect(mainActivity).toContain('WindowInsetsCompat.Type.ime()')
     expect(mainActivity).toContain('applyAuroraImeInsets()')
+    expect(mainActivity.match(/applyAuroraImeInsets\(\)/g)).toHaveLength(2)
+    expect(mainActivity).toContain('ApplicationInfo.FLAG_DEBUGGABLE')
+    expect(mainActivity).toContain('WebView.setWebContentsDebuggingEnabled(true)')
     expect(existsSync(join(root, 'tauri.settings.gradle'))).toBe(false)
     expect(existsSync(join(root, 'app', 'tauri.build.gradle.kts'))).toBe(false)
     expect(

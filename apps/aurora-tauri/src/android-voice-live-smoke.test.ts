@@ -125,13 +125,14 @@ describe('Android packaged voice live smoke harness', () => {
       entry('tts', 'standard:piper:en_us-john-medium-int8', 'en-us', 20_800_096),
       entry('vad', 'vad:silero:current-int8', 'und', 212_860),
       entry('kws', 'kws:zipformer:gigaspeech', 'en', 17_626_723),
+      entry('kws', 'kws:zipformer:zh-en-2025', 'en zh', 32_885_699),
     ]
 
     const selected = module.selectAndroidVoicePacks({ entries }, { language: 'en' })
     expect(selected.stt.packId).toBe('stt:whisper:tiny')
     expect(selected.tts.packId).toBe('standard:piper:en_gb-cori-medium-int8')
     expect(selected.vad.packId).toBe('vad:silero:current-int8')
-    expect(selected.kws.packId).toBe('kws:zipformer:gigaspeech')
+    expect(selected.kws.packId).toBe('kws:zipformer:zh-en-2025')
 
     const explicit = module.selectAndroidVoicePacks(
       { entries },
@@ -414,17 +415,17 @@ describe('Android packaged voice live smoke harness', () => {
     expect(pollBody).toContain('nextIngressRenewalAt = Date.now() + LIVE_TEST_INGRESS_RENEW_INTERVAL_MS')
   })
 
-  it('arms exclusive ingress before each service start and rejects any pre-fixture microphone push', () => {
+  it('arms exclusive ingress before each capture and rejects any pre-fixture microphone push', () => {
     const source = readFileSync(scriptPath, 'utf8')
-    for (const functionName of ['proveForegroundVoice', 'proveBackgroundVoice']) {
-      const start = source.indexOf(`async function ${functionName}`)
-      const nextFunction = source.indexOf('\nasync function ', start + 1)
-      const body = source.slice(start, nextFunction)
-      expect(body.indexOf('await armLiveTestPcmIngress(invoke)')).toBeLessThan(
-        body.indexOf("await invoke('aurora_android_voice_foreground_service_start'"),
-      )
-      expect(body).toContain('Number(active.acceptedSamples) !== 0')
-    }
+    const foregroundStart = source.indexOf('async function proveForegroundVoice')
+    const foregroundBody = source.slice(foregroundStart, source.indexOf('\nasync function ', foregroundStart + 1))
+    expect(foregroundBody.indexOf('await armLiveTestPcmIngress(invoke)')).toBeLessThan(
+      foregroundBody.indexOf("await invoke('aurora_android_voice_foreground_service_start'"),
+    )
+    expect(foregroundBody).toContain('Number(active.acceptedSamples) !== 0')
+
+    const profileSet = source.indexOf("await invoke('aurora_thin_profile_set'")
+    expect(source.lastIndexOf('await armLiveTestPcmIngress(invoke)', profileSet)).toBeGreaterThan(-1)
   })
 
   it('renders the wake phrase separately from the post-wake command', async () => {
@@ -529,7 +530,7 @@ describe('Android packaged voice live smoke harness', () => {
     }))
   })
 
-  it('checks foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
+  it('checks automatic background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
     const source = readFileSync(scriptPath, 'utf8')
     for (const invariant of [
       'captureBackend === \'android-audiorecord-rust-queue\'',
@@ -545,6 +546,11 @@ describe('Android packaged voice live smoke harness', () => {
       'wakeLockIsHeld(context)',
       'assertSelectedPacksPersisted',
       'stopVoiceAndRequireRelease',
+      'proveAutomaticBackgroundStart',
+      'proveNotificationStop',
+      "['exec-out', 'uiautomator', 'dump', '/dev/tty']",
+      'resource-id="android:id\\/action0"',
+      "'automatic background restart after force-stop and app reopen'",
     ]) {
       expect(source).toContain(invariant)
     }
