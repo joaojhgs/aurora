@@ -248,6 +248,29 @@ describe('Tauri CI native evidence contract', () => {
     }
   })
 
+  it('cancels superseded pull request verification without preempting non-PR runs', () => {
+    const pullRequestWorkflows = [
+      '.github/workflows/quality.yml',
+      '.github/workflows/python-tests.yml',
+      '.github/workflows/frontend-sdk.yml',
+      '.github/workflows/sdk-backend-contract-conformance.yml',
+      '.github/workflows/webrtc-interop.yml',
+      '.github/workflows/tauri-desktop.yml',
+      '.github/workflows/tauri-android.yml',
+      '.github/workflows/tauri-ios.yml',
+      '.github/workflows/tauri-ios-release.yml',
+      '.github/workflows/rust-voice.yml',
+      '.github/workflows/required-check-aliases.yml',
+    ]
+    const expectedGroup = 'group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}'
+
+    for (const path of pullRequestWorkflows) {
+      const workflow = repoText(path)
+      expect(workflow, path).toContain(expectedGroup)
+      expect(workflow, path).toContain('cancel-in-progress: true')
+    }
+  })
+
   it('requires mobile preflight policy gates without claiming unsupported signing or platform capabilities', () => {
     const packageJson = JSON.parse(repoText('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
     const androidWorkflow = repoText('.github/workflows/tauri-android.yml')
