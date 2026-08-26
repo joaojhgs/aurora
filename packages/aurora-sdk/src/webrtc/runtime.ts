@@ -1152,6 +1152,8 @@ class RuntimeSignalingHub {
 
 class MultiplexedRuntimeSignalingPort implements PeerSessionSignalingPort, MeshPeerSignalingHandle {
   private acquired = false
+  private closing = false
+  private connectPromise: Promise<void> | null = null
 
   constructor(
     private readonly hub: RuntimeSignalingHub,
@@ -1161,17 +1163,37 @@ class MultiplexedRuntimeSignalingPort implements PeerSessionSignalingPort, MeshP
   snapshot() { return this.hub.snapshot() }
 
   async connect(): Promise<void> {
+    if (this.closing) throw new Error('Cannot connect a closed room signaling port')
     if (this.acquired) return
-    this.acquired = true
+    if (this.connectPromise === null) {
+      this.connectPromise = this.finishConnect()
+    }
+    await this.connectPromise
+  }
+
+  private async finishConnect(): Promise<void> {
     try {
       await this.hub.acquire(this.allowlist)
-    } catch (error) {
-      this.acquired = false
-      throw error
+      if (this.closing) {
+        await this.hub.release('closed_during_connect')
+        throw new Error('Room signaling port closed while connecting')
+      }
+      this.acquired = true
+    } finally {
+      this.connectPromise = null
     }
   }
 
   async close(reason?: string): Promise<void> {
+    this.closing = true
+    const connecting = this.connectPromise
+    if (connecting !== null) {
+      try {
+        await connecting
+      } catch {
+        // Failed or cancelled acquisition owns its hub cleanup.
+      }
+    }
     if (!this.acquired) return
     this.acquired = false
     await this.hub.release(reason)

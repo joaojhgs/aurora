@@ -1600,7 +1600,11 @@ describe('browser WebRTC thin-shell runtime', () => {
       restoreKnownMeshPeers: true,
     })
 
-    await vi.waitFor(() => expect(connectPeer).toHaveBeenCalledWith(portugalProfile))
+    await vi.waitFor(() => expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
+      expectedStablePeerId: 'peer-portugal',
+      nodeName: 'Portugal node',
+    })))
+    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
 
     await controller.disconnect('runtime closed')
   })

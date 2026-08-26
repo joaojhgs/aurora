@@ -496,6 +496,17 @@ function resolveActiveNodeRole(
   return requestedNodeRole
 }
 
+function stablePeerConnectionProfile(
+  profile: WebRtcPeerConnectionProfile,
+): WebRtcPeerConnectionProfile {
+  if (profile.expectedStablePeerId === undefined) return profile
+  const {
+    expectedSignalingPeerId: _ephemeralSignalingPeerId,
+    ...stableProfile
+  } = profile
+  return stableProfile
+}
+
 export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly listeners = new Set<BrowserSnapshotListener>()
   private readonly peer: RegistryCapablePeerController | null
@@ -664,9 +675,10 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.connectionDiagnostic = undefined
     this.attemptedConnect = true
     this.disconnected = false
-    this.credentialStore?.savePeerConnectionProfile?.(profile)
+    const connectionProfile = stablePeerConnectionProfile(profile)
+    this.credentialStore?.savePeerConnectionProfile?.(connectionProfile)
     try {
-      await peer.connectPeer(profile)
+      await peer.connectPeer(connectionProfile)
     } catch (error) {
       if (options.reportFailure !== false) {
         this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY

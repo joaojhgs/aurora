@@ -528,7 +528,7 @@ class RuntimeFakeSignaling {
   private listeners = new Set<(message: any) => void>()
   snapshot = () => ({ selectedBrokerOrigin: 'wss://broker.example.test', reconnectCount: 0 })
   diagnostics = () => ({ attempts: [], reconnectCount: 0 })
-  connect = vi.fn(async () => undefined)
+  connect = vi.fn(async (): Promise<void> => undefined)
   close = vi.fn(async () => undefined)
   send = vi.fn(async (channel: string, envelope: Record<string, unknown>, toPeer?: string) => {
     const item: { channel: string; envelope: Record<string, unknown>; toPeer?: string } = { channel, envelope }
@@ -2301,6 +2301,7 @@ function makeMultiPeerHarness(
       backgroundStandbyReason?: 'connection_budget' | 'surface_suspended'
     }
     visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument']
+    signalingConnect?: (signaling: RuntimeFakeSignaling, index: number) => Promise<void>
   },
 ): MultiPeerHarness {
   const harnessOptions = typeof peerConnectionPolicyOrOptions === 'string'
@@ -2319,6 +2320,10 @@ function makeMultiPeerHarness(
     pairingConnectPoll: { maxAttempts: 3, initialDelayMs: 1, maxDelayMs: 1, rpcTimeoutMs: 1_000 },
     signalingFactory: () => {
       const next = new RuntimeFakeSignaling()
+      const index = signalings.length
+      if (harnessOptions.signalingConnect !== undefined) {
+        next.connect = vi.fn(async () => await harnessOptions.signalingConnect!(next, index))
+      }
       signalings.push(next)
       return next as any
     },
@@ -2495,6 +2500,42 @@ describe('browser WebRTC runtime peer registry', {
       expect.objectContaining({ toPeer: 'z-beta' }),
     ])
     await harness.runtime.close()
+  })
+
+  it('closes an in-flight shared signaling acquisition exactly once when it resolves late', async () => {
+    let resolveConnect!: () => void
+    const connectGate = new Promise<void>((resolve) => { resolveConnect = resolve })
+    const harness = makeMultiPeerHarness(['a-node'], {
+      peerConnectionPolicy: 'mesh',
+      signalingConnect: async () => await connectGate,
+    })
+    const connecting = harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await vi.waitFor(() => expect(harness.signalings[0]?.connect).toHaveBeenCalledOnce())
+
+    const closing = harness.runtime.close()
+    resolveConnect()
+    await Promise.all([connecting, closing])
+
+    expect(harness.signalings[0]?.close).toHaveBeenCalledTimes(1)
+    expect(harness.registry.roster().peers).toEqual([])
+  })
+
+  it('closes an in-flight shared signaling acquisition exactly once when it rejects late', async () => {
+    let rejectConnect!: (error: Error) => void
+    const connectGate = new Promise<void>((_resolve, reject) => { rejectConnect = reject })
+    const harness = makeMultiPeerHarness(['a-node'], {
+      peerConnectionPolicy: 'mesh',
+      signalingConnect: async () => await connectGate,
+    })
+    const connecting = harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await vi.waitFor(() => expect(harness.signalings[0]?.connect).toHaveBeenCalledOnce())
+
+    const closing = harness.runtime.close()
+    rejectConnect(new Error('signaling unavailable'))
+    await Promise.all([connecting, closing])
+
+    expect(harness.signalings[0]?.close).toHaveBeenCalledTimes(1)
+    expect(harness.registry.roster().peers).toEqual([])
   })
 
   it('clones only the active data-channel key for trusted native composition', async () => {
