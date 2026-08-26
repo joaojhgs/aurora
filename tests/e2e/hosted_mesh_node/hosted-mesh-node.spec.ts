@@ -281,16 +281,16 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(serviceSharing).toContainText('Service sharing')
   await expect(serviceSharing).toContainText('Tools')
   await expect(serviceSharing).not.toContainText(forbiddenProductionTerms)
-  const toolsServiceCard = serviceSharing.getByRole('article').filter({
-    has: page.getByRole('heading', { name: 'Tools', exact: true }),
-  })
-  const toolsServiceSwitch = toolsServiceCard.getByRole('switch', {
+  const toolsServiceSwitch = serviceSharing.getByRole('switch', {
     name: /Share Tools from this device/u,
+  })
+  const toolsServiceRow = serviceSharing.getByRole('row').filter({
+    has: toolsServiceSwitch,
   })
   await expect(toolsServiceSwitch).not.toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceCard.getByRole('button', { name: 'Review changes' }).click()
+  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
   const enabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
@@ -302,7 +302,7 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(toolsServiceSwitch).toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceCard.getByRole('button', { name: 'Review changes' }).click()
+  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
   const disabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
@@ -314,7 +314,7 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(toolsServiceSwitch).not.toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceCard.getByRole('button', { name: 'Review changes' }).click()
+  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
   const reenabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
