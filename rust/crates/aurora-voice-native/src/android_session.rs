@@ -131,6 +131,10 @@ impl LazyInstalledSttProvider {
         self.provider.as_mut().ok_or(EngineError::TaskUnavailable)
     }
 
+    fn preload(&mut self) -> Result<(), EngineError> {
+        self.ensure_loaded().map(|_| ())
+    }
+
     fn accepts_binding(&self, binding: &FiniteSttProviderBinding) -> bool {
         matches!(
             binding,
@@ -289,6 +293,10 @@ impl LazyInstalledTtsProvider {
             self.provider = Some(provider);
         }
         self.provider.as_mut().ok_or(EngineError::TaskUnavailable)
+    }
+
+    fn preload(&mut self) -> Result<(), EngineError> {
+        self.ensure_loaded().map(|_| ())
     }
 
     fn accepts_binding(&self, binding: &TtsSynthesisProviderBinding) -> bool {
@@ -944,14 +952,18 @@ fn build_local_runtime(
         )
         .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     );
-    let stt = LazyInstalledSttProvider::new(Arc::clone(&manager), stt_model_id)
+    let mut stt = LazyInstalledSttProvider::new(Arc::clone(&manager), stt_model_id)
         .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    let tts = LazyInstalledTtsProvider::new(
+    stt.preload()
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let mut tts = LazyInstalledTtsProvider::new(
         Arc::clone(&manager),
         tts_voice_id,
         config.tts_reference_profile.clone(),
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    tts.preload()
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let policy = microphone_policy(config)?;
     let limits = transport_limits(policy);
     let transport_for_assistant = build_assistant_transport(config, limits)?;

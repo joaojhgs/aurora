@@ -51,6 +51,16 @@ const SHERPA_FINITE_STT_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MAX_SECONDS: usize = 60;
 const SHERPA_TTS_MIN_SPEED: f32 = 0.5;
 const SHERPA_TTS_MAX_SPEED: f32 = 2.0;
+#[cfg(all(
+    target_os = "android",
+    any(feature = "native-stt", feature = "native-tts")
+))]
+const NATIVE_INFERENCE_THREADS: i32 = 4;
+#[cfg(all(
+    not(target_os = "android"),
+    any(feature = "native-stt", feature = "native-tts")
+))]
+const NATIVE_INFERENCE_THREADS: i32 = 1;
 
 /// Product-safe backend fault classes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2693,7 +2703,8 @@ mod native_stt_backend {
                 stt_config
             }
         }
-        .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32);
+        .with_sample_rate(VAD_SAMPLE_RATE_HZ as i32)
+        .with_num_threads(NATIVE_INFERENCE_THREADS);
         OfflineSttRecognizer::new(&config)
     }
 
@@ -2863,7 +2874,7 @@ mod native_tts_backend {
                 files.tokens_path,
                 files.espeak_data_dir,
             )
-            .with_num_threads(1);
+            .with_num_threads(NATIVE_INFERENCE_THREADS);
             if let Some(lexicon_path) = files.lexicon_path {
                 config = config.with_lexicon_path(lexicon_path);
             }
@@ -2934,7 +2945,7 @@ mod native_tts_backend {
                 files.vocab_path,
                 files.token_scores_path,
             ))
-            .with_num_threads(1);
+            .with_num_threads(NATIVE_INFERENCE_THREADS);
             let synthesizer = OfflineTtsSynthesizer::new(&config).map_err(native_tts_error)?;
             let sample_rate = u32::try_from(synthesizer.sample_rate())
                 .map_err(|_| EngineError::InvalidRequest)?;
