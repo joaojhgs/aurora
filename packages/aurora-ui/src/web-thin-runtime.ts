@@ -406,6 +406,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     config: securityContext,
     visibilityDocument: config.visibilityDocument,
     restoreKnownMeshPeers: activeNodeRole === 'mesh-node',
+    ...(activeProfile ? { activeProfile } : {}),
   })
   const localProviderLifecycle = config.peerHost as (WebRtcPeerHost & LocalProviderLifecyclePort) | undefined
   const lifecycle = localToolProviderEnabled && localProviderLifecycle
@@ -509,6 +510,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly disabledReason: string | undefined
   private readonly credentialStore: BrowserThinRuntimeConfig['credentialStore']
   private readonly config: BrowserRuntimeSecurityContext
+  private connectionProfile: WebRtcPeerConnectionProfile | null
   private sdkSnapshot: PeerConnectionSnapshot | null = null
   private fallbackReason: string | undefined
   private visibilityDiagnostic: string | undefined
@@ -523,7 +525,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private removeVisibilityListeners: (() => void) | undefined
   private readonly visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']
 
-  constructor(peer: RegistryCapablePeerController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument']; restoreKnownMeshPeers?: boolean }) {
+  constructor(peer: RegistryCapablePeerController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument']; restoreKnownMeshPeers?: boolean; activeProfile?: WebRtcPeerConnectionProfile }) {
     this.peer = peer
     this.mode = mode
     this.httpFallback = options.httpFallback
@@ -531,6 +533,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.disabledReason = options.disabledReason
     this.credentialStore = options.credentialStore
     this.config = options.config ?? {}
+    this.connectionProfile = options.activeProfile ?? null
     this.visibilityDocument = options.visibilityDocument
     if (peer) this.unsubscribe = peer.subscribe((snapshot) => {
       this.sdkSnapshot = snapshot
@@ -702,10 +705,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       })
     }
     if (roster?.peers.some((entry) => entry.peerId === peerId && entry.standby === undefined)) return
-    const savedProfile = this.credentialStore?.loadConnectionProfile?.()
+    const savedProfile = this.connectionProfile ?? this.credentialStore?.loadConnectionProfile?.()
     if (!savedProfile) {
       throw new AuroraError({ code: 'validation', message: INVITE_REQUIRED_COPY })
     }
+    this.connectionProfile = savedProfile
     const {
       expectedSignalingPeerId: _savedSignalingPeerId,
       expectedStablePeerId: _savedStablePeerId,
@@ -822,6 +826,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     if (!parsed) throw new AuroraError({ code: 'validation', message: INVITE_REQUIRED_COPY })
     if (this.credentialStore?.setRoomSecret) this.credentialStore.setRoomSecret(parsed.profile.roomSecretRef, parsed.roomSecret)
     this.credentialStore?.saveConnectionProfile?.(parsed.profile)
+    this.connectionProfile = parsed.profile
     return parsed.profile
   }
 
@@ -832,7 +837,10 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.connectionDiagnostic = undefined
     this.attemptedConnect = true
     this.disconnected = false
-    if (profile !== undefined) this.credentialStore?.saveConnectionProfile?.(profile)
+    if (profile !== undefined) {
+      this.credentialStore?.saveConnectionProfile?.(profile)
+      this.connectionProfile = profile
+    }
     try {
       await this.peer.connect(profile as WebRtcPeerConnectionProfile)
     } catch (error) {

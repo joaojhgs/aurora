@@ -1397,6 +1397,69 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.roster()?.peers.map((entry) => entry.peerId)).toEqual(['peer-brazil'])
   })
 
+  it('sets up a discovered mesh device from the active native profile when browser metadata is empty', async () => {
+    const connectPeer = vi.fn(async () => undefined)
+    const active = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-brazil',
+      connectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const roster: MeshPeerRosterSnapshot = {
+      primaryPeerId: 'peer-brazil',
+      peers: [{ peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: active }],
+      discovered: [{
+        peerId: 'peer-portugal',
+        stablePeerId: 'peer-portugal',
+        signalingPeerId: 'signal-portugal',
+        nodeName: 'Portugal node',
+        connected: false,
+        lastSeenAt: '2026-08-26T20:01:00.000Z',
+      }],
+      updatedAt: '2026-08-26T20:01:00.000Z',
+    }
+    const activeProfile = webRtcProfileFromInvite(inviteText())!
+    const loadConnectionProfile = vi.fn(() => null)
+    const peer = {
+      snapshot: () => active,
+      subscribe: (listener: (snapshot: PeerConnectionSnapshot) => void) => {
+        listener(active)
+        return () => undefined
+      },
+      roster: () => roster,
+      connectPeer,
+    }
+    const controller = new BrowserWebRtcPeerController(peer as never, 'webrtc-only', {
+      httpFallback: false,
+      activeProfile,
+      credentialStore: { loadConnectionProfile } as never,
+    })
+
+    await controller.connectDiscoveredDevice('peer-portugal')
+
+    expect(loadConnectionProfile).not.toHaveBeenCalled()
+    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
+      appId: activeProfile.appId,
+      room: activeProfile.room,
+      roomSecretRef: activeProfile.roomSecretRef,
+      expectedStablePeerId: 'peer-portugal',
+      expectedSignalingPeerId: 'signal-portugal',
+      nodeName: 'Portugal node',
+    }))
+  })
+
   it('restores an approved discovered mesh peer after the node reloads', async () => {
     const connectPeer = vi.fn(async () => undefined)
     const disconnectPeer = vi.fn(async () => undefined)
