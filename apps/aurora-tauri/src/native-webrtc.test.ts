@@ -9,6 +9,7 @@ import {
   nativeTransportHandleForRemoteSignalingId,
   NativeWebRtcMessageTooLargeError,
   NATIVE_WEBRTC_MAX_MESSAGE_BYTES,
+  subscribeNativeTransportHandles,
   type TauriNativeWebRtcBridge,
 } from "./native-webrtc";
 
@@ -91,6 +92,8 @@ class FakeNativeWebRtcBridge implements TauriNativeWebRtcBridge {
 describe("Tauri native WebRTC fallback", () => {
   it("indexes and reinjects frames by the session's exact signaling identity", async () => {
     const bridge = new FakeNativeWebRtcBridge();
+    const handlesChanged = vi.fn();
+    const unsubscribeHandles = subscribeNativeTransportHandles(handlesChanged);
     const peer = createTauriNativePeerConnectionFactory(bridge)(
       {},
       { remoteSignalingId: "signal-exact-peer" },
@@ -99,6 +102,8 @@ describe("Tauri native WebRTC fallback", () => {
     const onMessage = vi.fn();
     channel.onmessage = onMessage;
     await peer.createOffer();
+    expect(handlesChanged).toHaveBeenCalledOnce();
+    unsubscribeHandles();
     bridge.emit({
       type: "dataChannelOpen",
       peerConnectionId: 7,

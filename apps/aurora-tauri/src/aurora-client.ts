@@ -91,6 +91,7 @@ import {
   createTauriNativePeerConnection,
   deliverNativeTransportFrame,
   nativeTransportHandleForRemoteSignalingId,
+  subscribeNativeTransportHandles,
 } from "./native-webrtc";
 import {
   installMeshSessionRuntimeLink,
@@ -1365,6 +1366,7 @@ function createTauriWebThinRuntime({
         peer: runtime.peer,
         handleForRemoteSignalingId:
           nativeTransportHandleForRemoteSignalingId,
+        subscribeNativeTransportHandles,
         deliverFrame: deliverNativeTransportFrame,
         ...(nativeLocalPeerId !== undefined
           ? {

@@ -507,6 +507,25 @@ class NativeWebRtcEventRegistry {
  * binding.
  */
 const liveNativeDataChannels = new Set<TauriNativeDataChannel>();
+const nativeTransportHandleListeners = new Set<() => void>();
+
+/** Observe exact native transport handles becoming available or closing. */
+export function subscribeNativeTransportHandles(
+  listener: () => void,
+): () => void {
+  nativeTransportHandleListeners.add(listener);
+  return () => nativeTransportHandleListeners.delete(listener);
+}
+
+function notifyNativeTransportHandlesChanged(): void {
+  for (const listener of nativeTransportHandleListeners) {
+    try {
+      listener();
+    } catch {
+      // One observer must not prevent a native data channel from binding.
+    }
+  }
+}
 
 /**
  * The native handles a mesh session binding may use.
@@ -634,6 +653,7 @@ class TauriNativeDataChannel implements DataChannelLike {
     this.peerConnectionId = peerConnectionId;
     this.dataChannelId = response.dataChannelId;
     liveNativeDataChannels.add(this);
+    notifyNativeTransportHandlesChanged();
     this.readyState = response.readyState || "connecting";
     this.nativeBufferedAmount = response.bufferedAmount;
     this.syncBufferedAmountLowThreshold();
@@ -781,7 +801,9 @@ class TauriNativeDataChannel implements DataChannelLike {
   nativeClose(): void {
     if (this.readyState === "closed") return;
     this.readyState = "closed";
-    liveNativeDataChannels.delete(this);
+    if (liveNativeDataChannels.delete(this)) {
+      notifyNativeTransportHandlesChanged();
+    }
     this.nativeBufferedAmount = 0;
     this.pendingIpcBytes = 0;
     this.onclose?.();

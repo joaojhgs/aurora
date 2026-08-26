@@ -235,8 +235,8 @@ const loadingSnapshot: ServiceRoutingSnapshot = {
 
 /**
  * Mesh always shows the canonical service-sharing table.
- * Lightweight nodes that own local features use the local sharing projection;
- * home-node owners and remote consoles load sharing from the connected Aurora.
+ * Nodes that own local features use only the local sharing projection. Remote
+ * consoles load the full service catalog from the connected Aurora.
  */
 export function MeshServiceSharingResource({
   client,
@@ -246,14 +246,10 @@ export function MeshServiceSharingResource({
   localFeatureSharing,
   sessionIsAdmin,
 }: MeshServiceSharingResourceProps) {
-  if (surface.ownsLocalNodeState && localFeatureSharing && !surface.canManageLocalServiceConfiguration) {
+  if (surface.ownsLocalNodeState && localFeatureSharing) {
     return (
       <LocalServiceRoutingResource
         featureSharing={localFeatureSharing}
-        client={client}
-        route={route}
-        {...(thinPeer ? { thinPeer } : {})}
-        {...(typeof sessionIsAdmin === 'boolean' ? { sessionIsAdmin } : {})}
       />
     )
   }
@@ -350,127 +346,54 @@ export function ServiceRoutingResource({
 
 export function LocalServiceRoutingResource({
   featureSharing,
-  client,
-  route,
-  thinPeer,
-  sessionIsAdmin,
 }: LocalServiceRoutingResourceProps) {
   const [sharing, setSharing] = useState<LocalFeatureSharingSnapshot | null>(null)
-  const [connectedSnapshot, setConnectedSnapshot] = useState<ServiceRoutingSnapshot | null>(null)
-  const [thinSnapshot, setThinSnapshot] = useState<BrowserWebRtcSnapshot | null>(
-    () => thinPeer?.snapshot() ?? null,
-  )
-  const [localLoadError, setLocalLoadError] = useState<string | null>(null)
-  const [connectedLoadError, setConnectedLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const loadGeneration = useRef(0)
-  const routeKey = route
-    ? [route.item.id, route.state, route.disabled ? 'disabled' : 'enabled'].join('|')
-    : null
-  const stableRoute = useMemo(() => route, [routeKey])
-  const connectedTransportReady = !thinPeer || isBrowserWebRtcConnected(thinSnapshot)
-  const requiresConnectedLoad = Boolean(client && stableRoute && connectedTransportReady)
 
   const load = useCallback(async () => {
     const generation = loadGeneration.current + 1
     loadGeneration.current = generation
-    setLocalLoadError(null)
-    setConnectedLoadError(null)
-    let localFailed = false
-    let connectedFailed = false
+    setLoadError(null)
     try {
-      const [localResult, connectedResult] = await Promise.allSettled([
-        featureSharing.load(),
-        requiresConnectedLoad && client && stableRoute
-          ? buildServiceRoutingSnapshot(client, stableRoute)
-          : Promise.resolve(null),
-      ])
-      if (loadGeneration.current !== generation) return
-      if (localResult.status === 'fulfilled') {
-        setSharing(localResult.value)
-      } else {
-        localFailed = true
-      }
-      if (connectedResult.status === 'fulfilled') {
-        const nextConnected = connectedResult.value
-        setConnectedSnapshot((current) => nextConnected
-          ? reconcileServiceRoutingWithThinPeer(
-              nextConnected,
-              thinPeer?.snapshot(),
-              current,
-            )
-          : null)
-      } else if (requiresConnectedLoad) {
-        connectedFailed = true
-      }
-      if (localFailed || connectedFailed) {
-        const message = 'Service sharing is unavailable right now. Try again.'
-        if (localFailed) setLocalLoadError(message)
-        if (connectedFailed) setConnectedLoadError(message)
-      }
+      const next = await featureSharing.load()
+      if (loadGeneration.current === generation) setSharing(next)
     } catch {
-      if (loadGeneration.current !== generation) return
-      const message = 'Service sharing is unavailable right now. Try again.'
-      setLocalLoadError(message)
-      if (requiresConnectedLoad) setConnectedLoadError(message)
+      if (loadGeneration.current === generation) {
+        setLoadError('Service sharing is unavailable right now. Try again.')
+      }
     }
-  }, [client, featureSharing, requiresConnectedLoad, stableRoute, thinPeer])
+  }, [featureSharing])
 
   useEffect(() => {
-    setThinSnapshot(thinPeer?.snapshot() ?? null)
-    if (!thinPeer) return undefined
-    return thinPeer.subscribe((nextThinSnapshot) => {
-      setThinSnapshot(nextThinSnapshot)
-      setConnectedSnapshot((current) =>
-        current
-          ? reconcileServiceRoutingWithThinPeer(
-              current,
-              nextThinSnapshot,
-              current,
-            )
-          : current,
-      )
-    })
-  }, [thinPeer])
-
-  useEffect(() => {
-    setConnectedSnapshot(null)
     void load()
     return () => {
       loadGeneration.current += 1
     }
-  }, [load, requiresConnectedLoad])
+  }, [load])
 
   useEffect(() => {
     return featureSharing.subscribe?.((next) => {
+      loadGeneration.current += 1
       setSharing(next)
-      setLocalLoadError(null)
+      setLoadError(null)
     })
   }, [featureSharing])
 
-  const loadError = connectedLoadError ?? localLoadError
-  const connectedBaselinePending = requiresConnectedLoad && !connectedSnapshot && !connectedLoadError
-  const canEditHomeServerSharing = resolveSessionIsAdmin(sessionIsAdmin, client)
   const snapshot = useMemo(
-    () => {
-      const next = connectedBaselinePending
-        ? { ...loadingSnapshot, evidenceSource: 'This device' }
-        : buildNodeServiceRoutingSnapshot(sharing, connectedSnapshot, loadError)
-      return canEditHomeServerSharing ? next : lockHomeServerRoutingRows(next)
-    },
-    [canEditHomeServerSharing, connectedBaselinePending, connectedSnapshot, loadError, sharing],
+    () => buildLocalServiceRoutingSnapshot(sharing, loadError),
+    [loadError, sharing],
   )
 
   const previewRow = useCallback(async (
     row: ServiceRoutingRow,
     changes: ServiceRoutingChange[],
   ): Promise<ServiceRoutingPreviewEvidence> => {
-    const localChanges = changes.filter((change) => change.keyPath.startsWith('local.'))
-    const connectedChanges = changes.filter((change) => change.keyPath.startsWith('services.'))
-    const unsupported = localChanges.filter((change) => change.keyPath !== `${row.sharingPath}.share`)
-    const shareChange = localChanges.find((change) => change.keyPath === `${row.sharingPath}.share`)
-    const localPreview: ServiceRoutingPreviewEvidence = {
+    const unsupported = changes.filter((change) => change.keyPath !== `${row.sharingPath}.share`)
+    const shareChange = changes.find((change) => change.keyPath === `${row.sharingPath}.share`)
+    return {
       valid: unsupported.length === 0 && Boolean(shareChange),
       diffs: shareChange ? [{
         key_path: shareChange.keyPath,
@@ -492,23 +415,7 @@ export function LocalServiceRoutingResource({
       changedPaths: shareChange ? [shareChange.keyPath] : [],
       secretsRedacted: true,
     }
-    if (connectedChanges.length === 0) return localPreview
-    if (!client) throw new Error('Service sharing is unavailable right now. Try again.')
-    const connectedPreview = await previewServiceRoutingChanges(client, connectedChanges)
-    if (localChanges.length === 0) return connectedPreview
-    return {
-      ...connectedPreview,
-      valid: connectedPreview.valid && localPreview.valid,
-      diffs: [...localPreview.diffs, ...connectedPreview.diffs],
-      errors: [...localPreview.errors, ...connectedPreview.errors],
-      localPreviewToken: localPreview.localPreviewToken ?? null,
-      changedPaths: [...new Set([
-        ...localPreview.changedPaths,
-        ...connectedPreview.changedPaths,
-      ])],
-      secretsRedacted: localPreview.secretsRedacted && connectedPreview.secretsRedacted,
-    }
-  }, [client, sharing])
+  }, [sharing])
 
   const saveRow = useCallback(async (
     row: ServiceRoutingRow,
@@ -518,46 +425,25 @@ export function LocalServiceRoutingResource({
   ) => {
     if (!confirmation.reauthConfirmed || !preview.valid || !preview.previewToken) return
     const localChanges = changes.filter((change) => change.keyPath.startsWith('local.'))
-    const connectedChanges = canEditHomeServerSharing
-      ? changes.filter((change) => change.keyPath.startsWith('services.'))
-      : []
     setPendingRowId(row.id)
     setMutationError(null)
     try {
-      let localUpdate: {
-        current: LocalFeatureSharingSnapshot
-        share: boolean
-        featureIds: Set<string>
-      } | null = null
-      if (localChanges.length > 0) {
-        const current = await featureSharing.load()
-        const expectedLocalToken = preview.localPreviewToken
-          ?? (connectedChanges.length === 0 ? preview.previewToken : null)
-        if (!expectedLocalToken || localSharingPreviewToken(current) !== expectedLocalToken) {
-          throw new Error('Sharing choices changed. Refresh and review before saving again.')
-        }
-        const share = localChanges.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
-        if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
-        const serviceScope = localShareableServiceScopes(current)
-          .find((candidate) => candidate.id === row.id)
-        if (!serviceScope) throw new Error('This service is no longer available on this device.')
-        localUpdate = {
-          current,
-          share,
-          featureIds: new Set(serviceScope.featureIds),
-        }
+      const current = await featureSharing.load()
+      const expectedLocalToken = preview.localPreviewToken ?? preview.previewToken
+      if (!expectedLocalToken || localSharingPreviewToken(current) !== expectedLocalToken) {
+        throw new Error('Sharing choices changed. Refresh and review before saving again.')
       }
-      if (connectedChanges.length > 0) {
-        if (!client) throw new Error('Service sharing is unavailable right now. Try again.')
-        await commitServiceRoutingChanges(client, row, connectedChanges, preview, confirmation)
-      }
-      if (localUpdate) {
-        for (const feature of localUpdate.current.features.filter(
-          (candidate) => candidate.available && localUpdate?.featureIds.has(candidate.id),
-        )) {
-          if (feature.enabled !== localUpdate.share) {
-            await featureSharing.setFeatureEnabled(feature.id, localUpdate.share)
-          }
+      const share = localChanges.find((change) => change.keyPath === `${row.sharingPath}.share`)?.value
+      if (typeof share !== 'boolean') throw new Error('This sharing choice is unavailable.')
+      const serviceScope = localShareableServiceScopes(current)
+        .find((candidate) => candidate.id === row.id)
+      if (!serviceScope) throw new Error('This service is no longer available on this device.')
+      const featureIds = new Set(serviceScope.featureIds)
+      for (const feature of current.features.filter(
+        (candidate) => candidate.available && featureIds.has(candidate.id),
+      )) {
+        if (feature.enabled !== share) {
+          await featureSharing.setFeatureEnabled(feature.id, share)
         }
       }
       await load()
@@ -566,7 +452,7 @@ export function LocalServiceRoutingResource({
     } finally {
       setPendingRowId(null)
     }
-  }, [canEditHomeServerSharing, client, featureSharing, load])
+  }, [featureSharing, load])
 
   return (
     <ServiceRoutingView
@@ -578,7 +464,7 @@ export function LocalServiceRoutingResource({
       onSaveRow={(row, changes, preview, confirmation) => {
         void saveRow(row, changes, preview, confirmation)
       }}
-      sharingOnly={!client || !stableRoute}
+      sharingOnly
     />
   )
 }
@@ -656,91 +542,10 @@ export function buildLocalServiceRoutingSnapshot(
 
 export function buildNodeServiceRoutingSnapshot(
   sharing: LocalFeatureSharingSnapshot | null,
-  connected: ServiceRoutingSnapshot | null,
+  _connected: ServiceRoutingSnapshot | null,
   error: string | null = null,
 ): ServiceRoutingSnapshot {
-  const local = buildLocalServiceRoutingSnapshot(sharing, error)
-  if (!connected || connected.loadState === 'loading') return local
-
-  const connectedRows = new Map(connected.rows.map((row) => [row.id, row]))
-  const localRowIds = new Set(local.rows.map((row) => row.id))
-  const rows: ServiceRoutingRow[] = local.rows.map((localRow) => {
-    const connectedRow = connectedRows.get(localRow.id)
-    return {
-      ...localRow,
-      registryStatus: localRow.registryStatus,
-      registryVersion: connectedRow?.registryVersion ?? localRow.registryVersion,
-      registered: localRow.registered,
-      routingPath: connectedRow?.routingPath ?? localRow.routingPath,
-      routingPolicy: connectedRow?.routingPolicy ?? localRow.routingPolicy,
-      providerOptions: connectedRow?.providerOptions ?? localRow.providerOptions,
-      remoteFeatureOptions: connectedRow?.remoteFeatureOptions ?? localRow.remoteFeatureOptions,
-      remoteCapabilityTagOptions: connectedRow?.remoteCapabilityTagOptions ?? localRow.remoteCapabilityTagOptions,
-      sharingEditable: true,
-      sharingDetailsEditable: false,
-      routingEditable: Boolean(connectedRow?.routingEditable ?? connectedRow),
-    }
-  })
-
-  for (const row of connected.rows) {
-    if (localRowIds.has(row.id)) continue
-    rows.push({
-      ...row,
-      exportPolicy: {
-        share: false,
-        maxConcurrent: 0,
-        unsharedFeatureIds: [],
-        unsharedMethodIds: [],
-      },
-      exportFeatures: [],
-      ungroupedMethods: [],
-      staleMethodIds: [],
-      sharingEditable: false,
-      sharingDetailsEditable: false,
-      routingEditable: row.routingEditable ?? connected.editable,
-    })
-  }
-
-  const knownPeerMap = new Map<string, ServiceRoutingKnownPeer>()
-  for (const peer of local.knownPeers) knownPeerMap.set(peer.peerId, peer)
-  for (const peer of connected.knownPeers) knownPeerMap.set(peer.peerId, peer)
-  const warnings = [
-    ...local.warnings,
-    ...connected.warnings,
-  ]
-  return {
-    loadState: local.loadState === 'unavailable'
-      ? local.loadState
-      : connected.loadState === 'unavailable'
-        ? 'degraded'
-        : connected.loadState === 'degraded'
-          ? 'degraded'
-          : local.loadState,
-    rows: orderServiceRows(rows),
-    knownPeers: [...knownPeerMap.values()]
-      .sort((a, b) => a.label.localeCompare(b.label) || a.peerId.localeCompare(b.peerId)),
-    editable: local.editable || connected.editable,
-    registryMode: connected.registryMode ?? local.registryMode,
-    warnings: [...new Set(warnings)],
-    error: local.error,
-    evidenceSource: connected.evidenceSource,
-  }
-}
-
-function lockHomeServerRoutingRows(snapshot: ServiceRoutingSnapshot): ServiceRoutingSnapshot {
-  return {
-    ...snapshot,
-    rows: snapshot.rows.map((row) => (
-      row.basePath.startsWith('local.')
-        ? { ...row, routingEditable: false }
-        : {
-            ...row,
-            sharingEditable: false,
-            sharingDetailsEditable: false,
-            routingEditable: false,
-          }
-    )),
-  }
+  return buildLocalServiceRoutingSnapshot(sharing, error)
 }
 
 function localSharingRevision(sharing: LocalFeatureSharingSnapshot): number {

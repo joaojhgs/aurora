@@ -211,33 +211,18 @@ describe('Service sharing and outbound routing', () => {
     expect(JSON.stringify(local)).not.toContain('Native.Unavailable')
   })
 
-  it('combines local service sharing with connected-device routing without claiming remote services are local', async () => {
+  it('keeps node service sharing limited to services this device can share', async () => {
     const connected = await buildServiceRoutingSnapshot(snapshotClient(), route())
     const node = buildNodeServiceRoutingSnapshot(localSharingSnapshot(), connected)
 
-    expect(node.rows.map((candidate) => candidate.id)).toEqual(expect.arrayContaining([
-      'tooling',
-      'tts',
-      'stt-coordinator',
-      'stt-transcription',
-    ]))
+    expect(node.rows.map((candidate) => candidate.id)).toEqual(['tooling'])
     expect(node.rows.find((candidate) => candidate.id === 'tooling')).toMatchObject({
       sharingEditable: true,
       sharingDetailsEditable: false,
-      routingEditable: true,
+      routingEditable: false,
       exportPolicy: { share: true },
     })
-    expect(node.rows.find((candidate) => candidate.id === 'tts')).toMatchObject({
-      sharingEditable: false,
-      routingEditable: true,
-      exportPolicy: { share: false },
-      routingPolicy: { prefer: 'network', fallback: 'local' },
-    })
-    expect(node.rows.find((candidate) => candidate.id === 'tts')?.providerOptions).toContainEqual({
-      id: 'peer-provider',
-      label: 'Studio node',
-      stale: false,
-    })
+    expect(JSON.stringify(node)).not.toMatch(/Text to speech|STT coordinator|STT transcription/iu)
   })
 
   it('shows the sharing table for a remote console instead of omitting it', async () => {
@@ -301,7 +286,47 @@ describe('Service sharing and outbound routing', () => {
 
     expect(container.textContent).toContain('Service sharing')
     expect(container.textContent).toContain('Tools')
+    expect(container.textContent).not.toContain('Text to speech')
+    expect(container.textContent).not.toContain('STT coordinator')
+    expect(container.textContent).not.toContain('STT transcription')
     expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('keeps desktop-local node mode on the local shareable-service projection', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const surface = getAuroraSurfaceProfile({
+      runtimeMode: 'desktop-local',
+      nodeMode: 'mesh-node',
+      transportKind: 'tauri-local',
+      runtimeTier: 'python-full',
+    })
+    expect(surface.canManageLocalServiceConfiguration).toBe(true)
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(async () => localSharingSnapshot()),
+      subscribe: () => () => undefined,
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+
+    await act(async () => {
+      root.render(
+        <MeshServiceSharingResource
+          client={snapshotClient()}
+          route={route()}
+          surface={surface}
+          localFeatureSharing={port}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('Text to speech')
+    expect(container.textContent).not.toContain('STT coordinator')
     await act(async () => root.unmount())
   })
 
@@ -387,7 +412,7 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => root.unmount())
   })
 
-  it('waits for the connected routing baseline before enabling local service edits', async () => {
+  it('does not wait for a connected routing baseline before enabling local service edits', async () => {
     const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
     const baseClient = snapshotClient()
     const registryResult = await baseClient.registry.getRegistry()
@@ -422,8 +447,9 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Loading service sharing through Aurora')
-    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(client.registry.getRegistry).not.toHaveBeenCalled()
 
     await act(async () => {
       connectedRegistry.resolve(registryResult)
@@ -432,11 +458,11 @@ describe('Service sharing and outbound routing', () => {
     })
 
     expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
-    expect(container.textContent).toContain('Send requests to')
+    expect(container.textContent).not.toContain('Text to speech')
     await act(async () => root.unmount())
   })
 
-  it('returns to loading when an authorized peer makes the connected baseline required', async () => {
+  it('keeps local sharing available when a peer becomes authorized', async () => {
     const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
     const baseClient = snapshotClient()
     const registryResult = await baseClient.registry.getRegistry()
@@ -481,8 +507,9 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Loading service sharing through Aurora')
-    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(client.registry.getRegistry).not.toHaveBeenCalled()
 
     await act(async () => {
       connectedRegistry.resolve(registryResult)
@@ -491,11 +518,11 @@ describe('Service sharing and outbound routing', () => {
     })
 
     expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
-    expect(container.textContent).toContain('Send requests to')
+    expect(container.textContent).not.toContain('Text to speech')
     await act(async () => root.unmount())
   })
 
-  it('shows degraded connected evidence when one connected source cannot load', async () => {
+  it('does not load connected service evidence for local node sharing', async () => {
     const connectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
     const baseClient = snapshotClient()
     const client = {
@@ -532,23 +559,63 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Loading service sharing through Aurora')
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(client.registry.getRegistry).not.toHaveBeenCalled()
 
     await act(async () => {
-      connectedRegistry.reject(new Error('connected registry unavailable'))
       await Promise.resolve()
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Needs attention')
-    expect(container.textContent).toContain('Some service sharing details are temporarily unavailable.')
+    expect(container.textContent).not.toContain('Needs attention')
+    expect(container.textContent).not.toContain('Some service sharing details are temporarily unavailable.')
     expect(container.textContent).not.toMatch(/registry unavailable|config metadata|capability catalog/iu)
     expect(container.textContent).not.toContain('Loading service sharing through Aurora')
     expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
     await act(async () => root.unmount())
   })
 
-  it('re-enters loading while retrying a rejected required connected load', async () => {
+  it('does not let an older local load overwrite a newer sharing update', async () => {
+    const staleLoad = deferred<LocalFeatureSharingSnapshot>()
+    const current = localSharingSnapshot()
+    const newer: LocalFeatureSharingSnapshot = {
+      ...current,
+      features: current.features.map((feature) => ({ ...feature, enabled: false })),
+    }
+    const port: LocalFeatureSharingPort = {
+      load: vi.fn(() => staleLoad.promise),
+      subscribe(listener) {
+        listener(newer)
+        return () => undefined
+      },
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<LocalServiceRoutingResource featureSharing={port} />)
+      await Promise.resolve()
+    })
+
+    const sharingSwitch = container.querySelector<HTMLElement>(
+      '[aria-label="Share Tools from this device"]',
+    )
+    expect(sharingSwitch?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => {
+      staleLoad.resolve(localSharingSnapshot())
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(sharingSwitch?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => root.unmount())
+  })
+
+  it('refreshes local node sharing without retrying the connected catalog', async () => {
     const retryConnectedRegistry = deferred<Awaited<ReturnType<AuroraClient['registry']['getRegistry']>>>()
     const baseClient = snapshotClient()
     const registryResult = await baseClient.registry.getRegistry()
@@ -616,8 +683,9 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
-    expect(container.textContent).toContain('Loading service sharing through Aurora')
-    expect(container.querySelector('[aria-label="Share Tools from this device"]')).toBeNull()
+    expect(container.textContent).not.toContain('Loading service sharing through Aurora')
+    expect(container.querySelector('[aria-label="Share Tools from this device"]')).not.toBeNull()
+    expect(client.registry.getRegistry).not.toHaveBeenCalled()
 
     await act(async () => {
       retryConnectedRegistry.resolve(registryResult)
@@ -654,10 +722,8 @@ describe('Service sharing and outbound routing', () => {
 
     expect(container.textContent).toContain('Service sharing')
     expect(container.textContent).toContain('Tools')
-    expect(container.textContent).toContain('Text to speech')
-    expect(container.textContent).toContain('Send requests to')
-    expect(container.querySelector('[aria-label="Mobile service policy cards"]')).not.toBeNull()
-    expect(container.querySelector('table')?.className).not.toContain('aui-service-sharing-table')
+    expect(container.textContent).not.toContain('Text to speech')
+    expect(container.querySelector('table')?.className).toContain('aui-service-sharing-table')
 
     await act(async () => {
       container.querySelector<HTMLElement>('[aria-label="Share Tools from this device"]')?.click()
@@ -679,7 +745,7 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => root.unmount())
   })
 
-  it('reviews and saves local sharing with connected routing as one row update', async () => {
+  it('reviews local node sharing without mutating connected routing', async () => {
     const setFeatureEnabled = vi.fn(async () => undefined)
     const previewDiff = vi.fn(async ({ changes }: { changes: Array<{ key_path: string; value: unknown }> }) => ({
       ok: true as const,
@@ -759,7 +825,7 @@ describe('Service sharing and outbound routing', () => {
     await act(async () => buttonByText(toolsCard, 'Review changes').click())
     await act(async () => Promise.resolve())
 
-    expect(toolsCard.textContent).toContain('Review 2 changes')
+    expect(toolsCard.textContent).toContain('Review 1 change')
     expect(toolsCard.textContent).not.toContain('separately')
     const approval = Array.from(toolsCard.querySelectorAll<HTMLElement>('[role="checkbox"]'))
       .find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))!
@@ -770,22 +836,8 @@ describe('Service sharing and outbound routing', () => {
       await Promise.resolve()
     })
 
-    expect(previewDiff).toHaveBeenCalledWith({
-      changes: [{
-        key_path: 'services.tooling.mesh_routing.require_explicit_selector',
-        value: true,
-      }],
-    })
-    expect(commitChangeSet).toHaveBeenCalledWith(expect.objectContaining({
-      request: {
-        changes: [{
-          key_path: 'services.tooling.mesh_routing.require_explicit_selector',
-          value: true,
-        }],
-        base_revision: 12,
-        preview_token: 'connected-preview-12',
-      },
-    }))
+    expect(previewDiff).not.toHaveBeenCalled()
+    expect(commitChangeSet).not.toHaveBeenCalled()
     expect(setFeatureEnabled.mock.calls).toEqual([
       ['Native.GetDeviceStatus', false],
       ['Native.StartVoice', false],

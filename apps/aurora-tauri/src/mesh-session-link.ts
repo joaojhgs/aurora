@@ -380,6 +380,9 @@ export interface MeshSessionRuntimeLinkOptions {
   readonly subscribeNativeResume?: (
     listener: () => void,
   ) => Promise<() => void>;
+  readonly subscribeNativeTransportHandles?: (
+    listener: () => void,
+  ) => () => void;
   readonly unbindRetryDelaysMs?: readonly number[];
   /** Delays between manifest hydration retries; injected for deterministic tests. */
   readonly manifestRetryDelaysMs?: readonly number[];
@@ -456,6 +459,7 @@ export function installMeshSessionRuntimeLink(
   let reconcileQueue: Promise<void> = Promise.resolve();
   let lifecycleStop: MeshSurfaceLifecycleStop | null = null;
   let nativeResumeUnlisten: (() => void) | null = null;
+  let nativeTransportHandlesUnlisten: (() => void) | null = null;
   let nativeResumeSubscription: Promise<void> = Promise.resolve();
   const unbindRetryDelaysMs =
     options.unbindRetryDelaysMs ?? DEFAULT_UNBIND_RETRY_DELAYS_MS;
@@ -964,6 +968,19 @@ export function installMeshSessionRuntimeLink(
     reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
   };
   const unsubscribeRoster = options.peer.subscribeRoster(scheduleReconcile);
+  if (options.subscribeNativeTransportHandles) {
+    nativeTransportHandlesUnlisten = options.subscribeNativeTransportHandles(
+      () => {
+        if (closed) return;
+        for (const pending of pendingHandleBindings.values()) {
+          if (!pending.exhausted) continue;
+          pending.attempts = 0;
+          pending.exhausted = false;
+        }
+        reconcileQueue = reconcileQueue.then(reconcile).catch(() => undefined);
+      },
+    );
+  }
   lifecycleStop = observeMeshSurfaceLifecycle({
     invoke: options.invoke,
     onDrained: retainDrains,
@@ -990,6 +1007,8 @@ export function installMeshSessionRuntimeLink(
       if (!closed) {
         closed = true;
         unsubscribeRoster();
+        nativeTransportHandlesUnlisten?.();
+        nativeTransportHandlesUnlisten = null;
         lifecycleStop?.();
         lifecycleStop = null;
         await nativeResumeSubscription;
