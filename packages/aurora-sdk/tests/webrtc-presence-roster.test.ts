@@ -234,6 +234,7 @@ describe('W3 presence roster and per-session signaling allowlist', () => {
     await harness.announce('z-remote', 'peer-remote', 'Home node')
     await harness.announce('m-kitchen', 'peer-kitchen', 'Kitchen speaker')
     await harness.announce('q-studio', 'peer-studio', 'Studio desktop')
+    await harness.announce('stale-local-signal', 'local-stable', 'This device')
 
     const roster = harness.peer.roster()
     expect(roster.discovered.map((peer) => peer.peerId).sort()).toEqual(['peer-kitchen', 'peer-remote', 'peer-studio'])

@@ -390,6 +390,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   }
 
   private observeRoomPresence(presence: MqttSignalingPresence): void {
+    if (
+      presence.stablePeerId !== undefined
+      && presence.stablePeerId === this.options.localStablePeerId
+    ) return
     const key = presence.stablePeerId ?? presence.signalingPeerId
     // A device that already holds an established session is described by that
     // session. Whoever announces its identity next does not get to rename it,
