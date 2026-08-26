@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GatewaySupportBundleResponse } from '@aurora/client'
 import {
   MeshDiagnosticsView,
@@ -12,9 +12,12 @@ import {
 } from './mesh-diagnostics-view'
 import type { MeshDiagnosticsResourceProps } from './mesh-diagnostics-view'
 
+const NATIVE_RTT_POLL_MS = 3_000
+
 export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnosticsResourceProps) {
   const [snapshot, setSnapshot] = useState<MeshDiagnosticsSnapshot>(loadingMeshDiagnosticsSnapshot)
   const [thinPeerSnapshot, setThinPeerSnapshot] = useState(() => thinPeer?.snapshot() ?? null)
+  const thinPeerLatencyMs = useRef<number | null>(null)
   const [exportState, setExportState] = useState<SupportBundleExportState>({ status: 'idle', message: null })
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
 
@@ -30,10 +33,58 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
           current,
           nextThinSnapshot,
           current,
+          thinPeerLatencyMs.current,
         ),
       )
     })
   }, [thinPeer])
+
+  useEffect(() => {
+    if (!thinPeer || thinPeerSnapshot?.status !== 'authorized') {
+      thinPeerLatencyMs.current = null
+      return
+    }
+    let cancelled = false
+    let pending = false
+    const measure = async () => {
+      if (pending) return
+      pending = true
+      try {
+        const evidence = await thinPeer.getSelectedCandidatePairEvidence()
+        if (cancelled) return
+        const value = evidence.roundTripTimeMs
+        const latencyMs = typeof value === 'number' && Number.isFinite(value) && value > 0
+          ? value
+          : null
+        thinPeerLatencyMs.current = latencyMs
+        const currentThinSnapshot = thinPeer.snapshot()
+        setSnapshot((current) => reconcileMeshDiagnosticsWithThinPeer(
+          current,
+          currentThinSnapshot,
+          current,
+          latencyMs,
+        ))
+      } catch {
+        if (cancelled) return
+        thinPeerLatencyMs.current = null
+        const currentThinSnapshot = thinPeer.snapshot()
+        setSnapshot((current) => reconcileMeshDiagnosticsWithThinPeer(
+          current,
+          currentThinSnapshot,
+          current,
+          null,
+        ))
+      } finally {
+        pending = false
+      }
+    }
+    void measure()
+    const interval = window.setInterval(() => void measure(), NATIVE_RTT_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [thinPeer, thinPeerSnapshot?.status])
 
   const loadDiagnostics = useCallback(async () => {
     const next = await buildMeshDiagnosticsSnapshot(client, route)
@@ -42,6 +93,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
         next,
         thinPeer?.snapshot() ?? thinPeerSnapshot,
         current,
+        thinPeerLatencyMs.current,
       ),
     )
   }, [client, route, thinPeer, thinPeerSnapshot])
@@ -56,6 +108,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
             next,
             thinPeer?.snapshot() ?? thinPeerSnapshot,
             current,
+            thinPeerLatencyMs.current,
           ),
         )
       }
@@ -90,6 +143,7 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
           next,
           thinPeer?.snapshot() ?? thinPeerSnapshot,
           current,
+          thinPeerLatencyMs.current,
         ),
       )
     } catch (error) {

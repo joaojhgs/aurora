@@ -3514,6 +3514,49 @@ describe('Aurora production shell', () => {
     ])
   })
 
+  it('projects a native application ping into thin-peer diagnostics', async () => {
+    const unavailable = await buildMeshDiagnosticsSnapshot(
+      new Aurora({ transport: MockAuroraTransport.empty() }),
+      meshRoute(),
+    )
+    const snapshot = reconcileMeshDiagnosticsWithThinPeer(unavailable, {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-host',
+      connectedSignalingPeerId: 'signal-host',
+      nodeName: 'Aurora host',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T00:00:00Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+      persistenceBackend: 'platform-keychain',
+    }, null, 18.25)
+
+    expect(snapshot.transportRows).toEqual([
+      expect.objectContaining({
+        peerId: 'peer-host',
+        rttMs: 18.25,
+        routeQuality: 'healthy',
+      }),
+    ])
+    expect(snapshot.liveProbes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Thin WebRTC peer', latency: '18ms' }),
+    ]))
+  })
+
   it('builds mesh peer AdminAction requests with typed method paths and redacted scopes', () => {
     const peer = { peerId: 'peer-kitchen', nodeName: 'Kitchen node' }
     const approve = buildMeshPeerAdminAction(peer, 'approve', {

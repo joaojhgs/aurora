@@ -494,6 +494,7 @@ export function reconcileMeshDiagnosticsWithThinPeer(
   next: MeshDiagnosticsSnapshot,
   thinPeer: BrowserWebRtcSnapshot | null | undefined,
   previous?: MeshDiagnosticsSnapshot | null,
+  measuredLatencyMs: number | null = null,
 ): MeshDiagnosticsSnapshot {
   if (!isBrowserWebRtcConfigured(thinPeer)) return next
 
@@ -531,7 +532,7 @@ export function reconcileMeshDiagnosticsWithThinPeer(
     dataChannelState: connected ? 'open' : 'closed',
     dataChannelLabel: 'aurora-rpc',
     hasSendChannel: connected,
-    rttMs: null,
+    rttMs: connected ? measuredLatencyMs : null,
     authState: connected ? 'authenticated' : 'saved peer offline',
     identitySource: 'saved thin WebRTC profile',
     isAdmin: false,
@@ -539,7 +540,9 @@ export function reconcileMeshDiagnosticsWithThinPeer(
     pairingState: thinPeer.status === 'pairing'
       ? 'bilateral approval pending'
       : 'no pairing work reported',
-    routeQuality: connected ? 'connected' : 'offline',
+    routeQuality: connected
+      ? routeQuality(measuredLatencyMs, 'connected')
+      : 'offline',
     routeProvider: connected
       ? 'authorized direct peer and its advertised mesh providers'
       : 'last-known providers retained until reconnect',
@@ -575,10 +578,10 @@ export function reconcileMeshDiagnosticsWithThinPeer(
   )
     ? base.liveProbes.map((probe) =>
         probe.name === 'Thin WebRTC peer'
-          ? thinPeerProbe(nodeName, state, connected)
+          ? thinPeerProbe(nodeName, state, connected, measuredLatencyMs)
           : probe,
       )
-    : [...base.liveProbes, thinPeerProbe(nodeName, state, connected)]
+    : [...base.liveProbes, thinPeerProbe(nodeName, state, connected, measuredLatencyMs)]
 
   return {
     ...base,
@@ -1190,11 +1193,16 @@ function thinPeerProbe(
   nodeName: string,
   state: AvailabilityState,
   connected: boolean,
+  measuredLatencyMs: number | null = null,
 ): DiagnosticsProbeRow {
   return {
     name: 'Thin WebRTC peer',
     state,
-    latency: connected ? 'connected' : 'offline',
+    latency: connected && measuredLatencyMs !== null
+      ? formatMs(measuredLatencyMs)
+      : connected
+        ? 'response time unavailable'
+        : 'offline',
     detail: connected
       ? `${nodeName} is connected through the browser/WebView WebRTC runtime.`
       : `${nodeName} is offline; WebRTC remains enabled and will retry the saved peer.`,
