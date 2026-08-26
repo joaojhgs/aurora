@@ -374,7 +374,14 @@ describe('Android packaged voice live smoke harness', () => {
     }
     const rejection = { accepted: false, reason: 'voice_session_not_accepting_audio' }
 
-    for (const runtimePhase of ['processing', 'speaking', 'stopping']) {
+    for (const runtimePhase of [
+      'processing',
+      'transcribing',
+      'waiting-for-response',
+      'preparing-speech',
+      'speaking',
+      'stopping',
+    ]) {
       expect(module.backgroundPcmRejectionEndsInjection(rejection, {
         ...baseline,
         runtimePhase,

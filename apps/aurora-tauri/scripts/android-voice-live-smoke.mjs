@@ -920,7 +920,7 @@ function explicitPackIdsFromEnvironment() {
   }
 }
 
-function prepareVoiceFixtures({ wakeText = ANDROID_BACKGROUND_WAKE_TEXT } = {}) {
+export function prepareVoiceFixtures({ wakeText = ANDROID_BACKGROUND_WAKE_TEXT } = {}) {
   const directory = mkdtempSync(join(os.tmpdir(), 'aurora-android-voice-'))
   try {
     const archive = join(directory, 'voice.tar.bz2')
@@ -1057,7 +1057,7 @@ export function wavToPcm16Mono(wav, targetSampleRateHz = LIVE_TEST_PCM_SAMPLE_RA
   return output
 }
 
-async function injectLiveTestPcm(invoke, pcm, { backgroundBaseline } = {}) {
+export async function injectLiveTestPcm(invoke, pcm, { backgroundBaseline } = {}) {
   if (!Buffer.isBuffer(pcm) || pcm.length === 0 || pcm.length % 2 !== 0) {
     throw new Error('Android live voice PCM fixture is empty or misaligned.')
   }
@@ -1093,10 +1093,17 @@ export function backgroundPcmRejectionEndsInjection(rejection, status, baseline,
   if (!captureOwned) return false
   if (Number(status?.completedTurns ?? 0) > Number(baseline?.completedTurns ?? 0)) return true
   return status?.runtimeActive === true
-    && ['processing', 'speaking', 'stopping'].includes(status?.runtimePhase)
+    && [
+      'processing',
+      'transcribing',
+      'waiting-for-response',
+      'preparing-speech',
+      'speaking',
+      'stopping',
+    ].includes(status?.runtimePhase)
 }
 
-async function armLiveTestPcmIngress(invoke, { required = true } = {}) {
+export async function armLiveTestPcmIngress(invoke, { required = true } = {}) {
   const result = await invoke('aurora_android_voice_live_test_inject_pcm', {
     request: { pcmBase64: '', armIngress: true },
   })
@@ -1138,7 +1145,7 @@ function parseJson(value) {
   try { return JSON.parse(value) } catch { return {} }
 }
 
-async function connectInstalledWebview(context) {
+export async function connectInstalledWebview(context) {
   const deadline = Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? DEFAULT_WEBVIEW_TIMEOUT_MS)
   let lastError
   while (Date.now() < deadline) {
@@ -1192,7 +1199,7 @@ async function waitForTauriInvoke(client, deadline) {
   throw new Error('Tauri invoke did not become ready in the packaged Android WebView.')
 }
 
-async function invokeTauri(client, command, args = undefined) {
+export async function invokeTauri(client, command, args = undefined) {
   const commandJson = JSON.stringify(command)
   const argsJson = JSON.stringify(args ?? {})
   const response = await client.send('Runtime.evaluate', {
