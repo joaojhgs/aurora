@@ -279,19 +279,19 @@ function validateOverlay(path, surface, policy) {
 
   if (policy.requiresUpdaterCapability) {
     check(
-      `${safeId(path)}-desktop-updater-capability`,
+      `${safeId(basename(path))}-desktop-updater-capability`,
       capabilities.includes('aurora-desktop-updater'),
       'Desktop overlays must include aurora-desktop-updater.',
     )
     check(
-      `${safeId(path)}-desktop-updater-permission`,
+      `${safeId(basename(path))}-desktop-updater-permission`,
       permissions.has('updater:default'),
       'Desktop overlays must resolve updater:default permission.',
     )
   }
   if (policy.forbidsUpdaterCapability) {
     check(
-      `${safeId(path)}-mobile-no-updater-capability`,
+      `${safeId(basename(path))}-mobile-no-updater-capability`,
       !capabilities.includes('aurora-desktop-updater') && !permissions.has('updater:default'),
       'Mobile overlays must not include desktop updater capability or updater:default permission.',
     )

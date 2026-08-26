@@ -826,6 +826,9 @@ jobs:
 
   it('requires desktop updater permissions and rejects updater leakage into mobile overlays', () => {
     const fixture = createFixture()
+    const tokenShapedDirectory = join(fixture.root, 'sk1234567890123456')
+    mkdirSync(tokenShapedDirectory, { recursive: true })
+    fixture.linux = join(tokenShapedDirectory, 'tauri.linux.conf.json')
     writeJson(fixture.linux, { app: { security: { capabilities: ['aurora-main'] } } })
     writeJson(fixture.iosThin, { app: { security: { capabilities: ['aurora-ios-thin', 'aurora-desktop-updater'] } } })
     const result = runPolicy(fixture)
