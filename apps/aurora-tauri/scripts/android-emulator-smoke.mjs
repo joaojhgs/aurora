@@ -40,15 +40,11 @@ export async function runAndroidEmulatorSmoke() {
   launchApp(appId)
   dismissSystemUiAnrDialog()
 
-  const payloadJson = waitForPayloadJson()
-  if (!payloadJson) {
-    const pid = adbOutput(['shell', 'pidof', appId], { allowPidofNoProcess: true }).trim()
-    throw new Error(
-      `Android native plugin payload log was not observed after deterministic MainActivity launch; app process ${pid ? `remained running as ${pid}` : 'was not running'}.`,
-    )
-  }
+  const { state: webview, nativePayload } = await waitForWebviewMount(appId)
+  const payloadJson = JSON.stringify(nativePayload)
   const payload = validateNativePayload(payloadJson)
-  const webview = await waitForWebviewMount(appId)
+  const loggedPayloadJson = readPayloadJsonFromLogcat()
+  if (loggedPayloadJson) validateNativePayload(loggedPayloadJson)
   assertNoWebviewConsoleErrors()
 
   console.log(`Installed APK: ${apk}`)
@@ -188,8 +184,8 @@ async function waitForWebviewMount(appId) {
       port = adbOutput(['forward', 'tcp:0', `localabstract:${socketName}`]).trim()
       const result = await inspectWebview(port, deadline)
       lastState = result.state
-      if (result.state.rootChildren > 0 && result.state.bodyText.trim().length > 0) {
-        return result.state
+      if (result.nativePayload) {
+        return result
       }
       if (result.errors.length > 0) {
         lastError = new Error(result.errors.join('\n'))
@@ -279,7 +275,8 @@ async function inspectWebview(port, deadline) {
       if (isStableAuroraWebviewState(state)) {
         readySince ??= Date.now()
         if (Date.now() - readySince >= stabilityMs) {
-          return { state, errors }
+          const nativePayload = await invokeNativePluginPayload(client)
+          return { state, errors, nativePayload }
         }
       } else {
         readySince = null
@@ -287,10 +284,42 @@ async function inspectWebview(port, deadline) {
       await sleep(500)
     }
 
-    return { state, errors }
+    return { state, errors, nativePayload: null }
   } finally {
     client.close()
   }
+}
+
+export async function invokeNativePluginPayload(client) {
+  const response = await client.send('Runtime.evaluate', {
+    expression: `(async () => {
+      try {
+        const invoke = window.__TAURI_INTERNALS__?.invoke;
+        if (typeof invoke !== 'function') throw new Error('tauri_invoke_unavailable');
+        const result = await invoke('aurora_android_native_plugin_payload', {});
+        return JSON.stringify({ ok: true, result: result ?? null });
+      } catch (error) {
+        return JSON.stringify({
+          ok: false,
+          error: typeof error?.message === 'string' ? error.message : String(error),
+        });
+      }
+    })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  }, Number(process.env.AURORA_ANDROID_INVOKE_TIMEOUT_MS ?? 60_000))
+  const raw = response.result?.result?.value
+  if (typeof raw !== 'string') {
+    throw new Error(`Android native plugin command returned no serialized value: ${JSON.stringify(response)}`)
+  }
+  const envelope = JSON.parse(raw)
+  if (envelope.ok !== true) {
+    throw new Error(`Android native plugin command failed: ${String(envelope.error ?? raw)}`)
+  }
+  if (!envelope.result || typeof envelope.result !== 'object' || Array.isArray(envelope.result)) {
+    throw new Error('Android native plugin command returned an invalid manifest payload.')
+  }
+  return envelope.result
 }
 
 function assertNoWebviewConsoleErrors() {
@@ -371,19 +400,11 @@ function sleep(milliseconds) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 }
 
-function waitForPayloadJson() {
-  const deadline = Date.now() + Number(process.env.AURORA_ANDROID_SMOKE_TIMEOUT_MS ?? 60_000)
-  while (Date.now() < deadline) {
-    const logcat = spawnSync(adb, NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
-    if (logcat.error) {
-      throw logcat.error
-    }
-    const output = `${logcat.stdout}\n${logcat.stderr}`
-    const payload = extractChunkedPayload(output) ?? extractLegacyPayload(output)
-    if (payload) return payload
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
-  }
-  return null
+function readPayloadJsonFromLogcat() {
+  const logcat = spawnSync(adb, NATIVE_PAYLOAD_LOGCAT_ARGS, { encoding: 'utf8' })
+  if (logcat.error) throw logcat.error
+  const output = `${logcat.stdout}\n${logcat.stderr}`
+  return extractChunkedPayload(output) ?? extractLegacyPayload(output)
 }
 
 function resolveAdbCommand() {

@@ -74,7 +74,12 @@ adb -s "$WAYDROID_SERIAL" shell cmd role holders android.app.role.ASSISTANT
 
 Then call the JS transport command path for `getNativeCapabilityManifest()` / `androidAssistantRoleStatus`, `localLightInferenceStatus`, `requestAndroidPermission('aurora.android.microphone')`, `voiceForegroundServiceStatus`, and `entrypointPayload`, or invoke the plugin commands from the Tauri mobile shell test harness and record the returned payload. Expected results must distinguish `roleAvailable`, `packageQualified`, `roleHeld`, `requestable`, `denied`, and `oemUnavailable`; include mic/notification/biometric/local-network/foreground-service/foreground-voice/file/share/deep-link/widget/shortcut/quick-tile states; include local-light inference as `degraded` with backend model catalog and device/model proof requirements; include redacted entrypoint descriptors and `lastEntrypointPayload`; and keep fallback entrypoints present when `roleHeld=false`.
 
-The CI smoke harness reads chunked `aurora_android_native_plugin_payload_*` log markers and reassembles them before JSON validation. Do not rely on a single full-payload logcat line; Android log output can truncate long JSON lines before the parser sees them.
+The CI smoke harness reads the native capability manifest through the packaged
+Tauri command boundary after the WebView is ready. Chunked
+`aurora_android_native_plugin_payload_*` log markers remain corroborating
+diagnostics and are reassembled before validation when present. Do not rely on
+a single full-payload logcat line; Android log output can truncate long JSON
+lines before the parser sees them.
 
 For mesh/background/assistant acceptance, run the maintained package scripts
 only after Python, SDK, UI, and Rust suites pass. The live server must be the
