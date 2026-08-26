@@ -9,6 +9,7 @@ permissions:
   checks: read
   actions: read
 
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
