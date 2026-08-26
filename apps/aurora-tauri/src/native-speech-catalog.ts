@@ -81,7 +81,7 @@ export interface TauriNativeSpeechCatalogPortOptions {
 
 const TASKS: readonly NativeSpeechPackTask[] = Object.freeze(["vad", "kws", "stt", "tts"]);
 const DEFAULT_ANDROID_POLL_INTERVAL_MS = 500;
-const DEFAULT_ANDROID_POLL_TIMEOUT_MS = 120_000;
+const DEFAULT_ANDROID_POLL_TIMEOUT_MS = 30 * 60_000;
 
 export function createTauriNativeSpeechCatalogPort(
   options: TauriNativeSpeechCatalogPortOptions,

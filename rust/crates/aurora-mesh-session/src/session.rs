@@ -43,7 +43,7 @@ use aurora_mesh_authority::types::{
     PeerHostAuthorizationDecision, PeerHostAuthorizeRequest, PeerHostIdentity,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::deferral::{error_frame, not_authorized_body, orchestration_deferred_frame};
@@ -108,6 +108,12 @@ pub enum MeshSessionError {
     #[error("no session for peer {peer_id}")]
     UnknownPeer {
         /// The stable id that was named.
+        peer_id: String,
+    },
+    /// One native application-layer latency sample may be outstanding per peer.
+    #[error("peer {peer_id} already has a native latency ping in flight")]
+    NativePingAlreadyPending {
+        /// The stable id whose existing sample has not settled yet.
         peer_id: String,
     },
 }
@@ -362,19 +368,15 @@ fn tooling_get_export_catalog(
     let retirements = Vec::<Value>::new();
     let authority_revision = authority_revision(decision);
     let projection_revision = sha256_hex(&authority_revision);
-    let projection_digest = sha256_hex(&json!({
-        "tools": tools.clone(),
-        "blocked_tools": blocked_tools.clone(),
-        "retirements": retirements.clone(),
-    }));
-    let mut output = json!({
+    let placeholder_digest = "0".repeat(64);
+    let output = json!({
         "ok": true,
         "provider_peer_id": context.provider_peer_id,
         "service_instance_id": context.provider_service_instance_id,
         "selected_protocol_tier": "projection_v1",
         "authority_revision": authority_revision,
         "projection_revision": projection_revision,
-        "projection_digest": projection_digest,
+        "projection_digest": placeholder_digest,
         "page_index": 0,
         "page_size": page_size,
         "page_hash": "0".repeat(64),
@@ -384,8 +386,19 @@ fn tooling_get_export_catalog(
         "complete": true,
         "next_cursor": null,
         "total_count": tools.len(),
-        "final_checksum": projection_digest,
+        "final_checksum": placeholder_digest,
     });
+    // Hash the complete contract representation supplied by the native
+    // provider. The generated Rust DTO intentionally omits default-valued
+    // fields when it serializes the wire result, while Python materializes
+    // those same defaults before validating hashes. `native_tool_info` names
+    // every ToolingToolInfo field explicitly so both sides reconstruct and
+    // hash the same document.
+    let mut output = output;
+    normalize_output(ids::TOOLING_GET_EXPORT_CATALOG, output.clone())?;
+    let projection_digest = sha256_hex(&canonical_projection_payload(&output));
+    output["projection_digest"] = json!(projection_digest);
+    output["final_checksum"] = json!(projection_digest);
     let page_hash = sha256_hex(&json!({
         "provider_peer_id": output["provider_peer_id"],
         "service_instance_id": output["service_instance_id"],
@@ -488,19 +501,54 @@ fn normalize_input(method_id: &str, value: Value) -> Result<Value, ContractParse
     normalize_generated_contract(descriptor.input_schema_id, value)
 }
 
+fn normalize_output(method_id: &str, value: Value) -> Result<Value, ContractParseError> {
+    let descriptor = method_by_id(method_id)
+        .ok_or_else(|| ContractParseError::UnknownSchema(method_id.to_owned()))?;
+    normalize_generated_contract(descriptor.output_schema_id, value)
+}
+
 fn result_frame(
     call_id: &str,
     method_id: &str,
     output: Value,
 ) -> Result<Value, ContractParseError> {
-    let descriptor = method_by_id(method_id)
-        .ok_or_else(|| ContractParseError::UnknownSchema(method_id.to_owned()))?;
-    let normalized = normalize_generated_contract(descriptor.output_schema_id, output)?;
+    let normalized = normalize_output(method_id, output)?;
     Ok(json!({
         "type": "result",
         "id": call_id,
         "result": normalized,
     }))
+}
+
+fn canonical_projection_payload(output: &Value) -> Value {
+    let mut tools = output["tools"].as_array().cloned().unwrap_or_default();
+    tools.sort_by(|left, right| {
+        json_string(left, "global_tool_id").cmp(json_string(right, "global_tool_id"))
+    });
+    let mut blocked_tools = output["blocked_tools"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    blocked_tools.sort_by(|left, right| {
+        json_string(&left["tool"], "global_tool_id")
+            .cmp(json_string(&right["tool"], "global_tool_id"))
+    });
+    let mut retirements = output["retirements"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    retirements.sort_by(|left, right| {
+        json_string(left, "global_tool_id").cmp(json_string(right, "global_tool_id"))
+    });
+    json!({
+        "tools": tools,
+        "blocked_tools": blocked_tools,
+        "retirements": retirements,
+    })
+}
+
+fn json_string<'a>(value: &'a Value, key: &str) -> &'a str {
+    value.get(key).and_then(Value::as_str).unwrap_or_default()
 }
 
 fn granted_tool_list(
@@ -570,6 +618,7 @@ fn native_tool_info(context: &BackgroundToolingProviderContext) -> Value {
         "provider_service_instance_id": context.provider_service_instance_id,
         "provenance": {
             "advertised_name": NATIVE_GET_DEVICE_STATUS_LOCAL_NAME,
+            "provider_kind": "local",
             "provider_peer_id": context.provider_peer_id,
             "provider_service_instance_id": context.provider_service_instance_id,
             "provider_tool_id": NATIVE_GET_DEVICE_STATUS_CONTRACT_ID,
@@ -598,6 +647,14 @@ fn native_tool_info(context: &BackgroundToolingProviderContext) -> Value {
         "exportable": true,
         "capability_class": "device",
         "trust_tier": "trusted",
+        "safety_class": "standard",
+        "risk_class": "standard",
+        "data_egress": false,
+        "mutating": false,
+        "external": false,
+        "admin": false,
+        "confirmation_required": false,
+        "rate_limit_hints": null,
         "share_group_id": "native.status",
         "share_group_label": "Device status",
     })
@@ -901,11 +958,29 @@ pub struct MeshPeerSession {
     context: Option<AuthenticatedPeerContext>,
     queue: VecDeque<QueuedFrame>,
     next_sequence: u64,
+    next_ping_sequence: u64,
+    pending_native_ping: Option<PendingNativePing>,
+    last_rtt_ms: Option<u64>,
     answered_pings: u64,
     served_calls: u64,
     deferred_calls: u64,
     denied_calls: u64,
     failed_calls: u64,
+}
+
+#[derive(Clone, Debug)]
+struct PendingNativePing {
+    id: String,
+    sent_at_ms: i64,
+}
+
+/// A native application-layer pong correlated to the exact peer and ping id.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativePongSample {
+    /// Correlation id generated by the native mesh session.
+    pub ping_id: String,
+    /// Measured round-trip time, with one millisecond as the display floor.
+    pub round_trip_time_ms: u64,
 }
 
 impl MeshPeerSession {
@@ -933,6 +1008,12 @@ impl MeshPeerSession {
         self.answered_pings
     }
 
+    /// Last completed native application-layer round-trip sample.
+    #[must_use]
+    pub fn last_rtt_ms(&self) -> Option<u64> {
+        self.last_rtt_ms
+    }
+
     /// The reference this session holds to what the reconnect proof established.
     ///
     /// A reference, never a grant: every authorization question still goes to
@@ -951,6 +1032,7 @@ impl MeshPeerSession {
             "connectionId": self.connection_id,
             "queueDepth": self.queue.len(),
             "answeredPings": self.answered_pings,
+            "lastRttMs": self.last_rtt_ms,
             "servedCalls": self.served_calls,
             "deferredCalls": self.deferred_calls,
             "deniedCalls": self.denied_calls,
@@ -1037,6 +1119,9 @@ impl MeshSessionRegistry {
                 context: None,
                 queue: VecDeque::new(),
                 next_sequence: 0,
+                next_ping_sequence: 0,
+                pending_native_ping: None,
+                last_rtt_ms: None,
                 answered_pings: 0,
                 served_calls: 0,
                 deferred_calls: 0,
@@ -1049,6 +1134,87 @@ impl MeshSessionRegistry {
             session.context = context;
         }
         Ok(())
+    }
+
+    /// Begin one Rust-owned application-layer latency sample for a peer.
+    ///
+    /// The returned frame is sent by the native WebRTC adapter, without
+    /// involving the WebView. Correlation stays in this per-peer registry so a
+    /// pong from another peer or an unrelated browser ping cannot settle it.
+    pub fn begin_native_ping(
+        &mut self,
+        peer_id: &str,
+        now_ms: i64,
+    ) -> Result<Value, MeshSessionError> {
+        let session = self.session_mut(peer_id)?;
+        if session.pending_native_ping.is_some() {
+            return Err(MeshSessionError::NativePingAlreadyPending {
+                peer_id: peer_id.to_owned(),
+            });
+        }
+        let ping_id = format!(
+            "native-rtt-{}-{}",
+            session.connection_id, session.next_ping_sequence
+        );
+        session.next_ping_sequence = session.next_ping_sequence.saturating_add(1);
+        session.pending_native_ping = Some(PendingNativePing {
+            id: ping_id.clone(),
+            sent_at_ms: now_ms,
+        });
+        Ok(json!({
+            "type": "ping",
+            "id": ping_id,
+            "ts": now_ms as f64 / 1_000.0,
+        }))
+    }
+
+    /// Settle a Rust-owned application-layer latency sample when ids match.
+    ///
+    /// Unmatched pongs remain available to the foreground TypeScript owner.
+    pub fn accept_native_pong(
+        &mut self,
+        peer_id: &str,
+        frame: &Value,
+        now_ms: i64,
+    ) -> Result<Option<NativePongSample>, MeshSessionError> {
+        if frame.get("type").and_then(Value::as_str) != Some("pong") {
+            return Ok(None);
+        }
+        let Some(ping_id) = frame.get("id").and_then(Value::as_str) else {
+            return Ok(None);
+        };
+        let session = self.session_mut(peer_id)?;
+        let Some(pending) = session.pending_native_ping.as_ref() else {
+            return Ok(None);
+        };
+        if pending.id != ping_id {
+            return Ok(None);
+        }
+        let round_trip_time_ms = now_ms.saturating_sub(pending.sent_at_ms).max(1) as u64;
+        session.pending_native_ping = None;
+        session.last_rtt_ms = Some(round_trip_time_ms);
+        Ok(Some(NativePongSample {
+            ping_id: ping_id.to_owned(),
+            round_trip_time_ms,
+        }))
+    }
+
+    /// Cancel an outstanding native latency sample after send failure/timeout.
+    pub fn cancel_native_ping(
+        &mut self,
+        peer_id: &str,
+        ping_id: &str,
+    ) -> Result<bool, MeshSessionError> {
+        let session = self.session_mut(peer_id)?;
+        if session
+            .pending_native_ping
+            .as_ref()
+            .is_some_and(|pending| pending.id == ping_id)
+        {
+            session.pending_native_ping = None;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     /// Drop a peer's session and everything parked for it.
@@ -1162,7 +1328,8 @@ impl MeshSessionRegistry {
             let session = self.session_mut(peer_id)?;
             session.answered_pings += 1;
             let id = frame.get("id").and_then(Value::as_str);
-            return Ok(InboundDisposition::Answer(vec![pong_frame(id)]));
+            let ts = frame.get("ts");
+            return Ok(InboundDisposition::Answer(vec![pong_frame(id, ts)]));
         }
 
         // An inbound `call` is authorized before anything else is decided about
@@ -1333,12 +1500,21 @@ impl MeshSessionRegistry {
 }
 
 /// The `pong` answering a `ping`, correlated when the ping carried an id.
+///
+/// Echoing the ping timestamp keeps the native answer wire-compatible with the
+/// Python/browser pong shape and gives diagnostics enough data to prove the
+/// app-layer native RTT path without relying on browser candidate-pair stats.
 #[must_use]
-pub fn pong_frame(ping_id: Option<&str>) -> Value {
-    match ping_id {
-        Some(id) => json!({ "type": "pong", "id": id }),
-        None => json!({ "type": "pong" }),
+pub fn pong_frame(ping_id: Option<&str>, ping_ts: Option<&Value>) -> Value {
+    let mut frame = Map::new();
+    frame.insert("type".to_owned(), Value::String("pong".to_owned()));
+    if let Some(id) = ping_id {
+        frame.insert("id".to_owned(), Value::String(id.to_owned()));
     }
+    if let Some(ts) = ping_ts {
+        frame.insert("ts".to_owned(), ts.clone());
+    }
+    Value::Object(frame)
 }
 
 /// What a `call` claims about its caller.

@@ -178,6 +178,8 @@ export interface PeerConnectionLike {
   setRemoteDescription(description: SessionDescriptionLike): Promise<void>
   addIceCandidate(candidate: IceCandidateInitLike | null): Promise<void>
   getStats?(): Promise<RTCStatsReport | Map<string, unknown>>
+  /** Native application-layer ping; browsers omit this optional capability. */
+  measureRoundTripTime?(): Promise<number | undefined>
   close(): void
 }
 
@@ -399,9 +401,21 @@ export class WebRtcPeerSession {
     }
     try {
       const report = await pc.getStats()
-      return selectedCandidatePairEvidenceFromStats(report, {
+      const evidence = selectedCandidatePairEvidenceFromStats(report, {
         configuredStunServers: this.options.iceServers?.flatMap((server) => iceServerUrls(server).filter(isStunServerUrl)) ?? []
       })
+      if (typeof pc.measureRoundTripTime === 'function') {
+        try {
+          const measured = await pc.measureRoundTripTime()
+          if (typeof measured === 'number' && Number.isFinite(measured) && measured > 0) {
+            evidence.roundTripTimeMs = measured
+          }
+        } catch {
+          // Candidate-pair evidence remains useful when an application ping
+          // times out; the next diagnostics sample will try again.
+        }
+      }
+      return evidence
     } catch {
       return emptySelectedCandidatePairEvidence()
     }
@@ -1302,7 +1316,11 @@ function selectedCandidatePairEvidenceFromStats(
 
 function candidatePairRoundTripTimeMs(pair: any): number | undefined {
   const current = pair?.currentRoundTripTime
-  if (typeof current === 'number' && Number.isFinite(current) && current >= 0) {
+  // The native webrtc-rs report currently emits numeric zero before it has an
+  // RTT sample (and, on some Android paths, for the lifetime of the selected
+  // pair). Treating that sentinel as a measurement masks the Gateway's real
+  // application-layer ping and renders a misleading "0.0 ms" in Mesh.
+  if (typeof current === 'number' && Number.isFinite(current) && current > 0) {
     return current * 1_000
   }
   const total = pair?.totalRoundTripTime
@@ -1310,7 +1328,7 @@ function candidatePairRoundTripTimeMs(pair: any): number | undefined {
   if (
     typeof total === 'number'
     && Number.isFinite(total)
-    && total >= 0
+    && total > 0
     && typeof responses === 'number'
     && Number.isFinite(responses)
     && responses > 0

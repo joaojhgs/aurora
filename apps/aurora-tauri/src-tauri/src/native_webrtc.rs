@@ -453,6 +453,19 @@ pub async fn aurora_native_webrtc_get_stats(
     }
 }
 
+/// Measure the exact native mesh data channel with a Rust-owned ping/pong.
+#[tauri::command]
+pub async fn aurora_native_webrtc_measure_rtt(
+    app: AppHandle,
+    state: State<'_, NativeWebRtcState>,
+    mesh_state: State<'_, crate::mesh_session::MeshSessionState>,
+    request: NativePeerIdRequest,
+) -> Result<f64, String> {
+    mesh_state
+        .measure_native_rtt(&app, &state, request.peer_connection_id)
+        .await
+}
+
 #[tauri::command]
 pub async fn aurora_native_webrtc_close(
     state: State<'_, NativeWebRtcState>,

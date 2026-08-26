@@ -33,8 +33,9 @@ pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
 #[cfg(feature = "native-sherpa-tts")]
 pub use android_session::AndroidTtsReferenceProfile;
 pub use android_session::{
-    AndroidAssistantRouteMode, AndroidVoiceSession, AndroidVoiceSessionCommandError,
-    AndroidVoiceSessionConfig, AndroidVoiceSessionPhase, AndroidVoiceSessionStatus,
+    AndroidAssistantRouteMode, AndroidBackgroundVoiceTurnResult, AndroidVoiceSession,
+    AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig, AndroidVoiceSessionPhase,
+    AndroidVoiceSessionStatus,
 };
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 pub use audio::{CpalAudioOutput, NativeAudioConfig, NativeAudioStatus};

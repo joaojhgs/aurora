@@ -263,6 +263,22 @@ struct AndroidVoiceForegroundServiceStartRequest {
     background_session: bool,
 }
 
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoiceForegroundServiceStatusRequest {
+    #[serde(default)]
+    take_focused_result: bool,
+    #[serde(default)]
+    take_background_result: bool,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidVoiceForegroundServiceStopRequest {
+    #[serde(default)]
+    background_session: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AndroidVoiceLiveTestPcmRequest {
@@ -2076,16 +2092,22 @@ async fn aurora_android_webview_microphone_permission_decision(
 
 #[tauri::command]
 async fn aurora_android_voice_foreground_service_status(
+    request: Option<AndroidVoiceForegroundServiceStatusRequest>,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
-        run_android_plugin_command(native, "voiceForegroundServiceStatus", json!({}))
+        run_android_plugin_command(
+            native,
+            "voiceForegroundServiceStatus",
+            serde_json::to_value(request.unwrap_or_default())
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        let _ = native;
+        let _ = (request, native);
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service status is only available in the Android Tauri shell"
                 .to_string(),
@@ -2164,16 +2186,22 @@ async fn aurora_android_voice_foreground_service_finish(
 
 #[tauri::command]
 async fn aurora_android_voice_foreground_service_cancel(
+    request: Option<AndroidVoiceForegroundServiceStopRequest>,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
-        run_android_plugin_command(native, "stopVoiceForegroundService", json!({}))
+        run_android_plugin_command(
+            native,
+            "stopVoiceForegroundService",
+            serde_json::to_value(request.unwrap_or_default())
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        )
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        let _ = native;
+        let _ = (request, native);
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service cancel is only available in the Android Tauri shell"
                 .to_string(),
@@ -8903,6 +8931,7 @@ pub fn run() {
             native_webrtc::aurora_native_webrtc_data_channel_close,
             native_webrtc::aurora_native_webrtc_set_data_channel_buffered_amount_low_threshold,
             native_webrtc::aurora_native_webrtc_get_stats,
+            native_webrtc::aurora_native_webrtc_measure_rtt,
             native_webrtc::aurora_native_webrtc_close,
             aurora_shutdown
         ])
@@ -11617,6 +11646,7 @@ mod tests {
             "nativeStart",
             "nativeStartBackground",
             "nativeFinish",
+            "nativeTakeBackgroundResult",
             "nativeCancel",
             "finishNativeSession",
             "AudioTrack.Builder()",
@@ -11652,6 +11682,7 @@ mod tests {
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStartBackground",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeFinish",
+            "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeTakeBackgroundResult",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCancel",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativePushPcm",
             "Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeDrainPcm",

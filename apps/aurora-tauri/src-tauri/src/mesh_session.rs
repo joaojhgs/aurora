@@ -30,7 +30,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -78,6 +78,7 @@ const AES_GCM_TAG_BYTES: usize = 16;
 const MAX_DATA_CHANNEL_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
 const BACKGROUND_CALL_REPLAY_TTL_MS: i64 = 5 * 60 * 1000;
 const BACKGROUND_CALL_REPLAY_MAX: usize = 256;
+const NATIVE_RTT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The registry, plus what the shell needs to route back to a channel.
 #[derive(Clone, Default)]
@@ -99,6 +100,8 @@ struct MeshSessionInner {
     channel_peers: HashMap<u64, String>,
     /// Reverse of `channels`, so an answer can find its way back out.
     peer_channels: HashMap<String, u64>,
+    /// Stable peer carried by each native WebRTC connection.
+    peer_connection_peers: HashMap<u64, String>,
     /// Per-peer native assistant eligibility supplied by the production bind.
     peer_bindings: HashMap<String, MeshSessionPeerBinding>,
     /// Native-owned outbound calls awaiting a response on an exact peer.
@@ -106,6 +109,8 @@ struct MeshSessionInner {
     /// Recently abandoned calls whose late result/error frames must not leak
     /// to the generic WebView path.
     native_assistant_abandoned: HashMap<(String, String), ExpiringMarker>,
+    /// Rust-owned application-layer pings awaiting the exact peer's pong.
+    native_rtt_pending: HashMap<(String, String), NativeRttPendingResponse>,
     /// Superseded data channels retained briefly so late frames from them do
     /// not settle current calls or masquerade as generic WebView traffic.
     retired_channel_peers: HashMap<u64, RetiredChannelPeer>,
@@ -170,6 +175,13 @@ enum BackgroundCallReplayDecision {
 struct NativeAssistantPendingResponse {
     data_channel_id: u64,
     sender: oneshot::Sender<Result<Value, TransportError>>,
+}
+
+#[derive(Debug)]
+struct NativeRttPendingResponse {
+    data_channel_id: u64,
+    started_at: Instant,
+    sender: oneshot::Sender<f64>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -372,6 +384,9 @@ pub async fn aurora_mesh_session_bind(
         .bind(&request.peer_id, request.peer_connection_id, context)
         .map_err(|error| error.to_string())?;
     inner.bind_channel_to_peer(&request.peer_id, request.data_channel_id, now_ms);
+    inner
+        .peer_connection_peers
+        .insert(request.peer_connection_id, request.peer_id.clone());
     inner.peer_bindings.insert(
         request.peer_id.clone(),
         MeshSessionPeerBinding {
@@ -414,6 +429,10 @@ pub async fn aurora_mesh_session_unbind(
         inner.channel_peers.remove(&channel_id);
     }
     inner.peer_bindings.remove(&request.peer_id);
+    inner
+        .peer_connection_peers
+        .retain(|_, peer_id| peer_id != &request.peer_id);
+    inner.cancel_native_rtt_peer(&request.peer_id);
     inner.fail_native_assistant_peer(&request.peer_id, TransportError::RequestFailed);
     let held = inner.sync_device_link(&app);
     Ok(json!({
@@ -804,7 +823,22 @@ impl MeshSessionInner {
                     previous_channel_id,
                     TransportError::RequestFailed,
                 );
+                self.cancel_native_rtt_peer(peer_id);
             }
+        }
+    }
+
+    fn cancel_native_rtt_peer(&mut self, peer_id: &str) {
+        let keys = self
+            .native_rtt_pending
+            .keys()
+            .filter(|(pending_peer_id, _)| pending_peer_id == peer_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for (pending_peer_id, ping_id) in keys {
+            self.native_rtt_pending
+                .remove(&(pending_peer_id.clone(), ping_id.clone()));
+            let _ = self.registry.cancel_native_ping(&pending_peer_id, &ping_id);
         }
     }
 
@@ -1093,6 +1127,18 @@ pub async fn route_inbound(
     {
         return InboundRouting::Parked;
     }
+    if let Ok(Some(sample)) = inner.registry.accept_native_pong(&peer_id, &frame, now_ms) {
+        if let Some(pending) = inner
+            .native_rtt_pending
+            .remove(&(peer_id.clone(), sample.ping_id))
+        {
+            if pending.data_channel_id == data_channel_id {
+                let measured_ms = (pending.started_at.elapsed().as_secs_f64() * 1_000.0).max(0.001);
+                let _ = pending.sender.send(measured_ms);
+            }
+        }
+        return InboundRouting::Parked;
+    }
 
     let disposition = match inner.registry.accept_inbound(&peer_id, &frame, now_ms) {
         Ok(disposition) => disposition,
@@ -1294,6 +1340,110 @@ impl MeshSessionState {
     #[cfg_attr(not(mobile), allow(dead_code))]
     pub async fn mark_surface_resumed(&self) {
         self.inner.lock().await.native_surface_backgrounded = false;
+    }
+
+    /// Measure the native data channel's application-layer round trip.
+    ///
+    /// The ping is created, correlated and consumed in Rust. The WebView only
+    /// asks for the sample and receives the measured duration, so background
+    /// session liveness never depends on JavaScript timers or frame handling.
+    pub async fn measure_native_rtt(
+        &self,
+        app: &AppHandle,
+        native_webrtc: &crate::native_webrtc::NativeWebRtcState,
+        peer_connection_id: u64,
+    ) -> Result<f64, String> {
+        let (peer_id, data_channel_id, ping_id, outbound, response) = {
+            let mut inner = self.inner.lock().await;
+            let peer_id = inner
+                .peer_connection_peers
+                .get(&peer_connection_id)
+                .cloned()
+                .ok_or_else(|| "native mesh session is not bound to this connection".to_owned())?;
+            let binding = inner
+                .peer_bindings
+                .get(&peer_id)
+                .cloned()
+                .ok_or_else(|| "native mesh data channel is unavailable".to_owned())?;
+            let frame = inner
+                .registry
+                .begin_native_ping(&peer_id, current_time_ms())
+                .map_err(|error| error.to_string())?;
+            let ping_id = frame
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "native latency ping has no correlation id".to_owned())?
+                .to_owned();
+            let outbound = match binding.data_channel_codec.as_ref() {
+                Some(codec) => codec
+                    .seal_json(&frame)
+                    .map(OutboundDataChannelFrame::Binary)?,
+                None => OutboundDataChannelFrame::Text(
+                    serde_json::to_string(&frame).map_err(|error| error.to_string())?,
+                ),
+            };
+            let (sender, response) = oneshot::channel();
+            inner.native_rtt_pending.insert(
+                (peer_id.clone(), ping_id.clone()),
+                NativeRttPendingResponse {
+                    data_channel_id: binding.data_channel_id,
+                    started_at: Instant::now(),
+                    sender,
+                },
+            );
+            (
+                peer_id,
+                binding.data_channel_id,
+                ping_id,
+                outbound,
+                response,
+            )
+        };
+
+        let send_result = match outbound {
+            OutboundDataChannelFrame::Text(payload) => {
+                crate::native_webrtc::send_native_text_data_channel(
+                    app.clone(),
+                    native_webrtc,
+                    data_channel_id,
+                    payload,
+                )
+                .await
+            }
+            OutboundDataChannelFrame::Binary(payload) => {
+                crate::native_webrtc::send_native_binary_data_channel(
+                    app.clone(),
+                    native_webrtc,
+                    data_channel_id,
+                    payload,
+                )
+                .await
+            }
+        };
+        if let Err(error) = send_result {
+            self.cancel_native_rtt(&peer_id, &ping_id).await;
+            return Err(error.to_string());
+        }
+
+        match tokio::time::timeout(NATIVE_RTT_TIMEOUT, response).await {
+            Ok(Ok(round_trip_time_ms)) => Ok(round_trip_time_ms),
+            Ok(Err(_)) => {
+                self.cancel_native_rtt(&peer_id, &ping_id).await;
+                Err("native latency measurement was interrupted".to_owned())
+            }
+            Err(_) => {
+                self.cancel_native_rtt(&peer_id, &ping_id).await;
+                Err("native latency measurement timed out".to_owned())
+            }
+        }
+    }
+
+    async fn cancel_native_rtt(&self, peer_id: &str, ping_id: &str) {
+        let mut inner = self.inner.lock().await;
+        inner
+            .native_rtt_pending
+            .remove(&(peer_id.to_owned(), ping_id.to_owned()));
+        let _ = inner.registry.cancel_native_ping(peer_id, ping_id);
     }
 
     #[cfg(test)]

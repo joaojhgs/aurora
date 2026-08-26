@@ -77,7 +77,7 @@ import { EvidenceBadge } from './status-badges'
 import { AURORA_RELEASE_FOCUSED_MEDIA_EVENT, getAuroraSurfaceProfile } from './platform-surface'
 import type { AuroraSurfaceProfile } from './platform-surface'
 import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason, NativeDesktopVoiceTrigger } from './native-desktop-voice'
-import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from './native-mobile-voice'
+import type { NativeMobileVoiceBackgroundResult, NativeMobileVoicePort } from './native-mobile-voice'
 import type { AuroraBrowserSpeechPacksRuntimeStatus } from './browser-speech-pack'
 import {
   createLightweightAssistantOrchestrator,
@@ -86,11 +86,6 @@ import {
 } from './local-assistant/lightweight-assistant'
 
 const NATIVE_MOBILE_BACKGROUND_STATUS_TIMEOUT_MS = 100
-const NATIVE_MOBILE_BACKGROUND_START_TIMEOUT_MS = 30_000
-const NATIVE_MOBILE_BACKGROUND_START_POLL_MS = 500
-const NATIVE_MOBILE_BACKGROUND_START_STATUS_TIMEOUT_MS = 2_000
-
-
 export interface AssistantViewProps {
   client: AuroraClient
   route: RouteAvailability
@@ -447,7 +442,6 @@ export function AssistantView({
   const nativeMobileVoiceOperationTokenRef = useRef(0)
   const nativeMobileVoiceStartInFlightRef = useRef(false)
   const nativeMobileBackgroundWakeActiveRef = useRef(false)
-  const nativeMobileBackgroundStartTokenRef = useRef<number | null>(null)
   const assistantViewDisposedRef = useRef(false)
   const sessionLoadGenerationRef = useRef(0)
   function setVoiceCaptureStatus(next: VoiceCaptureStatus) {
@@ -577,7 +571,7 @@ export function AssistantView({
     : primaryComposerAction === 'stop'
       ? 'Stop assistant generation'
       : 'Send assistant prompt'
-  const handsFreeActive = nativeDesktopBackgroundWakeActive || nativeMobileBackgroundWakeActive
+  const handsFreeActive = nativeDesktopBackgroundWakeActive
   const contextSummary = summarizeAttachments(attachments)
   const runtimeStrip = useMemo(
     () => ({
@@ -597,6 +591,10 @@ export function AssistantView({
   const usesNativeMobileVoice = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'mobile-native'
   const usesFocusedBrowserVoiceRuntime = surfaceProfile.voiceCapture.focusedPushToTalkOwner === 'webview-focused'
   const receivesCoordinatorVoiceEvents = surfaceProfile.voiceCapture.wakewordOwner === 'coordinator-daemon'
+  const nativeMobileBackgroundOwnsMicrophone = usesNativeMobileVoice && nativeMobileBackgroundWakeActive
+  const voiceCaptureButtonLabel = voiceCaptureStatus === 'listening'
+      ? 'Stop listening'
+      : 'Push to talk'
   const browserSpeechPacksRevision = browserSpeechPacks?.revision ?? 'none'
   const readyBrowserSpeechPacks = browserSpeechPacks?.state === 'ready' ? browserSpeechPacks : null
   const browserLocalTtsVoiceId = readyBrowserSpeechPacks?.capabilities.tts ? readyBrowserSpeechPacks.ttsVoiceId : undefined
@@ -954,11 +952,10 @@ export function AssistantView({
     stopStreamedTtsPlayback()
     void cancelNativeDesktopVoice('shutdown')
     const mobileBackgroundActive = nativeMobileBackgroundWakeActiveRef.current
-    const mobileBackgroundStarting = nativeMobileBackgroundStartTokenRef.current !== null
-    if (!mobileBackgroundActive && !mobileBackgroundStarting) {
+    if (!mobileBackgroundActive) {
       nativeMobileVoiceOperationTokenRef.current += 1
     }
-    if (!mobileBackgroundActive && !mobileBackgroundStarting && (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing')) {
+    if (!mobileBackgroundActive && (nativeMobileVoiceStartInFlightRef.current || voiceCaptureStatusRef.current === 'listening' || voiceCaptureStatusRef.current === 'processing')) {
       void cancelNativeMobileVoice({ updateUi: false })
     }
     const token = browserVoiceOperationTokenRef.current
@@ -1140,13 +1137,14 @@ export function AssistantView({
   }, [nativeVoice, usesNativeDesktopVoice])
 
   useEffect(() => {
-    if (!usesNativeMobileVoice || !nativeMobileVoice) {
-      return
-    }
+    if (!usesNativeMobileVoice || !nativeMobileVoice) return
     let active = true
     void nativeMobileVoice.status().then(async (status) => {
       if (!active) return
-      if (!status.available) {
+      if (status.backgroundActive === true) {
+        nativeMobileBackgroundWakeActiveRef.current = true
+        setNativeMobileBackgroundWakeActive(true)
+      } else if (!status.available) {
         setVoiceCaptureStatus('no-device')
       } else if (status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
@@ -1155,11 +1153,9 @@ export function AssistantView({
       }
       const backgroundStatus = await nativeMobileVoice.backgroundStatus?.().catch(() => null)
       if (!active || !backgroundStatus) return
-      if (isNativeMobileBackgroundCaptureActive(backgroundStatus)) {
-        nativeMobileBackgroundWakeActiveRef.current = true
-        setNativeMobileBackgroundWakeActive(true)
-        setVoiceCaptureStatus('listening')
-      }
+      const backgroundActive = backgroundStatus.backgroundActive === true
+      nativeMobileBackgroundWakeActiveRef.current = backgroundActive
+      setNativeMobileBackgroundWakeActive(backgroundActive)
     }).catch(() => {
       if (active) {
         setVoiceCaptureStatus('error')
@@ -1170,7 +1166,6 @@ export function AssistantView({
     }
   }, [
     nativeMobileVoice,
-    surfaceProfile.voiceCapture.wakewordOwner,
     usesNativeMobileVoice,
   ])
 
@@ -1191,7 +1186,7 @@ export function AssistantView({
         return
       }
       if (usesNativeMobileVoice) {
-        if (nativeMobileBackgroundWakeActiveRef.current || nativeMobileBackgroundStartTokenRef.current !== null) return
+        if (nativeMobileBackgroundWakeActiveRef.current) return
         const ownsFocusedMobileTurn = isUiOwnedNativeMobileFocusedTurnActive(
           activeVoiceSessionRef.current,
           nativeMobileVoiceStartInFlightRef.current
@@ -1229,7 +1224,7 @@ export function AssistantView({
             setNativeMobileBackgroundWakeActive(true)
             return
           }
-          if (nativeMobileBackgroundWakeActiveRef.current || nativeMobileBackgroundStartTokenRef.current !== null) return
+          if (nativeMobileBackgroundWakeActiveRef.current) return
           await cancelNativeMobileVoice()
         })()
         return
@@ -1367,6 +1362,7 @@ export function AssistantView({
     setSessionIndexLoading(true)
     setSessionIndexError(null)
     try {
+      await activateLocalAssistantConversation(localHistory, sessionId)
       const messages = await loadLocalAssistantConversationMessages(localHistory, sessionId)
       resetConversationUi({ sessionId, messages })
       setMobileHistoryOpen(false)
@@ -1608,6 +1604,73 @@ export function AssistantView({
     }
     return turnSucceeded && !abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)
   }
+
+  async function showNativeMobileBackgroundTurn(
+    result: NativeMobileVoiceBackgroundResult
+  ): Promise<boolean> {
+    if (!result.persisted || !result.conversationId || !localHistory) {
+      setSessionIndexError('This voice request could not be saved. Try again.')
+      return false
+    }
+    try {
+      const [messages, rows] = await Promise.all([
+        loadLocalAssistantConversationMessages(localHistory, result.conversationId),
+        loadLocalAssistantConversationRows(localHistory),
+      ])
+      setLocalConversationRows(rows)
+      setSession({ sessionId: result.conversationId, messages })
+      setSessionIndexError(null)
+      return true
+    } catch {
+      setSessionIndexError('This voice request was saved but could not be opened yet.')
+      return true
+    }
+  }
+
+  useEffect(() => {
+    if (!usesNativeMobileVoice || !nativeMobileVoice?.takeBackgroundResult) return
+    let active = true
+    let inFlight = false
+    const drainBackgroundResults = async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        while (active) {
+          const result = await nativeMobileVoice.takeBackgroundResult?.()
+          if (!active || !result) break
+          const transcript = result.transcript.trim()
+          if (!transcript) continue
+          voiceTranscriptPreviewRef.current = ''
+          setText('')
+          const opened = await showNativeMobileBackgroundTurn(result)
+          if (!opened) {
+            setVoiceCaptureStatus('error')
+            setLastError('This voice request could not be saved. Try again.')
+            continue
+          }
+          setVoiceCaptureStatus('idle')
+          if (result.errorCode && !result.assistantText?.trim()) {
+            setLastError('Aurora saved what you said but could not complete a response.')
+          }
+        }
+      } catch {
+        if (active) {
+          setVoiceCaptureStatus('error')
+          setLastError('Voice result could not be opened. Try again.')
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+    void drainBackgroundResults()
+    const interval = window.setInterval(() => {
+      void drainBackgroundResults()
+    }, 1_000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [localHistory, nativeMobileVoice, usesNativeMobileVoice])
 
   async function applyLightweightAssistantResult(
     result: Awaited<ReturnType<LightweightOrchestrator['runTurn']>>,
@@ -2702,10 +2765,6 @@ export function AssistantView({
     }
     if (primaryComposerAction !== 'stop') return
     if (voiceCaptureStatus === 'listening') {
-      if (usesNativeMobileVoice && nativeMobileBackgroundWakeActiveRef.current) {
-        await stopNativeMobileBackgroundWake()
-        return
-      }
       await toggleLocalCapture()
       return
     }
@@ -3107,6 +3166,8 @@ export function AssistantView({
         return false
       }
       setVoiceCaptureStatus('listening')
+      nativeMobileBackgroundWakeActiveRef.current = false
+      setNativeMobileBackgroundWakeActive(false)
       activeVoiceSessionRef.current = 'native-mobile-focused'
       ownedVoiceSessionIdsRef.current.add('native-mobile-focused')
       return true
@@ -3130,135 +3191,35 @@ export function AssistantView({
       const status = await nativeMobileVoice.finish()
       if (status.phase === 'faulted') {
         setVoiceCaptureStatus('error')
-        setLastError('Voice could not finish cleanly. Try again.')
+        setLastError(status.reasonCode === 'focused_voice_timeout'
+          ? 'Voice transcription took too long. Try again.'
+          : 'Voice could not finish cleanly. Try again.')
         return false
       }
-      setVoiceCaptureStatus('idle')
+      const transcript = nativeMobileVoice.takeTranscript
+        ? await nativeMobileVoice.takeTranscript()
+        : null
       activeVoiceSessionRef.current = null
       ownedVoiceSessionIdsRef.current.clear()
+      if (nativeMobileVoice.takeTranscript) {
+        if (!transcript) {
+          setVoiceCaptureStatus('idle')
+          setLastError('No speech was transcribed from the recording.')
+          return false
+        }
+        voiceTranscriptPreviewRef.current = ''
+        setText('')
+        const succeeded = await startAssistantTurn(transcript)
+        setVoiceCaptureStatus(succeeded ? 'idle' : 'error')
+        return succeeded
+      }
+      setVoiceCaptureStatus('idle')
       return true
     } catch {
       setVoiceCaptureStatus('error')
       setLastError('Voice could not finish cleanly. Try again.')
       return false
     }
-  }
-
-  async function startNativeMobileBackgroundWake(): Promise<boolean> {
-    if (!nativeMobileVoice?.startBackground || !nativeMobileVoice.backgroundStatus) {
-      setVoiceCaptureStatus('no-device')
-      setLastError('Hands-free voice is unavailable on this device.')
-      return false
-    }
-    setStreamState((current) => ({ ...current, status: 'streaming', message: 'Starting hands-free voice...' }))
-    const operationToken = ++nativeMobileVoiceOperationTokenRef.current
-    nativeMobileBackgroundStartTokenRef.current = operationToken
-    nativeMobileVoiceStartInFlightRef.current = true
-    try {
-      let status = await nativeMobileVoice.startBackground({ remoteAudioConsent: false })
-      if (operationToken !== nativeMobileVoiceOperationTokenRef.current) {
-        await nativeMobileVoice.stopBackground?.().catch(() => undefined)
-        return false
-      }
-      if (assistantViewDisposedRef.current) {
-        return status.available && status.phase !== 'unavailable' && status.phase !== 'faulted'
-      }
-      const deadline = Date.now() + NATIVE_MOBILE_BACKGROUND_START_TIMEOUT_MS
-      while (
-        status.available
-        && status.phase !== 'unavailable'
-        && status.phase !== 'faulted'
-        && !isNativeMobileBackgroundCaptureActive(status)
-        && Date.now() < deadline
-      ) {
-        if (operationToken !== nativeMobileVoiceOperationTokenRef.current) {
-          await nativeMobileVoice.stopBackground?.().catch(() => undefined)
-          return false
-        }
-        status = await withTimeout(
-          nativeMobileVoice.backgroundStatus(),
-          NATIVE_MOBILE_BACKGROUND_START_STATUS_TIMEOUT_MS,
-          new Error('Native mobile background status timed out')
-        ).catch(() => status)
-        if (
-          isNativeMobileBackgroundCaptureActive(status)
-          || !status.available
-          || status.phase === 'unavailable'
-          || status.phase === 'faulted'
-          || Date.now() >= deadline
-        ) break
-        await waitFor(NATIVE_MOBILE_BACKGROUND_START_POLL_MS)
-      }
-      if (
-        !status.available
-        || status.phase === 'unavailable'
-        || status.phase === 'faulted'
-        || !isNativeMobileBackgroundCaptureActive(status)
-      ) {
-        await nativeMobileVoice.stopBackground?.().catch(() => undefined)
-        nativeMobileBackgroundWakeActiveRef.current = false
-        setNativeMobileBackgroundWakeActive(false)
-        setVoiceCaptureStatus('error')
-        setLastError('Hands-free voice could not start. Check microphone access on this device.')
-        return false
-      }
-      nativeMobileBackgroundWakeActiveRef.current = true
-      setNativeMobileBackgroundWakeActive(true)
-      setVoiceCaptureStatus('listening')
-      activeVoiceSessionRef.current = 'native-mobile-background'
-      ownedVoiceSessionIdsRef.current.add('native-mobile-background')
-      return true
-    } catch {
-      if (assistantViewDisposedRef.current || operationToken !== nativeMobileVoiceOperationTokenRef.current) return false
-      nativeMobileBackgroundWakeActiveRef.current = false
-      setNativeMobileBackgroundWakeActive(false)
-      setVoiceCaptureStatus('error')
-      setLastError('Hands-free voice could not start. Check microphone access on this device.')
-      return false
-    } finally {
-      if (operationToken === nativeMobileVoiceOperationTokenRef.current) {
-        nativeMobileVoiceStartInFlightRef.current = false
-      }
-      if (nativeMobileBackgroundStartTokenRef.current === operationToken) {
-        nativeMobileBackgroundStartTokenRef.current = null
-      }
-    }
-  }
-
-  async function stopNativeMobileBackgroundWake(options: { updateUi?: boolean } = {}): Promise<boolean> {
-    if (!nativeMobileVoice?.stopBackground) return false
-    nativeMobileVoiceOperationTokenRef.current += 1
-    const updateUi = options.updateUi !== false
-    try {
-      await nativeMobileVoice.stopBackground()
-      nativeMobileBackgroundWakeActiveRef.current = false
-      setNativeMobileBackgroundWakeActive(false)
-      if (updateUi) setVoiceCaptureStatus('idle')
-      activeVoiceSessionRef.current = null
-      ownedVoiceSessionIdsRef.current.clear()
-      return true
-    } catch {
-      if (updateUi) {
-        setVoiceCaptureStatus('error')
-        setLastError('Hands-free voice could not stop cleanly. Try again.')
-      }
-      return false
-    }
-  }
-
-  async function toggleNativeMobileBackgroundWake(): Promise<boolean> {
-    const control = voiceModel.controls.find((candidate) => candidate.id === 'background-wake')
-    if (!control?.enabled && !nativeMobileBackgroundWakeActiveRef.current) return false
-    if (nativeMobileBackgroundWakeActiveRef.current) {
-      return stopNativeMobileBackgroundWake()
-    }
-    return startNativeMobileBackgroundWake()
-  }
-
-  async function toggleBackgroundWakeForSurface(): Promise<boolean> {
-    if (usesNativeDesktopVoice) return toggleNativeDesktopBackgroundWake()
-    if (usesNativeMobileVoice) return toggleNativeMobileBackgroundWake()
-    return false
   }
 
   async function cancelNativeMobileVoice(options: { updateUi?: boolean } = {}): Promise<boolean> {
@@ -3664,10 +3625,6 @@ export function AssistantView({
         return
       }
       if (usesNativeMobileVoice) {
-        if (nativeMobileBackgroundWakeActiveRef.current) {
-          await stopNativeMobileBackgroundWake()
-          return
-        }
         await finishNativeMobileVoice()
         return
       }
@@ -4006,16 +3963,16 @@ export function AssistantView({
               <button
                 type="button"
                 className="aui-secondary-button aui-composer-icon"
-                data-voice-state={voiceCaptureStatus === 'listening' ? 'listening' : 'idle'}
+                data-voice-state={nativeMobileBackgroundOwnsMicrophone ? 'background' : voiceCaptureStatus === 'listening' ? 'listening' : 'idle'}
                 disabled={voiceCaptureStatus === 'processing'}
                 onClick={(event) => { event.preventDefault(); requestVoiceToggle() }}
-                aria-label={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
-                title={voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}
+                aria-label={voiceCaptureButtonLabel}
+                title={voiceCaptureButtonLabel}
               >
                 {voiceCaptureStatus === 'listening' ? <StopCircle size={18} aria-hidden /> : <Mic size={18} aria-hidden />}
-                <span className="aui-sr-only">{voiceCaptureStatus === 'listening' ? 'Stop listening' : 'Push to talk'}</span>
+                <span className="aui-sr-only">{voiceCaptureButtonLabel}</span>
               </button>
-              {handsFreeControl && (handsFreeControl.enabled || handsFreeActive) ? (
+              {usesNativeDesktopVoice && handsFreeControl && (handsFreeControl.enabled || handsFreeActive) ? (
                 <button
                   type="button"
                   className="aui-secondary-button aui-composer-icon"
@@ -4024,7 +3981,7 @@ export function AssistantView({
                   aria-pressed={handsFreeActive}
                   aria-label={handsFreeControl.label}
                   title={handsFreeControl.reason}
-                  onClick={(event) => { event.preventDefault(); void toggleBackgroundWakeForSurface() }}
+                  onClick={(event) => { event.preventDefault(); void toggleNativeDesktopBackgroundWake() }}
                 >
                   <Radio size={18} aria-hidden />
                   <span className="aui-sr-only">{handsFreeControl.label}</span>
@@ -6271,21 +6228,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): P
   })
 }
 
-function isNativeMobileBackgroundCaptureActive(status: NativeMobileVoiceStatus): boolean {
-  return status.backgroundActive === true && status.captureActive
-}
-
 function isUiOwnedNativeMobileFocusedTurnActive(
   activeSessionId: string | null,
   startInFlight: boolean,
 ): boolean {
   if (startInFlight) return true
   return activeSessionId !== null && activeSessionId !== 'native-mobile-background'
-}
-
-function waitFor(ms: number): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve()
-  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function revokeAttachmentPreview(attachment: Pick<AssistantAttachmentDraft, 'previewUrl'>): void {
@@ -6775,6 +6723,36 @@ async function loadLocalAssistantConversationRows(
     updated: `${formatSessionActivity(new Date(summary.record.updatedAtMs).toISOString())} · ${summary.messageCount} ${summary.messageCount === 1 ? 'message' : 'messages'}`,
     active: false,
   })))
+}
+
+async function activateLocalAssistantConversation(
+  history: LocalAssistantHistoryDependencies,
+  conversationId: string,
+): Promise<void> {
+  await history.localData.transaction(async (repositories) => {
+    const records = await repositories.conversations.listConversations()
+    const conversation = records.find((record) => record.id === conversationId)
+    if (!conversation || conversation.archivedAtMs !== null) {
+      throw new Error('Local conversation is unavailable.')
+    }
+    if (
+      conversation.profileId !== history.scope.profileId
+      || conversation.localNodeId !== history.scope.localNodeId
+    ) {
+      throw new Error('Local conversation belongs to a different profile.')
+    }
+    const latestUpdatedAtMs = records
+      .filter((record) => (
+        record.profileId === history.scope.profileId
+        && record.localNodeId === history.scope.localNodeId
+        && record.archivedAtMs === null
+      ))
+      .reduce((latest, record) => Math.max(latest, record.updatedAtMs), 0)
+    await repositories.conversations.upsertConversation({
+      ...conversation,
+      updatedAtMs: Math.max(Date.now(), latestUpdatedAtMs + 1),
+    })
+  })
 }
 
 async function localAssistantConversationTitle(

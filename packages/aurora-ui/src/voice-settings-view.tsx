@@ -2102,6 +2102,13 @@ function wakePhraseOptionsFor(runtimeProfile: AuroraRuntimeProfileV2 | null): Wa
   const kws = runtimeProfile?.localNode.localSpeechSelection?.kws
   if (!kws) return []
   const locale = localeForWakePack(kws.packId)
+  if (locale === 'bilingual') {
+    return [
+      wakePhraseOption('hey-aurora.en', 'Hey Aurora', 'en', 'English'),
+      wakePhraseOption('aurora.en', 'Aurora', 'en', 'English'),
+      wakePhraseOption('ni-hao-aurora.zh', '你好 Aurora', 'zh', 'Chinese'),
+    ]
+  }
   if (locale === 'zh') {
     return [
       wakePhraseOption('ni-hao-aurora.zh', '你好 Aurora', 'zh', 'Chinese'),
@@ -2135,10 +2142,13 @@ function wakePhraseOption(
   }
 }
 
-function localeForWakePack(packId: string): 'en' | 'zh' | 'und' {
+function localeForWakePack(packId: string): 'en' | 'zh' | 'bilingual' | 'und' {
   const normalized = packId.toLowerCase()
-  if (/(?:^|[._:-])(?:zh|cn|chinese|wenet)(?:$|[._:-])/u.test(normalized)) return 'zh'
-  if (/(?:^|[._:-])(?:en|english|giga|gigaspeech)(?:$|[._:-])/u.test(normalized)) return 'en'
+  const supportsChinese = /(?:^|[._:-])(?:zh|cn|chinese|wenet)(?:$|[._:-])/u.test(normalized)
+  const supportsEnglish = /(?:^|[._:-])(?:en|english|giga|gigaspeech)(?:$|[._:-])/u.test(normalized)
+  if (supportsChinese && supportsEnglish) return 'bilingual'
+  if (supportsChinese) return 'zh'
+  if (supportsEnglish) return 'en'
   return 'und'
 }
 

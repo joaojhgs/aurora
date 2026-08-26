@@ -5,7 +5,7 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aurora_voice_core::CancellationToken;
@@ -474,9 +474,26 @@ impl SpeechPackManager {
     /// their model files. Callers may use this for non-authoritative UI status;
     /// runtime creation must still resolve and verify the selected bindings.
     pub fn recorded_pack_ids(&self) -> Result<Vec<String>, SpeechPackError> {
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        self.recorded_pack_ids_unlocked()
+    }
+
+    /// Return the non-authoritative completed-install snapshot without waiting
+    /// for a concurrent heavyweight verification. Android status polling runs
+    /// on the application main thread, so callers must retain their last good
+    /// snapshot when this reports that the state lock is currently busy.
+    pub fn try_recorded_pack_ids(&self) -> Result<Option<Vec<String>>, SpeechPackError> {
+        let _state_guard = match self.state_lock.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::WouldBlock) => return Ok(None),
+            Err(TryLockError::Poisoned(_)) => return Err(SpeechPackError::State),
+        };
+        self.recorded_pack_ids_unlocked().map(Some)
+    }
+
+    fn recorded_pack_ids_unlocked(&self) -> Result<Vec<String>, SpeechPackError> {
         let voice_catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
         let model_catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
-        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
         let state = read_state(&self.config.root)?;
         let mut pack_ids = state
             .installed
@@ -494,6 +511,84 @@ impl SpeechPackManager {
         pack_ids.sort();
         pack_ids.dedup();
         Ok(pack_ids)
+    }
+
+    /// Return canonical binding metadata for a recorded installed voice without
+    /// re-hashing its heavyweight model files.
+    ///
+    /// This is suitable for advertising a lazy provider binding only. Callers
+    /// must still use [`Self::resolve_voice_bindings`] before loading or running
+    /// the model so the complete install receipt is verified.
+    pub fn recorded_voice_task_binding(
+        &self,
+        voice_id: &str,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        let catalog = TtsVoiceCatalog::runtime().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .voice(voice_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let state = read_state(&self.config.root)?;
+        let record = state
+            .installed
+            .get(voice_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        if record.voice_id != entry.voice_id
+            || record.language != entry.language
+            || record.archive_sha256 != entry.archive.sha256
+            || record.archive_bytes != entry.archive.byte_size
+        {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        verify_bindings_in_root(&root, entry)?;
+        if entry.model_family == "vits_piper" {
+            let current_config = file_receipt(&root, &entry.bindings.config)?;
+            let expected_config = record
+                .receipt
+                .config
+                .as_ref()
+                .or_else(|| record.receipt.bindings.get("config"))
+                .ok_or(SpeechPackError::CorruptCache)?;
+            if &current_config != expected_config {
+                return Err(SpeechPackError::CorruptCache);
+            }
+        }
+        tts_task_binding(entry, &root)
+    }
+
+    /// Return canonical binding metadata for a recorded installed speech model
+    /// without re-hashing its heavyweight model files.
+    ///
+    /// This is suitable for advertising a lazy provider binding only. Callers
+    /// must still use [`Self::resolve_model_bindings`] before loading or running
+    /// the model so the complete install receipt is verified.
+    pub fn recorded_model_task_binding(
+        &self,
+        model_id: &str,
+    ) -> Result<TaskPackBinding, SpeechPackError> {
+        let catalog = SpeechModelCatalog::embedded().map_err(|_| SpeechPackError::State)?;
+        let entry = catalog
+            .model(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        let _state_guard = self.state_lock.lock().map_err(|_| SpeechPackError::State)?;
+        let state = read_state(&self.config.root)?;
+        let record = state
+            .speech_models
+            .get(model_id)
+            .ok_or(SpeechPackError::UnknownVoice)?;
+        if record.model_id != entry.model_id
+            || record.task != entry.task
+            || record.languages != entry.languages
+            || record.language_scope != entry.language_scope
+            || record.archive_sha256 != entry.archive.sha256
+            || record.archive_bytes != entry.archive.byte_size
+        {
+            return Err(SpeechPackError::CorruptCache);
+        }
+        let root = extract_root(&self.config.root, &entry.archive.sha256);
+        verify_model_bindings_in_root(&root, entry)?;
+        catalog_task_binding(entry)
     }
 
     /// Resolve verified local bindings for an installed selected voice.
@@ -2465,6 +2560,43 @@ mod tests {
             .recorded_pack_ids()
             .expect("recorded ids after remove")
             .is_empty());
+    }
+
+    #[test]
+    fn recorded_pack_status_never_waits_for_heavyweight_verification() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 1024);
+        write_embedded_disk_install(directory.path());
+
+        let _verification_guard = manager.state_lock.lock().expect("state lock");
+        assert_eq!(
+            manager.try_recorded_pack_ids().expect("nonblocking status"),
+            None,
+        );
+    }
+
+    #[test]
+    fn recorded_voice_binding_defers_heavy_model_integrity_to_runtime_load() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let manager = test_manager(directory.path(), 1024);
+        write_embedded_disk_install(directory.path());
+
+        let binding = manager
+            .recorded_voice_task_binding(VOICE_ID)
+            .expect("recorded binding");
+        assert_eq!(binding.task(), aurora_voice_engine::VoiceTask::TextToSpeech);
+
+        let catalog = TtsVoiceCatalog::embedded().expect("catalog");
+        let entry = catalog.voice(VOICE_ID).expect("voice");
+        let model =
+            extract_root(directory.path(), &entry.archive.sha256).join(&entry.bindings.model);
+        fs::write(model, b"bad!").expect("tamper heavyweight model");
+
+        assert!(manager.recorded_voice_task_binding(VOICE_ID).is_ok());
+        assert_eq!(
+            manager.resolve_voice_bindings(VOICE_ID),
+            Err(SpeechPackError::CorruptCache),
+        );
     }
 
     #[tokio::test]

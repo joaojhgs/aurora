@@ -1,12 +1,17 @@
 //! Android JNI binding for the shared Rust-native PCM ingress.
 
+use crate::local_data_native::{
+    local_data_db_path_from_app_config_dir, persist_native_voice_turn_at_path,
+    NativeVoiceTurnPersistenceRequest,
+};
 use aurora_voice_native::{
     AndroidAssistantRouteMode, AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult,
     AndroidTtsReferenceProfile, AndroidVoiceSession, AndroidVoiceSessionCommandError,
     AndroidVoiceSessionConfig, CancellationToken, SpeechCatalogTask, SpeechModelCatalog,
-    SpeechPackManager, SpeechPackManagerConfig, TtsVoiceCatalog,
+    SpeechPackInstallPhase, SpeechPackInstallProgress, SpeechPackManager, SpeechPackManagerConfig,
+    TtsVoiceCatalog,
 };
-use jni::objects::{JClass, JFloatArray, JShortArray, JString};
+use jni::objects::{JClass, JFloatArray, JObject, JShortArray, JString, JValue};
 use jni::sys::{jboolean, jint, jlong, jlongArray, jshortArray, jstring};
 use jni::JNIEnv;
 use serde_json::json;
@@ -67,6 +72,24 @@ fn optional_string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<
             Some(trimmed)
         }
     })
+}
+
+fn persistence_result_to_jni(env: &JNIEnv<'_>, payload: serde_json::Value) -> jstring {
+    serde_json::to_string(&payload)
+        .ok()
+        .and_then(|payload| env.new_string(payload).ok())
+        .map(JString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+fn persistence_failure_to_jni(env: &JNIEnv<'_>, error_code: &str) -> jstring {
+    persistence_result_to_jni(
+        env,
+        json!({
+            "ok": false,
+            "errorCode": error_code,
+        }),
+    )
 }
 
 fn optional_gateway_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<Option<Url>> {
@@ -183,7 +206,44 @@ fn android_embedded_catalog_json() -> Option<String> {
     serde_json::to_string(&entries).ok()
 }
 
-fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
+fn speech_pack_install_phase_name(phase: SpeechPackInstallPhase) -> &'static str {
+    match phase {
+        SpeechPackInstallPhase::Downloading => "downloading",
+        SpeechPackInstallPhase::Extracting => "extracting",
+        SpeechPackInstallPhase::Ready => "ready",
+    }
+}
+
+fn emit_install_progress(
+    env: &mut JNIEnv<'_>,
+    sink: &JObject<'_>,
+    progress: SpeechPackInstallProgress,
+) {
+    if sink.is_null() {
+        return;
+    }
+    let Ok(phase) = env.new_string(speech_pack_install_phase_name(progress.phase)) else {
+        return;
+    };
+    let phase = JObject::from(phase);
+    let completed = progress.completed_bytes.min(i64::MAX as u64) as jlong;
+    let expected = progress.expected_bytes.min(i64::MAX as u64) as jlong;
+    let _ = env.call_method(
+        sink,
+        "onProgress",
+        "(Ljava/lang/String;JJ)V",
+        &[
+            JValue::Object(&phase),
+            JValue::Long(completed),
+            JValue::Long(expected),
+        ],
+    );
+}
+
+fn install_pack_blocking<F>(root: String, pack_id: String, task: String, mut progress: F) -> bool
+where
+    F: FnMut(SpeechPackInstallProgress),
+{
     let Some(manager) = manager_from_root(root) else {
         return false;
     };
@@ -197,12 +257,12 @@ fn install_pack_blocking(root: String, pack_id: String, task: String) -> bool {
         let cancellation = CancellationToken::new();
         let result = if task == "tts" || task == "text-to-speech" {
             manager
-                .install_voice(&pack_id, &cancellation, |_| {})
+                .install_voice(&pack_id, &cancellation, |next| progress(next))
                 .await
                 .map(|_| ())
         } else if speech_catalog_task(&task).is_some() {
             manager
-                .install_model(&pack_id, &cancellation, |_| {})
+                .install_model(&pack_id, &cancellation, |next| progress(next))
                 .await
                 .map(|_| ())
         } else {
@@ -235,7 +295,7 @@ fn resolve_pack_blocking(root: String, pack_id: String, task: String) -> bool {
 
 fn installed_pack_ids_json(root: String) -> Option<String> {
     let manager = manager_from_root(root)?;
-    serde_json::to_string(&manager.recorded_pack_ids().ok()?).ok()
+    serde_json::to_string(&manager.try_recorded_pack_ids().ok()??).ok()
 }
 
 fn remove_pack_blocking(root: String, pack_id: String, task: String) -> bool {
@@ -264,6 +324,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPack
     root: JString<'_>,
     pack_id: JString<'_>,
     task: JString<'_>,
+    progress_sink: JObject<'_>,
 ) -> jboolean {
     let Some(root) = string_from_jni(&mut env, root) else {
         return 0;
@@ -274,7 +335,9 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeSpeechPack
     let Some(task) = string_from_jni(&mut env, task) else {
         return 0;
     };
-    bool_to_jboolean(install_pack_blocking(root, pack_id, task))
+    bool_to_jboolean(install_pack_blocking(root, pack_id, task, |progress| {
+        emit_install_progress(&mut env, &progress_sink, progress);
+    }))
 }
 
 #[no_mangle]
@@ -736,6 +799,117 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     session
         .finish(generation.max(0) as u64)
         .map_or_else(session_error_code, |_| AUDIO_OK)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeTakeFocusedTranscript(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    let Some(transcript) =
+        session_from_handle(handle).and_then(AndroidVoiceSession::take_focused_transcript)
+    else {
+        return ptr::null_mut();
+    };
+    env.new_string(transcript)
+        .map(JString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeTakeBackgroundResult(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    let Some(result) =
+        session_from_handle(handle).and_then(AndroidVoiceSession::take_background_result)
+    else {
+        return ptr::null_mut();
+    };
+    let Some(payload) = serde_json::to_string(&result).ok() else {
+        return ptr::null_mut();
+    };
+    env.new_string(payload)
+        .map(JString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativePersistBackgroundTurn(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    app_config_dir: JString<'_>,
+    profile_id: JString<'_>,
+    local_node_id: JString<'_>,
+    new_conversation_id: JString<'_>,
+    user_message_id: JString<'_>,
+    user_content_envelope_json: JString<'_>,
+    assistant_message_id: JString<'_>,
+    assistant_content_envelope_json: JString<'_>,
+    created_at_ms: jlong,
+    completed_at_ms: jlong,
+) -> jstring {
+    let Some(app_config_dir) = string_from_jni(&mut env, app_config_dir) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Ok(database_path) = local_data_db_path_from_app_config_dir(PathBuf::from(app_config_dir))
+    else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(profile_id) = string_from_jni(&mut env, profile_id) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(local_node_id) = string_from_jni(&mut env, local_node_id) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(new_conversation_id) = string_from_jni(&mut env, new_conversation_id) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(user_message_id) = string_from_jni(&mut env, user_message_id) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(user_content_envelope_json) = string_from_jni(&mut env, user_content_envelope_json)
+    else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let assistant_message_id = optional_string_from_jni(&mut env, assistant_message_id);
+    let assistant_content_envelope_json =
+        optional_string_from_jni(&mut env, assistant_content_envelope_json);
+    let Some(user_content_envelope) = serde_json::from_str(&user_content_envelope_json).ok() else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let assistant_content_envelope = match assistant_content_envelope_json {
+        Some(value) => match serde_json::from_str(&value) {
+            Ok(envelope) => Some(envelope),
+            Err(_) => return persistence_failure_to_jni(&env, "native_voice_persistence_invalid"),
+        },
+        None => None,
+    };
+    let request = NativeVoiceTurnPersistenceRequest {
+        profile_id,
+        local_node_id,
+        new_conversation_id,
+        user_message_id,
+        user_content_envelope,
+        assistant_message_id,
+        assistant_content_envelope,
+        created_at_ms,
+        completed_at_ms,
+    };
+    let Ok(result) = persist_native_voice_turn_at_path(database_path, request) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_failed");
+    };
+    persistence_result_to_jni(
+        &env,
+        json!({
+            "ok": true,
+            "conversationId": result.conversation_id,
+            "userMessageId": result.user_message_id,
+            "assistantMessageId": result.assistant_message_id,
+        }),
+    )
 }
 
 #[no_mangle]

@@ -276,6 +276,27 @@ struct ConversationMessageRecord {
     created_at_ms: i64,
 }
 
+#[derive(Clone)]
+pub(crate) struct NativeVoiceTurnPersistenceRequest {
+    pub(crate) profile_id: String,
+    pub(crate) local_node_id: String,
+    pub(crate) new_conversation_id: String,
+    pub(crate) user_message_id: String,
+    pub(crate) user_content_envelope: Value,
+    pub(crate) assistant_message_id: Option<String>,
+    pub(crate) assistant_content_envelope: Option<Value>,
+    pub(crate) created_at_ms: i64,
+    pub(crate) completed_at_ms: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct NativeVoiceTurnPersistenceResult {
+    pub(crate) conversation_id: String,
+    pub(crate) user_message_id: String,
+    pub(crate) assistant_message_id: Option<String>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -1090,6 +1111,167 @@ fn run_repository_operation(
     }
 }
 
+pub(crate) fn persist_native_voice_turn_at_path(
+    db_path: PathBuf,
+    request: NativeVoiceTurnPersistenceRequest,
+) -> Result<NativeVoiceTurnPersistenceResult, AuroraCommandError> {
+    validate_safe_int(request.created_at_ms, "voice.createdAtMs")?;
+    validate_safe_int(request.completed_at_ms, "voice.completedAtMs")?;
+    if request.completed_at_ms < request.created_at_ms {
+        return Err(local_data_error("voice completedAtMs before createdAtMs"));
+    }
+    validate_id(&request.new_conversation_id, "voice.newConversationId")?;
+    validate_id(&request.user_message_id, "voice.userMessageId")?;
+    match (
+        request.assistant_message_id.as_deref(),
+        request.assistant_content_envelope.as_ref(),
+    ) {
+        (Some(message_id), Some(_)) => validate_id(message_id, "voice.assistantMessageId")?,
+        (None, None) => {}
+        _ => return Err(local_data_error("voice assistant message is incomplete")),
+    }
+
+    open_local_data_at_path(db_path.clone(), &request.profile_id, &request.local_node_id)?;
+    let conn = SqliteConnection::open(db_path)?;
+    conn.exec("BEGIN IMMEDIATE;")?;
+    let result = persist_native_voice_turn(&conn, request);
+    match result {
+        Ok(response) => {
+            conn.exec("COMMIT;")?;
+            Ok(response)
+        }
+        Err(error) => {
+            let _ = conn.exec("ROLLBACK;");
+            Err(error)
+        }
+    }
+}
+
+fn persist_native_voice_turn(
+    conn: &SqliteConnection,
+    request: NativeVoiceTurnPersistenceRequest,
+) -> Result<NativeVoiceTurnPersistenceResult, AuroraCommandError> {
+    let duplicate = conn.query(
+        "SELECT m.conversation_id
+         FROM aurora_messages m
+         INNER JOIN aurora_conversations c ON c.id = m.conversation_id
+         WHERE m.id = ? AND c.profile_id = ? AND c.local_node_id = ?
+         LIMIT 1",
+        &[
+            json!(request.user_message_id),
+            json!(request.profile_id),
+            json!(request.local_node_id),
+        ],
+    )?;
+    if let Some(row) = duplicate.first() {
+        return Ok(NativeVoiceTurnPersistenceResult {
+            conversation_id: row_string(row, "conversation_id")?,
+            user_message_id: request.user_message_id,
+            assistant_message_id: request.assistant_message_id,
+        });
+    }
+
+    let existing = conn
+        .query(
+            "SELECT id, created_at_ms, updated_at_ms
+             FROM aurora_conversations
+             WHERE profile_id = ? AND local_node_id = ? AND archived_at_ms IS NULL
+             ORDER BY updated_at_ms DESC, id ASC
+             LIMIT 1",
+            &[json!(request.profile_id), json!(request.local_node_id)],
+        )?
+        .into_iter()
+        .next();
+    let (conversation_id, conversation_created_at_ms, conversation_updated_at_ms) = match existing {
+        Some(row) => (
+            row_string(&row, "id")?,
+            row_i64(&row, "created_at_ms")?,
+            row_i64(&row, "updated_at_ms")?,
+        ),
+        None => (
+            request.new_conversation_id.clone(),
+            request.created_at_ms,
+            request.completed_at_ms,
+        ),
+    };
+
+    run_repository_operation(
+        conn,
+        &request.profile_id,
+        &request.local_node_id,
+        LocalDataRepositoryOperation::ConversationsUpsertConversation {
+            record: ConversationRecord {
+                id: conversation_id.clone(),
+                profile_id: request.profile_id.clone(),
+                local_node_id: request.local_node_id.clone(),
+                title_envelope: None,
+                created_at_ms: conversation_created_at_ms,
+                updated_at_ms: request.completed_at_ms.max(conversation_updated_at_ms),
+                archived_at_ms: None,
+            },
+        },
+    )?;
+
+    let next_sequence_row = conn.query(
+        "SELECT COALESCE(MAX(sequence), -1) + 1 AS next_sequence
+         FROM aurora_messages WHERE conversation_id = ?",
+        &[json!(conversation_id)],
+    )?;
+    let mut next_sequence = row_i64(
+        next_sequence_row
+            .first()
+            .ok_or_else(|| local_data_error("voice message sequence unavailable"))?,
+        "next_sequence",
+    )?;
+    run_repository_operation(
+        conn,
+        &request.profile_id,
+        &request.local_node_id,
+        LocalDataRepositoryOperation::ConversationsAppendMessage {
+            record: ConversationMessageRecord {
+                id: request.user_message_id.clone(),
+                conversation_id: conversation_id.clone(),
+                sequence: next_sequence,
+                role: "user".to_string(),
+                content_envelope: Some(request.user_content_envelope),
+                tool_envelope: None,
+                status: "complete".to_string(),
+                created_at_ms: request.created_at_ms,
+            },
+        },
+    )?;
+    next_sequence += 1;
+
+    if let (Some(message_id), Some(content_envelope)) = (
+        request.assistant_message_id.clone(),
+        request.assistant_content_envelope,
+    ) {
+        run_repository_operation(
+            conn,
+            &request.profile_id,
+            &request.local_node_id,
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: ConversationMessageRecord {
+                    id: message_id,
+                    conversation_id: conversation_id.clone(),
+                    sequence: next_sequence,
+                    role: "assistant".to_string(),
+                    content_envelope: Some(content_envelope),
+                    tool_envelope: None,
+                    status: "complete".to_string(),
+                    created_at_ms: request.completed_at_ms,
+                },
+            },
+        )?;
+    }
+
+    Ok(NativeVoiceTurnPersistenceResult {
+        conversation_id,
+        user_message_id: request.user_message_id,
+        assistant_message_id: request.assistant_message_id,
+    })
+}
+
 fn import_records(
     conn: &SqliteConnection,
     profile_id: &str,
@@ -1497,12 +1679,23 @@ fn local_data_db_path(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
     Ok(path)
 }
 
-fn local_data_db_path_without_create(app: &AppHandle) -> Result<PathBuf, AuroraCommandError> {
+pub(crate) fn local_data_db_path_without_create(
+    app: &AppHandle,
+) -> Result<PathBuf, AuroraCommandError> {
     let base = app
         .path()
         .app_config_dir()
         .map_err(|error| local_data_error(error.to_string()))?;
-    Ok(base.join(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME))
+    local_data_db_path_from_app_config_dir(base)
+}
+
+pub(crate) fn local_data_db_path_from_app_config_dir(
+    app_config_dir: PathBuf,
+) -> Result<PathBuf, AuroraCommandError> {
+    if !app_config_dir.is_absolute() {
+        return Err(local_data_error("app config directory must be absolute"));
+    }
+    Ok(app_config_dir.join(generated::local_data_migrations::LOCAL_DATA_DATABASE_NAME))
 }
 
 fn status_value(
@@ -2502,6 +2695,72 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn native_voice_turn_persists_into_latest_native_conversation_once() {
+        let (dir, path) = test_db_path("android-background-voice");
+        let first = persist_native_voice_turn_at_path(
+            path.clone(),
+            NativeVoiceTurnPersistenceRequest {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
+                new_conversation_id: "voice-conversation-1".to_string(),
+                user_message_id: "voice-user-1".to_string(),
+                user_content_envelope: envelope_value(),
+                assistant_message_id: None,
+                assistant_content_envelope: None,
+                created_at_ms: 10,
+                completed_at_ms: 11,
+            },
+        )
+        .unwrap();
+        assert_eq!(first.conversation_id, "voice-conversation-1");
+
+        let second_request = NativeVoiceTurnPersistenceRequest {
+            profile_id: "profile-1".to_string(),
+            local_node_id: "node-1".to_string(),
+            new_conversation_id: "voice-conversation-unused".to_string(),
+            user_message_id: "voice-user-2".to_string(),
+            user_content_envelope: envelope_value(),
+            assistant_message_id: Some("voice-assistant-2".to_string()),
+            assistant_content_envelope: Some(envelope_value()),
+            created_at_ms: 12,
+            completed_at_ms: 13,
+        };
+        let second =
+            persist_native_voice_turn_at_path(path.clone(), second_request.clone()).unwrap();
+        assert_eq!(second.conversation_id, "voice-conversation-1");
+        persist_native_voice_turn_at_path(path.clone(), second_request).unwrap();
+
+        let conn = SqliteConnection::open(path).unwrap();
+        let conversations = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListConversations {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
+            },
+        )
+        .unwrap();
+        assert_eq!(conversations.as_array().unwrap().len(), 1);
+        let messages = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessages {
+                profile_id: "profile-1".to_string(),
+                local_node_id: "node-1".to_string(),
+                conversation_id: "voice-conversation-1".to_string(),
+            },
+        )
+        .unwrap();
+        assert_eq!(messages.as_array().unwrap().len(), 3);
+        assert_eq!(messages[0]["id"], json!("voice-user-1"));
+        assert_eq!(messages[1]["id"], json!("voice-user-2"));
+        assert_eq!(messages[2]["id"], json!("voice-assistant-2"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn import_validation_rejects_hostile_documents_before_db_changes() {

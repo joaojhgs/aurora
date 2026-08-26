@@ -1,4 +1,5 @@
 import type {
+  NativeMobileVoiceBackgroundResult,
   NativeMobileVoicePhase,
   NativeMobileVoicePort,
   NativeMobileVoiceStatus,
@@ -6,21 +7,31 @@ import type {
 
 type NativeCommand = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
+const FOCUSED_TURN_SETTLEMENT_TIMEOUT_MS = 120_000;
+const FOCUSED_CAPTURE_START_TIMEOUT_MS = 30_000;
+const FOCUSED_TURN_STATUS_POLL_MS = 100;
+
 export function createTauriNativeAndroidVoicePort(
   callNative: NativeCommand,
 ): NativeMobileVoicePort {
   return {
     status: async () => parseStatus(await callNative("aurora_android_voice_foreground_service_status")),
-    start: async ({ remoteAudioConsent }) => parseStatus(
+    start: async ({ remoteAudioConsent }) => waitForFocusedCaptureStart(
+      callNative,
       await callNative("aurora_android_voice_foreground_service_start", {
         request: { remoteAudioConsent },
       }),
     ),
-    finish: async () => parseStatus(
+    finish: async () => waitForFocusedTurnSettlement(
+      callNative,
       await callNative("aurora_android_voice_foreground_service_finish"),
     ),
+    takeTranscript: async () => takeFocusedTranscript(callNative),
+    takeBackgroundResult: async () => takeBackgroundResult(callNative),
     cancel: async () => parseStatus(
-      await callNative("aurora_android_voice_foreground_service_cancel"),
+      await callNative("aurora_android_voice_foreground_service_cancel", {
+        request: { backgroundSession: false },
+      }),
     ),
     backgroundStatus: async () => parseStatus(
       await callNative("aurora_android_voice_foreground_service_status"),
@@ -33,9 +44,101 @@ export function createTauriNativeAndroidVoicePort(
       { background: true },
     ),
     stopBackground: async () => parseStatus(
-      await callNative("aurora_android_voice_foreground_service_cancel"),
+      await callNative("aurora_android_voice_foreground_service_cancel", {
+        request: { backgroundSession: true },
+      }),
       { background: true },
     ),
+  };
+}
+
+async function waitForFocusedCaptureStart(
+  callNative: NativeCommand,
+  initialValue: unknown,
+): Promise<NativeMobileVoiceStatus> {
+  let status = parseStatus(initialValue);
+  const deadline = Date.now() + FOCUSED_CAPTURE_START_TIMEOUT_MS;
+  while (
+    status.available
+    && status.phase !== "faulted"
+    && !(status.running && status.captureActive)
+    && Date.now() < deadline
+  ) {
+    await new Promise<void>((resolve) => setTimeout(resolve, FOCUSED_TURN_STATUS_POLL_MS));
+    status = parseStatus(
+      await callNative("aurora_android_voice_foreground_service_status"),
+    );
+  }
+  if (status.available && status.phase !== "faulted" && !(status.running && status.captureActive)) {
+    return {
+      ...status,
+      phase: "faulted",
+      reasonCode: "focused_voice_start_timeout",
+    };
+  }
+  return status;
+}
+
+async function waitForFocusedTurnSettlement(
+  callNative: NativeCommand,
+  initialValue: unknown,
+): Promise<NativeMobileVoiceStatus> {
+  let status = parseStatus(initialValue);
+  const deadline = Date.now() + FOCUSED_TURN_SETTLEMENT_TIMEOUT_MS;
+  while (status.running && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, FOCUSED_TURN_STATUS_POLL_MS));
+    status = parseStatus(
+      await callNative("aurora_android_voice_foreground_service_status"),
+    );
+  }
+  if (status.running) {
+    return {
+      ...status,
+      phase: "faulted",
+      reasonCode: "focused_voice_timeout",
+    };
+  }
+  return status;
+}
+
+async function takeFocusedTranscript(callNative: NativeCommand): Promise<string | null> {
+  const value = await callNative("aurora_android_voice_foreground_service_status", {
+    request: { takeFocusedResult: true },
+  });
+  const record = isRecord(value) ? value : {};
+  return typeof record.focusedTranscript === "string" && record.focusedTranscript.trim()
+    ? record.focusedTranscript.trim()
+    : null;
+}
+
+async function takeBackgroundResult(callNative: NativeCommand): Promise<NativeMobileVoiceBackgroundResult | null> {
+  const value = await callNative("aurora_android_voice_foreground_service_status", {
+    request: { takeBackgroundResult: true },
+  });
+  const record = isRecord(value) ? value : {};
+  const raw = record.backgroundTurnResult;
+  if (!isRecord(raw)) return null;
+  const generation = typeof raw.generation === "number" && Number.isFinite(raw.generation)
+    ? raw.generation
+    : null;
+  const transcript = typeof raw.transcript === "string" ? raw.transcript.trim() : "";
+  if (generation === null || !transcript) return null;
+  return {
+    generation,
+    transcript,
+    assistantText: typeof raw.assistantText === "string" && raw.assistantText.trim()
+      ? raw.assistantText.trim()
+      : null,
+    errorCode: typeof raw.errorCode === "string" && raw.errorCode.trim()
+      ? raw.errorCode.trim()
+      : null,
+    persisted: raw.persisted === true,
+    conversationId: typeof raw.conversationId === "string" && raw.conversationId.trim()
+      ? raw.conversationId.trim()
+      : null,
+    persistenceErrorCode: typeof raw.persistenceErrorCode === "string" && raw.persistenceErrorCode.trim()
+      ? raw.persistenceErrorCode.trim()
+      : null,
   };
 }
 
@@ -53,6 +156,8 @@ function parseStatus(
     : null;
   const reasonCode = captureError
     ? captureError
+    : nested.microphoneSilenced === true
+      ? "microphone_in_use"
     : typeof nested.reason === "string"
       ? nested.reason
       : typeof nested.nativeRouteReason === "string" && nested.nativeRouteReason.trim()

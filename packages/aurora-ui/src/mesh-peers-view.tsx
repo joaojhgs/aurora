@@ -2296,7 +2296,7 @@ function connectionRoundTripTimeMs(
   evidence: SelectedCandidatePairEvidence | null | undefined,
 ): number | null {
   const value = evidence?.roundTripTimeMs
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? value
     : null
 }

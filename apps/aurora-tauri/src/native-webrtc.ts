@@ -287,6 +287,14 @@ class TauriNativePeerConnection implements PeerConnectionLike {
     return new Map(Object.entries(report));
   }
 
+  async measureRoundTripTime(): Promise<number | undefined> {
+    const peerConnectionId = await this.ensurePeerConnection();
+    return await this.bridge.invoke<number>(
+      "aurora_native_webrtc_measure_rtt",
+      { request: { peerConnectionId } },
+    );
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;

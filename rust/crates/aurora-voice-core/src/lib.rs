@@ -861,6 +861,10 @@ impl VoiceStateMachine {
                 VoiceState::Dispatching,
                 TransitionReason::Transcribed
             ) | (
+                VoiceState::Transcribing,
+                VoiceState::Idle,
+                TransitionReason::Transcribed
+            ) | (
                 VoiceState::Dispatching,
                 VoiceState::AwaitingResponse,
                 TransitionReason::Dispatched
@@ -1370,6 +1374,41 @@ where
             .await
     }
 
+    /// Captures and transcribes one focused push-to-talk utterance without
+    /// dispatching it to an assistant transport or synthesizing playback.
+    ///
+    /// Platform shells use this boundary when the foreground UI owns assistant
+    /// orchestration. Local microphone capture and STT therefore remain native,
+    /// while the final transcript reaches the same assistant path as typed text
+    /// without requiring HTTP or WebRTC.
+    pub async fn run_push_to_talk_transcription(
+        &mut self,
+        mut lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        lease.start_reason = CaptureStartReason::PushToTalk;
+        let lease = self.leases.request_start(lease)?;
+        let mut capture_started = false;
+        let result = match cancellation.check() {
+            Ok(()) => match self.audio.start(lease.clone()).await {
+                Ok(()) => {
+                    capture_started = true;
+                    self.run_push_to_talk_transcription_after_start(
+                        lease.clone(),
+                        at,
+                        cancellation.clone(),
+                    )
+                    .await
+                }
+                Err(error) => Err(error),
+            },
+            Err(error) => Err(error),
+        };
+        self.finish_with_cleanup(result, lease, cancellation, capture_started)
+            .await
+    }
+
     pub async fn run_wake_turn(
         &mut self,
         lease: VoiceCaptureLease,
@@ -1515,6 +1554,41 @@ where
         .await?;
         self.finish_voice_turn(lease, TimestampMicros(at.0.saturating_add(3)), cancellation)
             .await
+    }
+
+    async fn run_push_to_talk_transcription_after_start(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        cancellation.check()?;
+        self.ensure_idle(lease.generation, lease.route_revision, at)
+            .await?;
+        cancellation.check()?;
+        self.transition_emit(
+            VoiceState::Arming,
+            TransitionReason::PushToTalk,
+            lease.generation,
+            lease.route_revision,
+            TimestampMicros(at.0.saturating_add(1)),
+        )
+        .await?;
+        cancellation.check()?;
+        self.transition_emit(
+            VoiceState::CapturingUtterance,
+            TransitionReason::SpeechStarted,
+            lease.generation,
+            lease.route_revision,
+            TimestampMicros(at.0.saturating_add(2)),
+        )
+        .await?;
+        self.finish_voice_transcription(
+            lease,
+            TimestampMicros(at.0.saturating_add(3)),
+            cancellation,
+        )
+        .await
     }
 
     async fn run_wake_turn_after_start(
@@ -1853,6 +1927,86 @@ where
         .await
     }
 
+    async fn finish_voice_transcription(
+        &mut self,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Result<String, VoiceCoreError> {
+        let stt_binding = self.stt.finite_stt_binding()?;
+        if stt_binding.sample_rate_hz() != aurora_voice_engine::VAD_SAMPLE_RATE_HZ
+            || stt_binding.channels() != aurora_voice_engine::MONO_CHANNELS
+        {
+            return Err(VoiceCoreError::Engine(EngineError::InvalidRequest));
+        }
+        let mut stt_audio = match stt_binding.clone() {
+            FiniteSttProviderBinding::LocalTask(binding) => {
+                let task_request = BoundTaskRequest::new(
+                    TaskRequest {
+                        task: VoiceTask::SpeechToText,
+                        language: None,
+                        generation: lease.generation.0,
+                    },
+                    *binding,
+                )?;
+                FiniteSttAudioBuilder::new(task_request)?
+            }
+            FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
+                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+            )?,
+        };
+        cancellation.check()?;
+        while let Some(frame) = self.audio.next_frame().await? {
+            if cancellation.is_cancelled() {
+                stt_audio.clear();
+                return Err(VoiceCoreError::Cancelled);
+            }
+            if frame.generation() != lease.generation {
+                continue;
+            }
+            if frame.route_revision() != lease.route_revision || frame.discontinuity() {
+                stt_audio.clear();
+                self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
+                return Err(VoiceCoreError::InvalidTransition);
+            }
+            stt_audio.push_frame(frame.samples())?;
+        }
+        self.transition_emit(
+            VoiceState::Transcribing,
+            TransitionReason::SpeechEnded,
+            lease.generation,
+            lease.route_revision,
+            at,
+        )
+        .await?;
+        cancellation.check()?;
+        self.stt.warm_finite_stt(stt_binding).await?;
+        let (stt_request, stt_audio) = stt_audio.finish()?;
+        let transcript = self
+            .stt
+            .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
+            .await?;
+        cancellation.check()?;
+        self.sink
+            .event(RuntimeEvent::Transcript {
+                generation: lease.generation,
+                partial: false,
+                text: transcript.transcript().to_owned(),
+                at,
+            })
+            .await?;
+        cancellation.check()?;
+        self.transition_emit(
+            VoiceState::Idle,
+            TransitionReason::Transcribed,
+            lease.generation,
+            lease.route_revision,
+            TimestampMicros(at.0.saturating_add(1)),
+        )
+        .await?;
+        Ok(transcript.transcript().to_owned())
+    }
+
     async fn finish_voice_turn_with_sample_frames(
         &mut self,
         lease: VoiceCaptureLease,
@@ -1926,6 +2080,15 @@ where
             .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
             .await?;
         cancellation.check()?;
+        self.sink
+            .event(RuntimeEvent::Transcript {
+                generation: lease.generation,
+                partial: false,
+                text: transcript.transcript().to_owned(),
+                at,
+            })
+            .await?;
+        cancellation.check()?;
         self.transition_emit(
             VoiceState::Dispatching,
             TransitionReason::Transcribed,
@@ -1954,14 +2117,6 @@ where
         )
         .await?;
         cancellation.check()?;
-        self.transition_emit(
-            VoiceState::Speaking,
-            TransitionReason::ResponseReady,
-            lease.generation,
-            lease.route_revision,
-            TimestampMicros(at.0.saturating_add(3)),
-        )
-        .await?;
         // Assistant results are retained at transport fidelity. Local synthesis has a finite,
         // stricter input contract, so only the spoken rendition is normalized and bounded.
         let spoken_text = project_spoken_text(&response.text)?;
@@ -2009,6 +2164,18 @@ where
                 Err(error) => return Err(VoiceCoreError::Engine(error)),
             }
         }
+
+        // Do not advertise playback while the local speech engine is still loading or
+        // synthesizing. Keeping the runtime in AwaitingResponse until audio is ready lets
+        // platform status surfaces distinguish preparation from actual speech playback.
+        self.transition_emit(
+            VoiceState::Speaking,
+            TransitionReason::ResponseReady,
+            lease.generation,
+            lease.route_revision,
+            TimestampMicros(at.0.saturating_add(3)),
+        )
+        .await?;
 
         let mut completed_at = TimestampMicros(at.0.saturating_add(4));
         for audio in synthesized_segments {
@@ -2723,6 +2890,7 @@ mod tests {
 
     struct FakeTransport {
         response: String,
+        error_code: Option<String>,
         invoked: Rc<RefCell<Vec<AssistantTurnRequest>>>,
         cancelled: Rc<RefCell<Vec<Generation>>>,
     }
@@ -2731,6 +2899,16 @@ mod tests {
         fn new(response: &str) -> Self {
             Self {
                 response: response.to_owned(),
+                error_code: None,
+                invoked: Rc::new(RefCell::new(Vec::new())),
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+            }
+        }
+
+        fn failing(code: &str) -> Self {
+            Self {
+                response: String::new(),
+                error_code: Some(code.to_owned()),
                 invoked: Rc::new(RefCell::new(Vec::new())),
                 cancelled: Rc::new(RefCell::new(Vec::new())),
             }
@@ -2746,6 +2924,9 @@ mod tests {
         ) -> Result<AssistantTurnResponse, VoiceCoreError> {
             cancellation.check()?;
             self.invoked.borrow_mut().push(request);
+            if let Some(code) = &self.error_code {
+                return Err(VoiceCoreError::TransportFault { code: code.clone() });
+            }
             Ok(AssistantTurnResponse {
                 text: self.response.clone(),
                 session_id: None,
@@ -3610,6 +3791,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn focused_transcription_returns_text_without_transport_or_playback(
+    ) -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("focused transcript");
+        let tts_probe = engine.clone();
+        let transport = FakeTransport::new("must not dispatch");
+        let transport_invocations = Rc::clone(&transport.invoked);
+        let output = FakeAudioOutput::new();
+        let output_probe = output.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            transport,
+            output,
+            FakeEventSink::default(),
+            "android",
+            "focused-transcription-test",
+        )?;
+
+        let transcript = runtime
+            .run_push_to_talk_transcription(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await?;
+
+        assert_eq!(transcript, "focused transcript");
+        assert!(transport_invocations.borrow().is_empty());
+        assert!(tts_probe.synthesized_text().is_empty());
+        assert!(output_probe.played_generations().is_empty());
+        assert_eq!(runtime.state(), VoiceState::Idle);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn push_to_talk_preserves_full_response_while_bounding_spoken_text(
     ) -> Result<(), VoiceCoreError> {
         let response = format!("{}🙂tail", "a".repeat(TTS_MAX_TEXT_BYTES - 1));
@@ -3639,6 +3856,60 @@ mod tests {
         assert_eq!(synthesized.len(), 1);
         assert_eq!(synthesized[0].len(), TTS_MAX_TEXT_BYTES - 1);
         assert!(!synthesized[0].contains('🙂'));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn transcript_event_is_emitted_before_assistant_transport_finishes(
+    ) -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("native wake transcript");
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::failing("assistant_unavailable"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "android",
+            "transcript-event-test",
+        )?;
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { ref code }) if code == "assistant_unavailable"
+        ));
+        let (_audio, _stt, _tts, _transport, _output, sink) = runtime.into_parts();
+        let transcript_index = sink
+            .events
+            .iter()
+            .position(|event| {
+                matches!(
+                    event,
+                    RuntimeEvent::Transcript { text, partial: false, .. }
+                        if text == "native wake transcript"
+                )
+            })
+            .expect("final transcript event");
+        let dispatch_index = sink
+            .events
+            .iter()
+            .position(|event| {
+                matches!(
+                    event,
+                    RuntimeEvent::State { transition }
+                        if transition.to == VoiceState::Dispatching
+                )
+            })
+            .expect("dispatching transition");
+        assert!(transcript_index < dispatch_index);
         Ok(())
     }
 

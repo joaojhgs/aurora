@@ -113,8 +113,23 @@ internal fun auroraVoicePackReferenceAudioMode(item: org.json.JSONObject): Strin
         .lowercase(Locale.getDefault())
 
 internal object AuroraNativeSpeechPackBridge {
-    fun install(context: Context, packId: String, task: AuroraSpeechPackTask): Boolean =
-        nativeInstall(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName)
+    fun install(
+        context: Context,
+        packId: String,
+        task: AuroraSpeechPackTask,
+        onProgress: ((phase: String, completedBytes: Long, expectedBytes: Long) -> Unit)? = null,
+    ): Boolean {
+        val progressSink = if (onProgress == null) {
+            null
+        } else {
+            object : AuroraSpeechPackInstallProgressSink {
+                override fun onProgress(phase: String, completedBytes: Long, expectedBytes: Long) {
+                    onProgress(phase, completedBytes, expectedBytes)
+                }
+            }
+        }
+        return nativeInstall(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName, progressSink)
+    }
 
     fun resolve(context: Context, packId: String, task: AuroraSpeechPackTask): Boolean =
         nativeResolve(auroraSpeechPackStoreRoot(context).path, packId, task.nativeName)
@@ -125,8 +140,10 @@ internal object AuroraNativeSpeechPackBridge {
     fun embeddedCatalogJson(): String =
         nativeEmbeddedCatalogJson()
 
-    fun installedPackIds(context: Context): Set<String> {
-        val entries = JSONArray(nativeInstalledPackIdsJson(auroraSpeechPackStoreRoot(context).path))
+    fun installedPackIds(context: Context): Set<String>? {
+        val payload = nativeInstalledPackIdsJson(auroraSpeechPackStoreRoot(context).path)
+            ?: return null
+        val entries = runCatching { JSONArray(payload) }.getOrNull() ?: return null
         val packIds = mutableSetOf<String>()
         for (index in 0 until entries.length()) {
             entries.optString(index).trim().takeIf { it.isNotEmpty() }?.let(packIds::add)
@@ -134,13 +151,22 @@ internal object AuroraNativeSpeechPackBridge {
         return packIds
     }
 
-    private external fun nativeInstall(root: String, packId: String, task: String): Boolean
+    private external fun nativeInstall(
+        root: String,
+        packId: String,
+        task: String,
+        progressSink: AuroraSpeechPackInstallProgressSink?,
+    ): Boolean
     private external fun nativeResolve(root: String, packId: String, task: String): Boolean
     private external fun nativeRemove(root: String, packId: String, task: String): Boolean
     private external fun nativeEmbeddedCatalogJson(): String
-    private external fun nativeInstalledPackIdsJson(root: String): String
+    private external fun nativeInstalledPackIdsJson(root: String): String?
 
     init {
         System.loadLibrary("aurora_tauri_lib")
     }
+}
+
+internal interface AuroraSpeechPackInstallProgressSink {
+    fun onProgress(phase: String, completedBytes: Long, expectedBytes: Long)
 }

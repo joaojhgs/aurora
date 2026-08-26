@@ -31,8 +31,8 @@ use aurora_voice_core::{
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
-    FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TtsSynthesisPort,
-    TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
+    FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TaskPackBinding, TtsSynthesisPort,
+    TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig, VoiceTask,
 };
 use aurora_voice_engine::{
     FiniteSttRouteScope, RouteFiniteSttBinding, RouteTtsBinding, MAX_FINITE_STT_SAMPLES,
@@ -45,6 +45,8 @@ use aurora_voice_sherpa::{
 };
 #[cfg(feature = "native-sherpa-tts")]
 use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsReferenceAudio, SherpaTtsProvider};
+use serde::Serialize;
+use std::collections::VecDeque;
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -84,8 +86,101 @@ type RuntimeCore = VoiceRuntime<
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidFiniteSttProvider {
-    Local(Box<SherpaFiniteSttEngine<NativeSttBackend>>),
+    Local(Box<LazyInstalledSttProvider>),
     Gateway(Box<NativeGatewayFiniteStt>),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+struct LazyInstalledSttProvider {
+    manager: Arc<SpeechPackManager>,
+    model_id: String,
+    binding: TaskPackBinding,
+    provider: Option<SherpaFiniteSttEngine<NativeSttBackend>>,
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+impl LazyInstalledSttProvider {
+    fn new(
+        manager: Arc<SpeechPackManager>,
+        model_id: impl Into<String>,
+    ) -> Result<Self, EngineError> {
+        let model_id = model_id.into();
+        let binding = manager
+            .recorded_model_task_binding(&model_id)
+            .map_err(|_| EngineError::TaskUnavailable)?;
+        if binding.task() != VoiceTask::SpeechToText {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            manager,
+            model_id,
+            binding,
+            provider: None,
+        })
+    }
+
+    fn ensure_loaded(
+        &mut self,
+    ) -> Result<&mut SherpaFiniteSttEngine<NativeSttBackend>, EngineError> {
+        if self.provider.is_none() {
+            self.provider = Some(build_installed_stt_provider(
+                self.manager.as_ref(),
+                &self.model_id,
+            )?);
+        }
+        self.provider.as_mut().ok_or(EngineError::TaskUnavailable)
+    }
+
+    fn accepts_binding(&self, binding: &FiniteSttProviderBinding) -> bool {
+        matches!(
+            binding,
+            FiniteSttProviderBinding::LocalTask(requested) if requested.as_ref() == &self.binding
+        )
+    }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl FiniteSttPort for LazyInstalledSttProvider {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        Ok(FiniteSttProviderBinding::LocalTask(Box::new(
+            self.binding.clone(),
+        )))
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        if !self.accepts_binding(&binding) {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.ensure_loaded()?.warm_finite_stt(binding).await
+    }
+
+    async fn transcribe_finite(
+        &mut self,
+        request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<FiniteSttResult, EngineError> {
+        if request
+            .local_request()
+            .is_none_or(|local| local.binding() != &self.binding)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.ensure_loaded()?
+            .transcribe_finite(request, audio, cancellation)
+            .await
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self.provider.as_mut() {
+            Some(provider) => provider.cancel_finite_stt_generation(generation).await,
+            None => Ok(()),
+        }
+    }
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -138,8 +233,113 @@ impl FiniteSttPort for AndroidFiniteSttProvider {
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidTtsProvider {
-    Local(Box<SherpaTtsProvider<NativeTtsBackend>>),
+    Local(Box<LazyInstalledTtsProvider>),
     Gateway(Box<NativeGatewayTtsSynthesizer>),
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+struct LazyInstalledTtsProvider {
+    manager: Arc<SpeechPackManager>,
+    voice_id: String,
+    binding: TaskPackBinding,
+    reference_profile: Option<AndroidTtsReferenceProfile>,
+    provider: Option<SherpaTtsProvider<NativeTtsBackend>>,
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+impl LazyInstalledTtsProvider {
+    fn new(
+        manager: Arc<SpeechPackManager>,
+        voice_id: impl Into<String>,
+        reference_profile: Option<AndroidTtsReferenceProfile>,
+    ) -> Result<Self, EngineError> {
+        let voice_id = voice_id.into();
+        let binding = manager
+            .recorded_voice_task_binding(&voice_id)
+            .map_err(|_| EngineError::TaskUnavailable)?;
+        if binding.task() != VoiceTask::TextToSpeech {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok(Self {
+            manager,
+            voice_id,
+            binding,
+            reference_profile,
+            provider: None,
+        })
+    }
+
+    fn ensure_loaded(&mut self) -> Result<&mut SherpaTtsProvider<NativeTtsBackend>, EngineError> {
+        if self.provider.is_none() {
+            let provider = if let Some(reference_profile) = self.reference_profile.as_ref() {
+                let _reference_revision = reference_profile.revision();
+                build_installed_tts_provider_with_reference(
+                    self.manager.as_ref(),
+                    &self.voice_id,
+                    Some(
+                        reference_profile
+                            .to_native()
+                            .map_err(|_| EngineError::TaskUnavailable)?,
+                    ),
+                    reference_profile.reference_text(),
+                )
+            } else {
+                build_installed_tts_provider(self.manager.as_ref(), &self.voice_id)
+            }?;
+            self.provider = Some(provider);
+        }
+        self.provider.as_mut().ok_or(EngineError::TaskUnavailable)
+    }
+
+    fn accepts_binding(&self, binding: &TtsSynthesisProviderBinding) -> bool {
+        matches!(
+            binding,
+            TtsSynthesisProviderBinding::LocalTask(requested) if requested.as_ref() == &self.binding
+        )
+    }
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+#[async_trait(?Send)]
+impl TtsSynthesisPort for LazyInstalledTtsProvider {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        Ok(TtsSynthesisProviderBinding::LocalTask(Box::new(
+            self.binding.clone(),
+        )))
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        if !self.accepts_binding(&binding) {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.ensure_loaded()?.warm_synthesis(binding).await
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        if request
+            .local_request()
+            .is_none_or(|local| local.binding() != &self.binding)
+        {
+            return Err(EngineError::InvalidRequest);
+        }
+        self.ensure_loaded()?
+            .synthesize_text(request, cancellation)
+            .await
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self.provider.as_mut() {
+            Some(provider) => provider.cancel_synthesis_generation(generation).await,
+            None => Ok(()),
+        }
+    }
 }
 
 enum AndroidAssistantTransport {
@@ -441,13 +641,17 @@ impl AndroidAssistantRouteMode {
 #[repr(i64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AndroidVoiceSessionPhase {
-    Idle,
-    Starting,
-    Listening,
-    Processing,
-    Speaking,
-    Stopping,
-    Faulted,
+    Idle = 0,
+    Starting = 1,
+    Listening = 2,
+    Processing = 3,
+    Speaking = 4,
+    Stopping = 5,
+    Faulted = 6,
+    WaitingForWake = 7,
+    Transcribing = 8,
+    WaitingForResponse = 9,
+    PreparingSpeech = 10,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -507,6 +711,17 @@ pub enum AndroidVoiceStartMode {
     BackgroundSession,
 }
 
+const MAX_BACKGROUND_TURN_RESULTS: usize = 8;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidBackgroundVoiceTurnResult {
+    pub generation: Generation,
+    pub transcript: String,
+    pub assistant_text: Option<String>,
+    pub error_code: Option<String>,
+}
+
 /// Native Android voice runtime handle shared by JNI capture, playback, and
 /// foreground-service controls.
 pub struct AndroidVoiceSession {
@@ -514,6 +729,8 @@ pub struct AndroidVoiceSession {
     output: AndroidAudioOutput,
     commands: tokio_mpsc::UnboundedSender<Command>,
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
+    focused_transcript: Arc<Mutex<Option<String>>>,
+    background_results: Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
     join: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
@@ -529,25 +746,26 @@ impl AndroidVoiceSession {
         let input = AndroidAudioInput::new(ingress.clone());
         let control = input.control();
         let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+        let focused_transcript = Arc::new(Mutex::new(None));
+        let turn_transcript = Arc::new(Mutex::new(None));
+        let background_results = Arc::new(Mutex::new(VecDeque::new()));
         let sink = AndroidSessionSink {
             status: Arc::clone(&status),
+            turn_transcript: Arc::clone(&turn_transcript),
         };
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
-        let thread_status = Arc::clone(&status);
-        let thread_control = control.clone();
+        let thread_state = AndroidSessionThreadState {
+            status: Arc::clone(&status),
+            focused_transcript: Arc::clone(&focused_transcript),
+            turn_transcript: Arc::clone(&turn_transcript),
+            background_results: Arc::clone(&background_results),
+            control: control.clone(),
+        };
         let thread_output = output.clone();
         let join = thread::Builder::new()
             .name("aurora-android-voice".to_owned())
             .spawn(move || {
-                run_session_thread(
-                    config,
-                    input,
-                    thread_output,
-                    sink,
-                    command_rx,
-                    thread_status,
-                    thread_control,
-                )
+                run_session_thread(config, input, thread_output, sink, command_rx, thread_state)
             })
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
         Ok(Self {
@@ -555,6 +773,8 @@ impl AndroidVoiceSession {
             output,
             commands,
             status,
+            focused_transcript,
+            background_results,
             join: Mutex::new(Some(join)),
         })
     }
@@ -580,6 +800,22 @@ impl AndroidVoiceSession {
                 last_error: Some("status_unavailable".to_owned()),
                 ..AndroidVoiceSessionStatus::default()
             })
+    }
+
+    /// Consumes the final transcript from the most recently completed focused
+    /// push-to-talk turn. Background turns never populate this one-shot result.
+    pub fn take_focused_transcript(&self) -> Option<String> {
+        self.focused_transcript
+            .lock()
+            .ok()
+            .and_then(|mut transcript| transcript.take())
+    }
+
+    pub fn take_background_result(&self) -> Option<AndroidBackgroundVoiceTurnResult> {
+        self.background_results
+            .lock()
+            .ok()
+            .and_then(|mut results| results.pop_front())
     }
 
     pub fn start(&self) -> Result<Generation, AndroidVoiceSessionCommandError> {
@@ -701,24 +937,20 @@ fn build_local_runtime(
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
-    let manager = SpeechPackManager::open(
-        SpeechPackManagerConfig::new(store_root, None)
-            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
-    )
-    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    let stt = build_installed_stt_provider(&manager, stt_model_id)
-        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    let tts = if let Some(reference_profile) = &config.tts_reference_profile {
-        let _reference_revision = reference_profile.revision();
-        build_installed_tts_provider_with_reference(
-            &manager,
-            tts_voice_id,
-            Some(reference_profile.to_native()?),
-            reference_profile.reference_text(),
+    let manager = Arc::new(
+        SpeechPackManager::open(
+            SpeechPackManagerConfig::new(store_root, None)
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
         )
-    } else {
-        build_installed_tts_provider(&manager, tts_voice_id)
-    }
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+    );
+    let stt = LazyInstalledSttProvider::new(Arc::clone(&manager), stt_model_id)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let tts = LazyInstalledTtsProvider::new(
+        Arc::clone(&manager),
+        tts_voice_id,
+        config.tts_reference_profile.clone(),
+    )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let policy = microphone_policy(config)?;
     let limits = transport_limits(policy);
@@ -734,7 +966,7 @@ fn build_local_runtime(
         ANDROID_RUNTIME_ID,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
-    if let Some((vad, kws, wake_config)) = build_wake_runtime_parts(&manager, config)? {
+    if let Some((vad, kws, wake_config)) = build_wake_runtime_parts(manager.as_ref(), config)? {
         runtime = runtime
             .with_wake_providers(Box::new(vad), Box::new(kws), wake_config)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -779,18 +1011,19 @@ fn build_wake_runtime_parts(
     let vad_config = VadConfig::default();
     let vad = build_installed_vad_provider(manager, vad_model_id, &vad_config)
         .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let phrase_input = SherpaKwsPhraseInput::new(phrase_id, phrase_text)
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let kws = build_installed_kws_provider_from_phrases(
         manager,
         kws_model_id,
         phrase_revision,
-        [SherpaKwsPhraseInput::new(phrase_id, phrase_text)
-            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?],
+        [phrase_input],
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let vad_binding = vad.binding().clone();
     let kws_binding = kws.binding().clone();
     let kws_config = KwsConfig::new(
-        [phrase_id],
+        [phrase_id.to_owned()],
         phrase_revision,
         NATIVE_WAKE_KWS_THRESHOLD,
         0,
@@ -963,20 +1196,27 @@ fn background_eligible(mode: AndroidVoiceStartMode) -> bool {
     matches!(mode, AndroidVoiceStartMode::BackgroundSession)
 }
 
+struct AndroidSessionThreadState {
+    status: Arc<Mutex<AndroidVoiceSessionStatus>>,
+    focused_transcript: Arc<Mutex<Option<String>>>,
+    turn_transcript: Arc<Mutex<Option<(Generation, String)>>>,
+    background_results: Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
+    control: AndroidCaptureControl,
+}
+
 fn run_session_thread(
     config: AndroidVoiceSessionConfig,
     input: AndroidAudioInput,
     output: AndroidAudioOutput,
     sink: AndroidSessionSink,
     mut commands: tokio_mpsc::UnboundedReceiver<Command>,
-    status: Arc<Mutex<AndroidVoiceSessionStatus>>,
-    control: AndroidCaptureControl,
+    state: AndroidSessionThreadState,
 ) {
     let remote_audio_consent = config.remote_audio_consent;
     let mut voice_runtime = match build_runtime(&config, input, output, sink) {
         Ok(runtime) => runtime,
         Err(_) => {
-            set_fault(&status, "runtime_unavailable");
+            set_fault(&state.status, "runtime_unavailable");
             return;
         }
     };
@@ -986,7 +1226,7 @@ fn run_session_thread(
     {
         Ok(runtime) => runtime,
         Err(_) => {
-            set_fault(&status, "runtime_unavailable");
+            set_fault(&state.status, "runtime_unavailable");
             return;
         }
     };
@@ -1023,7 +1263,15 @@ fn run_session_thread(
                         stop_deadline: None,
                     };
                     let cancellation = CancellationToken::new();
-                    set_active(&status, generation);
+                    if matches!(mode, AndroidVoiceStartMode::PushToTalk) {
+                        if let Ok(mut transcript) = state.focused_transcript.lock() {
+                            *transcript = None;
+                        }
+                    }
+                    if let Ok(mut transcript) = state.turn_transcript.lock() {
+                        *transcript = None;
+                    }
+                    set_active(&state.status, generation);
                     let _ = reply.send(Ok(generation));
                     let result = run_turn(
                         &mut voice_runtime,
@@ -1032,14 +1280,21 @@ fn run_session_thread(
                         lease,
                         now,
                         cancellation,
-                        control.clone(),
+                        state.control.clone(),
                     )
                     .await;
-                    finish_status(&status, result);
+                    finish_status(
+                        &state.status,
+                        &state.focused_transcript,
+                        &state.turn_transcript,
+                        &state.background_results,
+                        mode,
+                        result,
+                    );
                 }
                 Command::Shutdown => {
-                    if let Some(generation) = active_generation(&status) {
-                        control.interrupt(generation);
+                    if let Some(generation) = active_generation(&state.status) {
+                        state.control.interrupt(generation);
                     }
                     break;
                 }
@@ -1063,7 +1318,7 @@ async fn run_turn<'a>(
     let generation = lease.generation;
     let mut turn: Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> = match mode {
         AndroidVoiceStartMode::PushToTalk => {
-            Box::pin(runtime.run_push_to_talk_turn(lease, at, cancellation.clone()))
+            Box::pin(runtime.run_push_to_talk_transcription(lease, at, cancellation.clone()))
         }
         AndroidVoiceStartMode::BackgroundSession => {
             Box::pin(runtime.run_background_turn(lease, at, cancellation.clone()))
@@ -1103,6 +1358,7 @@ async fn run_turn<'a>(
 #[derive(Clone)]
 struct AndroidSessionSink {
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
+    turn_transcript: Arc<Mutex<Option<(Generation, String)>>>,
 }
 
 #[async_trait(?Send)]
@@ -1115,10 +1371,26 @@ impl RuntimeEventSink for AndroidSessionSink {
     }
 
     async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError> {
-        if let RuntimeEvent::State { transition } = event {
-            if let Ok(mut status) = self.status.lock() {
-                update_session_phase(&mut status, transition.to, transition.generation);
+        match event {
+            RuntimeEvent::State { transition } => {
+                if let Ok(mut status) = self.status.lock() {
+                    update_session_phase(&mut status, transition.to, transition.generation);
+                }
             }
+            RuntimeEvent::Transcript {
+                generation,
+                partial: false,
+                text,
+                ..
+            } => {
+                let text = text.trim();
+                if !text.is_empty() {
+                    if let Ok(mut transcript) = self.turn_transcript.lock() {
+                        *transcript = Some((generation, text.to_owned()));
+                    }
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -1147,12 +1419,13 @@ fn update_session_phase(
 fn phase_for_state(state: VoiceState) -> AndroidVoiceSessionPhase {
     match state {
         VoiceState::Arming => AndroidVoiceSessionPhase::Starting,
-        VoiceState::ListeningForWake
-        | VoiceState::WakeDetected
-        | VoiceState::CapturingUtterance => AndroidVoiceSessionPhase::Listening,
-        VoiceState::Transcribing | VoiceState::Dispatching | VoiceState::AwaitingResponse => {
-            AndroidVoiceSessionPhase::Processing
+        VoiceState::ListeningForWake => AndroidVoiceSessionPhase::WaitingForWake,
+        VoiceState::WakeDetected | VoiceState::CapturingUtterance => {
+            AndroidVoiceSessionPhase::Listening
         }
+        VoiceState::Transcribing => AndroidVoiceSessionPhase::Transcribing,
+        VoiceState::Dispatching => AndroidVoiceSessionPhase::WaitingForResponse,
+        VoiceState::AwaitingResponse => AndroidVoiceSessionPhase::PreparingSpeech,
         VoiceState::Speaking => AndroidVoiceSessionPhase::Speaking,
         VoiceState::Stopping => AndroidVoiceSessionPhase::Stopping,
         VoiceState::Faulted => AndroidVoiceSessionPhase::Faulted,
@@ -1180,8 +1453,16 @@ fn active_generation(status: &Arc<Mutex<AndroidVoiceSessionStatus>>) -> Option<G
 
 fn finish_status(
     status: &Arc<Mutex<AndroidVoiceSessionStatus>>,
+    focused_transcript: &Arc<Mutex<Option<String>>>,
+    turn_transcript: &Arc<Mutex<Option<(Generation, String)>>>,
+    background_results: &Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
+    mode: AndroidVoiceStartMode,
     result: Result<String, VoiceCoreError>,
 ) {
+    let captured_transcript = turn_transcript
+        .lock()
+        .ok()
+        .and_then(|mut transcript| transcript.take());
     if let Ok(mut status) = status.lock() {
         let terminal_phase = status.phase;
         status.active = false;
@@ -1192,7 +1473,24 @@ fn finish_status(
         };
         status.generation = None;
         match result {
-            Ok(_) => status.completed_turns = status.completed_turns.saturating_add(1),
+            Ok(transcript) => {
+                status.completed_turns = status.completed_turns.saturating_add(1);
+                if matches!(mode, AndroidVoiceStartMode::PushToTalk) {
+                    if let Ok(mut result) = focused_transcript.lock() {
+                        *result = Some(transcript);
+                    }
+                } else if let Some((generation, captured)) = captured_transcript {
+                    push_background_result(
+                        background_results,
+                        AndroidBackgroundVoiceTurnResult {
+                            generation,
+                            transcript: captured,
+                            assistant_text: Some(transcript),
+                            error_code: None,
+                        },
+                    );
+                }
+            }
             Err(error) => {
                 status.failed_turns = status.failed_turns.saturating_add(1);
                 let code = error_code(&error, terminal_phase);
@@ -1200,8 +1498,33 @@ fn finish_status(
                     "aurora_android_voice_turn_failed phase={terminal_phase:?} reason={code} error={error}"
                 );
                 status.last_error = Some(code.to_owned());
+                if matches!(mode, AndroidVoiceStartMode::BackgroundSession) {
+                    if let Some((generation, captured)) = captured_transcript {
+                        push_background_result(
+                            background_results,
+                            AndroidBackgroundVoiceTurnResult {
+                                generation,
+                                transcript: captured,
+                                assistant_text: None,
+                                error_code: Some(code.to_owned()),
+                            },
+                        );
+                    }
+                }
             }
         }
+    }
+}
+
+fn push_background_result(
+    background_results: &Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
+    result: AndroidBackgroundVoiceTurnResult,
+) {
+    if let Ok(mut results) = background_results.lock() {
+        while results.len() >= MAX_BACKGROUND_TURN_RESULTS {
+            results.pop_front();
+        }
+        results.push_back(result);
     }
 }
 
@@ -1221,7 +1544,12 @@ fn error_code(error: &VoiceCoreError, terminal_phase: AndroidVoiceSessionPhase) 
         {
             "playback_failed"
         }
-        VoiceCoreError::Engine(_) if terminal_phase == AndroidVoiceSessionPhase::Speaking => {
+        VoiceCoreError::Engine(_)
+            if matches!(
+                terminal_phase,
+                AndroidVoiceSessionPhase::PreparingSpeech | AndroidVoiceSessionPhase::Speaking
+            ) =>
+        {
             "tts_failed"
         }
         VoiceCoreError::TransportFault { .. } => "assistant_unavailable",
@@ -1248,6 +1576,70 @@ fn now_micros() -> TimestampMicros {
 mod tests {
     use super::*;
 
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    #[test]
+    fn local_provider_bindings_are_available_before_heavy_engines_load() {
+        use aurora_voice_engine::{
+            RuntimeTarget, SpeechModelCatalog, TargetArch, TargetOs, TtsVoiceCatalog,
+        };
+
+        let root = tempfile::tempdir().expect("temp dir");
+        let manager = Arc::new(
+            SpeechPackManager::open(
+                SpeechPackManagerConfig::new(root.path(), None).expect("manager config"),
+            )
+            .expect("manager"),
+        );
+
+        let speech_catalog = SpeechModelCatalog::embedded().expect("speech catalog");
+        let stt_entry = speech_catalog.model("stt:whisper:base").expect("STT entry");
+        let stt_binding = TaskPackBinding::from_speech_catalog_entry(
+            speech_catalog,
+            stt_entry,
+            RuntimeTarget::Android,
+            TargetOs::Android,
+            TargetArch::Aarch64,
+        )
+        .expect("STT binding");
+        let stt = LazyInstalledSttProvider {
+            manager: Arc::clone(&manager),
+            model_id: stt_entry.model_id.clone(),
+            binding: stt_binding.clone(),
+            provider: None,
+        };
+        assert_eq!(
+            stt.finite_stt_binding().expect("advertised STT binding"),
+            FiniteSttProviderBinding::LocalTask(Box::new(stt_binding)),
+        );
+        assert!(stt.provider.is_none());
+
+        let tts_catalog = TtsVoiceCatalog::runtime().expect("TTS catalog");
+        let tts_entry = tts_catalog
+            .voice("standard:piper:en_us-lessac-high")
+            .expect("TTS entry");
+        let tts_binding = TaskPackBinding::from_tts_catalog_entry(
+            tts_catalog,
+            tts_entry,
+            RuntimeTarget::Android,
+            TargetOs::Android,
+            TargetArch::Aarch64,
+            22_050,
+        )
+        .expect("TTS binding");
+        let tts = LazyInstalledTtsProvider {
+            manager,
+            voice_id: tts_entry.voice_id.clone(),
+            binding: tts_binding.clone(),
+            reference_profile: None,
+            provider: None,
+        };
+        assert_eq!(
+            tts.synthesis_binding().expect("advertised TTS binding"),
+            TtsSynthesisProviderBinding::LocalTask(Box::new(tts_binding)),
+        );
+        assert!(tts.provider.is_none());
+    }
+
     #[test]
     fn loopback_policy_is_selected_without_exposing_credentials() {
         let url = Url::parse("http://127.0.0.1:8000").expect("url");
@@ -1264,7 +1656,7 @@ mod tests {
         );
         assert_eq!(
             phase_for_state(VoiceState::ListeningForWake),
-            AndroidVoiceSessionPhase::Listening
+            AndroidVoiceSessionPhase::WaitingForWake
         );
         assert_eq!(
             phase_for_state(VoiceState::WakeDetected),
@@ -1273,6 +1665,18 @@ mod tests {
         assert_eq!(
             phase_for_state(VoiceState::CapturingUtterance),
             AndroidVoiceSessionPhase::Listening
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::Transcribing),
+            AndroidVoiceSessionPhase::Transcribing
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::Dispatching),
+            AndroidVoiceSessionPhase::WaitingForResponse
+        );
+        assert_eq!(
+            phase_for_state(VoiceState::AwaitingResponse),
+            AndroidVoiceSessionPhase::PreparingSpeech
         );
         assert_eq!(
             phase_for_state(VoiceState::Speaking),
@@ -1319,6 +1723,13 @@ mod tests {
 
     #[test]
     fn terminal_errors_identify_the_failed_voice_stage() {
+        assert_eq!(
+            error_code(
+                &VoiceCoreError::Engine(EngineError::InvalidRequest),
+                AndroidVoiceSessionPhase::PreparingSpeech,
+            ),
+            "tts_failed",
+        );
         assert_eq!(
             error_code(
                 &VoiceCoreError::Engine(EngineError::InvalidRequest),
@@ -1381,6 +1792,84 @@ mod tests {
             CaptureStartReason::PushToTalk
         );
         assert!(!background_eligible(AndroidVoiceStartMode::PushToTalk));
+    }
+
+    #[test]
+    fn focused_transcript_is_retained_once_without_exposing_background_results() {
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus {
+            active: true,
+            phase: AndroidVoiceSessionPhase::Processing,
+            ..AndroidVoiceSessionStatus::default()
+        }));
+        let focused_transcript = Arc::new(Mutex::new(None));
+        let turn_transcript = Arc::new(Mutex::new(None));
+        let background_results = Arc::new(Mutex::new(VecDeque::new()));
+
+        finish_status(
+            &status,
+            &focused_transcript,
+            &turn_transcript,
+            &background_results,
+            AndroidVoiceStartMode::PushToTalk,
+            Ok("focused transcript".to_owned()),
+        );
+
+        assert_eq!(status.lock().expect("status").completed_turns, 1);
+        assert_eq!(
+            focused_transcript.lock().expect("transcript").take(),
+            Some("focused transcript".to_owned()),
+        );
+
+        finish_status(
+            &status,
+            &focused_transcript,
+            &turn_transcript,
+            &background_results,
+            AndroidVoiceStartMode::BackgroundSession,
+            Ok("background response".to_owned()),
+        );
+        assert!(focused_transcript.lock().expect("transcript").is_none());
+    }
+
+    #[test]
+    fn background_result_is_retained_when_assistant_transport_is_unavailable() {
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus {
+            active: true,
+            phase: AndroidVoiceSessionPhase::Processing,
+            ..AndroidVoiceSessionStatus::default()
+        }));
+        let focused_transcript = Arc::new(Mutex::new(None));
+        let turn_transcript = Arc::new(Mutex::new(Some((
+            Generation(7),
+            "what is the meaning of life".to_owned(),
+        ))));
+        let background_results = Arc::new(Mutex::new(VecDeque::new()));
+
+        finish_status(
+            &status,
+            &focused_transcript,
+            &turn_transcript,
+            &background_results,
+            AndroidVoiceStartMode::BackgroundSession,
+            Err(VoiceCoreError::TransportFault {
+                code: "assistant_unavailable".to_owned(),
+            }),
+        );
+
+        assert!(focused_transcript.lock().expect("transcript").is_none());
+        let retained = background_results
+            .lock()
+            .expect("background result")
+            .pop_front();
+        assert_eq!(
+            retained,
+            Some(AndroidBackgroundVoiceTurnResult {
+                generation: Generation(7),
+                transcript: "what is the meaning of life".to_owned(),
+                assistant_text: None,
+                error_code: Some("assistant_unavailable".to_owned()),
+            }),
+        );
     }
 
     #[test]

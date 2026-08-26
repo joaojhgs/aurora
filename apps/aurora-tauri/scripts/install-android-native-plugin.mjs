@@ -40,6 +40,7 @@ const requiredNativeSpeechLibraries = [
   'libonnxruntime.so',
   'libsherpa-onnx-c-api.so',
 ]
+const generatedRustLibrary = 'libaurora_tauri_lib.so'
 const sherpaTtsDisabledMarker = Buffer.from(
   'TTS is not enabled. Please rebuild sherpa-onnx',
 )
@@ -193,9 +194,13 @@ function syncNativeSpeechLibraries() {
     .filter(Boolean)
   if (targets.length === 0) return
 
+  const selectedAbis = new Set(targets.map((target) => androidNativeSpeechTargets[target]?.abi).filter(Boolean))
   for (const spec of Object.values(androidNativeSpeechTargets)) {
     for (const library of requiredNativeSpeechLibraries) {
       rmSync(join(generatedAndroidJniLibsDir, spec.abi, library), { force: true })
+    }
+    if (!selectedAbis.has(spec.abi)) {
+      rmSync(join(generatedAndroidJniLibsDir, spec.abi, generatedRustLibrary), { force: true })
     }
   }
 
@@ -263,6 +268,7 @@ function mergePluginManifest(content) {
     '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />',
     '    <uses-permission android:name="android.permission.WAKE_LOCK" />',
     '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+    '    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />',
     '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />',
   ]
     .filter((line) => !content.includes(line.trim()))
@@ -460,8 +466,14 @@ function mergePluginManifest(content) {
 
 function addMainActivityImeInsets(content) {
   let patched = content
+  patched = patched.replace(
+    /\n\s*WebView\.setWebContentsDebuggingEnabled\(BuildConfig\.DEBUG\)/g,
+    '',
+  )
   const missingImports = [
+    'import android.content.pm.ApplicationInfo',
     'import android.view.View',
+    'import android.webkit.WebView',
     'import androidx.core.view.ViewCompat',
     'import androidx.core.view.WindowInsetsCompat',
   ].filter((line) => !patched.includes(line))
@@ -472,10 +484,31 @@ function addMainActivityImeInsets(content) {
     )
   }
 
-  if (!/super\.onCreate\(savedInstanceState\)\s*\n\s*applyAuroraImeInsets\(\)/.test(patched)) {
+  if (!/super\.onCreate\(savedInstanceState\)\s*\n\s*enableAuroraDebugWebView\(\)\s*\n\s*applyAuroraImeInsets\(\)/.test(patched)) {
     patched = patched.replace(
       /super\.onCreate\(savedInstanceState\)/,
-      'super.onCreate(savedInstanceState)\n    applyAuroraImeInsets()',
+      'super.onCreate(savedInstanceState)\n    enableAuroraDebugWebView()\n    applyAuroraImeInsets()',
+    )
+  }
+  if (!/enableAuroraDebugWebView\(\)\s*\n\s*super\.onCreate/.test(patched)) {
+    patched = patched.replace(
+      /enableEdgeToEdge\(\)/,
+      'enableEdgeToEdge()\n    enableAuroraDebugWebView()',
+    )
+  }
+
+  if (!patched.includes('private fun enableAuroraDebugWebView')) {
+    patched = patched.replace(
+      /\n}\s*$/,
+      `
+
+  private fun enableAuroraDebugWebView() {
+    if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+      WebView.setWebContentsDebuggingEnabled(true)
+    }
+  }
+}
+`,
     )
   }
 
@@ -512,6 +545,10 @@ function addMainActivityImeInsets(content) {
     )
   }
 
+  patched = patched.replace(
+    /(\n\s*applyAuroraImeInsets\(\)){2,}/g,
+    '\n    applyAuroraImeInsets()',
+  )
   return patched
 }
 

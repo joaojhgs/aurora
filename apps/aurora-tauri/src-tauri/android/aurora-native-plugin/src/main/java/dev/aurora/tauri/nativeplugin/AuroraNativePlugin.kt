@@ -58,6 +58,10 @@ import app.tauri.plugin.Plugin
 import app.tauri.plugin.PluginManager
 import org.json.JSONArray
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 import java.util.Locale
 import java.security.KeyStore
@@ -78,10 +82,6 @@ private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
-private const val LOCAL_DATA_ENVELOPE_KEY_PREFIX = "aurora_local_data_envelope_v1_"
-private const val LOCAL_DATA_ENVELOPE_CURRENT_VERSION_PREFIX = "aurora_local_data_envelope_current_v1_"
-private const val LOCAL_DATA_ENVELOPE_ALGORITHM = "AES-GCM-256"
-private const val LOCAL_DATA_ENVELOPE_PURPOSE = "local-structured-data"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
 private const val VOICE_PACK_CATALOG_KEY = "catalog"
 private const val VOICE_PACK_ACTIVE_ID_KEY = "active_voice_pack_id"
@@ -121,6 +121,19 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private val voicePackDownloadJobs: ConcurrentHashMap<String, VoicePackDownloadState> = ConcurrentHashMap()
     private val voicePackJobsByPack: ConcurrentHashMap<String, String> = ConcurrentHashMap()
     private val voicePackLocks: ConcurrentHashMap<String, Any> = ConcurrentHashMap()
+    private val backgroundVoiceAutoStartGeneration = AtomicLong(0L)
+    private val backgroundVoiceAutoStartExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(
+            null,
+            {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                runnable.run()
+            },
+            "aurora-background-voice-readiness",
+            VOICE_PACK_INSTALL_STACK_SIZE_BYTES,
+        )
+    }
+    private var clearBackgroundStopOnNextResume: Boolean = true
     private val packCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
     private data class VoicePackDownloadState(
         val status: String = "queued",
@@ -172,15 +185,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     override fun onResume() {
         foreground = true
         focused = true
+        acknowledgeForegroundAppOpen()
         syncNativeVoiceRoute()
         if (!microphonePermissionRequestInFlight) {
             resolvePendingMicRequests(allowRuntimePrompt = false)
         }
+        scheduleBackgroundVoiceAutoStart()
         emitLifecycle("resume")
     }
 
     override fun onPause() {
         focused = false
+        backgroundVoiceAutoStartGeneration.incrementAndGet()
         if (!microphonePermissionRequestInFlight) {
             denyPendingMicRequests()
         }
@@ -191,6 +207,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     override fun onStop() {
         foreground = false
         focused = false
+        clearBackgroundStopOnNextResume = true
+        backgroundVoiceAutoStartGeneration.incrementAndGet()
         denyPendingMicRequests()
         requestFocusedVoiceReleaseOnBackground()
         emitLifecycle("stop")
@@ -199,12 +217,15 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     override fun onDestroy(activity: AppCompatActivity) {
         foreground = false
         focused = false
+        backgroundVoiceAutoStartGeneration.incrementAndGet()
+        backgroundVoiceAutoStartExecutor.shutdownNow()
         denyPendingMicRequests()
         emitLifecycle("destroy")
     }
 
     override fun onRestart(activity: AppCompatActivity) {
         foreground = true
+        clearBackgroundStopOnNextResume = true
         emitLifecycle("restart")
     }
 
@@ -225,6 +246,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         } else {
             webChromeClientDelegateCaptured = true
         }
+        acknowledgeForegroundAppOpen()
+        scheduleBackgroundVoiceAutoStart()
         emitLifecycle("load")
     }
 
@@ -586,7 +609,22 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun voiceForegroundServiceStatus(invoke: Invoke) {
-        invoke.resolve(voiceForegroundServiceStatusWithRouteSync())
+        val args = invoke.parseArgs(AndroidVoiceForegroundServiceStatusArgs::class.java)
+        val status = voiceForegroundServiceStatusWithRouteSync()
+        if (args.takeFocusedResult) {
+            status.put(
+                "focusedTranscript",
+                AuroraRuntimeForegroundService.takeFocusedTranscriptResult() ?: JSONObject.NULL,
+            )
+        }
+        if (args.takeBackgroundResult) {
+            val result = AuroraRuntimeForegroundService.takeBackgroundTurnResult()
+            status.put(
+                "backgroundTurnResult",
+                result?.let { JSONObject(it) } ?: JSONObject.NULL,
+            )
+        }
+        invoke.resolve(status)
     }
 
     @Command
@@ -625,6 +663,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
         val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
             if (args.backgroundSession) action = AuroraRuntimeForegroundService.ACTION_START_BACKGROUND
+            else action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startForegroundService(intent)
@@ -776,11 +815,33 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         voicePackJobsByPack[packId] = jobId
 
         val installPack = Runnable {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
             try {
                 val lock = voicePackLock(packId)
                 synchronized(lock) {
                     updateVoicePackDownloadState(jobId) { current -> current.copy(status = "started") }
-                    val result = installPackForRuntime(entry, task)
+                    val result = installPackForRuntime(entry, task) { phase, completedBytes, expectedBytes ->
+                        updateVoicePackDownloadState(jobId) { current ->
+                            val ready = phase == "ready"
+                            val totalBytes = if (ready) {
+                                entry.sizeBytes
+                            } else if (expectedBytes > 0L) {
+                                expectedBytes
+                            } else {
+                                current.totalBytes
+                            }
+                            val downloadedBytes = if (ready) {
+                                totalBytes
+                            } else {
+                                completedBytes.coerceAtLeast(current.downloadedBytes)
+                            }
+                            current.copy(
+                                status = "started",
+                                downloadedBytes = downloadedBytes,
+                                totalBytes = totalBytes,
+                            )
+                        }
+                    }
                     val terminalState = when (result) {
                         VoicePackDownloadResult.SUCCESS -> {
                             if (args.activate) {
@@ -793,6 +854,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                                     )
                                 } else {
                                     setActivePack(entry, task)
+                                    scheduleBackgroundVoiceAutoStart()
                                     VoicePackDownloadState(
                                         status = "completed",
                                         packId = packId,
@@ -866,7 +928,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("started", true)
         ret.put("packId", packId)
         ret.put("jobId", jobId)
-        ret.put("status", voicePackCatalogStatusObject())
         invoke.resolve(ret)
     }
 
@@ -923,12 +984,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                     true
                 }
             }
+            val catalogStatus = voicePackCatalogStatusObject()
+            if (activated) scheduleBackgroundVoiceAutoStart()
             activity.runOnUiThread {
                 val ret = JSObject()
                 ret.put("activated", activated)
                 ret.put("packId", args.packId)
                 ret.put("task", task.nativeName)
-                ret.put("status", voicePackCatalogStatusObject())
+                ret.put("status", catalogStatus)
                 if (!activated) {
                     ret.put(
                         "reason",
@@ -989,8 +1052,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     @Command
     fun stopVoiceForegroundService(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidVoiceForegroundServiceStopArgs::class.java)
         val stopIntent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
-            action = AuroraRuntimeForegroundService.ACTION_STOP
+            action = if (args.backgroundSession) {
+                AuroraRuntimeForegroundService.ACTION_STOP_BY_USER
+            } else {
+                AuroraRuntimeForegroundService.ACTION_STOP
+            }
         }
         val stopped = if (AuroraRuntimeForegroundService.running) {
             activity.startService(stopIntent)
@@ -1182,23 +1250,18 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun localDataEnvelopeEncrypt(invoke: Invoke) {
         val args = invoke.parseArgs(LocalDataEnvelopeEncryptArgs::class.java)
         try {
-            validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
-            val plaintext = base64UrlDecode(args.plaintextB64Url)
-            val aad = base64UrlDecode(args.aadB64Url)
-            val keyVersion = currentLocalDataEnvelopeKeyVersion(args.profileId, args.localNodeId, args.keyPurpose)
-            val keyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, keyVersion)
-            val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, localDataEnvelopeKey(keyId))
-            cipher.updateAAD(aad)
-            val ciphertextAndTag = cipher.doFinal(plaintext)
-            val ret = JSObject()
-            ret.put("version", 1)
-            ret.put("algorithm", LOCAL_DATA_ENVELOPE_ALGORITHM)
-            ret.put("keyId", keyId)
-            ret.put("nonceB64Url", base64UrlEncode(cipher.iv))
-            ret.put("ciphertextAndTagB64Url", base64UrlEncode(ciphertextAndTag))
-            ret.put("createdAtMs", currentUnixMs())
-            invoke.resolve(ret)
+            invoke.resolve(
+                JSObject.fromJSONObject(
+                    AuroraLocalDataEnvelopeCrypto.encrypt(
+                        context = activity,
+                        keyPurpose = args.keyPurpose,
+                        profileId = args.profileId,
+                        localNodeId = args.localNodeId,
+                        plaintext = base64UrlDecode(args.plaintextB64Url),
+                        aad = base64UrlDecode(args.aadB64Url),
+                    ),
+                ),
+            )
         } catch (error: Exception) {
             invoke.reject(error.message ?: "local_data_envelope_encrypt_failed")
         }
@@ -1208,16 +1271,20 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun localDataEnvelopeDecrypt(invoke: Invoke) {
         val args = invoke.parseArgs(LocalDataEnvelopeDecryptArgs::class.java)
         try {
-            validateLocalDataEnvelope(args.envelope)
-            validateLocalDataEnvelopeBinding(args.profileId, args.localNodeId, args.envelope.keyId)
-            val cipher = Cipher.getInstance(AES_GCM_TRANSFORMATION)
-            cipher.init(
-                Cipher.DECRYPT_MODE,
-                localDataEnvelopeKey(args.envelope.keyId),
-                GCMParameterSpec(AES_GCM_TAG_BITS, base64UrlDecode(args.envelope.nonceB64Url)),
+            val envelope = JSONObject()
+                .put("version", args.envelope.version)
+                .put("algorithm", args.envelope.algorithm)
+                .put("keyId", args.envelope.keyId)
+                .put("nonceB64Url", args.envelope.nonceB64Url)
+                .put("ciphertextAndTagB64Url", args.envelope.ciphertextAndTagB64Url)
+                .put("createdAtMs", args.envelope.createdAtMs)
+            val plaintext = AuroraLocalDataEnvelopeCrypto.decrypt(
+                context = activity,
+                profileId = args.profileId,
+                localNodeId = args.localNodeId,
+                envelope = envelope,
+                aad = base64UrlDecode(args.aadB64Url),
             )
-            cipher.updateAAD(base64UrlDecode(args.aadB64Url))
-            val plaintext = cipher.doFinal(base64UrlDecode(args.envelope.ciphertextAndTagB64Url))
             val ret = JSObject()
             ret.put("plaintextB64Url", base64UrlEncode(plaintext))
             ret.put("secretsRedacted", true)
@@ -1231,15 +1298,12 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     fun localDataEnvelopeRotate(invoke: Invoke) {
         val args = invoke.parseArgs(LocalDataEnvelopeRotateArgs::class.java)
         try {
-            validateLocalDataEnvelopeScope(args.keyPurpose, args.profileId, args.localNodeId)
-            val previousVersion = currentLocalDataEnvelopeKeyVersion(args.profileId, args.localNodeId, args.keyPurpose)
-            val previousKeyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, previousVersion)
-            val newVersion = previousVersion + 1
-            val newKeyId = localDataEnvelopeKeyId(args.profileId, args.localNodeId, args.keyPurpose, newVersion)
-            localDataEnvelopeKey(newKeyId)
-            securePrefs().edit()
-                .putInt(localDataEnvelopeCurrentVersionKey(args.profileId, args.localNodeId, args.keyPurpose), newVersion)
-                .apply()
+            val (previousKeyId, newKeyId) = AuroraLocalDataEnvelopeCrypto.rotate(
+                context = activity,
+                keyPurpose = args.keyPurpose,
+                profileId = args.profileId,
+                localNodeId = args.localNodeId,
+            )
             val ret = JSObject()
             ret.put("previousKeyId", previousKeyId)
             ret.put("newKeyId", newKeyId)
@@ -1417,6 +1481,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("key", THIN_PROFILE_KEY)
         ret.put("ok", true)
         ret.put("voiceRoute", syncNativeVoiceRoute())
+        scheduleBackgroundVoiceAutoStart()
         invoke.resolve(ret)
     }
 
@@ -2039,9 +2104,21 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
      * This is deliberately non-authoritative: runtime activation and native session
      * construction still resolve and verify every selected pack before use.
      */
-    private fun recordedInstalledPackIds(): Set<String> = runCatching {
-        AuroraNativeSpeechPackBridge.installedPackIds(activity)
-    }.getOrDefault(emptySet())
+    private val recordedInstalledPackIdsCache = AtomicReference<Set<String>?>(null)
+
+    private fun recordedInstalledPackIds(): Set<String> {
+        val refreshed = runCatching {
+            AuroraNativeSpeechPackBridge.installedPackIds(activity)
+        }.getOrNull()
+        if (refreshed != null) {
+            val snapshot = refreshed.toSet()
+            recordedInstalledPackIdsCache.set(snapshot)
+            return snapshot
+        }
+        return recordedInstalledPackIdsCache.get() ?: AuroraSpeechPackTask.entries
+            .mapNotNull(::activePackId)
+            .toSet()
+    }
 
     private fun isRecordedPackReadyForRuntime(
         entry: VoicePackCatalogEntry,
@@ -2250,11 +2327,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun installPackForRuntime(
         entry: VoicePackCatalogEntry,
         task: AuroraSpeechPackTask,
+        onProgress: (phase: String, completedBytes: Long, expectedBytes: Long) -> Unit,
     ): VoicePackDownloadResult {
         if (!isPackDownloadReady(entry)) return VoicePackDownloadResult.INVALID_INPUT
         return if (
             runCatching {
-                AuroraNativeSpeechPackBridge.install(activity, entry.packId, task)
+                AuroraNativeSpeechPackBridge.install(activity, entry.packId, task) { phase, completedBytes, expectedBytes ->
+                    onProgress(phase, completedBytes, expectedBytes)
+                }
             }.getOrDefault(false)
         ) {
             VoicePackDownloadResult.SUCCESS
@@ -2633,6 +2713,13 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun hasForegroundServiceMicrophonePermission(): Boolean =
         Build.VERSION.SDK_INT < 34 || hasRuntimePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)
 
+    private fun hasForegroundServiceConnectedDevicePermission(): Boolean =
+        Build.VERSION.SDK_INT < 34 ||
+            (
+                hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE) &&
+                    hasPackagePermission(Manifest.permission.CHANGE_NETWORK_STATE)
+            )
+
     private fun voiceForegroundServiceStatusObject(
         microphoneGranted: Boolean = hasRuntimePermission(Manifest.permission.RECORD_AUDIO),
         notificationsGranted: Boolean = hasPostNotificationsPermission(),
@@ -2640,7 +2727,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     ): JSObject {
         val manifestReady = hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE) &&
             (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_MICROPHONE)) &&
-            (Build.VERSION.SDK_INT < 34 || hasPackagePermission(Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE))
+            hasForegroundServiceConnectedDevicePermission()
         val nativeConfig = AuroraVoiceNativeConfigStore.load(activity)
         val nativeRouteReady = nativeConfig != null
         val installedPackIds = recordedInstalledPackIds()
@@ -2672,6 +2759,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("focusedVoiceActive", focusedVoiceActive)
         ret.put("captureActive", capture.captureActive)
         ret.put("microphoneSignalDetected", capture.microphoneSignalDetected)
+        ret.put("microphoneSilenced", capture.microphoneSilenced)
         ret.put("captureBackend", "android-audiorecord-rust-queue")
         ret.put("sampleRateHz", capture.sampleRateHz)
         ret.put("acceptedChunks", capture.acceptedChunks)
@@ -2698,6 +2786,10 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("localDuplexReady", localDuplexReady)
         ret.put("backgroundRuntimeReady", backgroundRuntimeReady)
         ret.put("backgroundStartable", backgroundStartable)
+        ret.put(
+            "backgroundStoppedByUser",
+            AuroraRuntimeForegroundService.backgroundStoppedByUser(activity),
+        )
         ret.put("state", voiceForegroundState(startable, manifestReady, microphoneGranted, notificationReady, nativeRouteReady))
         ret.put(
             "reason",
@@ -2940,71 +3032,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return keyGenerator.generateKey()
     }
 
-    private fun localDataEnvelopeKey(keyId: String): SecretKey {
-        validateLocalDataEnvelopeKeyId(keyId)
-        val alias = LOCAL_DATA_ENVELOPE_KEY_PREFIX + sha256Hex(keyId.toByteArray(Charsets.UTF_8))
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        (keyStore.getKey(alias, null) as? SecretKey)?.let { return it }
-        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        keyGenerator.init(
-            KeyGenParameterSpec.Builder(
-                alias,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
-            )
-                .setKeySize(256)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setRandomizedEncryptionRequired(true)
-                .build(),
-        )
-        return keyGenerator.generateKey()
-    }
-
-    private fun currentLocalDataEnvelopeKeyVersion(profileId: String, localNodeId: String, purpose: String): Int =
-        securePrefs().getInt(localDataEnvelopeCurrentVersionKey(profileId, localNodeId, purpose), 1)
-
-    private fun localDataEnvelopeCurrentVersionKey(profileId: String, localNodeId: String, purpose: String): String =
-        LOCAL_DATA_ENVELOPE_CURRENT_VERSION_PREFIX +
-            sha256Hex("${profileId}\u0000${localNodeId}\u0000${purpose}".toByteArray(Charsets.UTF_8))
-
-    private fun localDataEnvelopeKeyId(profileId: String, localNodeId: String, purpose: String, version: Int): String =
-        "aurora.local-data-envelope.v1.${sha256Hex(profileId.toByteArray(Charsets.UTF_8))}.${sha256Hex(localNodeId.toByteArray(Charsets.UTF_8))}.${purpose}.k${version}"
-
-    private fun validateLocalDataEnvelopeScope(purpose: String, profileId: String, localNodeId: String) {
-        if (purpose != LOCAL_DATA_ENVELOPE_PURPOSE) throw IllegalArgumentException("local_data_key_purpose_unsupported")
-        validateLocalDataId("profileId", profileId)
-        validateLocalDataId("localNodeId", localNodeId)
-    }
-
-    private fun validateLocalDataId(field: String, value: String) {
-        val valid = value.isNotEmpty() &&
-            value.toByteArray(Charsets.UTF_8).size <= 256 &&
-            value.all { it.isLetterOrDigit() || it == '_' || it == '.' || it == ':' || it == '@' || it == '/' || it == '-' } &&
-            value.all { it.code <= 0x7f }
-        if (!valid) throw IllegalArgumentException("${field}_invalid")
-    }
-
-    private fun validateLocalDataEnvelopeBinding(profileId: String, localNodeId: String, keyId: String) {
-        validateLocalDataId("profileId", profileId)
-        validateLocalDataId("localNodeId", localNodeId)
-        val expectedPrefix = "aurora.local-data-envelope.v1.${sha256Hex(profileId.toByteArray(Charsets.UTF_8))}.${sha256Hex(localNodeId.toByteArray(Charsets.UTF_8))}.${LOCAL_DATA_ENVELOPE_PURPOSE}.k"
-        if (!keyId.startsWith(expectedPrefix)) throw IllegalArgumentException("local_data_envelope_key_mismatch")
-        validateLocalDataEnvelopeKeyId(keyId)
-    }
-
-    private fun validateLocalDataEnvelopeKeyId(keyId: String) {
-        val regex = Regex("^aurora\\.local-data-envelope\\.v1\\.[0-9a-f]{64}\\.[0-9a-f]{64}\\.${LOCAL_DATA_ENVELOPE_PURPOSE}\\.k[1-9][0-9]*$")
-        if (!regex.matches(keyId)) throw IllegalArgumentException("local_data_envelope_key_invalid")
-    }
-
-    private fun validateLocalDataEnvelope(envelope: LocalDataEnvelopeArg) {
-        if (envelope.version != 1 || envelope.algorithm != LOCAL_DATA_ENVELOPE_ALGORITHM) {
-            throw IllegalArgumentException("local_data_envelope_unsupported")
-        }
-        if (base64UrlDecode(envelope.nonceB64Url).size != 12) throw IllegalArgumentException("local_data_envelope_nonce_invalid")
-        if (base64UrlDecode(envelope.ciphertextAndTagB64Url).size < 16) throw IllegalArgumentException("local_data_envelope_ciphertext_invalid")
-    }
-
     private fun base64UrlEncode(value: ByteArray): String =
         Base64.encodeToString(value, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
 
@@ -3206,6 +3233,50 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
 
     private fun emitLifecycle(phase: String) {
         trigger("aurora://android-lifecycle", lifecycleStatusObject(phase))
+    }
+
+    private fun acknowledgeForegroundAppOpen() {
+        if (!clearBackgroundStopOnNextResume) return
+        AuroraRuntimeForegroundService.clearBackgroundStoppedByUser(activity)
+        clearBackgroundStopOnNextResume = false
+    }
+
+    private fun scheduleBackgroundVoiceAutoStart() {
+        if (!foreground || !focused || activity.isFinishing || activity.isDestroyed) return
+        if (AuroraRuntimeForegroundService.backgroundStoppedByUser(activity)) return
+        val generation = backgroundVoiceAutoStartGeneration.incrementAndGet()
+        try {
+            backgroundVoiceAutoStartExecutor.execute {
+                val ready = runCatching {
+                    voiceForegroundServiceStatusObject().getBoolean("backgroundStartable")
+                }.getOrDefault(false)
+                if (!ready || generation != backgroundVoiceAutoStartGeneration.get()) return@execute
+                activity.runOnUiThread {
+                    if (
+                        generation != backgroundVoiceAutoStartGeneration.get() ||
+                        !foreground ||
+                        !focused ||
+                        activity.isFinishing ||
+                        activity.isDestroyed ||
+                        AuroraRuntimeForegroundService.backgroundStoppedByUser(activity) ||
+                        AuroraRuntimeForegroundService.backgroundSessionActive
+                    ) return@runOnUiThread
+                    val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
+                        action = AuroraRuntimeForegroundService.ACTION_START_BACKGROUND
+                    }
+                    runCatching {
+                        ContextCompat.startForegroundService(activity, intent)
+                    }.onFailure { error ->
+                        Log.w(
+                            LOG_TAG,
+                            "redacted_background_voice_autostart_failed error=${error.javaClass.simpleName}",
+                        )
+                    }
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            // The Activity and its plugin are already being destroyed.
+        }
     }
 
     private fun requestFocusedVoiceReleaseOnBackground(): Boolean {
@@ -3851,6 +3922,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                     microphonePermissionRequestInFlight = false
                     if (foreground && focused) {
                         resolvePendingMicRequests(allowRuntimePrompt = false)
+                        scheduleBackgroundVoiceAutoStart()
                     }
                 }
             }
@@ -4093,6 +4165,17 @@ class AndroidPermissionRequestArgs {
 @InvokeArg
 class AndroidVoiceForegroundServiceStartArgs {
     var remoteAudioConsent: Boolean = false
+    var backgroundSession: Boolean = false
+}
+
+@InvokeArg
+class AndroidVoiceForegroundServiceStatusArgs {
+    var takeFocusedResult: Boolean = false
+    var takeBackgroundResult: Boolean = false
+}
+
+@InvokeArg
+class AndroidVoiceForegroundServiceStopArgs {
     var backgroundSession: Boolean = false
 }
 

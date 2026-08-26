@@ -29,10 +29,12 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
+import dev.aurora.desktop.R
 import java.io.FileDescriptor
 import java.io.PrintWriter
 import java.net.URI
 import java.security.KeyStore
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadFactory
@@ -57,6 +59,7 @@ private const val VOICE_CAPTURE_FRAME_SAMPLES = SAMPLE_RATE_HZ / 10
 // host write so a stalled sink is reported to the Rust runtime as a playback
 // failure instead of leaving the assistant turn in "speaking" indefinitely.
 private const val VOICE_PLAYBACK_WRITE_TIMEOUT_MILLIS = 2_000L
+private const val VOICE_RECOVERABLE_ERROR_REARM_DELAY_MILLIS = 2_500L
 // Debug-only deterministic ingress expires 120 seconds after its last explicit
 // harness heartbeat, restoring live capture if the harness exits unexpectedly.
 private const val VOICE_LIVE_TEST_INGRESS_MAX_HOLD_MILLIS = 120_000L
@@ -68,7 +71,10 @@ private const val VOICE_STATS_FAILED_TURNS_INDEX = 9
 private const val VOICE_STATS_QUEUED_OUTPUT_CHUNKS_INDEX = 10
 private const val VOICE_STATS_LAST_ERROR_INDEX = 11
 private const val VOICE_RUNTIME_INIT_STACK_SIZE_BYTES = 16L * 1024L * 1024L
-private const val AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION
+private val AUDIO_SOURCE_FALLBACKS = intArrayOf(
+    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+    MediaRecorder.AudioSource.MIC,
+)
 private const val VOICE_SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val VOICE_SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
 private const val VOICE_SECURE_STORAGE_KEYSTORE = "AndroidKeyStore"
@@ -81,6 +87,7 @@ private const val VOICE_GENERIC_BEARER_KEY = "aurora.auth"
 private const val VOICE_REMOTE_AUDIO_CONSENT_KEY = "aurora.voice.remote_audio_consent"
 private const val VOICE_SERVICE_PREFS = "aurora_voice_foreground_service_state"
 private const val VOICE_BACKGROUND_SESSION_REQUESTED_KEY = "background_session_requested"
+private const val VOICE_BACKGROUND_STOPPED_BY_USER_KEY = "background_stopped_by_user"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
@@ -323,6 +330,7 @@ private interface AuroraPcmOutputBridge : AutoCloseable {
 data class AuroraVoiceCaptureSnapshot(
     val captureActive: Boolean,
     val microphoneSignalDetected: Boolean,
+    val microphoneSilenced: Boolean,
     val sampleRateHz: Int,
     val acceptedChunks: Long,
     val acceptedSamples: Long,
@@ -346,6 +354,10 @@ private fun auroraVoiceRuntimePhase(value: Long): String = when (value) {
     4L -> "speaking"
     5L -> "stopping"
     6L -> "faulted"
+    7L -> "waiting-for-wake"
+    8L -> "transcribing"
+    9L -> "waiting-for-response"
+    10L -> "preparing-speech"
     else -> "unknown"
 }
 
@@ -376,7 +388,7 @@ private fun isRecoverableBackgroundTurn(errorCode: String?): Boolean = when (err
 private fun voiceRuntimeAcceptsMicrophoneInput(stats: LongArray): Boolean {
     if (stats.getOrElse(VOICE_STATS_RUNTIME_ACTIVE_INDEX) { 0L } == 0L) return false
     return when (stats.getOrElse(VOICE_STATS_RUNTIME_PHASE_INDEX) { 0L }) {
-        1L, 2L -> true
+        1L, 2L, 7L -> true
         else -> false
     }
 }
@@ -537,6 +549,39 @@ private class AuroraNativeVoiceSessionBridge(
         return if (current == 0L) -1 else nativeFinish(current, generation)
     }
 
+    fun takeFocusedTranscript(): String? {
+        val current = handle
+        return if (current == 0L) null else nativeTakeFocusedTranscript(current)
+    }
+
+    fun takeBackgroundResultJson(): String? {
+        val current = handle
+        return if (current == 0L) null else nativeTakeBackgroundResult(current)
+    }
+
+    fun persistBackgroundTurn(
+        appConfigDir: String,
+        scope: AuroraNativeLocalDataScope,
+        newConversationId: String,
+        userMessageId: String,
+        userContentEnvelopeJson: String,
+        assistantMessageId: String?,
+        assistantContentEnvelopeJson: String?,
+        createdAtMs: Long,
+        completedAtMs: Long,
+    ): String? = nativePersistBackgroundTurn(
+        appConfigDir,
+        scope.profileId,
+        scope.localNodeId,
+        newConversationId,
+        userMessageId,
+        userContentEnvelopeJson,
+        assistantMessageId.orEmpty(),
+        assistantContentEnvelopeJson.orEmpty(),
+        createdAtMs,
+        completedAtMs,
+    )
+
     fun cancel(generation: Long): Int {
         val current = handle
         return if (current == 0L) -1 else nativeCancel(current, generation)
@@ -611,6 +656,20 @@ private class AuroraNativeVoiceSessionBridge(
     private external fun nativeStart(handle: Long): Long
     private external fun nativeStartBackground(handle: Long): Long
     private external fun nativeFinish(handle: Long, generation: Long): Int
+    private external fun nativeTakeFocusedTranscript(handle: Long): String?
+    private external fun nativeTakeBackgroundResult(handle: Long): String?
+    private external fun nativePersistBackgroundTurn(
+        appConfigDir: String,
+        profileId: String,
+        localNodeId: String,
+        newConversationId: String,
+        userMessageId: String,
+        userContentEnvelopeJson: String,
+        assistantMessageId: String,
+        assistantContentEnvelopeJson: String,
+        createdAtMs: Long,
+        completedAtMs: Long,
+    ): String?
     private external fun nativeCancel(handle: Long, generation: Long): Int
     private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
     private external fun nativeClearIngress(handle: Long): Int
@@ -767,6 +826,9 @@ private class AuroraAudioCapture(
     @Volatile
     private var microphoneSignalDetected = false
 
+    @Volatile
+    private var microphoneSilenced = false
+
     init {
         if (liveTestIngressInitiallyArmed) {
             synchronized(sequenceGuard) {
@@ -777,9 +839,19 @@ private class AuroraAudioCapture(
 
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) return true
+        worker.start()
+        handler = Handler(worker.looper)
+        if (handler?.post { openAndReadLoop() } != true) {
+            fail("audio_record_initialization_failed")
+            return false
+        }
+        return true
+    }
+
+    private fun openAndReadLoop() {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             fail("microphone_permission_missing")
-            return false
+            return
         }
         val minimumBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE_HZ,
@@ -788,34 +860,56 @@ private class AuroraAudioCapture(
         )
         if (minimumBuffer <= 0) {
             fail("audio_record_buffer_unavailable")
-            return false
+            return
         }
-        return try {
-            val frameCapacity = VOICE_CAPTURE_FRAME_SAMPLES
-            val byteCapacity = maxOf(minimumBuffer, frameCapacity * 2)
-            val audioRecordBuilder = AudioRecord.Builder()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                audioRecordBuilder.setContext(context)
-            }
-            recorder = audioRecordBuilder
-                .setAudioSource(AUDIO_SOURCE)
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(SAMPLE_RATE_HZ)
-                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                        .build(),
-                )
-                .setBufferSizeInBytes(byteCapacity)
-                .build()
-            worker.start()
-            handler = Handler(worker.looper)
-            handler?.post { readLoop(frameCapacity) }
-            true
-        } catch (_: RuntimeException) {
+        val frameCapacity = VOICE_CAPTURE_FRAME_SAMPLES
+        val byteCapacity = maxOf(minimumBuffer, frameCapacity * 2)
+        val initializedRecorder = buildInitializedAudioRecord(byteCapacity)
+        if (initializedRecorder == null) {
             fail("audio_record_initialization_failed")
-            false
+            return
         }
+        recorder = initializedRecorder
+        readLoop(frameCapacity)
+    }
+
+    private fun buildInitializedAudioRecord(byteCapacity: Int): AudioRecord? {
+        for (source in AUDIO_SOURCE_FALLBACKS) {
+            val candidate = try {
+                val audioRecordBuilder = AudioRecord.Builder()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    audioRecordBuilder.setContext(context)
+                }
+                audioRecordBuilder
+                    .setAudioSource(source)
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE_HZ)
+                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                            .build(),
+                    )
+                    .setBufferSizeInBytes(byteCapacity)
+                    .build()
+            } catch (_: RuntimeException) {
+                null
+            }
+            val readyCandidate = candidate ?: continue
+            if (readyCandidate.state != AudioRecord.STATE_INITIALIZED) {
+                readyCandidate.release()
+                continue
+            }
+            val started = try {
+                readyCandidate.startRecording()
+                readyCandidate.recordingState == AudioRecord.RECORDSTATE_RECORDING
+            } catch (_: RuntimeException) {
+                false
+            }
+            if (started) return readyCandidate
+            runCatching { readyCandidate.stop() }
+            readyCandidate.release()
+        }
+        return null
     }
 
     private fun readLoop(frameCapacity: Int) {
@@ -825,12 +919,16 @@ private class AuroraAudioCapture(
         }
         val buffer = ShortArray(frameCapacity)
         try {
-            currentRecorder.startRecording()
             publishSnapshot()
             while (running.get()) {
                 val read = currentRecorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
                 when {
                     read > 0 -> {
+                        microphoneSilenced = clientSilenced(currentRecorder)
+                        if (microphoneSilenced) {
+                            publishSnapshot()
+                            continue
+                        }
                         if (!microphoneSignalDetected) {
                             for (index in 0 until read) {
                                 if (buffer[index].toInt() != 0) {
@@ -878,6 +976,15 @@ private class AuroraAudioCapture(
             publishSnapshot()
         }
     }
+
+    private fun clientSilenced(currentRecorder: AudioRecord): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                currentRecorder.activeRecordingConfiguration?.isClientSilenced == true
+            }.getOrDefault(false)
+        } else {
+            false
+        }
 
     /**
      * Injects one bounded frame through the exact production Rust ingress queue.
@@ -975,6 +1082,7 @@ private class AuroraAudioCapture(
             AuroraVoiceCaptureSnapshot(
                 captureActive = running.get() && errorCode == null,
                 microphoneSignalDetected = microphoneSignalDetected,
+                microphoneSilenced = microphoneSilenced,
                 sampleRateHz = SAMPLE_RATE_HZ,
                 acceptedChunks = stats.getOrElse(0) { 0 },
                 acceptedSamples = stats.getOrElse(1) { 0 },
@@ -1131,10 +1239,16 @@ class AuroraRuntimeForegroundService : Service() {
     @Volatile
     private var backgroundSessionRearmEnabled = false
 
+    @Volatile
+    private var resumeBackgroundAfterFocusedTurn = false
+
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         val durableBackgroundSession = backgroundSessionRequested()
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> {
+                if (durableBackgroundSession) {
+                    return@OnAudioFocusChangeListener
+                }
                 captureError = "audio_focus_lost"
                 releaseNativeVoiceResourcesAsync()
                 captureSnapshot = terminalSnapshot(captureSnapshot, null, captureError)
@@ -1198,6 +1312,13 @@ class AuroraRuntimeForegroundService : Service() {
             syncForegroundReasons(startId)
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_STOP_BY_USER) {
+            if (backgroundSessionActive || backgroundSessionRequested()) {
+                markBackgroundStoppedByUser(this)
+            }
+            stopAfterTerminalFailure()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             stopAfterTerminalFailure()
             return START_NOT_STICKY
@@ -1212,6 +1333,10 @@ class AuroraRuntimeForegroundService : Service() {
         }
         val persistedBackgroundRequest = backgroundSessionRequested()
         val explicitBackgroundStart = intent?.action == ACTION_START_BACKGROUND
+        if (explicitBackgroundStart && backgroundStoppedByUser(this)) {
+            stopAfterTerminalFailure(startId)
+            return START_NOT_STICKY
+        }
         val stickyRestart = intent == null && persistedBackgroundRequest
         if (intent == null && !stickyRestart) {
             stopAfterTerminalFailure(startId)
@@ -1232,7 +1357,7 @@ class AuroraRuntimeForegroundService : Service() {
         val backgroundSession = durableBackgroundSession
         running = true
         AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.VOICE)
-        enterForeground("Starting microphone…")
+        enterForeground("Preparing voice…")
         if (backgroundSession && !isBackgroundVoiceSessionAvailable()) {
             captureError = "background_voice_unavailable"
             stopAfterTerminalFailure(startId)
@@ -1249,6 +1374,9 @@ class AuroraRuntimeForegroundService : Service() {
                 // previous focused turn is still tearing down. Preserve the
                 // latest invocation and start it once the serialized native
                 // lifecycle queue has released the previous session.
+                if (backgroundSessionActive && backgroundSessionRequested()) {
+                    resumeBackgroundAfterFocusedTurn = true
+                }
                 pendingAssistantStartId = startId
                 invalidateNativeVoiceInitialization()
                 releaseNativeVoiceResourcesAsync()
@@ -1275,15 +1403,20 @@ class AuroraRuntimeForegroundService : Service() {
         durableBackgroundSession: Boolean,
         startId: Int,
     ): Int {
+        if (!backgroundSession) clearFocusedTranscriptResult()
         backgroundSessionActive = backgroundSession
         backgroundSessionRearmEnabled = durableBackgroundSession
+        if (backgroundSession) resumeBackgroundAfterFocusedTurn = false
         captureError = null
         captureSnapshot = emptySnapshot(null)
-        if (!requestAudioFocus(durableBackgroundSession)) {
-            captureError = "audio_focus_unavailable"
-            stopAfterTerminalFailure(startId)
-            return START_NOT_STICKY
-        }
+        // Each native session owns a fresh state stream. Force its first
+        // snapshot through even when the previous session ended on identical
+        // notification text.
+        lastNotificationText.set(null)
+        // Audio focus arbitrates playback; it is not authority to record from
+        // the microphone. Some OEMs deny exclusive focus while AudioRecord is
+        // still valid, so focus is best-effort and capture proves availability.
+        requestAudioFocus(durableBackgroundSession)
         if (durableBackgroundSession && !enableDurableBackgroundSession()) {
             captureError = "background_wake_lock_unavailable"
             stopAfterTerminalFailure(startId)
@@ -1366,7 +1499,7 @@ class AuroraRuntimeForegroundService : Service() {
 
     private fun recordedInstalledPackIds(): Set<String> = runCatching {
         AuroraNativeSpeechPackBridge.installedPackIds(this)
-    }.getOrDefault(emptySet())
+    }.getOrNull().orEmpty()
 
     private fun readCatalogEntries(): List<VoicePackCatalogEntry> {
         val raw = readCatalogRaw()
@@ -1739,6 +1872,7 @@ class AuroraRuntimeForegroundService : Service() {
         releaseBackgroundWakeLock()
         backgroundSessionActive = false
         backgroundSessionRearmEnabled = false
+        resumeBackgroundAfterFocusedTurn = false
         invalidateNativeVoiceInitialization()
         running = false
         finishHandler.removeCallbacksAndMessages(null)
@@ -1860,11 +1994,23 @@ class AuroraRuntimeForegroundService : Service() {
 
     private fun finishNativeSession() {
         val nativeSession = session ?: return
-        clearBackgroundSessionPersistence()
+        if (!resumeBackgroundAfterFocusedTurn) {
+            clearBackgroundSessionPersistence()
+        }
         backgroundSessionActive = false
         backgroundSessionRearmEnabled = false
         val captureToClose = capture
         val generationToFinish = sessionGeneration
+        capture = null
+        sessionGeneration = 0L
+        captureSnapshot = captureSnapshot.copy(
+            captureActive = false,
+            runtimeActive = true,
+            runtimePhase = "processing",
+            sessionGeneration = generationToFinish,
+            errorCode = null,
+        )
+        updateNotification(captureSnapshot)
         try {
             nativeLifecycleExecutor.execute {
                 val finishFailed = generationToFinish == 0L || runCatching {
@@ -1882,8 +2028,6 @@ class AuroraRuntimeForegroundService : Service() {
                     if (finishFailed) stopSelf() else awaitFinishedSession(nativeSession)
                 }
             }
-            capture = null
-            sessionGeneration = 0L
         } catch (_: RejectedExecutionException) {
             // Finish can enter native inference and must never run on Android's main thread.
             captureError = "voice_runtime_shutdown_failed"
@@ -1933,6 +2077,17 @@ class AuroraRuntimeForegroundService : Service() {
             finishHandler.postDelayed({ awaitFinishedSession(nativeSession) }, 100L)
             return
         }
+        if (!backgroundSessionActive) {
+            nativeSession.takeFocusedTranscript()
+                ?.trim()
+                ?.takeIf { transcript -> transcript.isNotEmpty() }
+                ?.let(::storeFocusedTranscriptResult)
+        } else {
+            nativeSession.takeBackgroundResultJson()
+                ?.trim()
+                ?.takeIf { result -> result.isNotEmpty() }
+                ?.let { result -> persistBackgroundTurnResultAsync(nativeSession, result) }
+        }
         val errorCode = auroraVoiceRuntimeError(
             stats.getOrElse(VOICE_STATS_LAST_ERROR_INDEX) { 0L },
         )
@@ -1942,12 +2097,153 @@ class AuroraRuntimeForegroundService : Service() {
             capture != null &&
             isRecoverableBackgroundTurn(errorCode)
         ) {
-            rearmBackgroundSession(nativeSession, stats)
+            if (errorCode != null) {
+                captureError = errorCode
+                captureSnapshot = terminalSnapshot(captureSnapshot, stats, errorCode)
+                updateNotification(captureSnapshot)
+                finishHandler.postDelayed(
+                    { rearmBackgroundSession(nativeSession, stats) },
+                    VOICE_RECOVERABLE_ERROR_REARM_DELAY_MILLIS,
+                )
+            } else {
+                rearmBackgroundSession(nativeSession, stats)
+            }
             return
         }
         captureError = captureError ?: errorCode
         captureSnapshot = terminalSnapshot(captureSnapshot, stats, captureError)
         stopAfterTerminalFailure()
+    }
+
+    private fun persistBackgroundTurnResultAsync(
+        nativeSession: AuroraNativeVoiceSessionBridge,
+        resultJson: String,
+    ) {
+        try {
+            nativeLifecycleExecutor.execute {
+                val enriched = persistBackgroundTurnResult(nativeSession, resultJson)
+                finishHandler.post { storeBackgroundTurnResult(enriched) }
+            }
+        } catch (_: RejectedExecutionException) {
+            storeBackgroundTurnResult(
+                markBackgroundTurnPersistence(
+                    resultJson,
+                    conversationId = null,
+                    persistenceErrorCode = "native_voice_persistence_unavailable",
+                ),
+            )
+        }
+    }
+
+    private fun persistBackgroundTurnResult(
+        nativeSession: AuroraNativeVoiceSessionBridge,
+        resultJson: String,
+    ): String {
+        val result = runCatching { JSONObject(resultJson) }.getOrNull()
+            ?: return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = "native_voice_result_invalid",
+            )
+        val transcript = result.optString("transcript", "").trim()
+        val scope = AuroraNativeLocalDataContext.activeScope(this)
+        if (transcript.isEmpty()) {
+            return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = "native_voice_result_invalid",
+            )
+        }
+        if (scope == null) {
+            return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = "native_voice_persistence_scope_unavailable",
+            )
+        }
+        val assistantText = if (result.isNull("assistantText")) {
+            null
+        } else {
+            result.optString("assistantText", "").trim().takeIf { it.isNotEmpty() }
+        }
+        val createdAtMs = System.currentTimeMillis().coerceAtLeast(0L)
+        val userMessageId = AuroraNativeLocalDataContext.newMessageId("user")
+        val assistantMessageId = assistantText?.let {
+            AuroraNativeLocalDataContext.newMessageId("assistant")
+        }
+        val persistedJson = try {
+            val userEnvelope = AuroraLocalDataEnvelopeCrypto.encryptMessageText(
+                this,
+                scope,
+                userMessageId,
+                transcript,
+            )
+            val assistantEnvelope = assistantText?.let { text ->
+                AuroraLocalDataEnvelopeCrypto.encryptMessageText(
+                    this,
+                    scope,
+                    requireNotNull(assistantMessageId),
+                    text,
+                )
+            }
+            nativeSession.persistBackgroundTurn(
+                appConfigDir = applicationInfo.dataDir,
+                scope = scope,
+                newConversationId = AuroraNativeLocalDataContext.newConversationId(),
+                userMessageId = userMessageId,
+                userContentEnvelopeJson = userEnvelope.toString(),
+                assistantMessageId = assistantMessageId,
+                assistantContentEnvelopeJson = assistantEnvelope?.toString(),
+                createdAtMs = createdAtMs,
+                completedAtMs = System.currentTimeMillis().coerceAtLeast(createdAtMs),
+            )
+        } catch (_: Exception) {
+            return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = "native_voice_persistence_failed",
+            )
+        }
+        val persisted = persistedJson?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (persisted?.optBoolean("ok", false) != true) {
+            return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = persisted
+                    ?.optString("errorCode", "native_voice_persistence_failed")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "native_voice_persistence_failed",
+            )
+        }
+        val conversationId = persisted.optString("conversationId", "").takeIf { it.isNotEmpty() }
+            ?: return markBackgroundTurnPersistence(
+                resultJson,
+                conversationId = null,
+                persistenceErrorCode = "native_voice_persistence_failed",
+            )
+        return markBackgroundTurnPersistence(
+            resultJson,
+            conversationId = conversationId,
+            persistenceErrorCode = null,
+        )
+    }
+
+    private fun markBackgroundTurnPersistence(
+        resultJson: String,
+        conversationId: String?,
+        persistenceErrorCode: String?,
+    ): String {
+        val result = runCatching { JSONObject(resultJson) }.getOrElse { JSONObject() }
+        result.put("persisted", conversationId != null)
+        result.put(
+            "conversationId",
+            conversationId ?: JSONObject.NULL,
+        )
+        result.put(
+            "persistenceErrorCode",
+            persistenceErrorCode ?: JSONObject.NULL,
+        )
+        return result.toString()
     }
 
     private fun rearmBackgroundSession(
@@ -2066,15 +2362,19 @@ class AuroraRuntimeForegroundService : Service() {
 
     private fun updateNotification(snapshot: AuroraVoiceCaptureSnapshot) {
         if (!running) return
-        val text = notificationTextFor(AuroraRuntimeForegroundLedger.activeReasons(), snapshot)
-        if (lastNotificationText.getAndSet(text) == text) return
         notificationsSuppressed = !canPostNotifications()
         // The one Aurora entry cannot reach the shade when the user has turned
         // notifications off. The session keeps running and the degraded state
         // is reported through the status surface instead.
-        if (notificationsSuppressed) return
+        if (notificationsSuppressed) {
+            lastNotificationText.set(null)
+            return
+        }
+        val text = notificationTextFor(AuroraRuntimeForegroundLedger.activeReasons(), snapshot)
+        if (lastNotificationText.get() == text) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(AURORA_RUNTIME_NOTIFICATION_ID, foregroundNotification(text))
+        lastNotificationText.set(text)
     }
 
     /**
@@ -2088,14 +2388,58 @@ class AuroraRuntimeForegroundService : Service() {
     ): String {
         val voice = AuroraRuntimeForegroundReason.VOICE in reasons
         val deviceLink = AuroraRuntimeForegroundReason.DEVICE_LINK in reasons
+        val voiceText = when {
+            snapshot.errorCode != null || snapshot.runtimePhase == "faulted" ->
+                notificationErrorTextFor(snapshot.errorCode)
+            snapshot.microphoneSilenced ->
+                "Another app is using the microphone. Aurora will resume automatically."
+            snapshot.runtimePhase == "waiting-for-wake" -> {
+                val wakePhrase = notificationWakePhrase()
+                "Say “$wakePhrase” to begin. Tap Stop to end."
+            }
+            snapshot.runtimePhase == "listening" && backgroundSessionActive ->
+                "Aurora heard you. Keep speaking."
+            snapshot.runtimePhase == "listening" -> "Listening. Tap again when finished."
+            snapshot.runtimePhase == "transcribing" && backgroundSessionActive ->
+                "Understanding what you said… Tap Stop to end."
+            snapshot.runtimePhase == "transcribing" -> "Understanding what you said…"
+            snapshot.runtimePhase == "waiting-for-response" && backgroundSessionActive ->
+                "Aurora is thinking… Tap Stop to end."
+            snapshot.runtimePhase == "waiting-for-response" -> "Aurora is thinking…"
+            snapshot.runtimePhase == "preparing-speech" && backgroundSessionActive ->
+                "Preparing the answer to speak… Tap Stop to end."
+            snapshot.runtimePhase == "preparing-speech" -> "Preparing the answer to speak…"
+            snapshot.runtimePhase == "processing" && backgroundSessionActive ->
+                "Working on your request. Tap Stop to end."
+            snapshot.runtimePhase == "processing" -> "Aurora is working…"
+            snapshot.runtimePhase == "speaking" -> "Aurora is speaking. Tap Stop to end."
+            snapshot.runtimePhase == "starting" || !snapshot.captureActive -> "Preparing voice…"
+            else -> "Microphone is active. Tap Stop to end."
+        }
         return when {
-            voice && deviceLink && snapshot.captureActive ->
-                "Microphone is active and your other devices stay connected. Tap Stop to end."
-            voice && deviceLink -> "Your other devices stay connected."
-            voice && snapshot.captureActive -> "Microphone is active. Tap Stop to end."
-            voice -> "Voice controls are unavailable."
+            voice && deviceLink -> "$voiceText Other devices stay connected."
+            voice -> voiceText
             deviceLink -> "Your other devices stay connected."
             else -> "Aurora is finishing up."
+        }
+    }
+
+    private fun notificationErrorTextFor(errorCode: String?): String = when (errorCode) {
+        "assistant_unavailable" -> "I couldn’t reach your computer. I’ll keep listening."
+        "wake_not_detected" -> "I didn’t catch the wake phrase. Listening again."
+        "speech_not_detected" -> "I didn’t hear a request. Listening again."
+        "speech_timeout" -> "I stopped listening after the pause. Listening again."
+        else -> "Voice needs attention. Open Aurora to try again."
+    }
+
+    private fun notificationWakePhrase(): String {
+        val phrase = wakePhraseSelection()?.text?.trim().orEmpty()
+        return if (
+            phrase.length in 1..48 && phrase.none { character -> character.isISOControl() }
+        ) {
+            phrase
+        } else {
+            "Aurora"
         }
     }
 
@@ -2109,11 +2453,31 @@ class AuroraRuntimeForegroundService : Service() {
         lastNotificationText.set(text)
         val notification = foregroundNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                AURORA_RUNTIME_NOTIFICATION_ID,
-                notification,
-                foregroundServiceTypes(AuroraRuntimeForegroundLedger.activeReasons()),
-            )
+            val requestedTypes = foregroundServiceTypes(AuroraRuntimeForegroundLedger.activeReasons())
+            try {
+                startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification, requestedTypes)
+            } catch (error: SecurityException) {
+                // A device-link foreground-service policy mismatch must never
+                // crash voice capture or the app. Drop only that persistence
+                // reason and retain a legal microphone foreground service when
+                // one is active. The manifest/preflight gate normally prevents
+                // this branch; it is a final guard for vendor policy drift.
+                AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.DEVICE_LINK)
+                val microphoneType = if (
+                    AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) &&
+                    checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                } else {
+                    0
+                }
+                if (microphoneType == 0) {
+                    running = false
+                    stopSelf()
+                    return
+                }
+                startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification, microphoneType)
+            }
         } else {
             startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification)
         }
@@ -2167,7 +2531,9 @@ class AuroraRuntimeForegroundService : Service() {
     }
 
     private fun foregroundNotification(text: String): Notification {
-        val stopIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply { action = ACTION_STOP }
+        val stopIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply {
+            action = ACTION_STOP_BY_USER
+        }
         val stopPendingIntent = PendingIntent.getService(
             this,
             4204,
@@ -2181,10 +2547,24 @@ class AuroraRuntimeForegroundService : Service() {
             Notification.Builder(this)
         }
         builder
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(R.drawable.ic_aurora_notification)
             .setContentTitle("Aurora")
             .setContentText(text)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setColor(0xFF1F6F68.toInt())
+        packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            builder.setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    4205,
+                    launchIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+        }
         // Stop ends the microphone session, so it is offered only while one is
         // the reason Aurora is running.
         if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)) {
@@ -2252,16 +2632,63 @@ class AuroraRuntimeForegroundService : Service() {
     private fun serviceRestartMode(): Int =
         if (backgroundSessionRequested()) START_STICKY else START_NOT_STICKY
 
+    private fun restartDurableBackgroundAfterFocusedTurn(): Boolean {
+        if (
+            !resumeBackgroundAfterFocusedTurn ||
+            pendingAssistantStartId != null ||
+            !backgroundSessionRequested() ||
+            backgroundStoppedByUser(this)
+        ) {
+            return false
+        }
+        resumeBackgroundAfterFocusedTurn = false
+        backgroundSessionActive = false
+        backgroundSessionRearmEnabled = false
+        invalidateNativeVoiceInitialization()
+        releaseNativeVoiceResourcesAsync()
+        captureError = null
+        captureSnapshot = emptySnapshot(null)
+        updateNotification(captureSnapshot)
+        return try {
+            nativeLifecycleExecutor.execute {
+                finishHandler.post {
+                    if (
+                        destroyed ||
+                        !backgroundSessionRequested() ||
+                        backgroundStoppedByUser(this)
+                    ) {
+                        stopAfterTerminalFailure()
+                        return@post
+                    }
+                    val intent = Intent(this, AuroraRuntimeForegroundService::class.java).apply {
+                        action = ACTION_START_BACKGROUND
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                }
+            }
+            true
+        } catch (_: RejectedExecutionException) {
+            captureError = "voice_runtime_shutdown_failed"
+            false
+        }
+    }
+
     /**
      * Ends the voice reason for keeping the service alive. The service itself
      * only stops once nothing else holds it, so a held device connection keeps
      * the one Aurora entry in place instead of Aurora gaining a second one.
      */
     private fun stopAfterTerminalFailure(startId: Int? = null) {
+        if (restartDurableBackgroundAfterFocusedTurn()) return
         pendingAssistantStartId = null
         clearBackgroundSessionPersistence()
         backgroundSessionActive = false
         backgroundSessionRearmEnabled = false
+        resumeBackgroundAfterFocusedTurn = false
         invalidateNativeVoiceInitialization()
         releaseNativeVoiceResourcesAsync()
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
@@ -2292,6 +2719,7 @@ class AuroraRuntimeForegroundService : Service() {
 
     companion object {
         const val ACTION_STOP = "dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE"
+        const val ACTION_STOP_BY_USER = "dev.aurora.tauri.nativeplugin.action.STOP_BACKGROUND_VOICE_BY_USER"
         const val ACTION_FINISH = "dev.aurora.tauri.nativeplugin.action.FINISH_VOICE_CAPTURE"
         const val ACTION_START_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.START_BACKGROUND_VOICE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
@@ -2320,10 +2748,15 @@ class AuroraRuntimeForegroundService : Service() {
             val intent = Intent(context, AuroraRuntimeForegroundService::class.java).apply {
                 action = ACTION_SYNC_REASONS
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            val started = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }.isSuccess
+            if (!started) {
+                AuroraRuntimeForegroundLedger.release(AuroraRuntimeForegroundReason.DEVICE_LINK)
             }
         }
 
@@ -2345,6 +2778,46 @@ class AuroraRuntimeForegroundService : Service() {
         /** Whether a focused or durable native voice session currently holds the service. */
         fun foregroundVoiceSessionActive(): Boolean =
             AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
+
+        fun backgroundStoppedByUser(context: Context): Boolean =
+            context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(VOICE_BACKGROUND_STOPPED_BY_USER_KEY, false)
+
+        fun clearBackgroundStoppedByUser(context: Context) {
+            context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(VOICE_BACKGROUND_STOPPED_BY_USER_KEY)
+                .apply()
+        }
+
+        private val focusedTranscriptResult = AtomicReference<String?>(null)
+        private val backgroundTurnResults = ConcurrentLinkedQueue<String>()
+
+        private fun clearFocusedTranscriptResult() {
+            focusedTranscriptResult.set(null)
+        }
+
+        private fun storeFocusedTranscriptResult(transcript: String) {
+            focusedTranscriptResult.set(transcript)
+        }
+
+        fun takeFocusedTranscriptResult(): String? = focusedTranscriptResult.getAndSet(null)
+
+        private fun storeBackgroundTurnResult(resultJson: String) {
+            backgroundTurnResults.add(resultJson)
+            while (backgroundTurnResults.size > 8) {
+                backgroundTurnResults.poll()
+            }
+        }
+
+        fun takeBackgroundTurnResult(): String? = backgroundTurnResults.poll()
+
+        private fun markBackgroundStoppedByUser(context: Context) {
+            context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(VOICE_BACKGROUND_STOPPED_BY_USER_KEY, true)
+                .apply()
+        }
 
         @Volatile
         var captureError: String? = null
@@ -2377,6 +2850,7 @@ class AuroraRuntimeForegroundService : Service() {
         fun emptySnapshot(errorCode: String?) = AuroraVoiceCaptureSnapshot(
             captureActive = false,
             microphoneSignalDetected = false,
+            microphoneSilenced = false,
             sampleRateHz = SAMPLE_RATE_HZ,
             acceptedChunks = 0,
             acceptedSamples = 0,

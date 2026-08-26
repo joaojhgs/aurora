@@ -3302,7 +3302,13 @@ fn validate_binding_language(
                 Err(EngineError::InvalidRequest)
             }
         }
-        None if binding.task == VoiceTask::VoiceActivityDetection => Ok(()),
+        None if matches!(
+            binding.task,
+            VoiceTask::VoiceActivityDetection | VoiceTask::KeywordSpotting
+        ) =>
+        {
+            Ok(())
+        }
         None if binding
             .languages
             .iter()
@@ -3900,6 +3906,28 @@ mod tests {
         )
         .expect("vad binding");
         assert!(vad_binding.validate_language(None).is_ok());
+    }
+
+    #[test]
+    fn bilingual_keyword_spotting_binding_accepts_implicit_language() {
+        let (manifest, selection) = selected(PackTask::Kws);
+        let mut binding =
+            TaskPackBinding::from_selection(VoiceTask::KeywordSpotting, &manifest, &selection)
+                .expect("binding");
+        binding.languages.push(LanguageSupport {
+            language: "zh".to_owned(),
+            locale: Some("zh-CN".to_owned()),
+            fixed_language: true,
+            auto_detect: false,
+        });
+
+        let request = TaskRequest {
+            task: VoiceTask::KeywordSpotting,
+            language: None,
+            generation: 1,
+        };
+
+        assert!(BoundTaskRequest::new(request, binding).is_ok());
     }
 
     #[test]
