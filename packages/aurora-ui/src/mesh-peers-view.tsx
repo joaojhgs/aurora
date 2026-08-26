@@ -373,6 +373,7 @@ export function MeshPeersResource({
   const [thinPeerEvidence, setThinPeerEvidence] =
     useState<SelectedCandidatePairEvidence | null>(null)
   const thinPeerEvidenceRef = useRef<SelectedCandidatePairEvidence | null>(null)
+  const thinPeerEvidenceByPeerRef = useRef<ReadonlyMap<string, SelectedCandidatePairEvidence>>(new Map())
   const [thinPeerMutationError, setThinPeerMutationError] =
     useState<string | null>(null)
   const thinPairingApprovals = useRef<Set<string>>(new Set<string>())
@@ -433,6 +434,7 @@ export function MeshPeersResource({
             thinPeer: nextThinSnapshot,
             peerRoster: thinPeer.roster(),
             connectionEvidence: thinPeerEvidenceRef.current,
+            connectionEvidenceByPeer: thinPeerEvidenceByPeerRef.current,
             featureSharing: localSharingSnapshot.current,
             sharingAvailable: Boolean(localFeatureSharing),
           })
@@ -449,6 +451,7 @@ export function MeshPeersResource({
         thinPeer: thinPeer?.snapshot() ?? null,
         peerRoster: thinPeer?.roster() ?? null,
         connectionEvidence: thinPeerEvidenceRef.current,
+        connectionEvidenceByPeer: thinPeerEvidenceByPeerRef.current,
         featureSharing: nextSharing,
         sharingAvailable: true,
       }))
@@ -471,6 +474,7 @@ export function MeshPeersResource({
         thinPeer: thinPeer?.snapshot() ?? null,
         peerRoster: thinPeer?.roster() ?? null,
         connectionEvidence: thinPeerEvidenceRef.current,
+        connectionEvidenceByPeer: thinPeerEvidenceByPeerRef.current,
         featureSharing,
         sharingAvailable: Boolean(localFeatureSharing),
       }))
@@ -522,8 +526,13 @@ export function MeshPeersResource({
   }, [canManageLocalServiceConfiguration, client, ownsLocalNodeState, route, snapshot.meshEnabled, thinPeer, thinPeerSnapshot])
 
   useEffect(() => {
-    if (!thinPeer || !isBrowserWebRtcConnected(thinPeerSnapshot)) {
+    const roster = thinPeer?.roster()
+    const authorizedPeerIds = roster?.peers
+      .filter((entry) => entry.snapshot.state === 'authorized')
+      .map((entry) => entry.peerId) ?? []
+    if (!thinPeer || (authorizedPeerIds.length === 0 && !isBrowserWebRtcConnected(thinPeerSnapshot))) {
       thinPeerEvidenceRef.current = null
+      thinPeerEvidenceByPeerRef.current = new Map()
       setThinPeerEvidence(null)
       return
     }
@@ -533,17 +542,31 @@ export function MeshPeersResource({
       if (pending) return
       pending = true
       try {
-        const evidence = await thinPeer.getSelectedCandidatePairEvidence()
+        const currentRoster = thinPeer.roster()
+        const currentThinSnapshot = thinPeer.snapshot()
+        const connectedPeerIds = currentRoster?.peers
+          .filter((entry) => entry.snapshot.state === 'authorized')
+          .map((entry) => entry.peerId) ?? []
+        const evidenceEntries = await Promise.all(connectedPeerIds.map(async (peerId) => [
+          peerId,
+          await thinPeer.getSelectedCandidatePairEvidence(peerId),
+        ] as const))
+        const evidenceByPeer = new Map(evidenceEntries)
+        const primaryPeerId = currentRoster?.primaryPeerId ?? currentThinSnapshot.expectedStablePeerId
+        const evidence = primaryPeerId
+          ? evidenceByPeer.get(primaryPeerId) ?? await thinPeer.getSelectedCandidatePairEvidence()
+          : await thinPeer.getSelectedCandidatePairEvidence()
         if (cancelled) return
         thinPeerEvidenceRef.current = evidence
+        thinPeerEvidenceByPeerRef.current = evidenceByPeer
         setThinPeerEvidence(evidence)
-        const currentThinSnapshot = thinPeer.snapshot()
         setSnapshot((current) => ownsLocalNodeState
           ? buildLocalMeshNodeSnapshot({
               localNode,
               thinPeer: currentThinSnapshot,
-              peerRoster: thinPeer.roster(),
+              peerRoster: currentRoster,
               connectionEvidence: evidence,
+              connectionEvidenceByPeer: evidenceByPeer,
               featureSharing: localSharingSnapshot.current,
               sharingAvailable: Boolean(localFeatureSharing),
             })
@@ -551,6 +574,7 @@ export function MeshPeersResource({
       } catch {
         if (!cancelled) {
           thinPeerEvidenceRef.current = null
+          thinPeerEvidenceByPeerRef.current = new Map()
           setThinPeerEvidence(null)
           const currentThinSnapshot = thinPeer.snapshot()
           setSnapshot((current) => ownsLocalNodeState
@@ -559,6 +583,7 @@ export function MeshPeersResource({
                 thinPeer: currentThinSnapshot,
                 peerRoster: thinPeer.roster(),
                 connectionEvidence: null,
+                connectionEvidenceByPeer: thinPeerEvidenceByPeerRef.current,
                 featureSharing: localSharingSnapshot.current,
                 sharingAvailable: Boolean(localFeatureSharing),
               })
@@ -1332,6 +1357,7 @@ export function buildLocalMeshNodeSnapshot({
   thinPeer,
   peerRoster,
   connectionEvidence,
+  connectionEvidenceByPeer,
   featureSharing,
   sharingAvailable,
 }: {
@@ -1339,6 +1365,7 @@ export function buildLocalMeshNodeSnapshot({
   thinPeer?: BrowserWebRtcSnapshot | null | undefined
   peerRoster?: MeshPeerRosterSnapshot | null | undefined
   connectionEvidence?: SelectedCandidatePairEvidence | null | undefined
+  connectionEvidenceByPeer?: ReadonlyMap<string, SelectedCandidatePairEvidence> | undefined
   featureSharing?: LocalFeatureSharingSnapshot | null | undefined
   sharingAvailable?: boolean
 }): MeshPeersSnapshot {
@@ -1351,6 +1378,8 @@ export function buildLocalMeshNodeSnapshot({
   const approvedDevices = featureSharing?.approvedDevices ?? []
   const serviceScopes = featureSharing ? localShareableServiceScopes(featureSharing) : []
   const latencyMs = connected ? connectionRoundTripTimeMs(connectionEvidence) : null
+  const latencyForPeer = (peerId: string) => connectionRoundTripTimeMs(connectionEvidenceByPeer?.get(peerId))
+    ?? (peerId === (peerRoster?.primaryPeerId ?? expectedPeerId) ? latencyMs : null)
   const rows = new Map<string, MeshPeerRow>()
   const rosterByPeerId = new Map(rosterPeers.map((entry) => [entry.peerId, entry]))
   const primaryPeerId = peerRoster?.primaryPeerId ?? expectedPeerId
@@ -1376,7 +1405,7 @@ export function buildLocalMeshNodeSnapshot({
         || approved.peerLabel,
       connected: peerConnected,
       updatedAt: rosterEntry?.snapshot.updatedAt ?? (isCurrent ? thinPeer?.updatedAt ?? null : null),
-      latencyMs: isCurrent && peerConnected ? latencyMs : null,
+      latencyMs: peerConnected ? latencyForPeer(approved.peerId) : null,
       permissions,
       services: grantedServices.map((scope) => scope.label),
     }))
@@ -1389,7 +1418,7 @@ export function buildLocalMeshNodeSnapshot({
       nodeName: entry.nodeName?.trim() || entry.snapshot.nodeName?.trim() || 'Connected Aurora device',
       connected: true,
       updatedAt: entry.snapshot.updatedAt,
-      latencyMs: entry.peerId === primaryPeerId ? latencyMs : null,
+      latencyMs: latencyForPeer(entry.peerId),
       permissions: [],
       services: [],
     }))
@@ -1413,7 +1442,7 @@ export function buildLocalMeshNodeSnapshot({
         peerId: entry.peerId,
         nodeName: entry.nodeName,
         snapshot: entry.snapshot,
-        latencyMs: entry.peerId === primaryPeerId ? latencyMs : null,
+        latencyMs: latencyForPeer(entry.peerId),
       }))
     : connected && expectedPeerId
       ? [localMeshSessionRow({

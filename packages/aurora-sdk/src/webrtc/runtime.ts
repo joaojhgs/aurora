@@ -617,6 +617,12 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     return await this.session?.getSelectedCandidatePairEvidence() ?? { selected: false, category: 'unknown', statsSource: 'RTCPeerConnection.getStats', rawAddressRedacted: true as const }
   }
 
+  async getPeerSelectedCandidatePairEvidence(peerId: string) {
+    const entry = this.registry.findByPeerId(peerId)
+    return await entry?.session?.getSelectedCandidatePairEvidence()
+      ?? { selected: false, category: 'unknown', statsSource: 'RTCPeerConnection.getStats', rawAddressRedacted: true as const }
+  }
+
   async disconnect(reason = 'disconnect'): Promise<void> {
     this.releaseVisibilityHook()
     this.observedPeers.clear()

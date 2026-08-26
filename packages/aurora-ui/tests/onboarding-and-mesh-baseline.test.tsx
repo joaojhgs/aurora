@@ -231,6 +231,22 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
         statsSource: 'RTCPeerConnection.getStats',
         rawAddressRedacted: true,
       },
+      connectionEvidenceByPeer: new Map([
+        ['peer-brazil', {
+          selected: true,
+          category: 'srflx' as const,
+          roundTripTimeMs: 42,
+          statsSource: 'RTCPeerConnection.getStats' as const,
+          rawAddressRedacted: true as const,
+        }],
+        ['peer-portugal', {
+          selected: true,
+          category: 'relay' as const,
+          roundTripTimeMs: 236,
+          statsSource: 'RTCPeerConnection.getStats' as const,
+          rawAddressRedacted: true as const,
+        }],
+      ]),
       sharingAvailable: true,
       featureSharing: {
         features: [],
@@ -250,6 +266,8 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       'peer-brazil',
       'peer-portugal',
     ])
+    expect(snapshot.peers.map((peer) => peer.latencyMs)).toEqual([42, 236])
+    expect(snapshot.liveSessions.map((session) => session.latencyMs)).toEqual([42, 236])
   })
 
   it('never loads the connected server peer history for a node-owned Mesh page', async () => {

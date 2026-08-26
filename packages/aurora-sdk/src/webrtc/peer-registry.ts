@@ -21,7 +21,7 @@ import type { WebRtcPeerSession } from './peer-session.js'
 import type { MeshPeerStandbyReason } from './protocol.js'
 import type { SignalingSessionAllowlist } from './signaling-allowlist.js'
 import type { MqttWebSocketSignalingClient } from './signaling-mqtt.js'
-import type { PeerConnectionSnapshot, WebRtcPeerConnectionProfile } from './types.js'
+import type { PeerConnectionSnapshot, SelectedCandidatePairEvidence, WebRtcPeerConnectionProfile } from './types.js'
 
 /** Machine-readable reason for the one-stable-id-one-session refusal. */
 export const PEER_ALREADY_REGISTERED_REASON = 'peer_already_registered'
@@ -167,6 +167,8 @@ export interface MeshPeerRegistryController {
   subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void): () => void
   /** Add a peer without disturbing the sessions already in the registry. */
   connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void>
+  /** Measure one exact peer without changing the registry's primary route. */
+  getPeerSelectedCandidatePairEvidence(peerId: string): Promise<SelectedCandidatePairEvidence>
   /** Drop one peer, leaving the rest of the registry connected. */
   disconnectPeer(peerId: string, reason?: string): Promise<void>
   /** How many devices this surface may hold at once. */

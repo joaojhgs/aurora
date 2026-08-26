@@ -778,8 +778,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     if (this.pendingPairingCache?.sessionId === sessionId) this.pendingPairingCache = null
   }
 
-  async getSelectedCandidatePairEvidence(): Promise<SelectedCandidatePairEvidence> {
+  async getSelectedCandidatePairEvidence(peerId?: string): Promise<SelectedCandidatePairEvidence> {
     if (!this.peer) return emptySelectedCandidatePairEvidence()
+    if (peerId && this.peer.getPeerSelectedCandidatePairEvidence) {
+      return await this.peer.getPeerSelectedCandidatePairEvidence(peerId)
+    }
     return await this.peer.getSelectedCandidatePairEvidence()
   }
 

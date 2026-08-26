@@ -92,6 +92,20 @@ class RosterFakePeerConnection implements PeerConnectionLike {
   channels: RosterFakeChannel[] = []
   addedIceCandidates: unknown[] = []
   appliedRemoteDescriptions: Array<{ type: string; sdp: string }> = []
+  statsReport = new Map<string, unknown>([
+    ['pair-1', {
+      type: 'candidate-pair',
+      nominated: true,
+      state: 'succeeded',
+      currentRoundTripTime: 0.236,
+      localCandidateId: 'local-relay',
+      remoteCandidateId: 'remote-host',
+      bytesSent: 10,
+      bytesReceived: 20,
+    }],
+    ['local-relay', { type: 'local-candidate', candidateType: 'relay', protocol: 'udp' }],
+    ['remote-host', { type: 'remote-candidate', candidateType: 'host', protocol: 'udp' }],
+  ])
   createDataChannel(label: string): DataChannelLike {
     const channel = new RosterFakeChannel(label)
     this.channels.push(channel)
@@ -107,6 +121,7 @@ class RosterFakePeerConnection implements PeerConnectionLike {
     this.appliedRemoteDescriptions.push({ ...description })
   }
   async addIceCandidate(candidate: unknown): Promise<void> { this.addedIceCandidates.push(candidate) }
+  async getStats(): Promise<Map<string, unknown>> { return this.statsReport }
   close(): void { this.connectionState = 'closed' }
 }
 
@@ -189,6 +204,28 @@ function makeRosterHarness(overrides: Partial<WebRtcPeerConnectionProfile> = {})
 }
 
 describe('W3 presence roster and per-session signaling allowlist', () => {
+  it('measures candidate-pair evidence for the exact registered peer', async () => {
+    const harness = makeRosterHarness()
+    await harness.peer.connect(harness.runtimeProfile)
+    await flush()
+    await harness.announce('z-remote', 'peer-remote', 'Remote node')
+    await flush()
+
+    await expect(harness.peer.getPeerSelectedCandidatePairEvidence('peer-remote')).resolves.toMatchObject({
+      selected: true,
+      category: 'relay',
+      roundTripTimeMs: 236,
+      rawAddressRedacted: true,
+    })
+    await expect(harness.peer.getPeerSelectedCandidatePairEvidence('peer-unknown')).resolves.toMatchObject({
+      selected: false,
+      category: 'unknown',
+      rawAddressRedacted: true,
+    })
+
+    await harness.runtime.close()
+  })
+
   it('reports every device in a three-node room while only the invited one holds a session', async () => {
     const harness = makeRosterHarness()
     await harness.peer.connect(harness.runtimeProfile)

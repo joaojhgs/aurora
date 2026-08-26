@@ -1321,6 +1321,17 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(JSON.stringify(evidence)).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/)
   })
 
+  it('measures the selected candidate pair for the requested registry peer', async () => {
+    const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized' })
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false })
+
+    const evidence = await controller.getSelectedCandidatePairEvidence('peer-portugal')
+
+    expect(peer.selectedCandidatePairEvidenceCalls).toBe(0)
+    expect(peer.selectedCandidatePairEvidencePeerIds).toEqual(['peer-portugal'])
+    expect(evidence.roundTripTimeMs).toBe(236)
+  })
+
   it('sets up a discovered mesh device from the saved room without replacing the active peer', async () => {
     const connectPeer = vi.fn(async () => undefined)
     const active = {
@@ -2377,6 +2388,7 @@ class FakeBrowserPeer {
   connectedProfiles: WebRtcPeerConnectionProfile[] = []
   disconnectedReasons: string[] = []
   selectedCandidatePairEvidenceCalls = 0
+  selectedCandidatePairEvidencePeerIds: string[] = []
   private snapshotValue: BrowserWebRtcSnapshot
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}, private readonly connectError: unknown = null) {
     this.snapshotValue = {
@@ -2435,6 +2447,16 @@ class FakeBrowserPeer {
         statsSource: 'RTCPeerConnection.getStats',
         rawAddressRedacted: true,
       },
+      statsSource: 'RTCPeerConnection.getStats' as const,
+      rawAddressRedacted: true as const,
+    }
+  }
+  async getPeerSelectedCandidatePairEvidence(peerId: string) {
+    this.selectedCandidatePairEvidencePeerIds.push(peerId)
+    return {
+      selected: true,
+      category: 'relay' as const,
+      roundTripTimeMs: 236,
       statsSource: 'RTCPeerConnection.getStats' as const,
       rawAddressRedacted: true as const,
     }
