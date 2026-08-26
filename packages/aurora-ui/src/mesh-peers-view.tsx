@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Copy, GitBranch, KeyRound, Link2, LockKeyhole, Network, QrCode, RadioTower, RefreshCw, Router, ScanLine, Settings2, ShieldCheck, Signal, UsersRound, Wifi } from 'lucide-react'
 import { AUTH_METHODS, AuroraError, GATEWAY_METHODS, routePath, summarizeCapabilities, type AuroraClient, type AvailabilityState, type CapabilitySummary, type ConfigFieldMetadata, type ConfigSchemaMetadataResponse, type DeviceListResponse, type DeviceResponse, type JsonObject, type JsonValue, type ListPendingPairingsResponse, type MeshInviteConfigResponse, type MeshPeerListResponse, type MeshPeerDiagnostic, type MeshPeerInfo, type MeshRouteDiagnostic, type MeshStatusResponse, type PendingPairingEntry, type PermissionCatalogEntry, type WebRTCDiagnosticsResponse } from '@aurora/client'
-import type { PeerPairingApproval, SelectedCandidatePairEvidence } from '@aurora/client/webrtc'
+import type { MeshPeerRosterSnapshot, PeerConnectionSnapshot, PeerPairingApproval, SelectedCandidatePairEvidence } from '@aurora/client/webrtc'
 import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Avatar, AvatarFallback } from '#components/ui/avatar'
 import { Badge } from '#components/ui/badge'
@@ -431,6 +431,7 @@ export function MeshPeersResource({
         ? buildLocalMeshNodeSnapshot({
             localNode,
             thinPeer: nextThinSnapshot,
+            peerRoster: thinPeer.roster(),
             connectionEvidence: thinPeerEvidenceRef.current,
             featureSharing: localSharingSnapshot.current,
             sharingAvailable: Boolean(localFeatureSharing),
@@ -446,6 +447,7 @@ export function MeshPeersResource({
       setSnapshot(buildLocalMeshNodeSnapshot({
         localNode,
         thinPeer: thinPeer?.snapshot() ?? null,
+        peerRoster: thinPeer?.roster() ?? null,
         connectionEvidence: thinPeerEvidenceRef.current,
         featureSharing: nextSharing,
         sharingAvailable: true,
@@ -467,6 +469,7 @@ export function MeshPeersResource({
       setSnapshot(buildLocalMeshNodeSnapshot({
         localNode,
         thinPeer: thinPeer?.snapshot() ?? null,
+        peerRoster: thinPeer?.roster() ?? null,
         connectionEvidence: thinPeerEvidenceRef.current,
         featureSharing,
         sharingAvailable: Boolean(localFeatureSharing),
@@ -539,6 +542,7 @@ export function MeshPeersResource({
           ? buildLocalMeshNodeSnapshot({
               localNode,
               thinPeer: currentThinSnapshot,
+              peerRoster: thinPeer.roster(),
               connectionEvidence: evidence,
               featureSharing: localSharingSnapshot.current,
               sharingAvailable: Boolean(localFeatureSharing),
@@ -553,6 +557,7 @@ export function MeshPeersResource({
             ? buildLocalMeshNodeSnapshot({
                 localNode,
                 thinPeer: currentThinSnapshot,
+                peerRoster: thinPeer.roster(),
                 connectionEvidence: null,
                 featureSharing: localSharingSnapshot.current,
                 sharingAvailable: Boolean(localFeatureSharing),
@@ -841,6 +846,16 @@ export function MeshPeersResource({
     }
   }, [thinPeer])
 
+  const connectDiscoveredDevice = useCallback(async (peerId: string) => {
+    if (!thinPeer || !ownsLocalNodeState) return
+    setThinPeerMutationError(null)
+    try {
+      await thinPeer.connectDiscoveredDevice(peerId)
+    } catch (error) {
+      setThinPeerMutationError(meshPeerErrorMessage(error))
+    }
+  }, [ownsLocalNodeState, thinPeer])
+
   return (
       <MeshPeersView
         snapshot={snapshot}
@@ -868,6 +883,9 @@ export function MeshPeersResource({
       onConfirmThinPairing={confirmThinPairing}
       onRejectThinPairing={(sessionId) => void rejectThinPairing(sessionId)}
       onReconnectThinPeer={() => void reconnectThinPeer()}
+      {...(ownsLocalNodeState && thinPeer
+        ? { onConnectDiscoveredDevice: connectDiscoveredDevice }
+        : {})}
       {...(canManageLocalServiceConfiguration
         ? {
             onConfigChange: runConfigChange,
@@ -1312,27 +1330,36 @@ export function reconcileMeshPeersWithThinPeer(
 export function buildLocalMeshNodeSnapshot({
   localNode,
   thinPeer,
+  peerRoster,
   connectionEvidence,
   featureSharing,
   sharingAvailable,
 }: {
   localNode?: LocalMeshNodeIdentity | undefined
   thinPeer?: BrowserWebRtcSnapshot | null | undefined
+  peerRoster?: MeshPeerRosterSnapshot | null | undefined
   connectionEvidence?: SelectedCandidatePairEvidence | null | undefined
   featureSharing?: LocalFeatureSharingSnapshot | null | undefined
   sharingAvailable?: boolean
 }): MeshPeersSnapshot {
-  const configured = isBrowserWebRtcConfigured(thinPeer)
-  const connected = isBrowserWebRtcConnected(thinPeer)
-  const expectedPeerId = configured ? thinPeer.expectedStablePeerId ?? null : null
+  const rosterPeers = peerRoster?.peers ?? []
+  const authorizedRosterPeers = rosterPeers.filter((entry) => entry.snapshot.state === 'authorized')
+  const configured = isBrowserWebRtcConfigured(thinPeer) || rosterPeers.length > 0
+  const connected = authorizedRosterPeers.length > 0 || isBrowserWebRtcConnected(thinPeer)
+  const expectedPeerId = configured ? thinPeer?.expectedStablePeerId ?? null : null
   const featureById = new Map((featureSharing?.features ?? []).map((feature) => [feature.id, feature]))
   const approvedDevices = featureSharing?.approvedDevices ?? []
   const serviceScopes = featureSharing ? localShareableServiceScopes(featureSharing) : []
   const latencyMs = connected ? connectionRoundTripTimeMs(connectionEvidence) : null
   const rows = new Map<string, MeshPeerRow>()
+  const rosterByPeerId = new Map(rosterPeers.map((entry) => [entry.peerId, entry]))
+  const primaryPeerId = peerRoster?.primaryPeerId ?? expectedPeerId
 
   for (const approved of approvedDevices) {
-    const isCurrent = approved.peerId === expectedPeerId
+    const rosterEntry = rosterByPeerId.get(approved.peerId)
+    const isCurrent = approved.peerId === primaryPeerId
+    const peerConnected = rosterEntry?.snapshot.state === 'authorized'
+      || (rosterPeers.length === 0 && approved.peerId === expectedPeerId && connected)
     const grantedFeatures = approved.featureIds
       .map((featureId) => featureById.get(featureId))
       .filter((feature): feature is LocalDeviceFeature => Boolean(feature?.available && feature.enabled))
@@ -1343,12 +1370,28 @@ export function buildLocalMeshNodeSnapshot({
     const permissions = grantedServices.map((scope) => scope.permissionId)
     rows.set(approved.peerId, localMeshPeerRow({
       peerId: approved.peerId,
-      nodeName: isCurrent ? thinPeer?.nodeName?.trim() || approved.peerLabel : approved.peerLabel,
-      connected: isCurrent && connected,
-      updatedAt: isCurrent ? thinPeer?.updatedAt ?? null : null,
-      latencyMs: isCurrent ? latencyMs : null,
+      nodeName: rosterEntry?.nodeName?.trim()
+        || rosterEntry?.snapshot.nodeName?.trim()
+        || (isCurrent ? thinPeer?.nodeName?.trim() : '')
+        || approved.peerLabel,
+      connected: peerConnected,
+      updatedAt: rosterEntry?.snapshot.updatedAt ?? (isCurrent ? thinPeer?.updatedAt ?? null : null),
+      latencyMs: isCurrent && peerConnected ? latencyMs : null,
       permissions,
       services: grantedServices.map((scope) => scope.label),
+    }))
+  }
+
+  for (const entry of authorizedRosterPeers) {
+    if (rows.has(entry.peerId)) continue
+    rows.set(entry.peerId, localMeshPeerRow({
+      peerId: entry.peerId,
+      nodeName: entry.nodeName?.trim() || entry.snapshot.nodeName?.trim() || 'Connected Aurora device',
+      connected: true,
+      updatedAt: entry.snapshot.updatedAt,
+      latencyMs: entry.peerId === primaryPeerId ? latencyMs : null,
+      permissions: [],
+      services: [],
     }))
   }
 
@@ -1365,6 +1408,35 @@ export function buildLocalMeshNodeSnapshot({
   }
 
   const peers = [...rows.values()].sort((left, right) => left.nodeName.localeCompare(right.nodeName) || left.peerId.localeCompare(right.peerId))
+  const liveSessions = authorizedRosterPeers.length > 0
+    ? authorizedRosterPeers.map((entry) => localMeshSessionRow({
+        peerId: entry.peerId,
+        nodeName: entry.nodeName,
+        snapshot: entry.snapshot,
+        latencyMs: entry.peerId === primaryPeerId ? latencyMs : null,
+      }))
+    : connected && expectedPeerId
+      ? [localMeshSessionRow({
+          peerId: expectedPeerId,
+          nodeName: thinPeer?.nodeName,
+          snapshot: {
+            icePathCategory: thinPeer!.icePathCategory,
+            updatedAt: thinPeer!.updatedAt,
+            ...(thinPeer?.nodeName ? { nodeName: thinPeer.nodeName } : {}),
+            ...(thinPeer?.pairingSessionId
+              ? {
+                  pendingPairing: {
+                    sessionId: thinPeer.pairingSessionId,
+                    verificationCode: thinPeer.pairingVerificationCode ?? '',
+                    remoteStablePeerId: expectedPeerId,
+                    remoteNodeName: thinPeer.nodeName ?? '',
+                  },
+                }
+              : {}),
+          },
+          latencyMs,
+        })]
+      : []
   const localNodeName = localNode?.nodeName.trim() || 'This device'
   const sharingUnavailable = sharingAvailable === true && featureSharing == null
   const warnings = sharingUnavailable
@@ -1381,16 +1453,17 @@ export function buildLocalMeshNodeSnapshot({
     webrtcStarted: connected,
     peers,
     pendingRequests: [],
-    liveSessions: connected && expectedPeerId ? [localMeshSessionRow(expectedPeerId, thinPeer!, latencyMs)] : [],
+    liveSessions,
     devices: [],
-    pendingCount: thinPeer?.pairingSessionId ? 1 : 0,
+    pendingCount: rosterPeers.filter((entry) => Boolean(entry.snapshot.pendingPairing)).length
+      || (thinPeer?.pairingSessionId ? 1 : 0),
     approvedCount: peers.filter((peer) => peer.trustState === 'available-local' || peer.trustState === 'available-remote').length,
     deniedCount: 0,
     removedCount: 0,
     runtimePeerCount: peers.length,
-    liveSessionCount: connected ? 1 : 0,
+    liveSessionCount: liveSessions.length,
     deviceCount: peers.length,
-    routeCount: connected ? 1 : 0,
+    routeCount: liveSessions.length,
     compatibilityFailures: [],
     listState: sharingUnavailable ? 'degraded' : peers.length === 0 ? 'available-local' : connected ? 'available-remote' : 'stale',
     listReason: sharingUnavailable
@@ -1463,26 +1536,33 @@ function localMeshPeerRow({
   }
 }
 
-function localMeshSessionRow(
-  peerId: string,
-  thinPeer: BrowserWebRtcSnapshot,
-  latencyMs: number | null,
-): MeshLiveSessionRow {
+function localMeshSessionRow({
+  peerId,
+  nodeName,
+  snapshot,
+  latencyMs,
+}: {
+  peerId: string
+  nodeName?: string | undefined
+  snapshot: Pick<PeerConnectionSnapshot, 'icePathCategory' | 'nodeName' | 'pendingPairing' | 'updatedAt'>
+  latencyMs: number | null
+}): MeshLiveSessionRow {
+  const pendingPairing = snapshot.pendingPairing
   return {
     sessionId: `direct:${peerId}`,
     stablePeerId: peerId,
-    nodeName: thinPeer.nodeName?.trim() || 'Connected Aurora device',
-    pairingSessionId: thinPeer.pairingSessionId ?? null,
-    verificationCode: thinPeer.pairingVerificationCode ?? null,
+    nodeName: nodeName?.trim() || snapshot.nodeName?.trim() || 'Connected Aurora device',
+    pairingSessionId: pendingPairing?.sessionId ?? null,
+    verificationCode: pendingPairing?.verificationCode ?? null,
     state: 'available-remote',
     connectionState: 'connected',
-    iceState: thinPeer.icePathCategory,
+    iceState: snapshot.icePathCategory,
     dataChannelState: 'connected',
     authState: 'approved',
     latencyMs,
     identitySource: 'Saved device identity',
     permissions: 'Approved connection',
-    pairingState: thinPeer.pairingSessionId ? 'Waiting for approval' : 'Complete',
+    pairingState: pendingPairing ? 'Waiting for approval' : 'Complete',
     linkedPeerState: 'Linked',
     evidenceSource: 'Direct connection',
   }
@@ -2169,7 +2249,7 @@ function DiscoveredDevicesCard({
                 Code {device.shortCode} · {discoveredDeviceStateLabel(device.state)}
               </p>
             </div>
-            {onConnect && device.state !== 'connected' ? (
+            {onConnect && (device.state === 'new' || device.state === 'known') ? (
               <Button type="button" size="sm" variant="outline" onClick={() => void onConnect(device.peerId)}>
                 Set up
               </Button>

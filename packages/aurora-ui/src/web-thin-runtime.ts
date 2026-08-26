@@ -537,7 +537,10 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   snapshot(): BrowserWebRtcSnapshot {
-    const sdk = this.peer?.snapshot() ?? this.sdkSnapshot ?? null
+    const pendingRosterSnapshot = this.peer
+      ?.roster?.()
+      .peers.find((entry) => entry.snapshot.pendingPairing)?.snapshot
+    const sdk = pendingRosterSnapshot ?? this.peer?.snapshot() ?? this.sdkSnapshot ?? null
     const diagnostic = this.connectionDiagnostic ?? this.visibilityDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
     const snapshotPairing = pendingPairingFromSnapshot(sdk)
     if (snapshotPairing) {
@@ -652,6 +655,37 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       this.emit()
       throw productSafeAuroraError(error)
     }
+  }
+
+  /** Set up one device already discovered in this Aurora's signaling room. */
+  async connectDiscoveredDevice(peerId: string): Promise<void> {
+    if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
+    const roster = this.peer?.roster?.()
+    const device = roster?.discovered.find((candidate) => candidate.peerId === peerId)
+    if (!device) {
+      throw new AuroraError({
+        code: 'validation',
+        message: 'This device is no longer available. Refresh connected devices and try again.',
+      })
+    }
+    if (roster?.peers.some((entry) => entry.peerId === peerId && entry.standby === undefined)) return
+    const savedProfile = this.credentialStore?.loadConnectionProfile?.()
+    if (!savedProfile) {
+      throw new AuroraError({ code: 'validation', message: INVITE_REQUIRED_COPY })
+    }
+    const {
+      expectedSignalingPeerId: _savedSignalingPeerId,
+      expectedStablePeerId: _savedStablePeerId,
+      nodeName: _savedNodeName,
+      ...roomProfile
+    } = savedProfile
+    const profile: WebRtcPeerConnectionProfile = {
+      ...roomProfile,
+      expectedSignalingPeerId: device.signalingPeerId,
+      ...(device.stablePeerId ? { expectedStablePeerId: device.stablePeerId } : {}),
+      ...(device.nodeName ? { nodeName: device.nodeName } : {}),
+    }
+    await this.connectDevice(profile)
   }
 
   /** Drop one device, leaving every other connection in place. */

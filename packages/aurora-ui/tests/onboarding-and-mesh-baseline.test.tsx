@@ -6,7 +6,7 @@ import {
   AuroraClient as Aurora,
   MockAuroraTransport,
 } from '@aurora/client'
-import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
+import type { MeshPeerRosterSnapshot, PeerConnectionSnapshot, WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import {
   buildMeshPeersSnapshot,
   buildLocalMeshNodeSnapshot,
@@ -169,6 +169,89 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.trim() === 'Features')).toBe(false)
   })
 
+  it('projects every authorized registry peer as independently connected in node mode', () => {
+    const peerSnapshot = (peerId: string, nodeName: string): PeerConnectionSnapshot => ({
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: peerId,
+      connectedStablePeerId: peerId,
+      nodeName,
+      icePathCategory: 'srflx',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    })
+    const peerRoster: MeshPeerRosterSnapshot = {
+      primaryPeerId: 'peer-brazil',
+      peers: [
+        { peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: peerSnapshot('peer-brazil', 'Brazil node') },
+        { peerId: 'peer-portugal', primary: false, nodeName: 'Portugal node', snapshot: peerSnapshot('peer-portugal', 'Portugal node') },
+      ],
+      discovered: [],
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    }
+
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
+      thinPeer: {
+        state: 'authorized',
+        connectionMode: 'webrtc-only',
+        expectedStablePeerId: 'peer-brazil',
+        nodeName: 'Brazil node',
+        icePathCategory: 'srflx',
+        protocolCapabilities: [],
+        reconnectCount: 0,
+        pendingCallCount: 0,
+        pendingStreamCount: 0,
+        pendingSubscriptionCount: 0,
+        pendingFragmentCount: 0,
+        bufferPressureHighWaterBytes: 0,
+        sentFragmentCount: 0,
+        receivedFragmentCount: 0,
+        updatedAt: '2026-08-26T20:00:00.000Z',
+        status: 'authorized',
+        secureContext: true,
+        visible: true,
+        focused: true,
+        hasHttpFallback: false,
+        secretsPersisted: true,
+      },
+      peerRoster,
+      connectionEvidence: {
+        selected: true,
+        category: 'srflx',
+        roundTripTimeMs: 42,
+        statsSource: 'RTCPeerConnection.getStats',
+        rawAddressRedacted: true,
+      },
+      sharingAvailable: true,
+      featureSharing: {
+        features: [],
+        approvedDevices: [
+          { peerId: 'peer-brazil', peerLabel: 'Old Brazil label', featureIds: [], expiresAtMs: null },
+          { peerId: 'peer-portugal', peerLabel: 'Old Portugal label', featureIds: [], expiresAtMs: null },
+        ],
+      },
+    })
+
+    expect(snapshot.peers.map((peer) => [peer.nodeName, peer.connectionStatus])).toEqual([
+      ['Brazil node', 'connected'],
+      ['Portugal node', 'connected'],
+    ])
+    expect(snapshot.liveSessionCount).toBe(2)
+    expect(snapshot.liveSessions.map((session) => session.stablePeerId)).toEqual([
+      'peer-brazil',
+      'peer-portugal',
+    ])
+  })
+
   it('never loads the connected server peer history for a node-owned Mesh page', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const requestResult = vi.spyOn(client, 'requestResult')
@@ -224,6 +307,57 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(container.textContent).toContain('18.8 ms')
     expect(peer.selectedCandidatePairEvidenceCalls).toBeGreaterThan(0)
     expect(requestResult).not.toHaveBeenCalled()
+  })
+
+  it('uses the canonical setup action for a device discovered by a node-owned Mesh page', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const localFeatureSharing: LocalFeatureSharingPort = {
+      load: vi.fn(async () => ({ features: [], approvedDevices: [] })),
+      setFeatureEnabled: vi.fn(async () => undefined),
+      replacePeerSharing: vi.fn(async () => undefined),
+      revokePeerSharing: vi.fn(async () => undefined),
+    }
+    const peer = new FakeBrowserPeer({
+      status: 'authorized',
+      state: 'authorized',
+      expectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      secretsPersisted: true,
+      discoveredDevices: [{
+        peerId: 'peer-portugal',
+        deviceName: 'Portugal node',
+        shortCode: '7FD0',
+        state: 'new',
+      }],
+    })
+    const container = render(
+      <MeshPeersResource
+        client={client}
+        route={meshRoute()}
+        surfaceProfile={getAuroraSurfaceProfile({
+          runtimeMode: 'mobile-native',
+          transportKind: 'native-mobile',
+          nativePlatform: 'android',
+          nodeMode: 'mesh-node',
+          runtimeTier: 'lightweight-ts',
+        })}
+        thinPeer={peer as never}
+        localFeatureSharing={localFeatureSharing}
+        localNode={{ peerId: 'peer-waydroid', nodeName: 'Waydroid' }}
+      />,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Portugal node')
+    await act(async () => {
+      findButton(container, 'Set up').click()
+      await Promise.resolve()
+    })
+
+    expect(peer.connectedDiscoveredPeerIds).toEqual(['peer-portugal'])
   })
 
   it('changes a paired device service access through the canonical Mesh scopes dialog', async () => {
@@ -877,6 +1011,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
 
 class FakeBrowserPeer {
   selectedCandidatePairEvidenceCalls = 0
+  connectedDiscoveredPeerIds: string[] = []
   private readonly snapshotValue: BrowserWebRtcSnapshot
 
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}) {
@@ -905,6 +1040,7 @@ class FakeBrowserPeer {
   }
 
   snapshot() { return this.snapshotValue }
+  roster() { return null }
   subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) {
     listener(this.snapshotValue)
     return () => undefined
@@ -913,6 +1049,7 @@ class FakeBrowserPeer {
     return webRtcProfileFromInvite(inviteText)!
   }
   async connect() { return undefined }
+  async connectDiscoveredDevice(peerId: string) { this.connectedDiscoveredPeerIds.push(peerId) }
   async confirmPairing() { return undefined }
   async rejectPairing() { return undefined }
   async getSelectedCandidatePairEvidence() {

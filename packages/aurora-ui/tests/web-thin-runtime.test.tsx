@@ -6,6 +6,7 @@ import {
   CAP_CONSUMER_ONLY_V1,
   MemoryPeerCredentialStore,
   type BrowserWebRtcRuntimeOptions,
+  type MeshPeerRosterSnapshot,
   type PeerConnectionController,
   type PeerPairingApproval,
   type PeerConnectionSnapshot,
@@ -1318,6 +1319,130 @@ describe('browser WebRTC thin-shell runtime', () => {
     })
     expect(Object.keys(evidence)).not.toEqual(expect.arrayContaining(['localAddress', 'remoteAddress', 'ip', 'address']))
     expect(JSON.stringify(evidence)).not.toMatch(/\b\d{1,3}(?:\.\d{1,3}){3}\b/)
+  })
+
+  it('sets up a discovered mesh device from the saved room without replacing the active peer', async () => {
+    const connectPeer = vi.fn(async () => undefined)
+    const active = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-brazil',
+      connectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const roster: MeshPeerRosterSnapshot = {
+      primaryPeerId: 'peer-brazil',
+      peers: [{ peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: active }],
+      discovered: [
+        {
+          peerId: 'peer-portugal',
+          stablePeerId: 'peer-portugal',
+          signalingPeerId: 'signal-portugal',
+          nodeName: 'Portugal node',
+          connected: false,
+          lastSeenAt: '2026-08-26T20:01:00.000Z',
+        },
+      ],
+      updatedAt: '2026-08-26T20:01:00.000Z',
+    }
+    const roomProfile = webRtcProfileFromInvite(inviteText())!
+    const peer = {
+      snapshot: () => active,
+      subscribe: (listener: (snapshot: PeerConnectionSnapshot) => void) => {
+        listener(active)
+        return () => undefined
+      },
+      roster: () => roster,
+      connectPeer,
+    }
+    const controller = new BrowserWebRtcPeerController(peer as never, 'webrtc-only', {
+      httpFallback: false,
+      credentialStore: { loadConnectionProfile: () => roomProfile } as never,
+    })
+
+    await controller.connectDiscoveredDevice('peer-portugal')
+
+    expect(connectPeer).toHaveBeenCalledOnce()
+    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
+      appId: roomProfile.appId,
+      room: roomProfile.room,
+      roomSecretRef: roomProfile.roomSecretRef,
+      signalingBrokers: roomProfile.signalingBrokers,
+      expectedStablePeerId: 'peer-portugal',
+      expectedSignalingPeerId: 'signal-portugal',
+      nodeName: 'Portugal node',
+    }))
+    expect(controller.roster()?.peers.map((entry) => entry.peerId)).toEqual(['peer-brazil'])
+  })
+
+  it('surfaces a second peer pending code without changing the authorized primary session', () => {
+    const active = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-brazil',
+      connectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const pending = {
+      ...active,
+      state: 'awaiting-sas-confirmation',
+      expectedStablePeerId: 'peer-portugal',
+      nodeName: 'Portugal node',
+      pendingPairing: {
+        sessionId: 'pair-portugal',
+        verificationCode: '47211483',
+        remoteStablePeerId: 'peer-portugal',
+        remoteNodeName: 'Portugal node',
+      },
+    } as PeerConnectionSnapshot
+    const peer = {
+      snapshot: () => active,
+      subscribe: (listener: (snapshot: PeerConnectionSnapshot) => void) => {
+        listener(active)
+        return () => undefined
+      },
+      roster: () => ({
+        primaryPeerId: 'peer-brazil',
+        peers: [
+          { peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: active },
+          { peerId: 'peer-portugal', primary: false, nodeName: 'Portugal node', snapshot: pending },
+        ],
+        discovered: [],
+        updatedAt: '2026-08-26T20:01:00.000Z',
+      }),
+    }
+    const controller = new BrowserWebRtcPeerController(peer as never, 'webrtc-only', { httpFallback: false })
+
+    expect(controller.snapshot()).toMatchObject({
+      expectedStablePeerId: 'peer-portugal',
+      nodeName: 'Portugal node',
+      pairingSessionId: 'pair-portugal',
+      pairingVerificationCode: '47211483',
+      status: 'pairing',
+    })
+    expect(controller.roster()?.primaryPeerId).toBe('peer-brazil')
   })
 
   it('uses fixed user copy for secret-bearing connection diagnostics', async () => {
