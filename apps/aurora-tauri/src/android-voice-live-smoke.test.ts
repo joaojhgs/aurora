@@ -585,6 +585,8 @@ describe('Android packaged voice live smoke harness', () => {
     ]) {
       expect(source).toContain(invariant)
     }
+    expect(source).toContain("'--ipv4'")
+    expect(source).toContain("'--retry-all-errors'")
     const foregroundBody = source.slice(
       source.indexOf('async function proveForegroundVoice'),
       source.indexOf('async function proveBackgroundVoice'),

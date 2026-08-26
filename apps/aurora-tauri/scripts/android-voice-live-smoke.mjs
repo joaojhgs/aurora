@@ -902,7 +902,13 @@ function prepareVoiceFixtures({ wakeText = ANDROID_BACKGROUND_WAKE_TEXT } = {}) 
     const archive = join(directory, 'voice.tar.bz2')
     commandRun('curl', [
       '--fail',
+      '--ipv4',
       '--location',
+      '--retry',
+      '3',
+      '--retry-all-errors',
+      '--connect-timeout',
+      '20',
       '--silent',
       '--show-error',
       '--output',
