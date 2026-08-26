@@ -1173,6 +1173,81 @@ describe("mesh session link", () => {
     expect(handleUnsubscribed).toBe(true);
   });
 
+  it("keeps an authorized native binding through transient handle lookup churn", async () => {
+    vi.useFakeTimers();
+    const calls: { command: string; args?: Record<string, unknown> }[] = [];
+    let handlesAvailable = true;
+    let rosterListener:
+      | ((roster: {
+          peers: Array<{
+            peerId: string;
+            primary: boolean;
+            snapshot: {
+              state: string;
+              connectedSignalingPeerId: string;
+            };
+          }>;
+        }) => void)
+      | undefined;
+    const roster = {
+      peers: [{
+        peerId: "peer-a",
+        primary: true,
+        snapshot: {
+          state: "authorized",
+          connectedSignalingPeerId: "signal-a",
+        },
+      }],
+    };
+    const invoke = (async (
+      command: string,
+      args?: Record<string, unknown>,
+    ) => {
+      calls.push({ command, args });
+      if (command === "aurora_mesh_session_set_lifecycle") {
+        return { lifecycle: "foreground", drained: [] };
+      }
+      return { peerId: "peer-a", sessions: 1, deviceLinkHeld: true };
+    }) as MeshSessionInvoke;
+
+    const link = installMeshSessionRuntimeLink({
+      invoke,
+      peer: {
+        subscribeRoster(listener) {
+          rosterListener = listener;
+          listener(roster);
+          return () => undefined;
+        },
+        async getManifest() {
+          return { services: [{ methods: ["Orchestrator.ExternalUserInput"] }] };
+        },
+      },
+      handleForRemoteSignalingId: () =>
+        handlesAvailable
+          ? { peerConnectionId: 1, dataChannelId: 11 }
+          : null,
+      deliverFrame: () => true,
+      lifecycleTarget: fakeDocument("visible"),
+      manifestRetryDelaysMs: [25],
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        calls.filter(({ command }) => command === "aurora_mesh_session_bind"),
+      ).toHaveLength(2);
+    });
+
+    handlesAvailable = false;
+    rosterListener?.(roster);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(
+      calls.filter(({ command }) => command === "aurora_mesh_session_unbind"),
+    ).toHaveLength(0);
+
+    await link.close();
+  });
+
   it("cancels a pending manifest retry when the link closes", async () => {
     vi.useFakeTimers();
     let manifestAttempts = 0;

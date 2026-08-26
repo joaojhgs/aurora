@@ -907,9 +907,13 @@ export function installMeshSessionRuntimeLink(
         handles = null;
       }
       if (!handles) {
-        if (bindings.has(rosterPeer.peerId)) {
-          await retirePeer(rosterPeer.peerId);
-        }
+        // The roster remains the authority for whether this peer is still
+        // authorized. Native handle lookup can be briefly empty while the
+        // WebRTC wrapper publishes a channel replacement; unbinding here
+        // drops Rust-owned RTT and background assistant routing even though
+        // the authenticated session is still live. Keep the last binding
+        // until a replacement can be bound or the roster explicitly retires
+        // the peer.
         scheduleHandleBindingRetry(rosterPeer);
         continue;
       }
