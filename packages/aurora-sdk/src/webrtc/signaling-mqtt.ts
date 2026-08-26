@@ -81,6 +81,9 @@ export interface MqttPublishOptions extends MqttSubscribeOptions {
 }
 
 export interface MqttClientLike {
+  /** MQTT.js sets this before emitting `connect`; fast factories can therefore
+   * return a client whose connect event has already been delivered. */
+  readonly connected?: boolean
   on(event: 'connect', handler: () => void): this
   on(event: 'message', handler: (topic: string, payload: Uint8Array | Buffer | string) => void): this
   on(event: 'close' | 'offline' | 'error', handler: (error?: unknown) => void): this
@@ -478,6 +481,13 @@ export class MqttWebSocketSignalingClient {
       })
       client.on('close', () => fail(undefined, 'MQTT connection closed before it was ready'))
       client.on('offline', () => fail(undefined, 'MQTT connection went offline before it was ready'))
+      // Register listeners before checking current state so neither an early
+      // factory event nor a connection racing this check can be missed.
+      if (client.connected === true && !done) {
+        done = true
+        ;(this.options.clearTimeout ?? globalThis.clearTimeout)(timer)
+        resolve()
+      }
     })
   }
 

@@ -17,6 +17,7 @@ import {
 } from '../src/webrtc/signaling-mqtt.js'
 
 class FakeMqttClient implements MqttClientLike {
+  connected = false
   handlers = new Map<string, Array<(...args: any[]) => void>>()
   subscriptions: Array<{ topic: string; qos: 0 | 1 }> = []
   unsubscriptions: string[] = []
@@ -32,6 +33,8 @@ class FakeMqttClient implements MqttClientLike {
   }
 
   emit(event: string, ...args: any[]) {
+    if (event === 'connect') this.connected = true
+    if (event === 'close' || event === 'offline') this.connected = false
     for (const handler of this.handlers.get(event) ?? []) handler(...args)
   }
 
@@ -172,6 +175,26 @@ describe('MQTT WebSocket signaling contract', () => {
     )
     const sent = JSON.parse(new TextDecoder().decode(client.publishes.at(-1)?.payload))
     expect(sent.sdp).toBe('v=0\r\nunchanged')
+  })
+
+  it('restores room state when the MQTT factory returns an already-connected client', async () => {
+    const client = new FakeMqttClient()
+    client.connected = true
+    const signaling = new MqttWebSocketSignalingClient({
+      brokers: ['wss://mqtt.example.test/mqtt'],
+      crypto: jsonCrypto(),
+      mqttFactory: vi.fn(() => client),
+      randomId: () => 'peer-offer'
+    })
+
+    await signaling.connect(room)
+
+    expect(signaling.snapshot().connected).toBe(true)
+    expect(client.subscriptions).toEqual(roomSubscriptions('aurora', 'aurora-fixture', 'lab-room', 'peer-offer'))
+    expect(client.publishes[0]).toEqual(expect.objectContaining({
+      topic: 'aurora/aurora-fixture/lab-room/presence/peer-offer',
+      options: expect.objectContaining({ qos: 1, retain: true })
+    }))
   })
 
   it('filters expected stable peers, malformed payloads, own messages, and unrelated rooms', async () => {
