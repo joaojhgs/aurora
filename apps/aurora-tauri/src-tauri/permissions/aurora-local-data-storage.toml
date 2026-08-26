@@ -4,6 +4,7 @@ description = "Allow the private local-data adapter to open Aurora-owned structu
 commands.allow = [
   "aurora_local_data_open",
   "aurora_local_data_status",
+  "aurora_local_data_inspect_identity",
   "aurora_local_data_close",
   "aurora_local_data_transaction_begin",
   "aurora_local_data_transaction_commit",

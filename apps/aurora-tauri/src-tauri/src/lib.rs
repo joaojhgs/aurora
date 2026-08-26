@@ -73,7 +73,8 @@ mod generated {
 }
 use local_data_native::{
     aurora_local_data_close, aurora_local_data_export_v1, aurora_local_data_import_v1,
-    aurora_local_data_open, aurora_local_data_repository_operation, aurora_local_data_status,
+    aurora_local_data_inspect_identity, aurora_local_data_open,
+    aurora_local_data_repository_operation, aurora_local_data_status,
     aurora_local_data_transaction_begin, aurora_local_data_transaction_commit,
     aurora_local_data_transaction_rollback, LocalDataCommandState,
 };
@@ -8876,6 +8877,7 @@ pub fn run() {
             mesh_session::aurora_mesh_session_snapshot,
             aurora_local_data_open,
             aurora_local_data_status,
+            aurora_local_data_inspect_identity,
             aurora_local_data_close,
             aurora_local_data_transaction_begin,
             aurora_local_data_transaction_commit,

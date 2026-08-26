@@ -31,6 +31,7 @@ const SQLITE_INTEGER: c_int = 1;
 const SQLITE_FLOAT: c_int = 2;
 const SQLITE_TEXT: c_int = 3;
 const SQLITE_NULL: c_int = 5;
+const SQLITE_OPEN_READONLY: c_int = 0x0000_0001;
 const SQLITE_OPEN_READWRITE: c_int = 0x0000_0002;
 const SQLITE_OPEN_CREATE: c_int = 0x0000_0004;
 const SQLITE_OPEN_FULLMUTEX: c_int = 0x0001_0000;
@@ -382,17 +383,21 @@ impl Drop for SqliteConnection {
 
 impl SqliteConnection {
     fn open(path: PathBuf) -> Result<Self, AuroraCommandError> {
+        Self::open_with_flags(
+            path,
+            SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
+        )
+    }
+
+    fn open_readonly(path: PathBuf) -> Result<Self, AuroraCommandError> {
+        Self::open_with_flags(path, SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX)
+    }
+
+    fn open_with_flags(path: PathBuf, flags: c_int) -> Result<Self, AuroraCommandError> {
         let path = CString::new(path.to_string_lossy().as_bytes())
             .map_err(|_| local_data_error("database path contains a nul byte"))?;
         let mut raw = ptr::null_mut();
-        let rc = unsafe {
-            sqlite3_open_v2(
-                path.as_ptr(),
-                &mut raw,
-                SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
-                ptr::null(),
-            )
-        };
+        let rc = unsafe { sqlite3_open_v2(path.as_ptr(), &mut raw, flags, ptr::null()) };
         if rc != SQLITE_OK {
             let message = sqlite_error(raw);
             if !raw.is_null() {
@@ -593,6 +598,14 @@ pub(crate) async fn aurora_local_data_status(
             "idle"
         },
     ))
+}
+
+/// Inspect the persisted database identity without opening a mutable app session.
+#[tauri::command]
+pub(crate) async fn aurora_local_data_inspect_identity(
+    app: AppHandle,
+) -> Result<Value, AuroraCommandError> {
+    inspect_local_data_identity_at_path(local_data_db_path_without_create(&app)?)
 }
 
 #[tauri::command]
@@ -1620,6 +1633,73 @@ fn ensure_existing_identity_before_migration(
         return Err(local_data_error("identity_mismatch"));
     }
     Ok(())
+}
+
+fn inspect_local_data_identity_at_path(db_path: PathBuf) -> Result<Value, AuroraCommandError> {
+    if !db_path.exists()
+        || db_path
+            .metadata()
+            .map(|metadata| metadata.len())
+            .unwrap_or(0)
+            == 0
+    {
+        return Ok(json!({
+            "databaseExists": false,
+            "identityTablePresent": false,
+            "databaseLocalNodeId": null,
+            "schemaVersion": null,
+            "sqliteObjectCount": 0,
+            "recordCount": 0,
+            "secretsRedacted": true
+        }));
+    }
+
+    let conn = SqliteConnection::open_readonly(db_path)?;
+    let identity_table_present = table_exists(&conn, "aurora_database_identity")?;
+    let database_local_node_id = if identity_table_present {
+        conn.query(
+            "SELECT local_node_id FROM aurora_database_identity WHERE singleton_id = 1",
+            &[],
+        )?
+        .first()
+        .map(|row| row_string(row, "local_node_id"))
+        .transpose()?
+    } else {
+        None
+    };
+    let record_count = [
+        "aurora_conversations",
+        "aurora_messages",
+        "aurora_memory_items",
+        "aurora_local_tool_state",
+        "aurora_peer_grant_metadata",
+        "aurora_local_audit",
+    ]
+    .into_iter()
+    .try_fold(0_i64, |total, table| {
+        if !table_exists(&conn, table)? {
+            return Ok(total);
+        }
+        let rows = conn.query(&format!("SELECT COUNT(*) AS row_count FROM {table}"), &[])?;
+        let count = row_i64(
+            rows.first()
+                .ok_or_else(|| local_data_error("unable to inspect local data records"))?,
+            "row_count",
+        )?;
+        total
+            .checked_add(count)
+            .ok_or_else(|| local_data_error("local data record count overflow"))
+    })?;
+
+    Ok(json!({
+        "databaseExists": true,
+        "identityTablePresent": identity_table_present,
+        "databaseLocalNodeId": database_local_node_id,
+        "schemaVersion": schema_version(&conn)?,
+        "sqliteObjectCount": sqlite_object_count(&conn)?,
+        "recordCount": record_count,
+        "secretsRedacted": true
+    }))
 }
 
 fn table_exists(conn: &SqliteConnection, table: &str) -> Result<bool, AuroraCommandError> {
@@ -2884,6 +2964,51 @@ mod tests {
         assert!(format!("{error:?}").contains("profileId invalid"));
         assert!(!dir.exists());
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn identity_inspection_does_not_create_a_missing_database() {
+        let (dir, path) = test_db_path("inspect-missing");
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let inspection = inspect_local_data_identity_at_path(path.clone()).unwrap();
+
+        assert_eq!(inspection["databaseExists"], json!(false));
+        assert_eq!(inspection["identityTablePresent"], json!(false));
+        assert_eq!(inspection["databaseLocalNodeId"], Value::Null);
+        assert_eq!(inspection["schemaVersion"], Value::Null);
+        assert_eq!(inspection["sqliteObjectCount"], json!(0));
+        assert_eq!(inspection["recordCount"], json!(0));
+        assert_eq!(inspection["secretsRedacted"], json!(true));
+        assert!(!dir.exists());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn identity_inspection_reports_populated_database_without_mutating_it() {
+        let (dir, path) = test_db_path("inspect-populated");
+        {
+            let conn = SqliteConnection::open(path.clone()).unwrap();
+            apply_generated_migrations(&conn).unwrap();
+            ensure_identity(&conn, "node-1").unwrap();
+            seed_complete_profile(&conn, "profile-1", "node-1", "inspect").unwrap();
+        }
+        let before = std::fs::read(&path).unwrap();
+
+        let inspection = inspect_local_data_identity_at_path(path.clone()).unwrap();
+
+        assert_eq!(inspection["databaseExists"], json!(true));
+        assert_eq!(inspection["identityTablePresent"], json!(true));
+        assert_eq!(inspection["databaseLocalNodeId"], json!("node-1"));
+        assert_eq!(
+            inspection["schemaVersion"],
+            json!(generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION)
+        );
+        assert!(inspection["sqliteObjectCount"].as_i64().unwrap() > 0);
+        assert_eq!(inspection["recordCount"], json!(6));
+        assert_eq!(inspection["secretsRedacted"], json!(true));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
