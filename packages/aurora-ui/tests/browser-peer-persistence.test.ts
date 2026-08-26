@@ -173,6 +173,8 @@ describe('BrowserPersistentPeerCredentialStore', () => {
       'host-peer',
       'peer-portugal',
     ])
+    expect(reloaded.loadPeerConnectionProfiles().find((saved) => saved.expectedStablePeerId === 'peer-portugal'))
+      .not.toHaveProperty('expectedSignalingPeerId')
     expect(new TextDecoder().decode(await reloaded.getRoomSecret(profile.roomSecretRef) ?? undefined))
       .toBe('never-store-this-room-secret-in-plaintext')
     expect(await reloaded.get('host-peer')).toMatchObject({
@@ -189,6 +191,35 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await reloaded.remove('peer-portugal')
     expect(reloaded.loadPeerConnectionProfiles().map((saved) => saved.expectedStablePeerId)).toEqual(['host-peer'])
     await reloaded.close()
+  })
+
+  it('does not pin a stable peer to an expired signaling transport after reload', async () => {
+    const metadata = new MapMetadataStorage()
+    const first = new BrowserPersistentPeerCredentialStore({
+      storage: new MapVaultStorage(),
+      metadataStorage: metadata,
+      crypto: globalThis.crypto,
+      origin: 'https://aurora.example.test',
+    })
+
+    first.saveConnectionProfile({
+      ...profile,
+      expectedSignalingPeerId: 'host-signal-before-restart',
+    })
+    first.savePeerConnectionProfile({
+      ...profile,
+      expectedStablePeerId: 'peer-portugal',
+      expectedSignalingPeerId: 'portugal-signal-before-restart',
+    })
+
+    expect(first.loadConnectionProfile()).toMatchObject({ expectedStablePeerId: 'host-peer' })
+    expect(first.loadConnectionProfile()).not.toHaveProperty('expectedSignalingPeerId')
+    expect(first.loadPeerConnectionProfiles()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ expectedStablePeerId: 'peer-portugal' }),
+    ]))
+    expect(first.loadPeerConnectionProfiles().find((saved) => saved.expectedStablePeerId === 'peer-portugal'))
+      .not.toHaveProperty('expectedSignalingPeerId')
+    await first.close()
   })
 
   it('falls back to memory-only when encrypted persistence fails', async () => {

@@ -820,6 +820,10 @@ function normalizeProfile(value: unknown): PersistedProfile {
   const out: PersistedProfile = { mode, appId, room, roomSecretRef, signalingBrokers }
   copyOptionalString(value, out, 'expectedStablePeerId', 256)
   copyOptionalString(value, out, 'expectedSignalingPeerId', 256)
+  // Signaling IDs identify one transport epoch. Once a stable peer identity is
+  // known, persisting the old signaling ID would pin reloads to a connection
+  // that cannot return after the remote node restarts.
+  if (out.expectedStablePeerId !== undefined) delete out.expectedSignalingPeerId
   copyOptionalString(value, out, 'nodeName', 256)
   copyOptionalBoolean(value, out, 'production')
   copyOptionalBoolean(value, out, 'allowInsecureLoopbackSignaling')
