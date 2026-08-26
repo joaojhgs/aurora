@@ -32,6 +32,7 @@
     "android:build:aab": "pnpm android:sync-native-plugin && pnpm tauri android build --aab",
     "android:smoke": "node ./scripts/android-emulator-smoke-runner.mjs",
     "android:voice:live": "node ./scripts/android-voice-live-smoke.mjs",
+    "android:three-node:live": "node ./scripts/run-android-three-node-live.mjs",
     "android:webrtc:interop": "node ./scripts/run-android-webrtc-interop.mjs",
     "android:webrtc:webview": "vitest run --environment node tests/android/android-python-webrtc.e2e.test.ts",
     "android:webrtc:mobile-browser": "vitest run --environment node tests/android/android-browser-python-webrtc.e2e.test.ts",
