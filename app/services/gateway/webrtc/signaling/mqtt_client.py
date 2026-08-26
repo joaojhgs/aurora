@@ -44,6 +44,7 @@ class MQTTSignaling:
         self._room = room
         self._peer_id = peer_id
         self._connected = asyncio.Event()
+        self._reconnect_lock = asyncio.Lock()
         self._subscribed = False
         self._room_joined = False
         self._room_metadata: dict = {}
@@ -131,6 +132,11 @@ class MQTTSignaling:
                 self._restore_joined_room(client)
                 self._loop.call_soon_threadsafe(self._connected.set)
 
+        def on_disconnect(client, userdata, *args):
+            del client, userdata, args
+            if self._loop:
+                self._loop.call_soon_threadsafe(self._connected.clear)
+
         for url in self._brokers:
             # Ensure the connected event is cleared for each broker attempt
             self._connected.clear()
@@ -157,6 +163,7 @@ class MQTTSignaling:
                 self._configure_presence_last_will()
 
                 self._client.on_connect = on_connect
+                self._client.on_disconnect = on_disconnect
                 self._client.on_message = self._on_message
 
                 if transport == "websockets":
@@ -204,7 +211,24 @@ class MQTTSignaling:
         self._peer_id = peer_id
         self._room_metadata = dict(metadata or {})
         self._room_joined = True
-        self._restore_joined_room()
+        reconnected = await self._ensure_connected()
+        if not reconnected:
+            self._restore_joined_room()
+
+    async def _ensure_connected(self) -> bool:
+        """Reconnect a dropped Paho client before refreshing room presence."""
+        is_connected = getattr(self._client, "is_connected", None)
+        if not callable(is_connected) or is_connected():
+            return False
+        async with self._reconnect_lock:
+            if is_connected():
+                return True
+            self._connected.clear()
+            result = await asyncio.to_thread(self._client.reconnect)
+            if result not in (None, mqtt.MQTT_ERR_SUCCESS):
+                raise RuntimeError(f"MQTT reconnect failed with result {result}")
+            await asyncio.wait_for(self._connected.wait(), timeout=10)
+            return True
 
     def on_message(self, channel: str, handler: OnMessage) -> None:
         self._handlers[channel] = handler

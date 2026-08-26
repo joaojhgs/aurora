@@ -277,6 +277,65 @@ async def test_mqtt_reconnect_restores_room_subscriptions_and_live_presence():
 
 
 @pytest.mark.asyncio
+async def test_presence_refresh_reconnects_a_dropped_client_before_republishing():
+    """The periodic refresh must recover when Paho stays disconnected."""
+    keys = derive_room_keys("room-password", "private-app", "private-room")
+    mqtt_client = MagicMock()
+    mqtt_client.is_connected.return_value = True
+
+    def complete_connect(*_args, **_kwargs):
+        mqtt_client.on_connect(mqtt_client, None, None, 0)
+
+    mqtt_client.connect.side_effect = complete_connect
+
+    with patch(
+        "app.services.gateway.webrtc.signaling.mqtt_client.mqtt.Client",
+        return_value=mqtt_client,
+    ):
+        signaling = MQTTSignaling(
+            ["mqtt://localhost:1883"],
+            encrypt_presence=True,
+            sig_key=keys.k_sig,
+            app_id="private-app",
+            room="private-room",
+            peer_id="signaling-session",
+        )
+        await signaling.connect()
+        await signaling.join_room(
+            "private-app",
+            "private-room",
+            "signaling-session",
+            {"stable_peer_id": "stable-peer", "node_name": "Aurora 2"},
+        )
+        mqtt_client.subscribe.reset_mock()
+        mqtt_client.publish.reset_mock()
+
+        mqtt_client.is_connected.return_value = False
+        mqtt_client.on_disconnect(mqtt_client, None, 1)
+
+        def complete_reconnect():
+            mqtt_client.is_connected.return_value = True
+            mqtt_client.on_connect(mqtt_client, None, None, 0)
+            return 0
+
+        mqtt_client.reconnect.side_effect = complete_reconnect
+        await signaling.join_room(
+            "private-app",
+            "private-room",
+            "signaling-session",
+            {"stable_peer_id": "stable-peer", "node_name": "Aurora 2"},
+        )
+
+    mqtt_client.reconnect.assert_called_once_with()
+    assert mqtt_client.subscribe.call_count == 5
+    mqtt_client.publish.assert_called_once()
+    publish_call = mqtt_client.publish.call_args
+    assert publish_call.args[0] == ("aurora/private-app/private-room/presence/signaling-session")
+    assert aead_open(keys.k_sig, publish_call.args[1])["stable_peer_id"] == "stable-peer"
+    assert publish_call.kwargs == {"qos": 1, "retain": True}
+
+
+@pytest.mark.asyncio
 async def test_graceful_leave_waits_for_tombstone_before_unsubscribe_and_disconnect():
     """The authenticated retained departure must be acknowledged before shutdown."""
     keys = derive_room_keys("room-password", "private-app", "private-room")
