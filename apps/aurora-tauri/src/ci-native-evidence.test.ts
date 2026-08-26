@@ -250,6 +250,7 @@ describe('Tauri CI native evidence contract', () => {
 
   it('cancels superseded pull request verification without preempting non-PR runs', () => {
     const pullRequestWorkflows = [
+      '.github/workflows/docker-build.yml',
       '.github/workflows/quality.yml',
       '.github/workflows/python-tests.yml',
       '.github/workflows/frontend-sdk.yml',
