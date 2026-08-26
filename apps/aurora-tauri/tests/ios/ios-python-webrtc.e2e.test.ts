@@ -151,11 +151,19 @@ if (surfaces.length === 0) {
   throw new Error('AURORA_IOS_WEBRTC_SURFACES selected no iOS surfaces')
 }
 // Cold simulator WebKit startup plus the full reconnect/revocation proof can
-// exceed three minutes on shared macOS runners.
+// consume separate build and protocol budgets on shared macOS runners.
 const interopTimeoutMs = Number(
   process.env.AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000,
 )
-const testTimeoutMs = Math.max(900_000, interopTimeoutMs + 180_000)
+const wkWebViewSetupBudgetMs = Number(
+  process.env.AURORA_IOS_WKWEBVIEW_SETUP_BUDGET_MS ?? 900_000,
+)
+const simulatorLaunchTimeoutMs = Number(
+  process.env.AURORA_IOS_SIMULATOR_LAUNCH_TIMEOUT_MS ?? 60_000,
+)
+const simulatorLaunchRetryMs = Number(
+  process.env.AURORA_IOS_SIMULATOR_LAUNCH_RETRY_MS ?? 5_000,
+)
 const cleanupTimeoutMs = 60_000
 const safariBundleId = 'com.apple.mobilesafari'
 const describeOnMac = process.platform === 'darwin' ? describe : describe.skip
@@ -169,16 +177,21 @@ afterEach(async () => {
 
 describeOnMac('iOS browser and packaged WKWebView WebRTC interoperability', () => {
   for (const surface of surfaces) {
-    it(surface.testName, () => runIosInterop(surface), testTimeoutMs)
+    it(
+      surface.testName,
+      () => runIosInterop(surface),
+      iosInteropTestTimeoutMs(surface),
+    )
   }
 })
 
 async function runIosInterop(surface: IosInteropSurface): Promise<void> {
+  const started = Date.now()
   const resources = await createInteropResources(surface)
   cleanup = resources.close
-  const started = Date.now()
   let mobileResult: MobileResult | undefined
   let screenshotEvidence: IosScreenshotEvidence | undefined
+  let phase = 'python-peer-readiness'
   try {
     const ready = await waitForJson<BrowserConfig>(
       resources.readyPath,
@@ -188,8 +201,10 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       resources.getPythonOutput,
     )
     resources.setReadyConfig(ready)
+    phase = 'simulator-launch'
     await resources.launchBrowser()
 
+    phase = 'wait-mobile-result'
     mobileResult = await resources.waitForMobileResult(
       resources.timeoutMs,
     )
@@ -198,6 +213,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
     }
 
     const browserResult = mobileResult.result
+    phase = 'protocol-validation'
     resources.assertNoSeededSecrets(browserResult)
     assertInteropBrowserResult(browserResult, {
       lane: interopLane,
@@ -206,6 +222,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
     })
     expect(mobileResult.consoleErrors ?? []).toEqual([])
 
+    phase = 'artifact-finalization'
     screenshotEvidence = await resources.captureSimulatorEvidence()
     await writeJson(resources.browserReportPath, {
       lane: interopLane,
@@ -291,6 +308,7 @@ async function runIosInterop(surface: IosInteropSurface): Promise<void> {
       lane: interopLane,
       browserName: surface.browserName,
       status: 'failed',
+      phase,
       durationMs: Date.now() - started,
       error: redactedError,
       mobileResult,
@@ -830,16 +848,12 @@ async function createInteropResources(surface: IosInteropSurface) {
           ])
           return
         }
-        const launchOutput = capture('xcrun', [
-          'simctl',
-          'launch',
-          simulator.udid,
-          targetBundleId,
-        ])
-        launchedPid = parseSimulatorLaunchPid(
-          launchOutput,
+        const launch = await launchSimulatorAppWithRetry(
+          simulator,
           targetBundleId,
         )
+        launchedPid = launch.pid
+        surfaceEvidence.launchAttempts = launch.attempts
       },
       async waitForMobileResult(waitMs: number): Promise<MobileResult> {
         const deadline = Date.now() + waitMs
@@ -966,6 +980,14 @@ function parseInteropLane(value: string): IosInteropLane {
   throw new Error(
     `AURORA_IOS_WEBRTC_LANE must be direct, stun, or turn; received ${value}`,
   )
+}
+
+function iosInteropTestTimeoutMs(surface: IosInteropSurface): number {
+  const setupBudgetMs =
+    surface.id === 'tauri-wkwebview'
+      ? wkWebViewSetupBudgetMs
+      : 180_000
+  return Math.max(900_000, interopTimeoutMs + setupBudgetMs)
 }
 
 function parseSurfaceFilter(
@@ -1301,6 +1323,55 @@ function parseSimulatorLaunchPid(
     )
   }
   return pid
+}
+
+async function launchSimulatorAppWithRetry(
+  simulator: SimulatorDevice,
+  bundleId: string,
+): Promise<{ pid: number; attempts: number }> {
+  const deadline = Date.now() + simulatorLaunchTimeoutMs
+  let attempts = 0
+  let lastError = new Error(
+    `Could not launch ${bundleId} in iOS simulator ${simulator.udid}`,
+  )
+
+  while (Date.now() <= deadline) {
+    attempts += 1
+    const args = ['simctl', 'launch', simulator.udid, bundleId]
+    const result = spawnSync('xcrun', args, {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: 'utf8',
+    })
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+    if (!result.error && result.status === 0) {
+      return {
+        pid: parseSimulatorLaunchPid(output, bundleId),
+        attempts,
+      }
+    }
+
+    lastError = new Error(
+      `xcrun ${args.join(' ')} failed with ${result.status}: ${redactProcessOutput(
+        result.error ? `${result.error.message}\n${output}` : output,
+      )}`,
+    )
+    if (!/FBSOpenApplicationServiceErrorDomain[\s\S]*code=4/iu.test(output)) {
+      throw lastError
+    }
+
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) break
+    run('xcrun', ['simctl', 'bootstatus', simulator.udid, '-b'])
+    await sleep(
+      Math.min(
+        Math.max(1, simulatorLaunchRetryMs),
+        remainingMs,
+      ),
+    )
+  }
+
+  throw lastError
 }
 
 function wkWebViewHarnessHtml(): string {

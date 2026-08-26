@@ -197,8 +197,17 @@ jobs:
       - name: Install, launch, and screenshot the client app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
 
-      - name: Pair iOS MobileSafari and packaged WKWebView with the external Python peer over WebRTC
+      - name: Pair iOS MobileSafari with the external Python peer over WebRTC
         env:
+          AURORA_IOS_WEBRTC_SURFACES: mobile-safari
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer over direct WebRTC
+        env:
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
           CODE_SIGN_IDENTITY: ""
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"

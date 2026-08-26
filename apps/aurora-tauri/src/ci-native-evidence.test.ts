@@ -312,6 +312,14 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosInteropTest).toContain(
       'AURORA_IOS_MOBILE_WEBRTC_TIMEOUT_MS ?? 600_000',
     )
+    expect(iosInteropTest).toContain(
+      'AURORA_IOS_WKWEBVIEW_SETUP_BUDGET_MS ?? 900_000',
+    )
+    expect(iosInteropTest).toContain('iosInteropTestTimeoutMs(surface)')
+    expect(iosInteropTest).toContain('launchSimulatorAppWithRetry')
+    expect(iosInteropTest).toContain(
+      'AURORA_IOS_SIMULATOR_LAUNCH_TIMEOUT_MS ?? 60_000',
+    )
     expect(iosInteropTest).toContain('const cleanupTimeoutMs = 60_000')
     expect(iosInteropTest).toContain('}, cleanupTimeoutMs)')
     expect(iosInteropTest).toContain('server.closeAllConnections()')
@@ -528,6 +536,18 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosBaselineWorkflow).toContain('brew install mosquitto')
     expect(iosBaselineWorkflow).toContain(
       'pnpm --filter @aurora/tauri-ui ios:webrtc:interop',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'Pair iOS MobileSafari with the external Python peer over WebRTC',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'Pair packaged WKWebView with the external Python peer over direct WebRTC',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'AURORA_IOS_WEBRTC_SURFACES: mobile-safari',
+    )
+    expect(iosBaselineWorkflow).toContain(
+      'AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview',
     )
     expect(iosBaselineWorkflow).toContain(
       'apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/',
