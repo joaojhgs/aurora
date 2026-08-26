@@ -2885,8 +2885,23 @@ describe('Aurora production shell', () => {
         status: 'authorized',
       },
     )
-    expect(connectedFailure).toBe(failed)
-    expect(connectedFailure.error).toBe('Could not connect to this Aurora device. Try again.')
+    expect(connectedFailure).toMatchObject({
+      loadState: 'error',
+      connectionState: 'connected',
+      capabilityFreshness: 'stale',
+      nodeName: 'Aurora host',
+      transportKind: 'mesh',
+      evidenceSource: 'Last saved device state',
+      error: 'Could not connect to this Aurora device. Try again.',
+    })
+    expect(connectedFailure.routes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        state: 'stale',
+        routeable: false,
+        disabled: true,
+        blockers: expect.arrayContaining(['thin_peer_capability_refresh_failed']),
+      }),
+    ]))
   })
 
   it('keeps pending pairing requests out of the scopes approval path', async () => {

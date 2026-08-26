@@ -33,6 +33,8 @@ import { safeErrorCopy } from './product-copy'
 import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
+export type ShellConnectionState = 'unknown' | 'connected' | 'offline'
+export type ShellCapabilityFreshness = 'pending' | 'fresh' | 'stale'
 
 export interface RouteAvailability {
   item: AuroraNavItemSnapshot
@@ -74,6 +76,8 @@ export interface RouteProviderCandidate {
 
 export interface AuroraShellSnapshot {
   loadState: ShellLoadState
+  connectionState: ShellConnectionState
+  capabilityFreshness: ShellCapabilityFreshness
   nodeName: string
   localPeerId: string | null
   /** Aurora version reported by the connected server, when it provides one. */
@@ -115,6 +119,8 @@ export interface AssistantVoiceRoutes {
 
 export const loadingShellSnapshot: AuroraShellSnapshot = {
   loadState: 'loading',
+  connectionState: 'unknown',
+  capabilityFreshness: 'pending',
   nodeName: 'Loading Aurora',
   localPeerId: null,
   serverVersion: null,
@@ -176,6 +182,8 @@ export function snapshotFromGraph(
   const assistantVoiceRoutes = assistantVoiceRoutesFromGraph(graph, native)
   return {
     loadState: 'ready',
+    connectionState: 'connected',
+    capabilityFreshness: 'fresh',
     nodeName: graph.localNodeName || 'This device',
     localPeerId: graph.localPeerId,
     serverVersion: graph.serverVersion ?? null,
@@ -247,6 +255,7 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
   return {
     ...loadingShellSnapshot,
     loadState: 'error',
+    capabilityFreshness: 'stale',
     nodeName: 'Aurora unavailable',
     transportKind,
     evidenceSource: 'Aurora service error',
@@ -271,7 +280,6 @@ export function retainThinShellSnapshot(
   peer: BrowserWebRtcSnapshot | null | undefined,
 ): AuroraShellSnapshot {
   if (next.loadState !== 'error' || !isBrowserWebRtcConfigured(peer)) return next
-  if (isBrowserWebRtcConnected(peer)) return next
 
   const hasLastKnownGraph =
     current.routes.length > 0
@@ -281,21 +289,29 @@ export function retainThinShellSnapshot(
     )
   const base = hasLastKnownGraph ? current : next
   const peerLabel = safePeerDisplayName(peer)
+  const peerConnected = isBrowserWebRtcConnected(peer)
   const retainRoute = (route: RouteAvailability): RouteAvailability => {
     if (route.item.id === 'settings') return route
     return {
     ...route,
     state: 'stale',
-    explanation: hasLastKnownGraph
-      ? `Saved feature choices remain visible while ${peerLabel} is offline.`
-      : `${peerLabel} is offline. Choices will appear when an approved Aurora device reconnects.`,
-    blockers: sortedUnique([...route.blockers, 'thin_peer_offline']),
+    explanation: peerConnected
+      ? `Saved feature choices remain visible while ${peerLabel} refreshes.`
+      : hasLastKnownGraph
+        ? `Saved feature choices remain visible while ${peerLabel} is offline.`
+        : `${peerLabel} is offline. Choices will appear when an approved Aurora device reconnects.`,
+    blockers: sortedUnique([
+      ...route.blockers,
+      peerConnected ? 'thin_peer_capability_refresh_failed' : 'thin_peer_offline',
+    ]),
     candidateProviders: route.candidateProviders.map((candidate) => ({
       ...candidate,
       state: 'stale' as const,
       selectable: false,
       label: safeDisplayCopy(candidate.label, 'Connected Aurora device'),
-      reason: `Saved choice; ${peerLabel} is offline.`,
+      reason: peerConnected
+        ? `Saved choice; ${peerLabel} is refreshing.`
+        : `Saved choice; ${peerLabel} is offline.`,
       requiredAction: candidate.requiredAction ? safeRouteReason(candidate.requiredAction) : null,
     })),
     routeable: false,
@@ -317,11 +333,15 @@ export function retainThinShellSnapshot(
   return {
     ...base,
     loadState: 'error',
+    connectionState: peerConnected ? 'connected' : 'offline',
+    capabilityFreshness: 'stale',
     nodeName: peerLabel,
     transportKind: 'mesh',
     evidenceSource: hasLastKnownGraph
       ? 'Last saved device state'
-      : 'Saved device connection',
+      : peerConnected
+        ? 'Active device connection'
+        : 'Saved device connection',
     secretsRedacted: true,
     routeCount: routes.length,
     availableCount: 0,
@@ -329,7 +349,9 @@ export function retainThinShellSnapshot(
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,
-    error: null,
+    // Keep the sanitized capability failure visible while treating the
+    // authenticated peer session as a separate, still-connected signal.
+    error: peerConnected ? next.error : null,
   }
 }
 

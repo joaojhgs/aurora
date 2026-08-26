@@ -669,7 +669,11 @@ function ActivityRail({
   localNodeAvailable?: boolean | undefined;
 }) {
   const events = shellActivityEvents(snapshot, runtimeMode, nodeMode, localNodeAvailable);
-  const shellAlertCopy = snapshot.error ? productStatusCopy("connection-failed").title : null;
+  const shellAlertCopy = snapshot.error
+    ? shellCapabilitiesNeedAttention(snapshot)
+      ? "Some Aurora features could not be refreshed. They will update automatically."
+      : productStatusCopy("connection-failed").title
+    : null;
   return (
     <aside className="flex h-full flex-col" aria-label="Aurora activity">
       <header className="flex items-center justify-between border-b border-border px-3.5 py-3">
@@ -707,6 +711,7 @@ function activityRailBadgeLabel(
   localNodeAvailable?: boolean,
 ): string {
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "Attention";
+  if (shellCapabilitiesNeedAttention(snapshot)) return "Attention";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "Offline";
   if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "Live";
   if (snapshot.loadState !== "ready") return "Syncing";
@@ -720,7 +725,8 @@ function shellActivityEvents(
   localNodeAvailable?: boolean,
 ) {
   const healthy = !shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)
-    && !localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable);
+    && !localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)
+    && !shellCapabilitiesNeedAttention(snapshot);
   const surface = shellSurfaceProfile(snapshot, runtimeMode, nodeMode);
   const nodeLabel = shellNodeLabel(snapshot);
   return [
@@ -789,6 +795,7 @@ function shellHealthLabel(
   localNodeAvailable?: boolean,
 ): string {
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "Degraded";
+  if (shellCapabilitiesNeedAttention(snapshot)) return "Degraded";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "Offline";
   if (snapshot.loadState === "loading") return "Connecting";
   return "Healthy";
@@ -823,6 +830,7 @@ function shellRuntimeStateLabel(
   localNodeAvailable?: boolean,
 ): string {
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "attention";
+  if (shellCapabilitiesNeedAttention(snapshot)) return "attention";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "offline";
   if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "available";
   if (snapshot.loadState === "loading") return "syncing";
@@ -845,6 +853,7 @@ function shellRuntimeStateToneClass(
   localNodeAvailable?: boolean,
 ): string {
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "text-warning";
+  if (shellCapabilitiesNeedAttention(snapshot)) return "text-warning";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "text-destructive";
   return "text-success";
 }
@@ -879,7 +888,13 @@ function shellRuntimeStateIsOffline(
   nodeMode?: AuroraNodeMode,
 ): boolean {
   return snapshot.loadState === "error"
+    && snapshot.connectionState !== "connected"
     && !isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode);
+}
+
+function shellCapabilitiesNeedAttention(snapshot: AuroraShellSnapshot): boolean {
+  return snapshot.connectionState === "connected"
+    && snapshot.capabilityFreshness === "stale";
 }
 
 function localNodeNeedsAttention(
@@ -902,6 +917,11 @@ function productSurfaceLabel(
   if (profile.usesLocalSidecar) return "Aurora is running on this computer";
   if (localNodeAvailable === false && profile.ownsLocalNodeState) return "Device setup needs attention";
   if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "This device is available";
+  if (shellCapabilitiesNeedAttention(snapshot)) {
+    return profile.ownsLocalNodeState
+      ? "This device is available"
+      : `Connected to ${shellNodeLabel(snapshot)}`;
+  }
   if (snapshot.loadState === "error") return `${shellNodeLabel(snapshot)} is offline`;
   if (profile.ownsLocalNodeState) return "This device is available";
   if (nodeMode === "remote-console") return `Connected to ${shellNodeLabel(snapshot)}`;
