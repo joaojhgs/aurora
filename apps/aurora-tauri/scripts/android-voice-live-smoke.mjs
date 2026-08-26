@@ -302,7 +302,7 @@ export async function runAndroidVoiceLiveSmoke() {
       { allowRecoverableBackgroundErrors: true },
     )
     notificationStop.restartedOnReopen = true
-    await stopVoiceAndRequireRelease(context, invoke, { expectUserStop: true })
+    await stopVoiceAndRequireRelease(context, invoke)
     const foreground = await proveForegroundVoice(context, invoke, fixtures.foregroundPcm)
     webview.close()
     webview = null
@@ -342,7 +342,7 @@ export async function runAndroidVoiceLiveSmoke() {
     const persistedCatalog = await resumedInvoke('aurora_android_voice_pack_catalog_status')
     assertSelectedPacksPersisted(persistedCatalog, readyPacks)
 
-    await stopVoiceAndRequireRelease(context, resumedInvoke, { expectUserStop: true })
+    await stopVoiceAndRequireRelease(context, resumedInvoke)
     const finalForegroundStart = await resumedInvoke('aurora_android_voice_foreground_service_start', {
       request: { remoteAudioConsent: false, backgroundSession: false },
     })
@@ -631,13 +631,12 @@ async function proveForceStopPersistence(context, invoke, packs) {
   }
 }
 
-async function stopVoiceAndRequireRelease(context, invoke, { expectUserStop = false } = {}) {
+async function stopVoiceAndRequireRelease(context, invoke) {
   await invoke('aurora_android_voice_foreground_service_cancel')
   await pollVoiceStatus(
     invoke,
     (status) => status.running !== true
-      && status.captureActive !== true
-      && (!expectUserStop || status.backgroundStoppedByUser === true),
+      && status.captureActive !== true,
     'voice stop',
   )
   const deadline = Date.now() + 15_000

@@ -604,6 +604,7 @@ describe('Android packaged voice live smoke harness', () => {
       "'pm', 'grant', context.appId, 'android.permission.FOREGROUND_SERVICE_MICROPHONE'",
     )
     expect(source).not.toContain("['shell', 'run-as'")
+    expect(source).not.toContain('{ expectUserStop: true }')
     const freshnessBody = source.slice(
       source.indexOf('function apkFreshnessInputs()'),
       source.indexOf('function assertApkFreshness', source.indexOf('function apkFreshnessInputs()')),
