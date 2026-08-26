@@ -488,7 +488,10 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
   if (finish?.finished !== true) throw new Error(`Foreground voice finish was rejected: ${JSON.stringify(finish)}`)
   const completed = await pollVoiceStatus(
     invoke,
-    (status) => focusedTranscriptionCompleted(before, status),
+    // Native session counters restart for each focused capture. Compare the
+    // terminal state with this session's active zero-sample baseline, not the
+    // stopped background session that preceded it.
+    (status) => focusedTranscriptionCompleted(active, status),
     'foreground local transcription turn',
   )
   const settledAt = Date.now()

@@ -685,6 +685,31 @@ describe('Android packaged voice live smoke harness', () => {
     })).toBe(false)
   })
 
+  it('compares focused completion with the current session after native counters reset', async () => {
+    const module = await liveSmokeModule()
+    const stoppedPreviousSession = {
+      acceptedSamples: 96_000,
+      completedTurns: 4,
+      failedTurns: 0,
+    }
+    const activeFocusedSession = {
+      acceptedSamples: 0,
+      completedTurns: 0,
+      failedTurns: 0,
+    }
+    const completedFocusedSession = {
+      running: false,
+      captureActive: false,
+      acceptedSamples: 64_010,
+      completedTurns: 1,
+      failedTurns: 0,
+      captureError: null,
+    }
+
+    expect(module.focusedTranscriptionCompleted(stoppedPreviousSession, completedFocusedSession)).toBe(false)
+    expect(module.focusedTranscriptionCompleted(activeFocusedSession, completedFocusedSession)).toBe(true)
+  })
+
   it('checks automatic background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
     const source = readFileSync(scriptPath, 'utf8')
     for (const invariant of [
@@ -695,7 +720,7 @@ describe('Android packaged voice live smoke harness', () => {
       "['shell', 'am', 'crash', '--user', '0', context.appId]",
       "['shell', 'am', 'force-stop', context.appId]",
       "'aurora_android_voice_live_test_inject_pcm'",
-      'focusedTranscriptionCompleted(before, status)',
+      'focusedTranscriptionCompleted(active, status)',
       'request: { takeFocusedResult: true }',
       "acceptRearmed: true",
       'bestEffortStopVoice(context, webview)',
@@ -721,7 +746,7 @@ describe('Android packaged voice live smoke harness', () => {
       source.indexOf('async function proveStickyRestart'),
     )
     expect(foregroundBody).toContain('status.backendAudioEvidenceRequired === false')
-    expect(foregroundBody).toContain('focusedTranscriptionCompleted(before, status)')
+    expect(foregroundBody).toContain('focusedTranscriptionCompleted(active, status)')
     expect(foregroundBody).toContain("localTurnOutcome: 'transcribed'")
     expect(foregroundBody).toContain('transcriptionAfterFinish: settledAt - injectionCompletedAt')
     expect(foregroundBody).not.toContain('status.microphoneSignalDetected === true')
