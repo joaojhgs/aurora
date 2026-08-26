@@ -720,7 +720,11 @@ export function backgroundVoiceAcceptsInjectedPcm(status) {
     && status?.backgroundSessionActive === true
     && status?.captureActive === true
     && status?.runtimeActive === true
-    && (status?.runtimePhase === 'starting' || status?.runtimePhase === 'listening')
+    && (
+      status?.runtimePhase === 'starting'
+      || status?.runtimePhase === 'waiting-for-wake'
+      || status?.runtimePhase === 'listening'
+    )
     && !status?.captureError
 }
 

@@ -318,6 +318,7 @@ describe('Android packaged voice live smoke harness', () => {
 
     expect(module.backgroundVoiceAcceptsInjectedPcm({ ...active, runtimePhase: 'idle' })).toBe(false)
     expect(module.backgroundVoiceAcceptsInjectedPcm({ ...active, runtimePhase: 'starting' })).toBe(true)
+    expect(module.backgroundVoiceAcceptsInjectedPcm({ ...active, runtimePhase: 'waiting-for-wake' })).toBe(true)
     expect(module.backgroundVoiceAcceptsInjectedPcm({ ...active, runtimePhase: 'listening' })).toBe(true)
     expect(module.backgroundVoiceAcceptsInjectedPcm({
       ...active,
