@@ -1397,6 +1397,88 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.roster()?.peers.map((entry) => entry.peerId)).toEqual(['peer-brazil'])
   })
 
+  it('restores an approved discovered mesh peer after the node reloads', async () => {
+    const connectPeer = vi.fn(async () => undefined)
+    const disconnectPeer = vi.fn(async () => undefined)
+    const disconnect = vi.fn(async () => undefined)
+    let rosterListener: ((snapshot: MeshPeerRosterSnapshot) => void) | undefined
+    const active = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-brazil',
+      connectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-26T20:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const roster: MeshPeerRosterSnapshot = {
+      primaryPeerId: 'peer-brazil',
+      peers: [{ peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: active }],
+      discovered: [{
+        peerId: 'peer-portugal',
+        stablePeerId: 'peer-portugal',
+        signalingPeerId: 'signal-portugal',
+        nodeName: 'Portugal node',
+        connected: false,
+        lastSeenAt: '2026-08-26T20:01:00.000Z',
+      }],
+      updatedAt: '2026-08-26T20:01:00.000Z',
+    }
+    const roomProfile = webRtcProfileFromInvite(inviteText())!
+    const peer = {
+      snapshot: () => active,
+      subscribe: (listener: (snapshot: PeerConnectionSnapshot) => void) => {
+        listener(active)
+        return () => undefined
+      },
+      roster: () => roster,
+      subscribeRoster: (listener: (snapshot: MeshPeerRosterSnapshot) => void) => {
+        rosterListener = listener
+        listener(roster)
+        return () => undefined
+      },
+      connectPeer,
+      disconnectPeer,
+      disconnect,
+    }
+    const get = vi.fn(async (peerId: string) => peerId === 'peer-portugal' ? ({ peerId } as never) : undefined)
+    const controller = new BrowserWebRtcPeerController(peer as never, 'webrtc-only', {
+      httpFallback: false,
+      credentialStore: {
+        loadConnectionProfile: () => roomProfile,
+        get,
+        close: async () => undefined,
+      } as never,
+      restoreKnownMeshPeers: true,
+    })
+
+    await vi.waitFor(() => expect(connectPeer).toHaveBeenCalledOnce())
+    expect(get).toHaveBeenCalledWith('peer-portugal')
+    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
+      expectedStablePeerId: 'peer-portugal',
+      expectedSignalingPeerId: 'signal-portugal',
+      nodeName: 'Portugal node',
+    }))
+
+    await controller.disconnectDevice('peer-portugal', 'user disconnected')
+    rosterListener?.(roster)
+    await Promise.resolve()
+    expect(disconnectPeer).toHaveBeenCalledWith('peer-portugal', 'user disconnected')
+    expect(connectPeer).toHaveBeenCalledOnce()
+
+    await controller.disconnect('runtime closed')
+    expect(disconnect).toHaveBeenCalledWith('runtime closed')
+  })
+
   it('surfaces a second peer pending code without changing the authorized primary session', () => {
     const active = {
       state: 'authorized',

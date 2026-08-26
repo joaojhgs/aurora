@@ -405,6 +405,7 @@ export function createBrowserWebThinRuntime(config: BrowserThinRuntimeConfig = {
     credentialStore,
     config: securityContext,
     visibilityDocument: config.visibilityDocument,
+    restoreKnownMeshPeers: activeNodeRole === 'mesh-node',
   })
   const localProviderLifecycle = config.peerHost as (WebRtcPeerHost & LocalProviderLifecyclePort) | undefined
   const lifecycle = localToolProviderEnabled && localProviderLifecycle
@@ -500,6 +501,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   /** Devices this surface has already been set up with, filled in as they are seen. */
   private readonly knownDeviceIds = new Set<string>()
   private readonly deviceLookupsInFlight = new Set<string>()
+  private readonly deviceConnectionsInFlight = new Set<string>()
+  private readonly suppressedDeviceIds = new Set<string>()
   private readonly mode: AuroraThinConnectionMode
   private readonly httpFallback: boolean
   private readonly creationError: unknown
@@ -516,10 +519,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   private readonly pairingCacheTtlMs = 65_000
   private pendingPairingCache: { sessionId?: string; verificationCode?: string; cachedAt: number } | null = null
   private unsubscribe: (() => void) | undefined
+  private unsubscribeRoster: (() => void) | undefined
   private removeVisibilityListeners: (() => void) | undefined
   private readonly visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']
 
-  constructor(peer: RegistryCapablePeerController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument'] }) {
+  constructor(peer: RegistryCapablePeerController | null, mode: AuroraThinConnectionMode, options: { httpFallback: boolean; creationError?: unknown; disabledReason?: string; credentialStore?: BrowserThinRuntimeConfig['credentialStore']; config?: BrowserRuntimeSecurityContext; visibilityDocument?: BrowserThinRuntimeConfig['visibilityDocument']; restoreKnownMeshPeers?: boolean }) {
     this.peer = peer
     this.mode = mode
     this.httpFallback = options.httpFallback
@@ -533,6 +537,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       if (snapshot.state === 'authorized') this.authorizedRouteSeen = true
       this.emit()
     })
+    if (peer?.subscribeRoster && options.restoreKnownMeshPeers) {
+      this.unsubscribeRoster = peer.subscribeRoster((roster) => {
+        void this.restoreKnownMeshPeers(roster)
+      })
+    }
     this.installVisibilityPolicy(options.visibilityDocument)
   }
 
@@ -641,7 +650,10 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   }
 
   /** Add a device without disturbing the ones already set up. */
-  async connectDevice(profile: WebRtcPeerConnectionProfile): Promise<void> {
+  async connectDevice(
+    profile: WebRtcPeerConnectionProfile,
+    options: { reportFailure?: boolean } = {},
+  ): Promise<void> {
     if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
     const peer = this.peer
     if (!peer?.connectPeer) throw new AuroraError({ code: 'unavailable_service', message: CONNECTION_UNAVAILABLE_COPY })
@@ -651,15 +663,34 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     try {
       await peer.connectPeer(profile)
     } catch (error) {
-      this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
+      if (options.reportFailure !== false) {
+        this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
+      }
       this.emit()
       throw productSafeAuroraError(error)
     }
   }
 
   /** Set up one device already discovered in this Aurora's signaling room. */
-  async connectDiscoveredDevice(peerId: string): Promise<void> {
+  async connectDiscoveredDevice(
+    peerId: string,
+    options: { reportFailure?: boolean } = {},
+  ): Promise<void> {
     if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
+    this.suppressedDeviceIds.delete(peerId)
+    if (this.deviceConnectionsInFlight.has(peerId)) return
+    this.deviceConnectionsInFlight.add(peerId)
+    try {
+      await this.connectDiscoveredDeviceNow(peerId, options)
+    } finally {
+      this.deviceConnectionsInFlight.delete(peerId)
+    }
+  }
+
+  private async connectDiscoveredDeviceNow(
+    peerId: string,
+    options: { reportFailure?: boolean },
+  ): Promise<void> {
     const roster = this.peer?.roster?.()
     const device = roster?.discovered.find((candidate) => candidate.peerId === peerId)
     if (!device) {
@@ -685,13 +716,35 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       ...(device.stablePeerId ? { expectedStablePeerId: device.stablePeerId } : {}),
       ...(device.nodeName ? { nodeName: device.nodeName } : {}),
     }
-    await this.connectDevice(profile)
+    await this.connectDevice(profile, options)
+  }
+
+  /** Rejoin every approved device seen in the shared room after a node reload. */
+  private async restoreKnownMeshPeers(roster: MeshPeerRosterSnapshot): Promise<void> {
+    if (this.disconnected || !this.credentialStore?.get) return
+    await Promise.all(roster.discovered.map(async (device) => {
+      if (
+        device.connected
+        || this.suppressedDeviceIds.has(device.peerId)
+        || roster.peers.some((entry) => entry.peerId === device.peerId)
+      ) return
+      try {
+        const stored = await this.credentialStore?.get?.(device.peerId)
+        if (!stored || this.disconnected) return
+        this.knownDeviceIds.add(device.peerId)
+        await this.connectDiscoveredDevice(device.peerId, { reportFailure: false })
+      } catch {
+        // Discovery remains visible and the next room update retries without
+        // turning a best-effort background restore into a global UI error.
+      }
+    }))
   }
 
   /** Drop one device, leaving every other connection in place. */
   async disconnectDevice(peerId: string, reason = 'disconnect'): Promise<void> {
     const peer = this.peer
     if (!peer?.disconnectPeer) return
+    this.suppressedDeviceIds.add(peerId)
     await peer.disconnectPeer(peerId, reason)
     this.emit()
   }
@@ -791,6 +844,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     if (reason === 'runtime closed') {
       this.unsubscribe?.()
       this.unsubscribe = undefined
+      this.unsubscribeRoster?.()
+      this.unsubscribeRoster = undefined
       this.removeVisibilityListeners?.()
       this.removeVisibilityListeners = undefined
       this.pendingPairingCache = null
