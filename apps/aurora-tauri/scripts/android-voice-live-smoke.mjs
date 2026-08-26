@@ -24,6 +24,10 @@ const MAX_BACKGROUND_WAKE_ATTEMPTS = 2
 const LIVE_TEST_INGRESS_RENEW_INTERVAL_MS = 30_000
 export const ANDROID_BACKGROUND_WAKE_TEXT = 'Hey Aurora.'
 export const ANDROID_BACKGROUND_COMMAND_TEXT = 'Confirm Android background voice.'
+const DEFAULT_WAKE_PHRASES = {
+  en: { phraseId: 'hey-aurora.en', phrase: 'Hey Aurora', language: 'en' },
+  zh: { phraseId: 'ni-hao-aurora.zh', phrase: '你好 Aurora', language: 'zh' },
+}
 const VOICE_TEST_ARCHIVE = {
   url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-en_GB-cori-medium-int8.tar.bz2',
   sha256: '169ca8aff3adb271f009a4924c99928a811dbf2b52eaca2dbb460e8c34478c93',
@@ -139,6 +143,7 @@ export function selectAndroidVoicePacks(catalogStatus, {
 export function buildAndroidVoiceRuntimeProfile(packs, {
   language = 'en',
   profileId = 'aurora-waydroid-voice-live',
+  wakePhrase = undefined,
 } = {}) {
   for (const task of TASKS) {
     if (!packs?.[task]?.packId || !packs[task].engineRuntimeRevision) {
@@ -146,12 +151,12 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
     }
   }
   const wakeLanguage = wakeLanguageForPack(packs.kws, language)
-  const phraseId = wakeLanguage === 'zh' ? 'ni-hao-aurora.zh' : 'hey-aurora.en'
-  const phrase = wakeLanguage === 'zh' ? '你好 Aurora' : 'Hey Aurora'
+  const selectedWakePhrase = sanitizeWakePhraseSelection(wakePhrase, wakeLanguage)
+  const { phraseId, phrase } = selectedWakePhrase
   const kwsSelection = speechSelection(packs.kws)
   const wakeRevision = wakePhraseRevision({
     phrase,
-    language: wakeLanguage,
+    language: selectedWakePhrase.language,
     packId: kwsSelection.packId,
     packRevision: kwsSelection.packRevision,
   })
@@ -181,13 +186,36 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
           wakePhrase: {
             phraseId,
             phrase,
-            language: wakeLanguage,
+            language: selectedWakePhrase.language,
             revision: wakeRevision,
           },
         },
       },
     }],
   }
+}
+
+export function wakePhraseSelectionFromEnvironment(language = 'en') {
+  const phrase = process.env.AURORA_ANDROID_WAKE_PHRASE?.trim()
+  if (!phrase) return undefined
+  const phraseId = process.env.AURORA_ANDROID_WAKE_PHRASE_ID?.trim()
+    || phrase
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/giu, '-')
+      .replace(/^-+|-+$/gu, '')
+      .concat(`.${language}`)
+  return { phraseId, phrase, language }
+}
+
+function sanitizeWakePhraseSelection(selection, fallbackLanguage) {
+  if (!selection) return DEFAULT_WAKE_PHRASES[fallbackLanguage] ?? DEFAULT_WAKE_PHRASES.en
+  const phrase = String(selection.phrase ?? '').trim().replace(/\s+/gu, ' ')
+  const phraseId = String(selection.phraseId ?? '').trim()
+  const language = String(selection.language ?? fallbackLanguage).trim() || fallbackLanguage
+  if (!phrase || !phraseId) {
+    throw new Error(`Invalid Android live wake phrase selection: ${JSON.stringify(selection)}`)
+  }
+  return { phraseId, phrase, language }
 }
 
 export function wakePhraseRevision({ phrase, language, packId, packRevision }) {
@@ -248,6 +276,7 @@ export async function runAndroidVoiceLiveSmoke() {
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
     const profile = buildAndroidVoiceRuntimeProfile(readyPacks, {
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
+      wakePhrase: wakePhraseSelectionFromEnvironment(process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en'),
     })
     await armLiveTestPcmIngress(invoke)
     const profileResult = await invoke('aurora_thin_profile_set', { value: JSON.stringify(profile) })
@@ -255,7 +284,9 @@ export async function runAndroidVoiceLiveSmoke() {
       throw new Error(`Android local-only voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
 
-    fixtures = prepareVoiceFixtures()
+    fixtures = prepareVoiceFixtures({
+      wakeText: profile.profiles[0].localNode.localSpeechSelection.wakePhrase.phrase,
+    })
     const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
     const notificationStop = await proveNotificationStop(context, invoke)
     webview.close()
@@ -861,7 +892,7 @@ function explicitPackIdsFromEnvironment() {
   }
 }
 
-function prepareVoiceFixtures() {
+function prepareVoiceFixtures({ wakeText = ANDROID_BACKGROUND_WAKE_TEXT } = {}) {
   const directory = mkdtempSync(join(os.tmpdir(), 'aurora-android-voice-'))
   try {
     const archive = join(directory, 'voice.tar.bz2')
@@ -892,7 +923,7 @@ function prepareVoiceFixtures() {
     const backgroundWakePcm = renderVoiceFixture({
       directory,
       name: 'background-wake',
-      text: ANDROID_BACKGROUND_WAKE_TEXT,
+      text: wakeText.endsWith('.') ? wakeText : `${wakeText}.`,
       model,
       config,
       trailingSilenceSeconds: 1,

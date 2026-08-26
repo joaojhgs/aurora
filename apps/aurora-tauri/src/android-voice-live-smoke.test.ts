@@ -13,7 +13,10 @@ async function liveSmokeModule() {
     selectAndroidVoicePacks(status: unknown, options?: unknown): Record<string, CatalogEntry>
     buildAndroidVoiceRuntimeProfile(
       packs: Record<string, CatalogEntry>,
-      options?: { language?: string },
+      options?: {
+        language?: string
+        wakePhrase?: { phraseId: string; phrase: string; language: string }
+      },
     ): RuntimeDocument
     wakePhraseRevision(input: {
       phrase: string
@@ -528,6 +531,33 @@ describe('Android packaged voice live smoke harness', () => {
       packId: packs.kws.packId,
       packRevision: packs.kws.engineRuntimeRevision,
     }))
+  })
+
+  it('lets the live lane select a deterministic wake phrase for the configured KWS pack', async () => {
+    const module = await liveSmokeModule()
+    const packs = {
+      stt: entry('stt', 'stt:whisper:tiny', 'multi', 116_204_861),
+      tts: entry('tts', 'standard:piper:en_gb-cori-medium-int8', 'en-gb', 20_768_736),
+      vad: entry('vad', 'vad:silero:current-int8', 'und', 212_860),
+      kws: entry('kws', 'kws:zipformer:zh-en-2025', 'en zh', 32_885_699),
+    }
+
+    const profile = module.buildAndroidVoiceRuntimeProfile(packs, {
+      language: 'en',
+      wakePhrase: { phraseId: 'light-up.en', phrase: 'Light up', language: 'en' },
+    })
+
+    expect(profile.profiles[0].localNode.localSpeechSelection.wakePhrase).toMatchObject({
+      phraseId: 'light-up.en',
+      phrase: 'Light up',
+      language: 'en',
+      revision: module.wakePhraseRevision({
+        phrase: 'Light up',
+        language: 'en',
+        packId: packs.kws.packId,
+        packRevision: packs.kws.engineRuntimeRevision,
+      }),
+    })
   })
 
   it('checks automatic background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {

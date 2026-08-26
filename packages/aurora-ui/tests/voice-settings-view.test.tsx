@@ -1853,7 +1853,7 @@ describe('VoiceSettingsView', () => {
     await unmount()
   })
 
-  it('offers English and Chinese phrases for the bilingual wake-word pack', async () => {
+  it('offers a reliable English phrase for the bilingual wake-word pack', async () => {
     const onLocalSpeechSelectionConfirmed = vi.fn()
     const runtimeProfile = meshVoiceRuntimeProfile()
     runtimeProfile.localNode.localSpeechPackState = 'ready'
@@ -1888,7 +1888,7 @@ describe('VoiceSettingsView', () => {
       onLocalSpeechSelectionConfirmed,
     })
 
-    await chooseSearchableOption(container, 'Choose wake phrase', '你好 Aurora')
+    await chooseSearchableOption(container, 'Choose wake phrase', 'Light up')
 
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith(expect.objectContaining({
       kws: {
@@ -1896,9 +1896,9 @@ describe('VoiceSettingsView', () => {
         packRevision: 'kws-rev-2',
       },
       wakePhrase: expect.objectContaining({
-        phraseId: 'ni-hao-aurora.zh',
-        phrase: '你好 Aurora',
-        language: 'zh',
+        phraseId: 'light-up.en',
+        phrase: 'Light up',
+        language: 'en',
       }),
     }))
     assertNoForbiddenCopy(visibleText(container))

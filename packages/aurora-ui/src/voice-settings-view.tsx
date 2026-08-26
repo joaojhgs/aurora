@@ -2104,6 +2104,7 @@ function wakePhraseOptionsFor(runtimeProfile: AuroraRuntimeProfileV2 | null): Wa
   const locale = localeForWakePack(kws.packId)
   if (locale === 'bilingual') {
     return [
+      wakePhraseOption('light-up.en', 'Light up', 'en', 'English'),
       wakePhraseOption('hey-aurora.en', 'Hey Aurora', 'en', 'English'),
       wakePhraseOption('aurora.en', 'Aurora', 'en', 'English'),
       wakePhraseOption('ni-hao-aurora.zh', '你好 Aurora', 'zh', 'Chinese'),
@@ -2117,6 +2118,7 @@ function wakePhraseOptionsFor(runtimeProfile: AuroraRuntimeProfileV2 | null): Wa
   }
   if (locale === 'en') {
     return [
+      wakePhraseOption('light-up.en', 'Light up', 'en', 'English'),
       wakePhraseOption('hey-aurora.en', 'Hey Aurora', 'en', 'English'),
       wakePhraseOption('aurora.en', 'Aurora', 'en', 'English'),
     ]
