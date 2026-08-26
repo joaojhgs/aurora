@@ -13,5 +13,6 @@ commands.allow = [
   "aurora_native_webrtc_data_channel_close",
   "aurora_native_webrtc_set_data_channel_buffered_amount_low_threshold",
   "aurora_native_webrtc_get_stats",
+  "aurora_native_webrtc_measure_rtt",
   "aurora_native_webrtc_close"
 ]

@@ -17,6 +17,7 @@ const speechPackPath =
 const nativeDownloaderPath = 'rust/crates/aurora-voice-native/src/downloader.rs'
 const permissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-native-plugin.toml'
 const liveTestPermissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-android-voice-live-e2e.toml'
+const nativeWebRtcPermissionPath = 'apps/aurora-tauri/src-tauri/permissions/aurora-native-webrtc.toml'
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
 const tauriLibPath = 'apps/aurora-tauri/src-tauri/src/lib.rs'
 const meshSessionPath = 'apps/aurora-tauri/src-tauri/src/mesh_session.rs'
@@ -26,6 +27,14 @@ function repoText(path: string): string {
 }
 
 describe('Android native voice route policy', () => {
+  it('allows the shared native WebRTC capability to measure application RTT', () => {
+    const capability = repoText(capabilityPath)
+    const permission = repoText(nativeWebRtcPermissionPath)
+
+    expect(capability).toContain('"aurora-native-webrtc"')
+    expect(permission).toContain('"aurora_native_webrtc_measure_rtt"')
+  })
+
   it('releases focused voice when the activity backgrounds but keeps durable voice alive', () => {
     const plugin = repoText(kotlinPath)
     const foregroundService = repoText(voiceStorePath)
