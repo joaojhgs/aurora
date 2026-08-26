@@ -61,8 +61,8 @@ use url::Url;
 const ROUTE_REVISION: u64 = 1;
 const ANDROID_SURFACE: &str = "android";
 const ANDROID_RUNTIME_ID: &str = "android-native-voice";
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(75);
+const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(75);
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 type RuntimeCore = VoiceRuntime<
@@ -1658,6 +1658,15 @@ mod tests {
         assert!(is_loopback(&url));
         let remote = Url::parse("https://gateway.example.test").expect("url");
         assert!(!is_loopback(&remote));
+    }
+
+    #[test]
+    fn assistant_limits_outlive_the_python_inference_window() {
+        let limits = transport_limits(MicrophoneAudioPolicy::LoopbackOnly);
+
+        assert_eq!(limits.request_timeout, Duration::from_secs(75));
+        assert_eq!(limits.stream_idle_timeout, Duration::from_secs(75));
+        assert!(limits.request_timeout > Duration::from_secs(60));
     }
 
     #[test]
