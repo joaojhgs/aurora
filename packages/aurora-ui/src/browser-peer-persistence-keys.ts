@@ -3,6 +3,7 @@ export const BROWSER_PEER_VAULT_DATABASE_NAME = 'aurora-web-thin-v1'
 export const BROWSER_PEER_VAULT_OBJECT_STORE_NAME = 'vault'
 export const BROWSER_PEER_VAULT_KEY_RECORD = 'internal:vault-key'
 export const BROWSER_PEER_PROFILE_KEY = 'aurora.webThin.profile.v1'
+export const BROWSER_PEER_MESH_PROFILES_KEY = 'aurora.webThin.meshProfiles.v1'
 export const BROWSER_PEER_THIN_PROFILE_DOCUMENT_KEY = 'aurora.webThin.connectionProfiles.v1'
 export const BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY = 'aurora.runtimeProfiles.v2'
 export const BROWSER_PEER_STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
@@ -21,6 +22,7 @@ export function clearBrowserPeerProfileMetadata(options: {
   const metadataStorage = options.metadataStorage === undefined ? browserMetadataStorage() : options.metadataStorage
   for (const key of [
     BROWSER_PEER_PROFILE_KEY,
+    BROWSER_PEER_MESH_PROFILES_KEY,
     BROWSER_PEER_THIN_PROFILE_DOCUMENT_KEY,
     BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY,
     BROWSER_PEER_STABLE_PEER_KEY,

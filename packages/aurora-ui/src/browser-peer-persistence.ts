@@ -23,6 +23,7 @@ import {
   BROWSER_PEER_CREDENTIAL_PREFIX as CREDENTIAL_PREFIX,
   BROWSER_PEER_INBOUND_VERIFIER_KEY_PREFIX as INBOUND_VERIFIER_KEY_PREFIX,
   BROWSER_PEER_INBOUND_VERIFIER_PREFIX as INBOUND_VERIFIER_PREFIX,
+  BROWSER_PEER_MESH_PROFILES_KEY as MESH_PROFILES_KEY,
   BROWSER_PEER_PROFILE_KEY as PROFILE_KEY,
   BROWSER_PEER_ROOM_PREFIX as ROOM_PREFIX,
   BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY as RUNTIME_PROFILE_DOCUMENT_KEY,
@@ -82,6 +83,9 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   getRoomSecret(ref: string): Promise<Uint8Array | string | null>
   saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void
   loadConnectionProfile(): WebRtcPeerConnectionProfile | null
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[]
+  removePeerConnectionProfile(peerId: string): void
   saveThinProfileDocument(document: ThinProfileDocument): void
   loadThinProfileDocument(): ThinProfileDocument | null
   saveRuntimeProfileDocument(document: AuroraRuntimeProfileDocumentV2): void
@@ -153,6 +157,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.assertOpen()
     const normalized = normalizeProfile(profile)
     this.writeMetadata(PROFILE_KEY, JSON.stringify(normalized))
+    this.savePeerConnectionProfile(normalized)
   }
 
   loadConnectionProfile(): WebRtcPeerConnectionProfile | null {
@@ -165,6 +170,44 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       this.removeMetadata(PROFILE_KEY)
       return null
     }
+  }
+
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void {
+    this.assertOpen()
+    const normalized = normalizeProfile(profile)
+    const peerId = normalized.expectedStablePeerId
+    if (!peerId) return
+    const profiles = this.loadPeerConnectionProfiles()
+      .filter((saved) => saved.expectedStablePeerId !== peerId)
+    profiles.push(normalized)
+    this.writeMetadata(MESH_PROFILES_KEY, JSON.stringify(profiles))
+  }
+
+  loadPeerConnectionProfiles(): WebRtcPeerConnectionProfile[] {
+    this.assertOpen()
+    const encoded = this.readMetadata(MESH_PROFILES_KEY)
+    if (!encoded) return []
+    try {
+      const parsed = JSON.parse(encoded)
+      if (!Array.isArray(parsed) || parsed.length > 64) throw new Error('Invalid peer profile list')
+      const profiles = parsed.map((value) => normalizeProfile(value))
+      if (profiles.some((profile) => !profile.expectedStablePeerId)) {
+        throw new Error('Peer profile is missing its stable ID')
+      }
+      return profiles
+    } catch {
+      this.removeMetadata(MESH_PROFILES_KEY)
+      return []
+    }
+  }
+
+  removePeerConnectionProfile(peerId: string): void {
+    this.assertOpen()
+    assertStorageKey('peer ID', peerId, 256)
+    const profiles = this.loadPeerConnectionProfiles()
+      .filter((profile) => profile.expectedStablePeerId !== peerId)
+    if (profiles.length === 0) this.removeMetadata(MESH_PROFILES_KEY)
+    else this.writeMetadata(MESH_PROFILES_KEY, JSON.stringify(profiles))
   }
 
   saveThinProfileDocument(document: ThinProfileDocument): void {
@@ -294,6 +337,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     assertStorageKey('peer ID', peerId, 256)
     await this.memory.remove(peerId)
     await this.deleteSafely(`${CREDENTIAL_PREFIX}${peerId}`)
+    this.removePeerConnectionProfile(peerId)
   }
 
   async getOpaqueSecret(key: string): Promise<string | undefined> {
@@ -350,6 +394,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       }
     }
     this.removeMetadata(PROFILE_KEY)
+    this.removeMetadata(MESH_PROFILES_KEY)
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)

@@ -143,6 +143,12 @@ describe('BrowserPersistentPeerCredentialStore', () => {
 
     first.setRoomSecret(profile.roomSecretRef, 'never-store-this-room-secret-in-plaintext')
     first.saveConnectionProfile(profile)
+    first.savePeerConnectionProfile({
+      ...profile,
+      expectedStablePeerId: 'peer-portugal',
+      expectedSignalingPeerId: 'signal-portugal',
+      nodeName: 'Portugal node',
+    })
     const stablePeerId = first.getOrCreateLocalStablePeerId()
     await first.save('host-peer', credential)
     const firstProof = await first.prove('host-peer', challenge)
@@ -163,6 +169,10 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     })
     expect(reloaded.getOrCreateLocalStablePeerId()).toBe(stablePeerId)
     expect(reloaded.loadConnectionProfile()).toEqual(profile)
+    expect(reloaded.loadPeerConnectionProfiles().map((saved) => saved.expectedStablePeerId)).toEqual([
+      'host-peer',
+      'peer-portugal',
+    ])
     expect(new TextDecoder().decode(await reloaded.getRoomSecret(profile.roomSecretRef) ?? undefined))
       .toBe('never-store-this-room-secret-in-plaintext')
     expect(await reloaded.get('host-peer')).toMatchObject({
@@ -176,6 +186,8 @@ describe('BrowserPersistentPeerCredentialStore', () => {
       secretsPersisted: true,
       profilePersisted: true,
     })
+    await reloaded.remove('peer-portugal')
+    expect(reloaded.loadPeerConnectionProfiles().map((saved) => saved.expectedStablePeerId)).toEqual(['host-peer'])
     await reloaded.close()
   })
 

@@ -541,6 +541,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       this.unsubscribeRoster = peer.subscribeRoster((roster) => {
         void this.restoreKnownMeshPeers(roster)
       })
+      void this.restoreSavedMeshPeers()
     }
     this.installVisibilityPolicy(options.visibilityDocument)
   }
@@ -660,6 +661,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.connectionDiagnostic = undefined
     this.attemptedConnect = true
     this.disconnected = false
+    this.credentialStore?.savePeerConnectionProfile?.(profile)
     try {
       await peer.connectPeer(profile)
     } catch (error) {
@@ -736,6 +738,34 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       } catch {
         // Discovery remains visible and the next room update retries without
         // turning a best-effort background restore into a global UI error.
+      }
+    }))
+  }
+
+  /** Rejoin approved peers even when MQTT presence was not retained. */
+  private async restoreSavedMeshPeers(): Promise<void> {
+    if (this.disconnected || !this.credentialStore?.get) return
+    const profiles = this.credentialStore.loadPeerConnectionProfiles?.() ?? []
+    await Promise.all(profiles.map(async (profile) => {
+      const peerId = profile.expectedStablePeerId
+      if (!peerId || this.suppressedDeviceIds.has(peerId)) return
+      const roster = this.peer?.roster?.()
+      if (
+        roster?.peers.some((entry) => entry.peerId === peerId)
+        || this.peer?.snapshot().expectedStablePeerId === peerId
+        || this.deviceConnectionsInFlight.has(peerId)
+      ) return
+      this.deviceConnectionsInFlight.add(peerId)
+      try {
+        const stored = await this.credentialStore?.get?.(peerId)
+        if (!stored || this.disconnected || this.suppressedDeviceIds.has(peerId)) return
+        this.knownDeviceIds.add(peerId)
+        await this.connectDevice(profile, { reportFailure: false })
+      } catch {
+        // The saved row remains offline and can reconnect on a later room
+        // update without replacing another peer or showing a global failure.
+      } finally {
+        this.deviceConnectionsInFlight.delete(peerId)
       }
     }))
   }
