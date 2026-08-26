@@ -31,7 +31,6 @@ make unit
 make integration
 uv run pytest tests/unit/gateway tests/unit/services tests/unit/app/config -q
 uv run pytest tests/e2e -q
-uv run pytest tests/performance -v
 
 # TypeScript packages
 pnpm install --frozen-lockfile

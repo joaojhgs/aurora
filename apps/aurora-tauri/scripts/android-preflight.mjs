@@ -398,6 +398,7 @@ function androidNativeManifestIntegration() {
   const required = [
     'android.permission.INTERNET',
     'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.CHANGE_NETWORK_STATE',
     'android.permission.RECORD_AUDIO',
     'android.permission.MODIFY_AUDIO_SETTINGS',
     'android.permission.POST_NOTIFICATIONS',

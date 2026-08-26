@@ -301,7 +301,7 @@ jobs:
           script: |
             pnpm --filter @aurora/tauri-ui android:smoke
             AURORA_ANDROID_MOBILE_WEBRTC_LANE=turn pnpm --filter @aurora/tauri-ui android:webrtc:interop
-            env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:gigaspeech pnpm --filter @aurora/tauri-ui android:voice:live
+            env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 pnpm --filter @aurora/tauri-ui android:voice:live
 
       - name: Upload Android to Python WebRTC evidence
         if: always()
