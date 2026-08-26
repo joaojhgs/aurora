@@ -421,6 +421,7 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before)
   await armLiveTestPcmIngress(invoke)
+  const startedAt = Date.now()
   const start = await invoke('aurora_android_voice_foreground_service_start', {
     request: { remoteAudioConsent: false, backgroundSession: false },
   })
@@ -435,22 +436,30 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
       && status.backendAudioEvidenceRequired === false,
     'foreground native PCM gate',
   )
+  const captureReadyAt = Date.now()
   if (Number(active.acceptedSamples) !== 0) {
     throw new Error(`Foreground microphone audio entered native ingress before the fixture: ${JSON.stringify(active)}`)
   }
   await armLiveTestPcmIngress(invoke)
   await injectLiveTestPcm(invoke, foregroundPcm)
+  const injectionCompletedAt = Date.now()
   const finish = await invoke('aurora_android_voice_foreground_service_finish')
   if (finish?.finished !== true) throw new Error(`Foreground voice finish was rejected: ${JSON.stringify(finish)}`)
   const completed = await pollVoiceStatus(
     invoke,
-    (status) => status.running !== true
-      && status.captureActive !== true
-      && Number(status.acceptedSamples) > Number(before.acceptedSamples ?? 0)
-      && Number(status.failedTurns) > Number(before.failedTurns ?? 0)
-      && status.captureError === 'assistant_unavailable',
+    (status) => focusedTranscriptionCompleted(before, status),
     'foreground local transcription turn',
   )
+  const settledAt = Date.now()
+  const focusedResult = await invoke('aurora_android_voice_foreground_service_status', {
+    request: { takeFocusedResult: true },
+  })
+  const transcript = typeof focusedResult?.focusedTranscript === 'string'
+    ? focusedResult.focusedTranscript.trim()
+    : ''
+  if (!transcript) {
+    throw new Error(`Foreground native transcription completed without a transcript: ${JSON.stringify(focusedResult)}`)
+  }
 
   const lifecycleStart = await invoke('aurora_android_voice_foreground_service_start', {
     request: { remoteAudioConsent: false, backgroundSession: false },
@@ -490,10 +499,26 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
     captureBackend: active.captureBackend,
     completedTurns: completed.completedTurns,
     failedTurns: completed.failedTurns,
-    localTurnOutcome: completed.captureError,
+    transcript,
+    localTurnOutcome: 'transcribed',
+    timingMs: {
+      captureReady: captureReadyAt - startedAt,
+      fixtureIngress: injectionCompletedAt - captureReadyAt,
+      transcriptionAfterFinish: settledAt - injectionCompletedAt,
+      total: settledAt - startedAt,
+    },
     serviceVisible,
     notificationVisible,
   }
+}
+
+export function focusedTranscriptionCompleted(baseline, status) {
+  return status?.running !== true
+    && status?.captureActive !== true
+    && Number(status?.acceptedSamples ?? 0) > Number(baseline?.acceptedSamples ?? 0)
+    && Number(status?.completedTurns ?? 0) > Number(baseline?.completedTurns ?? 0)
+    && Number(status?.failedTurns ?? 0) === Number(baseline?.failedTurns ?? 0)
+    && !status?.captureError
 }
 
 async function proveBackgroundVoice(context, invoke, backgroundPcm) {

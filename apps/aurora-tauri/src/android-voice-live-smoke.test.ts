@@ -35,6 +35,10 @@ async function liveSmokeModule() {
       baseline: Record<string, unknown>,
       acceptedFrames: number,
     ): boolean
+    focusedTranscriptionCompleted(
+      baseline: Record<string, unknown>,
+      status: Record<string, unknown>,
+    ): boolean
     classifyBackgroundWakeAttempt(baseline: Record<string, unknown>, status: Record<string, unknown>):
       'completed' | 'rearmed' | 'failed' | 'pending'
     wavToPcm16Mono(wav: Buffer, targetSampleRateHz?: number): Buffer
@@ -561,6 +565,32 @@ describe('Android packaged voice live smoke harness', () => {
     })
   })
 
+  it('accepts a settled focused native transcript without requiring an assistant route', async () => {
+    const module = await liveSmokeModule()
+    const baseline = {
+      acceptedSamples: 0,
+      completedTurns: 4,
+      failedTurns: 2,
+    }
+
+    expect(module.focusedTranscriptionCompleted(baseline, {
+      running: false,
+      captureActive: false,
+      acceptedSamples: 60_852,
+      completedTurns: 5,
+      failedTurns: 2,
+      captureError: null,
+    })).toBe(true)
+    expect(module.focusedTranscriptionCompleted(baseline, {
+      running: false,
+      captureActive: false,
+      acceptedSamples: 60_852,
+      completedTurns: 4,
+      failedTurns: 3,
+      captureError: 'assistant_unavailable',
+    })).toBe(false)
+  })
+
   it('checks automatic background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
     const source = readFileSync(scriptPath, 'utf8')
     for (const invariant of [
@@ -571,7 +601,8 @@ describe('Android packaged voice live smoke harness', () => {
       "['shell', 'am', 'crash', '--user', '0', context.appId]",
       "['shell', 'am', 'force-stop', context.appId]",
       "'aurora_android_voice_live_test_inject_pcm'",
-      "status.captureError === 'assistant_unavailable'",
+      'focusedTranscriptionCompleted(before, status)',
+      'request: { takeFocusedResult: true }',
       "acceptRearmed: true",
       'bestEffortStopVoice(context, webview)',
       'wakeLockIsHeld(context)',
@@ -596,7 +627,9 @@ describe('Android packaged voice live smoke harness', () => {
       source.indexOf('async function proveStickyRestart'),
     )
     expect(foregroundBody).toContain('status.backendAudioEvidenceRequired === false')
-    expect(foregroundBody).toContain('Number(status.acceptedSamples) > Number(before.acceptedSamples ?? 0)')
+    expect(foregroundBody).toContain('focusedTranscriptionCompleted(before, status)')
+    expect(foregroundBody).toContain("localTurnOutcome: 'transcribed'")
+    expect(foregroundBody).toContain('transcriptionAfterFinish: settledAt - injectionCompletedAt')
     expect(foregroundBody).not.toContain('status.microphoneSignalDetected === true')
     expect(backgroundBody).toContain('Number(completed.acceptedSamples) <= Number(active.acceptedSamples ?? 0)')
     expect(backgroundBody).toContain("completed.liveOutcome !== 'rearmed'")
