@@ -2279,6 +2279,7 @@ interface MultiPeerHarness {
   runtime: BrowserWebRtcRuntime
   registry: RuntimePeerRegistry
   store: MemoryPeerCredentialStore
+  nodeSignalingId: string
   signalings: RuntimeFakeSignaling[]
   connections: RuntimeFakePeerConnection[]
 }
@@ -2333,20 +2334,27 @@ function makeMultiPeerHarness(
     ...(harnessOptions.visibilityDocument !== undefined ? { visibilityDocument: harnessOptions.visibilityDocument } : {}),
     windowLocation: secureLocation
   })
-  return { runtime, registry: runtime.peer as unknown as RuntimePeerRegistry, store, signalings, connections }
+  return {
+    runtime,
+    registry: runtime.peer as unknown as RuntimePeerRegistry,
+    store,
+    nodeSignalingId: localSignalingIds[0] ?? 'a-node',
+    signalings,
+    connections,
+  }
 }
 
 async function saveMeshPeerCredential(
   harness: MultiPeerHarness,
   peerId: string,
-  localSignalingId: string,
+  _localSignalingId: string,
   remoteSignalingId: string
 ): Promise<void> {
   await harness.store.save(peerId, {
     tokenId: `token-row-${peerId}`,
     claimantPeerId: 'local-stable',
     verifierPeerId: peerId,
-    claimantSignalingPeerId: localSignalingId,
+    claimantSignalingPeerId: harness.nodeSignalingId,
     verifierSignalingPeerId: remoteSignalingId,
     roomName: 'room-1',
     rawBearerToken: `saved-token-${peerId}`
@@ -2359,7 +2367,7 @@ async function openMeshPeerChannel(
   peerId: string,
   remoteSignalingId: string
 ): Promise<RuntimeFakeChannel> {
-  const signaling = harness.signalings[index] as RuntimeFakeSignaling
+  const signaling = harness.signalings.at(-1) as RuntimeFakeSignaling
   signaling.emit({ channel: 'presence', from: remoteSignalingId, stablePeerId: peerId, envelope: { type: 'presence', stable_peer_id: peerId } })
   await flushRuntime()
   signaling.emit({ channel: 'answer', from: remoteSignalingId, stablePeerId: peerId, envelope: { type: 'answer', sdp: 'answer-sdp' } })
@@ -2374,18 +2382,18 @@ async function authorizeMeshPeer(
   harness: MultiPeerHarness,
   index: number,
   peerId: string,
-  localSignalingId: string,
+  _localSignalingId: string,
   remoteSignalingId: string
 ): Promise<RuntimeFakeChannel> {
   const channel = await openMeshPeerChannel(harness, index, peerId, remoteSignalingId)
-  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: localSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
+  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: harness.nodeSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
   channel.receive(await encodeInbound({
     type: 'mesh_auth_challenge_v1',
     challenge: 'a'.repeat(64),
     channel_binding: binding,
     claimant_peer_id: 'local-stable',
     verifier_peer_id: peerId,
-    claimant_signaling_peer_id: localSignalingId,
+    claimant_signaling_peer_id: harness.nodeSignalingId,
     verifier_signaling_peer_id: remoteSignalingId,
     room_name: 'room-1'
   }))
@@ -2399,18 +2407,18 @@ async function driveMeshSasPrompt(
   harness: MultiPeerHarness,
   index: number,
   peerId: string,
-  localSignalingId: string,
+  _localSignalingId: string,
   remoteSignalingId: string,
   nodeName: string
 ): Promise<{ channel: RuntimeFakeChannel; remoteSas: Awaited<ReturnType<PairingSasHandshake['acceptReveal']>> }> {
   const channel = await openMeshPeerChannel(harness, index, peerId, remoteSignalingId)
   const localCommit = await decodeSent(channel, 0)
   expect(localCommit.type).toBe('pairing_v2_commit')
-  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: localSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
+  const binding = await deriveChannelBinding({ appId: 'aurora', room: 'room-1', offererSignalingId: harness.nodeSignalingId, answererSignalingId: remoteSignalingId, offerSdp: 'offer-sdp', answerSdp: 'answer-sdp' })
   const remote = new PairingSasHandshake({
     channelBindingSha256: binding,
     localIdentity: pairingIdentity({ role: 'answerer', stablePeerId: peerId, signalingPeerId: remoteSignalingId, nodeName }),
-    expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: localSignalingId, nodeName: 'Thin Shell' })
+    expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: harness.nodeSignalingId, nodeName: 'Thin Shell' })
   })
   remote.acceptCommit(localCommit)
   channel.receive(await encodeInbound(await remote.commitMessage()))
@@ -2426,6 +2434,69 @@ async function driveMeshSasPrompt(
 describe('browser WebRTC runtime peer registry', {
   timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
 }, () => {
+  it('multiplexes every mesh peer behind one node signaling identity', async () => {
+    const harness = makeMultiPeerHarness(['a-node'], 'mesh')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+
+    expect(harness.signalings).toHaveLength(1)
+    const signaling = harness.signalings[0] as RuntimeFakeSignaling
+    signaling.emit({
+      channel: 'presence',
+      from: 'z-alpha',
+      stablePeerId: 'peer-alpha',
+      envelope: { type: 'presence', stable_peer_id: 'peer-alpha' },
+    })
+    signaling.emit({
+      channel: 'presence',
+      from: 'z-beta',
+      stablePeerId: 'peer-beta',
+      envelope: { type: 'presence', stable_peer_id: 'peer-beta' },
+    })
+    await flushRuntime()
+
+    expect(signaling.sent.filter((message) => message.channel === 'offer')).toEqual([
+      expect.objectContaining({ toPeer: 'z-alpha' }),
+      expect.objectContaining({ toPeer: 'z-beta' }),
+    ])
+    expect(harness.registry.roster().peers.map((entry) => [
+      entry.peerId,
+      entry.snapshot.state,
+    ])).toEqual([
+      ['peer-alpha', 'negotiating'],
+      ['peer-beta', 'negotiating'],
+    ])
+
+    await harness.registry.disconnectPeer('peer-alpha', 'alpha left')
+    expect(signaling.close).not.toHaveBeenCalled()
+    await harness.registry.disconnectPeer('peer-beta', 'beta left')
+    expect(signaling.close).toHaveBeenCalledTimes(1)
+
+    await harness.runtime.close()
+  })
+
+  it('replays retained room presence when a later mesh session joins the shared signaling hub', async () => {
+    const harness = makeMultiPeerHarness(['a-node'], 'mesh')
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
+    const signaling = harness.signalings[0] as RuntimeFakeSignaling
+
+    signaling.emit({
+      channel: 'presence',
+      from: 'z-beta',
+      stablePeerId: 'peer-beta',
+      envelope: { type: 'presence', stable_peer_id: 'peer-beta' },
+    })
+    await flushRuntime()
+    expect(signaling.sent.filter((message) => message.channel === 'offer')).toEqual([])
+
+    await harness.registry.connectPeer(meshPeerProfile('peer-beta', 'z-beta', 'Beta node'))
+
+    expect(signaling.sent.filter((message) => message.channel === 'offer')).toEqual([
+      expect.objectContaining({ toPeer: 'z-beta' }),
+    ])
+    await harness.runtime.close()
+  })
+
   it('clones only the active data-channel key for trusted native composition', async () => {
     const harness = makeMultiPeerHarness(['a-alpha'])
     await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
@@ -2566,7 +2637,7 @@ describe('browser WebRTC runtime peer registry', {
     // A second transport with no invited stable id announces itself as peer-alpha.
     await harness.registry.connectPeer(meshPeerProfile(undefined, 'z-ghost', 'Alpha node'))
     expect(harness.registry.roster().peers).toHaveLength(2)
-    const ghostSignaling = harness.signalings[1] as RuntimeFakeSignaling
+    const ghostSignaling = harness.signalings.at(-1) as RuntimeFakeSignaling
     ghostSignaling.emit({ channel: 'presence', from: 'z-ghost', stablePeerId: 'peer-alpha', envelope: { type: 'presence', stable_peer_id: 'peer-alpha' } })
     await flushRuntime()
 
@@ -2755,7 +2826,7 @@ describe('browser WebRTC runtime peer registry', {
     visibilityState = 'visible'
     visibilityListener?.()
     const resumeDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
-    while (harness.signalings.length < 3) {
+    while (harness.connections.length < 3) {
       if (Date.now() > resumeDeadline) throw new Error('iOS foreground did not resume the suspended peer')
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
@@ -2864,12 +2935,19 @@ describe('browser WebRTC runtime peer registry', {
     }
 
     await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
-    const returningSignaling = harness.signalings[1] as RuntimeFakeSignaling
+    const returningSignaling = harness.signalings.at(-1) as RuntimeFakeSignaling
     returningSignaling.emit({
       channel: 'presence',
       from: 'z-alpha',
-      stablePeerId: 'peer-other',
-      envelope: { type: 'presence', stable_peer_id: 'peer-other' }
+      stablePeerId: 'peer-alpha',
+      envelope: { type: 'presence', stable_peer_id: 'peer-alpha' }
+    })
+    await flushRuntime()
+    returningSignaling.emit({
+      channel: 'answer',
+      from: 'z-alpha',
+      stablePeerId: 'peer-alpha',
+      envelope: { type: 'answer', stable_peer_id: 'peer-alpha' }
     })
     const restoreDeadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
     while (!harness.registry.roster().peers[0]?.standby) {

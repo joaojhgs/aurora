@@ -25,6 +25,7 @@ import {
 import {
   MqttWebSocketSignalingClient,
   type MqttSealOpen,
+  type MqttSignalingMessage,
   type MqttSignalingOptions,
   type MqttSignalingPresence,
   type MqttSignalingRoom
@@ -68,6 +69,7 @@ import {
   type NativeDataChannelCodec,
   type MeshPeerPriorityUpdate,
   type MeshPeerRegistryController,
+  type MeshPeerSignalingHandle,
   type MeshPeerRosterSnapshot,
   type MeshPeerSessionEntry
 } from './peer-registry.js'
@@ -295,6 +297,9 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   // One entry per stable peer id: session, signaling port, bridge, pairing
   // state. The single-peer snapshot below is a derived view over this map.
   private readonly registry: MeshPeerSessionRegistry
+  /** Node mode multiplexes every peer through one room signaling identity. */
+  private readonly signalingHubs = new Map<string, RuntimeSignalingHub>()
+  private meshLocalSignalingId: string | undefined
   // Dispatches every mesh RPC on the peer id the caller named, so one transport
   // reaches the whole registry instead of a single `defaultPeerId`.
   private readonly bridgeRouter = new MeshPeerBridgeRouter({
@@ -471,7 +476,10 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     const rememberedStandby = profile.expectedStablePeerId === undefined
       ? undefined
       : this.registry.takeStandby(profile.expectedStablePeerId)
-    const localSignalingId = this.options.randomId?.() ?? randomBrowserId()
+    const multiplexSignaling = this.registry.connectionPolicy === 'mesh'
+    const localSignalingId = multiplexSignaling
+      ? (this.meshLocalSignalingId ??= this.options.randomId?.() ?? randomBrowserId())
+      : this.options.randomId?.() ?? randomBrowserId()
     const now = Date.now()
     const entry: MeshPeerSessionEntry = {
       key: profile.expectedStablePeerId ?? `pending:${localSignalingId}`,
@@ -523,11 +531,6 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       }
       if (profile.production !== undefined) signalingOptions.production = profile.production
       if (profile.allowInsecureLoopbackSignaling !== undefined) signalingOptions.allowInsecureLoopback = profile.allowInsecureLoopbackSignaling
-      if (profile.expectedStablePeerId !== undefined) signalingOptions.expectedStablePeerId = profile.expectedStablePeerId
-      if (profile.expectedSignalingPeerId !== undefined) signalingOptions.expectedSignalingPeerId = profile.expectedSignalingPeerId
-      signalingOptions.allowlist = entry.allowlist
-      const signaling = (this.options.signalingFactory ?? ((nextOptions) => new MqttWebSocketSignalingClient(nextOptions)))(signalingOptions)
-      signaling.onPresence?.((presence) => this.observeRoomPresence(presence))
       const signalingRoom: MqttSignalingRoom = {
         appId: profile.appId,
         room: profile.room,
@@ -536,7 +539,28 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       if (this.options.localStablePeerId !== undefined) signalingRoom.stablePeerId = this.options.localStablePeerId
       const nodeName = this.options.localNodeName ?? profile.nodeName
       if (nodeName !== undefined) signalingRoom.nodeName = nodeName
-      const signalingPort = new RuntimeSignalingPort(signaling, signalingRoom)
+      let signalingPort: RuntimeSignalingPort | MultiplexedRuntimeSignalingPort
+      if (multiplexSignaling) {
+        const hubKey = signalingHubKey(profile)
+        let hub = this.signalingHubs.get(hubKey)
+        if (hub === undefined) {
+          signalingOptions.allowlist = new MultiplexedRoomSignalingAllowlist()
+          const signaling = (this.options.signalingFactory ?? ((nextOptions) => new MqttWebSocketSignalingClient(nextOptions)))(signalingOptions)
+          signaling.onPresence?.((presence) => this.observeRoomPresence(presence))
+          hub = new RuntimeSignalingHub(signaling, signalingRoom, () => {
+            if (this.signalingHubs.get(hubKey) === hub) this.signalingHubs.delete(hubKey)
+          })
+          this.signalingHubs.set(hubKey, hub)
+        }
+        signalingPort = hub.createPort(entry.allowlist)
+      } else {
+        if (profile.expectedStablePeerId !== undefined) signalingOptions.expectedStablePeerId = profile.expectedStablePeerId
+        if (profile.expectedSignalingPeerId !== undefined) signalingOptions.expectedSignalingPeerId = profile.expectedSignalingPeerId
+        signalingOptions.allowlist = entry.allowlist
+        const signaling = (this.options.signalingFactory ?? ((nextOptions) => new MqttWebSocketSignalingClient(nextOptions)))(signalingOptions)
+        signaling.onPresence?.((presence) => this.observeRoomPresence(presence))
+        signalingPort = new RuntimeSignalingPort(signaling, signalingRoom)
+      }
       const auth = new RuntimePeerAuth({
         profile,
         credentialStore: this.credentialStore,
@@ -575,7 +599,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       if (this.options.random !== undefined) sessionOptions.random = this.options.random
       const session = new WebRtcPeerSession(sessionOptions)
       entry.session = session
-      entry.signaling = signaling
+      entry.signaling = signalingPort
       session.subscribe((snapshot) => this.handleSessionSnapshot(entry, snapshot))
       await session.start()
     } catch (error) {
@@ -988,10 +1012,185 @@ function zeroEntryKeyMaterial(entry: MeshPeerSessionEntry): void {
   entry.keyMaterial = null
 }
 
-class RuntimeSignalingPort implements PeerSessionSignalingPort {
+/** The room socket opens envelopes once; each session still applies its own allowlist. */
+class MultiplexedRoomSignalingAllowlist extends SignalingSessionAllowlist {
+  override admits(): boolean { return true }
+}
+
+interface RuntimeHubSubscription {
+  readonly allowlist: SignalingSessionAllowlist
+  readonly listener: (message: SignalingMessage) => void
+}
+
+class RuntimeSignalingHub {
+  private readonly subscriptions = new Set<RuntimeHubSubscription>()
+  private readonly retainedPresence = new Map<string, MqttSignalingMessage>()
+  private readonly unsubscribe: () => void
+  private connectPromise: Promise<void> | null = null
+  private connected = false
+  private closed = false
+  private referenceCount = 0
+
+  constructor(
+    private readonly signaling: MqttWebSocketSignalingClient,
+    private readonly room: MqttSignalingRoom,
+    private readonly onEmpty: () => void,
+  ) {
+    this.unsubscribe = signaling.onMessage((message) => this.handleMessage(message))
+  }
+
+  createPort(allowlist: SignalingSessionAllowlist): MultiplexedRuntimeSignalingPort {
+    return new MultiplexedRuntimeSignalingPort(this, allowlist)
+  }
+
+  snapshot() { return this.signaling.snapshot() }
+
+  subscribe(
+    allowlist: SignalingSessionAllowlist,
+    listener: (message: SignalingMessage) => void,
+  ): () => void {
+    const subscription = { allowlist, listener }
+    this.subscriptions.add(subscription)
+    return () => this.subscriptions.delete(subscription)
+  }
+
+  async acquire(allowlist: SignalingSessionAllowlist): Promise<void> {
+    if (this.closed) throw new Error('Cannot connect a closed room signaling hub')
+    const replayRetainedPresence = this.connected
+    this.referenceCount += 1
+    try {
+      if (this.connectPromise === null) {
+        this.connectPromise = this.signaling.connect(this.room).then(() => {
+          this.connected = true
+        })
+      }
+      await this.connectPromise
+      if (replayRetainedPresence) this.replayPresence(allowlist)
+    } catch (error) {
+      this.referenceCount -= 1
+      if (this.referenceCount === 0) {
+        this.closed = true
+        this.connected = false
+        this.connectPromise = null
+        this.unsubscribe()
+        this.retainedPresence.clear()
+        this.subscriptions.clear()
+        try {
+          await this.signaling.close('connect_failed')
+        } finally {
+          this.onEmpty()
+        }
+      }
+      throw error
+    }
+  }
+
+  async release(reason?: string): Promise<void> {
+    if (this.referenceCount === 0) return
+    this.referenceCount -= 1
+    if (this.referenceCount > 0) return
+    this.closed = true
+    this.connected = false
+    this.unsubscribe()
+    this.retainedPresence.clear()
+    this.subscriptions.clear()
+    try {
+      await this.signaling.close(reason)
+    } finally {
+      this.onEmpty()
+    }
+  }
+
+  async publish(channel: SignalingChannel, envelope: Record<string, unknown>, toPeer?: string): Promise<void> {
+    if (channel === 'presence') {
+      await this.signaling.announcePresence()
+      return
+    }
+    if (channel === 'broadcast') {
+      await this.signaling.send('broadcast', envelope as import('./signaling-mqtt.js').MqttSignalingEnvelope)
+      return
+    }
+    await this.signaling.send(
+      channel,
+      envelope as import('./signaling-mqtt.js').MqttSignalingEnvelope,
+      toPeer ?? String(envelope.to ?? ''),
+    )
+  }
+
+  private handleMessage(message: MqttSignalingMessage): void {
+    if (message.channel === 'presence') {
+      const key = message.stablePeerId ?? message.from
+      if (message.envelope.type === 'presence_departed') this.retainedPresence.delete(key)
+      else this.retainedPresence.set(key, message)
+    }
+    for (const subscription of [...this.subscriptions]) {
+      this.deliver(subscription, message)
+    }
+  }
+
+  private replayPresence(allowlist: SignalingSessionAllowlist): void {
+    for (const subscription of [...this.subscriptions]) {
+      if (subscription.allowlist !== allowlist) continue
+      for (const message of this.retainedPresence.values()) this.deliver(subscription, message)
+    }
+  }
+
+  private deliver(subscription: RuntimeHubSubscription, message: MqttSignalingMessage): void {
+    if (!subscription.allowlist.admits({
+      channel: message.channel,
+      from: message.from,
+      stablePeerId: message.stablePeerId,
+    })) return
+    subscription.listener({
+      channel: message.channel,
+      from: message.from,
+      stablePeerId: message.stablePeerId,
+      envelope: message.envelope,
+    })
+  }
+}
+
+class MultiplexedRuntimeSignalingPort implements PeerSessionSignalingPort, MeshPeerSignalingHandle {
+  private acquired = false
+
+  constructor(
+    private readonly hub: RuntimeSignalingHub,
+    private readonly allowlist: SignalingSessionAllowlist,
+  ) {}
+
+  snapshot() { return this.hub.snapshot() }
+
+  async connect(): Promise<void> {
+    if (this.acquired) return
+    this.acquired = true
+    try {
+      await this.hub.acquire(this.allowlist)
+    } catch (error) {
+      this.acquired = false
+      throw error
+    }
+  }
+
+  async close(reason?: string): Promise<void> {
+    if (!this.acquired) return
+    this.acquired = false
+    await this.hub.release(reason)
+  }
+
+  async publish(channel: SignalingChannel, envelope: Record<string, unknown>, toPeer?: string): Promise<void> {
+    await this.hub.publish(channel, envelope, toPeer)
+  }
+
+  subscribe(listener: (message: SignalingMessage) => void): () => void {
+    return this.hub.subscribe(this.allowlist, listener)
+  }
+}
+
+class RuntimeSignalingPort implements PeerSessionSignalingPort, MeshPeerSignalingHandle {
   constructor(private readonly signaling: MqttWebSocketSignalingClient, private readonly room: MqttSignalingRoom) {}
+  snapshot() { return this.signaling.snapshot() }
   async connect(): Promise<void> { await this.signaling.connect(this.room) }
-  async close(): Promise<void> { await this.signaling.close() }
+  async close(reason?: string): Promise<void> { await this.signaling.close(reason) }
   async publish(channel: SignalingChannel, envelope: Record<string, unknown>, toPeer?: string): Promise<void> {
     if (channel === 'presence') {
       await this.signaling.announcePresence()
@@ -1936,6 +2135,17 @@ function randomBrowserId(): string {
   globalThis.crypto?.getRandomValues(bytes)
   if (bytes.some((byte) => byte !== 0)) return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
   return `thin-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
+}
+
+function signalingHubKey(profile: WebRtcPeerConnectionProfile): string {
+  return JSON.stringify([
+    profile.appId,
+    profile.room,
+    profile.roomSecretRef,
+    [...profile.signalingBrokers],
+    profile.production ?? true,
+    profile.allowInsecureLoopbackSignaling ?? false,
+  ])
 }
 
 function boundedTokenId(): string {

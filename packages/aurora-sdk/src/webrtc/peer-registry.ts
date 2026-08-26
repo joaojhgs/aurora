@@ -20,7 +20,7 @@ import type { PairingSasResult } from './pairing.js'
 import type { WebRtcPeerSession } from './peer-session.js'
 import type { MeshPeerStandbyReason } from './protocol.js'
 import type { SignalingSessionAllowlist } from './signaling-allowlist.js'
-import type { MqttWebSocketSignalingClient } from './signaling-mqtt.js'
+import type { MqttSignalingClientSnapshot } from './signaling-mqtt.js'
 import type { PeerConnectionSnapshot, SelectedCandidatePairEvidence, WebRtcPeerConnectionProfile } from './types.js'
 
 /** Machine-readable reason for the one-stable-id-one-session refusal. */
@@ -110,7 +110,7 @@ export interface MeshPeerSessionEntry {
   peerId: string | undefined
   readonly profile: WebRtcPeerConnectionProfile
   session: WebRtcPeerSession | null
-  signaling: MqttWebSocketSignalingClient | null
+  signaling: MeshPeerSignalingHandle | null
   /** Which peer may drive this session. Presence widens; the session pins. */
   readonly allowlist: SignalingSessionAllowlist
   bridge: WebRtcMeshPeerBridge | null
@@ -121,6 +121,12 @@ export interface MeshPeerSessionEntry {
   budget: MeshPeerBudgetState
   /** Present while the connection is intentionally shed or suspended. */
   standby: MeshPeerStandbyState | null
+}
+
+/** Per-entry view of signaling; mesh entries may share one room connection. */
+export interface MeshPeerSignalingHandle {
+  snapshot(): MqttSignalingClientSnapshot
+  close(reason?: string): Promise<void>
 }
 
 export interface MeshPeerRosterEntry {

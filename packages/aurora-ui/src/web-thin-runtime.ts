@@ -718,8 +718,9 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     } = savedProfile
     const profile: WebRtcPeerConnectionProfile = {
       ...roomProfile,
-      expectedSignalingPeerId: device.signalingPeerId,
-      ...(device.stablePeerId ? { expectedStablePeerId: device.stablePeerId } : {}),
+      ...(device.stablePeerId
+        ? { expectedStablePeerId: device.stablePeerId }
+        : { expectedSignalingPeerId: device.signalingPeerId }),
       ...(device.nodeName ? { nodeName: device.nodeName } : {}),
     }
     await this.connectDevice(profile, options)

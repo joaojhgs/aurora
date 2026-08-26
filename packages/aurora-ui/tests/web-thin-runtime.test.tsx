@@ -1333,7 +1333,7 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('sets up a discovered mesh device from the saved room without replacing the active peer', async () => {
-    const connectPeer = vi.fn(async () => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
     const active = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
@@ -1391,14 +1391,14 @@ describe('browser WebRTC thin-shell runtime', () => {
       roomSecretRef: roomProfile.roomSecretRef,
       signalingBrokers: roomProfile.signalingBrokers,
       expectedStablePeerId: 'peer-portugal',
-      expectedSignalingPeerId: 'signal-portugal',
       nodeName: 'Portugal node',
     }))
+    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
     expect(controller.roster()?.peers.map((entry) => entry.peerId)).toEqual(['peer-brazil'])
   })
 
   it('sets up a discovered mesh device from the active native profile when browser metadata is empty', async () => {
-    const connectPeer = vi.fn(async () => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
     const active = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
@@ -1455,13 +1455,13 @@ describe('browser WebRTC thin-shell runtime', () => {
       room: activeProfile.room,
       roomSecretRef: activeProfile.roomSecretRef,
       expectedStablePeerId: 'peer-portugal',
-      expectedSignalingPeerId: 'signal-portugal',
       nodeName: 'Portugal node',
     }))
+    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
   })
 
   it('restores an approved discovered mesh peer after the node reloads', async () => {
-    const connectPeer = vi.fn(async () => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
     const disconnectPeer = vi.fn(async () => undefined)
     const disconnect = vi.fn(async () => undefined)
     let rosterListener: ((snapshot: MeshPeerRosterSnapshot) => void) | undefined
@@ -1528,9 +1528,9 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(get).toHaveBeenCalledWith('peer-portugal')
     expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
       expectedStablePeerId: 'peer-portugal',
-      expectedSignalingPeerId: 'signal-portugal',
       nodeName: 'Portugal node',
     }))
+    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
 
     await controller.disconnectDevice('peer-portugal', 'user disconnected')
     rosterListener?.(roster)
@@ -1543,7 +1543,7 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('restores a saved mesh peer when the signaling broker retained no presence', async () => {
-    const connectPeer = vi.fn(async () => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
     const active = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
