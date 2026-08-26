@@ -21,6 +21,15 @@ type AndroidHelpers = {
     command: string,
     args?: JsonObject,
   ) => Promise<unknown>
+  completeBackgroundWakeTurn: (
+    invoke: (command: string, args?: JsonObject) => Promise<unknown>,
+    pcm: Buffer,
+    initialStatus: AndroidVoiceStatus,
+  ) => Promise<AndroidVoiceStatus & { liveOutcome?: string }>
+  prepareVoiceFixtures: (options: { wakeText: string }) => {
+    backgroundPcm: Buffer
+    close: () => void
+  }
   resolveAndroidDeviceSerial: (devices: string, explicit?: string) => string
 }
 
@@ -78,6 +87,18 @@ type NativeMeshPeer = {
   peerId?: string
   answeredPings?: number
   lastRttMs?: number
+}
+
+type AndroidVoiceStatus = {
+  acceptedSamples?: number
+  backgroundSessionActive?: boolean
+  captureActive?: boolean
+  captureError?: string | null
+  completedTurns?: number
+  failedTurns?: number
+  running?: boolean
+  runtimeActive?: boolean
+  runtimePhase?: string
 }
 
 const baseUrl = process.env.AURORA_THREE_NODE_BASE_URL ?? ''
@@ -142,6 +163,7 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
   expect(inviteConfig.room_password).not.toBe('')
 
   const android = await connectAndroid(androidHelpers)
+  let voiceFixtures: ReturnType<AndroidHelpers['prepareVoiceFixtures']> | undefined
   try {
     const storedProfile = await androidHelpers.invokeTauri(
       android.webview.client,
@@ -153,14 +175,20 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       activeProfileId?: string
       profiles?: Array<{
         id?: string
-        localNode?: { nodeName?: string; stablePeerId?: string }
+        localNode?: {
+          nodeName?: string
+          stablePeerId?: string
+          localSpeechSelection?: { wakePhrase?: { phrase?: string } }
+        }
       }>
     } | null
     const activeProfile = profileDocument?.profiles?.find(
       (profile) => profile.id === profileDocument.activeProfileId,
     )
     const androidPeerId = activeProfile?.localNode?.stablePeerId ?? ''
+    const wakePhrase = activeProfile?.localNode?.localSpeechSelection?.wakePhrase?.phrase ?? ''
     expect(androidPeerId).not.toBe('')
+    expect(wakePhrase).not.toBe('')
 
     const androidCredential = await androidHelpers.invokeTauri(
       android.webview.client,
@@ -287,13 +315,108 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       },
       'Android Rust mesh binding',
     )
-    const rttMs = await androidHelpers.invokeTauri(
-      android.webview.client,
-      'aurora_native_webrtc_measure_rtt',
-      { request: { peerConnectionId: nativePeer.connectionId } },
-    ) as number
-    expect(Number.isFinite(rttMs)).toBe(true)
-    expect(rttMs).toBeGreaterThan(0)
+    const rttSamplesMs: number[] = []
+    for (let sample = 0; sample < 5; sample += 1) {
+      rttSamplesMs.push(await androidHelpers.invokeTauri(
+        android.webview.client,
+        'aurora_native_webrtc_measure_rtt',
+        { request: { peerConnectionId: nativePeer.connectionId } },
+      ) as number)
+    }
+    expect(rttSamplesMs.every((sample) => Number.isFinite(sample) && sample > 0)).toBe(true)
+    const sortedRttSamplesMs = [...rttSamplesMs].sort((left, right) => left - right)
+    const medianRttMs = sortedRttSamplesMs[Math.floor(sortedRttSamplesMs.length / 2)] ?? Infinity
+    expect(medianRttMs).toBeLessThan(100)
+
+    voiceFixtures = androidHelpers.prepareVoiceFixtures({ wakeText: wakePhrase })
+    const invokeAndroid = async (command: string, args?: JsonObject) => (
+      await androidHelpers.invokeTauri(android.webview.client, command, args)
+    )
+    execFileSync(android.adb, [
+      '-s', android.serial,
+      'shell', 'input', 'keyevent', 'HOME',
+    ], { stdio: 'ignore' })
+    await invokeAndroid('aurora_android_voice_foreground_service_cancel')
+    await waitFor(
+      async () => {
+        const status = await invokeAndroid(
+          'aurora_android_voice_foreground_service_status',
+        ) as AndroidVoiceStatus
+        return status.captureActive !== true
+          && status.backgroundSessionActive !== true
+          && status.runtimeActive !== true
+          ? status
+          : null
+      },
+      'previous Android background speech capture release',
+      30_000,
+      250,
+    )
+    const ingressArm = await invokeAndroid('aurora_android_voice_live_test_inject_pcm', {
+      request: { pcmBase64: '', armIngress: true },
+    }) as { accepted?: boolean }
+    expect(ingressArm.accepted).toBe(true)
+    const backgroundStart = await invokeAndroid(
+      'aurora_android_voice_foreground_service_start',
+      { request: { remoteAudioConsent: false, backgroundSession: true } },
+    ) as { started?: boolean }
+    expect(backgroundStart.started).toBe(true)
+    const voiceReady = await waitFor(
+      async () => {
+        const status = await invokeAndroid(
+          'aurora_android_voice_foreground_service_status',
+        ) as AndroidVoiceStatus
+        return backgroundVoiceReady(status) ? status : null
+      },
+      'Android background speech runtime',
+      120_000,
+    )
+    const databaseBefore = await invokeAndroid(
+      'aurora_local_data_inspect_identity',
+    ) as { databaseLocalNodeId?: string; recordCount?: number }
+    expect(databaseBefore.databaseLocalNodeId).toBe(androidPeerId)
+    const voiceStartedAt = Date.now()
+    const completedVoice = await androidHelpers.completeBackgroundWakeTurn(
+      invokeAndroid,
+      voiceFixtures.backgroundPcm,
+      voiceReady,
+    )
+    const voiceElapsedMs = Date.now() - voiceStartedAt
+    expect(completedVoice.liveOutcome).toBe('completed')
+    expect(voiceElapsedMs).toBeLessThan(75_000)
+    const databaseAfter = await waitFor(
+      async () => {
+        const identity = await invokeAndroid(
+          'aurora_local_data_inspect_identity',
+        ) as { databaseLocalNodeId?: string; recordCount?: number }
+        return Number(identity.recordCount ?? 0) > Number(databaseBefore.recordCount ?? 0)
+          ? identity
+          : null
+      },
+      'background voice chat persistence',
+      30_000,
+      500,
+    )
+    expect(databaseAfter.databaseLocalNodeId).toBe(androidPeerId)
+    const persistedRecordDelta = Number(databaseAfter.recordCount ?? 0)
+      - Number(databaseBefore.recordCount ?? 0)
+    // Reusing the latest active conversation adds the user and assistant
+    // messages; a new conversation adds one additional record.
+    expect(persistedRecordDelta).toBeGreaterThanOrEqual(2)
+    expect(androidServiceVisible(android)).toBe(true)
+    expect(androidWakeLockHeld(android)).toBe(true)
+
+    launchAndroid(android)
+    await waitFor(
+      async () => {
+        const status = await invokeAndroid(
+          'aurora_android_voice_foreground_service_status',
+        ) as AndroidVoiceStatus
+        return backgroundVoiceReady(status) ? status : null
+      },
+      'background speech re-arm after the completed peer turn',
+      90_000,
+    )
 
     await page.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
     await clickFirstRefresh(page)
@@ -320,12 +443,17 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       browserPeerId,
       pythonPeerId,
       authenticatedPeerCount: 2,
-      androidNativeRttMs: rttMs,
+      androidNativeMedianRttMs: medianRttMs,
+      androidNativeRttSamplesMs: rttSamplesMs,
       androidAnsweredPings: nativePeer.answeredPings ?? null,
       androidProjectedRttMs: nativePeer.lastRttMs ?? null,
+      backgroundVoiceElapsedMs: voiceElapsedMs,
+      backgroundVoicePersistedRecordDelta: persistedRecordDelta,
+      backgroundVoiceOutcome: completedVoice.liveOutcome,
       rostersMutuallyVisible: true,
     }))
   } finally {
+    voiceFixtures?.close()
     android.webview.close()
   }
 })
@@ -354,14 +482,53 @@ async function connectAndroid(androidHelpers: AndroidHelpers) {
   if (!resolvedActivity?.includes('/')) {
     throw new Error(`Android launcher activity could not be resolved for ${appId}.`)
   }
-  execFileSync(adb, [
-    '-s', serial,
-    'shell', 'am', 'start', '-W', '-n', resolvedActivity,
-  ], { stdio: 'ignore' })
-  return {
+  const android = {
+    adb,
+    appId,
+    resolvedActivity,
     serial,
+  }
+  launchAndroid(android)
+  return {
+    ...android,
     webview: await androidHelpers.connectInstalledWebview({ adb, serial, appId }),
   }
+}
+
+function launchAndroid(android: {
+  adb: string
+  resolvedActivity: string
+  serial: string
+}) {
+  execFileSync(android.adb, [
+    '-s', android.serial,
+    'shell', 'am', 'start', '-W', '-n', android.resolvedActivity,
+  ], { stdio: 'ignore' })
+}
+
+function backgroundVoiceReady(status: AndroidVoiceStatus) {
+  return status.running === true
+    && status.backgroundSessionActive === true
+    && status.captureActive === true
+    && status.runtimeActive === true
+    && ['waiting-for-wake', 'listening'].includes(status.runtimePhase ?? '')
+    && !status.captureError
+}
+
+function androidServiceVisible(android: { adb: string; appId: string; serial: string }) {
+  const services = execFileSync(android.adb, [
+    '-s', android.serial,
+    'shell', 'dumpsys', 'activity', 'services', android.appId,
+  ], { encoding: 'utf8' })
+  return services.includes('AuroraRuntimeForegroundService')
+}
+
+function androidWakeLockHeld(android: { adb: string; serial: string }) {
+  const power = execFileSync(android.adb, [
+    '-s', android.serial,
+    'shell', 'dumpsys', 'power',
+  ], { encoding: 'utf8' })
+  return /AuroraVoiceRuntime|aurora.*voice/iu.test(power)
 }
 
 async function post<T>(
