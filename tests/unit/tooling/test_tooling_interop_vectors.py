@@ -251,12 +251,8 @@ def test_python_accepts_native_rust_device_status_projection_hashes():
                     "provenance": {
                         "advertised_name": "native.get_device_status",
                         "provider_peer_id": "aurora-local-provider",
-                        "provider_service_instance_id": (
-                            "local:aurora-local-provider:Tooling"
-                        ),
-                        "provider_tool_id": (
-                            "aurora.local.native.get_device_status.v1"
-                        ),
+                        "provider_service_instance_id": ("local:aurora-local-provider:Tooling"),
+                        "provider_tool_id": ("aurora.local.native.get_device_status.v1"),
                         "source": "core",
                         "stable_source_id": "native.capability",
                     },
