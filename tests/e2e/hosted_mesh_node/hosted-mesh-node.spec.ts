@@ -284,13 +284,14 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   const toolsServiceSwitch = serviceSharing.getByRole('switch', {
     name: /Share Tools from this device/u,
   })
-  const toolsServiceRow = serviceSharing.getByRole('row').filter({
-    has: toolsServiceSwitch,
+  const reviewSharingChanges = serviceSharing.getByRole('button', {
+    name: 'Review changes',
   })
+  await expect(reviewSharingChanges).toHaveCount(1)
   await expect(toolsServiceSwitch).not.toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
+  await reviewSharingChanges.click()
   const enabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
@@ -302,7 +303,7 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(toolsServiceSwitch).toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
+  await reviewSharingChanges.click()
   const disabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
@@ -314,7 +315,7 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   await expect(toolsServiceSwitch).not.toBeChecked()
 
   await toolsServiceSwitch.click()
-  await toolsServiceRow.getByRole('button', { name: 'Review changes' }).click()
+  await reviewSharingChanges.click()
   const reenabledServiceReview = serviceSharing.getByRole('region', {
     name: 'Service sharing change review',
   })
