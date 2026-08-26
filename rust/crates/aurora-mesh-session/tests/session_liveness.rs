@@ -167,21 +167,26 @@ fn ping_is_answered_the_same_way_in_both_lifecycles() {
 fn native_ping_measures_only_the_matching_peer_and_pong() {
     let mut registry = registry_with(&[PEER_A, PEER_B]);
 
-    let ping = registry.begin_native_ping(PEER_A, 1_000).unwrap();
-    let ping_id = ping["id"].as_str().unwrap().to_owned();
+    let ping = registry
+        .begin_native_ping(PEER_A, 1_000)
+        .expect("bound peer should accept a native ping");
+    let ping_id = ping["id"]
+        .as_str()
+        .expect("native ping should contain a string id")
+        .to_owned();
     assert_eq!(ping["type"], "ping");
     assert_eq!(ping["ts"], 1.0);
 
     assert_eq!(
         registry
             .accept_native_pong(PEER_B, &json!({"type": "pong", "id": ping_id}), 1_020,)
-            .unwrap(),
+            .expect("pong from another bound peer should be ignored"),
         None
     );
     assert_eq!(
         registry
             .accept_native_pong(PEER_A, &json!({"type": "pong", "id": "wrong"}), 1_020,)
-            .unwrap(),
+            .expect("pong with a different id should be ignored"),
         None
     );
 
@@ -191,11 +196,17 @@ fn native_ping_measures_only_the_matching_peer_and_pong() {
             &json!({"type": "pong", "id": ping_id, "ts": 1.0}),
             1_025,
         )
-        .unwrap()
-        .unwrap();
+        .expect("matching pong should be accepted")
+        .expect("matching pong should produce an RTT sample");
     assert_eq!(sample.ping_id, ping_id);
     assert_eq!(sample.round_trip_time_ms, 25);
-    assert_eq!(registry.session(PEER_A).unwrap().last_rtt_ms(), Some(25));
+    assert_eq!(
+        registry
+            .session(PEER_A)
+            .expect("bound peer session should remain registered")
+            .last_rtt_ms(),
+        Some(25)
+    );
     assert_eq!(registry.snapshot()["peers"][0]["lastRttMs"], 25);
 }
 
@@ -203,19 +214,28 @@ fn native_ping_measures_only_the_matching_peer_and_pong() {
 fn native_ping_cancels_cleanly_and_never_reports_a_zero_placeholder() {
     let mut registry = registry_with(&[PEER_A]);
 
-    let first = registry.begin_native_ping(PEER_A, 2_000).unwrap();
-    let first_id = first["id"].as_str().unwrap().to_owned();
+    let first = registry
+        .begin_native_ping(PEER_A, 2_000)
+        .expect("bound peer should accept the first native ping");
+    let first_id = first["id"]
+        .as_str()
+        .expect("native ping should contain a string id")
+        .to_owned();
     assert!(matches!(
         registry.begin_native_ping(PEER_A, 2_001),
         Err(MeshSessionError::NativePingAlreadyPending { .. })
     ));
-    assert!(registry.cancel_native_ping(PEER_A, &first_id).unwrap());
+    assert!(registry
+        .cancel_native_ping(PEER_A, &first_id)
+        .expect("pending native ping should be cancellable"));
 
-    let second = registry.begin_native_ping(PEER_A, 3_000).unwrap();
+    let second = registry
+        .begin_native_ping(PEER_A, 3_000)
+        .expect("bound peer should accept a new ping after cancellation");
     let sample = registry
         .accept_native_pong(PEER_A, &json!({"type": "pong", "id": second["id"]}), 3_000)
-        .unwrap()
-        .unwrap();
+        .expect("matching pong should be accepted")
+        .expect("matching pong should produce an RTT sample");
     assert_eq!(sample.round_trip_time_ms, 1);
 }
 
