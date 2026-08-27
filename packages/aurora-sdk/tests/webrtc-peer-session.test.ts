@@ -525,6 +525,11 @@ describe('WebRtcPeerSession', () => {
   it('rolls back a colliding local offer before yielding to the lower signaling id', async () => {
     const signaling = new FakeSignaling()
     const pc = new FakePeerConnection('local-android-offer', 'local-android-answer')
+    const auth = {
+      tryReconnect: async () => true,
+      handleFrame: async () => undefined,
+      resetTransport: vi.fn()
+    }
     const session = new WebRtcPeerSession({
       localSignalingId: 'z-android',
       localStableId: 'stable-android',
@@ -534,7 +539,7 @@ describe('WebRtcPeerSession', () => {
       createPeerConnection: () => pc,
       codec,
       timers: new FakeTimers(),
-      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+      auth
     })
 
     await session.start()
@@ -562,6 +567,7 @@ describe('WebRtcPeerSession', () => {
       'answer'
     ])
     expect(abandonedChannel?.closed).toBe(true)
+    expect(auth.resetTransport).toHaveBeenCalledOnce()
     expect(pc.remoteDescription).toEqual({ type: 'offer', sdp: 'remote-browser-offer' })
     expect(session.getSnapshot()).toMatchObject({ role: 'answerer', state: 'negotiating' })
     expect(signaling.published).toContainEqual(expect.objectContaining({

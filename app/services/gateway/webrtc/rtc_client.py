@@ -6684,6 +6684,20 @@ class RTCClient:
                 if existing_transport is not None and existing_transport.get("pc") is existing_pc
                 else ""
             )
+            local_offer_owns_glare = (
+                existing_pc is not None
+                and existing_transport is not None
+                and existing_transport.get("pc") is existing_pc
+                and existing_transport.get("offerer_signaling_id") == self._peer_id
+                and existing_offer_sdp
+                and self._peer_id < peer
+            )
+            if local_offer_owns_glare:
+                log_info(
+                    f"RTCClient: Ignoring simultaneous offer from peer {peer}; "
+                    "the lower signaling ID keeps the active offer"
+                )
+                return
             active_channel = self._peer_data_channels.get(peer)
             if existing_pc is not None and existing_offer_sdp and existing_offer_sdp != offer_sdp:
                 if (

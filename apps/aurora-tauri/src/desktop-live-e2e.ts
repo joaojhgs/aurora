@@ -28,7 +28,7 @@ import {
   type PeerConnectionLike,
   type PeerSessionPeerConnectionFactory,
   type StoredPeerCredentialMetadata,
-  type WebRtcAuroraRuntime,
+  type BrowserWebRtcRuntime,
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
 import {
@@ -154,8 +154,16 @@ type MeshTransportPort = {
   } | null>;
   streamRequest<T = unknown>(request: { method: string } & Record<string, unknown>): AsyncIterable<T>;
 };
-type DesktopLiveRuntime = WebRtcAuroraRuntime<AuroraClient> & {
+type DesktopLiveRuntime = BrowserWebRtcRuntime<AuroraClient> & {
   meshTransport?: MeshTransportPort | undefined;
+};
+export type DesktopLivePeerConnector = {
+  peer: {
+    connectPeer(
+      profile: WebRtcPeerConnectionProfile,
+      options?: { negotiationIntent?: "auto" | "offerer" | "answerer" },
+    ): Promise<void>;
+  };
 };
 type RemoteConsoleManifestDrainRuntime = {
   meshTransport?: Pick<MeshTransportPort, "getManifest"> | undefined;
@@ -374,6 +382,7 @@ export async function runDesktopLiveE2e(
     const remoteAuthorized = await connectAndAuthorize(
       remoteRuntime,
       homeProfile,
+      ready.expectedNegotiationRole,
       Math.min(30_000, ready.timeoutMs),
       "remote-console authorization",
     );
@@ -532,10 +541,11 @@ function createInteropRuntime({
 async function connectAndAuthorize(
   runtime: DesktopLiveRuntime,
   profile: WebRtcPeerConnectionProfile,
+  negotiationIntent: DesktopLiveReadyPayload["expectedNegotiationRole"],
   timeoutMs: number,
   label = "mesh-node authorization",
 ): Promise<boolean> {
-  await runtime.peer.connect(profile);
+  await connectDesktopLivePeer(runtime, profile, negotiationIntent);
   try {
     await waitFor(
       () => runtime.peer.snapshot().state === "authorized",
@@ -559,6 +569,14 @@ async function connectAndAuthorize(
     );
   }
   return runtime.peer.snapshot().state === "authorized";
+}
+
+export async function connectDesktopLivePeer(
+  runtime: DesktopLivePeerConnector,
+  profile: WebRtcPeerConnectionProfile,
+  negotiationIntent: DesktopLiveReadyPayload["expectedNegotiationRole"],
+): Promise<void> {
+  await runtime.peer.connectPeer(profile, { negotiationIntent });
 }
 
 export async function drainRemoteConsoleManifestHandshake(
@@ -609,7 +627,12 @@ async function runMeshInteropContract({
     if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined);
   });
   try {
-    await connectAndAuthorize(runtime, profile, reconnectTimeoutMs);
+    await connectAndAuthorize(
+      runtime,
+      profile,
+      ready.expectedNegotiationRole,
+      reconnectTimeoutMs,
+    );
     const authorizedSnapshot = runtime.peer.snapshot();
     stage = "registry";
     const registry = await retryDesktopProviderReadiness(
@@ -738,7 +761,7 @@ async function runMeshInteropContract({
     stage = "authorized-reconnect";
     const reconnectStart = snapshots.length;
     await runtime.peer.disconnect("desktop live reconnect probe").catch(() => undefined);
-    await runtime.peer.connect(profile);
+    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop reconnect WebRTC DataChannel", reconnectTimeoutMs);
     const reconnectRegistry = await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
@@ -792,7 +815,7 @@ async function runMeshInteropContract({
         settled_after_disconnect: false,
       })),
     ]);
-    await runtime.peer.connect(profile);
+    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", reconnectTimeoutMs);
     await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
@@ -815,7 +838,7 @@ async function runMeshInteropContract({
     const revokedStart = snapshots.length;
     autoConfirmPairing = false;
     await runtime.peer.disconnect("desktop live revoked credential reconnect probe").catch(() => undefined);
-    await runtime.peer.connect(profile);
+    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
     const revocationObservation = await waitForPostRevocationPairingObservation({
       snapshot: () => runtime.peer.snapshot(),
       snapshots,

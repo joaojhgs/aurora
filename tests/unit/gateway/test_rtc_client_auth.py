@@ -2465,6 +2465,56 @@ async def test_failed_offer_response_discards_pc_before_fresh_offer(mock_deps):
 
 
 @pytest.mark.asyncio
+async def test_lower_id_offer_owner_ignores_simultaneous_remote_offer(mock_deps):
+    """Glare keeps the deterministic winning PC and its pairing transcript."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "a-offer-owner"
+    client._adapter = MagicMock()
+    client._adapter.send = AsyncMock()
+    peer = "z-simultaneous-offerer"
+
+    winning_pc = MockPeerConnectionWithEvents()
+    winning_pc.connectionState = "new"
+    winning_pc.signalingState = "have-local-offer"
+    winning_pc.close = AsyncMock()
+    client._pcs[peer] = winning_pc
+    client._pairing_transports[peer] = {
+        "pc": winning_pc,
+        "offerer_signaling_id": client._peer_id,
+        "answerer_signaling_id": peer,
+        "offer_sdp": "v=0\r\na=ice-ufrag:winning-local-offer\r\n",
+        "answer_sdp": "",
+        "remote_stable_peer_id": "stable-remote-peer",
+        "remote_node_name": "Remote Aurora",
+    }
+
+    simultaneous_offer = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "offer",
+            "app_id": settings.webrtc.app_id,
+            "room": settings.webrtc.room,
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "v=0\r\na=ice-ufrag:losing-remote-offer\r\n",
+            "stable_peer_id": "stable-remote-peer",
+            "node_name": "Remote Aurora",
+        },
+    )
+
+    await client._on_offer(simultaneous_offer)
+
+    winning_pc.close.assert_not_awaited()
+    client._adapter.send.assert_not_awaited()
+    assert client._pcs[peer] is winning_pc
+    assert client._pairing_transports[peer]["pc"] is winning_pc
+    assert client._pairing_transports[peer]["offer_sdp"].endswith(
+        "a=ice-ufrag:winning-local-offer\r\n"
+    )
+
+
+@pytest.mark.asyncio
 async def test_fresh_offer_replaces_stale_unconnected_answerer_transport(mock_deps):
     """A recovering offerer gets a clean answerer PC for each new SDP epoch."""
     settings, bus, registry, auth_service = mock_deps

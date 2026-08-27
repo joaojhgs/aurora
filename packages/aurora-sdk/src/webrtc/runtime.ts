@@ -159,6 +159,8 @@ function createRuntimeClient<TClient>(
 }
 
 export interface BrowserWebRtcRuntime<TClient = AuroraClient> extends WebRtcAuroraRuntime<TClient> {
+  /** Browser WebRTC runtimes always expose the multi-peer registry controller. */
+  readonly peer: PeerConnectionController & MeshPeerRegistryController
   readonly transport: AuroraTransport
   readonly httpTransport?: HttpGatewayTransport | undefined
   readonly meshTransport?: MeshP2PTransport | undefined

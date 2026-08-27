@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   DesktopLiveE2eCredentialStore,
+  connectDesktopLivePeer,
   desktopLivePairingConfirmationMode,
   desktopLiveSignalingId,
   drainRemoteConsoleManifestHandshake,
@@ -102,6 +103,22 @@ describe("desktop live E2E WebView hook", () => {
   it("hands mesh-node pairing control to the revocation-aware contract", () => {
     expect(desktopLivePairingConfirmationMode("remote-console")).toBe("automatic");
     expect(desktopLivePairingConfirmationMode("mesh-node")).toBe("managed");
+  });
+
+  it("honors the configured negotiation role for every desktop live connection", async () => {
+    const connectPeer = vi.fn(async () => undefined);
+    const profile = samplePayload().runtimeProfile.profiles[0]?.homeConnection?.webrtcProfile;
+    expect(profile).toBeDefined();
+
+    await connectDesktopLivePeer(
+      { peer: { connectPeer } },
+      profile!,
+      "answerer",
+    );
+
+    expect(connectPeer).toHaveBeenCalledWith(profile, {
+      negotiationIntent: "answerer",
+    });
   });
 
   it("keeps shared credentials alive until both role runtimes are finished", async () => {
@@ -680,6 +697,7 @@ describe("desktop live E2E WebView hook", () => {
     expect(source).toContain('stage = "wrong-correlation-event";');
     expect(source).toContain('"remote-console authorization"');
     expect(source).toContain("negotiationRole: snapshot.negotiationRole");
+    expect(source).not.toContain("runtime.peer.connect(profile)");
     const postReconnectRegistryDrain = source.indexOf(
       '"desktop live registry after uncertain mutation WebRTC reconnect"',
     );

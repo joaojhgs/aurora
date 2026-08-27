@@ -653,6 +653,7 @@ export class WebRtcPeerSession {
       if (!this.isCurrentNegotiation(pc, generation)) return
       // The channel was created by the abandoned local offer. The remote
       // offer will deliver its negotiated channel through `ondatachannel`.
+      this.options.auth.resetTransport?.()
       this.closeChannel()
     }
     this.role = 'answerer'
