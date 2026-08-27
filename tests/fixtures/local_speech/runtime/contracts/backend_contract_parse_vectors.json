@@ -334,6 +334,7 @@
         "$:x-aurora-route-explain-no-raw-payload",
         "$:x-aurora-route-explain-selector-fields",
         "$:x-aurora-route-explain-speech-no-raw-payload",
+        "$.$defs.SpeechLanguageRequirement:x-aurora-speech-language-requirement",
         "$.$defs.SpeechLanguageRequirement.properties.auto_language_candidates:x-aurora-speech-language-array-normalize",
         "$.$defs.SpeechLanguageRequirement.properties.language:x-aurora-speech-language-string-normalize"
       ],
@@ -446,6 +447,34 @@
     {
       "accepted": false,
       "case_index": 4,
+      "direction": "input",
+      "input": {
+        "selector": {
+          "peer_id": "peer-1"
+        },
+        "speech": {
+          "language_requirement": {
+            "auto_language_candidates": [
+              "en"
+            ],
+            "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+            "mode": "auto"
+          }
+        },
+        "topic": "TTS.Request"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.speech.language_requirement.digest",
+      "marker_paths": [
+        "$.$defs.SpeechLanguageRequirement:x-aurora-speech-language-requirement"
+      ],
+      "method_id": "Gateway.ExplainRoute",
+      "model_name": "RouteExplainRequest",
+      "schema_id": "Gateway.ExplainRoute.input.RouteExplainRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 5,
       "direction": "input",
       "input": {
         "selector": {
@@ -1116,6 +1145,9 @@
         "stream_id": "stream-1",
         "text": "hello"
       },
+      "marker_paths": [
+        "$:x-aurora-tts-audio-chunk-event-invariant"
+      ],
       "method_id": "TTS.AudioChunk",
       "model_name": "TTSAudioChunkEvent",
       "normalized": {
@@ -1125,14 +1157,13 @@
         "duration_ms": 12.5,
         "format": "raw",
         "is_final": false,
-        "reason": null,
         "sample_rate": 24000,
         "sequence": 0,
         "source_sequence": 0,
         "stream_id": "stream-1",
         "text": "hello"
       },
-      "normalized_hash": "dfa9799bb419c86562e22b480e08c9f8786e10ad6d1074367f0acf667c8faa66",
+      "normalized_hash": "1919ac9f706bd5b636ef685a51dbd55ecd4302e107631ee929b7bc35fde9d8b2",
       "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent"
     },
     {
@@ -1359,12 +1390,70 @@
     },
     {
       "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-a",
+        "status": "created",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-create-profile-response-invariant"
+      ],
+      "method_id": "TTS.CreateVoiceProfile",
+      "model_name": "TTSCreateVoiceProfileResponse",
+      "normalized": {
+        "revision": "voice-rev-a",
+        "status": "created",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "69cb47512d6180bdd78a04f2bc955c6d07a0e038b1c61f3994f0d1e368c38c8e",
+      "schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "created",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "marker_paths": [
+        "$:x-aurora-tts-create-profile-response-invariant"
+      ],
+      "method_id": "TTS.CreateVoiceProfile",
+      "model_name": "TTSCreateVoiceProfileResponse",
+      "schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-a",
+        "status": "created",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.voice_id",
+      "marker_paths": [
+        "$:x-aurora-tts-create-profile-response-invariant"
+      ],
+      "method_id": "TTS.CreateVoiceProfile",
+      "model_name": "TTSCreateVoiceProfileResponse",
+      "schema_id": "TTS.CreateVoiceProfile.output.TTSCreateVoiceProfileResponse"
+    },
+    {
+      "accepted": true,
       "direction": "input",
       "input": {
         "operation_id": " delete-1 ",
         "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
       },
       "marker_paths": [
+        "$:x-aurora-tts-delete-profile-request-invariant",
         "$.properties.operation_id:x-aurora-tts-operation-id"
       ],
       "method_id": "TTS.DeleteVoiceProfile",
@@ -1409,6 +1498,82 @@
       "method_id": "TTS.DeleteVoiceProfile",
       "model_name": "TTSDeleteVoiceProfileRequest",
       "schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "input",
+      "input": {
+        "operation_id": " delete-1 ",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.voice_id",
+      "marker_paths": [
+        "$:x-aurora-tts-delete-profile-request-invariant"
+      ],
+      "method_id": "TTS.DeleteVoiceProfile",
+      "model_name": "TTSDeleteVoiceProfileRequest",
+      "schema_id": "TTS.DeleteVoiceProfile.input.TTSDeleteVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-b",
+        "status": "deleted",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-delete-profile-response-invariant",
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.DeleteVoiceProfile",
+      "model_name": "TTSDeleteVoiceProfileResponse",
+      "normalized": {
+        "idempotent": false,
+        "revision": "voice-rev-b",
+        "status": "deleted",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "1bd6b360e2f6b8ea4f896f8cd9d493e4439ad5c5335604c0306765af45bec49b",
+      "schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-b",
+        "status": "deleted",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.voice_id",
+      "marker_paths": [
+        "$:x-aurora-tts-delete-profile-response-invariant"
+      ],
+      "method_id": "TTS.DeleteVoiceProfile",
+      "model_name": "TTSDeleteVoiceProfileResponse",
+      "schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "deleted",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.revision",
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.DeleteVoiceProfile",
+      "model_name": "TTSDeleteVoiceProfileResponse",
+      "schema_id": "TTS.DeleteVoiceProfile.output.TTSDeleteVoiceProfileResponse"
     },
     {
       "accepted": true,
@@ -1623,6 +1788,10 @@
             "pack-b"
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "de",
@@ -1653,6 +1822,7 @@
         }
       },
       "marker_paths": [
+        "$.$defs.TTSCapabilities:x-aurora-tts-capabilities-invariant",
         "$.$defs.TTSCapabilities.properties.installed_language_pack_ids:x-aurora-bounded-nonblank-string-set-normalize",
         "$.$defs.TTSCapabilities.properties.ready_languages:x-aurora-speech-language-array-normalize",
         "$.$defs.TTSCapabilities.properties.resident_language_pack_ids:x-aurora-bounded-nonblank-string-set-normalize",
@@ -1721,10 +1891,119 @@
       "input": {
         "capabilities": {
           "installed_language_pack_ids": [
+            "pack-c"
+          ],
+          "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
+          "ready": true,
+          "ready_languages": [
+            "de",
+            " EN "
+          ],
+          "resident_base_model_count": 1,
+          "resident_language_pack_ids": [
+            "pack-a"
+          ],
+          "resident_language_packs": [
+            {
+              "pack_id": "pack-a",
+              "ready_languages": [
+                " EN ",
+                "de",
+                "en"
+              ]
+            }
+          ],
+          "sample_rates": [
+            24000
+          ],
+          "supported_language_pack_ids": [
+            "pack-b",
+            "pack-a",
+            "pack-a"
+          ]
+        }
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.capabilities.installed_language_pack_ids",
+      "marker_paths": [
+        "$.$defs.TTSCapabilities:x-aurora-tts-capabilities-invariant"
+      ],
+      "method_id": "TTS.GetCapabilities",
+      "model_name": "TTSGetCapabilitiesResponse",
+      "schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "capabilities": {
+          "installed_language_pack_ids": [
             "pack-a",
             "pack-b"
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
+          "ready": false,
+          "ready_languages": [
+            "de",
+            " EN "
+          ],
+          "resident_base_model_count": 1,
+          "resident_language_pack_ids": [
+            "pack-a"
+          ],
+          "resident_language_packs": [
+            {
+              "pack_id": "pack-a",
+              "ready_languages": [
+                " EN ",
+                "de",
+                "en"
+              ]
+            }
+          ],
+          "sample_rates": [
+            24000
+          ],
+          "supported_language_pack_ids": [
+            "pack-b",
+            "pack-a",
+            "pack-a"
+          ]
+        }
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.capabilities.ready_languages",
+      "marker_paths": [
+        "$.$defs.TTSCapabilities:x-aurora-tts-capabilities-invariant"
+      ],
+      "method_id": "TTS.GetCapabilities",
+      "model_name": "TTSGetCapabilitiesResponse",
+      "schema_id": "TTS.GetCapabilities.output.TTSGetCapabilitiesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "output",
+      "input": {
+        "capabilities": {
+          "installed_language_pack_ids": [
+            "pack-a",
+            "pack-b"
+          ],
+          "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "en--US"
@@ -1764,7 +2043,7 @@
     },
     {
       "accepted": false,
-      "case_index": 1,
+      "case_index": 3,
       "direction": "output",
       "input": {
         "capabilities": {
@@ -1773,6 +2052,10 @@
             "pack-b"
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "de",
@@ -1811,7 +2094,7 @@
     },
     {
       "accepted": false,
-      "case_index": 2,
+      "case_index": 4,
       "direction": "output",
       "input": {
         "capabilities": {
@@ -1820,6 +2103,10 @@
             "pack-b"
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "de",
@@ -1858,7 +2145,7 @@
     },
     {
       "accepted": false,
-      "case_index": 3,
+      "case_index": 5,
       "direction": "output",
       "input": {
         "capabilities": {
@@ -1866,6 +2153,10 @@
             "   "
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "de",
@@ -1906,7 +2197,7 @@
     },
     {
       "accepted": false,
-      "case_index": 4,
+      "case_index": 6,
       "direction": "output",
       "input": {
         "capabilities": {
@@ -1915,6 +2206,10 @@
             "pack-b"
           ],
           "model_status": "ready",
+          "output_formats": [
+            "wav",
+            "raw"
+          ],
           "ready": true,
           "ready_languages": [
             "de",
@@ -1977,6 +2272,8 @@
         }
       },
       "marker_paths": [
+        "$:x-aurora-tts-get-profile-response-invariant",
+        "$.$defs.TTSVoiceProfileDescriptor:x-aurora-tts-profile-descriptor-invariant",
         "$.$defs.TTSVoiceProfileDescriptor.properties.allowed_peer_ids:x-aurora-bounded-nonblank-string-set-normalize",
         "$.$defs.TTSVoiceProfileDescriptor.properties.compatible_language_pack_ids:x-aurora-bounded-nonblank-string-set-normalize"
       ],
@@ -2018,6 +2315,72 @@
       "case_index": 0,
       "direction": "output",
       "input": {
+        "found": false,
+        "profile": {
+          "allowed_peer_ids": [
+            "peer-b",
+            "peer-a",
+            "peer-b"
+          ],
+          "compatible_language_pack_ids": [
+            "pack-b",
+            "pack-a",
+            "pack-a"
+          ],
+          "display_name": "Clone",
+          "kind": "cloned",
+          "revision": "rev-1",
+          "visibility": "allowed_peers",
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        }
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.profile",
+      "marker_paths": [
+        "$:x-aurora-tts-get-profile-response-invariant"
+      ],
+      "method_id": "TTS.GetVoiceProfile",
+      "model_name": "TTSGetVoiceProfileResponse",
+      "schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "found": true,
+        "profile": {
+          "allowed_peer_ids": [
+            "peer-b",
+            "peer-a",
+            "peer-b"
+          ],
+          "compatible_language_pack_ids": [
+            "pack-b",
+            "pack-a",
+            "pack-a"
+          ],
+          "display_name": "Clone",
+          "kind": "cloned",
+          "revision": "rev-1",
+          "visibility": "private",
+          "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+        }
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.profile.allowed_peer_ids",
+      "marker_paths": [
+        "$.$defs.TTSVoiceProfileDescriptor:x-aurora-tts-profile-descriptor-invariant"
+      ],
+      "method_id": "TTS.GetVoiceProfile",
+      "model_name": "TTSGetVoiceProfileResponse",
+      "schema_id": "TTS.GetVoiceProfile.output.TTSGetVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "output",
+      "input": {
         "found": true,
         "profile": {
           "allowed_peer_ids": [
@@ -2047,7 +2410,7 @@
     },
     {
       "accepted": false,
-      "case_index": 1,
+      "case_index": 3,
       "direction": "output",
       "input": {
         "found": true,
@@ -2349,6 +2712,46 @@
     },
     {
       "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-a",
+        "status": "installed",
+        "voice_id": "standard:starter:voice"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.InstallVoiceProfile",
+      "model_name": "TTSInstallVoiceProfileResponse",
+      "normalized": {
+        "idempotent": false,
+        "revision": "voice-rev-a",
+        "status": "installed",
+        "voice_id": "standard:starter:voice"
+      },
+      "normalized_hash": "7385b9ba0aed6aef346ca799eb18114c62a5eb94bd141899fceaa6b9a24f2364",
+      "schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "installed",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.revision",
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.InstallVoiceProfile",
+      "model_name": "TTSInstallVoiceProfileResponse",
+      "schema_id": "TTS.InstallVoiceProfile.output.TTSInstallVoiceProfileResponse"
+    },
+    {
+      "accepted": true,
       "direction": "input",
       "input": {
         "language": " EN "
@@ -2414,7 +2817,10 @@
         ]
       },
       "marker_paths": [
-        "$.$defs.TTSLanguagePackDescriptor.properties.language:x-aurora-speech-language-string-normalize"
+        "$:x-aurora-tts-language-pack-list-invariant",
+        "$.$defs.TTSLanguagePackDescriptor:x-aurora-tts-language-pack-descriptor-invariant",
+        "$.$defs.TTSLanguagePackDescriptor.properties.language:x-aurora-speech-language-string-normalize",
+        "$.$defs.TTSLanguagePackVoice:x-aurora-tts-language-pack-voice-invariant"
       ],
       "method_id": "TTS.ListLanguagePacks",
       "model_name": "TTSListLanguagePacksResponse",
@@ -2615,6 +3021,155 @@
             "display_name": "English",
             "installed": true,
             "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 2,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.packs.0.voice_count",
+      "marker_paths": [
+        "$.$defs.TTSLanguagePackDescriptor:x-aurora-tts-language-pack-descriptor-invariant"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 3,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          },
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": true,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.packs",
+      "marker_paths": [
+        "$:x-aurora-tts-language-pack-list-invariant"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 4,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
+            "language": " EN ",
+            "pack_id": "en",
+            "ready": true,
+            "ready_voice_count": 1,
+            "revision": "pack-rev-1",
+            "voice_count": 1,
+            "voices": [
+              {
+                "active": false,
+                "default": true,
+                "display_name": "Voice",
+                "installed": false,
+                "ready": true,
+                "revision": "rev-1",
+                "voice_id": "standard:starter_en:alba"
+              }
+            ]
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.packs.0.voices.0.installed",
+      "marker_paths": [
+        "$.$defs.TTSLanguagePackVoice:x-aurora-tts-language-pack-voice-invariant"
+      ],
+      "method_id": "TTS.ListLanguagePacks",
+      "model_name": "TTSListLanguagePacksResponse",
+      "schema_id": "TTS.ListLanguagePacks.output.TTSListLanguagePacksResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 5,
+      "direction": "output",
+      "input": {
+        "catalog_status": "available",
+        "default_voice_id": "standard:starter_en:alba",
+        "packs": [
+          {
+            "default": true,
+            "display_name": "English",
+            "installed": true,
+            "installed_voice_count": 1,
             "language": "en--US",
             "pack_id": "en",
             "ready": true,
@@ -2669,6 +3224,8 @@
         ]
       },
       "marker_paths": [
+        "$:x-aurora-tts-profile-list-invariant",
+        "$.$defs.TTSVoiceProfileDescriptor:x-aurora-tts-profile-descriptor-invariant",
         "$.$defs.TTSVoiceProfileDescriptor.properties.allowed_peer_ids:x-aurora-bounded-nonblank-string-set-normalize",
         "$.$defs.TTSVoiceProfileDescriptor.properties.compatible_language_pack_ids:x-aurora-bounded-nonblank-string-set-normalize"
       ],
@@ -2715,6 +3272,91 @@
         "profiles": [
           {
             "allowed_peer_ids": [
+              "peer-b",
+              "peer-a",
+              "peer-b"
+            ],
+            "compatible_language_pack_ids": [
+              "pack-b",
+              "pack-a",
+              "pack-a"
+            ],
+            "display_name": "Clone",
+            "kind": "cloned",
+            "revision": "rev-1",
+            "visibility": "private",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.profiles.0.allowed_peer_ids",
+      "marker_paths": [
+        "$.$defs.TTSVoiceProfileDescriptor:x-aurora-tts-profile-descriptor-invariant"
+      ],
+      "method_id": "TTS.ListVoiceProfiles",
+      "model_name": "TTSListVoiceProfilesResponse",
+      "schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "profiles": [
+          {
+            "allowed_peer_ids": [
+              "peer-b",
+              "peer-a",
+              "peer-b"
+            ],
+            "compatible_language_pack_ids": [
+              "pack-b",
+              "pack-a",
+              "pack-a"
+            ],
+            "display_name": "Clone",
+            "kind": "cloned",
+            "revision": "rev-1",
+            "visibility": "allowed_peers",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          },
+          {
+            "allowed_peer_ids": [
+              "peer-b",
+              "peer-a",
+              "peer-b"
+            ],
+            "compatible_language_pack_ids": [
+              "pack-b",
+              "pack-a",
+              "pack-a"
+            ],
+            "display_name": "Clone",
+            "kind": "cloned",
+            "revision": "rev-1",
+            "visibility": "allowed_peers",
+            "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.profiles",
+      "marker_paths": [
+        "$:x-aurora-tts-profile-list-invariant"
+      ],
+      "method_id": "TTS.ListVoiceProfiles",
+      "model_name": "TTSListVoiceProfilesResponse",
+      "schema_id": "TTS.ListVoiceProfiles.output.TTSListVoiceProfilesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "output",
+      "input": {
+        "profiles": [
+          {
+            "allowed_peer_ids": [
               "peer-a",
               "   "
             ],
@@ -2742,7 +3384,7 @@
     },
     {
       "accepted": false,
-      "case_index": 1,
+      "case_index": 3,
       "direction": "output",
       "input": {
         "profiles": [
@@ -2825,6 +3467,8 @@
         ]
       },
       "marker_paths": [
+        "$:x-aurora-tts-voice-list-invariant",
+        "$.$defs.TTSVoiceDescriptor:x-aurora-tts-voice-descriptor-invariant",
         "$.$defs.TTSVoiceDescriptor.properties.compatible_language_pack_ids:x-aurora-bounded-nonblank-string-set-normalize"
       ],
       "method_id": "TTS.ListVoices",
@@ -2854,6 +3498,72 @@
     {
       "accepted": false,
       "case_index": 0,
+      "direction": "output",
+      "input": {
+        "voices": [
+          {
+            "compatible_language_pack_ids": [],
+            "display_name": "Voice",
+            "kind": "standard",
+            "ready": true,
+            "revision": "rev-1",
+            "voice_id": "standard:starter:voice"
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.voices.0.compatible_language_pack_ids",
+      "marker_paths": [
+        "$.$defs.TTSVoiceDescriptor:x-aurora-tts-voice-descriptor-invariant"
+      ],
+      "method_id": "TTS.ListVoices",
+      "model_name": "TTSListVoicesResponse",
+      "schema_id": "TTS.ListVoices.output.TTSListVoicesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "voices": [
+          {
+            "compatible_language_pack_ids": [
+              "pack-b",
+              "pack-a",
+              "pack-a"
+            ],
+            "display_name": "Voice",
+            "kind": "standard",
+            "ready": true,
+            "revision": "rev-1",
+            "voice_id": "standard:starter:voice"
+          },
+          {
+            "compatible_language_pack_ids": [
+              "pack-b",
+              "pack-a",
+              "pack-a"
+            ],
+            "display_name": "Voice",
+            "kind": "standard",
+            "ready": true,
+            "revision": "rev-1",
+            "voice_id": "standard:starter:voice"
+          }
+        ]
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.voices",
+      "marker_paths": [
+        "$:x-aurora-tts-voice-list-invariant"
+      ],
+      "method_id": "TTS.ListVoices",
+      "model_name": "TTSListVoicesResponse",
+      "schema_id": "TTS.ListVoices.output.TTSListVoicesResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
       "direction": "output",
       "input": {
         "voices": [
@@ -2930,6 +3640,46 @@
       "method_id": "TTS.RemoveVoiceProfile",
       "model_name": "TTSRemoveVoiceProfileRequest",
       "schema_id": "TTS.RemoveVoiceProfile.input.TTSRemoveVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-b",
+        "status": "removed",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.RemoveVoiceProfile",
+      "model_name": "TTSRemoveVoiceProfileResponse",
+      "normalized": {
+        "idempotent": false,
+        "revision": "voice-rev-b",
+        "status": "removed",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "normalized_hash": "876628063def0aab75af9b06adfe5433964332c81cd63b439dc318ac1b0df849",
+      "schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "removed",
+        "voice_id": "clone:123e4567-e89b-42d3-a456-426614174000"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.revision",
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.RemoveVoiceProfile",
+      "model_name": "TTSRemoveVoiceProfileResponse",
+      "schema_id": "TTS.RemoveVoiceProfile.output.TTSRemoveVoiceProfileResponse"
     },
     {
       "accepted": true,
@@ -3118,6 +3868,7 @@
         "voice_id": "standard:starter:voice"
       },
       "marker_paths": [
+        "$:x-aurora-tts-update-profile-patch-invariant",
         "$.properties.allowed_peer_ids.anyOf.0:x-aurora-bounded-nonblank-string-set-normalize",
         "$.properties.operation_id:x-aurora-tts-operation-id"
       ],
@@ -3186,6 +3937,23 @@
       "case_index": 2,
       "direction": "input",
       "input": {
+        "operation_id": " update-1 ",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$",
+      "marker_paths": [
+        "$:x-aurora-tts-update-profile-patch-invariant"
+      ],
+      "method_id": "TTS.UpdateVoiceProfile",
+      "model_name": "TTSUpdateVoiceProfileRequest",
+      "schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 3,
+      "direction": "input",
+      "input": {
         "allowed_peer_ids": [
           "peer-a",
           "   "
@@ -3202,6 +3970,46 @@
       "method_id": "TTS.UpdateVoiceProfile",
       "model_name": "TTSUpdateVoiceProfileRequest",
       "schema_id": "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "revision": "voice-rev-c",
+        "status": "updated",
+        "voice_id": "standard:starter:voice"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.UpdateVoiceProfile",
+      "model_name": "TTSUpdateVoiceProfileResponse",
+      "normalized": {
+        "idempotent": false,
+        "revision": "voice-rev-c",
+        "status": "updated",
+        "voice_id": "standard:starter:voice"
+      },
+      "normalized_hash": "fe1db80e84846f553f5bb2b1b1152a95b183522278c8bb68255aee8647b330bb",
+      "schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "revision": null,
+        "status": "updated",
+        "voice_id": "standard:starter:voice"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.revision",
+      "marker_paths": [
+        "$:x-aurora-tts-profile-mutation-response-invariant"
+      ],
+      "method_id": "TTS.UpdateVoiceProfile",
+      "model_name": "TTSUpdateVoiceProfileResponse",
+      "schema_id": "TTS.UpdateVoiceProfile.output.TTSUpdateVoiceProfileResponse"
     },
     {
       "accepted": true,
@@ -3266,6 +4074,7 @@
         "upload_id": "upload-1"
       },
       "marker_paths": [
+        "$:x-aurora-tts-import-chunk-request-invariant",
         "$.properties.operation_id:x-aurora-tts-operation-id"
       ],
       "method_id": "TTS.VoiceImportChunk",
@@ -3316,6 +4125,110 @@
       "method_id": "TTS.VoiceImportChunk",
       "model_name": "TTSVoiceImportChunkRequest",
       "schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "input",
+      "input": {
+        "chunk_data": "aGVsbG8=",
+        "chunk_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "operation_id": " chunk-1 ",
+        "sequence": 0,
+        "upload_id": "upload-1"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.chunk_sha256",
+      "marker_paths": [
+        "$:x-aurora-tts-import-chunk-request-invariant"
+      ],
+      "method_id": "TTS.VoiceImportChunk",
+      "model_name": "TTSVoiceImportChunkRequest",
+      "schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 3,
+      "direction": "input",
+      "input": {
+        "chunk_data": "",
+        "operation_id": " chunk-1 ",
+        "sequence": 0,
+        "upload_id": "upload-1"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.chunk_data",
+      "marker_paths": [
+        "$:x-aurora-tts-import-chunk-request-invariant"
+      ],
+      "method_id": "TTS.VoiceImportChunk",
+      "model_name": "TTSVoiceImportChunkRequest",
+      "schema_id": "TTS.VoiceImportChunk.input.TTSVoiceImportChunkRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "next_sequence": 1,
+        "received_bytes": 5,
+        "sequence": 0,
+        "upload_id": "upload-1"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-import-chunk-response-invariant"
+      ],
+      "method_id": "TTS.VoiceImportChunk",
+      "model_name": "TTSVoiceImportChunkResponse",
+      "normalized": {
+        "idempotent": false,
+        "next_sequence": 1,
+        "received_bytes": 5,
+        "sequence": 0,
+        "status": "accepted",
+        "upload_id": "upload-1"
+      },
+      "normalized_hash": "0b36dab73d9fb74ff7f7f54c73b42560afaa57c024dd5ae68a22316aa52bfb5e",
+      "schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "next_sequence": 2,
+        "received_bytes": 5,
+        "sequence": 0,
+        "upload_id": "upload-1"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.next_sequence",
+      "marker_paths": [
+        "$:x-aurora-tts-import-chunk-response-invariant"
+      ],
+      "method_id": "TTS.VoiceImportChunk",
+      "model_name": "TTSVoiceImportChunkResponse",
+      "schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "idempotent": false,
+        "next_sequence": 1,
+        "received_bytes": 5,
+        "sequence": 0,
+        "status": "duplicate",
+        "upload_id": "upload-1"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.idempotent",
+      "marker_paths": [
+        "$:x-aurora-tts-import-chunk-response-invariant"
+      ],
+      "method_id": "TTS.VoiceImportChunk",
+      "model_name": "TTSVoiceImportChunkResponse",
+      "schema_id": "TTS.VoiceImportChunk.output.TTSVoiceImportChunkResponse"
     },
     {
       "accepted": true,
@@ -3444,6 +4357,49 @@
       "method_id": "TTS.VoiceImportStart",
       "model_name": "TTSVoiceImportStartRequest",
       "schema_id": "TTS.VoiceImportStart.input.TTSVoiceImportStartRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "accepted_total_bytes": 5,
+        "expires_at": "2026-01-01T00:00:00Z",
+        "upload_id": "upload-1"
+      },
+      "marker_paths": [
+        "$:x-aurora-tts-import-start-response-invariant"
+      ],
+      "method_id": "TTS.VoiceImportStart",
+      "model_name": "TTSVoiceImportStartResponse",
+      "normalized": {
+        "accepted_total_bytes": 5,
+        "expires_at": "2026-01-01T00:00:00Z",
+        "max_chunk_bytes": 49152,
+        "max_chunks": 43,
+        "upload_id": "upload-1"
+      },
+      "normalized_hash": "4d60dfee06bd0a274a8f425109f560fe5a3f55ab4a6d38cc674e74e2db1163a6",
+      "schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "accepted_total_bytes": 49153,
+        "expires_at": "2026-01-01T00:00:00Z",
+        "max_chunk_bytes": 49152,
+        "max_chunks": 1,
+        "upload_id": "upload-1"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.accepted_total_bytes",
+      "marker_paths": [
+        "$:x-aurora-tts-import-start-response-invariant"
+      ],
+      "method_id": "TTS.VoiceImportStart",
+      "model_name": "TTSVoiceImportStartResponse",
+      "schema_id": "TTS.VoiceImportStart.output.TTSVoiceImportStartResponse"
     },
     {
       "accepted": true,
@@ -3680,6 +4636,8 @@
         "unexpected": "stripped"
       },
       "marker_paths": [
+        "$:x-aurora-projection-identity",
+        "$:x-aurora-projection-page-termination",
         "$.$defs.ToolingToolInfo.properties.legacy_global_tool_ids:x-aurora-unique-string-array-normalize"
       ],
       "method_id": "Tooling.GetExportCatalog",
@@ -5736,6 +6694,7 @@
         "language": " AUTO "
       },
       "marker_paths": [
+        "$:x-aurora-stt-transcribe-language-shape",
         "$.properties.auto_language_candidates:x-aurora-speech-language-array-normalize",
         "$.properties.language:x-aurora-speech-language-auto-null"
       ],
@@ -5762,6 +6721,26 @@
       "input": {
         "audio_data": "AA==",
         "auto_language_candidates": [
+          "de"
+        ],
+        "language": "en"
+      },
+      "issue_category": "value_error",
+      "issue_path": "$.auto_language_candidates",
+      "marker_paths": [
+        "$:x-aurora-stt-transcribe-language-shape"
+      ],
+      "method_id": "Transcription.Transcribe",
+      "model_name": "TranscribeAudioRequest",
+      "schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "input",
+      "input": {
+        "audio_data": "AA==",
+        "auto_language_candidates": [
           " EN ",
           "de",
           "en"
@@ -5779,7 +6758,7 @@
     },
     {
       "accepted": false,
-      "case_index": 1,
+      "case_index": 2,
       "direction": "input",
       "input": {
         "audio_data": "AA==",

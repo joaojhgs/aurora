@@ -873,7 +873,15 @@ impl InboundCredentialVerifierStore for MemoryInboundCredentialVerifierStore {
         verifier: LocalPeerCredentialVerifierV1,
     ) -> AuthorityResult<()> {
         validate_verifier(&verifier)?;
-        self.verifiers.insert(verifier.selector(), verifier);
+        let selector = verifier.selector();
+        if self
+            .verifiers
+            .get(&selector)
+            .is_some_and(|existing| existing.credential_revision >= verifier.credential_revision)
+        {
+            return Ok(());
+        }
+        self.verifiers.insert(selector, verifier);
         Ok(())
     }
 
@@ -940,6 +948,13 @@ impl MemoryPeerGrantRepository {
 impl PeerGrantRepository for MemoryPeerGrantRepository {
     async fn upsert_grant(&mut self, grant: LocalPeerGrantV1) -> AuthorityResult<()> {
         validate_grant(&grant)?;
+        if self
+            .grants
+            .get(&grant.grant_id)
+            .is_some_and(|existing| existing.grant_revision >= grant.grant_revision)
+        {
+            return Ok(());
+        }
         self.grants.insert(grant.grant_id.clone(), grant);
         Ok(())
     }

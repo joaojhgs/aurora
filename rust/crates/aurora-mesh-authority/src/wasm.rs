@@ -37,6 +37,13 @@ use crate::types::{
     PeerHostAuthorizationStore, PeerHostAuthorizeRequest, PeerHostManifestAuthorityRequest,
 };
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifierStatus {
+    found: bool,
+    credential_revision: Option<i64>,
+}
+
 /// Bytes drawn from the host page's `crypto.getRandomValues`.
 ///
 /// The authority never invents randomness of its own; the platform supplies it,
@@ -294,10 +301,10 @@ impl MeshAuthority {
         to_js(&summary?)
     }
 
-    /// The live credential verifier for a relationship, if there is one.
+    /// Redacted live credential status for a relationship.
     ///
     /// A read, not a decision: the shell asks it to answer "do I already have a
-    /// credential for this peer" without having to keep a second copy.
+    /// credential for this peer" without exposing verifier proof key material.
     #[wasm_bindgen(js_name = getVerifier)]
     pub async fn get_verifier(&self, selector: JsValue, now_ms: f64) -> Result<JsValue, JsValue> {
         use crate::authority::InboundCredentialVerifierStore;
@@ -309,7 +316,10 @@ impl MeshAuthority {
             .get_verifier(&selector, now_ms as i64)
             .await
             .map_err(to_error)?;
-        to_js(&verifier)
+        to_js(&VerifierStatus {
+            found: verifier.is_some(),
+            credential_revision: verifier.map(|row| row.credential_revision),
+        })
     }
 
     /// Every grant row held for a relationship, for durable persistence.

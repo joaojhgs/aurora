@@ -280,11 +280,130 @@ fn validate_markers(schema: &Map<String, Value>, value: &Value) -> Result<(), St
         validate_tts_language_pack_voice(value)?;
     }
     if schema
+        .get("x-aurora-tts-language-pack-descriptor-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_language_pack_descriptor(value)?;
+    }
+    if schema
         .get("x-aurora-tts-language-pack-list-invariant")
         .and_then(Value::as_bool)
         == Some(true)
     {
         validate_tts_language_pack_list(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-capabilities-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_capabilities(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-voice-descriptor-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_voice_descriptor(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-voice-list-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_voice_list(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-profile-descriptor-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_profile_descriptor(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-profile-list-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_profile_list(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-get-profile-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_get_profile_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-update-profile-patch-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_update_profile_patch(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-create-profile-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_create_profile_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-delete-profile-request-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_delete_profile_request(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-delete-profile-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_delete_profile_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-profile-mutation-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_profile_mutation_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-import-start-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_import_start_response(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-import-chunk-request-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_import_chunk_request(value)?;
+    }
+    if schema
+        .get("x-aurora-tts-import-chunk-response-invariant")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_tts_import_chunk_response(value)?;
+    }
+    if schema
+        .get("x-aurora-stt-transcribe-language-shape")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_stt_transcribe_language_shape(value)?;
+    }
+    if schema
+        .get("x-aurora-speech-language-requirement")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        validate_speech_language_requirement(value)?;
     }
     if schema
         .get("x-aurora-projection-page-termination")
@@ -414,6 +533,13 @@ fn normalize_markers(schema: &Map<String, Value>, value: &mut Value) -> Result<(
             *value = Value::String(text.trim().to_owned());
         }
     }
+    if schema
+        .get("x-aurora-speech-language-requirement")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        normalize_speech_language_requirement(value)?;
+    }
     Ok(())
 }
 
@@ -450,10 +576,34 @@ fn validate_tts_language_pack_list(value: &Value) -> Result<(), String> {
     let Some(object) = value.as_object() else {
         return Ok(());
     };
-    let Some(stale_default) = object.get("stale_default_voice_id").and_then(Value::as_str) else {
+    let Some(packs) = object.get("packs").and_then(Value::as_array) else {
         return Ok(());
     };
-    let Some(packs) = object.get("packs").and_then(Value::as_array) else {
+    let pack_ids: Vec<&str> = packs
+        .iter()
+        .filter_map(|pack| {
+            pack.as_object()
+                .and_then(|pack| pack.get("pack_id"))
+                .and_then(Value::as_str)
+        })
+        .collect();
+    if has_duplicate_strings(pack_ids.iter().copied()) {
+        return Err("language pack list cannot contain duplicate packs".to_owned());
+    }
+    match object.get("catalog_status").and_then(Value::as_str) {
+        Some("available")
+            if object
+                .get("catalog_error_code")
+                .is_some_and(|value| !value.is_null()) =>
+        {
+            return Err("available language pack catalog cannot include an error code".to_owned());
+        }
+        Some("unavailable") if object.get("catalog_error_code").is_none_or(Value::is_null) => {
+            return Err("unavailable language pack catalog requires an error code".to_owned());
+        }
+        _ => {}
+    }
+    let Some(stale_default) = object.get("stale_default_voice_id").and_then(Value::as_str) else {
         return Ok(());
     };
     for pack in packs {
@@ -469,11 +619,405 @@ fn validate_tts_language_pack_list(value: &Value) -> Result<(), String> {
                 continue;
             };
             let ready = voice.get("ready").and_then(Value::as_bool) == Some(true);
+            let default = voice.get("default").and_then(Value::as_bool) == Some(true);
             let voice_id = voice.get("voice_id").and_then(Value::as_str);
-            if ready && voice_id == Some(stale_default) {
-                return Err("stale default voice cannot be ready in listed voices".to_owned());
+            if (ready || default) && voice_id == Some(stale_default) {
+                return Err("stale default voice cannot be ready or default".to_owned());
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_tts_capabilities(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let supported = string_set(object.get("supported_language_pack_ids"));
+    let installed_ids = string_list(object.get("installed_language_pack_ids"));
+    let installed = string_set(object.get("installed_language_pack_ids"));
+    let resident_ids = string_list(object.get("resident_language_pack_ids"));
+    let resident = string_set(object.get("resident_language_pack_ids"));
+    let bindings = object_array(object.get("resident_language_packs"));
+    let binding_ids: Vec<&str> = bindings
+        .iter()
+        .filter_map(|binding| binding.get("pack_id").and_then(Value::as_str))
+        .collect();
+    for id in installed_ids {
+        if !supported.contains(id) {
+            return Err("installed packs must be supported".to_owned());
+        }
+    }
+    for id in resident_ids {
+        if !installed.contains(id) {
+            return Err("resident packs must be installed".to_owned());
+        }
+    }
+    if has_duplicate_strings(binding_ids.iter().copied()) {
+        return Err("resident language pack bindings must be unique".to_owned());
+    }
+    if binding_ids.len() != resident.len() || binding_ids.iter().any(|id| !resident.contains(id)) {
+        return Err("resident language pack ids and bindings must match".to_owned());
+    }
+    let mut bound_ready_languages = BTreeSet::new();
+    for binding in &bindings {
+        for language in string_list(binding.get("ready_languages")) {
+            bound_ready_languages.insert(language);
+        }
+    }
+    let ready_languages = string_set(object.get("ready_languages"));
+    if bound_ready_languages != ready_languages {
+        return Err("ready languages must match resident language pack bindings".to_owned());
+    }
+    if number_field(object, "resident_base_model_count")
+        .zip(number_field(object, "max_resident_base_models"))
+        .is_some_and(|(count, max)| count > max)
+    {
+        return Err("resident base model count exceeds limit".to_owned());
+    }
+    let ready = bool_field(object, "ready") == Some(true);
+    if !ready && !ready_languages.is_empty() {
+        return Err("ready=false cannot advertise ready languages".to_owned());
+    }
+    if ready {
+        let model_status = object.get("model_status").and_then(Value::as_str);
+        if !matches!(model_status, Some("ready" | "degraded")) {
+            return Err("ready capability needs a usable model status".to_owned());
+        }
+        if ready_languages.is_empty() || resident.is_empty() {
+            return Err("ready capability needs resident languages and packs".to_owned());
+        }
+        if number_field(object, "resident_base_model_count").is_some_and(|count| count < 1) {
+            return Err("ready capability needs a resident base model".to_owned());
+        }
+        if string_list(object.get("output_formats")).is_empty()
+            || object
+                .get("sample_rates")
+                .and_then(Value::as_array)
+                .is_none_or(Vec::is_empty)
+        {
+            return Err("ready capability needs output formats and sample rates".to_owned());
+        }
+    } else if object.get("model_status").and_then(Value::as_str) == Some("ready") {
+        return Err("model_status=ready requires ready=true".to_owned());
+    }
+    let cloning = bool_field(object, "cloning") == Some(true);
+    if cloning {
+        if string_list(object.get("accepted_clone_import_formats")).is_empty() {
+            return Err("cloning needs at least one accepted import format".to_owned());
+        }
+        if number_field(object, "max_clone_import_bytes").is_none_or(|value| value < 1)
+            || number_field(object, "max_clone_chunk_bytes").is_none_or(|value| value < 1)
+        {
+            return Err("cloning needs positive import limits".to_owned());
+        }
+    } else if !string_list(object.get("accepted_clone_import_formats")).is_empty()
+        || number_field(object, "max_clone_import_bytes").is_some_and(|value| value != 0)
+        || number_field(object, "max_clone_chunk_bytes").is_some_and(|value| value != 0)
+    {
+        return Err("cloning=false cannot advertise clone import support".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_voice_descriptor(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let voice_id = optional_string(object, "voice_id");
+    match object.get("kind").and_then(Value::as_str) {
+        Some("standard") if voice_id.is_none_or(|id| !id.starts_with("standard:")) => {
+            Err("standard voice kind needs a standard logical voice id".to_owned())
+        }
+        Some("cloned") if voice_id.is_none_or(|id| !id.starts_with("clone:")) => {
+            Err("cloned voice kind needs a clone logical voice id".to_owned())
+        }
+        _ if bool_field(object, "ready") == Some(true)
+            && string_list(object.get("compatible_language_pack_ids")).is_empty() =>
+        {
+            Err("ready voice needs a compatible language pack".to_owned())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_tts_voice_list(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let voices = object_array(object.get("voices"));
+    if voices
+        .iter()
+        .any(|voice| bool_field(voice, "ready") != Some(true))
+    {
+        return Err("use-safe voice list cannot contain unready voices".to_owned());
+    }
+    let ids = voices
+        .iter()
+        .filter_map(|voice| voice.get("voice_id").and_then(Value::as_str));
+    if has_duplicate_strings(ids) {
+        return Err("use-safe voice list cannot contain duplicate voices".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_language_pack_descriptor(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let voices = object_array(object.get("voices"));
+    let ids = voices
+        .iter()
+        .filter_map(|voice| voice.get("voice_id").and_then(Value::as_str));
+    if has_duplicate_strings(ids) {
+        return Err("language pack cannot contain duplicate voices".to_owned());
+    }
+    let installed = voices
+        .iter()
+        .filter(|voice| bool_field(voice, "installed") == Some(true))
+        .count() as i64;
+    let ready = voices
+        .iter()
+        .filter(|voice| bool_field(voice, "ready") == Some(true))
+        .count() as i64;
+    let has_default = voices
+        .iter()
+        .any(|voice| bool_field(voice, "default") == Some(true));
+    if number_field(object, "voice_count") != Some(voices.len() as i64) {
+        return Err("voice count must match listed voices".to_owned());
+    }
+    if number_field(object, "installed_voice_count") != Some(installed) {
+        return Err("installed voice count must match listed voices".to_owned());
+    }
+    if number_field(object, "ready_voice_count") != Some(ready) {
+        return Err("ready voice count must match listed voices".to_owned());
+    }
+    if bool_field(object, "installed") != Some(installed > 0) {
+        return Err("installed pack state must match installed voices".to_owned());
+    }
+    if bool_field(object, "ready") != Some(ready > 0) {
+        return Err("ready pack state must match ready voices".to_owned());
+    }
+    if bool_field(object, "default") != Some(has_default) {
+        return Err("default pack state must match listed voices".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_profile_descriptor(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let voice_id = optional_string(object, "voice_id");
+    match object.get("kind").and_then(Value::as_str) {
+        Some("standard") if voice_id.is_none_or(|id| !id.starts_with("standard:")) => {
+            return Err("standard profile kind needs a standard logical voice id".to_owned());
+        }
+        Some("cloned") if voice_id.is_none_or(|id| !id.starts_with("clone:")) => {
+            return Err("cloned profile kind needs a clone logical voice id".to_owned());
+        }
+        _ => {}
+    }
+    if bool_field(object, "ready") == Some(true) && bool_field(object, "installed") != Some(true) {
+        return Err("ready profile must be installed".to_owned());
+    }
+    if (bool_field(object, "default") == Some(true) || bool_field(object, "active") == Some(true))
+        && bool_field(object, "ready") != Some(true)
+    {
+        return Err("default or active profile must be ready".to_owned());
+    }
+    if object.get("kind").and_then(Value::as_str) == Some("standard")
+        && bool_field(object, "retained_source") == Some(true)
+    {
+        return Err("standard profile cannot retain clone source".to_owned());
+    }
+    if object.get("visibility").and_then(Value::as_str) == Some("private")
+        && !string_list(object.get("allowed_peer_ids")).is_empty()
+    {
+        return Err("private profile cannot expose allowed peers".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_profile_list(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let profiles = object_array(object.get("profiles"));
+    let ids = profiles
+        .iter()
+        .filter_map(|profile| profile.get("voice_id").and_then(Value::as_str));
+    if has_duplicate_strings(ids) {
+        return Err("voice profile list cannot contain duplicate profiles".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_get_profile_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let found = bool_field(object, "found") == Some(true);
+    let profile = object.get("profile");
+    if found && profile.is_none_or(Value::is_null) {
+        return Err("found voice profile response requires profile".to_owned());
+    }
+    if !found && profile.is_some_and(|profile| !profile.is_null()) {
+        return Err("missing voice profile response cannot include profile".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_update_profile_patch(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if !object.contains_key("display_name")
+        && !object.contains_key("enabled")
+        && !object.contains_key("visibility")
+        && !object.contains_key("allowed_peer_ids")
+    {
+        return Err("voice profile update must include a change".to_owned());
+    }
+    if object.get("visibility").and_then(Value::as_str) == Some("private")
+        && !string_list(object.get("allowed_peer_ids")).is_empty()
+    {
+        return Err("private visibility cannot include allowed peers".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_create_profile_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let ok = matches!(
+        object.get("status").and_then(Value::as_str),
+        Some("created" | "queued" | "ready")
+    );
+    let voice_id = optional_string(object, "voice_id");
+    if ok && object.get("revision").is_none_or(Value::is_null) {
+        return Err("successful create result needs revision".to_owned());
+    }
+    if ok && object.get("voice_id").is_none_or(Value::is_null) {
+        return Err("successful create result needs voice_id".to_owned());
+    }
+    if voice_id.is_some_and(|id| !id.starts_with("clone:")) {
+        return Err("created profile must use a clone logical voice id".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_delete_profile_request(value: &Value) -> Result<(), String> {
+    validate_clone_voice_id(
+        value,
+        "voice_id",
+        "only cloned voice profiles can be deleted",
+    )
+}
+
+fn validate_tts_delete_profile_response(value: &Value) -> Result<(), String> {
+    validate_clone_voice_id(
+        value,
+        "voice_id",
+        "deleted profile result must use a clone logical voice id",
+    )?;
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if matches!(
+        object.get("status").and_then(Value::as_str),
+        Some("deleted" | "revision_conflict")
+    ) && object.get("revision").is_none_or(Value::is_null)
+    {
+        return Err("delete result needs revision".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_profile_mutation_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if !matches!(
+        object.get("status").and_then(Value::as_str),
+        Some("rejected" | "not_found")
+    ) && object.get("revision").is_none_or(Value::is_null)
+    {
+        return Err("successful or conflicting mutation result needs revision".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_import_start_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let Some(max_chunk_bytes) = number_field(object, "max_chunk_bytes") else {
+        return Ok(());
+    };
+    let Some(max_chunks) = number_field(object, "max_chunks") else {
+        return Ok(());
+    };
+    let Some(accepted_total_bytes) = number_field(object, "accepted_total_bytes") else {
+        return Ok(());
+    };
+    if max_chunk_bytes.saturating_mul(max_chunks) < accepted_total_bytes {
+        return Err("upload session capacity is below accepted total bytes".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_import_chunk_request(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let Some(chunk_data) = object.get("chunk_data").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(chunk_data)
+        .map_err(|_| "chunk_data must be valid base64".to_owned())?;
+    if decoded.is_empty() {
+        return Err("decoded chunk must not be empty".to_owned());
+    }
+    if decoded.len() > 49_152 {
+        return Err("decoded chunk exceeds limit".to_owned());
+    }
+    if object
+        .get("chunk_sha256")
+        .and_then(Value::as_str)
+        .is_some_and(|expected| sha256_hex(&decoded) != expected)
+    {
+        return Err("chunk SHA-256 mismatch".to_owned());
+    }
+    let json_len = serde_json::to_vec(value)
+        .map_err(|_| "voice import chunk request cannot be measured".to_owned())?
+        .len();
+    if json_len > 131_072 {
+        return Err("voice import chunk request exceeds JSON limit".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_tts_import_chunk_response(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if let Some(sequence) = number_field(object, "sequence") {
+        if number_field(object, "next_sequence") != Some(sequence + 1) {
+            return Err("next_sequence must acknowledge exactly one chunk".to_owned());
+        }
+    }
+    if object.get("status").and_then(Value::as_str) == Some("duplicate")
+        && bool_field(object, "idempotent") != Some(true)
+    {
+        return Err("duplicate chunk acknowledgement must be idempotent".to_owned());
+    }
+    if object.get("status").and_then(Value::as_str) == Some("accepted")
+        && bool_field(object, "idempotent") == Some(true)
+    {
+        return Err("first chunk acknowledgement cannot be idempotent".to_owned());
     }
     Ok(())
 }
@@ -569,6 +1113,43 @@ fn normalize_string_set(value: &mut Value) {
         normalized.insert(text.to_owned());
     }
     *value = Value::Array(normalized.into_iter().map(Value::String).collect());
+}
+
+fn normalize_speech_language_requirement(value: &mut Value) -> Result<(), String> {
+    let Some(object) = value.as_object_mut() else {
+        return Ok(());
+    };
+    match object.get_mut("language") {
+        Some(language) => normalize_speech_language_value(language, true),
+        None => {
+            object.insert("language".to_owned(), Value::Null);
+        }
+    }
+    match object.get_mut("auto_language_candidates") {
+        Some(candidates) => normalize_speech_language_array(candidates),
+        None => {
+            object.insert(
+                "auto_language_candidates".to_owned(),
+                Value::Array(Vec::new()),
+            );
+        }
+    }
+    if !object.contains_key("table_revision") {
+        object.insert(
+            "table_revision".to_owned(),
+            Value::String("aurora-speech-language-v2".to_owned()),
+        );
+    }
+    let expected = speech_language_requirement_digest(object)?;
+    if object
+        .get("digest")
+        .and_then(Value::as_str)
+        .is_some_and(|actual| actual != expected)
+    {
+        return Err("language requirement digest mismatch".to_owned());
+    }
+    object.insert("digest".to_owned(), Value::String(expected));
+    Ok(())
 }
 
 fn validate_tts_operation_id(value: &Value) -> Result<(), String> {
@@ -667,6 +1248,140 @@ fn validate_tts_import_profile_response(value: &Value) -> Result<(), String> {
         return Err("voice profile import result requires revision".to_owned());
     }
     Ok(())
+}
+
+fn validate_stt_transcribe_language_shape(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if object
+        .get("language")
+        .is_some_and(|language| !language.is_null())
+        && !string_list(object.get("auto_language_candidates")).is_empty()
+    {
+        return Err("exact STT language cannot include auto candidates".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_speech_language_requirement(value: &Value) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let language = object.get("language");
+    let candidates = string_list(object.get("auto_language_candidates"));
+    match object.get("mode").and_then(Value::as_str) {
+        Some("exact") => {
+            if language.is_none_or(Value::is_null) {
+                return Err("exact language requirement needs language".to_owned());
+            }
+            if !candidates.is_empty() {
+                return Err("exact language requirement cannot include auto candidates".to_owned());
+            }
+        }
+        Some("auto") => {
+            if language.is_some_and(|value| !value.is_null()) {
+                return Err("auto language requirement cannot include exact language".to_owned());
+            }
+        }
+        _ => {}
+    }
+    if !is_sorted_string_list(&candidates) {
+        return Err("auto language candidates must be sorted".to_owned());
+    }
+    let expected = speech_language_requirement_digest(object)?;
+    if object
+        .get("digest")
+        .and_then(Value::as_str)
+        .is_some_and(|actual| actual != expected)
+    {
+        return Err("language requirement digest mismatch".to_owned());
+    }
+    Ok(())
+}
+
+fn speech_language_requirement_digest(object: &Map<String, Value>) -> Result<String, String> {
+    let candidates = object
+        .get("auto_language_candidates")
+        .cloned()
+        .unwrap_or_else(|| Value::Array(Vec::new()));
+    let language = object.get("language").cloned().unwrap_or(Value::Null);
+    let mode = object.get("mode").cloned().unwrap_or(Value::Null);
+    let table_revision = object
+        .get("table_revision")
+        .cloned()
+        .unwrap_or_else(|| Value::String("aurora-speech-language-v2".to_owned()));
+    let canonical = format!(
+        "{{\"auto_language_candidates\":{},\"language\":{},\"mode\":{},\"table_revision\":{}}}",
+        serde_json::to_string(&candidates)
+            .map_err(|_| "language requirement digest payload is invalid".to_owned())?,
+        serde_json::to_string(&language)
+            .map_err(|_| "language requirement digest payload is invalid".to_owned())?,
+        serde_json::to_string(&mode)
+            .map_err(|_| "language requirement digest payload is invalid".to_owned())?,
+        serde_json::to_string(&table_revision)
+            .map_err(|_| "language requirement digest payload is invalid".to_owned())?,
+    );
+    Ok(sha256_hex(canonical.as_bytes()))
+}
+
+fn validate_clone_voice_id(value: &Value, field: &str, message: &str) -> Result<(), String> {
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    if optional_string(object, field).is_none_or(|voice_id| !voice_id.starts_with("clone:")) {
+        return Err(message.to_owned());
+    }
+    Ok(())
+}
+
+fn object_array(value: Option<&Value>) -> Vec<&Map<String, Value>> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .collect()
+}
+
+fn string_list(value: Option<&Value>) -> Vec<&str> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+fn string_set(value: Option<&Value>) -> BTreeSet<&str> {
+    string_list(value).into_iter().collect()
+}
+
+fn optional_string<'a>(object: &'a Map<String, Value>, field: &str) -> Option<&'a str> {
+    object.get(field).and_then(Value::as_str)
+}
+
+fn bool_field(object: &Map<String, Value>, field: &str) -> Option<bool> {
+    object.get(field).and_then(Value::as_bool)
+}
+
+fn number_field(object: &Map<String, Value>, field: &str) -> Option<i64> {
+    object.get(field).and_then(|value| {
+        value
+            .as_i64()
+            .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
+    })
+}
+
+fn has_duplicate_strings<'a>(values: impl IntoIterator<Item = &'a str>) -> bool {
+    let mut seen = BTreeSet::new();
+    values.into_iter().any(|value| !seen.insert(value))
+}
+
+fn is_sorted_string_list(values: &[&str]) -> bool {
+    values
+        .windows(2)
+        .all(|pair| pair[0].chars().cmp(pair[1].chars()) != std::cmp::Ordering::Greater)
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

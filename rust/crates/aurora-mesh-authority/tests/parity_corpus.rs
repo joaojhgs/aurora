@@ -13,11 +13,11 @@ use std::path::PathBuf;
 
 use aurora_mesh_authority::authority::{
     AuthenticatedPeerContext, AuthorityError, AuthorityResult, InboundCredentialVerifierStore,
-    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
-    MemoryPeerGrantRepository, MemoryReconnectChallengeStore, PeerAuthorityResolver,
-    PeerGrantRepository, PeerGrantResolutionRequest, PeerPairingIssueOptions, PeerPairingIssuer,
-    PeerRelationshipIdentity, PeerRelationshipSelector, RandomSource, ReconnectChallengeStore,
-    ReconnectTransportAttestation,
+    LocalPeerCredentialVerifierV1, LocalPeerGrantV1, MemoryInboundCredentialVerifierStore,
+    MemoryPeerAuditSink, MemoryPeerGrantRepository, MemoryReconnectChallengeStore,
+    PeerAuthorityResolver, PeerGrantRepository, PeerGrantResolutionRequest,
+    PeerPairingIssueOptions, PeerPairingIssuer, PeerRelationshipIdentity, PeerRelationshipSelector,
+    RandomSource, ReconnectChallengeStore, ReconnectTransportAttestation,
 };
 use aurora_mesh_authority::authorization::{
     PeerAuthorityHostAuthorizationStore, SessionPeerHostAuthorizationStore,
@@ -148,7 +148,223 @@ async fn seeded_repository(grants: &[LocalPeerGrantV1]) -> MemoryPeerGrantReposi
     repository
 }
 
+fn verifier_for(
+    selector: &PeerRelationshipSelector,
+    credential_revision: i64,
+    revoked_at_ms: Option<i64>,
+) -> LocalPeerCredentialVerifierV1 {
+    LocalPeerCredentialVerifierV1 {
+        version: 1,
+        token_id: selector.token_id.clone(),
+        claimant_peer_id: selector.claimant_peer_id.clone(),
+        verifier_peer_id: selector.verifier_peer_id.clone(),
+        room_name: selector.room_name.clone(),
+        token_hash_hex: "a".repeat(64),
+        created_at_ms: 1_000,
+        expires_at_ms: None,
+        revoked_at_ms,
+        credential_revision,
+    }
+}
+
+fn grant_for(
+    selector: &PeerRelationshipSelector,
+    grant_id: &str,
+    grant_revision: i64,
+    revoked_at_ms: Option<i64>,
+) -> LocalPeerGrantV1 {
+    LocalPeerGrantV1 {
+        version: 1,
+        grant_id: grant_id.to_owned(),
+        token_id: selector.token_id.clone(),
+        claimant_peer_id: selector.claimant_peer_id.clone(),
+        verifier_peer_id: selector.verifier_peer_id.clone(),
+        room_name: selector.room_name.clone(),
+        allowed_method_ids: vec!["Tooling.GetTools".to_owned()],
+        allowed_tool_contract_ids: Vec::new(),
+        capability_pack_ids: Vec::new(),
+        resource_scopes: Vec::new(),
+        created_at_ms: 1_000,
+        expires_at_ms: None,
+        revoked_at_ms,
+        grant_revision,
+    }
+}
+
 // ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn stale_verifier_upsert_cannot_resurrect_a_revoked_credential() {
+    let selector = PeerRelationshipSelector {
+        token_id: "token-a".to_owned(),
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let mut store = MemoryInboundCredentialVerifierStore::new();
+    store
+        .upsert_verifier(verifier_for(&selector, 1, None))
+        .await
+        .expect("initial verifier is valid");
+    store
+        .revoke_verifier(&selector, 2_000)
+        .await
+        .expect("verifier revoke succeeds");
+
+    store
+        .upsert_verifier(verifier_for(&selector, 1, None))
+        .await
+        .expect("stale hydrate row is valid but ignored");
+    assert!(
+        store
+            .get_verifier(&selector, 3_000)
+            .await
+            .expect("verifier read succeeds")
+            .is_none(),
+        "lower-revision verifier resurrected a revoked credential"
+    );
+
+    store
+        .upsert_verifier(verifier_for(&selector, 2, None))
+        .await
+        .expect("equal hydrate row is valid but ignored");
+    assert!(
+        store
+            .get_verifier(&selector, 3_000)
+            .await
+            .expect("verifier read succeeds")
+            .is_none(),
+        "equal-revision verifier resurrected a revoked credential"
+    );
+}
+
+#[tokio::test]
+async fn newer_verifier_revision_can_replace_a_revoked_credential() {
+    let selector = PeerRelationshipSelector {
+        token_id: "token-a".to_owned(),
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let mut store = MemoryInboundCredentialVerifierStore::new();
+    store
+        .upsert_verifier(verifier_for(&selector, 1, None))
+        .await
+        .expect("initial verifier is valid");
+    store
+        .revoke_verifier(&selector, 2_000)
+        .await
+        .expect("verifier revoke succeeds");
+
+    store
+        .upsert_verifier(verifier_for(&selector, 3, None))
+        .await
+        .expect("newer credential revision is accepted");
+    let live = store
+        .get_verifier(&selector, 3_000)
+        .await
+        .expect("verifier read succeeds")
+        .expect("newer verifier is live");
+    assert_eq!(live.credential_revision, 3);
+}
+
+#[tokio::test]
+async fn stale_grant_upsert_cannot_resurrect_a_revoked_grant() {
+    let selector = PeerRelationshipSelector {
+        token_id: "token-a".to_owned(),
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let mut repository = MemoryPeerGrantRepository::new();
+    repository
+        .upsert_grant(grant_for(&selector, "grant-a", 1, None))
+        .await
+        .expect("initial grant is valid");
+    repository
+        .revoke_grants(&selector, 2_000)
+        .await
+        .expect("grant revoke succeeds");
+
+    repository
+        .upsert_grant(grant_for(&selector, "grant-a", 1, None))
+        .await
+        .expect("stale hydrate grant is valid but ignored");
+    let denied = repository
+        .resolve_grant(&PeerGrantResolutionRequest {
+            selector: selector.clone(),
+            method_id: Some("Tooling.GetTools".to_owned()),
+            tool_contract_id: None,
+            capability_pack_id: None,
+            resource_scope: None,
+            now_ms: 3_000,
+        })
+        .await
+        .expect("grant resolution succeeds");
+    assert!(!denied.allowed, "lower-revision grant resurrected access");
+    assert_eq!(
+        denied.reason_code,
+        Some(aurora_mesh_authority::authority::PeerAuthorityDecisionReason::GrantRevoked)
+    );
+
+    repository
+        .upsert_grant(grant_for(&selector, "grant-a", 2, None))
+        .await
+        .expect("equal hydrate grant is valid but ignored");
+    let denied = repository
+        .resolve_grant(&PeerGrantResolutionRequest {
+            selector,
+            method_id: Some("Tooling.GetTools".to_owned()),
+            tool_contract_id: None,
+            capability_pack_id: None,
+            resource_scope: None,
+            now_ms: 3_000,
+        })
+        .await
+        .expect("grant resolution succeeds");
+    assert!(!denied.allowed, "equal-revision grant resurrected access");
+    assert_eq!(
+        denied.reason_code,
+        Some(aurora_mesh_authority::authority::PeerAuthorityDecisionReason::GrantRevoked)
+    );
+}
+
+#[tokio::test]
+async fn newer_grant_revision_can_replace_a_revoked_grant() {
+    let selector = PeerRelationshipSelector {
+        token_id: "token-a".to_owned(),
+        claimant_peer_id: "peer-a".to_owned(),
+        verifier_peer_id: "peer-host".to_owned(),
+        room_name: "lab-room".to_owned(),
+    };
+    let mut repository = MemoryPeerGrantRepository::new();
+    repository
+        .upsert_grant(grant_for(&selector, "grant-a", 1, None))
+        .await
+        .expect("initial grant is valid");
+    repository
+        .revoke_grants(&selector, 2_000)
+        .await
+        .expect("grant revoke succeeds");
+
+    repository
+        .upsert_grant(grant_for(&selector, "grant-a", 3, None))
+        .await
+        .expect("newer grant revision is accepted");
+    let allowed = repository
+        .resolve_grant(&PeerGrantResolutionRequest {
+            selector,
+            method_id: Some("Tooling.GetTools".to_owned()),
+            tool_contract_id: None,
+            capability_pack_id: None,
+            resource_scope: None,
+            now_ms: 3_000,
+        })
+        .await
+        .expect("grant resolution succeeds");
+    assert!(allowed.allowed);
+    assert_eq!(allowed.grant.expect("covering grant").grant_revision, 3);
+}
 
 #[test]
 fn corpus_declares_the_schema_and_is_synthetic() {
