@@ -708,21 +708,12 @@ export function MeshPeersResource({
           key_path: change.keyPath,
           value: change.value,
         }))
-        const diff = await client.config.previewDiff({
-          changes: configChanges,
-        })
-        if (!diff.ok || !diff.data?.valid) {
-          throw new Error(diff.ok ? diff.data?.errors.join('; ') || 'Config change was not valid.' : meshPeerErrorMessage(diff.error))
-        }
-        await client.config.previewReloadImpact({ changes: configChanges })
-        for (const change of configChanges) {
-          setConfigPendingKey(change.key_path)
-          await client.config.applyChange({
-            change,
-            reason: `Update mesh settings for ${snapshot.localNodeName}`,
-            reauthConfirmed: true,
-          })
-        }
+        await commitMeshConfigChangeSet(
+          client,
+          configChanges,
+          `Update mesh settings for ${snapshot.localNodeName}`,
+          'Config change was not valid.',
+        )
         await loadPeers()
       } catch (error) {
         setConfigMutationError(meshPeerErrorMessage(error))
@@ -739,33 +730,14 @@ export function MeshPeersResource({
       try {
         const changes = meshInviteConfigChanges(invite)
         if (changes.length > 0) {
-          const diff = await client.config.previewDiff({ changes })
-          if (!diff.ok || !diff.data?.valid) {
-            throw new Error(diff.ok ? diff.data?.errors.join('; ') || 'Invite configuration was not valid for this node.' : meshPeerErrorMessage(diff.error))
-          }
-          await client.config.previewReloadImpact({ changes })
-          const quiesceChanges = meshInviteQuiesceChanges()
-          const quiesceDiff = await client.config.previewDiff({ changes: quiesceChanges })
-          if (!quiesceDiff.ok || !quiesceDiff.data?.valid) {
-                throw new Error(quiesceDiff.ok ? 'Aurora could not pause existing connections before applying the invite.' : meshPeerErrorMessage(quiesceDiff.error))
-          }
-          await client.config.previewReloadImpact({ changes: quiesceChanges })
-          for (const change of quiesceChanges) {
-            await client.config.applyChange({
-              change,
-              reason: `Pause mesh connections before invite for ${snapshot.localNodeName}`,
-              reauthConfirmed: true,
-            })
-          }
-          for (const change of changes) {
-            await client.config.applyChange({
-              change,
-              reason: `Join mesh from invite for ${snapshot.localNodeName}`,
-              reauthConfirmed: true,
-            })
-          }
+          await commitMeshConfigChangeSet(
+            client,
+            changes,
+            `Join mesh from invite for ${snapshot.localNodeName}`,
+            'Invite configuration was not valid for this device.',
+          )
         }
-        setInviteImport({ pending: false, error: null, appliedChangeCount: changes.length + meshInviteQuiesceChanges().length })
+        setInviteImport({ pending: false, error: null, appliedChangeCount: changes.length })
         await loadPeers()
       } catch (error) {
         setInviteImport({ pending: false, error: meshPeerErrorMessage(error), appliedChangeCount: null })
@@ -967,6 +939,38 @@ export function meshInviteConfigChanges(invite: JsonObject): { key_path: string;
   push('services.gateway.mesh_network.enabled', mesh.enabled === false ? undefined : true)
   push('services.gateway.webrtc.enabled', webrtc.enabled === false ? undefined : true)
   return changes
+}
+
+export async function commitMeshConfigChangeSet(
+  client: AuroraClient,
+  changes: { key_path: string; value: JsonValue }[],
+  reason: string,
+  invalidFallback: string,
+): Promise<string[]> {
+  const diff = await client.config.previewDiff({ changes })
+  if (!diff.ok || !diff.data?.valid) {
+    throw new Error(diff.ok ? diff.data?.errors.join('; ') || invalidFallback : meshPeerErrorMessage(diff.error))
+  }
+  if (typeof diff.data.base_revision !== 'number' || !diff.data.preview_token) {
+    throw new Error('Aurora could not confirm that save. Refresh and review before saving again.')
+  }
+  await client.config.previewReloadImpact({ changes })
+  const committed = await client.config.commitChangeSet({
+    request: {
+      changes,
+      base_revision: diff.data.base_revision,
+      preview_token: diff.data.preview_token,
+    },
+    reason,
+    reauthConfirmed: true,
+  })
+  if (!committed.data.success) {
+    const failure = committed.data.error_code === 'config_revision_conflict'
+      ? 'Settings changed since review. Refresh and review before saving again.'
+      : meshSafeErrorTitle(committed.data.error || committed.data.error_code || 'Aurora could not save those changes.')
+    throw new Error(failure)
+  }
+  return committed.data.changed_paths
 }
 
 /** Stop all mesh/WebRTC publication before changing a room invite in place. */

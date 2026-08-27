@@ -115,4 +115,36 @@ describe('AdminDevicesView production device and pairing controls', () => {
     expect(snapshot.warnings.join(' ')).toContain('Connection lost. Reconnecting')
     expect(markup).toContain('Connection lost. Reconnecting')
   })
+
+  it('does not build trust actions from fuzzy device-name matches', async () => {
+    const transport = new MockAuroraTransport()
+    transport.register('Auth.ListDevices', () => ({
+      generated_at: '2026-07-28T00:00:00Z',
+      secrets_redacted: true,
+      devices: [{
+        id: 'device-study-tablet',
+        name: 'Study tablet',
+        user_id: 'principal-study-tablet',
+        is_trusted: false,
+        created_at: '2026-07-28T00:00:00Z',
+        last_seen: null,
+      }],
+    }))
+    transport.register('Auth.MeshListPeers', () => ({
+      peers: [{
+        ...meshPeerListFixture.peers[0],
+        id: 'peer-kitchen-shadow',
+        peer_id: 'peer-kitchen-shadow',
+        node_name: 'Study tablet',
+        outbound_status: 'pending',
+        inbound_status: 'pending',
+        connection_status: 'connected',
+      }],
+    }))
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport }))
+
+    expect(snapshot.devices[0]?.linkedMeshPeerId).toBe('peer-kitchen-shadow')
+    expect(snapshot.devices[0]?.linkedMeshPeerLabel).toBe('Study tablet (pending)')
+    expect(snapshot.devices[0]?.trustAction).toBeNull()
+  })
 })

@@ -24,6 +24,114 @@ export type MermaidDiagramProps = SyntaxHighlighterProps & {
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
+const SAFE_SVG_TAGS = new Set([
+  "svg",
+  "g",
+  "defs",
+  "marker",
+  "path",
+  "line",
+  "polyline",
+  "polygon",
+  "rect",
+  "circle",
+  "ellipse",
+  "text",
+  "tspan",
+  "title",
+  "style",
+]);
+const SAFE_SVG_ATTRS = new Set([
+  "aria-hidden",
+  "class",
+  "cx",
+  "cy",
+  "d",
+  "dominant-baseline",
+  "fill",
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-weight",
+  "height",
+  "href",
+  "id",
+  "marker-end",
+  "markerHeight",
+  "markerheight",
+  "markerUnits",
+  "markerunits",
+  "markerWidth",
+  "markerwidth",
+  "orient",
+  "points",
+  "r",
+  "refX",
+  "refx",
+  "refY",
+  "refy",
+  "role",
+  "rx",
+  "ry",
+  "stroke",
+  "stroke-dasharray",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-width",
+  "style",
+  "text-anchor",
+  "transform",
+  "viewBox",
+  "width",
+  "x",
+  "x1",
+  "x2",
+  "xlink:href",
+  "xmlns",
+  "xmlns:xlink",
+  "y",
+  "y1",
+  "y2",
+]);
+const SVG_DENY_TAG = /^(?:script|foreignobject|iframe|object|embed|link|meta|base|audio|video|canvas)$/iu;
+const SVG_UNSAFE_VALUE = /(?:javascript:|data:text\/html|vbscript:|expression\s*\(|@import|<)/iu;
+const SVG_UNSAFE_STYLE = /(?:url\s*\(|javascript:|vbscript:|expression\s*\(|@import|<|<\/style)/iu;
+
+export function sanitizeMermaidSvg(svg: string): string | null {
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") return null;
+  const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+  if (document.querySelector("parsererror")) return null;
+  const root = document.documentElement;
+  if (root.tagName.toLowerCase() !== "svg") return null;
+  if (!sanitizeSvgElement(root)) return null;
+  return new XMLSerializer().serializeToString(root);
+}
+
+function sanitizeSvgElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  if (SVG_DENY_TAG.test(tagName) || !SAFE_SVG_TAGS.has(tagName)) return false;
+  if (tagName === "style") {
+    if (SVG_UNSAFE_STYLE.test(element.textContent ?? "")) return false;
+  }
+  for (const attr of [...element.attributes]) {
+    const attrName = attr.name;
+    const normalizedName = attrName.toLowerCase();
+    if (normalizedName.startsWith("on") || !SAFE_SVG_ATTRS.has(attrName) || !safeSvgAttrValue(normalizedName, attr.value)) {
+      element.removeAttribute(attrName);
+    }
+  }
+  for (const child of [...element.children]) {
+    if (!sanitizeSvgElement(child)) return false;
+  }
+  return true;
+}
+
+function safeSvgAttrValue(attrName: string, value: string): boolean {
+  const trimmed = value.trim();
+  if (attrName === "href" || attrName === "xlink:href") return trimmed.startsWith("#");
+  if (attrName === "style") return !SVG_UNSAFE_STYLE.test(trimmed);
+  return !SVG_UNSAFE_VALUE.test(trimmed);
+}
 
 type MermaidZoomProps = {
   svg: string;
@@ -287,15 +395,17 @@ const MermaidDiagramImpl: FC<MermaidDiagramProps> = ({
   const result = useMemo(() => {
     if (!isComplete) return null;
     try {
-      return {
-        svg: renderMermaidSVG(code, {
+      const svg = sanitizeMermaidSvg(renderMermaidSVG(code, {
           bg: "var(--background)",
           fg: "var(--foreground)",
           muted: "var(--muted-foreground)",
           border: "var(--border)",
           accent: "var(--foreground)",
           transparent: true,
-        }),
+        }));
+      if (!svg) throw new Error("Diagram SVG failed safety checks");
+      return {
+        svg,
         error: null,
       };
     } catch (err) {

@@ -749,13 +749,14 @@ function buildDeviceRow(
   const deleteState = deleteCapability?.availability ?? 'unsupported'
   const deleteReason = deleteCapability ? capabilityReason(deleteCapability) : 'Device removal is not ready yet.'
   const linkedMeshPeer = findLinkedMeshPeer(device.name, meshPeers)
-  const pendingPairing = findLinkedPairing(device.name, pendingPairings)
+  const actionableMeshPeer = findExactMeshPeerForDevice(device, meshPeers)
+  const pendingPairing = findExactPairingForDevice(device, pendingPairings)
   const linkedState = linkedMeshPeer
     ? meshPeerAvailability(linkedMeshPeer)
     : pendingPairing
       ? 'pending'
       : 'unsupported'
-  const trustAction = buildTrustActionForDevice(device, linkedMeshPeer, pendingPairing, meshPeerActionState)
+  const trustAction = buildTrustActionForDevice(device, actionableMeshPeer, pendingPairing, meshPeerActionState)
   return {
     id: device.id,
     name: device.name,
@@ -777,7 +778,7 @@ function buildDeviceRow(
     trustAction,
     linkedMeshPeerId: linkedMeshPeer?.peer_id ?? pendingPairing?.remote_peer_id ?? null,
     linkedMeshPeerLabel: linkedMeshPeer
-      ? `${linkedMeshPeer.node_name} (${linkedMeshPeer.outbound_status}/${linkedMeshPeer.connection_status})`
+      ? linkedMeshPeerSummary(linkedMeshPeer)
       : pendingPairing
         ? `${pendingPairing.remote_node_name || pendingPairing.remote_peer_id} pending pairing`
         : 'no linked mesh peer reported',
@@ -814,7 +815,7 @@ function pendingPairingRow(entry: PendingPairingEntry, meshPeers: MeshPeerInfo[]
     adminRequested: entry.granted_is_admin,
     linkedMeshPeerId: linkedPeer?.peer_id ?? entry.remote_peer_id ?? null,
     linkedMeshPeerLabel: linkedPeer
-      ? `${linkedPeer.node_name} (${linkedPeer.outbound_status}/${linkedPeer.connection_status})`
+      ? linkedMeshPeerSummary(linkedPeer)
       : entry.remote_peer_id
         ? `${entry.remote_node_name || entry.remote_peer_id} pending peer`
         : 'no mesh peer id reported',
@@ -847,12 +848,30 @@ function findLinkedMeshPeer(deviceName: string, meshPeers: MeshPeerInfo[]): Mesh
   })
 }
 
-function findLinkedPairing(deviceName: string, pairings: PendingPairingEntry[]): PendingPairingEntry | undefined {
-  const normalizedDevice = normalizeLinkLabel(deviceName)
-  return pairings.find((entry) => {
-    const labels = [entry.device_name, entry.remote_node_name, entry.remote_peer_id].map(normalizeLinkLabel)
-    return labels.some((label) => label.length > 0 && (label.includes(normalizedDevice) || normalizedDevice.includes(label)))
-  })
+function findExactMeshPeerForDevice(device: DeviceResponse, meshPeers: MeshPeerInfo[]): MeshPeerInfo | undefined {
+  const deviceIds = exactDeviceLinkIds(device)
+  return meshPeers.find((peer) => deviceIds.has(peer.peer_id) || deviceIds.has(peer.id))
+}
+
+function findExactPairingForDevice(device: DeviceResponse, pairings: PendingPairingEntry[]): PendingPairingEntry | undefined {
+  const deviceIds = exactDeviceLinkIds(device)
+  return pairings.find((entry) => deviceIds.has(entry.remote_peer_id))
+}
+
+function exactDeviceLinkIds(device: DeviceResponse): Set<string> {
+  return new Set([device.id, device.user_id].filter((value): value is string => typeof value === 'string' && value.length > 0))
+}
+
+function linkedMeshPeerSummary(peer: MeshPeerInfo): string {
+  return `${peer.node_name} (${meshPeerStateLabel(meshPeerAvailability(peer))})`
+}
+
+function meshPeerStateLabel(state: AvailabilityState): string {
+  if (state === 'available-local' || state === 'available-remote') return 'approved'
+  if (state === 'offline' || state === 'stale') return 'offline'
+  if (state === 'denied' || state === 'privacy-blocked') return 'not allowed'
+  if (state === 'pending') return 'pending'
+  return 'needs attention'
 }
 
 function normalizeLinkLabel(value: string): string {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   decodeMeshInvite,
   encodeMeshInviteToken,
@@ -7,7 +7,8 @@ import {
   meshInviteSummary,
   MESH_INVITE_KIND,
 } from '../src/mesh-invite'
-import { meshInviteConfigChanges, meshInviteQuiesceChanges } from '../src/mesh-peers-view'
+import { commitMeshConfigChangeSet, meshInviteConfigChanges } from '../src/mesh-peers-view'
+import type { AuroraClient } from '@aurora/client'
 import type { JsonObject } from '@aurora/client'
 
 const invite: JsonObject = {
@@ -59,9 +60,8 @@ describe('mesh invite codec', () => {
     expect(summary.pairingCode).toBeNull()
   })
 
-  it('quiesces transport, applies credentials, then enables mesh before WebRTC', () => {
+  it('applies credentials before enabling direct device connections without duplicate keys', () => {
     const changes = meshInviteConfigChanges(invite)
-    const quiesceChanges = meshInviteQuiesceChanges()
     const byKey = Object.fromEntries(changes.map((change) => [change.key_path, change.value]))
     expect(byKey['services.gateway.mesh_network.enabled']).toBe(true)
     expect(byKey['services.gateway.webrtc.enabled']).toBe(true)
@@ -83,9 +83,45 @@ describe('mesh invite codec', () => {
       expect(indexOf(credential), `${credential} must be applied before WebRTC starts`).toBeLessThan(webRtcEnabledIndex)
     }
     expect(meshEnabledIndex).toBeLessThan(webRtcEnabledIndex)
-    expect(quiesceChanges).toEqual([
-      { key_path: 'services.gateway.mesh_network.enabled', value: false },
-      { key_path: 'services.gateway.webrtc.enabled', value: false },
-    ])
+    expect(new Set(changes.map((change) => change.key_path)).size).toBe(changes.length)
+  })
+
+  it('previews once and commits mesh config as one atomic change set', async () => {
+    const changes = meshInviteConfigChanges(invite)
+    const previewDiff = vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        valid: true,
+        diffs: [],
+        errors: [],
+        secrets_redacted: true,
+        base_revision: 12,
+        preview_token: 'mesh-preview-12',
+        changed_paths: changes.map((change) => change.key_path),
+      },
+    }))
+    const previewReloadImpact = vi.fn(async () => ({ ok: true as const, data: { impacted_services: [] } }))
+    const commitChangeSet = vi.fn(async (_input: unknown) => ({
+      data: {
+        success: true,
+        revision: 13,
+        changed_paths: changes.map((change) => change.key_path),
+        error: null,
+        error_code: null,
+      },
+    }))
+    const client = { config: { previewDiff, previewReloadImpact, commitChangeSet } } as unknown as AuroraClient
+
+    await expect(commitMeshConfigChangeSet(client, changes, 'Join mesh from invite for Studio', 'Invite invalid')).resolves.toEqual(
+      changes.map((change) => change.key_path),
+    )
+    expect(previewDiff).toHaveBeenCalledTimes(1)
+    expect(previewReloadImpact).toHaveBeenCalledWith({ changes })
+    expect(commitChangeSet).toHaveBeenCalledTimes(1)
+    expect(commitChangeSet.mock.calls[0]?.[0]).toEqual({
+      request: { changes, base_revision: 12, preview_token: 'mesh-preview-12' },
+      reason: 'Join mesh from invite for Studio',
+      reauthConfirmed: true,
+    })
   })
 })
