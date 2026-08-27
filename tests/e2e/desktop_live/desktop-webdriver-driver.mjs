@@ -406,8 +406,25 @@ async function readJsonEnv(name) {
   return JSON.parse(await fs.readFile(file, 'utf8'))
 }
 
-async function invokeDesktopHook(baseUrl, sessionId, payload) {
-  const value = await executeAsyncScript(baseUrl, sessionId, `
+async function invokeDesktopHook(
+  baseUrl,
+  sessionId,
+  payload,
+  {
+    execute = executeAsyncScript,
+    recoverContext = async () => {
+      await selectMainDesktopWindow(baseUrl, sessionId)
+      await waitForDesktopHookContext(baseUrl, sessionId)
+      await selectMainDesktopWindow(baseUrl, sessionId)
+    },
+    sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+    maxAttempts = 3,
+  } = {},
+) {
+  let lastError
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const value = await execute(baseUrl, sessionId, `
     const payload = arguments[0];
     const envelopeSchema = arguments[1];
     const done = arguments[arguments.length - 1];
@@ -427,7 +444,13 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
       }
       done(serialized);
     };
-    Promise.resolve().then(async () => {
+    const runKey = String(payload && payload.sessionNonce || 'missing-session-nonce');
+    const runs = window.__AURORA_DESKTOP_LIVE_E2E_RUNS__ instanceof Map
+      ? window.__AURORA_DESKTOP_LIVE_E2E_RUNS__
+      : new Map();
+    window.__AURORA_DESKTOP_LIVE_E2E_RUNS__ = runs;
+    let run = runs.get(runKey);
+    if (!run) run = Promise.resolve().then(async () => {
       const runtime = {
         href: String(window.location.href),
         tauriPresent: Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__),
@@ -457,13 +480,23 @@ async function invokeDesktopHook(baseUrl, sessionId, payload) {
         };
       }
       return { runtime, ...result };
-    }).then(finish, (error) => finish({
+    });
+    runs.set(runKey, run);
+    run.then(finish, (error) => finish({
       status: 'failed',
       blocker: 'desktop-webview-hook-threw',
       detail: error && typeof error.message === 'string' ? error.message : String(error)
     }));
   `, [payload, hookResultEnvelopeSchema])
-  return parseHookResultEnvelope(value)
+      return parseHookResultEnvelope(value)
+    } catch (error) {
+      lastError = error
+      if (!isTransientDesktopContextError(error) || attempt === maxAttempts) throw error
+      await recoverContext()
+      await sleep(100 * attempt)
+    }
+  }
+  throw lastError
 }
 
 function parseHookResultEnvelope(value) {
@@ -784,6 +817,37 @@ async function runSelfTest() {
   })
   assert.equal(readinessAttempts, 3)
   assert.equal(readyRuntime.hookReady, true)
+  let hookAttempts = 0
+  let hookRecoveries = 0
+  const recoveredHookResult = await invokeDesktopHook(
+    'http://unused.test',
+    'session',
+    { sessionNonce: 'retry-nonce' },
+    {
+      maxAttempts: 2,
+      execute: async (_baseUrl, _sessionId, script) => {
+        hookAttempts += 1
+        assert.match(script, /__AURORA_DESKTOP_LIVE_E2E_RUNS__/)
+        if (hookAttempts === 1) {
+          throw new Error(
+            'WebDriver POST /execute/async failed with 500: '
+            + '{"value":{"error":"javascript error","message":"A JavaScript exception occurred"}}',
+          )
+        }
+        return JSON.stringify({
+          schema: hookResultEnvelopeSchema,
+          result: { status: 'passed' },
+        })
+      },
+      recoverContext: async () => {
+        hookRecoveries += 1
+      },
+      sleep: async () => undefined,
+    },
+  )
+  assert.deepEqual(recoveredHookResult, { status: 'passed' })
+  assert.equal(hookAttempts, 2)
+  assert.equal(hookRecoveries, 1)
   await assert.rejects(
     waitForDesktopHookContext('http://unused.test', 'session', {
       timeoutMs: 1_000,
@@ -793,6 +857,22 @@ async function runSelfTest() {
           'WebDriver POST /execute/sync failed with 404: '
           + '{"value":{"error":"invalid session id"}}',
         )
+      },
+      sleep: async () => undefined,
+    }),
+    /invalid session id/,
+  )
+  await assert.rejects(
+    invokeDesktopHook('http://unused.test', 'session', { sessionNonce: 'fatal-nonce' }, {
+      maxAttempts: 2,
+      execute: async () => {
+        throw new Error(
+          'WebDriver POST /execute/async failed with 404: '
+          + '{"value":{"error":"invalid session id"}}',
+        )
+      },
+      recoverContext: async () => {
+        assert.fail('non-transient WebDriver errors must not recover or retry')
       },
       sleep: async () => undefined,
     }),
