@@ -1,6 +1,5 @@
-import { AuroraError } from '@aurora/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Page from './page'
 
 const { listBackups } = vi.hoisted(() => ({
@@ -37,27 +36,26 @@ vi.mock('../../backup-client', () => ({
   )
 }))
 
-describe('web backup page copy', () => {
+describe('web backup page', () => {
   beforeEach(() => {
     listBackups.mockReset()
   })
 
-  it('sanitizes hostile typed initial-list errors before rendering text or user-facing attributes', async () => {
-    listBackups.mockResolvedValueOnce({
-      ok: false,
-      error: new AuroraError({
-        code: 'transport_loss',
-        message: 'Backup.List Gateway.GetSupportBundle /home/alice room-password WebRTC sidecar evidence SDK fallback raw token',
-        correlationId: 'BACKUP_REF-9'
-      })
-    })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('does not server-prefetch backup data with shared environment credentials', async () => {
+    vi.stubEnv('AURORA_GATEWAY_URL', 'https://gateway.example')
+    vi.stubEnv('AURORA_GATEWAY_TOKEN', 'server-shared-token')
 
     const markup = renderToStaticMarkup(await Page())
     const text = visibleOutput(markup)
     const attributes = userFacingAttributes(markup)
 
-    expect(text).toContain('Connection lost. Reconnecting... Ref BACKUP_REF-9.')
-    expect(`${text} ${attributes}`).not.toMatch(/Backup\.List|Gateway\.|\/home\/|room-password|WebRTC|sidecar|evidence|SDK|fallback|raw|token/i)
+    expect(text).toContain('Backups ready')
+    expect(`${text} ${attributes}`).not.toContain('server-shared-token')
+    expect(listBackups).not.toHaveBeenCalled()
   })
 })
 

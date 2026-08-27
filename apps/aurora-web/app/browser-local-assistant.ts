@@ -15,11 +15,12 @@ export async function createAuroraBrowserLocalAssistantConfig(
   if (!runtime.localData || !runtime.localNodeProviderStatus.localDataWritable || !runtime.localToolProvider) {
     return null
   }
-  const enabled = await loadAuroraBrowserAssistantAvailability()
+  const bearerToken = () => runtime.client.auth.bearerToken()
+  const enabled = await loadAuroraBrowserAssistantAvailability({ bearerToken })
   if (!enabled) return null
   const remoteTools = await loadRemoteProjectionTools(runtime)
   return {
-    provider: createAuroraBrowserAssistantProvider(),
+    provider: createAuroraBrowserAssistantProvider({ bearerToken }),
     remoteTools,
   }
 }

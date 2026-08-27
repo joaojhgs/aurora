@@ -197,8 +197,7 @@ export function createAuroraWebClient(): AuroraClient {
   if (gatewayUrl) {
     return new AuroraClient({
       transport: new HttpGatewayTransport({
-        baseUrl: gatewayUrl,
-        bearerToken: process.env.AURORA_GATEWAY_TOKEN
+        baseUrl: gatewayUrl
       })
     })
   }
@@ -208,11 +207,14 @@ export function createAuroraWebClient(): AuroraClient {
   return new AuroraClient({ transport: new MissingGatewayTransport() })
 }
 
-export async function loadAuroraBrowserAssistantAvailability(): Promise<boolean> {
+export async function loadAuroraBrowserAssistantAvailability(options: {
+  readonly bearerToken?: (() => string | null | undefined) | undefined
+} = {}): Promise<boolean> {
   try {
+    const headers = assistantRouteHeaders({ accept: 'application/json' }, options.bearerToken)
     const response = await fetch(ASSISTANT_COMPLETION_ROUTE, {
       method: 'GET',
-      headers: { accept: 'application/json' },
+      headers,
     })
     if (!response.ok) return false
     const body = await response.json() as { enabled?: unknown }
@@ -222,12 +224,15 @@ export async function loadAuroraBrowserAssistantAvailability(): Promise<boolean>
   }
 }
 
-export function createAuroraBrowserAssistantProvider(): LightweightAssistantProvider {
+export function createAuroraBrowserAssistantProvider(options: {
+  readonly bearerToken?: (() => string | null | undefined) | undefined
+} = {}): LightweightAssistantProvider {
   return {
     async complete(request: LightweightProviderRequest): Promise<LightweightProviderResponse> {
+      const headers = assistantRouteHeaders({ 'content-type': 'application/json' }, options.bearerToken)
       const response = await fetch(ASSISTANT_COMPLETION_ROUTE, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers,
         body: JSON.stringify({
           messages: request.messages,
           tools: request.tools,
@@ -239,6 +244,14 @@ export function createAuroraBrowserAssistantProvider(): LightweightAssistantProv
       return await response.json() as LightweightProviderResponse
     },
   }
+}
+
+function assistantRouteHeaders(
+  baseHeaders: Record<string, string>,
+  bearerToken: (() => string | null | undefined) | undefined,
+): Record<string, string> {
+  const token = bearerToken?.()?.trim()
+  return token ? { ...baseHeaders, Authorization: `Bearer ${token}` } : baseHeaders
 }
 
 export function createAuroraBrowserRuntime(): AuroraBrowserRuntime {

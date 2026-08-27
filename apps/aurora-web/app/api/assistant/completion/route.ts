@@ -7,7 +7,7 @@ import {
   createOpenAICompatibleToolProvider,
   type LightweightProviderMessage,
 } from '@aurora/client/lightweight-orchestrator'
-import type { ToolingProjectionToolInfo } from '@aurora/client'
+import { routePath, type ToolingProjectionToolInfo } from '@aurora/client'
 import {
   assistantCompletionPublicConfig,
   assistantCompletionServerConfig,
@@ -18,12 +18,14 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
 
-export function GET(request: NextRequest) {
+export async function GET(request: NextRequest) {
   if (!sameOriginRequest(request)) return unavailableResponse(404)
   const config = assistantCompletionPublicConfig()
   if (!config.enabled) {
     return jsonResponse({ enabled: false })
   }
+  const authorized = await authorizeAssistantRequest(request)
+  if (!authorized) return jsonResponse({ enabled: false })
   return jsonResponse(config)
 }
 
@@ -33,6 +35,8 @@ export async function POST(request: NextRequest) {
   if (!config) {
     return unavailableResponse(404)
   }
+  const authorized = await authorizeAssistantRequest(request)
+  if (!authorized) return unavailableResponse(401)
   let body: unknown
   try {
     const raw = await request.text()
@@ -146,6 +150,51 @@ function sameOriginRequest(request: NextRequest): boolean {
     }
   }
   return true
+}
+
+async function authorizeAssistantRequest(request: NextRequest): Promise<boolean> {
+  const bearerToken = bearerTokenFromHeaders(request.headers)
+  if (!bearerToken) return false
+  const gatewayUrl = process.env.AURORA_GATEWAY_URL?.trim()
+  if (!gatewayUrl) return false
+  try {
+    const response = await fetch(`${gatewayUrl.replace(/\/+$/u, '')}${routePath('Auth', 'WhoAmI')}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${bearerToken}`,
+      },
+      body: '{}',
+      cache: 'no-store',
+      signal: request.signal,
+    })
+    if (!response.ok) return false
+    const identity = await response.json() as {
+      error?: unknown
+      principal_id?: unknown
+      permissions?: unknown
+      effective_perms?: unknown
+      is_admin?: unknown
+    }
+    if (typeof identity.error === 'string' || typeof identity.principal_id !== 'string') return false
+    const permissions = Array.isArray(identity.effective_perms)
+      ? identity.effective_perms
+      : Array.isArray(identity.permissions)
+        ? identity.permissions
+        : []
+    return identity.is_admin === true || permissions.some((permission) => (
+      permission === '*' || permission === 'Orchestrator.use'
+    ))
+  } catch {
+    return false
+  }
+}
+
+function bearerTokenFromHeaders(headers: Headers): string | null {
+  const authorization = headers.get('authorization')
+  const match = authorization?.match(/^Bearer\s+(.+)$/iu)
+  const token = match?.[1]?.trim()
+  return token || null
 }
 
 function effectiveRequestOrigin(request: NextRequest): string {

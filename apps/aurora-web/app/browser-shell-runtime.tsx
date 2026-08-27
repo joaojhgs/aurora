@@ -36,6 +36,10 @@ export function useBrowserShellRuntime(): AuroraBrowserRuntime {
   return runtime
 }
 
+export function useOptionalBrowserShellRuntime(): AuroraBrowserRuntime | null {
+  return useContext(BrowserRuntimeContext)
+}
+
 export function useBrowserRuntimeProfile(): AuroraRuntimeProfileV2 | null {
   return useContext(BrowserRuntimeProfileContext)
 }

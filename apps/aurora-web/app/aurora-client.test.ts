@@ -82,6 +82,26 @@ describe('createAuroraWebClient', () => {
 
     expect(client.transport.kind).toBe('mock')
   })
+
+  it('does not attach the shared environment Gateway token to server-rendered Gateway reads', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', 'https://gateway.example')
+    vi.stubEnv('AURORA_GATEWAY_TOKEN', 'server-shared-token')
+    const calls: Array<{ url: string; headers: Record<string, string> }> = []
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), headers: plainHeaders(init?.headers) })
+      return jsonResponse({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 })
+    })
+
+    const client = createAuroraWebClient()
+    await client.registry.getRegistry()
+
+    expect(client.transport.kind).toBe('http')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe('https://gateway.example/api/registry')
+    expect(calls[0]?.headers.Authorization).toBeUndefined()
+    expect(JSON.stringify(calls)).not.toContain('server-shared-token')
+  })
 })
 
 describe('createAuroraBrowserClient', () => {

@@ -34,7 +34,10 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     })
 
     await expect(createAuroraBrowserLocalAssistantConfig(runtime)).resolves.toMatchObject({ remoteTools: [] })
-    expect(fetch).toHaveBeenCalledWith('/api/assistant/completion', expect.objectContaining({ method: 'GET' }))
+    expect(fetch).toHaveBeenCalledWith('/api/assistant/completion', expect.objectContaining({
+      method: 'GET',
+      headers: expect.objectContaining({ Authorization: 'Bearer browser-session-token' }),
+    }))
   })
 
   it('builds a same-origin provider and binds parsed provider tools to the remote route without exposing a raw provider key', async () => {
@@ -84,11 +87,15 @@ describe('createAuroraBrowserLocalAssistantConfig', () => {
     expect(response).toEqual({ type: 'message', content: 'Ready.' })
     expect(fetch).toHaveBeenLastCalledWith('/api/assistant/completion', expect.objectContaining({
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        Authorization: 'Bearer browser-session-token',
+      },
       body: expect.stringContaining('remote.weather'),
     }))
     const browserSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'browser-local-assistant.ts'), 'utf8')
-    expect(browserSource).not.toMatch(/AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY|apiKey|authorization/i)
+    expect(browserSource).not.toMatch(/AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY|apiKey/i)
+    expect(browserSource).toContain('runtime.client.auth.bearerToken()')
     expect(JSON.stringify(fetch.mock.calls)).not.toContain('provider-secret')
   })
 
@@ -168,6 +175,9 @@ function fakeRuntime(overrides: {
       localDataWritable: true,
     },
     client: {
+      auth: {
+        bearerToken: () => 'browser-session-token',
+      },
       tools: {
         getExportCatalog: overrides.getExportCatalog ?? vi.fn(async () => completeProjectionPage([])),
       },
