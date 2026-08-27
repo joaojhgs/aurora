@@ -954,7 +954,10 @@ export async function commitMeshConfigChangeSet(
   if (typeof diff.data.base_revision !== 'number' || !diff.data.preview_token) {
     throw new Error('Aurora could not confirm that save. Refresh and review before saving again.')
   }
-  await client.config.previewReloadImpact({ changes })
+  const impact = await client.config.previewReloadImpact({ changes })
+  if (!impact.ok) {
+    throw new Error(meshPeerErrorMessage(impact.error))
+  }
   const committed = await client.config.commitChangeSet({
     request: {
       changes,

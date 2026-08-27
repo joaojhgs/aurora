@@ -10,6 +10,7 @@ import {
 import { commitMeshConfigChangeSet, meshInviteConfigChanges } from '../src/mesh-peers-view'
 import type { AuroraClient } from '@aurora/client'
 import type { JsonObject } from '@aurora/client'
+import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 const invite: JsonObject = {
   kind: MESH_INVITE_KIND,
@@ -123,5 +124,38 @@ describe('mesh invite codec', () => {
       reason: 'Join mesh from invite for Studio',
       reauthConfirmed: true,
     })
+  })
+
+  it('does not commit when reload impact cannot be reviewed', async () => {
+    const changes = meshInviteConfigChanges(invite)
+    const previewDiff = vi.fn(async () => ({
+      ok: true as const,
+      data: {
+        valid: true,
+        diffs: [],
+        errors: [],
+        secrets_redacted: true,
+        base_revision: 12,
+        preview_token: 'mesh-preview-12',
+        changed_paths: changes.map((change) => change.key_path),
+      },
+    }))
+    const previewReloadImpact = vi.fn(async () => ({
+      ok: false as const,
+      error: new Error('Config.PreviewReloadImpact backend schema route failed'),
+    }))
+    const commitChangeSet = vi.fn()
+    const client = { config: { previewDiff, previewReloadImpact, commitChangeSet } } as unknown as AuroraClient
+
+    let message = ''
+    try {
+      await commitMeshConfigChangeSet(client, changes, 'Join mesh from invite for Studio', 'Invite invalid')
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+
+    expect(message).toBe('Could not connect to this Aurora device. Try again.')
+    expect(findForbiddenProductionCopyTerms(message)).toEqual([])
+    expect(commitChangeSet).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
+import { renderMermaidSVG } from 'beautiful-mermaid'
 import { sanitizeMermaidSvg } from '../src/components/assistant-ui/mermaid-diagram'
 
 describe('MermaidDiagram SVG sanitizer', () => {
@@ -26,5 +27,31 @@ describe('MermaidDiagram SVG sanitizer', () => {
 
     expect(sanitized).toContain('Safe')
     expect(sanitized).not.toMatch(/onload|onclick|javascript:|example\.invalid/iu)
+  })
+
+  it.each([
+    ['flowchart', 'flowchart TD\n  A[Start] --> B{Ready?}\n  B -->|yes| C[Go]\n  B -->|no| D[Wait]', ['Start', 'Ready?', 'Go', 'Wait']],
+    ['sequence', 'sequenceDiagram\n  participant A as Alice\n  participant B as Bob\n  A->>B: Hello\n  B-->>A: Hi', ['Alice', 'Bob', 'Hello', 'Hi']],
+    ['class', 'classDiagram\n  class Animal {\n    +String name\n    +move()\n  }\n  Animal <|-- Dog', ['Animal', 'Dog', 'name', 'move']],
+    ['state', 'stateDiagram-v2\n  [*] --> Idle\n  Idle --> Running: start\n  Running --> Idle: stop', ['Idle', 'Running', 'start', 'stop']],
+    ['er', 'erDiagram\n  USER ||--o{ ORDER : places\n  USER {\n    string id\n    string name\n  }\n  ORDER {\n    string id\n  }', ['USER', 'ORDER', 'places', 'name']],
+  ])('preserves generated %s diagram semantics', (_name, source, labels) => {
+    const raw = renderMermaidSVG(source, {
+      bg: 'var(--background)',
+      fg: 'var(--foreground)',
+      muted: 'var(--muted-foreground)',
+      border: 'var(--border)',
+      accent: 'var(--foreground)',
+      transparent: true,
+    })
+    const sanitized = sanitizeMermaidSvg(raw)
+
+    expect(sanitized).not.toBeNull()
+    if (raw.includes('marker-start')) expect(sanitized).toContain('marker-start')
+    if (raw.includes(' dy=')) expect(sanitized).toContain(' dy=')
+    for (const label of labels) {
+      expect(sanitized).toContain(label)
+    }
+    expect(sanitized).not.toMatch(/<script|foreignObject|javascript:|vbscript:|expression\s*\(/iu)
   })
 })

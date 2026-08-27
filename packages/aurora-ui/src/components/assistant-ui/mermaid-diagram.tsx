@@ -48,6 +48,7 @@ const SAFE_SVG_ATTRS = new Set([
   "cy",
   "d",
   "dominant-baseline",
+  "dy",
   "fill",
   "font-family",
   "font-size",
@@ -57,6 +58,7 @@ const SAFE_SVG_ATTRS = new Set([
   "href",
   "id",
   "marker-end",
+  "marker-start",
   "markerHeight",
   "markerheight",
   "markerUnits",
@@ -93,9 +95,31 @@ const SAFE_SVG_ATTRS = new Set([
   "y1",
   "y2",
 ]);
+const SAFE_SVG_DATA_ATTRS = new Set([
+  "data-actor",
+  "data-arrow-end",
+  "data-arrow-head",
+  "data-arrow-start",
+  "data-cardinality1",
+  "data-cardinality2",
+  "data-entity1",
+  "data-entity2",
+  "data-from",
+  "data-id",
+  "data-identifying",
+  "data-label",
+  "data-line-style",
+  "data-marker-at",
+  "data-self",
+  "data-shape",
+  "data-style",
+  "data-to",
+  "data-type",
+]);
 const SVG_DENY_TAG = /^(?:script|foreignobject|iframe|object|embed|link|meta|base|audio|video|canvas)$/iu;
 const SVG_UNSAFE_VALUE = /(?:javascript:|data:text\/html|vbscript:|expression\s*\(|@import|<)/iu;
 const SVG_UNSAFE_STYLE = /(?:url\s*\(|javascript:|vbscript:|expression\s*\(|@import|<|<\/style)/iu;
+const SAFE_FONT_IMPORT = /@import\s+url\(['"]https:\/\/fonts\.googleapis\.com\/css2\?family=[^'")]+['"]\);?/giu;
 
 export function sanitizeMermaidSvg(svg: string): string | null {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return null;
@@ -111,12 +135,12 @@ function sanitizeSvgElement(element: Element): boolean {
   const tagName = element.tagName.toLowerCase();
   if (SVG_DENY_TAG.test(tagName) || !SAFE_SVG_TAGS.has(tagName)) return false;
   if (tagName === "style") {
-    if (SVG_UNSAFE_STYLE.test(element.textContent ?? "")) return false;
+    if (!safeSvgStyleText(element.textContent ?? "")) return false;
   }
   for (const attr of [...element.attributes]) {
     const attrName = attr.name;
     const normalizedName = attrName.toLowerCase();
-    if (normalizedName.startsWith("on") || !SAFE_SVG_ATTRS.has(attrName) || !safeSvgAttrValue(normalizedName, attr.value)) {
+    if (normalizedName.startsWith("on") || !safeSvgAttrName(attrName) || !safeSvgAttrValue(normalizedName, attr.value)) {
       element.removeAttribute(attrName);
     }
   }
@@ -126,11 +150,19 @@ function sanitizeSvgElement(element: Element): boolean {
   return true;
 }
 
+function safeSvgAttrName(attrName: string): boolean {
+  return SAFE_SVG_ATTRS.has(attrName) || SAFE_SVG_DATA_ATTRS.has(attrName.toLowerCase());
+}
+
 function safeSvgAttrValue(attrName: string, value: string): boolean {
   const trimmed = value.trim();
   if (attrName === "href" || attrName === "xlink:href") return trimmed.startsWith("#");
-  if (attrName === "style") return !SVG_UNSAFE_STYLE.test(trimmed);
+  if (attrName === "style") return safeSvgStyleText(trimmed);
   return !SVG_UNSAFE_VALUE.test(trimmed);
+}
+
+function safeSvgStyleText(value: string): boolean {
+  return !SVG_UNSAFE_STYLE.test(value.replace(SAFE_FONT_IMPORT, ""));
 }
 
 type MermaidZoomProps = {
