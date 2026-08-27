@@ -85,6 +85,14 @@ async function runLive() {
   const sessionNonce = crypto.randomBytes(24).toString('base64url')
   const room = `desktop-live-${process.pid}-${Date.now().toString(36)}`
   const timeoutMs = Number(process.env.AURORA_DESKTOP_LIVE_E2E_TIMEOUT_MS ?? 180_000)
+  const brokerUrl = process.env.AURORA_DESKTOP_LIVE_E2E_BROKER_URL ?? 'ws://127.0.0.1:9001/mqtt'
+  const manageInteropServicesSetting = process.env.AURORA_DESKTOP_LIVE_E2E_MANAGE_INTEROP_SERVICES
+  if (manageInteropServicesSetting !== undefined && !['0', '1'].includes(manageInteropServicesSetting)) {
+    throw new Error('AURORA_DESKTOP_LIVE_E2E_MANAGE_INTEROP_SERVICES must be 0 or 1')
+  }
+  const manageInteropServices = manageInteropServicesSetting === undefined
+    ? /^ws:\/\/(127\.0\.0\.1|localhost):9001(?:\/|$)/.test(brokerUrl)
+    : manageInteropServicesSetting === '1'
   const driverCommand = process.env.AURORA_DESKTOP_LIVE_E2E_DRIVER_COMMAND
   const driverApplication = process.env.AURORA_DESKTOP_LIVE_E2E_APPLICATION
   const applicationPidFile = process.env.AURORA_DESKTOP_LIVE_E2E_APP_PID_FILE
@@ -119,11 +127,13 @@ async function runLive() {
         : Promise.resolve(),
     ])
 
-    runService(['up'])
-    servicesStarted = true
-    await waitForPort(9001, timeoutMs, 'MQTT broker')
-    if (lane === 'turn') await waitForPort(3478, timeoutMs, 'TURN server')
-    if (lane === 'stun') await waitForPort(3478, timeoutMs, 'STUN server')
+    if (manageInteropServices) {
+      runService(['up'])
+      servicesStarted = true
+      await waitForPort(9001, timeoutMs, 'MQTT broker')
+      if (lane === 'turn') await waitForPort(3478, timeoutMs, 'TURN server')
+      if (lane === 'stun') await waitForPort(3478, timeoutMs, 'STUN server')
+    }
     const hostIpv4 = lane === 'direct'
       ? undefined
       : process.env.WEBRTC_INTEROP_HOST_IPV4 ?? await resolveHostIpv4()
@@ -147,7 +157,7 @@ async function runLive() {
       '--report',
       pythonReportPath,
       '--broker',
-      'ws://127.0.0.1:9001/mqtt',
+      brokerUrl,
       '--room',
       room,
       '--timeout',
