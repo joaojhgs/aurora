@@ -518,7 +518,12 @@ export function forbiddenInteropTransportRequests<
     if (request.url.startsWith(`blob:${harness.origin}/`)) return false
     try {
       const url = new URL(request.url)
+      const isTauriChannelRequest =
+        url.origin === 'http://ipc.localhost' &&
+        decodeURIComponent(url.pathname) ===
+          '/plugin:__TAURI_CHANNEL__|fetch'
       return !(
+        isTauriChannelRequest ||
         (url.hostname === harness.hostname && url.port === harness.port) ||
         request.url.startsWith(brokerUrl)
       )
