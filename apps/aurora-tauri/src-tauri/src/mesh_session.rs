@@ -781,20 +781,21 @@ impl MeshSessionInner {
         Err(TransportError::InvalidConfiguration)
     }
 
-    fn native_assistant_manifest_pending(
+    fn native_assistant_route_pending(
         &self,
         preferred_peer_id: Option<&str>,
         required_method_id: Option<&str>,
     ) -> bool {
+        if let Some(peer_id) = preferred_peer_id {
+            let Some(binding) = self.peer_bindings.get(peer_id) else {
+                return true;
+            };
+            return required_method_id.is_some_and(|_| !binding.manifest_methods_ready);
+        }
+
         let Some(required_method_id) = required_method_id else {
             return false;
         };
-        if let Some(peer_id) = preferred_peer_id {
-            return self
-                .peer_bindings
-                .get(peer_id)
-                .is_some_and(|binding| !binding.manifest_methods_ready);
-        }
 
         let has_ready_candidate = self.peer_bindings.values().any(|binding| {
             binding.manifest_methods_ready
@@ -1475,8 +1476,8 @@ impl MeshSessionState {
             .native_assistant_pending
             .keys()
             .any(|(_, pending_request_id)| pending_request_id == request_id);
-        let manifest_pending = !request_id_in_use
-            && inner.native_assistant_manifest_pending(
+        let route_pending = !request_id_in_use
+            && inner.native_assistant_route_pending(
                 preferred_peer_id,
                 require_advertised_method.then_some(method_id),
             );
@@ -1488,7 +1489,7 @@ impl MeshSessionState {
         ) {
             Ok(pending) => Ok(Some(pending)),
             Err(error)
-                if manifest_pending
+                if route_pending
                     && matches!(
                         error,
                         TransportError::UnknownMethod | TransportError::InvalidConfiguration
@@ -2060,6 +2061,86 @@ mod tests {
                     .await
                     .expect_err("missing method"),
                 TransportError::UnknownMethod
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_waits_for_preferred_peer_handoff_without_masking_duplicates() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            assert!(state
+                .begin_native_assistant_call_or_wait(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("missing preferred peer remains retryable")
+                .is_none());
+
+            state
+                .test_bind_native_assistant_peer(
+                    "peer-a",
+                    10,
+                    &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                    true,
+                    None,
+                )
+                .await;
+            let pending = state
+                .begin_native_assistant_call_or_wait(
+                    Some("peer-a"),
+                    ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                    "request-1",
+                    true,
+                )
+                .await
+                .expect("preferred peer route")
+                .expect("preferred peer became ready");
+            assert_eq!(pending.peer_id, "peer-a");
+            assert_eq!(
+                state
+                    .begin_native_assistant_call_or_wait(
+                        Some("peer-a"),
+                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        "request-1",
+                        true,
+                    )
+                    .await
+                    .expect_err("duplicate request id must remain invalid"),
+                TransportError::InvalidConfiguration
+            );
+        });
+    }
+
+    #[test]
+    fn native_assistant_wait_does_not_mask_ambiguous_ready_peers() {
+        block_on(async {
+            let state = MeshSessionState::default();
+            for (peer_id, data_channel_id) in [("peer-a", 10), ("peer-b", 20)] {
+                state
+                    .test_bind_native_assistant_peer(
+                        peer_id,
+                        data_channel_id,
+                        &[ids::ORCHESTRATOR_EXTERNAL_USER_INPUT],
+                        false,
+                        None,
+                    )
+                    .await;
+            }
+            assert_eq!(
+                state
+                    .begin_native_assistant_call_or_wait(
+                        None,
+                        ids::ORCHESTRATOR_EXTERNAL_USER_INPUT,
+                        "ambiguous",
+                        true,
+                    )
+                    .await
+                    .expect_err("ambiguous ready peers must fail closed"),
+                TransportError::InvalidConfiguration
             );
         });
     }
