@@ -61,6 +61,7 @@ describe("mesh session link", () => {
     const result = await bindMeshSessionPeer(invoke, "peer-a", {
       handles: { peerConnectionId: 7, dataChannelId: 9 },
       authenticatedPeerContext: { selector: { claimantPeerId: "peer-a" } },
+      nodeName: "Skyron server",
     });
 
     expect(calls).toEqual([
@@ -72,6 +73,7 @@ describe("mesh session link", () => {
             peerConnectionId: 7,
             dataChannelId: 9,
             authenticatedPeerContext: { selector: { claimantPeerId: "peer-a" } },
+            nodeName: "Skyron server",
             localPeerId: null,
             providerServiceInstanceId: null,
             nativeDataChannelCodec: null,

@@ -271,8 +271,8 @@ describe('one Aurora in the notification shade', () => {
     expect(finish.indexOf('updateNotification(captureSnapshot)')).toBeLessThan(
       finish.indexOf('nativeLifecycleExecutor.execute'),
     )
-    expect(start).toContain('lastNotificationText.set(null)')
-    expect(start.indexOf('lastNotificationText.set(null)')).toBeLessThan(
+    expect(start).toContain('lastNotificationFingerprint.set(null)')
+    expect(start.indexOf('lastNotificationFingerprint.set(null)')).toBeLessThan(
       start.indexOf('beginNativeVoiceInitialization('),
     )
   })
@@ -320,12 +320,12 @@ describe('one Aurora in the notification shade', () => {
     const update = sliceBetween(service, 'private fun updateNotification(', 'private fun notificationTextFor(')
     expect(update).toContain('notificationsSuppressed = !canPostNotifications()')
     expect(update).toContain('if (notificationsSuppressed) {')
-    expect(update).toContain('lastNotificationText.set(null)')
+    expect(update).toContain('lastNotificationFingerprint.set(null)')
     expect(update.indexOf('notificationsSuppressed = !canPostNotifications()')).toBeLessThan(
-      update.indexOf('lastNotificationText.get() == text'),
+      update.indexOf('lastNotificationFingerprint.get() == fingerprint'),
     )
     expect(update.indexOf('manager.notify(')).toBeLessThan(
-      update.lastIndexOf('lastNotificationText.set(text)'),
+      update.lastIndexOf('lastNotificationFingerprint.set(fingerprint)'),
     )
     expect(update).not.toContain('stopSelf')
     expect(update).not.toContain('stopAfterTerminalFailure')

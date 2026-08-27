@@ -11505,6 +11505,9 @@ mod tests {
         let plugin = include_str!(
             "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt"
         );
+        let local_data = include_str!(
+            "../android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativeLocalData.kt"
+        );
         for command in [
             "fun thinPeerCredentialSet",
             "fun thinPeerCredentialStatus",
@@ -11586,12 +11589,13 @@ mod tests {
         assert!(plugin.contains("background_voice_unavailable"));
         assert!(!plugin.contains(r#"rawBearerToken", record.getString"#));
         for invariant in [
-            "validateLocalDataId(\"profileId\", profileId)",
-            "validateLocalDataId(\"localNodeId\", localNodeId)",
-            "value.toByteArray(Charsets.UTF_8).size <= 256",
-            "it.code <= 0x7f",
+            "validateId(\"profileId\", profileId)",
+            "validateId(\"localNodeId\", localNodeId)",
+            "private const val LOCAL_DATA_MAX_ID_BYTES = 256",
+            "value.toByteArray(Charsets.UTF_8).size <= LOCAL_DATA_MAX_ID_BYTES",
+            "LOCAL_DATA_ID_PATTERN.matches(value)",
         ] {
-            assert!(plugin.contains(invariant), "{invariant}");
+            assert!(local_data.contains(invariant), "{invariant}");
         }
     }
 
@@ -11624,7 +11628,10 @@ mod tests {
             "ACTION_START_BACKGROUND",
             "finishHandler",
             "awaitFinishedSession",
-            ".addAction(Notification.Action.Builder",
+            "builder.addAction(0, \"Stop\", stopPendingIntent)",
+            "NotificationCompat.DecoratedCustomViewStyle",
+            "setCustomContentView",
+            "setCustomBigContentView",
             "System.loadLibrary(\"aurora_tauri_lib\")",
             "nativePushPcm",
             "nativeDrainPcm",

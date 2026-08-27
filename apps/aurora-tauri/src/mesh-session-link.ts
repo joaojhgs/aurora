@@ -87,6 +87,7 @@ export async function bindMeshSessionPeer(
   options: {
     readonly authenticatedPeerContext?: unknown;
     readonly handles?: { peerConnectionId: number; dataChannelId: number };
+    readonly nodeName?: string;
     readonly localPeerId?: string;
     readonly providerServiceInstanceId?: string;
     readonly advertisedMethodIds?: readonly string[];
@@ -102,6 +103,7 @@ export async function bindMeshSessionPeer(
       peerConnectionId: handles.peerConnectionId,
       dataChannelId: handles.dataChannelId,
       authenticatedPeerContext: options.authenticatedPeerContext ?? null,
+      nodeName: options.nodeName ?? null,
       localPeerId: options.localPeerId ?? null,
       providerServiceInstanceId: options.providerServiceInstanceId ?? null,
       nativeDataChannelCodec: options.nativeDataChannelCodec ?? null,
@@ -311,6 +313,7 @@ export function observeMeshSurfaceLifecycle(
 export interface MeshSessionRosterPeer {
   readonly peerId: string;
   readonly primary: boolean;
+  readonly nodeName?: string;
   readonly authenticatedPeerContext?: unknown;
   readonly standby?: unknown;
   readonly snapshot: {
@@ -653,6 +656,7 @@ export function installMeshSessionRuntimeLink(
         peerConnectionId: handles.peerConnectionId,
         dataChannelId: handles.dataChannelId,
         authenticatedPeerContext: rosterPeer.authenticatedPeerContext ?? null,
+        nodeName: rosterPeer.nodeName ?? null,
         localPeerId: options.localPeerId ?? null,
         providerServiceInstanceId: options.providerServiceInstanceId ?? null,
         nativeDataChannelCodecVersion: nativeCodec?.version ?? null,
@@ -670,6 +674,9 @@ export function installMeshSessionRuntimeLink(
       await bindMeshSessionPeer(options.invoke, rosterPeer.peerId, {
         handles,
         authenticatedPeerContext: rosterPeer.authenticatedPeerContext,
+        ...(rosterPeer.nodeName !== undefined
+          ? { nodeName: rosterPeer.nodeName }
+          : {}),
         ...(options.localPeerId !== undefined
           ? { localPeerId: options.localPeerId }
           : {}),

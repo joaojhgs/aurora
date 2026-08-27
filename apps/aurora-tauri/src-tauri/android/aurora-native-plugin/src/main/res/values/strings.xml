@@ -4,4 +4,6 @@
     <string name="aurora_shortcut_assistant_long">Open Aurora assistant</string>
     <string name="aurora_shortcut_disabled">Aurora shortcut unavailable</string>
     <string name="aurora_widget_description">Open Aurora from the home screen</string>
+    <string name="aurora_notification_voice_heading">Voice</string>
+    <string name="aurora_notification_no_peers">Open Aurora to connect another device.</string>
 </resources>

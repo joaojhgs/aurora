@@ -79,6 +79,10 @@ const MAX_DATA_CHANNEL_PAYLOAD_BYTES: usize = 8 * 1024 * 1024;
 const BACKGROUND_CALL_REPLAY_TTL_MS: i64 = 5 * 60 * 1000;
 const BACKGROUND_CALL_REPLAY_MAX: usize = 256;
 const NATIVE_RTT_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(target_os = "android")]
+const ANDROID_NOTIFICATION_RTT_INITIAL_DELAY: Duration = Duration::from_secs(1);
+#[cfg(target_os = "android")]
+const ANDROID_NOTIFICATION_RTT_INTERVAL: Duration = Duration::from_secs(15);
 
 /// The registry, plus what the shell needs to route back to a channel.
 #[derive(Clone, Default)]
@@ -131,11 +135,17 @@ struct MeshSessionInner {
     /// from executing twice while still returning the original semantic answer.
     background_call_replays: HashMap<(String, String), BackgroundCallReplayEntry>,
     background_call_replay_sequence: u64,
+    /// One Rust-owned RTT loop refreshes Android's peer notification even
+    /// while the WebView is suspended.
+    #[cfg(target_os = "android")]
+    notification_probe_running: bool,
 }
 
 #[derive(Clone, Default)]
 struct MeshSessionPeerBinding {
     data_channel_id: u64,
+    node_name: Option<String>,
+    latest_rtt_ms: Option<f64>,
     advertised_method_ids: BTreeSet<String>,
     manifest_methods_ready: bool,
     primary: bool,
@@ -210,6 +220,9 @@ pub struct MeshSessionBindRequest {
     peer_id: String,
     data_channel_id: u64,
     peer_connection_id: u64,
+    /// User-facing name learned from authenticated roster/presence state.
+    #[serde(default)]
+    node_name: Option<String>,
     /// What a reconnect proof established, when there was one. A reference,
     /// never a grant.
     #[serde(default)]
@@ -323,6 +336,14 @@ pub struct MeshSessionPeerRequest {
     peer_id: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidNotificationPeer {
+    peer_id: String,
+    display_name: String,
+    round_trip_time_ms: Option<f64>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshSessionLifecycleRequest {
@@ -387,10 +408,19 @@ pub async fn aurora_mesh_session_bind(
     inner
         .peer_connection_peers
         .insert(request.peer_connection_id, request.peer_id.clone());
+    let previous_binding = inner.peer_bindings.get(&request.peer_id).cloned();
+    let node_name = notification_peer_name(request.node_name.as_deref()).or_else(|| {
+        previous_binding
+            .as_ref()
+            .and_then(|binding| binding.node_name.clone())
+    });
+    let latest_rtt_ms = previous_binding.and_then(|binding| binding.latest_rtt_ms);
     inner.peer_bindings.insert(
         request.peer_id.clone(),
         MeshSessionPeerBinding {
             data_channel_id: request.data_channel_id,
+            node_name,
+            latest_rtt_ms,
             advertised_method_ids: request.advertised_method_ids.into_iter().collect(),
             manifest_methods_ready: request.manifest_methods_ready,
             primary: request.primary,
@@ -404,9 +434,17 @@ pub async fn aurora_mesh_session_bind(
         inner.provider_service_instance_id = Some(service_instance_id);
     }
     let held = inner.sync_device_link(&app);
+    let sessions = inner.registry.len();
+    let notification_peers = inner.android_notification_peers();
+    let start_notification_probe = inner.start_notification_probe();
+    drop(inner);
+    update_android_notification_peers(&app, &notification_peers);
+    if start_notification_probe {
+        spawn_android_notification_probe(app.clone(), state.inner().clone());
+    }
     Ok(json!({
         "peerId": request.peer_id,
-        "sessions": inner.registry.len(),
+        "sessions": sessions,
         "deviceLinkHeld": held,
     }))
 }
@@ -435,10 +473,14 @@ pub async fn aurora_mesh_session_unbind(
     inner.cancel_native_rtt_peer(&request.peer_id);
     inner.fail_native_assistant_peer(&request.peer_id, TransportError::RequestFailed);
     let held = inner.sync_device_link(&app);
+    let sessions = inner.registry.len();
+    let notification_peers = inner.android_notification_peers();
+    drop(inner);
+    update_android_notification_peers(&app, &notification_peers);
     Ok(json!({
         "peerId": request.peer_id,
         "removed": removed,
-        "sessions": inner.registry.len(),
+        "sessions": sessions,
         "deviceLinkHeld": held,
     }))
 }
@@ -702,6 +744,63 @@ impl MeshSessionInner {
             None => {}
         }
         self.device_link.is_held()
+    }
+
+    fn android_notification_peers(&self) -> Vec<AndroidNotificationPeer> {
+        let mut peers = self
+            .peer_bindings
+            .iter()
+            .map(|(peer_id, binding)| {
+                (
+                    binding.primary,
+                    AndroidNotificationPeer {
+                        peer_id: peer_id.clone(),
+                        display_name: binding
+                            .node_name
+                            .clone()
+                            .unwrap_or_else(|| "Connected device".to_owned()),
+                        round_trip_time_ms: binding.latest_rtt_ms,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        peers.sort_by(|(left_primary, left), (right_primary, right)| {
+            right_primary
+                .cmp(left_primary)
+                .then_with(|| left.display_name.cmp(&right.display_name))
+                .then_with(|| left.peer_id.cmp(&right.peer_id))
+        });
+        peers.into_iter().map(|(_, peer)| peer).collect()
+    }
+
+    fn start_notification_probe(&mut self) -> bool {
+        #[cfg(not(target_os = "android"))]
+        {
+            return false;
+        }
+        #[cfg(target_os = "android")]
+        {
+            if self.notification_probe_running || self.peer_connection_peers.is_empty() {
+                return false;
+            }
+            self.notification_probe_running = true;
+            true
+        }
+    }
+
+    fn record_notification_rtt(
+        &mut self,
+        peer_id: &str,
+        data_channel_id: u64,
+        round_trip_time_ms: f64,
+    ) {
+        let Some(binding) = self.peer_bindings.get_mut(peer_id) else {
+            return;
+        };
+        if binding.data_channel_id != data_channel_id {
+            return;
+        }
+        binding.latest_rtt_ms = Some(round_trip_time_ms);
     }
 
     fn begin_native_assistant_call(
@@ -1311,6 +1410,9 @@ pub async fn native_data_channel_closed(
     inner.registry.unbind(&peer_id);
     inner.fail_native_assistant_peer(&peer_id, TransportError::RequestFailed);
     inner.sync_device_link(app);
+    let notification_peers = inner.android_notification_peers();
+    drop(inner);
+    update_android_notification_peers(app, &notification_peers);
 }
 
 pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: u64) {
@@ -1426,7 +1528,7 @@ impl MeshSessionState {
             return Err(error.to_string());
         }
 
-        match tokio::time::timeout(NATIVE_RTT_TIMEOUT, response).await {
+        let result = match tokio::time::timeout(NATIVE_RTT_TIMEOUT, response).await {
             Ok(Ok(round_trip_time_ms)) => Ok(round_trip_time_ms),
             Ok(Err(_)) => {
                 self.cancel_native_rtt(&peer_id, &ping_id).await;
@@ -1436,7 +1538,16 @@ impl MeshSessionState {
                 self.cancel_native_rtt(&peer_id, &ping_id).await;
                 Err("native latency measurement timed out".to_owned())
             }
+        };
+        if let Ok(round_trip_time_ms) = result.as_ref() {
+            let notification_peers = {
+                let mut inner = self.inner.lock().await;
+                inner.record_notification_rtt(&peer_id, data_channel_id, *round_trip_time_ms);
+                inner.android_notification_peers()
+            };
+            update_android_notification_peers(app, &notification_peers);
         }
+        result
     }
 
     async fn cancel_native_rtt(&self, peer_id: &str, ping_id: &str) {
@@ -1601,6 +1712,8 @@ impl MeshSessionState {
             peer_id.to_owned(),
             MeshSessionPeerBinding {
                 data_channel_id,
+                node_name: None,
+                latest_rtt_ms: None,
                 advertised_method_ids: advertised_method_ids
                     .iter()
                     .map(|method| (*method).to_owned())
@@ -1887,26 +2000,88 @@ async fn authorize(
 
 #[cfg(target_os = "android")]
 fn hold_device_link(app: &AppHandle) {
-    run_device_link_command(app, "meshDeviceLinkHold");
+    run_device_link_command(app, "meshDeviceLinkHold", json!({}));
 }
 
 #[cfg(target_os = "android")]
 fn release_device_link(app: &AppHandle) {
-    run_device_link_command(app, "meshDeviceLinkRelease");
+    run_device_link_command(app, "meshDeviceLinkRelease", json!({}));
 }
 
 #[cfg(target_os = "android")]
-fn run_device_link_command(app: &AppHandle, command: &str) {
+fn update_android_notification_peers(app: &AppHandle, peers: &[AndroidNotificationPeer]) {
+    run_device_link_command(app, "meshDeviceLinkUpdate", json!({ "peers": peers }));
+}
+
+#[cfg(not(target_os = "android"))]
+fn update_android_notification_peers(_app: &AppHandle, _peers: &[AndroidNotificationPeer]) {}
+
+#[cfg(target_os = "android")]
+fn run_device_link_command(app: &AppHandle, command: &str, payload: Value) {
     use tauri::Manager;
     let Some(native) = app.try_state::<crate::AuroraMobileNativePlugin<tauri::Wry>>() else {
         return;
     };
-    if let Err(error) = crate::run_android_plugin_command(native, command, json!({})) {
+    if let Err(error) = crate::run_android_plugin_command(native, command, payload) {
         // A held session is worth more than a notification. Losing the hold
         // means the process may be killed sooner, not that the session is
         // wrong, so this is reported and not propagated.
         eprintln!("aurora.mesh device link {command} failed: {error}");
     }
+}
+
+#[cfg(target_os = "android")]
+fn spawn_android_notification_probe(app: AppHandle, state: MeshSessionState) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(ANDROID_NOTIFICATION_RTT_INITIAL_DELAY).await;
+        loop {
+            let peer_connection_ids = {
+                let mut inner = state.inner.lock().await;
+                let ids = inner
+                    .peer_connection_peers
+                    .keys()
+                    .copied()
+                    .collect::<Vec<_>>();
+                if ids.is_empty() {
+                    inner.notification_probe_running = false;
+                }
+                ids
+            };
+            if peer_connection_ids.is_empty() {
+                return;
+            }
+            use tauri::Manager;
+            let Some(native_webrtc) = app
+                .try_state::<crate::native_webrtc::NativeWebRtcState>()
+                .map(|native| native.inner().clone())
+            else {
+                state.inner.lock().await.notification_probe_running = false;
+                return;
+            };
+            for peer_connection_id in peer_connection_ids {
+                let _ = state
+                    .measure_native_rtt(&app, &native_webrtc, peer_connection_id)
+                    .await;
+            }
+            tokio::time::sleep(ANDROID_NOTIFICATION_RTT_INTERVAL).await;
+        }
+    });
+}
+
+#[cfg(not(target_os = "android"))]
+fn spawn_android_notification_probe(_app: AppHandle, _state: MeshSessionState) {}
+
+fn notification_peer_name(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let normalized = value
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(64)
+        .collect::<String>();
+    (!normalized.is_empty()).then_some(normalized)
 }
 
 /// Every other platform keeps its process alive on its own terms.
@@ -1955,6 +2130,53 @@ mod tests {
             assert!(inner.finish_surface_resume().is_empty());
             assert_eq!(inner.registry.lifecycle(), SurfaceLifecycle::Foreground);
         });
+    }
+
+    #[test]
+    fn notification_peers_are_named_primary_first_and_keep_exact_rtt() {
+        let mut inner = MeshSessionInner::default();
+        inner.peer_bindings.insert(
+            "peer-b".to_owned(),
+            MeshSessionPeerBinding {
+                data_channel_id: 20,
+                node_name: notification_peer_name(Some("  Kitchen tablet  ")),
+                latest_rtt_ms: None,
+                advertised_method_ids: BTreeSet::new(),
+                manifest_methods_ready: true,
+                primary: false,
+                data_channel_codec: None,
+            },
+        );
+        inner.peer_bindings.insert(
+            "peer-a".to_owned(),
+            MeshSessionPeerBinding {
+                data_channel_id: 10,
+                node_name: notification_peer_name(Some("Skyron server")),
+                latest_rtt_ms: None,
+                advertised_method_ids: BTreeSet::new(),
+                manifest_methods_ready: true,
+                primary: true,
+                data_channel_codec: None,
+            },
+        );
+        inner.record_notification_rtt("peer-a", 10, 332.4);
+        inner.record_notification_rtt("peer-b", 99, 1.0);
+
+        assert_eq!(
+            inner.android_notification_peers(),
+            vec![
+                AndroidNotificationPeer {
+                    peer_id: "peer-a".to_owned(),
+                    display_name: "Skyron server".to_owned(),
+                    round_trip_time_ms: Some(332.4),
+                },
+                AndroidNotificationPeer {
+                    peer_id: "peer-b".to_owned(),
+                    display_name: "Kitchen tablet".to_owned(),
+                    round_trip_time_ms: None,
+                },
+            ],
+        );
     }
 
     #[test]
@@ -2514,6 +2736,8 @@ mod tests {
             "peer-a".to_owned(),
             MeshSessionPeerBinding {
                 data_channel_id: 10,
+                node_name: None,
+                latest_rtt_ms: None,
                 advertised_method_ids: BTreeSet::new(),
                 manifest_methods_ready: true,
                 primary: true,

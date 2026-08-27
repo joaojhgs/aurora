@@ -554,6 +554,23 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(deviceLinkStatusObject())
     }
 
+    /** Refresh the peer section of the one shared foreground notification. */
+    @Command
+    fun meshDeviceLinkUpdate(invoke: Invoke) {
+        val args = invoke.parseArgs(MeshDeviceLinkUpdateArgs::class.java)
+        AuroraRuntimeForegroundService.updateConnectedPeers(
+            activity.applicationContext,
+            args.peers.map { peer ->
+                AuroraNotificationPeer(
+                    peerId = peer.peerId,
+                    displayName = peer.displayName,
+                    roundTripTimeMs = peer.roundTripTimeMs,
+                )
+            },
+        )
+        invoke.resolve(deviceLinkStatusObject())
+    }
+
     /** What is currently keeping the one Aurora service alive. */
     @Command
     fun meshDeviceLinkStatus(invoke: Invoke) {
@@ -567,6 +584,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("activeReasons", JSArray().apply { reasons.forEach { put(it) } })
         ret.put("serviceRunning", AuroraRuntimeForegroundService.running)
         ret.put("notificationsSuppressed", AuroraRuntimeForegroundService.notificationsSuppressed)
+        ret.put("notificationPeerCount", AuroraRuntimeForegroundService.connectedPeerCount())
         return ret
     }
 
@@ -4155,6 +4173,18 @@ class AuroraMicWebChromeClient(
 @InvokeArg
 class AssistantRoleResultArgs {
     var resultCode: Int = Activity.RESULT_CANCELED
+}
+
+@InvokeArg
+class MeshDeviceLinkUpdateArgs {
+    var peers: Array<MeshNotificationPeerArgs> = emptyArray()
+}
+
+@InvokeArg
+class MeshNotificationPeerArgs {
+    var peerId: String = ""
+    var displayName: String = ""
+    var roundTripTimeMs: Double? = null
 }
 
 @InvokeArg

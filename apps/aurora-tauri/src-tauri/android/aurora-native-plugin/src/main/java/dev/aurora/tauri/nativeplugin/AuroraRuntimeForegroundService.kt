@@ -28,6 +28,9 @@ import android.os.SystemClock
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.view.View
+import android.widget.RemoteViews
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dev.aurora.desktop.R
 import java.io.FileDescriptor
@@ -45,10 +48,12 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlin.math.roundToInt
 import org.json.JSONObject
 
 private const val AURORA_RUNTIME_CHANNEL_ID = "aurora_voice_capture"
 private const val AURORA_RUNTIME_NOTIFICATION_ID = 4203
+private const val MAX_VISIBLE_NOTIFICATION_PEERS = 3
 private const val SAMPLE_RATE_HZ = 16_000
 private const val CHANNEL_COUNT = 1
 private const val QUEUE_CAPACITY_CHUNKS = 8
@@ -122,6 +127,12 @@ data class AuroraVoiceNativeConfig(
     val remoteAudioConsent: Boolean,
     val assistantRouteMode: String,
     val preferredStablePeerId: String?,
+)
+
+data class AuroraNotificationPeer(
+    val peerId: String,
+    val displayName: String,
+    val roundTripTimeMs: Double?,
 )
 
 private data class AuroraVoiceRouteProfile(
@@ -1210,7 +1221,7 @@ class AuroraRuntimeForegroundService : Service() {
     private val finishHandler = Handler(Looper.getMainLooper())
     private val initializationInFlight = AtomicBoolean(false)
     private var pendingAssistantStartId: Int? = null
-    private val lastNotificationText = AtomicReference<String?>(null)
+    private val lastNotificationFingerprint = AtomicReference<String?>(null)
     private val nativeLifecycleExecutor = ThreadPoolExecutor(
         0,
         1,
@@ -1412,7 +1423,7 @@ class AuroraRuntimeForegroundService : Service() {
         // Each native session owns a fresh state stream. Force its first
         // snapshot through even when the previous session ended on identical
         // notification text.
-        lastNotificationText.set(null)
+        lastNotificationFingerprint.set(null)
         // Audio focus arbitrates playback; it is not authority to record from
         // the microphone. Some OEMs deny exclusive focus while AudioRecord is
         // still valid, so focus is best-effort and capture proves availability.
@@ -2367,14 +2378,15 @@ class AuroraRuntimeForegroundService : Service() {
         // notifications off. The session keeps running and the degraded state
         // is reported through the status surface instead.
         if (notificationsSuppressed) {
-            lastNotificationText.set(null)
+            lastNotificationFingerprint.set(null)
             return
         }
         val text = notificationTextFor(AuroraRuntimeForegroundLedger.activeReasons(), snapshot)
-        if (lastNotificationText.get() == text) return
+        val fingerprint = notificationFingerprint(text, connectedPeers.get())
+        if (lastNotificationFingerprint.get() == fingerprint) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(AURORA_RUNTIME_NOTIFICATION_ID, foregroundNotification(text))
-        lastNotificationText.set(text)
+        lastNotificationFingerprint.set(fingerprint)
     }
 
     /**
@@ -2417,10 +2429,24 @@ class AuroraRuntimeForegroundService : Service() {
             else -> "Microphone is active. Tap Stop to end."
         }
         return when {
-            voice && deviceLink -> "$voiceText Other devices stay connected."
             voice -> voiceText
-            deviceLink -> "Your other devices stay connected."
+            deviceLink -> "Connected devices are available."
             else -> "Aurora is finishing up."
+        }
+    }
+
+    private fun notificationFingerprint(
+        text: String,
+        peers: List<AuroraNotificationPeer>,
+    ): String = buildString {
+        append(text)
+        peers.forEach { peer ->
+            append('|')
+            append(peer.peerId)
+            append(':')
+            append(peer.displayName)
+            append(':')
+            append(notificationPeerLatencyText(peer.roundTripTimeMs))
         }
     }
 
@@ -2450,7 +2476,7 @@ class AuroraRuntimeForegroundService : Service() {
      * the service legal while voice is still being checked or torn down.
      */
     private fun enterForeground(text: String) {
-        lastNotificationText.set(text)
+        lastNotificationFingerprint.set(notificationFingerprint(text, connectedPeers.get()))
         val notification = foregroundNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val requestedTypes = foregroundServiceTypes(AuroraRuntimeForegroundLedger.activeReasons())
@@ -2540,20 +2566,23 @@ class AuroraRuntimeForegroundService : Service() {
             stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, AURORA_RUNTIME_CHANNEL_ID)
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-        }
+        val peers = connectedPeers.get()
+        val collapsedView = notificationCollapsedView(text, peers)
+        val expandedView = notificationExpandedView(text, peers)
+        val builder = NotificationCompat.Builder(this, AURORA_RUNTIME_CHANNEL_ID)
         builder
             .setSmallIcon(R.drawable.ic_aurora_notification)
             .setContentTitle("Aurora")
             .setContentText(text)
+            .setSubText(notificationPeerSummary(peers.size).takeIf { peers.isNotEmpty() })
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setColor(0xFF1F6F68.toInt())
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(collapsedView)
+            .setCustomBigContentView(expandedView)
         packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
             launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             builder.setContentIntent(
@@ -2568,10 +2597,91 @@ class AuroraRuntimeForegroundService : Service() {
         // Stop ends the microphone session, so it is offered only while one is
         // the reason Aurora is running.
         if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)) {
-            builder.addAction(Notification.Action.Builder(null, "Stop", stopPendingIntent).build())
+            builder.addAction(0, "Stop", stopPendingIntent)
         }
         return builder.build()
     }
+
+    private fun notificationCollapsedView(
+        voiceText: String,
+        peers: List<AuroraNotificationPeer>,
+    ): RemoteViews = RemoteViews(
+        packageName,
+        R.layout.aurora_runtime_notification_collapsed,
+    ).apply {
+        setTextViewText(R.id.aurora_notification_voice_state, voiceText)
+        setTextViewText(R.id.aurora_notification_peer_summary, notificationPeerSummary(peers.size))
+        setViewVisibility(
+            R.id.aurora_notification_peer_summary,
+            if (peers.isEmpty()) View.GONE else View.VISIBLE,
+        )
+    }
+
+    private fun notificationExpandedView(
+        voiceText: String,
+        peers: List<AuroraNotificationPeer>,
+    ): RemoteViews = RemoteViews(
+        packageName,
+        R.layout.aurora_runtime_notification_expanded,
+    ).apply {
+        val voiceActive = AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
+        setTextViewText(
+            R.id.aurora_notification_voice_state,
+            if (voiceActive) voiceText else "Voice is off.",
+        )
+        setTextViewText(
+            R.id.aurora_notification_peers_heading,
+            notificationPeerSummary(peers.size),
+        )
+        setViewVisibility(
+            R.id.aurora_notification_no_peers,
+            if (peers.isEmpty()) View.VISIBLE else View.GONE,
+        )
+        val rows = listOf(
+            Triple(
+                R.id.aurora_notification_peer_row_1,
+                R.id.aurora_notification_peer_name_1,
+                R.id.aurora_notification_peer_latency_1,
+            ),
+            Triple(
+                R.id.aurora_notification_peer_row_2,
+                R.id.aurora_notification_peer_name_2,
+                R.id.aurora_notification_peer_latency_2,
+            ),
+            Triple(
+                R.id.aurora_notification_peer_row_3,
+                R.id.aurora_notification_peer_name_3,
+                R.id.aurora_notification_peer_latency_3,
+            ),
+        )
+        rows.forEachIndexed { index, (rowId, nameId, latencyId) ->
+            val peer = peers.getOrNull(index)
+            setViewVisibility(rowId, if (peer == null) View.GONE else View.VISIBLE)
+            if (peer != null) {
+                setTextViewText(nameId, peer.displayName)
+                setTextViewText(latencyId, notificationPeerLatencyText(peer.roundTripTimeMs))
+            }
+        }
+        val hiddenPeers = (peers.size - MAX_VISIBLE_NOTIFICATION_PEERS).coerceAtLeast(0)
+        setTextViewText(R.id.aurora_notification_more_peers, "+$hiddenPeers more")
+        setViewVisibility(
+            R.id.aurora_notification_more_peers,
+            if (hiddenPeers > 0) View.VISIBLE else View.GONE,
+        )
+    }
+
+    private fun notificationPeerSummary(peerCount: Int): String = when (peerCount) {
+        0 -> "No devices connected"
+        1 -> "1 device connected"
+        else -> "$peerCount devices connected"
+    }
+
+    private fun notificationPeerLatencyText(roundTripTimeMs: Double?): String =
+        if (roundTripTimeMs != null && roundTripTimeMs.isFinite() && roundTripTimeMs > 0.0) {
+            "${roundTripTimeMs.roundToInt()} ms"
+        } else {
+            "Connected"
+        }
 
     private fun backgroundSessionRequested(): Boolean =
         getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
@@ -2694,7 +2804,7 @@ class AuroraRuntimeForegroundService : Service() {
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
         val remaining = AuroraRuntimeForegroundLedger.activeReasons()
         if (remaining.isNotEmpty()) {
-            lastNotificationText.set(null)
+            lastNotificationFingerprint.set(null)
             enterForeground(notificationTextFor(remaining, captureSnapshot))
             return
         }
@@ -2714,7 +2824,7 @@ class AuroraRuntimeForegroundService : Service() {
         runCatching {
             getSystemService(NotificationManager::class.java).cancel(AURORA_RUNTIME_NOTIFICATION_ID)
         }
-        lastNotificationText.set(null)
+        lastNotificationFingerprint.set(null)
     }
 
     companion object {
@@ -2724,6 +2834,8 @@ class AuroraRuntimeForegroundService : Service() {
         const val ACTION_START_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.START_BACKGROUND_VOICE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
         const val ACTION_SYNC_REASONS = "dev.aurora.tauri.nativeplugin.action.SYNC_FOREGROUND_REASONS"
+
+        private val connectedPeers = AtomicReference<List<AuroraNotificationPeer>>(emptyList())
 
         @Volatile
         var running: Boolean = false
@@ -2770,6 +2882,46 @@ class AuroraRuntimeForegroundService : Service() {
                 },
             )
         }
+
+        fun updateConnectedPeers(context: Context, peers: List<AuroraNotificationPeer>) {
+            val seenPeerIds = HashSet<String>()
+            val normalized = peers.mapNotNull { peer ->
+                val peerId = peer.peerId.trim()
+                if (peerId.isEmpty() || !seenPeerIds.add(peerId)) {
+                    return@mapNotNull null
+                }
+                val displayName = peer.displayName
+                    .trim()
+                    .filterNot { character -> character.isISOControl() }
+                    .take(64)
+                    .ifEmpty { "Connected device" }
+                AuroraNotificationPeer(
+                    peerId = peerId,
+                    displayName = displayName,
+                    roundTripTimeMs = peer.roundTripTimeMs
+                        ?.takeIf { value -> value.isFinite() && value > 0.0 },
+                )
+            }
+            connectedPeers.set(normalized)
+            val instance = activeInstance
+            if (instance != null) {
+                instance.finishHandler.post {
+                    if (activeInstance === instance && running) {
+                        instance.updateNotification(captureSnapshot)
+                    }
+                }
+            } else if (running) {
+                runCatching {
+                    context.startService(
+                        Intent(context, AuroraRuntimeForegroundService::class.java).apply {
+                            action = ACTION_SYNC_REASONS
+                        },
+                    )
+                }
+            }
+        }
+
+        fun connectedPeerCount(): Int = connectedPeers.get().size
 
         /** The reasons currently keeping the one Aurora service alive. */
         fun activeForegroundReasonIds(): List<String> =

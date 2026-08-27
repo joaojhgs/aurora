@@ -21,12 +21,41 @@ const nativeWebRtcPermissionPath = 'apps/aurora-tauri/src-tauri/permissions/auro
 const capabilityPath = 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'
 const tauriLibPath = 'apps/aurora-tauri/src-tauri/src/lib.rs'
 const meshSessionPath = 'apps/aurora-tauri/src-tauri/src/mesh_session.rs'
+const notificationCollapsedLayoutPath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/res/layout/aurora_runtime_notification_collapsed.xml'
+const notificationExpandedLayoutPath =
+  'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/res/layout/aurora_runtime_notification_expanded.xml'
 
 function repoText(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8')
 }
 
 describe('Android native voice route policy', () => {
+  it('renders one expandable foreground notification with voice and native peer RTT state', () => {
+    const plugin = repoText(kotlinPath)
+    const foregroundService = repoText(voiceStorePath)
+    const meshSession = repoText(meshSessionPath)
+    const collapsedLayout = repoText(notificationCollapsedLayoutPath)
+    const expandedLayout = repoText(notificationExpandedLayoutPath)
+
+    expect(plugin).toContain('fun meshDeviceLinkUpdate(invoke: Invoke)')
+    expect(plugin).toContain('AuroraRuntimeForegroundService.updateConnectedPeers')
+    expect(meshSession).toContain('node_name: Option<String>')
+    expect(meshSession).toContain('update_android_notification_peers')
+    expect(meshSession).toContain('spawn_android_notification_probe')
+    expect(foregroundService).toContain('NotificationCompat.DecoratedCustomViewStyle()')
+    expect(foregroundService).toContain('setCustomContentView(collapsedView)')
+    expect(foregroundService).toContain('setCustomBigContentView(expandedView)')
+    expect(foregroundService).toContain('private const val MAX_VISIBLE_NOTIFICATION_PEERS = 3')
+    expect(foregroundService).toContain('notificationPeerLatencyText')
+    expect(collapsedLayout).toContain('@+id/aurora_notification_voice_state')
+    expect(collapsedLayout).toContain('@+id/aurora_notification_peer_summary')
+    expect(expandedLayout).toContain('@+id/aurora_notification_peer_name_1')
+    expect(expandedLayout).toContain('@+id/aurora_notification_peer_latency_1')
+    expect(expandedLayout).toContain('@+id/aurora_notification_peer_name_3')
+    expect(expandedLayout).toContain('@+id/aurora_notification_more_peers')
+  })
+
   it('allows the shared native WebRTC capability to measure application RTT', () => {
     const capability = repoText(capabilityPath)
     const permission = repoText(nativeWebRtcPermissionPath)
@@ -563,10 +592,10 @@ describe('Android native voice route policy', () => {
       foregroundService.indexOf('private fun updateNotification'),
       foregroundService.indexOf('private fun ensureNotificationChannel'),
     )
-    expect(foregroundService).toContain('private val lastNotificationText = AtomicReference<String?>(null)')
-    expect(notificationBody).toContain('if (lastNotificationText.get() == text) return')
+    expect(foregroundService).toContain('private val lastNotificationFingerprint = AtomicReference<String?>(null)')
+    expect(notificationBody).toContain('if (lastNotificationFingerprint.get() == fingerprint) return')
     expect(notificationBody.indexOf('manager.notify(AURORA_RUNTIME_NOTIFICATION_ID, foregroundNotification(text))')).toBeLessThan(
-      notificationBody.indexOf('lastNotificationText.set(text)'),
+      notificationBody.indexOf('lastNotificationFingerprint.set(fingerprint)'),
     )
 
     const nativeCreateBody = androidAudio.slice(
