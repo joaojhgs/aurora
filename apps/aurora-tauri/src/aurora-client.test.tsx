@@ -358,12 +358,28 @@ function fakeThinPeer(
     secretsPersisted: false,
     ...snapshot,
   };
+  const roster = {
+    peers: [],
+    discovered: [],
+    updatedAt: base.updatedAt,
+  };
   return {
     snapshot: () => base,
+    roster: () => roster,
+    subscribeRoster: (listener: (next: typeof roster) => void) => {
+      listener(roster);
+      return () => undefined;
+    },
     subscribe: (listener: (next: BrowserWebRtcSnapshot) => void) => {
       listener(base);
       return () => undefined;
     },
+    getSelectedCandidatePairEvidence: async () => ({
+      selected: false,
+      category: "unknown",
+      statsSource: "RTCPeerConnection.getStats",
+      rawAddressRedacted: true,
+    }),
     importInvite: (inviteText: string) => webRtcProfileFromInvite(inviteText)!,
     connect: async () => undefined,
     confirmPairing: async () => undefined,
