@@ -482,10 +482,16 @@ async function proveForegroundVoice(context, invoke, foregroundPcm) {
     throw new Error(`Foreground microphone audio entered native ingress before the fixture: ${JSON.stringify(active)}`)
   }
   await armLiveTestPcmIngress(invoke)
-  await injectLiveTestPcm(invoke, foregroundPcm)
+  const injectionStatus = await injectLiveTestPcm(
+    invoke,
+    foregroundPcm,
+    { focusedBaseline: active },
+  )
   const injectionCompletedAt = Date.now()
-  const finish = await invoke('aurora_android_voice_foreground_service_finish')
-  if (finish?.finished !== true) throw new Error(`Foreground voice finish was rejected: ${JSON.stringify(finish)}`)
+  if (!focusedTranscriptionCompleted(active, injectionStatus)) {
+    const finish = await invoke('aurora_android_voice_foreground_service_finish')
+    if (finish?.finished !== true) throw new Error(`Foreground voice finish was rejected: ${JSON.stringify(finish)}`)
+  }
   const completed = await pollVoiceStatus(
     invoke,
     // Native session counters restart for each focused capture. Compare the
@@ -1196,7 +1202,11 @@ export function wavToPcm16Mono(wav, targetSampleRateHz = LIVE_TEST_PCM_SAMPLE_RA
   return output
 }
 
-export async function injectLiveTestPcm(invoke, pcm, { backgroundBaseline } = {}) {
+export async function injectLiveTestPcm(
+  invoke,
+  pcm,
+  { backgroundBaseline, focusedBaseline } = {},
+) {
   if (!Buffer.isBuffer(pcm) || pcm.length === 0 || pcm.length % 2 !== 0) {
     throw new Error('Android live voice PCM fixture is empty or misaligned.')
   }
@@ -1207,10 +1217,13 @@ export async function injectLiveTestPcm(invoke, pcm, { backgroundBaseline } = {}
       request: { pcmBase64: frame.toString('base64') },
     })
     if (result?.accepted !== true) {
-      const status = backgroundBaseline
+      const status = backgroundBaseline || focusedBaseline
         ? await invoke('aurora_android_voice_foreground_service_status')
         : undefined
       if (backgroundPcmRejectionEndsInjection(result, status, backgroundBaseline, acceptedFrames)) {
+        return status
+      }
+      if (focusedPcmRejectionEndsInjection(result, status, focusedBaseline, acceptedFrames)) {
         return status
       }
       throw new Error(
@@ -1244,6 +1257,19 @@ export function backgroundPcmRejectionEndsInjection(rejection, status, baseline,
       'speaking',
       'stopping',
     ].includes(status?.runtimePhase)
+}
+
+export function focusedPcmRejectionEndsInjection(rejection, status, baseline, acceptedFrames) {
+  if (rejection?.reason !== 'voice_session_not_accepting_audio' || acceptedFrames <= 0) return false
+  if (Number(status?.acceptedSamples ?? 0) <= Number(baseline?.acceptedSamples ?? 0)) return false
+  if (Number(status?.failedTurns ?? 0) !== Number(baseline?.failedTurns ?? 0)) return false
+  if (status?.captureError) return false
+  if (focusedTranscriptionCompleted(baseline, status)) return true
+  const captureOwned = status?.running === true
+    && status?.backgroundSessionActive !== true
+    && status?.captureActive === true
+    && status?.runtimeActive === true
+  return captureOwned && ['processing', 'transcribing', 'stopping'].includes(status?.runtimePhase)
 }
 
 export async function armLiveTestPcmIngress(invoke, { required = true } = {}) {

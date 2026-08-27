@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const scriptPath = resolve(appRoot, 'scripts/android-voice-live-smoke.mjs')
@@ -48,6 +48,17 @@ async function liveSmokeModule() {
       baseline: Record<string, unknown>,
       acceptedFrames: number,
     ): boolean
+    focusedPcmRejectionEndsInjection(
+      rejection: Record<string, unknown>,
+      status: Record<string, unknown>,
+      baseline: Record<string, unknown>,
+      acceptedFrames: number,
+    ): boolean
+    injectLiveTestPcm(
+      invoke: (command: string, args?: unknown) => Promise<Record<string, unknown>>,
+      pcm: Buffer,
+      options?: { focusedBaseline?: Record<string, unknown> },
+    ): Promise<Record<string, unknown> | undefined>
     focusedTranscriptionCompleted(
       baseline: Record<string, unknown>,
       status: Record<string, unknown>,
@@ -481,6 +492,62 @@ describe('Android packaged voice live smoke harness', () => {
       ...baseline,
       runtimePhase: 'processing',
     }, baseline, 12)).toBe(false)
+  })
+
+  it('stops a focused fixture only after accepted PCM advances into transcription', async () => {
+    const module = await liveSmokeModule()
+    const baseline = {
+      running: true,
+      backgroundSessionActive: false,
+      captureActive: true,
+      runtimeActive: true,
+      runtimePhase: 'listening',
+      acceptedSamples: 0,
+      completedTurns: 0,
+      failedTurns: 0,
+      captureError: null,
+    }
+    const advanced = {
+      ...baseline,
+      runtimePhase: 'transcribing',
+      acceptedSamples: 16_000,
+    }
+    const rejection = { accepted: false, reason: 'voice_session_not_accepting_audio' }
+
+    expect(module.focusedPcmRejectionEndsInjection(rejection, advanced, baseline, 21)).toBe(true)
+    expect(module.focusedPcmRejectionEndsInjection(rejection, baseline, baseline, 21)).toBe(false)
+    expect(module.focusedPcmRejectionEndsInjection(rejection, {
+      ...advanced,
+      captureError: 'audio_focus_lost',
+    }, baseline, 21)).toBe(false)
+    expect(module.focusedPcmRejectionEndsInjection(rejection, advanced, baseline, 0)).toBe(false)
+    expect(module.focusedPcmRejectionEndsInjection({
+      accepted: false,
+      reason: 'audio_queue_closed',
+    }, advanced, baseline, 21)).toBe(false)
+    expect(module.focusedPcmRejectionEndsInjection(rejection, {
+      ...advanced,
+      running: false,
+      captureActive: false,
+      runtimeActive: false,
+      runtimePhase: 'idle',
+      completedTurns: 1,
+    }, baseline, 21)).toBe(true)
+
+    const invoke = vi.fn(async (command: string) => {
+      if (command === 'aurora_android_voice_foreground_service_status') return advanced
+      if (invoke.mock.calls.filter(([called]) => called === 'aurora_android_voice_live_test_inject_pcm').length === 1) {
+        return { accepted: true }
+      }
+      return rejection
+    })
+    const status = await module.injectLiveTestPcm(
+      invoke,
+      Buffer.alloc(32_768),
+      { focusedBaseline: baseline },
+    )
+    expect(status).toEqual(advanced)
+    expect(invoke).toHaveBeenCalledWith('aurora_android_voice_foreground_service_status')
   })
 
   it('renews exclusive ingress while a slow background attempt is still pending', () => {
