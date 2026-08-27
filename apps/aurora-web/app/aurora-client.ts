@@ -7,6 +7,7 @@ import {
   cloneFixture,
   iosNativeCapabilityManifestFixture,
   nativeCapabilityManifestFixture,
+  routePath,
   type AuroraTransport,
   type AuroraTransportRequest,
   type AuroraTransportResponse,
@@ -205,6 +206,54 @@ export function createAuroraWebClient(): AuroraClient {
     return createDebugUiDemoClient(resolveAuroraDebugUiLaunch())
   }
   return new AuroraClient({ transport: new MissingGatewayTransport() })
+}
+
+export async function authorizeAuroraServerAssistantSession(
+  headers: Headers,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const bearerToken = bearerTokenFromHeaders(headers)
+  if (!bearerToken) return false
+  const gatewayUrl = process.env.AURORA_GATEWAY_URL?.trim()
+  if (!gatewayUrl) return false
+  try {
+    const response = await fetch(`${gatewayUrl.replace(/\/+$/u, '')}${routePath('Auth', 'WhoAmI')}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${bearerToken}`,
+      },
+      body: '{}',
+      cache: 'no-store',
+      signal,
+    })
+    if (!response.ok) return false
+    const identity = await response.json() as {
+      error?: unknown
+      principal_id?: unknown
+      permissions?: unknown
+      effective_perms?: unknown
+      is_admin?: unknown
+    }
+    if (typeof identity.error === 'string' || typeof identity.principal_id !== 'string') return false
+    const permissions = Array.isArray(identity.effective_perms)
+      ? identity.effective_perms
+      : Array.isArray(identity.permissions)
+        ? identity.permissions
+        : []
+    return identity.is_admin === true || permissions.some((permission) => (
+      permission === '*' || permission === 'Orchestrator.use'
+    ))
+  } catch {
+    return false
+  }
+}
+
+function bearerTokenFromHeaders(headers: Headers): string | null {
+  const authorization = headers.get('authorization')
+  const match = authorization?.match(/^Bearer\s+(.+)$/iu)
+  const token = match?.[1]?.trim()
+  return token || null
 }
 
 export async function loadAuroraBrowserAssistantAvailability(options: {
