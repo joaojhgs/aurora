@@ -623,7 +623,7 @@ async def chatbot(state: State, bus: MessageBus):
             if inspect.isawaitable(maybe_response):
                 response_message = await maybe_response
         if response_message is None:
-            response_message = llm_with_tools.invoke(prompt_messages)
+            response_message = await asyncio.to_thread(llm_with_tools.invoke, prompt_messages)
 
     return {
         "messages": [response_message],

@@ -1,12 +1,15 @@
 """Unit tests for chatbot agent."""
 
+import asyncio
 import contextlib
 import sys
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from app.messaging import MessageBus
+from app.messaging import MessageBus, QueryResult
 from app.services.orchestrator.agents.chatbot import _protocol_safe_prompt_suffix, chatbot
 from app.services.orchestrator.state import State
 
@@ -158,6 +161,61 @@ class TestChatbotMemorySearch:
 
             # Verify memories were included in result
             assert "messages" in result
+
+    @pytest.mark.asyncio
+    async def test_chatbot_sync_invoke_fallback_does_not_block_event_loop(
+        self, mock_bus, mock_state
+    ):
+        """Sync-only LLM adapters are invoked from a worker thread."""
+
+        from langchain_core.messages import AIMessage
+
+        import app.services.orchestrator.agents.chatbot as chatbot_module
+
+        class SyncOnlyLLM:
+            invoke_thread_id: int | None = None
+
+            def bind_tools(self, tools, tool_choice=None):
+                return self
+
+            def astream(self, messages):
+                async def _stream():
+                    raise NotImplementedError
+                    yield
+
+                return _stream()
+
+            def invoke(self, messages):
+                self.invoke_thread_id = threading.get_ident()
+                time.sleep(0.2)
+                return AIMessage(content="Response")
+
+        sync_llm = SyncOnlyLLM()
+        mock_bus.request.side_effect = [
+            QueryResult(ok=True, data={"items": []}),
+            QueryResult(ok=True, data={"tools": []}),
+        ]
+        tick_delay = None
+
+        async def _tick():
+            nonlocal tick_delay
+            started_at = time.perf_counter()
+            await asyncio.sleep(0.05)
+            tick_delay = time.perf_counter() - started_at
+
+        event_loop_thread_id = threading.get_ident()
+        with (
+            patch.object(chatbot_module, "_initialize_llm", new_callable=AsyncMock),
+            patch.object(chatbot_module, "llm", sync_llm),
+            patch.object(chatbot_module, "_llm_initialized", True),
+        ):
+            result, _ = await asyncio.gather(chatbot(mock_state, bus=mock_bus), _tick())
+
+        assert result["messages"][0].content == "Response"
+        assert sync_llm.invoke_thread_id is not None
+        assert sync_llm.invoke_thread_id != event_loop_thread_id
+        assert tick_delay is not None
+        assert tick_delay < 0.15
 
     @pytest.mark.asyncio
     async def test_chatbot_memory_search_failure(self, mock_bus, mock_state):

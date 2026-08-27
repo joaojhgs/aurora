@@ -72,6 +72,7 @@ from app.shared.contracts.models.db import (
     DBBeginToolingRemoteCatalogSyncRequest,
     DBCommitToolingRemoteCatalogSyncRequest,
     DBExecuteSQLRequest,
+    DBExecuteSQLResponse,
     DBFinalizeToolingRemoteCatalogPolicyRequest,
     DBGetToolingExportPolicySnapshotRequest,
     DBGetToolingExportPolicySnapshotResponse,
@@ -339,6 +340,7 @@ class ToolingService(BaseService):
         log_info("Starting Tooling service...")
         await self._load_sharing_policy_from_config()
         await self._ensure_tooling_policy_tables()
+        await self._prune_consumed_approval_records()
         await self._load_stable_tooling_peer_id()
 
         # Set as global instance
@@ -1465,7 +1467,9 @@ class ToolingService(BaseService):
             priority=get_system_priority(),
         )
 
-    async def _db_sql(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
+    async def _db_execute_sql(
+        self, sql: str, params: list[Any] | None = None
+    ) -> DBExecuteSQLResponse:
         result = await self._request_db(
             DBMethods.EXECUTE_SQL,
             DBExecuteSQLRequest(sql=sql, params=params or []),
@@ -1473,16 +1477,47 @@ class ToolingService(BaseService):
         if not result.ok:
             raise RuntimeError(result.error or "DB.ExecuteSQL failed")
         data = result.data
-        if isinstance(data, dict):
-            if data.get("success", True) is False:
-                raise RuntimeError(data.get("error") or "DB.ExecuteSQL statement failed")
-        elif getattr(data, "success", True) is False:
-            raise RuntimeError(getattr(data, "error", None) or "DB.ExecuteSQL statement failed")
-        if hasattr(data, "rows"):
-            return list(data.rows)
-        if isinstance(data, dict):
-            return list(data.get("rows") or [])
-        return []
+        if isinstance(data, DBExecuteSQLResponse):
+            response = data
+        elif isinstance(data, dict):
+            response = DBExecuteSQLResponse.model_validate(data)
+        elif hasattr(data, "model_dump"):
+            response = DBExecuteSQLResponse.model_validate(data.model_dump())
+        else:
+            response = DBExecuteSQLResponse.model_validate(data)
+        if not response.success:
+            raise RuntimeError(response.error or "DB.ExecuteSQL statement failed")
+        return response
+
+    async def _db_sql(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
+        response = await self._db_execute_sql(sql, params)
+        return list(response.rows)
+
+    async def _prune_consumed_approval_records(self, *, now: float | None = None) -> None:
+        """Bound the in-memory and durable replay ledgers for approval handshakes."""
+
+        cutoff = time.time() if now is None else now
+        self._approval_tokens = {
+            token: claims
+            for token, claims in self._approval_tokens.items()
+            if not bool(claims.get("used")) and float(claims.get("expires_at") or 0) > cutoff
+        }
+        self._approval_requests = {
+            approval_request_id: pending
+            for approval_request_id, pending in self._approval_requests.items()
+            if not bool(pending.get("used")) and float(pending.get("expires_at") or 0) > cutoff
+        }
+        await self._ensure_tooling_policy_tables()
+        if not self._tooling_policy_tables_ready:
+            return
+        await self._db_execute_sql(
+            "DELETE FROM tooling_approval_tokens WHERE used = 1 OR expires_at <= ?",
+            [cutoff],
+        )
+        await self._db_execute_sql(
+            "DELETE FROM tooling_approval_requests WHERE used = 1 OR expires_at <= ?",
+            [cutoff],
+        )
 
     async def _ensure_tooling_policy_tables(self) -> None:
         """Create durable Tooling policy/grant/catalog tables through DB service."""
@@ -5268,16 +5303,30 @@ class ToolingService(BaseService):
         self._approval_tokens[token] = claims
         return claims
 
-    async def _mark_approval_token_used(self, token: str, claims: dict[str, Any]) -> None:
-        """Mark a short-lived approval token as consumed in memory and durable storage."""
+    async def _mark_approval_token_used(self, token: str, claims: dict[str, Any]) -> bool:
+        """Mark a short-lived approval token as consumed exactly once."""
 
-        claims["used"] = True
         await self._ensure_tooling_policy_tables()
-        if self._tooling_policy_tables_ready:
-            await self._db_sql(
-                "UPDATE tooling_approval_tokens SET used = 1 WHERE token_hash = ?",
-                [self._approval_token_hash(token)],
-            )
+        if not self._tooling_policy_tables_ready:
+            if claims.get("used"):
+                return False
+            claims["used"] = True
+            return True
+
+        response = await self._db_execute_sql(
+            """
+            UPDATE tooling_approval_tokens
+            SET used = 1
+            WHERE token_hash = ?
+              AND used = 0
+            """,
+            [self._approval_token_hash(token)],
+        )
+        if response.rowcount != 1:
+            claims["used"] = True
+            return False
+        claims["used"] = True
+        return True
 
     async def _validate_approval_token(
         self,
@@ -5313,7 +5362,8 @@ class ToolingService(BaseService):
         for field_name, expected_value in expected.items():
             if claims.get(field_name) != expected_value:
                 return False, f"approval_token_{field_name}_mismatch"
-        await self._mark_approval_token_used(token, claims)
+        if not await self._mark_approval_token_used(token, claims):
+            return False, "approval_token_replayed"
         return True, None
 
     @staticmethod
@@ -5427,28 +5477,37 @@ class ToolingService(BaseService):
         *,
         principal_id: str | None,
         correlation_id: str | None,
-    ) -> None:
+    ) -> bool:
         """Consume a one-shot deny grant after it blocks exactly one matching call."""
 
         if grant.grant_scope != "deny_once":
-            return
+            return True
         await self._ensure_tooling_policy_tables()
         if self._tooling_policy_tables_ready:
-            await self._db_sql(
+            consumed_at = time.time()
+            response = await self._db_execute_sql(
                 """
                 UPDATE tooling_approval_grants
                 SET active = 0, revoked_at = ?, reason = COALESCE(reason, ?)
                 WHERE grant_id = ?
+                  AND active = 1
+                  AND revoked_at IS NULL
                 """,
-                [time.time(), "deny_once_consumed", grant.grant_id],
+                [consumed_at, "deny_once_consumed", grant.grant_id],
             )
+            if response.rowcount != 1:
+                grant.active = False
+                return False
+        else:
+            consumed_at = time.time()
         grant.active = False
-        grant.revoked_at = time.time()
+        grant.revoked_at = consumed_at
         await self._audit_tooling_event(
             "tooling.approval.deny_once_consumed",
             principal_id=principal_id,
             details={"grant_id": grant.grant_id, "correlation_id": correlation_id},
         )
+        return True
 
     async def _find_matching_grant(
         self,
@@ -5619,13 +5678,24 @@ class ToolingService(BaseService):
         self._approval_requests[approval_request_id] = pending
         return pending
 
-    async def _mark_approval_request_used(self, approval_request_id: str) -> None:
+    async def _mark_approval_request_used(self, approval_request_id: str) -> bool:
         await self._ensure_tooling_policy_tables()
-        if self._tooling_policy_tables_ready:
-            await self._db_sql(
-                "UPDATE tooling_approval_requests SET used = 1 WHERE approval_request_id = ?",
-                [approval_request_id],
-            )
+        if not self._tooling_policy_tables_ready:
+            pending = self._approval_requests.get(approval_request_id)
+            if pending is None or pending.get("used"):
+                return False
+            pending["used"] = True
+            return True
+        response = await self._db_execute_sql(
+            """
+            UPDATE tooling_approval_requests
+            SET used = 1
+            WHERE approval_request_id = ?
+              AND used = 0
+            """,
+            [approval_request_id],
+        )
+        return response.rowcount == 1
 
     async def _create_grant_from_request(
         self,
@@ -5855,6 +5925,17 @@ class ToolingService(BaseService):
         )
         decision = prepared.policy_decision
         blocking_grant = await self._find_matching_blocking_grant(request, prepared)
+        if (
+            blocking_grant
+            and blocking_grant.grant_scope == "deny_once"
+            and not await self._consume_deny_once_grant(
+                blocking_grant,
+                principal_id=request.caller_principal_id,
+                correlation_id=request.correlation_id,
+            )
+        ):
+            blocking_grant = None
+
         if blocking_grant:
             decision.allowed = False
             decision.approval_required = False
@@ -5871,11 +5952,6 @@ class ToolingService(BaseService):
                     "global_tool_id": global_tool_id,
                     "provider_peer_id": provider_peer_id,
                 },
-            )
-            await self._consume_deny_once_grant(
-                blocking_grant,
-                principal_id=request.caller_principal_id,
-                correlation_id=request.correlation_id,
             )
 
         if not decision.allowed:
@@ -8264,6 +8340,7 @@ class ToolingService(BaseService):
                 error="permission_denied",
             )
 
+        await self._prune_consumed_approval_records()
         caller_permissions = await self._execution_caller_permissions(request, envelope)
         prepared = await self._prepare_execution_response(
             request, caller_permissions=caller_permissions, envelope=envelope
@@ -8390,8 +8467,15 @@ class ToolingService(BaseService):
                 policy_decision_id=prepared.policy_decision.decision_id,
                 error="approval_owner_required_for_durable_grant",
             )
+        if not await self._mark_approval_request_used(request.approval_request_id):
+            pending["used"] = True
+            return ToolingConfirmExecutionResponse(
+                ok=False,
+                correlation_id=correlation_id,
+                policy_decision_id=prepared.policy_decision.decision_id,
+                error="approval_request_replayed",
+            )
         pending["used"] = True
-        await self._mark_approval_request_used(request.approval_request_id)
         if not request.approve:
             deny_grant: ToolingApprovalGrant | None = None
             if request.grant_scope in {"deny_once", "deny_always"}:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import time
 from pathlib import Path
@@ -254,8 +255,12 @@ class _SqliteToolingBus:
                 connection.row_factory = sqlite3.Row
                 cursor = connection.execute(payload.sql, payload.params or [])
                 rows = [dict(row) for row in cursor.fetchall()] if cursor.description else []
+                rowcount = cursor.rowcount
                 connection.commit()
-            return QueryResult(ok=True, data={"rows": rows})
+            return QueryResult(
+                ok=True,
+                data={"rows": rows, "rowcount": rowcount, "success": True},
+            )
 
         if topic == AuthMethods.STORE_AUDIT_EVENT:
             self.audit_events.append(payload)
@@ -373,6 +378,51 @@ async def test_confirm_execution_persists_used_mark_to_block_replay_after_restar
 
 
 @pytest.mark.asyncio
+async def test_concurrent_confirm_execution_consumes_approval_request_once(
+    make_tooling_service,
+):
+    """Two process-mode workers racing the same approval request produce one token."""
+
+    creator = make_tooling_service()
+    approval = await creator._on_request_approval(
+        ToolingRequestApprovalRequest(**_execute_request().model_dump())
+    )
+    assert approval.approval_request_id is not None
+    barrier = asyncio.Barrier(2)
+    contenders = [make_tooling_service(), make_tooling_service()]
+    for contender in contenders:
+        load_approval_request = contender._load_approval_request
+
+        async def _load_then_wait(
+            approval_request_id: str,
+            *,
+            _load_approval_request=load_approval_request,
+        ):
+            pending = await _load_approval_request(approval_request_id)
+            await barrier.wait()
+            return pending
+
+        contender._load_approval_request = _load_then_wait
+
+    results = await asyncio.gather(
+        *(
+            contender._on_confirm_execution(
+                ToolingConfirmExecutionRequest(
+                    approval_request_id=approval.approval_request_id,
+                    approver_principal_id="approver-a",
+                    grant_scope="once",
+                )
+            )
+            for contender in contenders
+        )
+    )
+
+    assert sum(result.ok for result in results) == 1
+    assert sum(result.error == "approval_request_replayed" for result in results) == 1
+    assert sum(bool(result.approval_token) for result in results) == 1
+
+
+@pytest.mark.asyncio
 async def test_external_confirm_execution_uses_envelope_actor_for_grant_and_audit(
     make_tooling_service,
     sqlite_tooling_bus,
@@ -473,6 +523,65 @@ async def test_deny_once_blocks_only_one_matching_execution(make_tooling_service
     second_block = await service._find_matching_blocking_grant(execution_request, prepared)
 
     assert second_block is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_deny_once_enforcement_blocks_only_one_worker(make_tooling_service):
+    """Two workers seeing the same deny_once grant must not both apply the block."""
+
+    service = make_tooling_service()
+    execution_request = _execute_request(correlation_id="corr-deny-once-concurrent")
+    approval = await service._on_request_approval(
+        ToolingRequestApprovalRequest(**execution_request.model_dump())
+    )
+    assert approval.approval_request_id is not None
+    await service._on_confirm_execution(
+        ToolingConfirmExecutionRequest(
+            approval_request_id=approval.approval_request_id,
+            approver_principal_id="approver-a",
+            approve=False,
+            grant_scope="deny_once",
+            reason="operator denied once",
+        )
+    )
+    tool = _approval_required_tool()
+    prepared = await service._on_prepare_execution(execution_request)
+    barrier = asyncio.Barrier(2)
+    contenders = [make_tooling_service(), make_tooling_service()]
+    for contender in contenders:
+        find_matching_blocking_grant = contender._find_matching_blocking_grant
+
+        async def _find_then_wait(
+            request,
+            prepared_response,
+            *,
+            _find_matching_blocking_grant=find_matching_blocking_grant,
+        ):
+            grant = await _find_matching_blocking_grant(request, prepared_response)
+            await barrier.wait()
+            return grant
+
+        contender._find_matching_blocking_grant = _find_then_wait
+
+    responses = await asyncio.gather(
+        *(
+            contender._enforce_execution_policy(
+                execution_request,
+                tool=tool,
+                local_tool_name=prepared.local_tool_name,
+                global_tool_id=prepared.global_tool_id,
+                provider_peer_id=prepared.provider_peer_id,
+                service_instance_id=prepared.provider_service_instance_id,
+            )
+            for contender in contenders
+        )
+    )
+
+    assert sum(response.error_code == "tool_blocked" for response in responses if response) == 1
+    assert (
+        sum(response.error_code == "approval_token_required" for response in responses if response)
+        == 1
+    )
 
 
 async def _create_scheduled_execution_grant(service):
@@ -1420,6 +1529,121 @@ async def test_approval_token_is_marked_used_and_replay_is_rejected(make_tooling
 
     assert (first_ok, first_error) == (True, None)
     assert (second_ok, second_error) == (False, "approval_token_replayed")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_approval_token_validation_consumes_token_once(
+    make_tooling_service,
+):
+    """Two process-mode workers racing the same token produce one accepted call."""
+
+    service = make_tooling_service()
+    execution_request = _execute_request(correlation_id="corr-token-concurrent")
+    approval = await service._on_request_approval(
+        ToolingRequestApprovalRequest(**execution_request.model_dump())
+    )
+    assert approval.approval_request_id is not None
+    confirmation = await service._on_confirm_execution(
+        ToolingConfirmExecutionRequest(
+            approval_request_id=approval.approval_request_id,
+            approver_principal_id="approver-a",
+            grant_scope="once",
+        )
+    )
+    assert confirmation.approval_token is not None
+    prepared = await service._on_prepare_execution(execution_request)
+    token_request = execution_request.model_copy(
+        update={"approval_token": confirmation.approval_token}
+    )
+    barrier = asyncio.Barrier(2)
+    contenders = [make_tooling_service(), make_tooling_service()]
+    for contender in contenders:
+        load_approval_token = contender._load_approval_token
+
+        async def _load_then_wait(token: str, *, _load_approval_token=load_approval_token):
+            claims = await _load_approval_token(token)
+            await barrier.wait()
+            return claims
+
+        contender._load_approval_token = _load_then_wait
+
+    results = await asyncio.gather(
+        *(
+            contender._validate_approval_token(token_request, prepared=prepared)
+            for contender in contenders
+        )
+    )
+
+    assert sum(ok for ok, _error in results) == 1
+    assert sum(error == "approval_token_replayed" for ok, error in results if not ok) == 1
+
+
+@pytest.mark.asyncio
+async def test_approval_replay_ledgers_prune_used_and_expired_records(
+    make_tooling_service,
+):
+    """Approval token/request replay ledgers are bounded in memory and SQLite."""
+
+    service = make_tooling_service()
+    now = time.time()
+    service._approval_tokens.update(
+        {
+            "used-token": {"used": True, "expires_at": now + 60},
+            "expired-token": {"used": False, "expires_at": now - 1},
+            "fresh-token": {"used": False, "expires_at": now + 60},
+        }
+    )
+    service._approval_requests.update(
+        {
+            "used-request": {"used": True, "expires_at": now + 60},
+            "expired-request": {"used": False, "expires_at": now - 1},
+            "fresh-request": {"used": False, "expires_at": now + 60},
+        }
+    )
+    await service._ensure_tooling_policy_tables()
+    await service._db_sql(
+        """
+        INSERT INTO tooling_approval_tokens
+        (token_hash, claims_json, expires_at, used, created_at)
+        VALUES
+        (?, '{}', ?, 1, ?),
+        (?, '{}', ?, 0, ?),
+        (?, '{}', ?, 0, ?)
+        """,
+        [
+            service._approval_token_hash("used-token"),
+            now + 60,
+            now,
+            service._approval_token_hash("expired-token"),
+            now - 1,
+            now,
+            service._approval_token_hash("fresh-token"),
+            now + 60,
+            now,
+        ],
+    )
+    await service._db_sql(
+        """
+        INSERT INTO tooling_approval_requests
+        (approval_request_id, request_json, prepared_json, expires_at, used, created_at)
+        VALUES
+        ('used-request', '{}', '{}', ?, 1, ?),
+        ('expired-request', '{}', '{}', ?, 0, ?),
+        ('fresh-request', '{}', '{}', ?, 0, ?)
+        """,
+        [now + 60, now, now - 1, now, now + 60, now],
+    )
+
+    await service._prune_consumed_approval_records(now=now)
+
+    assert set(service._approval_tokens) == {"fresh-token"}
+    assert set(service._approval_requests) == {"fresh-request"}
+    token_rows = await service._db_sql("SELECT token_hash FROM tooling_approval_tokens")
+    request_rows = await service._db_sql(
+        "SELECT approval_request_id FROM tooling_approval_requests"
+    )
+    assert token_rows == [{"token_hash": service._approval_token_hash("fresh-token")}]
+    assert request_rows == [{"approval_request_id": "fresh-request"}]
 
 
 @pytest.mark.asyncio
