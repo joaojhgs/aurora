@@ -2570,17 +2570,17 @@ describe('browser WebRTC runtime peer registry', {
     const remoteDescriptionGate = new Promise<void>((resolve) => {
       releaseRemoteDescription = resolve
     })
-    const harness = makeMultiPeerHarness(['z-node'], {
+    const harness = makeMultiPeerHarness(['a-node'], {
       nodeRole: 'mesh-node',
       peerConnectionPolicy: 'mesh',
       remoteDescriptionGate,
     })
-    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'a-alpha', 'Alpha node'))
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'z-alpha', 'Alpha node'))
     const signaling = harness.signalings[0] as RuntimeFakeSignaling
 
     signaling.emit({
       channel: 'offer',
-      from: 'a-beta',
+      from: 'z-beta',
       stablePeerId: 'peer-beta',
       envelope: {
         type: 'offer',
@@ -2591,7 +2591,7 @@ describe('browser WebRTC runtime peer registry', {
     })
     signaling.emit({
       channel: 'candidate',
-      from: 'a-beta',
+      from: 'z-beta',
       stablePeerId: 'peer-beta',
       envelope: {
         type: 'candidate',
@@ -2604,7 +2604,7 @@ describe('browser WebRTC runtime peer registry', {
     await vi.waitFor(() => expect(harness.connections).toHaveLength(1))
     expect(harness.connections.at(-1)?.candidates).toEqual([])
     releaseRemoteDescription()
-    await vi.waitFor(() => expect(signaling.sent.some((message) => message.channel === 'answer' && message.toPeer === 'a-beta')).toBe(true))
+    await vi.waitFor(() => expect(signaling.sent.some((message) => message.channel === 'answer' && message.toPeer === 'z-beta')).toBe(true))
 
     expect(harness.signalings).toHaveLength(1)
     const betaEntry = harness.registry.roster().peers.find((entry) => entry.peerId === 'peer-beta')
@@ -2613,7 +2613,7 @@ describe('browser WebRTC runtime peer registry', {
       snapshot: {
         expectedStablePeerId: 'peer-beta',
         connectedStablePeerId: 'peer-beta',
-        connectedSignalingPeerId: 'a-beta',
+        connectedSignalingPeerId: 'z-beta',
         negotiationRole: 'answerer',
         state: 'negotiating',
       },
@@ -2625,8 +2625,8 @@ describe('browser WebRTC runtime peer registry', {
     expect(signaling.sent).toEqual([
       expect.objectContaining({
         channel: 'answer',
-        envelope: expect.objectContaining({ to: 'a-beta', sdp: 'answer-sdp' }),
-        toPeer: 'a-beta',
+        envelope: expect.objectContaining({ to: 'z-beta', sdp: 'answer-sdp' }),
+        toPeer: 'z-beta',
       }),
     ])
 

@@ -669,7 +669,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
   /** Add a device without disturbing the ones already set up. */
   async connectDevice(
     profile: WebRtcPeerConnectionProfile,
-    options: { reportFailure?: boolean } = {},
+    options: {
+      reportFailure?: boolean
+      negotiationIntent?: 'auto' | 'offerer' | 'answerer'
+      useCurrentSignalingPeerId?: boolean
+    } = {},
   ): Promise<void> {
     if (this.disabledReason) throw new AuroraError({ code: 'unsupported_feature', message: this.disabledReason })
     const peer = this.peer
@@ -677,10 +681,19 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.connectionDiagnostic = undefined
     this.attemptedConnect = true
     this.disconnected = false
-    const connectionProfile = stablePeerConnectionProfile(profile)
-    this.credentialStore?.savePeerConnectionProfile?.(connectionProfile)
+    const savedConnectionProfile = stablePeerConnectionProfile(profile)
+    this.credentialStore?.savePeerConnectionProfile?.(savedConnectionProfile)
     try {
-      await peer.connectPeer(connectionProfile)
+      const connectionProfile = options.useCurrentSignalingPeerId
+        ? profile
+        : savedConnectionProfile
+      if (options.negotiationIntent && options.negotiationIntent !== 'auto') {
+        await peer.connectPeer(connectionProfile, {
+          negotiationIntent: options.negotiationIntent,
+        })
+      } else {
+        await peer.connectPeer(connectionProfile)
+      }
     } catch (error) {
       if (options.reportFailure !== false) {
         this.connectionDiagnostic = productDiagnosticFromError(error) ?? CONNECTION_UNAVAILABLE_COPY
@@ -733,11 +746,18 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     const profile: WebRtcPeerConnectionProfile = {
       ...roomProfile,
       ...(device.stablePeerId
-        ? { expectedStablePeerId: device.stablePeerId }
+        ? {
+            expectedStablePeerId: device.stablePeerId,
+            expectedSignalingPeerId: device.signalingPeerId,
+          }
         : { expectedSignalingPeerId: device.signalingPeerId }),
       ...(device.nodeName ? { nodeName: device.nodeName } : {}),
     }
-    await this.connectDevice(profile, options)
+    await this.connectDevice(profile, {
+      ...options,
+      negotiationIntent: 'offerer',
+      useCurrentSignalingPeerId: true,
+    })
   }
 
   /** Rejoin every approved device seen in the shared room after a node reload. */

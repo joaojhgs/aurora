@@ -175,7 +175,7 @@ export interface PeerConnectionLike {
   createDataChannel(label: string, options?: RTCDataChannelInit): DataChannelLike
   createOffer(): Promise<SessionDescriptionLike>
   createAnswer(): Promise<SessionDescriptionLike>
-  setLocalDescription(description: SessionDescriptionLike): Promise<void>
+  setLocalDescription(description: LocalSessionDescriptionLike): Promise<void>
   setRemoteDescription(description: SessionDescriptionLike): Promise<void>
   addIceCandidate(candidate: IceCandidateInitLike | null): Promise<void>
   getStats?(): Promise<RTCStatsReport | Map<string, unknown>>
@@ -187,6 +187,11 @@ export interface PeerConnectionLike {
 export interface SessionDescriptionLike {
   type: RTCSdpType | 'offer' | 'answer'
   sdp: string
+}
+
+export type LocalSessionDescriptionLike = SessionDescriptionLike | {
+  type: 'rollback'
+  sdp?: string | undefined
 }
 
 export interface IceCandidateInitLike {
@@ -229,6 +234,13 @@ export interface PeerSessionOptions {
   localStableId?: string | undefined
   expectedRemoteSignalingId?: string | undefined
   expectedRemoteStableId?: string | undefined
+  /**
+   * How the first negotiation starts. Room reconnects use `auto` so both
+   * already-active peers deterministically elect one offerer. A person
+   * explicitly setting up a discovered device uses `offerer`; a session
+   * materialized from an inbound offer uses `answerer`.
+   */
+  negotiationIntent?: 'auto' | 'offerer' | 'answerer' | undefined
   iceServers?: RTCIceServer[]
   signaling: PeerSessionSignalingPort
   createPeerConnection: PeerSessionPeerConnectionFactory
@@ -586,7 +598,10 @@ export class WebRtcPeerSession {
     }
     if (this.state !== 'discovering-peer' && this.state !== 'reconnecting') return
     this.clearTimerKind('discovery')
-    this.role = this.options.localSignalingId < message.from ? 'offerer' : 'answerer'
+    const negotiationIntent = this.options.negotiationIntent ?? 'auto'
+    this.role = negotiationIntent === 'auto'
+      ? (this.options.localSignalingId < message.from ? 'offerer' : 'answerer')
+      : negotiationIntent
     if (this.role === 'offerer') {
       await this.beginOffer()
     }
@@ -617,7 +632,11 @@ export class WebRtcPeerSession {
   }
 
   private async handleOffer(message: SignalingMessage): Promise<void> {
-    if (this.options.localSignalingId < message.from) return
+    // A materialized inbound session must answer the offer that created it,
+    // regardless of lexical id order. If both people click Set up at once,
+    // two explicit offerers can glare; the existing stable id ordering still
+    // makes the higher id yield to the lower offer instead of deadlocking.
+    if (this.options.negotiationIntent !== 'answerer' && this.options.localSignalingId < message.from) return
     if (this.state !== 'discovering-peer' && this.state !== 'reconnecting' && this.state !== 'negotiating') return
     const sdp = typeof message.envelope.sdp === 'string' ? message.envelope.sdp : undefined
     if (sdp === undefined) {
@@ -625,10 +644,18 @@ export class WebRtcPeerSession {
       return
     }
     this.clearTimerKind('discovery')
-    this.role = 'answerer'
     this.ensurePeerConnection()
     const pc = this.pc!
     const generation = this.transportGeneration
+    const yieldingOfferer = this.role === 'offerer' && pc.localDescription?.type === 'offer'
+    if (yieldingOfferer) {
+      await pc.setLocalDescription({ type: 'rollback' })
+      if (!this.isCurrentNegotiation(pc, generation)) return
+      // The channel was created by the abandoned local offer. The remote
+      // offer will deliver its negotiated channel through `ondatachannel`.
+      this.closeChannel()
+    }
+    this.role = 'answerer'
     this.transition('negotiating')
     this.armTimeout('negotiation', this.timeouts.negotiationMs, () => {
       if (this.isCurrentTransport(pc, generation)) this.fail('negotiation timeout', true)

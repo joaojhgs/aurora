@@ -128,6 +128,7 @@ class FakePeerConnection implements PeerConnectionLike {
   statsReport: Map<string, unknown> = new Map()
   measuredRoundTripTimeMs: number | undefined
   closed = false
+  localDescriptionHistory: any[] = []
   constructor(readonly offerSdp = 'v=0\r\no=- offer\r\n', readonly answerSdp = 'v=0\r\no=- answer\r\n') {}
   createDataChannel(label: string): DataChannelLike {
     const channel = new FakeDataChannel(label)
@@ -136,7 +137,10 @@ class FakePeerConnection implements PeerConnectionLike {
   }
   async createOffer(): Promise<any> { return { type: 'offer', sdp: this.offerSdp } }
   async createAnswer(): Promise<any> { return { type: 'answer', sdp: this.answerSdp } }
-  async setLocalDescription(description: any): Promise<void> { this.localDescription = description }
+  async setLocalDescription(description: any): Promise<void> {
+    this.localDescriptionHistory.push(description)
+    this.localDescription = description.type === 'rollback' ? null : description
+  }
   async setRemoteDescription(description: any): Promise<void> { this.remoteDescription = description }
   async addIceCandidate(candidate: unknown): Promise<void> { this.candidates.push(candidate) }
   async getStats(): Promise<Map<string, unknown>> { return this.statsReport }
@@ -442,6 +446,129 @@ describe('WebRtcPeerSession', () => {
     expect(signaling.published.some((item) => item.channel === 'candidate' && item.envelope.candidate_category === 'relay')).toBe(true)
     expect(signaling.published.some((item) => item.channel === 'candidate' && item.envelope.candidate === null)).toBe(true)
     expect(session.getDiagnostics()).toMatchObject({ icePath: 'relay' })
+  })
+
+  it('lets an explicit setup initiator offer even when its signaling id sorts later', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection('explicit-setup-offer-sdp')
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z-android',
+      localStableId: 'stable-android',
+      expectedRemoteStableId: 'stable-browser',
+      negotiationIntent: 'offerer',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit({
+      channel: 'presence',
+      from: 'a-browser',
+      stablePeerId: 'stable-browser',
+      envelope: { type: 'presence', stable_peer_id: 'stable-browser' }
+    })
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({ role: 'offerer', state: 'negotiating' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'offer',
+      toPeer: 'a-browser',
+      envelope: expect.objectContaining({ sdp: 'explicit-setup-offer-sdp' })
+    }))
+  })
+
+  it('keeps an explicitly materialized inbound session in the answerer role', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection('unused-local-offer')
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'a-browser',
+      localStableId: 'stable-browser',
+      expectedRemoteStableId: 'stable-android',
+      expectedRemoteSignalingId: 'z-android',
+      negotiationIntent: 'answerer',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit({
+      channel: 'presence',
+      from: 'z-android',
+      stablePeerId: 'stable-android',
+      envelope: { type: 'presence', stable_peer_id: 'stable-android' }
+    })
+    await flush()
+    expect(signaling.published.some((item) => item.channel === 'offer')).toBe(false)
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'z-android',
+      stablePeerId: 'stable-android',
+      envelope: { type: 'offer', sdp: 'remote-android-offer-sdp' }
+    })
+    await flush()
+
+    expect(session.getSnapshot()).toMatchObject({ role: 'answerer', state: 'negotiating' })
+    expect(pc.remoteDescription).toEqual({ type: 'offer', sdp: 'remote-android-offer-sdp' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'answer',
+      toPeer: 'z-android'
+    }))
+  })
+
+  it('rolls back a colliding local offer before yielding to the lower signaling id', async () => {
+    const signaling = new FakeSignaling()
+    const pc = new FakePeerConnection('local-android-offer', 'local-android-answer')
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z-android',
+      localStableId: 'stable-android',
+      expectedRemoteStableId: 'stable-browser',
+      negotiationIntent: 'offerer',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth: { tryReconnect: async () => true, handleFrame: async () => undefined }
+    })
+
+    await session.start()
+    signaling.emit({
+      channel: 'presence',
+      from: 'a-browser',
+      stablePeerId: 'stable-browser',
+      envelope: { type: 'presence', stable_peer_id: 'stable-browser' }
+    })
+    await flush()
+    const abandonedChannel = pc.channels[0]
+    expect(pc.localDescription).toEqual({ type: 'offer', sdp: 'local-android-offer' })
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'a-browser',
+      stablePeerId: 'stable-browser',
+      envelope: { type: 'offer', sdp: 'remote-browser-offer' }
+    })
+    await flush()
+
+    expect(pc.localDescriptionHistory.map((description) => description.type)).toEqual([
+      'offer',
+      'rollback',
+      'answer'
+    ])
+    expect(abandonedChannel?.closed).toBe(true)
+    expect(pc.remoteDescription).toEqual({ type: 'offer', sdp: 'remote-browser-offer' })
+    expect(session.getSnapshot()).toMatchObject({ role: 'answerer', state: 'negotiating' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'answer',
+      toPeer: 'a-browser',
+      envelope: expect.objectContaining({ sdp: 'local-android-answer' })
+    }))
   })
 
   it('processes retained presence delivered before signaling connect resolves', async () => {

@@ -167,12 +167,17 @@ export interface MeshPeerRosterSnapshot {
   readonly updatedAt: string
 }
 
+/** Transient first-negotiation policy; it is never persisted in a peer profile. */
+export interface MeshPeerConnectOptions {
+  readonly negotiationIntent?: 'auto' | 'offerer' | 'answerer' | undefined
+}
+
 /** Multi-peer surface of the thin runtime peer controller. */
 export interface MeshPeerRegistryController {
   roster(): MeshPeerRosterSnapshot
   subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void): () => void
   /** Add a peer without disturbing the sessions already in the registry. */
-  connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void>
+  connectPeer(profile: WebRtcPeerConnectionProfile, options?: MeshPeerConnectOptions): Promise<void>
   /** Measure one exact peer without changing the registry's primary route. */
   getPeerSelectedCandidatePairEvidence(peerId: string): Promise<SelectedCandidatePairEvidence>
   /** Drop one peer, leaving the rest of the registry connected. */

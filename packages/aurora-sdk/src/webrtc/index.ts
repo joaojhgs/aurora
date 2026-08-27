@@ -23,6 +23,7 @@ export type {
   IceCandidateEventLike,
   IceCandidateInitLike,
   IceCandidateLike,
+  LocalSessionDescriptionLike,
   PeerConnectionLike,
   PeerSessionPeerConnectionContext,
   PeerSessionPeerConnectionFactory,
@@ -249,6 +250,7 @@ export {
 } from './peer-registry.js'
 export type {
   MeshDiscoveredPeer,
+  MeshPeerConnectOptions,
   MeshPeerConnectionBudget,
   MeshPeerConnectionPolicy,
   MeshPeerLifecycleState,

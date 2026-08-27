@@ -63,6 +63,7 @@ import {
   MeshPeerSessionRegistry,
   NATIVE_DATA_CHANNEL_CODEC_V1,
   type MeshPeerConnectionBudget,
+  type MeshPeerConnectOptions,
   type MeshDiscoveredPeer,
   type MeshPeerConnectionPolicy,
   type MeshPeerLifecycleState,
@@ -468,10 +469,13 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
 
   async connect(profile: WebRtcPeerConnectionProfile = this.requiredProfile()): Promise<void> {
     await this.disconnect('superseded connection')
-    await this.connectPeer(profile)
+    await this.connectPeer(profile, { negotiationIntent: 'offerer' })
   }
 
-  async connectPeer(profile: WebRtcPeerConnectionProfile): Promise<void> {
+  async connectPeer(
+    profile: WebRtcPeerConnectionProfile,
+    options: MeshPeerConnectOptions = {},
+  ): Promise<void> {
     assertSecureRuntime(profile, this.options)
     assertPeerConnectionRuntimeAvailable(this.options)
     const rememberedStandby = profile.expectedStablePeerId === undefined
@@ -579,6 +583,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
       })
       const sessionOptions: PeerSessionOptions = {
         localSignalingId,
+        negotiationIntent: options.negotiationIntent ?? 'auto',
         iceServers: iceServersFromProfile(profile),
         signaling: signalingPort,
         createPeerConnection: this.options.createPeerConnection ?? defaultPeerConnectionFactory,
@@ -993,7 +998,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
         expectedSignalingPeerId: message.from,
       }
       if (nodeName !== undefined) inboundProfile.nodeName = nodeName
-      await this.connectPeer(inboundProfile)
+      await this.connectPeer(inboundProfile, { negotiationIntent: 'answerer' })
       return true
     } catch (error) {
       this.recordDiagnostic('webrtc_inbound_offer_materialization_failed', diagnosticMessage(error))

@@ -1642,20 +1642,34 @@ export function MeshPeersView({
   const [scopesPeerId, setScopesPeerId] = useState<string | null>(null)
   const [detailsPeerId, setDetailsPeerId] = useState<string | null>(null)
   const [thinPairingOpen, setThinPairingOpen] = useState(false)
+  const [thinPairingSessionId, setThinPairingSessionId] = useState<string | null>(null)
   const [setupPeerId, setSetupPeerId] = useState<string | null>(null)
   useEffect(() => {
-    if (!thinPeerSnapshot?.pairingSessionId) setThinPairingOpen(false)
-  }, [thinPeerSnapshot?.pairingSessionId])
+    if (!thinPairingOpen) return
+    if (
+      !thinPeerSnapshot?.pairingSessionId
+      || !thinPairingSessionId
+      || thinPeerSnapshot.pairingSessionId !== thinPairingSessionId
+    ) {
+      setThinPairingOpen(false)
+      setThinPairingSessionId(null)
+    }
+  }, [thinPairingOpen, thinPairingSessionId, thinPeerSnapshot?.pairingSessionId])
   useEffect(() => {
     if (
       setupPeerId
       && thinPeerSnapshot?.pairingSessionId
       && thinPeerSnapshot.expectedStablePeerId === setupPeerId
     ) {
+      setThinPairingSessionId(thinPeerSnapshot.pairingSessionId)
       setThinPairingOpen(true)
       setSetupPeerId(null)
     }
   }, [setupPeerId, thinPeerSnapshot?.expectedStablePeerId, thinPeerSnapshot?.pairingSessionId])
+  const thinPairingSnapshot = thinPairingSessionId
+    && thinPeerSnapshot?.pairingSessionId === thinPairingSessionId
+    ? thinPeerSnapshot
+    : null
   const pendingRequests = snapshot.pendingRequests
   const outgoingPairingSessions = pendingRequests.length === 0
     ? snapshot.liveSessions.filter((session) => {
@@ -1745,7 +1759,12 @@ export function MeshPeersView({
 
       <ThinPeerConnectionStatus
         snapshot={thinPeerSnapshot}
-        onReview={() => setThinPairingOpen(true)}
+        onReview={() => {
+          const sessionId = thinPeerSnapshot?.pairingSessionId ?? null
+          if (!sessionId) return
+          setThinPairingSessionId(sessionId)
+          setThinPairingOpen(true)
+        }}
         onReconnect={onReconnectThinPeer}
       />
 
@@ -1868,9 +1887,12 @@ export function MeshPeersView({
         </>
       ) : null}
       <ThinPeerPairingDialog
-        snapshot={thinPeerSnapshot}
+        snapshot={thinPairingSnapshot}
         open={thinPairingOpen}
-        onOpenChange={setThinPairingOpen}
+        onOpenChange={(open) => {
+          setThinPairingOpen(open)
+          if (!open) setThinPairingSessionId(null)
+        }}
         localFeatureSharing={localFeatureSharing}
         onConfirm={onConfirmThinPairing}
         onReject={onRejectThinPairing}

@@ -1333,7 +1333,7 @@ describe('browser WebRTC thin-shell runtime', () => {
   })
 
   it('sets up a discovered mesh device from the saved room without replacing the active peer', async () => {
-    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile, _options?: { negotiationIntent?: string }) => undefined)
     const active = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
@@ -1385,20 +1385,23 @@ describe('browser WebRTC thin-shell runtime', () => {
     await controller.connectDiscoveredDevice('peer-portugal')
 
     expect(connectPeer).toHaveBeenCalledOnce()
-    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
-      appId: roomProfile.appId,
-      room: roomProfile.room,
-      roomSecretRef: roomProfile.roomSecretRef,
-      signalingBrokers: roomProfile.signalingBrokers,
-      expectedStablePeerId: 'peer-portugal',
-      nodeName: 'Portugal node',
-    }))
-    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
+    expect(connectPeer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: roomProfile.appId,
+        room: roomProfile.room,
+        roomSecretRef: roomProfile.roomSecretRef,
+        signalingBrokers: roomProfile.signalingBrokers,
+        expectedStablePeerId: 'peer-portugal',
+        expectedSignalingPeerId: 'signal-portugal',
+        nodeName: 'Portugal node',
+      }),
+      { negotiationIntent: 'offerer' },
+    )
     expect(controller.roster()?.peers.map((entry) => entry.peerId)).toEqual(['peer-brazil'])
   })
 
   it('sets up a discovered mesh device from the active native profile when browser metadata is empty', async () => {
-    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile, _options?: { negotiationIntent?: string }) => undefined)
     const active = {
       state: 'authorized',
       connectionMode: 'webrtc-only',
@@ -1450,18 +1453,21 @@ describe('browser WebRTC thin-shell runtime', () => {
     await controller.connectDiscoveredDevice('peer-portugal')
 
     expect(loadConnectionProfile).not.toHaveBeenCalled()
-    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
-      appId: activeProfile.appId,
-      room: activeProfile.room,
-      roomSecretRef: activeProfile.roomSecretRef,
-      expectedStablePeerId: 'peer-portugal',
-      nodeName: 'Portugal node',
-    }))
-    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
+    expect(connectPeer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: activeProfile.appId,
+        room: activeProfile.room,
+        roomSecretRef: activeProfile.roomSecretRef,
+        expectedStablePeerId: 'peer-portugal',
+        expectedSignalingPeerId: 'signal-portugal',
+        nodeName: 'Portugal node',
+      }),
+      { negotiationIntent: 'offerer' },
+    )
   })
 
   it('restores an approved discovered mesh peer after the node reloads', async () => {
-    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile) => undefined)
+    const connectPeer = vi.fn(async (_profile: WebRtcPeerConnectionProfile, _options?: { negotiationIntent?: string }) => undefined)
     const disconnectPeer = vi.fn(async () => undefined)
     const disconnect = vi.fn(async () => undefined)
     let rosterListener: ((snapshot: MeshPeerRosterSnapshot) => void) | undefined
@@ -1526,11 +1532,14 @@ describe('browser WebRTC thin-shell runtime', () => {
 
     await vi.waitFor(() => expect(connectPeer).toHaveBeenCalledOnce())
     expect(get).toHaveBeenCalledWith('peer-portugal')
-    expect(connectPeer).toHaveBeenCalledWith(expect.objectContaining({
-      expectedStablePeerId: 'peer-portugal',
-      nodeName: 'Portugal node',
-    }))
-    expect(connectPeer.mock.calls[0]?.[0]).not.toHaveProperty('expectedSignalingPeerId')
+    expect(connectPeer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedStablePeerId: 'peer-portugal',
+        expectedSignalingPeerId: 'signal-portugal',
+        nodeName: 'Portugal node',
+      }),
+      { negotiationIntent: 'offerer' },
+    )
 
     await controller.disconnectDevice('peer-portugal', 'user disconnected')
     rosterListener?.(roster)

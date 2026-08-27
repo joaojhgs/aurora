@@ -334,6 +334,21 @@ describe('W5 device discovery and selection', () => {
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain('Choose what Kitchen speaker can use from this device')
     expect(dialog?.textContent).toContain('Approve & pair')
+
+    await act(async () => {
+      root.render(view(thinSnapshot({
+        status: 'pairing',
+        state: 'awaiting-sas-confirmation',
+        expectedStablePeerId: 'peer-studio',
+        nodeName: 'Studio desktop',
+        pairingSessionId: 'pair-studio',
+      })))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).not.toContain('Approve Studio desktop')
+    expect(document.body.textContent).not.toContain('This pairing session did not report a verification code')
   })
 
   it('keeps the discovered device copy free of internal wording', () => {
