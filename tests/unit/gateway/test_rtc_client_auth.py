@@ -1858,6 +1858,7 @@ class MockPeerConnectionWithEvents:
         self.createAnswer = AsyncMock()
         self.close = MagicMock()
         self.localDescription = None
+        self.remoteDescription = None
 
     def on(self, event_name: str):
         def decorator(fn):
@@ -2550,6 +2551,138 @@ async def test_lower_id_offer_owner_ignores_glare_before_transport_is_recorded(m
     client._adapter.send.assert_not_awaited()
     assert client._pcs[peer] is winning_pc
     assert peer not in client._pairing_transports
+
+
+@pytest.mark.asyncio
+async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
+    """A losing glare offer cannot start ICE before the winning offer gets its answer."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "a-offer-owner"
+    client._adapter = MagicMock()
+    client._adapter.send = AsyncMock()
+    peer = "z-answerer"
+    pc = MockPeerConnectionWithEvents()
+    pc.connectionState = "new"
+    pc.signalingState = "have-local-offer"
+    pc.close = AsyncMock()
+    client._pcs[peer] = pc
+    client._pairing_transports[peer] = {
+        "pc": pc,
+        "offerer_signaling_id": client._peer_id,
+        "answerer_signaling_id": peer,
+        "offer_sdp": "v=0\r\na=ice-ufrag:local-offer\r\n",
+        "answer_sdp": "",
+        "remote_stable_peer_id": "stable-remote-peer",
+        "remote_node_name": "Remote Aurora",
+    }
+    events: list[str] = []
+
+    async def set_remote_description(description: Any) -> None:
+        events.append("remote-description")
+        pc.remoteDescription = description
+
+    async def add_ice_candidate(candidate: Any) -> None:
+        events.append("candidate")
+
+    pc.setRemoteDescription.side_effect = set_remote_description
+    pc.addIceCandidate.side_effect = add_ice_candidate
+    candidate = SimpleNamespace(sdpMid=None, sdpMLineIndex=None)
+    simultaneous_offer = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "offer",
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "v=0\r\na=ice-ufrag:losing-remote-offer\r\n",
+            "stable_peer_id": "stable-remote-peer",
+            "node_name": "Remote Aurora",
+        },
+    )
+    candidate_payload = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "candidate",
+            "from": peer,
+            "to": client._peer_id,
+            "candidate": "1 1 udp 1 192.0.2.1 12345 typ host",
+            "sdp_mid": "0",
+            "sdp_mline_index": 0,
+        },
+    )
+    answer_payload = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "answer",
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
+            "stable_peer_id": "stable-remote-peer",
+            "node_name": "Remote Aurora",
+        },
+    )
+
+    with patch(
+        "app.services.gateway.webrtc.rtc_client.candidate_from_sdp",
+        return_value=candidate,
+    ):
+        await client._on_offer(simultaneous_offer)
+        pc.close.assert_not_awaited()
+        client._adapter.send.assert_not_awaited()
+
+        await client._on_candidate(candidate_payload)
+        pc.addIceCandidate.assert_not_awaited()
+        assert client._pending_ice_candidates[peer] == [(pc, candidate)]
+
+        await client._on_answer(answer_payload)
+
+    assert events == ["remote-description", "candidate"]
+    pc.addIceCandidate.assert_awaited_once_with(candidate)
+    assert peer not in client._pending_ice_candidates
+
+
+@pytest.mark.asyncio
+async def test_bad_queued_candidate_does_not_abort_valid_answer(mock_deps):
+    """A bad deferred candidate cannot block SDP completion or its watchdog cleanup."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-offer-owner"
+    peer = "remote-answerer"
+    pc = MockPeerConnectionWithEvents()
+    pc.connectionState = "new"
+    pc.signalingState = "have-local-offer"
+    client._pcs[peer] = pc
+    client._pairing_transports[peer] = {
+        "pc": pc,
+        "offerer_signaling_id": client._peer_id,
+        "answerer_signaling_id": peer,
+        "offer_sdp": "v=0\r\na=ice-ufrag:local-offer\r\n",
+        "answer_sdp": "",
+        "remote_stable_peer_id": "stable-remote-peer",
+        "remote_node_name": "Remote Aurora",
+    }
+    bad_candidate = SimpleNamespace(sdpMid="0", sdpMLineIndex=0)
+    client._pending_ice_candidates[peer] = [(pc, bad_candidate)]
+    pc.addIceCandidate.side_effect = RuntimeError("stale candidate")
+    client._cancel_negotiation_watchdog = MagicMock()
+    answer_payload = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "answer",
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
+            "stable_peer_id": "stable-remote-peer",
+            "node_name": "Remote Aurora",
+        },
+    )
+
+    await client._on_answer(answer_payload)
+
+    pc.setRemoteDescription.assert_awaited_once()
+    pc.addIceCandidate.assert_awaited_once_with(bad_candidate)
+    assert peer not in client._pending_ice_candidates
+    client._cancel_negotiation_watchdog.assert_called_once_with(peer, pc)
 
 
 @pytest.mark.asyncio

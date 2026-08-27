@@ -338,6 +338,7 @@ _PROVIDER_EXPORT_DIAGNOSTIC_FIELDS = frozenset(
 )
 _MANIFEST_REANNOUNCE_RETRY_ATTEMPTS = 3
 _MANIFEST_REANNOUNCE_RETRY_MAX_DELAY_S = 30.0
+_MAX_PENDING_ICE_CANDIDATES_PER_PEER = 64
 
 
 class PeerAuthorityApplyStatus(str, Enum):
@@ -425,6 +426,11 @@ class RTCClient:
         self._negotiation_retry_pcs: set[RTCPeerConnection] = set()
         self._peer_reconnect_tasks: dict[str, asyncio.Task[None]] = {}
         self._offer_in_progress: set[str] = set()
+        # MQTT signaling channels are distinct topics and therefore do not
+        # guarantee that an ICE candidate arrives after its SDP answer. Bind
+        # early candidates to the exact PC that observed them and drain only
+        # after that PC has a remote description.
+        self._pending_ice_candidates: dict[str, list[tuple[RTCPeerConnection, Any]]] = {}
         # Per-peer credentials from prior pairing exchanges.  The raw bearer is
         # retained locally only to derive an HMAC; reconnect never transmits it.
         # Values may be legacy strings or {token, token_id} records while old DB
@@ -1828,6 +1834,7 @@ class RTCClient:
         self._rpc_handlers.pop(peer, None)
         self._peer_send_fns.pop(peer, None)
         self._peer_data_channels.pop(peer, None)
+        self._discard_pending_ice_candidates(peer, pc)
         self._cleanup_peer_protocol_state(peer)
         self._peer_auth_challenges.pop(peer, None)
         self._negotiation_retry_pcs.discard(pc)
@@ -2046,6 +2053,7 @@ class RTCClient:
         self._peer_reconnect_tasks.clear()
         self._offer_in_progress.clear()
         self._negotiation_retry_pcs.clear()
+        self._pending_ice_candidates.clear()
         shadow_tasks = list(self._provider_export_tasks)
         for task in shadow_tasks:
             task.cancel()
@@ -2331,6 +2339,7 @@ class RTCClient:
         self._resolve_peer_rpc_calls(session_peer_id)
         self._cancel_peer_rpc_work(session_peer_id, stable_peer_id, peer_id)
         self._clear_pairing_state(session_peer_id, pc)
+        self._discard_pending_ice_candidates(session_peer_id, pc)
         await self._close_peer_connection(pc)
         self._pcs.pop(session_peer_id, None)
         self._peer_acl.pop(session_peer_id, None)
@@ -5098,6 +5107,7 @@ class RTCClient:
         self._resolve_peer_rpc_calls(replaced_session_peer_id)
         self._cancel_peer_rpc_work(replaced_session_peer_id)
         self._clear_pairing_state(replaced_session_peer_id, replaced_pc)
+        self._discard_pending_ice_candidates(replaced_session_peer_id, replaced_pc)
 
         self._pcs.pop(replaced_session_peer_id, None)
         self._peer_acl.pop(replaced_session_peer_id, None)
@@ -6363,6 +6373,7 @@ class RTCClient:
                 self._rpc_handlers.pop(stable_peer_id, None)
                 self._peer_send_fns.pop(peer, None)
                 self._peer_data_channels.pop(peer, None)
+                self._discard_pending_ice_candidates(peer, pc)
                 self._cleanup_peer_protocol_state(peer, stable_peer_id)
                 self._cancel_provider_lease_task(stable_peer_id, session_peer_id=peer)
                 self._peer_names.pop(peer, None)
@@ -6716,6 +6727,7 @@ class RTCClient:
                 "remote_node_name": remote_node_name,
             }
             await pc.setRemoteDescription(RTCSessionDescription(sdp=offer_sdp, type="offer"))
+            await self._drain_pending_ice_candidates(peer, pc)
 
             answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
@@ -6781,7 +6793,46 @@ class RTCClient:
             transport["remote_stable_peer_id"] = remote_stable_peer_id
             transport["remote_node_name"] = remote_node_name
             await pc.setRemoteDescription(RTCSessionDescription(sdp=answer_sdp, type="answer"))
+            await self._drain_pending_ice_candidates(peer, pc)
             self._cancel_negotiation_watchdog(peer, pc)
+
+    def _discard_pending_ice_candidates(
+        self,
+        peer: str,
+        pc: RTCPeerConnection,
+    ) -> None:
+        """Discard queued candidates owned by one superseded negotiation."""
+        pending = self._pending_ice_candidates.get(peer)
+        if pending is None:
+            return
+        retained = [entry for entry in pending if entry[0] is not pc]
+        if retained:
+            self._pending_ice_candidates[peer] = retained
+        else:
+            self._pending_ice_candidates.pop(peer, None)
+
+    async def _drain_pending_ice_candidates(
+        self,
+        peer: str,
+        pc: RTCPeerConnection,
+    ) -> None:
+        """Apply candidates queued before the exact PC received remote SDP."""
+        pending = self._pending_ice_candidates.get(peer, ())
+        owned = [candidate for pending_pc, candidate in pending if pending_pc is pc]
+        retained = [entry for entry in pending if entry[0] is not pc]
+        if retained:
+            self._pending_ice_candidates[peer] = retained
+        else:
+            self._pending_ice_candidates.pop(peer, None)
+        if self._pcs.get(peer) is not pc:
+            return
+        for candidate in owned:
+            try:
+                await pc.addIceCandidate(candidate)
+            except Exception as exc:
+                # One stale or malformed trickled candidate must not prevent a
+                # valid remote description from completing the negotiation.
+                log_error(f"Error adding queued ICE candidate from {peer}: {exc}")
 
     async def _on_candidate(self, payload: bytes) -> None:
         try:
@@ -6805,6 +6856,12 @@ class RTCClient:
                 candidate.sdpMLineIndex = sdp_mline_index
             if peer in self._pcs:
                 pc = self._pcs[peer]
+                if getattr(pc, "remoteDescription", None) is None:
+                    pending = self._pending_ice_candidates.setdefault(peer, [])
+                    if len(pending) >= _MAX_PENDING_ICE_CANDIDATES_PER_PEER:
+                        pending.pop(0)
+                    pending.append((pc, candidate))
+                    return
                 await pc.addIceCandidate(candidate)
         except Exception as e:
             log_error(f"Error adding ICE candidate from {peer}: {e}")
