@@ -579,6 +579,13 @@ export async function connectDesktopLivePeer(
   await runtime.peer.connectPeer(profile, { negotiationIntent });
 }
 
+export async function reconnectDesktopLivePeer(
+  runtime: DesktopLivePeerConnector,
+  profile: WebRtcPeerConnectionProfile,
+): Promise<void> {
+  await connectDesktopLivePeer(runtime, profile, "offerer");
+}
+
 export async function drainRemoteConsoleManifestHandshake(
   runtime: RemoteConsoleManifestDrainRuntime,
   ready: Pick<DesktopLiveReadyPayload, "expectedStablePeerId" | "timeoutMs">,
@@ -761,7 +768,7 @@ async function runMeshInteropContract({
     stage = "authorized-reconnect";
     const reconnectStart = snapshots.length;
     await runtime.peer.disconnect("desktop live reconnect probe").catch(() => undefined);
-    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
+    await reconnectDesktopLivePeer(runtime, profile);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "authorized desktop reconnect WebRTC DataChannel", reconnectTimeoutMs);
     const reconnectRegistry = await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
@@ -815,7 +822,7 @@ async function runMeshInteropContract({
         settled_after_disconnect: false,
       })),
     ]);
-    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
+    await reconnectDesktopLivePeer(runtime, profile);
     await waitFor(() => runtime.peer.snapshot().state === "authorized", "post-mutation reconnect WebRTC DataChannel", reconnectTimeoutMs);
     await retryDesktopProviderReadiness(
       () => runtime.client.registry.getRegistry(),
@@ -838,7 +845,7 @@ async function runMeshInteropContract({
     const revokedStart = snapshots.length;
     autoConfirmPairing = false;
     await runtime.peer.disconnect("desktop live revoked credential reconnect probe").catch(() => undefined);
-    await connectDesktopLivePeer(runtime, profile, ready.expectedNegotiationRole);
+    await reconnectDesktopLivePeer(runtime, profile);
     const revocationObservation = await waitForPostRevocationPairingObservation({
       snapshot: () => runtime.peer.snapshot(),
       snapshots,

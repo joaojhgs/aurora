@@ -11,6 +11,7 @@ import {
   installDesktopLiveE2eHook,
   isDesktopLiveE2eHookEnabled,
   isDesktopLiveNativeWebRtcForced,
+  reconnectDesktopLivePeer,
   resolveDesktopLivePeerConnectionPrimitive,
   retryDesktopProviderReadiness,
   validateDesktopLiveE2ePayload,
@@ -105,7 +106,7 @@ describe("desktop live E2E WebView hook", () => {
     expect(desktopLivePairingConfirmationMode("mesh-node")).toBe("managed");
   });
 
-  it("honors the configured negotiation role for every desktop live connection", async () => {
+  it("honors the configured negotiation role for the initial desktop live connection", async () => {
     const connectPeer = vi.fn(async () => undefined);
     const profile = samplePayload().runtimeProfile.profiles[0]?.homeConnection?.webrtcProfile;
     expect(profile).toBeDefined();
@@ -118,6 +119,18 @@ describe("desktop live E2E WebView hook", () => {
 
     expect(connectPeer).toHaveBeenCalledWith(profile, {
       negotiationIntent: "answerer",
+    });
+  });
+
+  it("actively offers when the desktop live client initiates a reconnect", async () => {
+    const connectPeer = vi.fn(async () => undefined);
+    const profile = samplePayload().runtimeProfile.profiles[0]?.homeConnection?.webrtcProfile;
+    expect(profile).toBeDefined();
+
+    await reconnectDesktopLivePeer({ peer: { connectPeer } }, profile!);
+
+    expect(connectPeer).toHaveBeenCalledWith(profile, {
+      negotiationIntent: "offerer",
     });
   });
 
