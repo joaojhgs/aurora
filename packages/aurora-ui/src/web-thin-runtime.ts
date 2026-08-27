@@ -553,6 +553,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     })
     if (peer?.subscribeRoster && options.restoreKnownMeshPeers) {
       this.unsubscribeRoster = peer.subscribeRoster((roster) => {
+        this.persistAuthorizedMeshPeerProfiles(roster)
         void this.restoreKnownMeshPeers(roster)
       })
       void this.restoreSavedMeshPeers()
@@ -785,6 +786,32 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
         this.deviceConnectionsInFlight.delete(peerId)
       }
     }))
+  }
+
+  /** Save approved room members so native and browser nodes can rejoin them after restart. */
+  private persistAuthorizedMeshPeerProfiles(roster: MeshPeerRosterSnapshot): void {
+    const saveProfile = this.credentialStore?.savePeerConnectionProfile
+    if (!saveProfile) return
+    const activeProfile = this.connectionProfile ?? this.credentialStore?.loadConnectionProfile?.()
+    if (!activeProfile) return
+    const {
+      expectedSignalingPeerId: _expectedSignalingPeerId,
+      expectedStablePeerId: _expectedStablePeerId,
+      nodeName: _nodeName,
+      ...roomProfile
+    } = activeProfile
+    for (const peer of roster.peers) {
+      if (peer.snapshot.state !== 'authorized') continue
+      try {
+        saveProfile.call(this.credentialStore, {
+          ...roomProfile,
+          expectedStablePeerId: peer.peerId,
+          ...(peer.nodeName ? { nodeName: peer.nodeName } : {}),
+        })
+      } catch {
+        this.connectionDiagnostic = 'This device could not save every approved connection.'
+      }
+    }
   }
 
   /** Drop one device, leaving every other connection in place. */

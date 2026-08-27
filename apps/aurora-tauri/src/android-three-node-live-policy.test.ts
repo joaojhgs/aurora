@@ -9,6 +9,7 @@ const liveSpec = readFileSync(
   resolve(workspaceRoot, 'tests/e2e/android_three_node/android-three-node-main-live.spec.ts'),
   'utf8',
 )
+const tauriRuntime = readFileSync(resolve(process.cwd(), 'src/aurora-client.ts'), 'utf8')
 
 describe('Android full-stack three-node acceptance policy', () => {
   it('attaches to a caller-owned full Python stack and never starts the synthetic interop gateway', () => {
@@ -29,5 +30,12 @@ describe('Android full-stack three-node acceptance policy', () => {
     expect(liveSpec).toContain('backgroundVoicePersistedRecordDelta')
     expect(liveSpec).toContain('simultaneous Android and self-hosted UI sessions')
     expect(liveSpec).toContain('Android roster visibility for the self-hosted UI node')
+  })
+
+  it('restores mesh-node profiles without replacing them with the configured home peer', () => {
+    expect(tauriRuntime).toMatch(
+      /meshNodeServices\?\.enabled\s*\? runtime\.peer\.connectDevice\(webrtcProfile, \{ reportFailure: false \}\)\s*: runtime\.peer\.connect\(webrtcProfile\)/u,
+    )
+    expect(tauriRuntime).toContain('loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[]')
   })
 })

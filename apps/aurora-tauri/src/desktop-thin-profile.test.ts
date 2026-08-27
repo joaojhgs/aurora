@@ -41,6 +41,7 @@ import {
   createMemoryRuntimeProfileStore,
   createMemoryThinProfileStore,
   createTauriPackageCapabilities,
+  createTauriNativePeerCredentialStore,
   ANDROID_LIFECYCLE_EVENT,
   ANDROID_NATIVE_PLUGIN_NAME,
   createTauriPeerCredentialCommandInvoker,
@@ -1489,6 +1490,53 @@ describe('desktop-thin live connection profiles', () => {
       claimant_peer_id: 'android-peer',
       room_name: 'android-room',
     })
+  })
+
+  it('keeps multiple native mesh peer profiles across runtime recreation', async () => {
+    window.localStorage.clear()
+    const baseInvoke = vi.fn(async (
+      command: string,
+      args?: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const request = args?.request as { peerId?: string } | undefined
+      if (command === 'aurora_thin_peer_credential_delete') {
+        return {
+          peerId: request?.peerId,
+          found: false,
+          hasBearerToken: false,
+          persisted: true,
+          secretsRedacted: true,
+          redactedFields: ['rawBearerToken'],
+        }
+      }
+      throw new Error(`Unexpected native command: ${command}`)
+    })
+    const roomProfile = webRtcProfile('native-mesh-room')
+    const first = createTauriNativePeerCredentialStore(baseInvoke as never)
+    first.savePeerConnectionProfile?.({
+      ...roomProfile,
+      expectedStablePeerId: 'peer-browser',
+      nodeName: 'Hosted browser',
+    })
+    first.savePeerConnectionProfile?.({
+      ...roomProfile,
+      expectedStablePeerId: 'peer-python',
+      nodeName: 'Python node',
+    })
+    await first.close()
+
+    const restored = createTauriNativePeerCredentialStore(baseInvoke as never)
+    expect(restored.loadPeerConnectionProfiles?.()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ expectedStablePeerId: 'peer-browser', nodeName: 'Hosted browser' }),
+      expect.objectContaining({ expectedStablePeerId: 'peer-python', nodeName: 'Python node' }),
+    ]))
+
+    await restored.remove('peer-browser')
+    expect(restored.loadPeerConnectionProfiles?.()).toEqual([
+      expect.objectContaining({ expectedStablePeerId: 'peer-python', nodeName: 'Python node' }),
+    ])
+    await restored.close()
+    window.localStorage.clear()
   })
 
   it('loads overlay prefs from this-device profile instead of server config', async () => {

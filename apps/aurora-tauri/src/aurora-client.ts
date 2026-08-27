@@ -21,6 +21,7 @@ import {
   AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
   activeRuntimeProfile,
   activeThinConnectionProfile,
+  BrowserPersistentPeerCredentialStore,
   createBrowserWebThinRuntime,
   emptyThinProfileDocument,
   emptyRuntimeProfileDocument,
@@ -1148,17 +1149,28 @@ export function createTauriPeerCredentialCommandInvoker(
   return (command, payload) => baseInvoke(command, { request: payload ?? {} });
 }
 
-function createTauriNativePeerCredentialStore(): WebRtcPeerCredentialStore & {
+export function createTauriNativePeerCredentialStore(
+  baseInvoke: TauriInvokeFunction = invoke,
+): WebRtcPeerCredentialStore & {
   setRoomSecret(ref: string, value: string): void;
   getRoomSecret(ref: string): Promise<Uint8Array | null>;
+  saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void;
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null;
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void;
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[];
+  removePeerConnectionProfile(peerId: string): void;
 } {
   return new TauriRoomSecretNativeCredentialStore(
-    new NativePeerCredentialStore({ invoke: createTauriPeerCredentialCommandInvoker() }),
+    new NativePeerCredentialStore({ invoke: createTauriPeerCredentialCommandInvoker(baseInvoke) }),
   );
 }
 
 class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore {
   private readonly roomSecrets = new Map<string, Uint8Array>();
+  private readonly profileMetadataStore = new BrowserPersistentPeerCredentialStore({
+    storage: null,
+    crypto: null,
+  });
   private pendingRoomSecretWrites: Promise<void> = Promise.resolve();
 
   constructor(private readonly nativeStore: NativePeerCredentialStore) {}
@@ -1195,6 +1207,26 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
     return new Uint8Array(bytes);
   }
 
+  saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void {
+    this.profileMetadataStore.saveConnectionProfile(profile);
+  }
+
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null {
+    return this.profileMetadataStore.loadConnectionProfile();
+  }
+
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void {
+    this.profileMetadataStore.savePeerConnectionProfile(profile);
+  }
+
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[] {
+    return this.profileMetadataStore.loadPeerConnectionProfiles();
+  }
+
+  removePeerConnectionProfile(peerId: string): void {
+    this.profileMetadataStore.removePeerConnectionProfile(peerId);
+  }
+
   get(peerId: string): Promise<StoredPeerCredentialMetadata | undefined> {
     return this.nativeStore.get(peerId);
   }
@@ -1215,18 +1247,24 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
     return this.nativeStore.status(peerId);
   }
 
-  remove(peerId: string): Promise<void> {
-    return this.nativeStore.remove(peerId);
+  async remove(peerId: string): Promise<void> {
+    await this.nativeStore.remove(peerId);
+    this.profileMetadataStore.removePeerConnectionProfile(peerId);
   }
 
   async clear(): Promise<void> {
     await this.pendingRoomSecretWrites.catch(() => undefined);
     for (const value of this.roomSecrets.values()) value.fill(0);
     this.roomSecrets.clear();
+    await this.nativeStore.clear();
+    await this.profileMetadataStore.clear();
   }
 
   async close(): Promise<void> {
-    await this.clear();
+    await this.pendingRoomSecretWrites.catch(() => undefined);
+    for (const value of this.roomSecrets.values()) value.fill(0);
+    this.roomSecrets.clear();
+    await this.profileMetadataStore.close();
     await this.nativeStore.close();
   }
 }
@@ -1396,7 +1434,10 @@ function createTauriWebThinRuntime({
   }
   if (webrtcProfile && mode !== "http-only") {
     queueMicrotask(() => {
-      void runtime.peer.connect(webrtcProfile).catch(() => undefined);
+      const connection = meshNodeServices?.enabled
+        ? runtime.peer.connectDevice(webrtcProfile, { reportFailure: false })
+        : runtime.peer.connect(webrtcProfile);
+      void connection.catch(() => undefined);
     });
   }
   return runtime;
