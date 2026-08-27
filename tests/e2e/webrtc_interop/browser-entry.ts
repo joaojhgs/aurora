@@ -8,6 +8,7 @@ import {
   SecureInboundCredentialVerifierStore,
   WebRtcPeerHost,
   createToolingPeerHostRegistry,
+  type MeshPeerRegistryController,
   type WebRtcPeerConnectionProfile
 } from '../../../packages/aurora-sdk/src/webrtc/index.js'
 import { WasmPeerHostAuthorizationStore } from '../../../packages/aurora-mesh-authority-web/dist/index.js'
@@ -805,7 +806,12 @@ export async function runAuroraWebRtcInterop(config: InteropBrowserConfig) {
       if (pending && autoConfirmPairing) void runtime.peer.confirmPairing(pending.sessionId).catch(() => undefined)
     })
 
-    await runtime.peer.connect(profile)
+    if (config.expectedNegotiationRole === 'answerer') {
+      const peer = runtime.peer as typeof runtime.peer & MeshPeerRegistryController
+      await peer.connectPeer(profile, { negotiationIntent: 'answerer' })
+    } else {
+      await runtime.peer.connect(profile)
+    }
     recordInteropProgress('connect-returned', runtime.peer.snapshot())
     await waitFor(() => runtime.peer.snapshot().state === 'authorized', 'authorized WebRTC DataChannel', config.timeoutMs)
     const authorizedSnapshot = runtime.peer.snapshot()

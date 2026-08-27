@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AuroraClient, AuroraError, type AuroraTransport, type AuroraTransportRequest, type AuroraTransportResponse, type AuroraEventSubscription, type AuroraStreamRequest, createEventSubscription } from '../src/index.js'
-import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type BrowserWebRtcRuntimeOptions, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
+import { createBrowserWebRtcAuroraRuntime, MemoryPeerCredentialStore, type BrowserWebRtcRuntime, type BrowserWebRtcRuntimeOptions, type MeshPeerRegistryController, type WebRtcPeerConnectionProfile } from '../src/webrtc/index.js'
 import type { PeerAuthorityResolverPort, PeerRelationshipSelector } from '../src/peer-host/authority-types.js'
 import { scriptedResolver } from './helpers/authority-doubles.js'
 import { createTestAuthority } from './helpers/wasm-authority.js'
@@ -687,6 +687,7 @@ function makeRuntimeHarness(options: {
   mode?: 'webrtc-only' | 'webrtc-preferred'
   http?: Parameters<typeof createBrowserWebRtcAuroraRuntime>[0]['http']
   runtimeProfile?: WebRtcPeerConnectionProfile
+  localSignalingId?: string
   pairingConnectPoll?: Parameters<typeof createBrowserWebRtcAuroraRuntime>[0]['pairingConnectPoll']
   credentialStore?: MemoryPeerCredentialStore
   localProtocolCapabilities?: readonly string[]
@@ -710,7 +711,7 @@ function makeRuntimeHarness(options: {
     signalingFactory: () => signaling as any,
     createPeerConnection: () => pc,
     scryptDeriver: async () => new Uint8Array(32).fill(7),
-    randomId: () => (id++ === 0 ? 'a-local' : `rpc-${id}`),
+    randomId: () => (id++ === 0 ? (options.localSignalingId ?? 'a-local') : `rpc-${id}`),
     localProtocolCapabilities: options.localProtocolCapabilities,
     appLayerE2eeAllowed: options.appLayerE2eeAllowed,
     peerAuthorityResolver: options.peerAuthorityResolver,
@@ -877,6 +878,49 @@ async function authorizeHarness(harness: RuntimeHarness): Promise<{ channel: Run
 describe('browser WebRTC runtime Python gateway auth interop', {
   timeout: RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS + 5_000,
 }, () => {
+  it('honors an explicit answerer role when the remote peer initiates', async () => {
+    const runtimeProfile = profile({
+      mode: 'webrtc-only',
+      expectedSignalingPeerId: 'a-remote',
+    })
+    const harness = makeRuntimeHarness({
+      mode: 'webrtc-only',
+      runtimeProfile,
+      localSignalingId: 'z-local',
+    })
+
+    const peer = harness.runtime.peer as typeof harness.runtime.peer & MeshPeerRegistryController
+    await peer.connectPeer(runtimeProfile, { negotiationIntent: 'answerer' })
+    harness.signaling.emit({
+      channel: 'presence',
+      from: 'a-remote',
+      stablePeerId: 'peer-remote',
+      envelope: { type: 'presence', stable_peer_id: 'peer-remote' },
+    })
+    await flushRuntime()
+
+    expect(harness.runtime.peer.snapshot()).toMatchObject({
+      negotiationRole: 'answerer',
+      state: 'discovering-peer',
+    })
+    expect(harness.pc.channels).toHaveLength(0)
+
+    harness.signaling.emit({
+      channel: 'offer',
+      from: 'a-remote',
+      stablePeerId: 'peer-remote',
+      envelope: { type: 'offer', sdp: 'remote-offer-sdp' },
+    })
+    await flushRuntime()
+
+    expect(harness.signaling.sent).toContainEqual(expect.objectContaining({
+      channel: 'answer',
+      toPeer: 'a-remote',
+      envelope: expect.objectContaining({ type: 'answer', sdp: 'answer-sdp' }),
+    }))
+    await harness.runtime.close()
+  })
+
   it('advertises only enabled local capabilities and negotiates their intersection', async () => {
     const harness = makeRuntimeHarness({
       mode: 'webrtc-only',
