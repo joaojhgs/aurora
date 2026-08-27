@@ -317,6 +317,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
   // identity. Discovery only: an observed peer is a candidate to connect to,
   // never an authorized one.
   private readonly observedPeers = new Map<string, ObservedRoomPeer>()
+  private readonly inboundOfferMaterializations = new Set<string>()
   meshTransport: MeshP2PTransport | null = null
   private primaryEntry: MeshPeerSessionEntry | null = null
   private removeVisibilityListener: (() => void) | undefined
@@ -549,7 +550,7 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
           signaling.onPresence?.((presence) => this.observeRoomPresence(presence))
           hub = new RuntimeSignalingHub(signaling, signalingRoom, () => {
             if (this.signalingHubs.get(hubKey) === hub) this.signalingHubs.delete(hubKey)
-          })
+          }, (message) => this.materializeInboundMeshOffer(profile, message))
           this.signalingHubs.set(hubKey, hub)
         }
         signalingPort = hub.createPort(entry.allowlist)
@@ -971,6 +972,37 @@ class WebRtcPeerConnectionController implements PeerConnectionController, MeshPe
     }
   }
 
+  private async materializeInboundMeshOffer(
+    profile: WebRtcPeerConnectionProfile,
+    message: SignalingMessage,
+  ): Promise<boolean> {
+    if (this.options.nodeRole !== 'mesh-node' || this.registry.connectionPolicy !== 'mesh') return false
+    if (message.channel !== 'offer') return false
+    const envelopeStablePeerId = stringField(message.envelope, 'stable_peer_id') ?? undefined
+    const remoteStablePeerId = message.stablePeerId ?? envelopeStablePeerId
+    if (remoteStablePeerId === undefined || remoteStablePeerId === this.options.localStablePeerId) return false
+    if (this.registry.findByPeerId(remoteStablePeerId) !== undefined) return false
+    const key = `${profile.appId}/${profile.room}/${remoteStablePeerId}/${message.from}`
+    if (this.inboundOfferMaterializations.has(key)) return false
+    this.inboundOfferMaterializations.add(key)
+    try {
+      const nodeName = stringField(message.envelope, 'node_name') ?? undefined
+      const inboundProfile: WebRtcPeerConnectionProfile = {
+        ...profile,
+        expectedStablePeerId: remoteStablePeerId,
+        expectedSignalingPeerId: message.from,
+      }
+      if (nodeName !== undefined) inboundProfile.nodeName = nodeName
+      await this.connectPeer(inboundProfile)
+      return true
+    } catch (error) {
+      this.recordDiagnostic('webrtc_inbound_offer_materialization_failed', diagnosticMessage(error))
+      return false
+    } finally {
+      this.inboundOfferMaterializations.delete(key)
+    }
+  }
+
   private releaseVisibilityHook(): void {
     this.removeVisibilityListener?.()
     this.removeVisibilityListener = undefined
@@ -1022,6 +1054,8 @@ interface RuntimeHubSubscription {
   readonly listener: (message: SignalingMessage) => void
 }
 
+type RuntimeUnhandledOfferHandler = (message: SignalingMessage) => boolean | Promise<boolean>
+
 class RuntimeSignalingHub {
   private readonly subscriptions = new Set<RuntimeHubSubscription>()
   private readonly retainedPresence = new Map<string, MqttSignalingMessage>()
@@ -1035,6 +1069,7 @@ class RuntimeSignalingHub {
     private readonly signaling: MqttWebSocketSignalingClient,
     private readonly room: MqttSignalingRoom,
     private readonly onEmpty: () => void,
+    private readonly onUnhandledOffer?: RuntimeUnhandledOfferHandler | undefined,
   ) {
     this.unsubscribe = signaling.onMessage((message) => this.handleMessage(message))
   }
@@ -1123,8 +1158,12 @@ class RuntimeSignalingHub {
       if (message.envelope.type === 'presence_departed') this.retainedPresence.delete(key)
       else this.retainedPresence.set(key, message)
     }
-    for (const subscription of [...this.subscriptions]) {
-      this.deliver(subscription, message)
+    const delivered = this.deliverToSubscribers(message)
+    if (!delivered && message.channel === 'offer' && this.onUnhandledOffer !== undefined) {
+      const signalingMessage = this.toSignalingMessage(message)
+      void Promise.resolve(this.onUnhandledOffer(signalingMessage)).then((materialized) => {
+        if (materialized) this.deliverToSubscribers(message)
+      })
     }
   }
 
@@ -1135,18 +1174,31 @@ class RuntimeSignalingHub {
     }
   }
 
-  private deliver(subscription: RuntimeHubSubscription, message: MqttSignalingMessage): void {
+  private deliverToSubscribers(message: MqttSignalingMessage): boolean {
+    let delivered = false
+    for (const subscription of [...this.subscriptions]) {
+      delivered = this.deliver(subscription, message) || delivered
+    }
+    return delivered
+  }
+
+  private deliver(subscription: RuntimeHubSubscription, message: MqttSignalingMessage): boolean {
     if (!subscription.allowlist.admits({
       channel: message.channel,
       from: message.from,
       stablePeerId: message.stablePeerId,
-    })) return
-    subscription.listener({
+    })) return false
+    subscription.listener(this.toSignalingMessage(message))
+    return true
+  }
+
+  private toSignalingMessage(message: MqttSignalingMessage): SignalingMessage {
+    return {
       channel: message.channel,
       from: message.from,
       stablePeerId: message.stablePeerId,
       envelope: message.envelope,
-    })
+    }
   }
 }
 

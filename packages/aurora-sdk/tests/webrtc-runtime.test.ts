@@ -2339,6 +2339,7 @@ function meshPeerProfile(peerId: string | undefined, signalingPeerId: string, no
 function makeMultiPeerHarness(
   localSignalingIds: string[],
   peerConnectionPolicyOrOptions?: 'connect' | 'mesh' | {
+    nodeRole?: 'remote-console' | 'mesh-node'
     peerConnectionPolicy?: 'connect' | 'mesh'
     peerConnectionBudget?: {
       foregroundPeerLimit: number | null
@@ -2380,6 +2381,7 @@ function makeMultiPeerHarness(
     scryptDeriver: async () => new Uint8Array(32).fill(7),
     randomId: () => queuedLocalIds.shift() ?? `rpc-${rpc++}`,
     ...(harnessOptions.peerConnectionPolicy !== undefined ? { peerConnectionPolicy: harnessOptions.peerConnectionPolicy } : {}),
+    ...(harnessOptions.nodeRole !== undefined ? { nodeRole: harnessOptions.nodeRole } : {}),
     ...(harnessOptions.peerConnectionBudget !== undefined ? { peerConnectionBudget: harnessOptions.peerConnectionBudget } : {}),
     ...(harnessOptions.visibilityDocument !== undefined ? { visibilityDocument: harnessOptions.visibilityDocument } : {}),
     windowLocation: secureLocation
@@ -2544,6 +2546,73 @@ describe('browser WebRTC runtime peer registry', {
     expect(signaling.sent.filter((message) => message.channel === 'offer')).toEqual([
       expect.objectContaining({ toPeer: 'z-beta' }),
     ])
+    await harness.runtime.close()
+  })
+
+  it('auto-materializes a mesh-node session for a targeted inbound offer', async () => {
+    const harness = makeMultiPeerHarness(['z-node'], { nodeRole: 'mesh-node', peerConnectionPolicy: 'mesh' })
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'a-alpha', 'Alpha node'))
+    const signaling = harness.signalings[0] as RuntimeFakeSignaling
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'a-beta',
+      stablePeerId: 'peer-beta',
+      envelope: {
+        type: 'offer',
+        stable_peer_id: 'peer-beta',
+        node_name: 'Beta node',
+        sdp: 'remote-beta-offer-sdp',
+      },
+    })
+    await vi.waitFor(() => expect(signaling.sent.some((message) => message.channel === 'answer' && message.toPeer === 'a-beta')).toBe(true))
+
+    expect(harness.signalings).toHaveLength(1)
+    const betaEntry = harness.registry.roster().peers.find((entry) => entry.peerId === 'peer-beta')
+    expect(betaEntry).toMatchObject({
+      nodeName: 'Beta node',
+      snapshot: {
+        expectedStablePeerId: 'peer-beta',
+        connectedStablePeerId: 'peer-beta',
+        connectedSignalingPeerId: 'a-beta',
+        negotiationRole: 'answerer',
+        state: 'negotiating',
+      },
+    })
+    expect(harness.connections.at(-1)?.remoteDescription).toEqual({ type: 'offer', sdp: 'remote-beta-offer-sdp' })
+    expect(signaling.sent).toEqual([
+      expect.objectContaining({
+        channel: 'answer',
+        envelope: expect.objectContaining({ to: 'a-beta', sdp: 'answer-sdp' }),
+        toPeer: 'a-beta',
+      }),
+    ])
+
+    await harness.runtime.close()
+  })
+
+  it('does not auto-materialize inbound offers for remote-console mode', async () => {
+    const harness = makeMultiPeerHarness(['z-node'], { nodeRole: 'remote-console', peerConnectionPolicy: 'mesh' })
+    await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'a-alpha', 'Alpha node'))
+    const signaling = harness.signalings[0] as RuntimeFakeSignaling
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'a-beta',
+      stablePeerId: 'peer-beta',
+      envelope: {
+        type: 'offer',
+        stable_peer_id: 'peer-beta',
+        node_name: 'Beta node',
+        sdp: 'remote-beta-offer-sdp',
+      },
+    })
+    await flushRuntime()
+
+    expect(harness.registry.roster().peers.map((entry) => entry.peerId)).toEqual(['peer-alpha'])
+    expect(harness.connections).toHaveLength(0)
+    expect(signaling.sent).toEqual([])
+
     await harness.runtime.close()
   })
 
