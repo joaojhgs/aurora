@@ -6686,10 +6686,7 @@ class RTCClient:
             )
             local_offer_owns_glare = (
                 existing_pc is not None
-                and existing_transport is not None
-                and existing_transport.get("pc") is existing_pc
-                and existing_transport.get("offerer_signaling_id") == self._peer_id
-                and existing_offer_sdp
+                and getattr(existing_pc, "signalingState", "") == "have-local-offer"
                 and self._peer_id < peer
             )
             if local_offer_owns_glare:
