@@ -192,6 +192,36 @@ describe('/api/assistant/completion', () => {
     expect(JSON.stringify(upstreamFetch.mock.calls)).not.toContain('provider-secret')
   })
 
+  it.each([401, 403])('denies invalid browser session bearers when Gateway returns %i', async (status) => {
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_ENDPOINT', 'https://provider.example/v1/chat/completions')
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_MODEL', 'small-model')
+    vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_API_KEY', 'provider-secret')
+    vi.stubEnv('AURORA_GATEWAY_URL', 'https://gateway.example')
+    const upstreamFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(_input)).toBe('https://gateway.example/api/Auth/WhoAmI')
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer invalid-token')
+      return new Response(JSON.stringify({ detail: { message: 'authentication_required' } }), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', upstreamFetch)
+
+    const response = await POST(providerRequest({
+      messages: [{ role: 'user', content: 'Hello' }],
+      tools: [],
+      maxToolCalls: 0,
+    }, {
+      authorization: 'Bearer invalid-token',
+    }))
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ ok: false, error: 'assistant_unavailable' })
+    expect(upstreamFetch).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(upstreamFetch.mock.calls)).not.toContain('provider-secret')
+    expect(JSON.stringify(upstreamFetch.mock.calls)).not.toContain('provider.example')
+  })
+
   it('rejects cross-origin and oversized requests without provider details', async () => {
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_ENDPOINT', 'https://provider.example/v1/chat/completions')
     vi.stubEnv('AURORA_LIGHTWEIGHT_ASSISTANT_MODEL', 'small-model')

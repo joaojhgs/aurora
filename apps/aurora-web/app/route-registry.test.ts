@@ -56,6 +56,12 @@ function pageFileForHref(href: string): string {
   return join(appDir, href.replace(/^\//, ''), 'page.tsx')
 }
 
+function productionMountSourceForRoute(route: { id: string; href: string }): string {
+  const pageSource = readFileSync(pageFileForHref(route.href), 'utf8')
+  if (route.id !== 'diagnostics') return pageSource
+  return `${pageSource}\n${readFileSync(join(appDir, 'diagnostics', 'diagnostics-client.tsx'), 'utf8')}`
+}
+
 function tauriRouteIdsFromSource(): string[] {
   const source = readFileSync(join(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
   const tupleIds = (name: string): string[] => {
@@ -98,7 +104,7 @@ describe('Aurora web route registry', () => {
     )
 
     for (const route of auroraWebRouteRegistry) {
-      const source = readFileSync(pageFileForHref(route.href), 'utf8')
+      const source = productionMountSourceForRoute(route)
       const oracle = getProductionRouteOracle(route.id)
 
       expect(oracle, `${route.id} should have a production route oracle`).toBeDefined()
