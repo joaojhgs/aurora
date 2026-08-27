@@ -1272,6 +1272,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
   private remoteAuthenticatedContext: AuthenticatedPeerContext | undefined
   private outboundAuthenticationRequired = false
   private gatewayHelloReceived = false
+  private awaitingReciprocalProtocolHello = false
   private pairingCompleted = false
   private transportGeneration = 0
   private pairingConnectPromise: Promise<PeerSessionAuthFrameResult> | null = null
@@ -1381,6 +1382,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     this.remoteAuthenticatedContext = undefined
     this.outboundAuthenticationRequired = false
     this.gatewayHelloReceived = false
+    this.awaitingReciprocalProtocolHello = false
     this.pairingCompleted = false
     this.pairingConnectPromise = null
   }
@@ -1415,8 +1417,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       return await this.handleInboundAuthFrame(frame, context, generation)
     }
     if (type === 'protocol_hello') {
-      if (this.awaitingGatewayHello || this.sentAuthFrame) {
+      if (this.awaitingGatewayHello || this.sentAuthFrame || this.awaitingReciprocalProtocolHello) {
         this.gatewayHelloReceived = true
+        this.awaitingReciprocalProtocolHello = false
         return this.mutualAuthenticationResult()
       }
       return undefined
@@ -1449,8 +1452,9 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
       // reconnect proof that is still awaiting acknowledgement. Invalidate
       // that proof path before processing the recovery handshake so a late
       // protocol hello cannot authorize the rejected credential direction.
-      if (this.awaitingGatewayHello && !this.sentAuthFrame) {
+      if ((this.awaitingGatewayHello || this.awaitingReciprocalProtocolHello) && !this.sentAuthFrame) {
         this.awaitingGatewayHello = false
+        this.awaitingReciprocalProtocolHello = false
         this.gatewayHelloReceived = false
       }
       const handshake = await this.ensureHandshake(context, generation)
@@ -1776,7 +1780,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
           credentialRevision: credential.credentialRevision,
           authenticatedAtMs: Date.now()
         }
-        return this.mutualAuthenticationResult()
+        return this.remoteAuthenticationAcceptedResult()
       } finally {
         zeroBytes(actualHash)
         zeroBytes(expectedHash)
@@ -1793,7 +1797,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     if (!matches) return { handled: true, denied: true, terminal: true }
     this.remoteAuthenticated = true
     this.remoteAuthenticatedContext = undefined
-    return this.mutualAuthenticationResult()
+    return this.remoteAuthenticationAcceptedResult()
   }
 
   private async issueVerifierReconnectChallenge(context: PeerSessionAuthContext): Promise<boolean> {
@@ -1891,7 +1895,23 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
     this.remoteAuthenticatedByReconnectProof = true
     this.remoteAuthenticated = true
     this.remoteAuthenticatedContext = result.context
-    return this.mutualAuthenticationResult()
+    return this.remoteAuthenticationAcceptedResult()
+  }
+
+  private remoteAuthenticationAcceptedResult(): PeerSessionAuthFrameResult {
+    this.awaitingReciprocalProtocolHello = true
+    if (!this.gatewayHelloReceived) {
+      return { handled: true, remoteAuthenticationAccepted: true }
+    }
+    const result = this.mutualAuthenticationResult()
+    if (typeof result === 'object' && result !== null) {
+      return { ...result, remoteAuthenticationAccepted: true }
+    }
+    return {
+      handled: true,
+      authenticated: result === true,
+      remoteAuthenticationAccepted: true
+    }
   }
 
   private mutualAuthenticationResult(): PeerSessionAuthFrameResult {
@@ -1912,6 +1932,7 @@ class RuntimePeerAuth implements PeerSessionAuthPort {
         ? { authenticatedPeerContext: this.remoteAuthenticatedContext }
         : {})
     }
+    this.awaitingReciprocalProtocolHello = false
     this.pairingCompleted = true
     this.resolveReconnectWait(result)
     return result

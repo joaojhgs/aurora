@@ -618,6 +618,24 @@ async function decodeSent(channel: RuntimeFakeChannel, index: number): Promise<R
   }
 }
 
+async function waitForDecodedFrame(
+  channel: RuntimeFakeChannel,
+  predicate: (frame: Record<string, unknown>) => boolean,
+  startIndex = 0,
+): Promise<{ frame: Record<string, unknown>; index: number }> {
+  const deadline = Date.now() + RUNTIME_ASYNC_ASSERTION_TIMEOUT_MS
+  let index = startIndex
+  while (Date.now() <= deadline) {
+    while (index < channel.sent.length) {
+      const frame = await decodeSent(channel, index)
+      if (predicate(frame)) return { frame, index }
+      index += 1
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+  throw new Error(`Expected matching encrypted WebRTC frame after index ${startIndex}`)
+}
+
 async function encodeInbound(frame: unknown): Promise<Uint8Array> {
   const keys = await runtimeKeys()
   try {
@@ -1314,7 +1332,11 @@ describe('browser WebRTC runtime Python gateway auth interop', {
         verification_code: remoteSas.verificationCode
       }
     }))
-    const browserExchange = await decodeSent(channel, 7)
+    const browserExchange = (await waitForDecodedFrame(
+      channel,
+      (frame) => frame.type === 'call' && frame.method === 'Auth.PairingExchange',
+      7,
+    )).frame
     channel.receive(await encodeInbound({
       type: 'result',
       id: browserExchange.id,
@@ -1326,7 +1348,17 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       }
     }))
     await confirm
-    await expect(decodeSent(channel, 8)).resolves.toMatchObject({ type: 'auth', token: 'fresh-token' })
+    const outboundAuth = await waitForDecodedFrame(
+      channel,
+      (frame) => frame.type === 'auth' && frame.token === 'fresh-token',
+      7,
+    )
+    expect(outboundAuth.frame).toMatchObject({ type: 'auth', token: 'fresh-token' })
+    await expect(waitForDecodedFrame(
+      channel,
+      (frame) => frame.type === 'protocol_hello',
+      outboundAuth.index + 1,
+    )).resolves.toMatchObject({ frame: { type: 'protocol_hello', role: 'consumer' } })
 
     channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
     await waitForRuntimeState(harness.runtime, 'authorized')
@@ -1600,6 +1632,9 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       verifier_signaling_peer_id: 'a-local',
       room_name: 'room-1'
     }))
+    await waitForSent(channel, 2)
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+    channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
     await waitForRuntimeState(harness.runtime, 'authorized')
     expect((harness.runtime.peer as any).session.getSnapshot().authenticatedPeerContext).toMatchObject({
       selector: { tokenId: issued.tokenId, claimantPeerId: 'peer-remote', verifierPeerId: 'local-stable', roomName: 'room-1' },
@@ -1678,12 +1713,12 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       verifier_signaling_peer_id: 'a-local',
       room_name: 'room-1'
     }))
-    await flushRuntime()
+    await waitForSent(channel, 3)
 
     expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
     expect(harness.runtime.meshTransport).toBeUndefined()
     const preAckFrames = await Promise.all(channel.sent.map((_, index) => decodeSent(channel, index)))
-    expect(preAckFrames.some((frame) => frame.type === 'protocol_hello')).toBe(false)
+    expect(preAckFrames.filter((frame) => frame.type === 'protocol_hello')).toHaveLength(1)
 
     channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
     await waitForRuntimeState(harness.runtime, 'authorized')
@@ -1753,6 +1788,10 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       room_name: 'room-1'
     }))
     await flushRuntime()
+    await expect(decodeSent(channel, 1)).resolves.toMatchObject({
+      type: 'protocol_hello',
+      role: 'consumer'
+    })
 
     expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
     expect(harness.runtime.meshTransport).toBeUndefined()
@@ -1767,7 +1806,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       verifier_signaling_peer_id: 'z-remote',
       room_name: 'room-1'
     }))
-    await waitForSent(channel, 2)
+    await waitForSent(channel, 3)
     expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
 
     const remote = new PairingSasHandshake({
@@ -1776,9 +1815,9 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       expectedRemoteIdentity: pairingIdentity({ role: 'offerer', stablePeerId: 'local-stable', signalingPeerId: 'a-local', nodeName: 'Thin Shell' })
     })
     channel.receive(await encodeInbound(await remote.commitMessage()))
-    const localCommit = await decodeSent(channel, 2)
+    const localCommit = await decodeSent(channel, 3)
     remote.acceptCommit(localCommit)
-    const localReveal = await decodeSent(channel, 3)
+    const localReveal = await decodeSent(channel, 4)
     await remote.acceptReveal(localReveal)
 
     // The peer began fresh pairing instead of acknowledging our reconnect
@@ -1789,7 +1828,7 @@ describe('browser WebRTC runtime Python gateway auth interop', {
     expect(harness.runtime.meshTransport).toBeUndefined()
 
     channel.receive(await encodeInbound(remote.revealMessage()))
-    const pairingStart = await decodeSent(channel, 4)
+    const pairingStart = await decodeSent(channel, 5)
     expect(pairingStart).toMatchObject({ type: 'call', method: 'Auth.PairingStart' })
     expect(harness.runtime.peer.snapshot().pendingPairing).toBeUndefined()
 
@@ -1842,8 +1881,11 @@ describe('browser WebRTC runtime Python gateway auth interop', {
       verifier_signaling_peer_id: 'a-local',
       room_name: 'room-1'
     }))
-    await waitForRuntimeState(harness.runtime, 'authorized')
     await waitForSent(channel, 2)
+    expect(harness.runtime.peer.snapshot().state).not.toBe('authorized')
+    expect(harness.runtime.meshTransport).toBeUndefined()
+    channel.receive(await encodeInbound(buildProtocolHello({ role: 'provider', capabilities: [CAP_FRAGMENTATION_V1] })))
+    await waitForRuntimeState(harness.runtime, 'authorized')
     expect((harness.runtime.peer as any).session.options.auth.localSasConfirmed).toBe(false)
 
     const remote = new PairingSasHandshake({
@@ -1956,6 +1998,9 @@ describe('browser WebRTC runtime Python gateway auth interop', {
 
     await waitForSent(channel, 2)
     await expect(decodeSent(channel, 1)).resolves.toMatchObject({ type: 'pairing_v2_commit' })
+    await flushRuntime()
+    const recoveryFrames = await Promise.all(channel.sent.map((_, index) => decodeSent(channel, index)))
+    expect(recoveryFrames.some((frame) => frame.type === 'protocol_hello')).toBe(false)
     expect(harness.runtime.peer.snapshot().state).not.toBe('failed')
     expect(harness.runtime.peer.snapshot().lastRedactedError).toMatchObject({
       code: 'webrtc_reconnect_credential_stale'

@@ -117,6 +117,7 @@ export interface PeerSessionFrameCodec {
 export type PeerSessionAuthFrameResult = boolean | {
   authenticated?: boolean
   authenticatedPeerContext?: AuthenticatedPeerContext
+  remoteAuthenticationAccepted?: boolean
   denied?: boolean
   terminal?: boolean
   retry?: boolean
@@ -883,8 +884,16 @@ export class WebRtcPeerSession {
       }
       this.pendingRemoteProtocolHello = frame
     }
-    const result = await auth.handleFrame(frame, this.authContext(channel))
+    const context = this.authContext(channel)
+    let result = await auth.handleFrame(frame, context)
     if (this.channel !== channel || this.isTerminal()) return
+    if (typeof result === 'object' && result !== null && result.remoteAuthenticationAccepted === true) {
+      if (!await this.sendLocalProtocolHello()) return
+      if (this.pendingRemoteProtocolHello !== undefined) {
+        result = await auth.handleFrame(this.pendingRemoteProtocolHello, context)
+        if (this.channel !== channel || this.isTerminal()) return
+      }
+    }
     const authenticated = result === true || (typeof result === 'object' && result !== null && result.authenticated === true)
     await this.applyAuthResult(
       result,
@@ -1065,30 +1074,26 @@ export class WebRtcPeerSession {
   private async completeAuthentication(replayFrame?: unknown, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<void> {
     if (this.state === 'authorized' || this.isTerminal()) return
     this.clearAllTimers()
-    let localHello: unknown
-    if (!this.sentLocalProtocolHello) {
-      try {
-        localHello = this.options.localProtocolHello ?? defaultLocalConsumerHello()
-        parseProtocolHello(localHello)
-      } catch (error) {
-        this.terminalNoReconnect = true
-        this.fail(error, false)
-        return
-      }
-    }
     this.authenticatedPeerContext = authenticatedPeerContext === undefined ? undefined : cloneAuthenticatedPeerContext(authenticatedPeerContext)
     this.pendingRemoteProtocolHello = undefined
     this.lastError = undefined
     this.transition('authorized')
     if (replayFrame !== undefined) this.deliverFrame(replayFrame)
-    if (localHello !== undefined) {
+    await this.sendLocalProtocolHello()
+  }
+
+  private async sendLocalProtocolHello(): Promise<boolean> {
+    if (this.sentLocalProtocolHello) return true
+    try {
+      const localHello = this.options.localProtocolHello ?? defaultLocalConsumerHello()
+      parseProtocolHello(localHello)
       this.sentLocalProtocolHello = true
-      try {
-        await this.sendControlFrame(localHello)
-      } catch (error) {
-        this.terminalNoReconnect = true
-        this.fail(error, false)
-      }
+      await this.sendControlFrame(localHello)
+      return true
+    } catch (error) {
+      this.terminalNoReconnect = true
+      this.fail(error, false)
+      return false
     }
   }
 
