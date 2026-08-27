@@ -26,6 +26,21 @@ with socket.socket() as sock:
 PY
 )}}"
 BROKER_URL="${AURORA_HOSTED_PEER_BROKER_URL:-${AURORA_HOSTED_THIN_BROKER_URL:-ws://127.0.0.1:9001/mqtt}}"
+MANAGE_INTEROP_SERVICES="${AURORA_HOSTED_PEER_MANAGE_INTEROP_SERVICES:-}"
+if [[ -z "$MANAGE_INTEROP_SERVICES" ]]; then
+  case "$BROKER_URL" in
+    ws://127.0.0.1:9001/*|ws://localhost:9001/*)
+      MANAGE_INTEROP_SERVICES=1
+      ;;
+    *)
+      MANAGE_INTEROP_SERVICES=0
+      ;;
+  esac
+fi
+if [[ "$MANAGE_INTEROP_SERVICES" != "0" && "$MANAGE_INTEROP_SERVICES" != "1" ]]; then
+  echo "AURORA_HOSTED_PEER_MANAGE_INTEROP_SERVICES must be '0' or '1'" >&2
+  exit 64
+fi
 API_KEY="${AURORA_HOSTED_PEER_GATEWAY_API_KEY:-${AURORA_HOSTED_THIN_GATEWAY_API_KEY:-$(python - <<'PY'
 import secrets
 print("hosted-peer." + secrets.token_urlsafe(24))
@@ -76,7 +91,9 @@ cleanup() {
     kill -TERM -- "-$PYTHON_PID" 2>/dev/null || kill -TERM "$PYTHON_PID" 2>/dev/null || true
     wait "$PYTHON_PID" 2>/dev/null || true
   fi
-  scripts/webrtc_interop_services.sh down >/dev/null 2>&1 || true
+  if [[ "$MANAGE_INTEROP_SERVICES" == "1" ]]; then
+    scripts/webrtc_interop_services.sh down >/dev/null 2>&1 || true
+  fi
   python - "$RUNTIME_DIR" <<'PY'
 import shutil
 import sys
@@ -154,7 +171,9 @@ gateway["signaling_mqtt"]["topic_root"] = "aurora"
 Path(config_path).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
 
-scripts/webrtc_interop_services.sh up
+if [[ "$MANAGE_INTEROP_SERVICES" == "1" ]]; then
+  scripts/webrtc_interop_services.sh up
+fi
 
 setsid env \
   AURORA_ARCHITECTURE_MODE=threads \
