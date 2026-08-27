@@ -79,6 +79,7 @@ from .peer_protocol import (
     NegotiatedPeerProtocol,
     PeerProtocolError,
     PeerProtocolLimits,
+    ProtocolHello,
     build_protocol_hello,
     fragment_message,
     negotiate_protocol,
@@ -181,6 +182,12 @@ class _ReconnectChallengeRecord:
     room_name: str
     issued_at_ms: int
     expires_at_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingProtocolHello:
+    pc: RTCPeerConnection
+    hello: ProtocolHello
 
 
 _DIAGNOSTIC_REDACTED = "[REDACTED]"
@@ -509,6 +516,7 @@ class RTCClient:
         )
         self._peer_protocol_hellos: dict[str, Any] = {}
         self._peer_protocols: dict[str, NegotiatedPeerProtocol] = {}
+        self._pending_peer_protocol_hellos: dict[str, _PendingProtocolHello] = {}
         self._manifest_sync_pending_protocol: set[str] = set()
         self._manifest_protocol_timeout_tasks: dict[str, asyncio.Task[None]] = {}
         self._fragment_reassembler = FragmentReassembler(limits=PeerProtocolLimits())
@@ -639,6 +647,41 @@ class RTCClient:
         self._tooling_projection_sync_after_lease.discard(stable)
         self._cancel_peer_send_lane(session_peer_id)
         self._peer_send_locks.pop(session_peer_id, None)
+        self._pending_peer_protocol_hellos.pop(session_peer_id, None)
+
+    def _buffer_pre_auth_protocol_hello(
+        self,
+        peer_id: str,
+        pc: RTCPeerConnection,
+        frame: dict[str, Any],
+    ) -> bool:
+        """Retain one validated hello for the exact connection awaiting authentication.
+
+        Validation here is deliberately not negotiation: an anonymous peer cannot
+        install capability state. The parsed frame is promoted only after the
+        matching connection proves its identity.
+        """
+
+        try:
+            hello = parse_protocol_hello(frame)
+        except PeerProtocolError as exc:
+            self._record_diagnostic_error("protocol_hello_rejected", str(exc), peer_id)
+            return False
+        self._pending_peer_protocol_hellos[peer_id] = _PendingProtocolHello(pc=pc, hello=hello)
+        log_debug(
+            f"Peer {peer_id[:8]}… sent protocol hello while authentication was pending; "
+            "buffering for authenticated replay"
+        )
+        return True
+
+    def _replay_pre_auth_protocol_hello(self, peer_id: str) -> bool:
+        """Promote the exact active connection's buffered hello after authentication."""
+
+        pending = self._pending_peer_protocol_hellos.pop(peer_id, None)
+        if pending is None or self._pcs.get(peer_id) is not pending.pc:
+            return False
+        self._handle_protocol_hello(peer_id, pending.hello)
+        return True
 
     def _send_protocol_hello(self, peer_id: str) -> bool:
         """Send the local additive protocol hello after authentication/open access."""
@@ -652,13 +695,19 @@ class RTCClient:
             self._record_diagnostic_error("protocol_hello_send_failed", str(exc), session_peer_id)
             return False
 
-    def _handle_protocol_hello(self, peer_id: str, frame: dict[str, Any]) -> None:
+    def _handle_protocol_hello(
+        self,
+        peer_id: str,
+        frame: dict[str, Any] | ProtocolHello,
+    ) -> None:
         """Store an authenticated peer hello and negotiated common capabilities."""
 
         session_peer_id = self._session_for_peer_id(peer_id)
         stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
         try:
-            remote_hello = parse_protocol_hello(frame)
+            remote_hello = (
+                frame if isinstance(frame, ProtocolHello) else parse_protocol_hello(frame)
+            )
             negotiated = negotiate_protocol(self._local_protocol_hello, remote_hello)
         except PeerProtocolError as exc:
             self._record_diagnostic_error("protocol_hello_rejected", str(exc), session_peer_id)
@@ -1707,6 +1756,10 @@ class RTCClient:
         if challenge_entry is not None and (pc is None or challenge_entry.pc is pc):
             self._peer_auth_challenges.pop(peer, None)
 
+        pending_hello = self._pending_peer_protocol_hellos.get(peer)
+        if pending_hello is not None and (pc is None or pending_hello.pc is pc):
+            self._pending_peer_protocol_hellos.pop(peer, None)
+
         self._peer_pairing_directions.pop(peer, None)
         self._peer_pairing_active.discard(peer)
 
@@ -2069,6 +2122,7 @@ class RTCClient:
         self._peer_send_locks.clear()
         self._peer_protocol_hellos.clear()
         self._peer_protocols.clear()
+        self._pending_peer_protocol_hellos.clear()
         self._fragment_reassembler = FragmentReassembler(limits=PeerProtocolLimits())
         self._fragment_reassemblers.clear()
         self._event_subscriptions = MeshEventSubscriptionRegistry()
@@ -4986,6 +5040,7 @@ class RTCClient:
             self._clear_pairing_direction(peer, "inbound")
         self._maybe_finish_peer_auth_timeout(peer)
         self._send_protocol_hello(peer)
+        self._replay_pre_auth_protocol_hello(peer)
         await self._audit(
             "peer.authenticated",
             identity.principal_id,
@@ -6144,19 +6199,19 @@ class RTCClient:
                                 if method.startswith(self._ANON_ALLOWED_RPC_PREFIXES):
                                     asyncio.create_task(handler.on_message(text))
                                     return
-                            if (
-                                self._mesh_enabled
-                                and (
-                                    peer in self._peer_pairing_active
-                                    or peer in self._peer_auth_challenges
-                                )
-                                and msg_type in {"manifest", "manifest_request"}
+                            if self._mesh_enabled and (
+                                peer in self._peer_pairing_active
+                                or peer in self._peer_auth_challenges
                             ):
-                                log_debug(
-                                    f"Peer {peer} sent expected early '{msg_type}' during "
-                                    "bilateral authentication — dropping until authenticated"
-                                )
-                                return
+                                if msg_type == PROTOCOL_HELLO_TYPE:
+                                    self._buffer_pre_auth_protocol_hello(peer, pc, obj)
+                                    return
+                                if msg_type in {"manifest", "manifest_request"}:
+                                    log_debug(
+                                        f"Peer {peer} sent expected early '{msg_type}' during "
+                                        "bilateral authentication — dropping until authenticated"
+                                    )
+                                    return
                             log_warning(
                                 f"Peer {peer} sent '{msg_type}' before authenticating — dropping"
                             )

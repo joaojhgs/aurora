@@ -21,6 +21,7 @@ from app.services.gateway.webrtc.pairing_sas import (
     PairingSAS,
 )
 from app.services.gateway.webrtc.peer_protocol import (
+    CAP_FRAGMENTATION_V1,
     CAP_PROVIDER_LEASE_V1,
     build_protocol_hello,
     negotiate_protocol,
@@ -760,6 +761,119 @@ async def test_authentication_requests_remote_manifest_after_local_registration(
     target, payload = client.send_to_peer.call_args.args
     assert target == "stable-remote-peer"
     assert json.loads(payload) == {"type": "manifest_request"}
+
+
+@pytest.mark.asyncio
+async def test_early_protocol_hello_is_replayed_only_after_exact_peer_authentication(
+    mock_deps,
+):
+    """Async token validation must not lose or prematurely trust a native peer hello."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._audit = AsyncMock()
+    client._mesh_enabled = True
+    client._peer_registry = MagicMock()
+    client._peer_registry.register_peer = AsyncMock()
+    client._send_manifest = AsyncMock(return_value=True)
+    client._request_manifest = MagicMock()
+    pairing = pairing_sas_result()
+    client._pairing_results["peer1"] = pairing
+    client._mark_pairing_direction("peer1", "inbound")
+
+    validation_started = asyncio.Event()
+    release_validation = asyncio.Event()
+    token = Token(
+        id="token-id",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="remote-device",
+        user_id="remote-user",
+        scopes=["read"],
+    )
+
+    async def validate_after_hello(**_kwargs: Any) -> Token:
+        validation_started.set()
+        await release_validation.wait()
+        return token
+
+    auth_service.validate_mesh_pairing_token.side_effect = validate_after_hello
+    auth_service.build_identity_from_token.return_value = Identity(
+        principal_id="remote-user",
+        principal_name=pairing.remote_node_name,
+        is_admin=False,
+        effective_perms=frozenset({"read"}),
+        device_id="remote-device",
+        source="webrtc_peer",
+    )
+
+    pc = MagicMock()
+    channel = MockDataChannel()
+    pc.createDataChannel.return_value = channel
+    with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=pc):
+        await client._ensure_pc("peer1", is_offer_initiator=True)
+        install_pairing_transport(client, "peer1", pc)
+        channel.emit(
+            "message",
+            json.dumps(
+                {
+                    "type": "auth",
+                    "peer_name": pairing.remote_node_name,
+                    "peer_id": pairing.remote_stable_peer_id,
+                    "signaling_peer_id": "peer1",
+                    "pairing_session_id": pairing.pairing_session_id,
+                    "token": "fresh-token",
+                }
+            ),
+        )
+        await asyncio.wait_for(validation_started.wait(), timeout=1.0)
+
+        hello = build_protocol_hello(
+            role="hybrid",
+            capabilities=(CAP_FRAGMENTATION_V1,),
+        )
+        hello_task = channel.emit("message", json.dumps(hello))
+        if hello_task is not None:
+            await hello_task
+
+        assert "peer1" in client._pending_peer_protocol_hellos
+        assert "peer1" not in client._peer_protocols
+        assert client._peer_acl["peer1"] == ANONYMOUS
+        assert not any(
+            error.code == "preauth_message_dropped" for error in client._diagnostic_errors
+        )
+
+        release_validation.set()
+        async with asyncio.timeout(1.0):
+            while pairing.remote_stable_peer_id not in client._peer_protocols:
+                await asyncio.sleep(0.001)
+
+    assert "peer1" not in client._pending_peer_protocol_hellos
+    assert client.peer_supports_capability("peer1", CAP_FRAGMENTATION_V1)
+    assert client.peer_supports_capability(
+        pairing.remote_stable_peer_id,
+        CAP_FRAGMENTATION_V1,
+    )
+    client._send_manifest.assert_awaited_once_with(pairing.remote_stable_peer_id)
+    client._request_manifest.assert_called_once_with(
+        pairing.remote_stable_peer_id,
+        reason="authentication",
+    )
+
+
+def test_pending_protocol_hello_cleanup_is_scoped_to_exact_connection(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    peer = "peer1"
+    active_pc = MagicMock()
+    replacement_pc = MagicMock()
+    hello = build_protocol_hello(capabilities=(CAP_FRAGMENTATION_V1,))
+
+    assert client._buffer_pre_auth_protocol_hello(peer, active_pc, hello)
+    client._clear_pairing_state(peer, replacement_pc)
+    assert peer in client._pending_peer_protocol_hellos
+
+    client._clear_pairing_state(peer, active_pc)
+    assert peer not in client._pending_peer_protocol_hellos
 
 
 @pytest.mark.asyncio
