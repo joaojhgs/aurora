@@ -286,7 +286,10 @@ describe('W3 presence roster and per-session signaling allowlist', () => {
       sdp: 'remote-answer-sdp'
     })
     harness.pc.channels[0]?.open()
-    await flush()
+    await waitFor(
+      'initial pairing to reach SAS confirmation',
+      () => harness.peer.snapshot().state === 'awaiting-sas-confirmation'
+    )
 
     const established = harness.peer.snapshot()
     expect(established.connectedSignalingPeerId).toBe('z-remote')
