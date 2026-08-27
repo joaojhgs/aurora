@@ -96,16 +96,16 @@ class MigrationManager:
         """Split a migration script into statements safe for transactional execution."""
 
         statements: list[str] = []
-        buffer: list[str] = []
-        for line in script.splitlines():
-            buffer.append(line)
-            candidate = "\n".join(buffer).strip()
+        buffer = ""
+        for character in script:
+            buffer += character
+            candidate = buffer.strip()
             if candidate and sqlite3.complete_statement(candidate):
                 if MigrationManager._statement_has_sql(candidate):
                     statements.append(candidate)
-                buffer = []
+                buffer = ""
 
-        remainder = "\n".join(buffer).strip()
+        remainder = buffer.strip()
         if remainder:
             if not MigrationManager._statement_has_sql(remainder):
                 return statements
