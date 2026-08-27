@@ -33,6 +33,11 @@ async function liveSmokeModule() {
       packRevision: string
     }): string
     notificationIsVisibleFromDump(output: string, appId: string): boolean
+    auroraNotificationNodeBounds(
+      hierarchy: string,
+      attributes: { text?: string; resourceId?: string; contentDesc?: string },
+      appId?: string,
+    ): { left: number; top: number; right: number; bottom: number } | undefined
     wakeLockIsHeldFromDump(output: string): boolean
     isRecoverableBackgroundCaptureError(errorCode: unknown): boolean
     backgroundVoiceAcceptsInjectedPcm(status: Record<string, unknown>): boolean
@@ -186,6 +191,45 @@ describe('Android packaged voice live smoke harness', () => {
     expect(module.notificationIsVisibleFromDump(metadataOnlyDump, appId)).toBe(false)
     expect(module.notificationIsVisibleFromDump(activeRecordDump, appId)).toBe(true)
     expect(module.notificationIsVisibleFromDump(android16ActiveRecordDump, appId)).toBe(true)
+  })
+
+  it('locates notification controls after a rich notification expands', async () => {
+    const module = await liveSmokeModule()
+    const appId = 'dev.aurora.desktop'
+    const collapsedHierarchy = [
+      '<hierarchy>',
+      '<node resource-id="com.android.systemui:id/expandableNotificationRow">',
+      `<node text="Waiting for wake word" resource-id="${appId}:id/aurora_notification_voice_state" bounds="[12,16][220,40]" />`,
+      '<node text="" resource-id="android:id/expand_button" content-desc="Expand" bounds="[280,16][320,56]" />',
+      '</node>',
+      '</hierarchy>',
+    ].join('')
+    const expandedHierarchy = [
+      '<hierarchy>',
+      '<node resource-id="com.android.systemui:id/expandableNotificationRow">',
+      '<node text="Recorder" resource-id="android:id/app_name_text" bounds="[12,16][92,40]" />',
+      '<node text="Stop" resource-id="android:id/action0" bounds="[4,60][20,80]" />',
+      '</node>',
+      '<node resource-id="com.android.systemui:id/expandableNotificationRow">',
+      '<node text="Aurora" resource-id="android:id/app_name_text" bounds="[12,96][92,120]" />',
+      '<node content-desc="Stop" bounds="[24,120][96,168]" class="android.widget.Button" ',
+      'resource-id="android:id/action0" text="Stop" />',
+      '</node>',
+      '</hierarchy>',
+    ].join('')
+
+    expect(module.auroraNotificationNodeBounds(collapsedHierarchy, {
+      resourceId: 'android:id/expand_button',
+      contentDesc: 'Expand',
+    })).toEqual({ left: 280, top: 16, right: 320, bottom: 56 })
+    expect(module.auroraNotificationNodeBounds(collapsedHierarchy, {
+      resourceId: 'android:id/action0',
+      text: 'Stop',
+    })).toBeUndefined()
+    expect(module.auroraNotificationNodeBounds(expandedHierarchy, {
+      resourceId: 'android:id/action0',
+      text: 'Stop',
+    })).toEqual({ left: 24, top: 120, right: 96, bottom: 168 })
   })
 
   it('does not create or reverse a network service for local native voice acceptance', () => {
@@ -730,7 +774,8 @@ describe('Android packaged voice live smoke harness', () => {
       'proveAutomaticBackgroundStart',
       'proveNotificationStop',
       "['exec-out', 'uiautomator', 'dump', '/dev/tty']",
-      'resource-id="android:id\\/action0"',
+      "resourceId: 'android:id/action0'",
+      "contentDesc: 'Expand'",
       "'automatic background restart after force-stop and app reopen'",
     ]) {
       expect(source).toContain(invariant)

@@ -628,29 +628,124 @@ async function proveNotificationStop(context, invoke) {
 }
 
 async function tapNotificationStop(context) {
+  adbTry(context, ['shell', 'cmd', 'statusbar', 'collapse'])
+  adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP'])
+  adbTry(context, ['shell', 'wm', 'dismiss-keyguard'])
   adbRun(context, ['shell', 'cmd', 'statusbar', 'expand-notifications'])
-  await sleep(1_000)
-  const hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
-  const action = hierarchy.match(
-    /<node[^>]*text="Stop"[^>]*resource-id="android:id\/action0"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/u,
+  await sleep(750)
+  let hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
+  let action = auroraNotificationNodeBounds(
+    hierarchy,
+    {
+      resourceId: 'android:id/action0',
+      text: 'Stop',
+    },
+    context.appId,
   )
+  // Decorated custom notifications expose actions below the expanded content.
+  // Expand bounded notification rows until Aurora's real PendingIntent-backed
+  // action is present instead of assuming SystemUI renders it while collapsed.
+  for (let attempt = 0; !action && attempt < 6; attempt += 1) {
+    const expand = auroraNotificationNodeBounds(
+      hierarchy,
+      {
+        resourceId: 'android:id/expand_button',
+        contentDesc: 'Expand',
+      },
+      context.appId,
+    )
+    if (!expand) break
+    adbRun(context, [
+      'shell',
+      'input',
+      'tap',
+      String(Math.round((expand.left + expand.right) / 2)),
+      String(Math.round((expand.top + expand.bottom) / 2)),
+    ])
+    await sleep(750)
+    hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
+    action = auroraNotificationNodeBounds(
+      hierarchy,
+      {
+        resourceId: 'android:id/action0',
+        text: 'Stop',
+      },
+      context.appId,
+    )
+  }
   if (!action) {
     adbTry(context, ['shell', 'cmd', 'statusbar', 'collapse'])
     throw new Error('Aurora background voice notification did not expose its Stop action.')
   }
-  const left = Number(action[1])
-  const top = Number(action[2])
-  const right = Number(action[3])
-  const bottom = Number(action[4])
   adbRun(context, [
     'shell',
     'input',
     'tap',
-    String(Math.round((left + right) / 2)),
-    String(Math.round((top + bottom) / 2)),
+    String(Math.round((action.left + action.right) / 2)),
+    String(Math.round((action.top + action.bottom) / 2)),
   ])
   await sleep(500)
   adbRun(context, ['shell', 'cmd', 'statusbar', 'collapse'])
+}
+
+export function auroraNotificationNodeBounds(hierarchy, attributes = {}, appId = DEFAULT_APP_ID) {
+  const stack = []
+  for (const match of String(hierarchy ?? '').matchAll(/<node\b[^>]*\/>|<node\b[^>]*>|<\/node>/gu)) {
+    const token = match[0]
+    if (token === '</node>') {
+      const frame = stack.pop()
+      if (!frame) continue
+      if (frame.notificationRow && frame.hasAuroraContent && frame.targetBounds) {
+        return frame.targetBounds
+      }
+      mergeNotificationFrame(stack.at(-1), frame)
+      continue
+    }
+
+    const resourceId = xmlAttribute(token, 'resource-id')
+    const frame = {
+      notificationRow: resourceId?.endsWith(':id/expandableNotificationRow') === true,
+      hasAuroraContent: (resourceId === 'android:id/app_name_text'
+        && xmlAttribute(token, 'text') === 'Aurora')
+        || resourceId?.startsWith(`${appId}:id/aurora_notification_`) === true,
+      targetBounds: notificationNodeMatches(token, attributes)
+        ? notificationNodeBounds(token)
+        : undefined,
+    }
+    if (token.endsWith('/>')) {
+      mergeNotificationFrame(stack.at(-1), frame)
+    } else {
+      stack.push(frame)
+    }
+  }
+  return undefined
+}
+
+function mergeNotificationFrame(parent, child) {
+  if (!parent) return
+  parent.hasAuroraContent ||= child.hasAuroraContent
+  parent.targetBounds ??= child.targetBounds
+}
+
+function notificationNodeMatches(node, attributes) {
+  return (attributes.text === undefined || xmlAttribute(node, 'text') === attributes.text)
+    && (attributes.resourceId === undefined || xmlAttribute(node, 'resource-id') === attributes.resourceId)
+    && (attributes.contentDesc === undefined || xmlAttribute(node, 'content-desc') === attributes.contentDesc)
+}
+
+function notificationNodeBounds(node) {
+  const bounds = xmlAttribute(node, 'bounds')?.match(/^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/u)
+  if (!bounds) return undefined
+  return {
+    left: Number(bounds[1]),
+    top: Number(bounds[2]),
+    right: Number(bounds[3]),
+    bottom: Number(bounds[4]),
+  }
+}
+
+function xmlAttribute(node, name) {
+  return node.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`, 'u'))?.[1]
 }
 
 async function proveStickyRestart(context, previousSamples) {
