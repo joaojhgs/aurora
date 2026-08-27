@@ -6199,9 +6199,16 @@ class RTCClient:
                                 if method.startswith(self._ANON_ALLOWED_RPC_PREFIXES):
                                     asyncio.create_task(handler.on_message(text))
                                     return
+                            reconnect_proof = self._reconnect_proof_tasks.get(peer)
+                            reconnect_proof_pending = bool(
+                                reconnect_proof is not None
+                                and reconnect_proof[0] is pc
+                                and not reconnect_proof[1].done()
+                            )
                             if self._mesh_enabled and (
                                 peer in self._peer_pairing_active
                                 or peer in self._peer_auth_challenges
+                                or reconnect_proof_pending
                             ):
                                 if msg_type == PROTOCOL_HELLO_TYPE:
                                     self._buffer_pre_auth_protocol_hello(peer, pc, obj)

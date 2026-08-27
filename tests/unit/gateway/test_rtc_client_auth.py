@@ -1921,6 +1921,25 @@ async def test_slow_reconnect_proof_outlives_initial_auth_timeout(mock_deps):
         record = client._peer_auth_challenges[peer]
         channel.emit("message", json.dumps(reconnect_proof_for(record)))
         await asyncio.wait_for(verification_started.wait(), timeout=1.0)
+        client._mesh_enabled = True
+
+        hello_task = channel.emit(
+            "message",
+            json.dumps(
+                build_protocol_hello(
+                    role="hybrid",
+                    capabilities=(CAP_FRAGMENTATION_V1,),
+                )
+            ),
+        )
+        if hello_task is not None:
+            await hello_task
+
+        assert peer in client._pending_peer_protocol_hellos
+        assert peer not in client._peer_protocols
+        assert not any(
+            error.code == "preauth_message_dropped" for error in client._diagnostic_errors
+        )
 
         await asyncio.sleep(0.04)
         assert client._pcs[peer] is pc
@@ -1932,8 +1951,11 @@ async def test_slow_reconnect_proof_outlives_initial_auth_timeout(mock_deps):
             while client._peer_acl.get(peer, ANONYMOUS) == ANONYMOUS:
                 await asyncio.sleep(0.001)
 
-    assert client._peer_acl[peer] == identity
+    assert client._peer_acl[peer] != ANONYMOUS
+    assert client._peer_acl[peer].principal_id == identity.principal_id
     assert client._stable_peer_sessions["stable-remote-peer"] == peer
+    assert peer not in client._pending_peer_protocol_hellos
+    assert client.peer_supports_capability(peer, CAP_FRAGMENTATION_V1)
     assert peer not in client._reconnect_proof_tasks
     pc.close.assert_not_awaited()
     await cancel_auth_timeouts(client)
