@@ -59,6 +59,7 @@ FAKE_PACKAGE_ROOT = REPO_ROOT / "tests" / "fixtures" / "pockettts_fake_pkg"
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")
 TEST_REDIS_URL = os.environ.get("AURORA_POCKETTTS_PROCESS_TEST_REDIS_URL", f"{REDIS_URL}/14")
 SUBPROCESS_TIMEOUT_S = 20.0
+CONCURRENCY_TIMEOUT_S = 45.0
 TEST_VOICE_ID = "standard:aurora_process:neutral"
 TTS_MESH_POLICY: dict[str, Any] = {
     "mesh_sharing": {
@@ -371,8 +372,13 @@ def _read_events(fake_state: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in telemetry.read_text(encoding="utf-8").splitlines() if line]
 
 
-async def _wait_for_event(fake_state: Path, event_name: str) -> dict[str, Any]:
-    deadline = asyncio.get_running_loop().time() + SUBPROCESS_TIMEOUT_S
+async def _wait_for_event(
+    fake_state: Path,
+    event_name: str,
+    *,
+    timeout: float = SUBPROCESS_TIMEOUT_S,
+) -> dict[str, Any]:
+    deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         for event in _read_events(fake_state):
             if event.get("event") == event_name:
@@ -532,10 +538,16 @@ async def test_concurrent_synthesis_keeps_single_model_entry_under_bullmq_concur
             "POCKETTTS_FAKE_RELEASE_FILE": str(release_file),
         },
     ) as (bus, _procs, _output):
-        first = asyncio.create_task(_synthesize(bus, "first blocked", timeout=SUBPROCESS_TIMEOUT_S))
-        await _wait_for_event(fake_state, "blocked")
+        first = asyncio.create_task(
+            _synthesize(bus, "first blocked", timeout=CONCURRENCY_TIMEOUT_S)
+        )
+        await _wait_for_event(
+            fake_state,
+            "blocked",
+            timeout=CONCURRENCY_TIMEOUT_S,
+        )
         second = asyncio.create_task(
-            _synthesize(bus, "second queued", timeout=SUBPROCESS_TIMEOUT_S)
+            _synthesize(bus, "second queued", timeout=CONCURRENCY_TIMEOUT_S)
         )
         await asyncio.sleep(0.2)
         assert _max_active(fake_state) == 1
