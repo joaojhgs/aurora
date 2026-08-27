@@ -450,7 +450,13 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       expect(toolingToggle).not.toBeNull()
       toolingToggle?.click()
       await Promise.resolve()
+      expect(toolingToggle?.getAttribute('aria-checked')).toBe('true')
     })
+    await act(async () => {
+      peer.emit({ updatedAt: '2026-08-02T00:00:01.000Z' })
+      await Promise.resolve()
+    })
+    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('true')
     await act(async () => {
       findButton(document.body, 'Save').click()
       await Promise.resolve()
@@ -1030,7 +1036,8 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
 class FakeBrowserPeer {
   selectedCandidatePairEvidenceCalls = 0
   connectedDiscoveredPeerIds: string[] = []
-  private readonly snapshotValue: BrowserWebRtcSnapshot
+  private snapshotValue: BrowserWebRtcSnapshot
+  private readonly listeners = new Set<(snapshot: BrowserWebRtcSnapshot) => void>()
 
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}) {
     this.snapshotValue = {
@@ -1060,8 +1067,13 @@ class FakeBrowserPeer {
   snapshot() { return this.snapshotValue }
   roster() { return null }
   subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) {
+    this.listeners.add(listener)
     listener(this.snapshotValue)
-    return () => undefined
+    return () => this.listeners.delete(listener)
+  }
+  emit(partial: Partial<BrowserWebRtcSnapshot>) {
+    this.snapshotValue = { ...this.snapshotValue, ...partial }
+    for (const listener of this.listeners) listener(this.snapshotValue)
   }
   importInvite(inviteText: string): WebRtcPeerConnectionProfile {
     return webRtcProfileFromInvite(inviteText)!

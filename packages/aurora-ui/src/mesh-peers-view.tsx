@@ -3052,9 +3052,14 @@ function ScopesDialog({
   onSave: ((peer: MeshPeerRow, permissions: string[]) => void) | undefined
 }) {
   const [selected, setSelected] = useState<string[]>([])
+  const allowedPermissionIdsKey = permissionCatalog === undefined
+    ? null
+    : permissionCatalog.map((permission) => permission.id).sort().join('\u0000')
   const allowedPermissionIds = useMemo(
-    () => permissionCatalog ? new Set(permissionCatalog.map((permission) => permission.id)) : null,
-    [permissionCatalog],
+    () => allowedPermissionIdsKey === null
+      ? null
+      : new Set(allowedPermissionIdsKey ? allowedPermissionIdsKey.split('\u0000') : []),
+    [allowedPermissionIdsKey],
   )
   const permissionAllowed = useCallback(
     (permission: string) =>
