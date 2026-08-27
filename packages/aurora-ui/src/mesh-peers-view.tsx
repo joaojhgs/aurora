@@ -1424,7 +1424,7 @@ export function buildLocalMeshNodeSnapshot({
     }))
   }
 
-  if (expectedPeerId && !rows.has(expectedPeerId)) {
+  if (expectedPeerId && !thinPeer?.pairingSessionId && !rows.has(expectedPeerId)) {
     rows.set(expectedPeerId, localMeshPeerRow({
       peerId: expectedPeerId,
       nodeName: thinPeer?.nodeName?.trim() || 'Connected Aurora device',
@@ -1642,9 +1642,20 @@ export function MeshPeersView({
   const [scopesPeerId, setScopesPeerId] = useState<string | null>(null)
   const [detailsPeerId, setDetailsPeerId] = useState<string | null>(null)
   const [thinPairingOpen, setThinPairingOpen] = useState(false)
+  const [setupPeerId, setSetupPeerId] = useState<string | null>(null)
   useEffect(() => {
     if (!thinPeerSnapshot?.pairingSessionId) setThinPairingOpen(false)
   }, [thinPeerSnapshot?.pairingSessionId])
+  useEffect(() => {
+    if (
+      setupPeerId
+      && thinPeerSnapshot?.pairingSessionId
+      && thinPeerSnapshot.expectedStablePeerId === setupPeerId
+    ) {
+      setThinPairingOpen(true)
+      setSetupPeerId(null)
+    }
+  }, [setupPeerId, thinPeerSnapshot?.expectedStablePeerId, thinPeerSnapshot?.pairingSessionId])
   const pendingRequests = snapshot.pendingRequests
   const outgoingPairingSessions = pendingRequests.length === 0
     ? snapshot.liveSessions.filter((session) => {
@@ -1797,7 +1808,14 @@ export function MeshPeersView({
       <DiscoveredDevicesCard
         devices={thinPeerSnapshot?.discoveredDevices ?? []}
         knownPeerIds={snapshot.peers.map((peer) => peer.peerId)}
-        {...(onConnectDiscoveredDevice ? { onConnect: onConnectDiscoveredDevice } : {})}
+        {...(onConnectDiscoveredDevice
+          ? {
+              onConnect: (peerId: string) => {
+                setSetupPeerId(peerId)
+                return onConnectDiscoveredDevice(peerId)
+              },
+            }
+          : {})}
       />
       {homeServerConfigLocked ? (
         <p className="text-xs text-muted-foreground">{PRODUCT_COPY.mesh.adminSharingLocked}</p>

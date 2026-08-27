@@ -555,6 +555,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       this.unsubscribeRoster = peer.subscribeRoster((roster) => {
         this.persistAuthorizedMeshPeerProfiles(roster)
         void this.restoreKnownMeshPeers(roster)
+        this.emit()
       })
       void this.restoreSavedMeshPeers()
     }

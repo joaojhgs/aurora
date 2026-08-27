@@ -281,6 +281,61 @@ describe('W5 device discovery and selection', () => {
     expect(added).toEqual(['peer-home', 'peer-kitchen'])
   })
 
+  it('opens the permission review for the device started from Set up', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const connect = vi.fn()
+    const view = (snapshot: BrowserWebRtcSnapshot) => (
+      <MeshPeersView
+        snapshot={meshSnapshot()}
+        route={route()}
+        canManageLocalServiceConfiguration={false}
+        thinPeerSnapshot={snapshot}
+        onConnectDiscoveredDevice={connect}
+        localFeatureSharing={{
+          load: vi.fn(async () => ({ features: [], approvedDevices: [] })),
+          setFeatureEnabled: vi.fn(async () => undefined),
+          replacePeerSharing: vi.fn(async () => undefined),
+          revokePeerSharing: vi.fn(async () => undefined),
+        }}
+        onConfirmThinPairing={vi.fn(async () => undefined)}
+      />
+    )
+
+    await act(async () => {
+      root.render(view(thinSnapshot({ status: 'authorized', state: 'authorized' })))
+      await Promise.resolve()
+    })
+    const kitchenRow = Array.from(
+      container.querySelectorAll('[aria-label="Devices in this Aurora"] [class*="justify-between"]'),
+    ).find((row) => row.textContent?.includes('Kitchen speaker'))
+    expect(kitchenRow).toBeDefined()
+    await act(async () => {
+      findButton(kitchenRow ?? container, 'Set up').click()
+      await Promise.resolve()
+    })
+    expect(connect).toHaveBeenCalledWith('peer-kitchen')
+
+    await act(async () => {
+      root.render(view(thinSnapshot({
+        status: 'pairing',
+        state: 'awaiting-sas-confirmation',
+        expectedStablePeerId: 'peer-kitchen',
+        nodeName: 'Kitchen speaker',
+        pairingSessionId: 'pair-kitchen',
+        pairingVerificationCode: '47211483',
+      })))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Choose what Kitchen speaker can use from this device')
+    expect(dialog?.textContent).toContain('Approve & pair')
+  })
+
   it('keeps the discovered device copy free of internal wording', () => {
     const panel = renderConnectPanel(new FakeDiscoveryPeer(thinSnapshot()))
     const mesh = render(

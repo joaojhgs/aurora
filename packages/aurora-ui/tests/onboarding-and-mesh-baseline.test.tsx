@@ -270,6 +270,79 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(snapshot.liveSessions.map((session) => session.latencyMs)).toEqual([42, 236])
   })
 
+  it('does not present a second peer awaiting approval as an online saved device', () => {
+    const home = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-brazil',
+      connectedStablePeerId: 'peer-brazil',
+      nodeName: 'Brazil node',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-27T16:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const { connectedStablePeerId: _connectedStablePeerId, ...unconnectedHome } = home
+    const pending = {
+      ...unconnectedHome,
+      state: 'awaiting-sas-confirmation',
+      expectedStablePeerId: 'peer-browser',
+      nodeName: 'Hosted browser',
+      pendingPairing: {
+        sessionId: 'pair-browser',
+        verificationCode: '47211483',
+        remoteStablePeerId: 'peer-browser',
+        remoteNodeName: 'Hosted browser',
+      },
+    } as PeerConnectionSnapshot
+    const thinPeer = {
+      ...pending,
+      status: 'pairing',
+      pairingSessionId: 'pair-browser',
+      pairingVerificationCode: '47211483',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    } as BrowserWebRtcSnapshot
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-phone', nodeName: 'Phone' },
+      thinPeer,
+      peerRoster: {
+        primaryPeerId: 'peer-brazil',
+        peers: [
+          { peerId: 'peer-brazil', primary: true, nodeName: 'Brazil node', snapshot: home },
+          { peerId: 'peer-browser', primary: false, nodeName: 'Hosted browser', snapshot: pending },
+        ],
+        discovered: [],
+        updatedAt: '2026-08-27T16:00:00.000Z',
+      },
+      sharingAvailable: true,
+      featureSharing: {
+        features: [],
+        approvedDevices: [{
+          peerId: 'peer-brazil',
+          peerLabel: 'Brazil node',
+          featureIds: [],
+          expiresAtMs: null,
+        }],
+      },
+    })
+
+    expect(snapshot.peers.map((peer) => [peer.nodeName, peer.connectionStatus])).toEqual([
+      ['Brazil node', 'connected'],
+    ])
+    expect(snapshot.pendingCount).toBe(1)
+  })
+
   it('never loads the connected server peer history for a node-owned Mesh page', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const requestResult = vi.spyOn(client, 'requestResult')
