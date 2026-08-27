@@ -341,6 +341,7 @@ export class WebRtcPeerSession {
   private channelFlow: DataChannelFlowController | undefined
   private sendQueue: Promise<void> = Promise.resolve()
   private receiveQueue: Promise<void> = Promise.resolve()
+  private signalingQueue: Promise<void> = Promise.resolve()
   private state: PeerSessionState = 'idle'
   private role: PeerSessionRole = 'unknown'
   private remoteSignalingId: string | undefined
@@ -439,7 +440,12 @@ export class WebRtcPeerSession {
     this.terminalNoReconnect = false
     this.transition('deriving-keys')
     this.transition('signaling-connecting')
-    this.unsubscribeSignaling = this.options.signaling.subscribe((message) => void this.handleSignalingMessage(message))
+    this.unsubscribeSignaling = this.options.signaling.subscribe((message) => {
+      const job = this.signalingQueue.then(async () => await this.handleSignalingMessage(message))
+      this.signalingQueue = job.catch((error) => {
+        if (!this.isTerminal()) this.fail(error, true)
+      })
+    })
     this.armTimeout('signaling', this.timeouts.signalingMs, () => this.fail('signaling timeout', true))
     try {
       await this.options.signaling.connect()

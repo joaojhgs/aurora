@@ -658,6 +658,7 @@ describe('WebRtcPeerSession', () => {
     await session.start()
     expect(signaling.listeners.size).toBe(1)
     signaling.emit({ channel: 'presence', from: 'b', stablePeerId: 'evil', envelope: { type: 'presence', stable_peer_id: 'evil' } })
+    await flush()
     expect(session.getSnapshot()).toMatchObject({ state: 'failed' })
     expect(timers.handles.size).toBe(0)
     expect(signaling.listeners.size).toBe(0)

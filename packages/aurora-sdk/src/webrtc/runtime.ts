@@ -1056,9 +1056,12 @@ interface RuntimeHubSubscription {
 
 type RuntimeUnhandledOfferHandler = (message: SignalingMessage) => boolean | Promise<boolean>
 
+const MAX_PENDING_INBOUND_SIGNALING_FRAMES = 64
+
 class RuntimeSignalingHub {
   private readonly subscriptions = new Set<RuntimeHubSubscription>()
   private readonly retainedPresence = new Map<string, MqttSignalingMessage>()
+  private readonly pendingInboundMaterializations = new Map<string, MqttSignalingMessage[]>()
   private readonly unsubscribe: () => void
   private connectPromise: Promise<void> | null = null
   private connected = false
@@ -1109,6 +1112,7 @@ class RuntimeSignalingHub {
         this.connectPromise = null
         this.unsubscribe()
         this.retainedPresence.clear()
+        this.pendingInboundMaterializations.clear()
         this.subscriptions.clear()
         try {
           await this.signaling.close('connect_failed')
@@ -1128,6 +1132,7 @@ class RuntimeSignalingHub {
     this.connected = false
     this.unsubscribe()
     this.retainedPresence.clear()
+    this.pendingInboundMaterializations.clear()
     this.subscriptions.clear()
     try {
       await this.signaling.close(reason)
@@ -1158,12 +1163,31 @@ class RuntimeSignalingHub {
       if (message.envelope.type === 'presence_departed') this.retainedPresence.delete(key)
       else this.retainedPresence.set(key, message)
     }
+    const pendingMaterialization = this.pendingInboundMaterializations.get(message.from)
+    if (pendingMaterialization !== undefined && message.channel !== 'presence') {
+      if (pendingMaterialization.length < MAX_PENDING_INBOUND_SIGNALING_FRAMES) {
+        pendingMaterialization.push(message)
+      }
+      return
+    }
     const delivered = this.deliverToSubscribers(message)
     if (!delivered && message.channel === 'offer' && this.onUnhandledOffer !== undefined) {
       const signalingMessage = this.toSignalingMessage(message)
-      void Promise.resolve(this.onUnhandledOffer(signalingMessage)).then((materialized) => {
-        if (materialized) this.deliverToSubscribers(message)
-      })
+      const queued = [message]
+      this.pendingInboundMaterializations.set(message.from, queued)
+      void Promise.resolve()
+        .then(async () => await this.onUnhandledOffer!(signalingMessage))
+        .then((materialized) => {
+          if (this.pendingInboundMaterializations.get(message.from) !== queued) return
+          this.pendingInboundMaterializations.delete(message.from)
+          if (!materialized) return
+          for (const pending of queued) this.deliverToSubscribers(pending)
+        })
+        .catch(() => {
+          if (this.pendingInboundMaterializations.get(message.from) === queued) {
+            this.pendingInboundMaterializations.delete(message.from)
+          }
+        })
     }
   }
 

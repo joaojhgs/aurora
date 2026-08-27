@@ -577,13 +577,24 @@ class RuntimeFakePeerConnection implements PeerConnectionLike {
   onconnectionstatechange: PeerConnectionLike['onconnectionstatechange'] = null
   oniceconnectionstatechange: PeerConnectionLike['oniceconnectionstatechange'] = null
   channels: RuntimeFakeChannel[] = []
-  constructor(readonly offerSdp = 'offer-sdp', readonly answerSdp = 'answer-sdp') {}
+  candidates: unknown[] = []
+  constructor(
+    readonly offerSdp = 'offer-sdp',
+    readonly answerSdp = 'answer-sdp',
+    private readonly remoteDescriptionGate?: Promise<void>,
+  ) {}
   createDataChannel(label: string): DataChannelLike { const ch = new RuntimeFakeChannel(label); this.channels.push(ch); return ch }
   async createOffer(): Promise<{ type: 'offer'; sdp: string }> { return { type: 'offer', sdp: this.offerSdp } }
   async createAnswer(): Promise<{ type: 'answer'; sdp: string }> { return { type: 'answer', sdp: this.answerSdp } }
   async setLocalDescription(description: { type: 'offer' | 'answer'; sdp: string }): Promise<void> { this.localDescription = description }
-  async setRemoteDescription(description: { type: 'offer' | 'answer'; sdp: string }): Promise<void> { this.remoteDescription = description }
-  async addIceCandidate(): Promise<void> { }
+  async setRemoteDescription(description: { type: 'offer' | 'answer'; sdp: string }): Promise<void> {
+    await this.remoteDescriptionGate
+    this.remoteDescription = description
+  }
+  async addIceCandidate(candidate: unknown): Promise<void> {
+    if (this.remoteDescription === null) throw new Error('remote description is not ready')
+    this.candidates.push(candidate)
+  }
   close(): void { this.connectionState = 'closed' }
 }
 
@@ -2348,6 +2359,7 @@ function makeMultiPeerHarness(
     }
     visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument']
     signalingConnect?: (signaling: RuntimeFakeSignaling, index: number) => Promise<void>
+    remoteDescriptionGate?: Promise<void>
   },
 ): MultiPeerHarness {
   const harnessOptions = typeof peerConnectionPolicyOrOptions === 'string'
@@ -2374,7 +2386,11 @@ function makeMultiPeerHarness(
       return next as any
     },
     createPeerConnection: () => {
-      const next = new RuntimeFakePeerConnection('offer-sdp', 'answer-sdp')
+      const next = new RuntimeFakePeerConnection(
+        'offer-sdp',
+        'answer-sdp',
+        harnessOptions.remoteDescriptionGate,
+      )
       connections.push(next)
       return next
     },
@@ -2550,7 +2566,15 @@ describe('browser WebRTC runtime peer registry', {
   })
 
   it('auto-materializes a mesh-node session for a targeted inbound offer', async () => {
-    const harness = makeMultiPeerHarness(['z-node'], { nodeRole: 'mesh-node', peerConnectionPolicy: 'mesh' })
+    let releaseRemoteDescription!: () => void
+    const remoteDescriptionGate = new Promise<void>((resolve) => {
+      releaseRemoteDescription = resolve
+    })
+    const harness = makeMultiPeerHarness(['z-node'], {
+      nodeRole: 'mesh-node',
+      peerConnectionPolicy: 'mesh',
+      remoteDescriptionGate,
+    })
     await harness.registry.connectPeer(meshPeerProfile('peer-alpha', 'a-alpha', 'Alpha node'))
     const signaling = harness.signalings[0] as RuntimeFakeSignaling
 
@@ -2565,6 +2589,21 @@ describe('browser WebRTC runtime peer registry', {
         sdp: 'remote-beta-offer-sdp',
       },
     })
+    signaling.emit({
+      channel: 'candidate',
+      from: 'a-beta',
+      stablePeerId: 'peer-beta',
+      envelope: {
+        type: 'candidate',
+        stable_peer_id: 'peer-beta',
+        candidate: 'candidate:1 1 UDP 1 127.0.0.1 12345 typ host',
+        sdp_mid: '0',
+        sdp_mline_index: 0,
+      },
+    })
+    await vi.waitFor(() => expect(harness.connections).toHaveLength(1))
+    expect(harness.connections.at(-1)?.candidates).toEqual([])
+    releaseRemoteDescription()
     await vi.waitFor(() => expect(signaling.sent.some((message) => message.channel === 'answer' && message.toPeer === 'a-beta')).toBe(true))
 
     expect(harness.signalings).toHaveLength(1)
@@ -2580,6 +2619,9 @@ describe('browser WebRTC runtime peer registry', {
       },
     })
     expect(harness.connections.at(-1)?.remoteDescription).toEqual({ type: 'offer', sdp: 'remote-beta-offer-sdp' })
+    expect(harness.connections.at(-1)?.candidates).toEqual([
+      expect.objectContaining({ candidate: 'candidate:1 1 UDP 1 127.0.0.1 12345 typ host' }),
+    ])
     expect(signaling.sent).toEqual([
       expect.objectContaining({
         channel: 'answer',
