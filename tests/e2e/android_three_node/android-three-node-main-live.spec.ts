@@ -6,6 +6,7 @@ import {
   expect,
   test,
   type APIRequestContext,
+  type Page,
 } from '@playwright/test'
 
 type JsonObject = Record<string, unknown>
@@ -72,6 +73,7 @@ type WebRtcPeerDiagnostic = {
   data_channel_state?: string
   auth_state?: string
   effective_permission_count?: number
+  rtt_ms?: number | null
 }
 
 type PersistedMeshPeer = {
@@ -162,7 +164,7 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
   expect(inviteConfig.room).not.toBe('')
   expect(inviteConfig.room_password).not.toBe('')
 
-  const android = await connectAndroid(androidHelpers)
+  let android = await connectAndroid(androidHelpers)
   let voiceFixtures: ReturnType<AndroidHelpers['prepareVoiceFixtures']> | undefined
   try {
     const storedProfile = await androidHelpers.invokeTauri(
@@ -303,27 +305,61 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       ?? activeProfile?.localNode?.nodeName
       ?? androidPeerId
 
-    const nativePeer = await waitFor(
-      async () => {
-        const snapshot = await androidHelpers.invokeTauri(
-          android.webview.client,
-          'aurora_mesh_session_snapshot',
-        ) as { peers?: NativeMeshPeer[] }
-        return snapshot.peers?.find(
-          (peer) => peer.peerId === pythonPeerId && Number.isInteger(peer.connectionId),
-        ) ?? null
-      },
-      'Android Rust mesh binding',
-    )
-    const rttSamplesMs: number[] = []
-    for (let sample = 0; sample < 5; sample += 1) {
-      rttSamplesMs.push(await androidHelpers.invokeTauri(
-        android.webview.client,
-        'aurora_native_webrtc_measure_rtt',
-        { request: { peerConnectionId: nativePeer.connectionId } },
-      ) as number)
+    const directVerificationCode = await pairBrowserAndAndroid({
+      androidClient: android.webview.client,
+      androidNodeName,
+      page,
+    })
+    expect(directVerificationCode).not.toBe('')
+
+    const browserObservedRtts = {
+      android: await waitForBrowserPeerLatency(page, androidNodeName),
+      python: await waitForBrowserPeerLatency(page, pythonNodeName),
     }
-    expect(rttSamplesMs.every((sample) => Number.isFinite(sample) && sample > 0)).toBe(true)
+
+    const androidBrowserPeer = await waitForNativePeer(
+      androidHelpers,
+      android.webview.client,
+      browserPeerId,
+      'Android Rust binding for the self-hosted UI',
+    )
+    const androidBrowserRttSamplesMs = await measureAndroidPeerRtt(
+      androidHelpers,
+      android.webview.client,
+      androidBrowserPeer,
+    )
+    expect(androidBrowserRttSamplesMs.every(isPositiveFinite)).toBe(true)
+
+    const pythonObservedRtts = await waitFor(
+      async () => {
+        const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
+          request,
+          '/api/Gateway/GetWebRTCDiagnostics',
+        )
+        const browser = liveDiagnosticFor(diagnostics.peers ?? [], browserPeerId)
+        const installedAndroid = liveDiagnosticFor(diagnostics.peers ?? [], androidPeerId)
+        const browserRttMs = diagnosticRtt(browser)
+        const androidRttMs = diagnosticRtt(installedAndroid)
+        return browserRttMs !== null && androidRttMs !== null
+          ? { browser: browserRttMs, installedAndroid: androidRttMs }
+          : null
+      },
+      'full Python numeric RTT to both native nodes',
+      120_000,
+    )
+
+    const nativePeer = await waitForNativePeer(
+      androidHelpers,
+      android.webview.client,
+      pythonPeerId,
+      'Android Rust mesh binding for full Python',
+    )
+    const rttSamplesMs = await measureAndroidPeerRtt(
+      androidHelpers,
+      android.webview.client,
+      nativePeer,
+    )
+    expect(rttSamplesMs.every(isPositiveFinite)).toBe(true)
     const sortedRttSamplesMs = [...rttSamplesMs].sort((left, right) => left - right)
     const medianRttMs = sortedRttSamplesMs[Math.floor(sortedRttSamplesMs.length / 2)] ?? Infinity
     expect(medianRttMs).toBeLessThan(100)
@@ -336,31 +372,6 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       '-s', android.serial,
       'shell', 'input', 'keyevent', 'HOME',
     ], { stdio: 'ignore' })
-    await invokeAndroid('aurora_android_voice_foreground_service_cancel')
-    await waitFor(
-      async () => {
-        const status = await invokeAndroid(
-          'aurora_android_voice_foreground_service_status',
-        ) as AndroidVoiceStatus
-        return status.captureActive !== true
-          && status.backgroundSessionActive !== true
-          && status.runtimeActive !== true
-          ? status
-          : null
-      },
-      'previous Android background speech capture release',
-      30_000,
-      250,
-    )
-    const ingressArm = await invokeAndroid('aurora_android_voice_live_test_inject_pcm', {
-      request: { pcmBase64: '', armIngress: true },
-    }) as { accepted?: boolean }
-    expect(ingressArm.accepted).toBe(true)
-    const backgroundStart = await invokeAndroid(
-      'aurora_android_voice_foreground_service_start',
-      { request: { remoteAudioConsent: false, backgroundSession: true } },
-    ) as { started?: boolean }
-    expect(backgroundStart.started).toBe(true)
     const voiceReady = await waitFor(
       async () => {
         const status = await invokeAndroid(
@@ -368,9 +379,13 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
         ) as AndroidVoiceStatus
         return backgroundVoiceReady(status) ? status : null
       },
-      'Android background speech runtime',
+      'always-on Android background speech runtime',
       120_000,
     )
+    const ingressArm = await invokeAndroid('aurora_android_voice_live_test_inject_pcm', {
+      request: { pcmBase64: '', armIngress: true },
+    }) as { accepted?: boolean }
+    expect(ingressArm.accepted).toBe(true)
     const databaseBefore = await invokeAndroid(
       'aurora_local_data_inspect_identity',
     ) as { databaseLocalNodeId?: string; recordCount?: number }
@@ -437,6 +452,86 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
     expect(androidBody).toContain(browserPeerName)
     expect(browserGatewayRequests).toEqual([])
 
+    await page.goto('about:blank')
+    android.webview.close()
+    restartAndroid(android)
+    android = {
+      ...android,
+      webview: await androidHelpers.connectInstalledWebview({
+        adb: android.adb,
+        serial: android.serial,
+        appId: android.appId,
+      }),
+    }
+    await page.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
+    await androidNavigateToMesh(android.webview.client)
+
+    const restoredBrowserRtts = {
+      android: await waitForBrowserPeerLatency(page, androidNodeName),
+      python: await waitForBrowserPeerLatency(page, pythonNodeName),
+    }
+    const restoredAndroidBrowserPeer = await waitForNativePeer(
+      androidHelpers,
+      android.webview.client,
+      browserPeerId,
+      'restored Android Rust binding for the self-hosted UI',
+    )
+    const restoredAndroidPythonPeer = await waitForNativePeer(
+      androidHelpers,
+      android.webview.client,
+      pythonPeerId,
+      'restored Android Rust binding for full Python',
+    )
+    const restoredAndroidRtts = {
+      browser: await measureAndroidPeerRtt(
+        androidHelpers,
+        android.webview.client,
+        restoredAndroidBrowserPeer,
+        3,
+      ),
+      python: await measureAndroidPeerRtt(
+        androidHelpers,
+        android.webview.client,
+        restoredAndroidPythonPeer,
+        3,
+      ),
+    }
+    const restoredBrowserCredential = await androidHelpers.invokeTauri(
+      android.webview.client,
+      'aurora_thin_peer_credential_status',
+      { request: { peerId: browserPeerId } },
+    ) as { found?: boolean; hasBearerToken?: boolean }
+    expect(restoredBrowserCredential.found).toBe(true)
+    expect(restoredBrowserCredential.hasBearerToken).toBe(true)
+    expect(page.getByRole('button', { name: 'Review & approve' })).toHaveCount(0)
+    expect(await androidText(android.webview.client)).not.toContain('Review & approve')
+
+    const restoredPythonRtts = await waitFor(
+      async () => {
+        const diagnostics = await post<{ peers?: WebRtcPeerDiagnostic[] }>(
+          request,
+          '/api/Gateway/GetWebRTCDiagnostics',
+        )
+        const browserRttMs = diagnosticRtt(liveDiagnosticFor(diagnostics.peers ?? [], browserPeerId))
+        const androidRttMs = diagnosticRtt(liveDiagnosticFor(diagnostics.peers ?? [], androidPeerId))
+        return browserRttMs !== null && androidRttMs !== null
+          ? { browser: browserRttMs, installedAndroid: androidRttMs }
+          : null
+      },
+      'restored full Python numeric RTT to both native nodes',
+      120_000,
+    )
+    await waitFor(
+      async () => {
+        const status = await invokeAndroid(
+          'aurora_android_voice_foreground_service_status',
+        ) as AndroidVoiceStatus
+        return backgroundVoiceReady(status) ? status : null
+      },
+      'background speech re-arm after Android process restart',
+      120_000,
+    )
+
     console.log(JSON.stringify({
       ok: true,
       androidPeerId,
@@ -445,11 +540,19 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       authenticatedPeerCount: 2,
       androidNativeMedianRttMs: medianRttMs,
       androidNativeRttSamplesMs: rttSamplesMs,
+      androidToBrowserRttSamplesMs: androidBrowserRttSamplesMs,
       androidAnsweredPings: nativePeer.answeredPings ?? null,
       androidProjectedRttMs: nativePeer.lastRttMs ?? null,
+      browserObservedRtts,
+      pythonObservedRtts,
       backgroundVoiceElapsedMs: voiceElapsedMs,
       backgroundVoicePersistedRecordDelta: persistedRecordDelta,
       backgroundVoiceOutcome: completedVoice.liveOutcome,
+      directVerificationCodeMatched: true,
+      restoredBrowserRtts,
+      restoredAndroidRtts,
+      restoredPythonRtts,
+      restoredWithoutPairingPrompt: true,
       rostersMutuallyVisible: true,
     }))
   } finally {
@@ -488,7 +591,7 @@ async function connectAndroid(androidHelpers: AndroidHelpers) {
     resolvedActivity,
     serial,
   }
-  launchAndroid(android)
+  restartAndroid(android)
   return {
     ...android,
     webview: await androidHelpers.connectInstalledWebview({ adb, serial, appId }),
@@ -504,6 +607,195 @@ function launchAndroid(android: {
     '-s', android.serial,
     'shell', 'am', 'start', '-W', '-n', android.resolvedActivity,
   ], { stdio: 'ignore' })
+}
+
+function restartAndroid(android: {
+  adb: string
+  appId: string
+  resolvedActivity: string
+  serial: string
+}) {
+  execFileSync(android.adb, [
+    '-s', android.serial,
+    'shell', 'am', 'force-stop', android.appId,
+  ], { stdio: 'ignore' })
+  launchAndroid(android)
+}
+
+async function pairBrowserAndAndroid({
+  androidClient,
+  androidNodeName,
+  page,
+}: {
+  androidClient: AndroidCdpClient
+  androidNodeName: string
+  page: Page
+}) {
+  await page.goto(`${baseUrl}/mesh`, { waitUntil: 'domcontentloaded' })
+  await androidNavigateToMesh(androidClient)
+  await clickFirstRefresh(page)
+  await clickAndroidRefresh(androidClient)
+
+  const discoveryCard = page.getByLabel('Devices in this Aurora')
+  await expect(discoveryCard).toBeVisible({ timeout: 90_000 })
+  const deviceName = discoveryCard.getByText(androidNodeName, { exact: true })
+  await expect(deviceName).toBeVisible({ timeout: 90_000 })
+  const deviceRow = deviceName.locator('..').locator('..')
+  const setUp = deviceRow.getByRole('button', { name: 'Set up' })
+  await expect(setUp).toBeVisible({ timeout: 90_000 })
+  await setUp.click()
+
+  const browserReview = page.getByRole('button', { name: 'Review & approve' })
+  await browserReview.waitFor({ state: 'visible', timeout: 90_000 })
+  await browserReview.click()
+  const browserDialog = page.getByRole('dialog')
+  const browserCode = normalizeCode(
+    (await browserDialog
+      .locator('code[aria-label^="Verification code "]')
+      .getAttribute('aria-label'))?.replace('Verification code ', ''),
+  )
+  expect(browserCode).not.toBe('')
+
+  const androidCode = await waitFor(
+    async () => {
+      const openCode = await androidDialogVerificationCode(androidClient)
+      if (openCode) return openCode
+      await clickAndroidButton(androidClient, 'Refresh')
+      await clickAndroidButton(androidClient, 'Review & approve')
+      return await androidDialogVerificationCode(androidClient)
+    },
+    'Android direct-pairing review',
+    90_000,
+    500,
+  )
+  expect(androidCode).toBe(browserCode)
+
+  const browserApproval = browserDialog.getByRole('button', { name: 'Approve & pair' })
+  await expect(browserApproval).toBeEnabled({ timeout: 30_000 })
+  await Promise.all([
+    browserApproval.click(),
+    waitFor(
+      async () => await clickAndroidButton(androidClient, 'Approve & pair'),
+      'Android direct-pairing approval',
+      30_000,
+      250,
+    ),
+  ])
+  return browserCode
+}
+
+async function androidDialogVerificationCode(client: AndroidCdpClient) {
+  const value = await androidEvaluate<string>(client, `(() => {
+    const code = [...document.querySelectorAll('code[aria-label^="Verification code "]')]
+      .find((candidate) => candidate.closest('[role="dialog"]'));
+    return code?.getAttribute('aria-label')?.replace('Verification code ', '') ?? '';
+  })()`)
+  return normalizeCode(value)
+}
+
+async function clickAndroidButton(client: AndroidCdpClient, label: string) {
+  return await androidEvaluate<boolean>(client, `(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(label)} && !candidate.disabled);
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`) ?? false
+}
+
+async function androidEvaluate<T>(client: AndroidCdpClient, expression: string): Promise<T | undefined> {
+  const response = await client.send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+  })
+  return (response as { result?: { result?: { value?: T } } }).result?.result?.value
+}
+
+async function waitForBrowserPeerLatency(page: Page, peerName: string) {
+  return await waitFor(
+    async () => {
+      const latencyMs = await page.evaluate((expectedName) => {
+        const names = [...document.querySelectorAll('p, span, td')]
+          .filter((element) => element.textContent?.trim() === expectedName)
+        for (const name of names) {
+          let current: Element | null = name
+          for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+            const hasDetails = [...current.querySelectorAll('button')]
+              .some((button) => button.textContent?.trim() === 'Details')
+            if (!hasDetails && current.tagName !== 'TR') continue
+            const match = current.textContent?.match(/(\d+(?:\.\d+)?)\s*ms/u)
+            if (match) return Number(match[1])
+          }
+        }
+        return null
+      }, peerName)
+      return isPositiveFinite(latencyMs) ? latencyMs : null
+    },
+    `browser numeric RTT to ${peerName}`,
+    120_000,
+    1_000,
+  )
+}
+
+async function waitForNativePeer(
+  androidHelpers: AndroidHelpers,
+  client: AndroidCdpClient,
+  peerId: string,
+  label: string,
+) {
+  return await waitFor(
+    async () => {
+      const snapshot = await androidHelpers.invokeTauri(
+        client,
+        'aurora_mesh_session_snapshot',
+      ) as { peers?: NativeMeshPeer[] }
+      return snapshot.peers?.find(
+        (peer) => peer.peerId === peerId && Number.isInteger(peer.connectionId),
+      ) ?? null
+    },
+    label,
+    120_000,
+    500,
+  )
+}
+
+async function measureAndroidPeerRtt(
+  androidHelpers: AndroidHelpers,
+  client: AndroidCdpClient,
+  peer: NativeMeshPeer,
+  sampleCount = 5,
+) {
+  const samples: number[] = []
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    samples.push(await waitFor(
+      async () => {
+        try {
+          return await androidHelpers.invokeTauri(
+            client,
+            'aurora_native_webrtc_measure_rtt',
+            { request: { peerConnectionId: peer.connectionId } },
+          ) as number
+        } catch (error) {
+          if (String(error).includes('already has a native latency ping in flight')) {
+            return null
+          }
+          throw error
+        }
+      },
+      `available Android RTT probe for ${peer.peerId ?? peer.connectionId}`,
+      30_000,
+      250,
+    ))
+  }
+  return samples
+}
+
+function diagnosticRtt(peer: WebRtcPeerDiagnostic | null) {
+  return isPositiveFinite(peer?.rtt_ms) ? peer.rtt_ms : null
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
 function backgroundVoiceReady(status: AndroidVoiceStatus) {
