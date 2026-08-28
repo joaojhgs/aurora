@@ -108,6 +108,10 @@ struct AuroraThinRoomSecretGetArgs: Decodable {
   let ref: String
 }
 
+struct AuroraThinRoomSecretDeleteArgs: Decodable {
+  let ref: String
+}
+
 struct AuroraInboundVerifierGetArgs: Decodable {
   let request: AuroraInboundVerifierGetRequest
 }
@@ -385,6 +389,20 @@ enum AuroraThinPeerStorage {
       "value": value,
       "backend": "ios-keychain",
       "persisted": true,
+      "privacyClass": "secret",
+      "rawGetter": true,
+      "allowedGenericSecureStorage": false
+    ]
+  }
+
+  static func thinRoomSecretDelete(_ args: AuroraThinRoomSecretDeleteArgs) throws -> [String: Any] {
+    try validateNonEmpty(args.ref, maxBytes: 1024)
+    try keychainDelete(account: try roomSecretAccount(ref: args.ref))
+    return [
+      "ref": args.ref,
+      "ok": true,
+      "backend": "ios-keychain",
+      "persisted": false,
       "privacyClass": "secret",
       "rawGetter": true,
       "allowedGenericSecureStorage": false

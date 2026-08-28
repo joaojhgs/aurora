@@ -15,7 +15,6 @@ use std::env;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -25,7 +24,7 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewWindow};
 #[cfg(desktop)]
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 #[cfg(desktop)]
@@ -114,6 +113,11 @@ const VOICE_OVERLAY_HEIGHT: f64 = 230.0;
 const TEXT_OVERLAY_WIDTH: f64 = 520.0;
 const TEXT_OVERLAY_HEIGHT: f64 = 360.0;
 const GATEWAY_EVENT_STREAM_ERROR_BODY_MAX_BYTES: usize = 4096;
+const GATEWAY_COMMAND_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const GATEWAY_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+const GATEWAY_EVENT_STREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const GATEWAY_HEALTH_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const GATEWAY_HEALTH_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -463,6 +467,13 @@ struct ThinRoomSecretSetRequest {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ThinRoomSecretGetRequest {
+    #[serde(rename = "ref")]
+    ref_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThinRoomSecretDeleteRequest {
     #[serde(rename = "ref")]
     ref_id: String,
 }
@@ -1148,14 +1159,14 @@ struct SidecarState {
 }
 
 impl SidecarState {
-    fn new() -> Self {
-        Self {
+    fn new() -> Result<Self, AuroraCommandError> {
+        Ok(Self {
             child: None,
             started_at: None,
-            token: generate_sidecar_token(),
+            token: generate_sidecar_token()?,
             last_error: None,
             last_health: None,
-        }
+        })
     }
 
     fn is_running(&mut self) -> bool {
@@ -1181,28 +1192,54 @@ impl SidecarState {
 
 type SharedSidecarState = Arc<Mutex<SidecarState>>;
 type SharedSubscriptionState = Arc<Mutex<SubscriptionState>>;
+type SharedGatewayClients = Arc<GatewayClients>;
+
+struct GatewayClients {
+    command: reqwest::Client,
+    event_stream: reqwest::Client,
+    health: reqwest::Client,
+}
+
+impl GatewayClients {
+    fn new() -> Result<Self, AuroraCommandError> {
+        Ok(Self {
+            command: reqwest::Client::builder()
+                .connect_timeout(GATEWAY_COMMAND_CONNECT_TIMEOUT)
+                .timeout(GATEWAY_COMMAND_TIMEOUT)
+                .build()
+                .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?,
+            event_stream: reqwest::Client::builder()
+                .connect_timeout(GATEWAY_EVENT_STREAM_CONNECT_TIMEOUT)
+                .build()
+                .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?,
+            health: reqwest::Client::builder()
+                .connect_timeout(GATEWAY_HEALTH_CONNECT_TIMEOUT)
+                .timeout(GATEWAY_HEALTH_TIMEOUT)
+                .build()
+                .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?,
+        })
+    }
+}
 
 struct SubscriptionState {
-    next_id: AtomicU64,
     tasks: HashMap<String, SubscriptionTask>,
 }
 
 struct SubscriptionTask {
     handle: tauri::async_runtime::JoinHandle<()>,
     ready: watch::Sender<bool>,
+    owner_label: String,
 }
 
 impl SubscriptionState {
     fn new() -> Self {
         Self {
-            next_id: AtomicU64::new(1),
             tasks: HashMap::new(),
         }
     }
 
-    fn next_subscription_id(&self) -> String {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        format!("aurora-sub-{id}")
+    fn next_subscription_id(&self) -> Result<String, AuroraCommandError> {
+        Ok(format!("aurora-sub-{}", random_hex_128()?))
     }
 
     fn insert(&mut self, id: String, task: SubscriptionTask) {
@@ -1211,8 +1248,11 @@ impl SubscriptionState {
         }
     }
 
-    fn activate(&self, id: &str) -> bool {
+    fn activate(&self, id: &str, owner_label: &str) -> bool {
         if let Some(task) = self.tasks.get(id) {
+            if task.owner_label != owner_label {
+                return false;
+            }
             task.ready.send_replace(true);
             true
         } else {
@@ -1220,7 +1260,15 @@ impl SubscriptionState {
         }
     }
 
-    fn remove(&mut self, id: &str) {
+    fn remove(&mut self, id: &str, owner_label: &str) {
+        let owned = self
+            .tasks
+            .get(id)
+            .map(|task| task.owner_label == owner_label)
+            .unwrap_or(false);
+        if !owned {
+            return;
+        }
         if let Some(task) = self.tasks.remove(id) {
             task.handle.abort();
         }
@@ -1295,14 +1343,16 @@ impl Serialize for AuroraCommandError {
 async fn aurora_request(
     request: AuroraRequest,
     state: State<'_, SharedSidecarState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
-    aurora_command(request, state).await
+    aurora_command(request, state, gateway_clients).await
 }
 
 #[tauri::command]
 async fn aurora_command(
     request: AuroraRequest,
     state: State<'_, SharedSidecarState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
     if !request_has_valid_sidecar_token(&request, &state)? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
@@ -1316,7 +1366,6 @@ async fn aurora_command(
 
     let gateway_url = gateway_url()?;
     let url = gateway_request_url(&gateway_url, request.path.as_deref(), &request.method)?;
-    let client = reqwest::Client::new();
     let method = request
         .http_method
         .as_deref()
@@ -1328,7 +1377,8 @@ async fn aurora_command(
         .parse()
         .map_err(|error| AuroraCommandError::Gateway(format!("invalid HTTP method: {error}")))?;
 
-    let mut builder = client
+    let mut builder = gateway_clients
+        .command
         .request(method, url)
         .headers(filtered_headers(request.headers));
     if let Some(payload) = request.payload {
@@ -1359,8 +1409,10 @@ async fn aurora_command(
 async fn aurora_subscribe(
     request: AuroraSubscribeRequest,
     app: AppHandle,
+    window: WebviewWindow,
     sidecar_state: State<'_, SharedSidecarState>,
     subscription_state: State<'_, SharedSubscriptionState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraSubscribeResponse, AuroraCommandError> {
     if !subscribe_has_valid_sidecar_token(&request, &sidecar_state)? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
@@ -1372,17 +1424,19 @@ async fn aurora_subscribe(
         let subscriptions = subscription_state
             .lock()
             .map_err(|_| AuroraCommandError::SidecarState)?;
-        subscriptions.next_subscription_id()
+        subscriptions.next_subscription_id()?
     };
+    let owner_label = window.label().to_string();
     let event_name = format!("aurora://events/{subscription_id}");
     let closed_event_name = format!("aurora://events/{subscription_id}/closed");
-    let client = reqwest::Client::new();
+    let client = gateway_clients.event_stream.clone();
     let headers = filtered_headers(request.headers.clone());
     let task_subscription_id = subscription_id.clone();
     let cleanup_subscription_id = subscription_id.clone();
     let task_event_name = event_name.clone();
     let task_closed_event_name = closed_event_name.clone();
     let task_app = app.clone();
+    let task_owner_label = owner_label.clone();
     let task_subscriptions = subscription_state.inner().clone();
     let (ready_tx, mut ready_rx) = watch::channel(false);
 
@@ -1394,6 +1448,7 @@ async fn aurora_subscribe(
         }
         run_gateway_event_stream(
             task_app,
+            task_owner_label,
             client,
             url,
             headers,
@@ -1416,6 +1471,7 @@ async fn aurora_subscribe(
             SubscriptionTask {
                 handle: task,
                 ready: ready_tx,
+                owner_label,
             },
         );
     }
@@ -1446,12 +1502,14 @@ async fn aurora_subscribe(
 #[tauri::command]
 async fn aurora_activate_subscription(
     request: AuroraActivateSubscriptionRequest,
+    window: WebviewWindow,
     subscription_state: State<'_, SharedSubscriptionState>,
 ) -> Result<Value, AuroraCommandError> {
+    let owner_label = window.label().to_string();
     let subscriptions = subscription_state
         .lock()
         .map_err(|_| AuroraCommandError::SidecarState)?;
-    if subscriptions.activate(&request.subscription_id) {
+    if subscriptions.activate(&request.subscription_id, &owner_label) {
         Ok(json!({
             "subscriptionId": request.subscription_id,
             "activated": true,
@@ -1467,12 +1525,14 @@ async fn aurora_activate_subscription(
 #[tauri::command]
 async fn aurora_unsubscribe(
     request: AuroraUnsubscribeRequest,
+    window: WebviewWindow,
     subscription_state: State<'_, SharedSubscriptionState>,
 ) -> Result<Value, AuroraCommandError> {
+    let owner_label = window.label().to_string();
     let mut subscriptions = subscription_state
         .lock()
         .map_err(|_| AuroraCommandError::SidecarState)?;
-    subscriptions.remove(&request.subscription_id);
+    subscriptions.remove(&request.subscription_id, &owner_label);
     Ok(json!({
         "subscriptionId": request.subscription_id,
         "closed": true,
@@ -1484,6 +1544,7 @@ async fn aurora_unsubscribe(
 async fn aurora_sidecar_start(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
     command_token: Option<SidecarCommandToken>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
     let gateway = gateway_url()?;
@@ -1507,7 +1568,7 @@ async fn aurora_sidecar_start(
         }
     }
 
-    aurora_sidecar_status(state).await
+    aurora_sidecar_status(state, gateway_clients).await
 }
 
 #[tauri::command]
@@ -1523,6 +1584,7 @@ async fn aurora_sidecar_session(
 #[tauri::command]
 async fn aurora_sidecar_stop(
     state: State<'_, SharedSidecarState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
     command_token: Option<SidecarCommandToken>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
     verify_sidecar_command_token(command_token, &state)?;
@@ -1532,12 +1594,13 @@ async fn aurora_sidecar_stop(
         stop_sidecar(&mut sidecar)?;
     }
 
-    aurora_sidecar_status(state).await
+    aurora_sidecar_status(state, gateway_clients).await
 }
 
 #[tauri::command]
 async fn aurora_sidecar_status(
     state: State<'_, SharedSidecarState>,
+    gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
     let gateway = gateway_url()?;
     let (running, pid, last_error, started_at_ms, token_issued) = {
@@ -1553,7 +1616,7 @@ async fn aurora_sidecar_status(
         )
     };
 
-    let health = check_gateway_health(&gateway).await;
+    let health = check_gateway_health(&gateway_clients.health, &gateway).await;
     let mut details = BTreeMap::new();
     details.insert("supervisionTask".to_string(), json!("TAURI-002"));
     details.insert("shellTask".to_string(), json!("TAURI-001"));
@@ -3845,6 +3908,57 @@ async fn aurora_thin_room_secret_get(
             "persisted": true,
             "privacyClass": "secret"
         }))
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (request, native);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "thin room-secret storage is only available on desktop keychain, Android Keystore, and iOS Keychain targets"
+                .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_thin_room_secret_delete(
+    request: ThinRoomSecretDeleteRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_room_secret_ref(&request.ref_id)?;
+
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(
+            native,
+            "thinRoomSecretDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(
+            native,
+            "thinRoomSecretDelete",
+            serde_json::to_value(&request)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
+        );
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let storage_key = thin_room_secret_key(&request.ref_id)?;
+        match peer_credential_storage_entry(&storage_key)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(json!({
+                "ref": request.ref_id,
+                "ok": true,
+                "backend": "platform-keychain",
+                "persisted": false,
+                "privacyClass": "secret",
+                "secretsRedacted": true
+            })),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        }
     }
     #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
@@ -7923,13 +8037,15 @@ fn stop_sidecar(sidecar: &mut SidecarState) -> Result<(), AuroraCommandError> {
     Ok(())
 }
 
-async fn check_gateway_health(gateway: &Url) -> Result<Value, AuroraCommandError> {
+async fn check_gateway_health(
+    client: &reqwest::Client,
+    gateway: &Url,
+) -> Result<Value, AuroraCommandError> {
     let url = gateway
         .join(SIDECAR_HEALTH_PATH.trim_start_matches('/'))
         .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
-    let response = reqwest::Client::new()
+    let response = client
         .get(url)
-        .timeout(Duration::from_secs(2))
         .send()
         .await
         .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
@@ -7950,6 +8066,7 @@ async fn check_gateway_health(gateway: &Url) -> Result<Value, AuroraCommandError
 
 async fn run_gateway_event_stream(
     app: AppHandle,
+    owner_label: String,
     client: reqwest::Client,
     url: Url,
     headers: HeaderMap,
@@ -7966,7 +8083,7 @@ async fn run_gateway_event_stream(
         event_name,
         closed_event_name,
         move |event_name, payload| {
-            let _ = app.emit(event_name, payload);
+            let _ = app.emit_to(&owner_label, event_name, payload);
         },
     )
     .await;
@@ -8295,24 +8412,35 @@ fn bundled_sidecar_path(app: &AppHandle) -> Option<PathBuf> {
     candidates.into_iter().find(|path| path.is_file())
 }
 
-fn generate_sidecar_token() -> String {
-    let mut bytes = [0_u8; 32];
-    if getrandom::getrandom(&mut bytes).is_err() {
-        let fallback = format!(
-            "{}:{}:{:?}",
-            std::process::id(),
-            env!("CARGO_PKG_VERSION"),
-            Instant::now()
-        );
-        return fallback
-            .bytes()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
-    }
-    bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>()
+fn random_hex_128() -> Result<String, AuroraCommandError> {
+    random_hex_from_entropy::<16>(fill_secure_random)
+}
+
+fn generate_sidecar_token() -> Result<String, AuroraCommandError> {
+    random_hex_from_entropy::<32>(fill_secure_random)
+}
+
+fn random_hex_from_entropy<const N: usize>(
+    fill_entropy: impl FnOnce(&mut [u8]) -> Result<(), AuroraCommandError>,
+) -> Result<String, AuroraCommandError> {
+    let mut bytes = [0_u8; N];
+    fill_entropy(&mut bytes)?;
+    Ok(hex_encode(&bytes))
+}
+
+fn fill_secure_random(bytes: &mut [u8]) -> Result<(), AuroraCommandError> {
+    getrandom::getrandom(bytes).map_err(|error| {
+        AuroraCommandError::SidecarProcess(format!(
+            "secure random generator unavailable: {error}"
+        ))
+    })
+}
+
+#[cfg(test)]
+fn generate_sidecar_token_from_entropy(
+    fill_entropy: impl FnOnce(&mut [u8]) -> Result<(), AuroraCommandError>,
+) -> Result<String, AuroraCommandError> {
+    random_hex_from_entropy::<32>(fill_entropy)
 }
 
 fn is_loopback_host(url: &Url) -> bool {
@@ -8686,7 +8814,20 @@ pub fn run() {
             desktop_native_voice_e2e_keyring::credential_builder(),
         );
     }
-    let sidecar_state: SharedSidecarState = Arc::new(Mutex::new(SidecarState::new()));
+    let sidecar_state = match SidecarState::new() {
+        Ok(state) => Arc::new(Mutex::new(state)),
+        Err(error) => {
+            eprintln!("aurora_tauri_startup_failed={error}");
+            std::process::exit(1);
+        }
+    };
+    let gateway_clients = match GatewayClients::new() {
+        Ok(clients) => Arc::new(clients),
+        Err(error) => {
+            eprintln!("aurora_tauri_startup_failed={error}");
+            std::process::exit(1);
+        }
+    };
     let subscription_state: SharedSubscriptionState =
         Arc::new(Mutex::new(SubscriptionState::new()));
     let overlay_state: SharedOverlayState = Arc::new(Mutex::new(OverlayState::new()));
@@ -8715,6 +8856,7 @@ pub fn run() {
     builder
         .plugin(aurora_mobile_native_plugin())
         .manage(sidecar_state.clone())
+        .manage(gateway_clients)
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
         .manage(NativeVoiceState::default())
@@ -8861,6 +9003,7 @@ pub fn run() {
             aurora_thin_profile_set,
             aurora_thin_room_secret_set,
             aurora_thin_room_secret_get,
+            aurora_thin_room_secret_delete,
             aurora_inbound_verifier_get,
             aurora_inbound_verifier_set,
             aurora_inbound_verifier_delete,
@@ -9544,14 +9687,33 @@ mod tests {
             SubscriptionTask {
                 handle,
                 ready: watch::channel(false).0,
+                owner_label: "main".to_string(),
             },
         );
-        assert!(subscriptions.activate("aurora-sub-test"));
+        assert!(!subscriptions.activate("aurora-sub-test", OVERLAY_WINDOW_LABEL));
+        assert!(subscriptions.activate("aurora-sub-test", "main"));
 
-        subscriptions.remove("aurora-sub-test");
+        subscriptions.remove("aurora-sub-test", OVERLAY_WINDOW_LABEL);
+        assert!(subscriptions.tasks.contains_key("aurora-sub-test"));
+        subscriptions.remove("aurora-sub-test", "main");
 
-        assert!(!subscriptions.activate("aurora-sub-test"));
+        assert!(!subscriptions.activate("aurora-sub-test", "main"));
         assert!(subscriptions.tasks.is_empty());
+    }
+
+    #[test]
+    fn subscription_ids_are_random_nonsequential_tokens() {
+        let subscriptions = SubscriptionState::new();
+        let first = subscriptions.next_subscription_id().unwrap();
+        let second = subscriptions.next_subscription_id().unwrap();
+        assert_ne!(first, second);
+        for id in [first, second] {
+            let token = id
+                .strip_prefix("aurora-sub-")
+                .expect("subscription id prefix");
+            assert_eq!(token.len(), 32);
+            assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+        }
     }
 
     #[test]
@@ -10929,6 +11091,9 @@ mod tests {
             "aurora_thin_peer_credential_status",
             "aurora_thin_peer_credential_delete",
             "aurora_thin_peer_reconnect_prove",
+            "aurora_thin_room_secret_set",
+            "aurora_thin_room_secret_get",
+            "aurora_thin_room_secret_delete",
             "aurora_remote_origin_policy",
         ] {
             assert!(permission.contains(command), "{command}");
@@ -11921,6 +12086,9 @@ mod tests {
             "\"thinPeerReconnectProve\"",
             "\"thinProfileGet\"",
             "\"thinProfileSet\"",
+            "\"thinRoomSecretSet\"",
+            "\"thinRoomSecretGet\"",
+            "\"thinRoomSecretDelete\"",
         ] {
             let occurrences = source.matches(command).count();
             assert!(
@@ -12201,11 +12369,24 @@ mod tests {
 
     #[test]
     fn sidecar_token_is_random_hex_and_not_empty() {
-        let first = generate_sidecar_token();
-        let second = generate_sidecar_token();
+        let first = generate_sidecar_token().unwrap();
+        let second = generate_sidecar_token().unwrap();
         assert_eq!(first.len(), 64);
         assert!(first.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn sidecar_token_generation_fails_closed_without_secure_entropy() {
+        let error = generate_sidecar_token_from_entropy(|_| {
+            Err(AuroraCommandError::SidecarProcess(
+                "secure random generator unavailable: test entropy failure".to_string(),
+            ))
+        })
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("secure random generator unavailable"));
     }
 
     #[test]

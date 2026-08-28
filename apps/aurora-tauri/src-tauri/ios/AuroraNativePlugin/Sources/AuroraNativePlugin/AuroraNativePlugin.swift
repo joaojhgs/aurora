@@ -1078,6 +1078,20 @@ public final class AuroraNativePlugin: Plugin {
     }
   }
 
+  @objc public func thinRoomSecretDelete(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraThinRoomSecretDeleteArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.thinRoomSecretDelete(args))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "thin_room_secret_delete_failed"
+        )
+      )
+    }
+  }
+
   @objc public func inboundVerifierGet(_ invoke: Invoke) {
     do {
       let args = try invoke.parseArgs(AuroraInboundVerifierGetArgs.self)

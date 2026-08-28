@@ -1541,6 +1541,28 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     @Command
+    fun thinRoomSecretDelete(invoke: Invoke) {
+        val args = invoke.parseArgs(ThinRoomSecretDeleteArgs::class.java)
+        try {
+            validateNonEmpty("roomSecretRef", args.ref, 1024)
+            val committed = securePrefs()
+                .edit()
+                .remove(thinRoomSecretKey(args.ref))
+                .commit()
+            if (!committed) {
+                throw IllegalStateException("thin_room_secret_delete_failed")
+            }
+            val ret = thinRoomSecretStatusObject()
+            ret.put("ref", args.ref)
+            ret.put("ok", true)
+            ret.put("persisted", false)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "thin_room_secret_delete_failed")
+        }
+    }
+
+    @Command
     fun webviewMicrophonePermissionDecision(invoke: Invoke) {
         val args = invoke.parseArgs(WebviewMicrophonePermissionArgs::class.java)
         invoke.resolve(evaluateWebviewMicrophonePermission(args))
@@ -4423,6 +4445,11 @@ class ThinRoomSecretSetArgs {
 
 @InvokeArg
 class ThinRoomSecretGetArgs {
+    var ref: String = ""
+}
+
+@InvokeArg
+class ThinRoomSecretDeleteArgs {
     var ref: String = ""
 }
 

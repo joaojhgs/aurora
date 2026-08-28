@@ -1248,23 +1248,37 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
   }
 
   async remove(peerId: string): Promise<void> {
+    await this.pendingRoomSecretWrites;
+    const roomSecretRefs = nativeProfileRoomSecretRefsForPeer(
+      this.profileMetadataStore,
+      peerId,
+    );
+    for (const ref of roomSecretRefs) await deleteTauriRoomSecret(ref);
     await this.nativeStore.remove(peerId);
     this.profileMetadataStore.removePeerConnectionProfile(peerId);
+    for (const ref of roomSecretRefs) this.zeroCachedRoomSecret(ref);
   }
 
   async clear(): Promise<void> {
-    await this.pendingRoomSecretWrites.catch(() => undefined);
-    for (const value of this.roomSecrets.values()) value.fill(0);
-    this.roomSecrets.clear();
-    const savedPeerIds = this.profileMetadataStore
-      .loadPeerConnectionProfiles()
-      .flatMap((profile) => profile.expectedStablePeerId ? [profile.expectedStablePeerId] : []);
-    const uniquePeerIds = [...new Set(savedPeerIds)];
+    await this.pendingRoomSecretWrites;
+    const profiles = nativeSnapshotConnectionProfiles(this.profileMetadataStore);
+    const uniqueRoomSecretRefs = [
+      ...new Set([
+        ...profiles.flatMap((profile) => profile.roomSecretRef ? [profile.roomSecretRef] : []),
+        ...this.roomSecrets.keys(),
+      ]),
+    ];
+    const uniquePeerIds = [
+      ...new Set(profiles.flatMap((profile) => profile.expectedStablePeerId ? [profile.expectedStablePeerId] : [])),
+    ];
+    for (const ref of uniqueRoomSecretRefs) await deleteTauriRoomSecret(ref);
     // Native vaults intentionally expose exact-peer deletion only. Profiles are
     // therefore the deletion index; credentials orphaned outside that index
     // cannot be enumerated and must never be reported as successfully cleared.
     for (const peerId of uniquePeerIds) await this.nativeStore.remove(peerId);
     await this.profileMetadataStore.clear();
+    for (const value of this.roomSecrets.values()) value.fill(0);
+    this.roomSecrets.clear();
   }
 
   async close(): Promise<void> {
@@ -1274,6 +1288,44 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
     await this.profileMetadataStore.close();
     await this.nativeStore.close();
   }
+
+  private zeroCachedRoomSecret(ref: string): void {
+    const cached = this.roomSecrets.get(ref);
+    cached?.fill(0);
+    this.roomSecrets.delete(ref);
+  }
+}
+
+interface NativeProfileMetadataStore {
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null;
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[];
+}
+
+function nativeSnapshotConnectionProfiles(
+  store: NativeProfileMetadataStore,
+): readonly WebRtcPeerConnectionProfile[] {
+  const profiles = [...store.loadPeerConnectionProfiles()];
+  const homeProfile = store.loadConnectionProfile();
+  if (homeProfile) profiles.push(homeProfile);
+  return profiles;
+}
+
+function nativeProfileRoomSecretRefsForPeer(
+  store: NativeProfileMetadataStore,
+  peerId: string,
+): readonly string[] {
+  const profiles = nativeSnapshotConnectionProfiles(store);
+  return [
+    ...new Set(
+      profiles
+        .filter((profile) => profile.expectedStablePeerId === peerId)
+        .filter((profile) => !profiles.some((other) => (
+          other.expectedStablePeerId !== peerId
+          && other.roomSecretRef === profile.roomSecretRef
+        )))
+        .flatMap((profile) => profile.roomSecretRef ? [profile.roomSecretRef] : []),
+    ),
+  ];
 }
 
 async function persistTauriRoomSecret(
@@ -1285,6 +1337,15 @@ async function persistTauriRoomSecret(
   });
   if (!result.ok) {
     throw new Error("Thin-client room-secret persistence failed");
+  }
+}
+
+async function deleteTauriRoomSecret(ref: string): Promise<void> {
+  const result = await invoke<{ ok?: boolean }>("aurora_thin_room_secret_delete", {
+    request: { ref },
+  });
+  if (!result.ok) {
+    throw new Error("Thin-client room-secret deletion failed");
   }
 }
 

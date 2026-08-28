@@ -139,6 +139,7 @@ describe('Tauri secure storage policy', () => {
     for (const command of [
       'aurora_thin_room_secret_set',
       'aurora_thin_room_secret_get',
+      'aurora_thin_room_secret_delete',
     ]) {
       expect(runtimeSource).toContain(command)
       expect(rustSource).toContain(command)
@@ -153,8 +154,10 @@ describe('Tauri secure storage policy', () => {
     expect(rustSource).toContain('sha256_hex(ref_id.as_bytes())')
     expect(kotlinSource).toContain('encryptSecureValue(args.value)')
     expect(kotlinSource).toMatch(/thinRoomSecretKey\(args\.ref\)[\s\S]*?\.commit\(\)/)
+    expect(kotlinSource).toMatch(/fun thinRoomSecretDelete[\s\S]*?\.remove\(thinRoomSecretKey\(args\.ref\)\)[\s\S]*?\.commit\(\)/)
     expect(swiftStorage).toContain('kSecAttrAccessibleWhenUnlockedThisDeviceOnly')
     expect(swiftStorage).toContain('roomSecretAccount(ref: args.ref)')
+    expect(swiftStorage).toContain('thinRoomSecretDelete')
     expect(swiftStorage).toContain('"rawGetter": true')
     expect(permission).toContain('raw bearer tokens')
   })
@@ -254,6 +257,7 @@ describe('Tauri secure storage policy', () => {
       'thinProfileSet',
       'thinRoomSecretSet',
       'thinRoomSecretGet',
+      'thinRoomSecretDelete',
     ]) {
       expect(pluginSource).toContain(`@objc public func ${command}`)
       expect(rustSource).toContain(`"${command}"`)

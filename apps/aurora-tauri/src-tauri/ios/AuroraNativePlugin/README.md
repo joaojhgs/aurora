@@ -10,7 +10,7 @@ Current commands:
 
 - `nativeCapabilityManifest` returns the iOS native capability/permission manifest.
 - `thinPeerCredentialSet`, `thinPeerCredentialStatus`, `thinPeerCredentialDelete`, and `thinPeerReconnectProve` keep long-lived WebRTC reconnect bearer material in an opaque generic-password Keychain namespace. Items use `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, disable synchronization, never expose a raw getter, and return only redacted metadata or a challenge-bound canonical `mesh_auth_proof_v1` HMAC.
-- `thinRoomSecretSet` and `thinRoomSecretGet` keep runtime WebRTC room secrets in a separate device-only Keychain namespace so onboarding/imported invites can survive app restarts without placing secrets in the nonsecret profile document.
+- `thinRoomSecretSet`, `thinRoomSecretGet`, and `thinRoomSecretDelete` keep runtime WebRTC room secrets in a separate device-only Keychain namespace so onboarding/imported invites can survive app restarts without placing secrets in the nonsecret profile document while still allowing exact-profile erasure.
 - `thinProfileGet` and `thinProfileSet` persist only the sanitized, nonsecret HTTP/WebRTC connection-profile document in `UserDefaults`; endpoint credentials and invite secrets are not part of that document.
 - `invocationStatus` reports the allowed invocation surface and explicitly sets `siriReplacement` to `false`.
 - `voiceStatus` reports foreground-only microphone capture state from `AVAudioSession` and keeps raw-audio consent/backend evidence required.

@@ -1494,11 +1494,11 @@ describe('desktop-thin live connection profiles', () => {
 
   it('keeps multiple native mesh peer profiles across runtime recreation', async () => {
     window.localStorage.clear()
-    const baseInvoke = vi.fn(async (
+    const baseInvoke = tauriCoreMock.invoke.mockImplementation(async (
       command: string,
       args?: Record<string, unknown>,
     ): Promise<unknown> => {
-      const request = args?.request as { peerId?: string } | undefined
+      const request = args?.request as { peerId?: string; ref?: string } | undefined
       if (command === 'aurora_thin_peer_credential_delete') {
         return {
           peerId: request?.peerId,
@@ -1509,17 +1509,26 @@ describe('desktop-thin live connection profiles', () => {
           redactedFields: ['rawBearerToken'],
         }
       }
+      if (command === 'aurora_thin_room_secret_delete') {
+        return {
+          ref: request?.ref,
+          ok: true,
+          persisted: false,
+          secretsRedacted: true,
+        }
+      }
       throw new Error(`Unexpected native command: ${command}`)
     })
-    const roomProfile = webRtcProfile('native-mesh-room')
+    const browserProfile = webRtcProfile('native-mesh-browser-room')
+    const pythonProfile = webRtcProfile('native-mesh-python-room')
     const first = createTauriNativePeerCredentialStore(baseInvoke as never)
     first.savePeerConnectionProfile?.({
-      ...roomProfile,
+      ...browserProfile,
       expectedStablePeerId: 'peer-browser',
       nodeName: 'Hosted browser',
     })
     first.savePeerConnectionProfile?.({
-      ...roomProfile,
+      ...pythonProfile,
       expectedStablePeerId: 'peer-python',
       nodeName: 'Python node',
     })
@@ -1536,7 +1545,7 @@ describe('desktop-thin live connection profiles', () => {
       expect.objectContaining({ expectedStablePeerId: 'peer-python', nodeName: 'Python node' }),
     ])
     restored.savePeerConnectionProfile?.({
-      ...roomProfile,
+      ...browserProfile,
       expectedStablePeerId: 'peer-browser',
       nodeName: 'Hosted browser',
     })
@@ -1546,7 +1555,62 @@ describe('desktop-thin live connection profiles', () => {
       .filter(([command]) => command === 'aurora_thin_peer_credential_delete')
       .map(([, args]) => (args?.request as { peerId?: string }).peerId)
     ).toEqual(['peer-browser', 'peer-python', 'peer-browser'])
+    expect(baseInvoke.mock.calls
+      .filter(([command]) => command === 'aurora_thin_room_secret_delete')
+      .map(([, args]) => (args?.request as { ref?: string }).ref)
+    ).toEqual([
+      'ref:memory:native-mesh-browser-room',
+      'ref:memory:native-mesh-python-room',
+      'ref:memory:native-mesh-browser-room',
+    ])
     await restored.close()
+    window.localStorage.clear()
+  })
+
+  it('keeps a shared native room secret until every referencing peer profile is removed', async () => {
+    window.localStorage.clear()
+    const baseInvoke = tauriCoreMock.invoke.mockImplementation(async (
+      command: string,
+      args?: Record<string, unknown>,
+    ): Promise<unknown> => {
+      const request = args?.request as { peerId?: string; ref?: string } | undefined
+      if (command === 'aurora_thin_peer_credential_delete') {
+        return {
+          peerId: request?.peerId,
+          found: false,
+          hasBearerToken: false,
+          persisted: true,
+          secretsRedacted: true,
+          redactedFields: ['rawBearerToken'],
+        }
+      }
+      if (command === 'aurora_thin_room_secret_delete') {
+        return { ref: request?.ref, ok: true, persisted: false, secretsRedacted: true }
+      }
+      throw new Error(`Unexpected native command: ${command}`)
+    })
+    const sharedProfile = webRtcProfile('native-shared-room')
+    const store = createTauriNativePeerCredentialStore(baseInvoke as never)
+    store.savePeerConnectionProfile?.({
+      ...sharedProfile,
+      expectedStablePeerId: 'peer-browser',
+      nodeName: 'Hosted browser',
+    })
+    store.savePeerConnectionProfile?.({
+      ...sharedProfile,
+      expectedStablePeerId: 'peer-python',
+      nodeName: 'Python node',
+    })
+
+    await store.remove('peer-browser')
+    expect(baseInvoke.mock.calls.some(([command]) => command === 'aurora_thin_room_secret_delete')).toBe(false)
+
+    await store.clear()
+    expect(baseInvoke.mock.calls
+      .filter(([command]) => command === 'aurora_thin_room_secret_delete')
+      .map(([, args]) => (args?.request as { ref?: string }).ref)
+    ).toEqual(['ref:memory:native-shared-room'])
+    await store.close()
     window.localStorage.clear()
   })
 
