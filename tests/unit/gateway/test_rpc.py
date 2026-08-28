@@ -1300,6 +1300,8 @@ async def test_handle_call_forbidden_audits_redacted_correlation(
     assert details["peer_id"] == "remote-peer"
     assert details["correlation_id"] == "trace-denied"
     assert details["reason"] == "permission_denied"
+    assert details["details_redaction_version"] == 2
+    assert len(details["details_sha256"]) == 64
     assert details["details"]["params"]["api_key"]["redacted"] is True
     assert details["details"]["params"]["safe"] == "value"
 

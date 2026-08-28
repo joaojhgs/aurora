@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
+import math
 import uuid
 from typing import Any
 
 from pydantic import BaseModel
+
+AUDIT_REDACTION_FORMAT_VERSION = 2
 
 _SECRET_KEY_PARTS = (
     "api_key",
@@ -128,15 +132,14 @@ def _redacted_copy(
 
 
 def audit_details_hash(value: Any) -> str:
-    """Hash redacted metadata so separate logs can be correlated safely."""
+    """Hash redacted metadata using the current canonical audit format."""
 
-    redacted = repr(redacted_copy(value)).encode("utf-8", errors="replace")
-    return hashlib.sha256(redacted).hexdigest()
+    return _canonical_json_sha256(redacted_copy(value))
 
 
 def _redact_value(key: str, value: Any, *, method_id: str | None) -> Any:
     if _is_secret_key(key):
-        digest = hashlib.sha256(repr(value).encode("utf-8", errors="replace")).hexdigest()
+        digest = _canonical_json_sha256(value)
         return {"redacted": True, "sha256": digest}
     if _is_audio_key(key):
         return _content_summary(value, kind="audio")
@@ -215,3 +218,44 @@ def _base64_decoded_length(value: str) -> int | None:
         return len(base64.b64decode(compact, validate=True))
     except Exception:
         return None
+
+
+def _canonical_json_sha256(value: Any) -> str:
+    encoded = json.dumps(
+        _canonical_json_value(value),
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _canonical_json_value(value: Any) -> Any:
+    """Normalize audit metadata into deterministic JSON-compatible values."""
+
+    if isinstance(value, BaseModel):
+        return _canonical_json_value(value.model_dump(mode="json"))
+    if isinstance(value, dict):
+        return {str(key): _canonical_json_value(nested) for key, nested in value.items()}
+    if isinstance(value, list | tuple):
+        return [_canonical_json_value(item) for item in value]
+    if isinstance(value, set | frozenset):
+        normalized = [_canonical_json_value(item) for item in value]
+        return sorted(
+            normalized,
+            key=lambda item: json.dumps(
+                item,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+    if isinstance(value, bytes | bytearray | memoryview):
+        return _binary_summary(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        return {"non_finite_float": str(value)}
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)

@@ -25,7 +25,7 @@ from app.shared.contracts.models.tts import (
     TTSSynthesizeRequest,
     TTSSynthesizeResponse,
 )
-from app.shared.mesh.tracing import redacted_copy
+from app.shared.mesh.tracing import audit_details_hash, redacted_copy
 
 
 class _SingleMethodRegistry:
@@ -63,6 +63,14 @@ def test_redacted_copy_summarizes_top_level_speech_content():
         "kind": "speech",
         "element_count": 2,
     }
+
+
+def test_audit_details_hash_is_canonical_for_dict_order_and_unicode():
+    left = {"message": "Aurora 🙂", "nested": {"second": 2, "first": 1}}
+    right = {"nested": {"first": 1, "second": 2}, "message": "Aurora 🙂"}
+
+    assert audit_details_hash(left) == audit_details_hash(right)
+    assert len(audit_details_hash(left)) == 64
 
 
 @pytest.mark.asyncio

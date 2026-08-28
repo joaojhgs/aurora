@@ -54,6 +54,7 @@ from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.speech_routing import compute_speech_route_requirement_digest_for_payload
 from app.shared.mesh.observability import canonical_mesh_rollout_reason
 from app.shared.mesh.tracing import (
+    AUDIT_REDACTION_FORMAT_VERSION,
     audit_details_hash,
     ensure_correlation_id,
     redacted_copy,
@@ -2188,6 +2189,7 @@ class RPCHandler:
             "reason": reason,
             "details": safe_details,
             "details_sha256": audit_details_hash(safe_details),
+            "details_redaction_version": AUDIT_REDACTION_FORMAT_VERSION,
         }
         with contextlib.suppress(Exception):
             await self._audit_fn(event, principal_id, audit_details)

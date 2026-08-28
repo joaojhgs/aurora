@@ -79,6 +79,10 @@ WebView client peers use the same public production Auth/Gateway permission boun
 - event delivery is subscription/correlation scoped; and
 - lane reports pass redacted secret scans.
 
+Mesh RPC audit hashes carry `details_redaction_version`. Version 2 hashes
+canonical redacted JSON; hashes written before that marker used a legacy
+representation and are intentionally not comparable across the upgrade.
+
 Cross-engine interop commands generate ignored local reports under `reports/webrtc-interop/<lane>/report.json`; use the latest CI artifacts or rerun the commands for current evidence. Each passing lane includes `selectedCandidatePair` captured from browser `RTCPeerConnection.getStats()` and separates the raw selected category (`host`, `srflx`, `prflx`, or `relay`) from lane validation. Hosted Chromium peer behavior is maintained by `pnpm test:hosted-peer:live`; hosted mesh-node behavior by `scripts/hosted_mesh_node_e2e.sh`; browser persistence and packaged Linux desktop behavior by `pnpm test:web-persistence` and `pnpm test:desktop-client:live`. Packaged macOS/Windows WebViews and physical mobile runtime behavior remain separate platform validation boundaries.
 
 ## Mesh and peer trust
