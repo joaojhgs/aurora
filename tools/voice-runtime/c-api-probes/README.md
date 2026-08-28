@@ -1,7 +1,7 @@
 # Sherpa C API Phase 4 Probes
 
 This directory contains a small, reproducible probe harness for sherpa-onnx
-v1.13.4 C API semantics. It intentionally does not vendor sherpa, onnxruntime,
+v1.13.5 C API semantics. It intentionally does not vendor sherpa, onnxruntime,
 or model files.
 
 The runner compiles `phase4_sherpa_probe.c` against an existing sherpa C API

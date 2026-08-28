@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 import urllib.request
 from collections.abc import Iterable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -254,8 +255,10 @@ def _extract_pinned_source_tar(archive: Path, dest: Path, *, mode: str) -> None:
     )
 
 
-def extract_source_archive(archive: Path, output_root: Path) -> Path:
-    source_root = output_root / "source" / "sherpa-onnx-1.13.5"
+def extract_source_archive(archive: Path, staging_root: Path) -> Path:
+    """Extract verified sources into a build-only root outside release output."""
+
+    source_root = staging_root / "sherpa-onnx-1.13.5"
     if source_root.exists():
         return source_root
     with tempfile.TemporaryDirectory(prefix="aurora-sherpa-src-") as tmp_name:
@@ -471,41 +474,51 @@ def main(argv: list[str] | None = None) -> int:
     source_archive = ensure_source_archive(
         args.artifact_root, source_artifact, args.download_source
     )
-    source_root = args.source_root
-    if source_root is None and source_archive is not None:
-        source_root = extract_source_archive(source_archive, args.output_root)
-
-    if source_root is not None and not source_root.is_dir():
-        raise ReleaseError(f"source root does not exist: {source_root}")
-
-    build_reports: list[dict[str, Any]] = []
-    if args.build:
-        if source_root is None:
-            raise ReleaseError(
-                "--build requires --source-root or a verified/extractable source archive"
+    with ExitStack() as stack:
+        source_root = args.source_root
+        source_root_is_temporary = False
+        if source_root is None and source_archive is not None:
+            args.output_root.parent.mkdir(parents=True, exist_ok=True)
+            staging_name = stack.enter_context(
+                tempfile.TemporaryDirectory(
+                    prefix=f".{args.output_root.name}-source-",
+                    dir=args.output_root.parent,
+                )
             )
-        build_reports = run_build(source_root)
+            source_root = extract_source_archive(source_archive, Path(staging_name))
+            source_root_is_temporary = True
 
-    copied: list[dict[str, Any]] = []
-    if not args.skip_stage:
-        if source_root is None:
-            raise ReleaseError(
-                "staging requires --source-root or a verified/extractable source archive"
-            )
-        copied = copy_assets(source_root, args.tts_artifact_root, args.output_root)
-        leaks = validate_release_tree(args.output_root)
-        if leaks:
-            raise ReleaseError("release tree contains forbidden payloads: " + ", ".join(leaks))
+        if source_root is not None and not source_root.is_dir():
+            raise ReleaseError(f"source root does not exist: {source_root}")
 
-    report = write_provenance(
-        args.output_root,
-        manifest,
-        source_artifact,
-        source_archive,
-        source_root,
-        copied,
-        build_reports,
-    )
+        build_reports: list[dict[str, Any]] = []
+        if args.build:
+            if source_root is None:
+                raise ReleaseError(
+                    "--build requires --source-root or a verified/extractable source archive"
+                )
+            build_reports = run_build(source_root)
+
+        copied: list[dict[str, Any]] = []
+        if not args.skip_stage:
+            if source_root is None:
+                raise ReleaseError(
+                    "staging requires --source-root or a verified/extractable source archive"
+                )
+            copied = copy_assets(source_root, args.tts_artifact_root, args.output_root)
+            leaks = validate_release_tree(args.output_root)
+            if leaks:
+                raise ReleaseError("release tree contains forbidden payloads: " + ", ".join(leaks))
+
+        report = write_provenance(
+            args.output_root,
+            manifest,
+            source_artifact,
+            source_archive,
+            None if source_root_is_temporary else source_root,
+            copied,
+            build_reports,
+        )
     print(
         json.dumps(
             {"ok": True, "report": str(report), "capabilities": summarize_tasks(copied)},

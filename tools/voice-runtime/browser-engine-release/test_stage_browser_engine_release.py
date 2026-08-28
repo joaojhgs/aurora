@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -137,3 +138,29 @@ def test_rejects_forbidden_payloads(tmp_path: Path) -> None:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     assert module.validate_release_tree(release) == ["assets/kws/tokens.txt"]
+
+
+def test_archive_sources_extract_outside_release_tree(tmp_path: Path, monkeypatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("stage_browser_engine_release_extract", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    archive = tmp_path / "source.tar.gz"
+    with tarfile.open(archive, "w:gz"):
+        pass
+    release = tmp_path / "release"
+    staging = tmp_path / ".release-source-test"
+
+    def fake_extract(_archive: Path, destination: Path, *, mode: str) -> None:
+        assert mode == "r:gz"
+        (destination / "sherpa-onnx-1.13.5").mkdir(parents=True)
+
+    monkeypatch.setattr(module, "_extract_pinned_source_tar", fake_extract)
+    extracted = module.extract_source_archive(archive, staging)
+
+    assert extracted.is_dir()
+    assert release not in extracted.parents

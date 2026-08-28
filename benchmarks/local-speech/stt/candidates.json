@@ -190,7 +190,7 @@
         "wasm",
         "web-worker"
       ],
-      "revision": "sherpa-onnx@v1.13.4; onnxruntime@1.27.0; offline-vad-asr-moonshine-v2-en-quantized@2026-02-27",
+      "revision": "sherpa-onnx@v1.13.5; onnxruntime@1.27.1; offline-vad-asr-moonshine-v2-en-quantized@2026-02-27",
       "role": "phase4-production-candidate-offline-vad-asr",
       "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models",
       "supported_languages": [

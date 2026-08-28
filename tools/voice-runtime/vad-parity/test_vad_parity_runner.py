@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,22 @@ SPEC.loader.exec_module(runner)
 
 
 class VadParityRunnerTests(unittest.TestCase):
+    def test_worker_constants_are_generated_from_python_policy(self) -> None:
+        expected_config = json.dumps(runner.BROWSER_CONFIG, separators=(",", ":"))
+
+        self.assertIn(f"const CONFIG = {expected_config};", runner.WORKER_JS)
+        self.assertIn(
+            f"const ACCEPT_P95_LIMIT_MS = {runner.ACCEPT_P95_LIMIT_MS};",
+            runner.WORKER_JS,
+        )
+        self.assertIn(
+            "const EXPECTED_SEGMENT = "
+            + json.dumps(runner.EXPECTED_SEGMENT, separators=(",", ":"))
+            + ";",
+            runner.WORKER_JS,
+        )
+        self.assertNotIn("__AURORA_", runner.WORKER_JS)
+
     def test_reads_pcm16_mono_16khz_and_uses_32768_scale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "fixture.wav"

@@ -20,9 +20,9 @@ from urllib.parse import unquote, urlparse
 
 ARTIFACT_ENV = "AURORA_VOICE_P4_ARTIFACT_ROOT"
 VAD_ASR_BUILD = Path("builds/wasm-vad-asr/bin")
-VAD_ASR_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr")
+VAD_ASR_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr")
 KWS_BUILD = Path("builds/wasm-kws/bin")
-KWS_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.4/wasm/kws")
+KWS_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.5/wasm/kws")
 MOONSHINE_TEST_WAV = Path(
     "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/test_wavs/0.wav"
 )
@@ -324,8 +324,8 @@ async function runProbe() {
   postProgress('import-runtime');
   importScripts(
     '/artifacts/builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.js',
-    '/artifacts/sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/sherpa-onnx-vad.js',
-    '/artifacts/sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/sherpa-onnx-asr.js'
+    '/artifacts/sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/sherpa-onnx-vad.js',
+    '/artifacts/sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/sherpa-onnx-asr.js'
   );
   postProgress('await-runtime');
   await ready;
@@ -534,7 +534,7 @@ async function runProbe() {
   postProgress('import-runtime');
   importScripts(
     '/artifacts/builds/wasm-kws/bin/sherpa-onnx-wasm-kws-main.js',
-    '/artifacts/sources/extracted/sherpa-onnx-1.13.4/wasm/kws/sherpa-onnx-kws.js'
+    '/artifacts/sources/extracted/sherpa-onnx-1.13.5/wasm/kws/sherpa-onnx-kws.js'
   );
   postProgress('await-runtime');
   await ready;

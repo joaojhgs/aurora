@@ -31,14 +31,14 @@ MODEL_ENV = "AURORA_SHERPA_ONNX_MODEL"
 WAV_ENV = "AURORA_SHERPA_ONNX_TEST_WAV"
 
 VAD_BUILD = Path("builds/wasm-vad-asr/bin")
-VAD_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr")
+VAD_SOURCE = Path("sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr")
 KWS_TEST_WAV = Path(
     "models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/0.wav"
 )
 VAD_MODEL_CANDIDATES = (
     Path("models/silero-vad-v4.0.onnx"),
-    Path("sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/assets/silero_vad.onnx"),
-    Path("sources/extracted/sherpa-onnx-1.13.4/wasm/vad/assets/silero_vad.onnx"),
+    Path("sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/assets/silero_vad.onnx"),
+    Path("sources/extracted/sherpa-onnx-1.13.5/wasm/vad/assets/silero_vad.onnx"),
 )
 REQUIRED_BROWSER_ARTIFACTS = (
     VAD_BUILD / "sherpa-onnx-wasm-main-vad-asr.js",
@@ -60,6 +60,7 @@ CONFIG = {
 }
 ACCEPT_P95_LIMIT_MS = 32.0
 SEGMENT_TOLERANCE_SAMPLES = 512
+SILENCE_SECONDS = 31
 EXPECTED_MODEL_SHA256 = "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28"
 EXPECTED_WAV_SHA256 = "6bc58a4efdf20daac252b6b1502632601a71efe0308f6757dc1eda34891a7e4f"
 EXPECTED_SEGMENT = {"start": 5728, "length": 93696}
@@ -103,7 +104,7 @@ globalThis.runAuroraVadParity = (timeoutMs = 120000) => new Promise((resolve) =>
 </script>
 """
 
-WORKER_JS = r"""
+WORKER_JS_TEMPLATE = r"""
 let lastDownloadBucket = -1;
 
 var Module = self.Module = {
@@ -131,20 +132,10 @@ var Module = self.Module = {
 };
 var Module = self.Module;
 
-const CONFIG = {
-  threshold: 0.25,
-  minSilenceDuration: 0.25,
-  minSpeechDuration: 0.25,
-  maxSpeechDuration: 10,
-  windowSize: 512,
-  sampleRate: 16000,
-  numThreads: 1,
-  provider: 'cpu',
-  bufferSizeInSeconds: 30,
-};
-const ACCEPT_P95_LIMIT_MS = 32;
-const EXPECTED_SEGMENT = { start: 5728, length: 93696 };
-const SILENCE_SECONDS = 31;
+const CONFIG = __AURORA_VAD_CONFIG__;
+const ACCEPT_P95_LIMIT_MS = __AURORA_ACCEPT_P95_LIMIT_MS__;
+const EXPECTED_SEGMENT = __AURORA_EXPECTED_SEGMENT__;
+const SILENCE_SECONDS = __AURORA_SILENCE_SECONDS__;
 
 function postProgress(label) {
   self.postMessage({ type: 'progress', label });
@@ -442,7 +433,7 @@ async function runProbe() {
   postProgress('import-runtime');
   importScripts(
     '/artifacts/builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.js',
-    '/artifacts/sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/sherpa-onnx-vad.js'
+    '/artifacts/sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/sherpa-onnx-vad.js'
   );
   postProgress('await-runtime');
   await ready;
@@ -505,6 +496,26 @@ self.onmessage = async (event) => {
   }
 };
 """
+
+BROWSER_CONFIG = {
+    "threshold": CONFIG["threshold"],
+    "minSilenceDuration": CONFIG["min_silence_seconds"],
+    "minSpeechDuration": CONFIG["min_speech_seconds"],
+    "maxSpeechDuration": CONFIG["max_speech_seconds"],
+    "windowSize": CONFIG["window_size"],
+    "sampleRate": CONFIG["sample_rate"],
+    "numThreads": CONFIG["channels"],
+    "provider": CONFIG["provider"],
+    "bufferSizeInSeconds": CONFIG["buffer_seconds"],
+}
+WORKER_JS = (
+    WORKER_JS_TEMPLATE.replace(
+        "__AURORA_VAD_CONFIG__", json.dumps(BROWSER_CONFIG, separators=(",", ":"))
+    )
+    .replace("__AURORA_ACCEPT_P95_LIMIT_MS__", str(ACCEPT_P95_LIMIT_MS))
+    .replace("__AURORA_EXPECTED_SEGMENT__", json.dumps(EXPECTED_SEGMENT, separators=(",", ":")))
+    .replace("__AURORA_SILENCE_SECONDS__", str(SILENCE_SECONDS))
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -610,7 +621,7 @@ def find_model_path(artifact_root: Path) -> Path:
         if path.is_file():
             return candidate
     matches = sorted(
-        artifact_root.glob("sources/extracted/sherpa-onnx-1.13.4*/wasm/vad*/assets/silero_vad.onnx")
+        artifact_root.glob("sources/extracted/sherpa-onnx-1.13.5*/wasm/vad*/assets/silero_vad.onnx")
     )
     if matches:
         return matches[0].relative_to(artifact_root)

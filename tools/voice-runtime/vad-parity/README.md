@@ -1,6 +1,6 @@
 # VAD Parity Harness
 
-This tool compares the pinned sherpa-onnx v1.13.4 Silero VAD behavior between:
+This tool compares the pinned sherpa-onnx v1.13.5 Silero VAD behavior between:
 
 - native Rust through `aurora-voice-sherpa-sys`
 - Chromium worker + `SharedArrayBuffer` + cross-origin isolation
@@ -22,14 +22,14 @@ Required browser artifacts under that root:
 - `builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.js`
 - `builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.wasm`
 - `builds/wasm-vad-asr/bin/sherpa-onnx-wasm-main-vad-asr.data`
-- `sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/sherpa-onnx-vad.js`
+- `sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/sherpa-onnx-vad.js`
 - `models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/0.wav`
 
 The native run also needs the pinned Silero model file and sherpa C API library. The runner searches the artifact root for:
 
 - `models/silero-vad-v4.0.onnx`
-- `sources/extracted/sherpa-onnx-1.13.4/wasm/vad-asr/assets/silero_vad.onnx`
-- `sources/extracted/sherpa-onnx-1.13.4/wasm/vad/assets/silero_vad.onnx`
+- `sources/extracted/sherpa-onnx-1.13.5/wasm/vad-asr/assets/silero_vad.onnx`
+- `sources/extracted/sherpa-onnx-1.13.5/wasm/vad/assets/silero_vad.onnx`
 - `libsherpa-onnx-c-api.{so,dylib,a}` or `sherpa-onnx-c-api.lib`
 
 The runner verifies exact pinned input hashes before execution:
@@ -37,12 +37,14 @@ The runner verifies exact pinned input hashes before execution:
 - Silero model: `a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28`
 - KWS `test_wavs/0.wav`: `6bc58a4efdf20daac252b6b1502632601a71efe0308f6757dc1eda34891a7e4f`
 
-Override when needed:
+Override when needed. Every override must resolve inside
+`AURORA_VOICE_P4_ARTIFACT_ROOT`; absolute paths outside that root and symlink
+escapes are rejected:
 
 ```bash
-export AURORA_SHERPA_ONNX_MODEL=/path/to/silero_vad.onnx
-export AURORA_SHERPA_ONNX_LIB_DIR=/path/to/sherpa/lib
-export AURORA_SHERPA_ONNX_TEST_WAV=/path/to/test_wavs/0.wav
+export AURORA_SHERPA_ONNX_MODEL="$AURORA_VOICE_P4_ARTIFACT_ROOT/models/silero-vad-v4.0.onnx"
+export AURORA_SHERPA_ONNX_LIB_DIR="$AURORA_VOICE_P4_ARTIFACT_ROOT/builds/linux-x86_64/install/lib"
+export AURORA_SHERPA_ONNX_TEST_WAV="$AURORA_VOICE_P4_ARTIFACT_ROOT/models/extracted/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/test_wavs/0.wav"
 ```
 
 ## Run

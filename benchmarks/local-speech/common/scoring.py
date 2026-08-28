@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from math import ceil
 
 _WORD_RE = re.compile(r"[\w']+", re.UNICODE)
 
@@ -97,5 +98,5 @@ def percentile(values: list[float], pct: float) -> float | None:
     if pct >= 100:
         return max(values)
     ordered = sorted(values)
-    rank = int((pct / 100.0) * (len(ordered) - 1))
-    return ordered[rank]
+    rank = ceil((pct / 100.0) * len(ordered)) - 1
+    return ordered[max(0, min(rank, len(ordered) - 1))]

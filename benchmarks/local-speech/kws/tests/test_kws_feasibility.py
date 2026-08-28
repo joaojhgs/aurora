@@ -47,10 +47,12 @@ class KwsFeasibilityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "No official sherpa KWS Portuguese pack"):
             kws_benchmark.build_phrase_profiles("pt")
 
-    def test_lifecycle_stop_probe_has_strict_budget(self) -> None:
-        result = kws_benchmark.lifecycle_stop_probe(iterations=3)
-        self.assertLessEqual(result["max_ms"], result["target_ms"])
-        self.assertTrue(result["passed"])
+    def test_synthetic_lifecycle_probe_cannot_claim_engine_evidence(self) -> None:
+        result = kws_benchmark.synthetic_lifecycle_scaffold_probe(iterations=3)
+        self.assertEqual(result["evidence_kind"], "synthetic_scaffold")
+        self.assertFalse(result["release_gate_eligible"])
+        self.assertFalse(result["engine_stop_measured"])
+        self.assertNotIn("passed", result)
 
     def test_sherpa_model_file_selection_prefers_quantized_suffix(self) -> None:
         names = [
