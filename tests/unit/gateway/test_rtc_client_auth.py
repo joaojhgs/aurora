@@ -2456,16 +2456,16 @@ async def test_initial_offer_failure_discards_pc_and_schedules_retry(mock_deps):
         "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
         return_value=mock_pc,
     ):
-            await client._on_presence(
-                json.dumps(
-                    {
-                        "type": "presence",
-                        "app_id": "test-app",
-                        "room": "test-room",
-                        "peer_id": peer,
-                    }
-                ).encode()
-            )
+        await client._on_presence(
+            json.dumps(
+                {
+                    "type": "presence",
+                    "app_id": "test-app",
+                    "room": "test-room",
+                    "peer_id": peer,
+                }
+            ).encode()
+        )
 
     assert peer not in client._pcs
     mock_pc.close.assert_awaited_once()
@@ -2666,11 +2666,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     candidate = SimpleNamespace(sdpMid=None, sdpMLineIndex=None)
     simultaneous_offer = aead_seal(
         client._keys.k_sig,
-            {
-                "type": "offer",
-                "app_id": "test-app",
-                "room": "test-room",
-                "from": peer,
+        {
+            "type": "offer",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:losing-remote-offer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2679,11 +2679,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     )
     candidate_payload = aead_seal(
         client._keys.k_sig,
-            {
-                "type": "candidate",
-                "app_id": "test-app",
-                "room": "test-room",
-                "from": peer,
+        {
+            "type": "candidate",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
             "to": client._peer_id,
             "candidate": "1 1 udp 1 192.0.2.1 12345 typ host",
             "sdp_mid": "0",
@@ -2692,11 +2692,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     )
     answer_payload = aead_seal(
         client._keys.k_sig,
-            {
-                "type": "answer",
-                "app_id": "test-app",
-                "room": "test-room",
-                "from": peer,
+        {
+            "type": "answer",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2749,11 +2749,11 @@ async def test_bad_queued_candidate_does_not_abort_valid_answer(mock_deps):
     client._cancel_negotiation_watchdog = MagicMock()
     answer_payload = aead_seal(
         client._keys.k_sig,
-            {
-                "type": "answer",
-                "app_id": "test-app",
-                "room": "test-room",
-                "from": peer,
+        {
+            "type": "answer",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2843,11 +2843,11 @@ async def test_departed_presence_stops_reconnect_to_stale_signaling_uuid(mock_de
 
     await client._on_presence(
         json.dumps(
-                {
-                    "type": "presence_departed",
-                    "app_id": "test-app",
-                    "room": "test-room",
-                    "peer_id": "dead-signaling-session",
+            {
+                "type": "presence_departed",
+                "app_id": "test-app",
+                "room": "test-room",
+                "peer_id": "dead-signaling-session",
             }
         ).encode()
     )

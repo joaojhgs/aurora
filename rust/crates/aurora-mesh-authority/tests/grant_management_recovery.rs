@@ -79,7 +79,10 @@ fn existing_grant() -> LocalPeerGrantV1 {
 #[tokio::test]
 async fn failed_replacement_restores_the_previous_live_grant() {
     let mut inner = MemoryPeerGrantRepository::new();
-    inner.upsert_grant(existing_grant()).await.unwrap();
+    inner
+        .upsert_grant(existing_grant())
+        .await
+        .expect("existing grant should seed the in-memory repository");
     let repository = FailNextUpsertRepository {
         inner,
         fail_next_upsert: true,
@@ -93,7 +96,7 @@ async fn failed_replacement_restores_the_previous_live_grant() {
     let error = manager
         .replace_grant(&selector(), &replacement, 2_000)
         .await
-        .unwrap_err();
+        .expect_err("the injected repository failure should reject replacement");
 
     assert_eq!(
         error.code,
@@ -103,7 +106,7 @@ async fn failed_replacement_restores_the_previous_live_grant() {
         .repository()
         .list_recipient_grants(&selector(), 2_000)
         .await
-        .unwrap();
+        .expect("restored grant should remain readable");
     assert_eq!(live.len(), 1);
     assert_eq!(live[0].grant_id, "grant-1");
     assert_eq!(live[0].allowed_method_ids, ["Tooling.ListTools"]);
