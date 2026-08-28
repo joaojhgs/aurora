@@ -501,6 +501,177 @@ describe('desktop-thin live connection profiles', () => {
     await runtime.dispose()
   })
 
+  it('deletes a rotated v1 room secret only after the replacement document is saved', async () => {
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const events: string[] = []
+    tauriCoreMock.invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { ref?: string } | undefined
+      if (command === 'aurora_thin_room_secret_set') {
+        events.push(`set:${request?.ref}`)
+        return { ok: true }
+      }
+      if (command === 'aurora_thin_room_secret_delete') {
+        events.push(`delete:${request?.ref}`)
+        return { ok: true }
+      }
+      throw new Error(`unexpected invoke ${command}`)
+    })
+    let saved = document
+    const store = {
+      evidence: 'test v1 profile store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next: AuroraThinProfileDocument) => {
+        events.push('save')
+        saved = next
+      }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      thinProfileStore: store,
+      thinProfileDocument: document,
+      consumeThinInvite: false,
+    })
+    const nextRef = 'ref:memory:rotated-office-room'
+
+    await runtime.thinProfileController!.saveProfile({
+      ...profile,
+      webrtcProfile: { ...profile.webrtcProfile!, roomSecretRef: nextRef },
+    }, { roomSecretRef: nextRef, roomSecret: 'replacement-secret' })
+
+    expect(events).toEqual([
+      `set:${nextRef}`,
+      'save',
+      'delete:ref:memory:office-room',
+    ])
+    expect(saved.profiles[0]?.webrtcProfile?.roomSecretRef).toBe(nextRef)
+    await runtime.dispose()
+  })
+
+  it('retains shared room secrets and retries cleanup after a committed save', async () => {
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const oldRef = 'ref:memory:shared-office-room'
+    const firstProfile = {
+      ...profile,
+      webrtcProfile: { ...profile.webrtcProfile!, roomSecretRef: oldRef },
+    }
+    const secondProfile = {
+      ...firstProfile,
+      id: 'backup',
+      label: 'Backup',
+    }
+    let saved: AuroraThinProfileDocument = {
+      version: 1,
+      activeProfileId: firstProfile.id,
+      profiles: [firstProfile, secondProfile],
+    }
+    let failDelete = false
+    const deleted: string[] = []
+    tauriCoreMock.invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { ref?: string } | undefined
+      if (command === 'aurora_thin_room_secret_set') return { ok: true }
+      if (command === 'aurora_thin_room_secret_delete') {
+        deleted.push(String(request?.ref))
+        if (failDelete) {
+          failDelete = false
+          return { ok: false }
+        }
+        return { ok: true }
+      }
+      throw new Error(`unexpected invoke ${command}`)
+    })
+    const store = {
+      evidence: 'test v1 profile store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next: AuroraThinProfileDocument) => { saved = next }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      thinProfileStore: store,
+      thinProfileDocument: saved,
+      consumeThinInvite: false,
+    })
+    const firstNewRef = 'ref:memory:first-new-room'
+    await runtime.thinProfileController!.saveProfile({
+      ...firstProfile,
+      webrtcProfile: { ...firstProfile.webrtcProfile!, roomSecretRef: firstNewRef },
+    }, { roomSecretRef: firstNewRef, roomSecret: 'first-secret' })
+    expect(deleted).toEqual([])
+
+    const secondNewRef = 'ref:memory:second-new-room'
+    failDelete = true
+    await expect(runtime.thinProfileController!.saveProfile({
+      ...secondProfile,
+      webrtcProfile: { ...secondProfile.webrtcProfile!, roomSecretRef: secondNewRef },
+    }, { roomSecretRef: secondNewRef, roomSecret: 'second-secret' })).rejects.toThrow(
+      'room-secret deletion failed',
+    )
+    expect(saved.profiles.find((candidate) => candidate.id === 'backup')?.webrtcProfile?.roomSecretRef).toBe(secondNewRef)
+    expect(runtime.thinProfileController!.document).toEqual(saved)
+
+    await runtime.thinProfileController!.saveProfile({
+      ...secondProfile,
+      webrtcProfile: { ...secondProfile.webrtcProfile!, roomSecretRef: secondNewRef },
+    }, { roomSecretRef: secondNewRef, roomSecret: 'second-secret' })
+    expect(deleted).toEqual([oldRef, oldRef])
+    await runtime.dispose()
+  })
+
+  it('cleans a rotated room secret from the v2 runtime profile controller', async () => {
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    const deleted: string[] = []
+    tauriCoreMock.invoke.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { ref?: string } | undefined
+      if (command === 'aurora_thin_room_secret_set') return { ok: true }
+      if (command === 'aurora_thin_room_secret_delete') {
+        deleted.push(String(request?.ref))
+        return { ok: true }
+      }
+      throw new Error(`unexpected invoke ${command}`)
+    })
+    const initialRuntimeDocument: AuroraRuntimeProfileDocument = {
+      ...runtimeDocument,
+      profiles: runtimeDocument.profiles.map((candidate) => ({
+        ...candidate,
+        localNode: {
+          ...candidate.localNode,
+          meshMembership: candidate.localNode.meshMembership
+            ? {
+                ...candidate.localNode.meshMembership,
+                webrtcProfile: {
+                  ...candidate.localNode.meshMembership.webrtcProfile,
+                  roomSecretRef: 'ref:memory:membership-room',
+                },
+              }
+            : undefined,
+        },
+      })),
+    }
+    let saved = initialRuntimeDocument
+    const store: AuroraRuntimeProfileStore = {
+      kind: 'runtime-profile',
+      evidence: 'test runtime store',
+      load: vi.fn(async () => saved),
+      save: vi.fn(async (next) => { saved = next }),
+    }
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store,
+      runtimeProfileDocument: initialRuntimeDocument,
+      consumeThinInvite: false,
+    })
+    const nextRef = 'ref:memory:runtime-rotated-room'
+
+    await runtime.thinProfileController!.saveProfile({
+      ...profile,
+      id: 'runtime-office',
+      webrtcProfile: { ...profile.webrtcProfile!, roomSecretRef: nextRef },
+    }, { roomSecretRef: nextRef, roomSecret: 'runtime-secret' })
+
+    expect(deleted).toEqual([
+      'ref:memory:office-room',
+      'ref:memory:membership-room',
+    ])
+    expect(saved.profiles[0]?.homeConnection?.webrtcProfile?.roomSecretRef).toBe(nextRef)
+    await runtime.dispose()
+  })
+
   it('requires explicit package capability proof before accepting python-full runtime profiles', async () => {
     const pythonFullDocument: AuroraRuntimeProfileDocument = {
       ...runtimeDocument,

@@ -1887,11 +1887,55 @@ export function createMemoryRuntimeProfileStore(
   };
 }
 
+function thinDocumentRoomSecretRefs(
+  document: AuroraThinProfileDocument,
+): Set<string> {
+  return new Set(
+    document.profiles.flatMap((profile) =>
+      profile.webrtcProfile?.roomSecretRef
+        ? [profile.webrtcProfile.roomSecretRef]
+        : []
+    ),
+  );
+}
+
+function runtimeDocumentRoomSecretRefs(
+  document: AuroraRuntimeProfileDocument,
+): Set<string> {
+  return new Set(
+    document.profiles.flatMap((profile) => {
+      const refs = [
+        profile.homeConnection?.webrtcProfile?.roomSecretRef,
+        profile.localNode.meshMembership?.webrtcProfile.roomSecretRef,
+      ]
+      return refs.filter((ref): ref is string => Boolean(ref))
+    }),
+  );
+}
+
+function createStaleRoomSecretCleanup(): (
+  previous: ReadonlySet<string>,
+  next: ReadonlySet<string>,
+) => Promise<void> {
+  const pending = new Set<string>();
+  return async (previous, next) => {
+    for (const ref of previous) {
+      if (!next.has(ref)) pending.add(ref);
+    }
+    for (const ref of next) pending.delete(ref);
+    for (const ref of [...pending]) {
+      await deleteTauriRoomSecret(ref);
+      pending.delete(ref);
+    }
+  };
+}
+
 function createThinProfileController(
   store: AuroraThinProfileStore,
   document: AuroraThinProfileDocument,
 ): AuroraThinProfileController {
   let currentDocument = document;
+  const cleanupStaleRoomSecrets = createStaleRoomSecretCleanup();
   const controller: AuroraThinProfileController = {
     evidence: store.evidence,
     document: currentDocument,
@@ -1918,9 +1962,14 @@ function createThinProfileController(
         activeProfileId: sanitized.id,
         profiles: [...profiles, sanitized],
       };
+      const previousRoomSecretRefs = thinDocumentRoomSecretRefs(currentDocument);
       await store.save(next);
       currentDocument = next;
       controller.document = currentDocument;
+      await cleanupStaleRoomSecrets(
+        previousRoomSecretRefs,
+        thinDocumentRoomSecretRefs(next),
+      );
       return currentDocument;
     },
     selectProfile: async (profileId) => {
@@ -1950,6 +1999,7 @@ function createRuntimeBackedThinProfileController(
 ): AuroraThinProfileController {
   let currentRuntimeDocument = runtimeDocument;
   let currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+  const cleanupStaleRoomSecrets = createStaleRoomSecretCleanup();
   const controller: AuroraThinProfileController = {
     evidence: store.evidence,
     document: currentThinDocument,
@@ -2002,11 +2052,18 @@ function createRuntimeBackedThinProfileController(
         activeProfileId: runtimeProfile.id,
         profiles: [...profiles, runtimeProfile],
       };
+      const previousRoomSecretRefs = runtimeDocumentRoomSecretRefs(
+        currentRuntimeDocument,
+      );
       await store.save(next);
       currentRuntimeDocument = next;
       currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
       controller.runtimeDocument = currentRuntimeDocument;
       controller.document = currentThinDocument;
+      await cleanupStaleRoomSecrets(
+        previousRoomSecretRefs,
+        runtimeDocumentRoomSecretRefs(next),
+      );
       return currentThinDocument;
     },
     selectProfile: async (profileId) => {

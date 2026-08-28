@@ -1194,6 +1194,45 @@ type SharedSidecarState = Arc<Mutex<SidecarState>>;
 type SharedSubscriptionState = Arc<Mutex<SubscriptionState>>;
 type SharedGatewayClients = Arc<GatewayClients>;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ThinProfileRoute {
+    Local,
+    Thin { gateway: Option<String> },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ThinProfileState {
+    initialized: bool,
+    document: Option<String>,
+    route: ThinProfileRoute,
+}
+
+impl Default for ThinProfileState {
+    fn default() -> Self {
+        Self {
+            initialized: false,
+            document: None,
+            route: ThinProfileRoute::Local,
+        }
+    }
+}
+
+impl ThinProfileState {
+    fn from_stored_document(document: Option<String>) -> Result<Self, AuroraCommandError> {
+        let route = match document.as_deref() {
+            Some(value) => thin_profile_route_from_document(value)?,
+            None => ThinProfileRoute::Local,
+        };
+        Ok(Self {
+            initialized: true,
+            document,
+            route,
+        })
+    }
+}
+
+type SharedThinProfileState = Arc<Mutex<ThinProfileState>>;
+
 struct GatewayClients {
     command: reqwest::Client,
     event_stream: reqwest::Client,
@@ -1300,6 +1339,12 @@ enum AuroraCommandError {
     UnsupportedFeature(String),
     #[error("Desktop thin mode is connected to a remote Gateway and cannot start a local sidecar")]
     ThinModeSidecarDisabled,
+    #[error("Aurora connection profile state is not initialized")]
+    ThinProfileStateUnavailable,
+    #[error("Stored Aurora connection profile is invalid")]
+    ThinProfileInvalid,
+    #[error("The selected Aurora connection does not provide an HTTP Gateway")]
+    ThinProfileHttpUnavailable,
     #[error("Local sidecar supervision is only allowed for loopback Gateway origins: {0}")]
     SidecarLoopbackRequired(String),
     #[error("Sidecar command token is invalid or missing")]
@@ -1308,6 +1353,8 @@ enum AuroraCommandError {
     SidecarProcess(String),
     #[error("Sidecar state lock failed")]
     SidecarState,
+    #[error("Connection profile state lock failed")]
+    ProfileState,
     #[error("Secure storage key is invalid or outside the Aurora credential namespace: {0}")]
     SecureStorageKeyInvalid(String),
     #[error("Peer reconnect credential is expired")]
@@ -1343,18 +1390,20 @@ impl Serialize for AuroraCommandError {
 async fn aurora_request(
     request: AuroraRequest,
     state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
-    aurora_command(request, state, gateway_clients).await
+    aurora_command(request, state, profile_state, gateway_clients).await
 }
 
 #[tauri::command]
 async fn aurora_command(
     request: AuroraRequest,
     state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
-    if !request_has_valid_sidecar_token(&request, &state)? {
+    if !request_has_valid_sidecar_token(&request, &state, profile_state.inner())? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
     }
     if request.method == NATIVE_MANIFEST_METHOD {
@@ -1364,7 +1413,7 @@ async fn aurora_command(
         ));
     }
 
-    let gateway_url = gateway_url()?;
+    let gateway_url = gateway_url(profile_state.inner())?;
     let url = gateway_request_url(&gateway_url, request.path.as_deref(), &request.method)?;
     let method = request
         .http_method
@@ -1411,14 +1460,15 @@ async fn aurora_subscribe(
     app: AppHandle,
     window: WebviewWindow,
     sidecar_state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     subscription_state: State<'_, SharedSubscriptionState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraSubscribeResponse, AuroraCommandError> {
-    if !subscribe_has_valid_sidecar_token(&request, &sidecar_state)? {
+    if !subscribe_has_valid_sidecar_token(&request, &sidecar_state, profile_state.inner())? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
     }
 
-    let gateway = gateway_url()?;
+    let gateway = gateway_url(profile_state.inner())?;
     let url = event_stream_url(&gateway, &request)?;
     let subscription_id = {
         let subscriptions = subscription_state
@@ -1481,7 +1531,7 @@ async fn aurora_subscribe(
         event_name,
         stream_url: "/api/events/stream".to_string(),
         transport: "tauri-local".to_string(),
-        mode: if is_thin_mode() {
+        mode: if is_thin_mode(profile_state.inner())? {
             "desktop-thin-gateway-proxy".to_string()
         } else {
             "desktop-local-sidecar-gateway-proxy".to_string()
@@ -1544,11 +1594,12 @@ async fn aurora_unsubscribe(
 async fn aurora_sidecar_start(
     app: AppHandle,
     state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
     command_token: Option<SidecarCommandToken>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
-    let gateway = gateway_url()?;
-    if is_thin_mode() {
+    let gateway = gateway_url(profile_state.inner())?;
+    if is_thin_mode(profile_state.inner())? {
         return Err(AuroraCommandError::ThinModeSidecarDisabled);
     }
     if !is_loopback_http_origin(&gateway) {
@@ -1568,7 +1619,7 @@ async fn aurora_sidecar_start(
         }
     }
 
-    aurora_sidecar_status(state, gateway_clients).await
+    aurora_sidecar_status(state, profile_state, gateway_clients).await
 }
 
 #[tauri::command]
@@ -1584,6 +1635,7 @@ async fn aurora_sidecar_session(
 #[tauri::command]
 async fn aurora_sidecar_stop(
     state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
     command_token: Option<SidecarCommandToken>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
@@ -1594,15 +1646,16 @@ async fn aurora_sidecar_stop(
         stop_sidecar(&mut sidecar)?;
     }
 
-    aurora_sidecar_status(state, gateway_clients).await
+    aurora_sidecar_status(state, profile_state, gateway_clients).await
 }
 
 #[tauri::command]
 async fn aurora_sidecar_status(
     state: State<'_, SharedSidecarState>,
+    profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<SidecarStatus, AuroraCommandError> {
-    let gateway = gateway_url()?;
+    let gateway = gateway_url(profile_state.inner())?;
     let (running, pid, last_error, started_at_ms, token_issued) = {
         let mut sidecar = state.lock().map_err(|_| AuroraCommandError::SidecarState)?;
         (
@@ -1662,7 +1715,7 @@ async fn aurora_sidecar_status(
 
     Ok(SidecarStatus {
         running,
-        mode: if is_thin_mode() {
+        mode: if is_thin_mode(profile_state.inner())? {
             "thin".to_string()
         } else if running {
             "sidecar".to_string()
@@ -3678,8 +3731,13 @@ async fn aurora_thin_peer_reconnect_prove(
 }
 
 #[tauri::command]
-async fn aurora_remote_origin_policy() -> Result<RemoteOriginPolicy, AuroraCommandError> {
-    let remote_gateway = env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").ok();
+async fn aurora_remote_origin_policy(
+    profile_state: State<'_, SharedThinProfileState>,
+) -> Result<RemoteOriginPolicy, AuroraCommandError> {
+    let remote_gateway = match thin_profile_route_snapshot(profile_state.inner())? {
+        ThinProfileRoute::Thin { gateway } => gateway.or_else(dev_remote_gateway_bootstrap_url),
+        ThinProfileRoute::Local => dev_remote_gateway_bootstrap_url(),
+    };
     let remote_gateway_url = remote_gateway
         .as_deref()
         .and_then(|raw| Url::parse(raw).ok());
@@ -3739,18 +3797,23 @@ async fn aurora_log_tail(
 #[tauri::command]
 async fn aurora_thin_profile_get(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    profile_state: State<'_, SharedThinProfileState>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
-        return run_android_plugin_command(native, "thinProfileGet", json!({}));
+        let response = run_android_plugin_command(native, "thinProfileGet", json!({}))?;
+        refresh_thin_profile_state_from_payload(profile_state.inner(), &response)?;
+        return Ok(response);
     }
     #[cfg(target_os = "ios")]
     {
-        return run_ios_plugin_command(native, "thinProfileGet", json!({}));
+        let response = run_ios_plugin_command(native, "thinProfileGet", json!({}))?;
+        refresh_thin_profile_state_from_payload(profile_state.inner(), &response)?;
+        return Ok(response);
     }
     #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = native;
+        let _ = (native, profile_state);
         return Err(AuroraCommandError::UnsupportedFeature(
             "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
                 .to_string(),
@@ -3760,12 +3823,11 @@ async fn aurora_thin_profile_get(
     #[cfg(desktop)]
     {
         let _ = native;
-        let entry = thin_profile_storage_entry()?;
-        let value = match entry.get_password() {
-            Ok(value) => Some(value),
-            Err(keyring::Error::NoEntry) => None,
-            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
-        };
+        let value = profile_state
+            .lock()
+            .map_err(|_| AuroraCommandError::ProfileState)?
+            .document
+            .clone();
         Ok(json!({
             "key": DESKTOP_THIN_PROFILES_KEY,
             "value": value,
@@ -3780,18 +3842,25 @@ async fn aurora_thin_profile_get(
 async fn aurora_thin_profile_set(
     value: String,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    profile_state: State<'_, SharedThinProfileState>,
 ) -> Result<Value, AuroraCommandError> {
+    let next_state = ThinProfileState::from_stored_document(Some(value.clone()))?;
     #[cfg(target_os = "android")]
     {
-        return run_android_plugin_command(native, "thinProfileSet", json!({ "value": value }));
+        let response =
+            run_android_plugin_command(native, "thinProfileSet", json!({ "value": value }))?;
+        store_thin_profile_state(profile_state.inner(), next_state)?;
+        return Ok(response);
     }
     #[cfg(target_os = "ios")]
     {
-        return run_ios_plugin_command(native, "thinProfileSet", json!({ "value": value }));
+        let response = run_ios_plugin_command(native, "thinProfileSet", json!({ "value": value }))?;
+        store_thin_profile_state(profile_state.inner(), next_state)?;
+        return Ok(response);
     }
     #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = (value, native);
+        let _ = (value, native, profile_state, next_state);
         return Err(AuroraCommandError::UnsupportedFeature(
             "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
                 .to_string(),
@@ -3801,10 +3870,14 @@ async fn aurora_thin_profile_set(
     #[cfg(desktop)]
     {
         let _ = native;
-        let entry = thin_profile_storage_entry()?;
-        entry
-            .set_password(&value)
-            .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?;
+        run_secure_storage_blocking(move || {
+            let entry = thin_profile_storage_entry()?;
+            entry
+                .set_password(&value)
+                .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+        })
+        .await?;
+        store_thin_profile_state(profile_state.inner(), next_state)?;
         Ok(json!({
             "key": DESKTOP_THIN_PROFILES_KEY,
             "ok": true,
@@ -3813,6 +3886,60 @@ async fn aurora_thin_profile_set(
             "secretsRedacted": true
         }))
     }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn refresh_thin_profile_state_from_payload(
+    profile_state: &SharedThinProfileState,
+    response: &Value,
+) -> Result<(), AuroraCommandError> {
+    let document = match response.get("value") {
+        Some(Value::String(value)) => Some(value.clone()),
+        Some(Value::Null) => None,
+        _ => return Err(AuroraCommandError::InvalidGatewayResponse),
+    };
+    replace_thin_profile_state(profile_state, document)
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn replace_thin_profile_state(
+    profile_state: &SharedThinProfileState,
+    document: Option<String>,
+) -> Result<(), AuroraCommandError> {
+    let next_state = ThinProfileState::from_stored_document(document)?;
+    store_thin_profile_state(profile_state, next_state)
+}
+
+fn store_thin_profile_state(
+    profile_state: &SharedThinProfileState,
+    next_state: ThinProfileState,
+) -> Result<(), AuroraCommandError> {
+    let mut state = profile_state
+        .lock()
+        .map_err(|_| AuroraCommandError::ProfileState)?;
+    *state = next_state;
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn read_desktop_thin_profile_document() -> Result<Option<String>, AuroraCommandError> {
+    let entry = thin_profile_storage_entry()?;
+    match entry.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+    }
+}
+
+async fn run_secure_storage_blocking<T>(
+    operation: impl FnOnce() -> Result<T, AuroraCommandError> + Send + 'static,
+) -> Result<T, AuroraCommandError>
+where
+    T: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))?
 }
 
 #[tauri::command]
@@ -4897,10 +5024,14 @@ impl AuroraCommandError {
             Self::NativeSpeechPackSelectionInvalid => "validation_error",
             Self::UnsupportedFeature(_) => "unsupported_feature",
             Self::ThinModeSidecarDisabled => "unsupported_feature",
+            Self::ThinProfileStateUnavailable => "unavailable_service",
+            Self::ThinProfileInvalid => "validation_error",
+            Self::ThinProfileHttpUnavailable => "unsupported_feature",
             Self::SidecarLoopbackRequired(_) => "validation_error",
             Self::SidecarTokenInvalid => "permission",
             Self::SidecarProcess(_) => "unavailable_service",
             Self::SidecarState => "transport_loss",
+            Self::ProfileState => "transport_loss",
             Self::SecureStorageKeyInvalid(_) => "validation_error",
             Self::PeerCredentialExpired => "credential_expired",
             Self::SecureStorage(_) => "secure_storage_error",
@@ -7764,17 +7895,36 @@ fn current_unix_ms() -> u64 {
         .as_millis() as u64
 }
 
-fn gateway_url() -> Result<Url, AuroraCommandError> {
-    let raw = resolved_remote_gateway_from_profile()
-        .or_else(dev_remote_gateway_bootstrap_url)
-        .or_else(|| env::var("AURORA_GATEWAY_URL").ok())
-        .unwrap_or_else(|| DEFAULT_GATEWAY_URL.to_string());
+fn gateway_url(profile_state: &SharedThinProfileState) -> Result<Url, AuroraCommandError> {
+    let route = thin_profile_route_snapshot(profile_state)?;
+    let raw = match route {
+        ThinProfileRoute::Thin { gateway } => gateway
+            .or_else(dev_remote_gateway_bootstrap_url)
+            .ok_or(AuroraCommandError::ThinProfileHttpUnavailable)?,
+        ThinProfileRoute::Local => dev_remote_gateway_bootstrap_url()
+            .or_else(|| env::var("AURORA_GATEWAY_URL").ok())
+            .unwrap_or_else(|| DEFAULT_GATEWAY_URL.to_string()),
+    };
+    validated_gateway_url(&raw)
+}
+
+fn local_gateway_url() -> Result<Url, AuroraCommandError> {
+    let raw = env::var("AURORA_GATEWAY_URL").unwrap_or_else(|_| DEFAULT_GATEWAY_URL.to_string());
+    let url = validated_gateway_url(&raw)?;
+    if is_loopback_http_origin(&url) {
+        Ok(url)
+    } else {
+        Err(AuroraCommandError::SidecarLoopbackRequired(raw))
+    }
+}
+
+fn validated_gateway_url(raw: &str) -> Result<Url, AuroraCommandError> {
     let url =
-        Url::parse(&raw).map_err(|_| AuroraCommandError::InvalidGatewayOrigin(raw.clone()))?;
+        Url::parse(raw).map_err(|_| AuroraCommandError::InvalidGatewayOrigin(raw.to_string()))?;
     if is_loopback_http_origin(&url) || remote_gateway_allowed_for(&url) {
         Ok(url)
     } else {
-        Err(AuroraCommandError::InvalidGatewayOrigin(raw))
+        Err(AuroraCommandError::InvalidGatewayOrigin(raw.to_string()))
     }
 }
 
@@ -7837,8 +7987,11 @@ fn is_secure_remote_http_or_ws_origin(url: &Url) -> bool {
     matches!(url.scheme(), "https" | "wss") && !is_loopback_host(url)
 }
 
-fn is_thin_mode() -> bool {
-    resolved_remote_gateway_from_profile().is_some() || dev_remote_gateway_bootstrap_url().is_some()
+fn is_thin_mode(profile_state: &SharedThinProfileState) -> Result<bool, AuroraCommandError> {
+    Ok(matches!(
+        thin_profile_route_snapshot(profile_state)?,
+        ThinProfileRoute::Thin { .. }
+    ) || dev_remote_gateway_bootstrap_url().is_some())
 }
 
 fn dev_remote_gateway_bootstrap_url() -> Option<String> {
@@ -7848,53 +8001,103 @@ fn dev_remote_gateway_bootstrap_url() -> Option<String> {
     env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").ok()
 }
 
-fn resolved_remote_gateway_from_profile() -> Option<String> {
-    #[cfg(desktop)]
-    {
-        let entry = thin_profile_storage_entry().ok()?;
-        let value = entry.get_password().ok()?;
-        return remote_gateway_from_profile_document(&value);
+fn thin_profile_route_snapshot(
+    profile_state: &SharedThinProfileState,
+) -> Result<ThinProfileRoute, AuroraCommandError> {
+    let state = profile_state
+        .lock()
+        .map_err(|_| AuroraCommandError::ProfileState)?;
+    if !state.initialized {
+        return Err(AuroraCommandError::ThinProfileStateUnavailable);
     }
-    #[cfg(not(desktop))]
-    {
-        None
+    Ok(state.route.clone())
+}
+
+fn thin_profile_route_from_document(value: &str) -> Result<ThinProfileRoute, AuroraCommandError> {
+    let document =
+        serde_json::from_str::<Value>(value).map_err(|_| AuroraCommandError::ThinProfileInvalid)?;
+    let profiles = document
+        .get("profiles")
+        .and_then(Value::as_array)
+        .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+    let active_id = match document.get("activeProfileId") {
+        Some(Value::Null) => {
+            if document.get("version").and_then(Value::as_u64) == Some(1) && !profiles.is_empty() {
+                return Err(AuroraCommandError::ThinProfileInvalid);
+            }
+            return Ok(ThinProfileRoute::Local);
+        }
+        Some(Value::String(active_id)) if !active_id.trim().is_empty() => active_id.as_str(),
+        _ => return Err(AuroraCommandError::ThinProfileInvalid),
+    };
+    let mut matching_profiles = profiles
+        .iter()
+        .filter(|profile| profile.get("id").and_then(Value::as_str) == Some(active_id));
+    let profile = matching_profiles
+        .next()
+        .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+    if matching_profiles.next().is_some() {
+        return Err(AuroraCommandError::ThinProfileInvalid);
+    }
+    let version = document
+        .get("version")
+        .and_then(Value::as_u64)
+        .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+    match version {
+        1 => {
+            let mode = profile
+                .get("mode")
+                .and_then(Value::as_str)
+                .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+            let gateway = profile_gateway_for_mode(profile, mode)?;
+            Ok(ThinProfileRoute::Thin { gateway })
+        }
+        2 => {
+            if profile.get("version").and_then(Value::as_u64) != Some(2) {
+                return Err(AuroraCommandError::ThinProfileInvalid);
+            }
+            match profile.get("nodeMode").and_then(Value::as_str) {
+                Some("mesh-node") => Ok(ThinProfileRoute::Local),
+                Some("remote-console") => {
+                    let home = profile
+                        .get("homeConnection")
+                        .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+                    let mode = home
+                        .get("mode")
+                        .and_then(Value::as_str)
+                        .ok_or(AuroraCommandError::ThinProfileInvalid)?;
+                    let gateway = profile_gateway_for_mode(home, mode)?;
+                    Ok(ThinProfileRoute::Thin { gateway })
+                }
+                _ => Err(AuroraCommandError::ThinProfileInvalid),
+            }
+        }
+        _ => Err(AuroraCommandError::ThinProfileInvalid),
     }
 }
 
-fn remote_gateway_from_profile_document(value: &str) -> Option<String> {
-    let document = serde_json::from_str::<Value>(value).ok()?;
-    let version = document.get("version")?.as_u64()?;
-    match version {
-        1 => {
-            let active_id = document.get("activeProfileId")?.as_str()?;
-            document
-                .get("profiles")?
-                .as_array()?
-                .iter()
-                .find(|profile| profile.get("id").and_then(Value::as_str) == Some(active_id))
-                .and_then(|profile| profile.get("gatewayUrl"))
-                .and_then(Value::as_str)
-                .map(ToString::to_string)
-        }
-        2 => {
-            let active_id = document.get("activeProfileId")?.as_str()?;
-            let profile = document
-                .get("profiles")?
-                .as_array()?
-                .iter()
-                .find(|profile| profile.get("id").and_then(Value::as_str) == Some(active_id))?;
-            let node_mode = profile.get("nodeMode").and_then(Value::as_str)?;
-            if node_mode != "remote-console" {
-                return None;
-            }
-            profile
-                .get("homeConnection")?
-                .get("gatewayUrl")
-                .and_then(Value::as_str)
-                .map(ToString::to_string)
-        }
-        _ => None,
+fn profile_gateway_for_mode(
+    connection: &Value,
+    mode: &str,
+) -> Result<Option<String>, AuroraCommandError> {
+    if !matches!(mode, "http-only" | "webrtc-only" | "webrtc-preferred") {
+        return Err(AuroraCommandError::ThinProfileInvalid);
     }
+    let gateway = connection
+        .get("gatewayUrl")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string);
+    if mode != "webrtc-only" && gateway.is_none() {
+        return Err(AuroraCommandError::ThinProfileInvalid);
+    }
+    if let Some(raw) = gateway.as_deref() {
+        let url = Url::parse(raw).map_err(|_| AuroraCommandError::ThinProfileInvalid)?;
+        if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+            return Err(AuroraCommandError::ThinProfileInvalid);
+        }
+    }
+    Ok(gateway)
 }
 
 fn gateway_request_url(
@@ -7963,8 +8166,9 @@ fn filtered_headers(headers: Option<BTreeMap<String, String>>) -> HeaderMap {
 fn request_has_valid_sidecar_token(
     request: &AuroraRequest,
     state: &State<'_, SharedSidecarState>,
+    profile_state: &SharedThinProfileState,
 ) -> Result<bool, AuroraCommandError> {
-    if is_thin_mode() || request.method == NATIVE_MANIFEST_METHOD {
+    if request.method == NATIVE_MANIFEST_METHOD || is_thin_mode(profile_state)? {
         return Ok(true);
     }
     let Some(headers) = &request.headers else {
@@ -8299,8 +8503,9 @@ fn event_stream_url(
 fn subscribe_has_valid_sidecar_token(
     request: &AuroraSubscribeRequest,
     state: &State<'_, SharedSidecarState>,
+    profile_state: &SharedThinProfileState,
 ) -> Result<bool, AuroraCommandError> {
-    if is_thin_mode() {
+    if is_thin_mode(profile_state)? {
         return Ok(true);
     }
     let Some(headers) = &request.headers else {
@@ -8886,6 +9091,18 @@ pub fn run() {
     let subscription_state: SharedSubscriptionState =
         Arc::new(Mutex::new(SubscriptionState::new()));
     let overlay_state: SharedOverlayState = Arc::new(Mutex::new(OverlayState::new()));
+    #[cfg(desktop)]
+    let profile_state: SharedThinProfileState = match read_desktop_thin_profile_document()
+        .and_then(ThinProfileState::from_stored_document)
+    {
+        Ok(state) => Arc::new(Mutex::new(state)),
+        Err(error) => {
+            eprintln!("aurora_tauri_startup_failed={error}");
+            std::process::exit(1);
+        }
+    };
+    #[cfg(not(desktop))]
+    let profile_state: SharedThinProfileState = Arc::new(Mutex::new(ThinProfileState::default()));
     let builder = tauri::Builder::default();
     // Single-instance must be the first registered plugin so a second launch (e.g. an
     // aurora:// deep link on Windows/Linux) forwards its URL here instead of opening a
@@ -8914,6 +9131,7 @@ pub fn run() {
         .manage(gateway_clients)
         .manage(subscription_state.clone())
         .manage(overlay_state.clone())
+        .manage(profile_state)
         .manage(NativeVoiceState::default())
         .manage(LocalDataCommandState::default())
         .manage(native_webrtc::NativeWebRtcState::default())
@@ -11144,7 +11362,7 @@ mod tests {
             "profiles": [{
                 "id": "legacy",
                 "label": "Legacy",
-                "mode": "desktop-thin",
+                "mode": "http-only",
                 "gatewayUrl": "https://legacy.example/api",
                 "signalingUrl": "wss://legacy.example/signal",
                 "nodeName": "Desk",
@@ -11153,14 +11371,88 @@ mod tests {
         });
 
         assert_eq!(
-            remote_gateway_from_profile_document(&remote_console.to_string()).as_deref(),
-            Some("https://hosted.example/api")
+            thin_profile_route_from_document(&remote_console.to_string()).unwrap(),
+            ThinProfileRoute::Thin {
+                gateway: Some("https://hosted.example/api".to_string())
+            }
         );
         assert_eq!(
-            remote_gateway_from_profile_document(&legacy.to_string()).as_deref(),
-            Some("https://legacy.example/api")
+            thin_profile_route_from_document(&legacy.to_string()).unwrap(),
+            ThinProfileRoute::Thin {
+                gateway: Some("https://legacy.example/api".to_string())
+            }
         );
-        assert!(remote_gateway_from_profile_document(&mesh_node.to_string()).is_none());
+        assert_eq!(
+            thin_profile_route_from_document(&mesh_node.to_string()).unwrap(),
+            ThinProfileRoute::Local
+        );
+    }
+
+    #[test]
+    fn persisted_profile_rejects_unknown_v1_mode_and_malformed_active_profile() {
+        let invalid_mode = json!({
+            "version": 1,
+            "activeProfileId": "legacy",
+            "profiles": [{
+                "id": "legacy",
+                "mode": "desktop-thin",
+                "gatewayUrl": "https://legacy.example/api"
+            }]
+        });
+        let missing_active = json!({
+            "version": 2,
+            "activeProfileId": "missing",
+            "profiles": []
+        });
+
+        assert!(matches!(
+            thin_profile_route_from_document(&invalid_mode.to_string()),
+            Err(AuroraCommandError::ThinProfileInvalid)
+        ));
+        assert!(matches!(
+            thin_profile_route_from_document(&missing_active.to_string()),
+            Err(AuroraCommandError::ThinProfileInvalid)
+        ));
+    }
+
+    #[test]
+    fn persisted_webrtc_only_profile_is_thin_without_an_http_gateway() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_remote_env();
+        let document = json!({
+            "version": 2,
+            "activeProfileId": "remote",
+            "profiles": [{
+                "version": 2,
+                "id": "remote",
+                "nodeMode": "remote-console",
+                "homeConnection": { "mode": "webrtc-only" }
+            }]
+        });
+        let state = Arc::new(Mutex::new(
+            ThinProfileState::from_stored_document(Some(document.to_string())).unwrap(),
+        ));
+
+        assert!(is_thin_mode(&state).unwrap());
+        assert!(matches!(
+            gateway_url(&state),
+            Err(AuroraCommandError::ThinProfileHttpUnavailable)
+        ));
+        clear_remote_env();
+    }
+
+    #[test]
+    fn uninitialized_mobile_profile_state_fails_closed() {
+        let state = Arc::new(Mutex::new(ThinProfileState::default()));
+
+        assert!(matches!(
+            is_thin_mode(&state),
+            Err(AuroraCommandError::ThinProfileStateUnavailable)
+        ));
+        assert!(matches!(
+            gateway_url(&state),
+            Err(AuroraCommandError::ThinProfileStateUnavailable)
+        ));
     }
 
     #[test]

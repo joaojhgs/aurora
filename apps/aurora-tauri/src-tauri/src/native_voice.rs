@@ -1285,7 +1285,7 @@ enum RuntimeProfile {
 #[cfg(desktop)]
 impl RuntimeProfile {
     fn local_with_speech(local_speech: LocalSpeechSelection) -> Result<Self, &'static str> {
-        let gateway = super::gateway_url().map_err(|_| PROFILE_REASON)?;
+        let gateway = super::local_gateway_url().map_err(|_| PROFILE_REASON)?;
         Self::local_from_gateway_with_speech(gateway, local_speech)
     }
 
