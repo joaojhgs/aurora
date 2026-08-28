@@ -425,7 +425,7 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
               { label: 'Support reference', value: selectedJob.auditReceipt, mono: true },
               { label: 'Tool integration', value: selectedJob.toolIntegration },
               { label: 'Run history', value: selectedJob.runHistory },
-              { label: 'Blocker', value: selectedJob.blockedReason ?? 'none' }
+              { label: 'Blocker', value: adminReasonText(selectedJob.blockedReason, 'none') }
             ]}
           />
         ) : null}
@@ -794,7 +794,7 @@ function schedulerToolOptions(tools: ToolApprovalCardModel[]): SchedulerToolCrea
     providerPeerId: tool.providerPeerId,
     serviceInstanceId: tool.serviceInstanceId,
     disabled: tool.state === 'denied' || tool.state === 'unavailable' || Boolean(tool.disabledReason),
-    reason: tool.disabledReason ?? tool.denialReason ?? 'Available from negotiated Tooling catalog.'
+    reason: adminReasonText(tool.disabledReason ?? tool.denialReason, 'Available from reviewed Tools.')
   }))
 }
 

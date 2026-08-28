@@ -230,11 +230,11 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     label: 'Admin plugins and tools',
     navItemIds: ['plugins', 'tools'],
     routeOracles: [
-      routeOracle('plugins', ['Plugins, MCP, and tools'], ['Reload catalog']),
-      routeOracle('tools', ['Tools & Plugins', 'Review tool sources'], ['Tool search', 'Tool detail drawer', 'Tool parameters', 'MCP server status', 'Open scheduler'])
+      routeOracle('plugins', ['Plugins and tools'], ['Reload tools']),
+      routeOracle('tools', ['Tools & Plugins', 'Review tool sources'], ['Tool search', 'Tool detail drawer', 'Tool parameters', 'Connected tool status', 'Open scheduler'])
     ],
     mockReferenceFiles: ['app/(cockpit)/tools/page.tsx'],
-    mockUxAnchors: ['Tools &amp; Plugins', 'grouped by source', 'Add MCP source', 'Policy:'],
+    mockUxAnchors: ['Tools &amp; Plugins', 'grouped with review settings', 'Add tool source', 'Review:'],
     componentFiles: ['admin-plugins-view.tsx', 'tool-approval-panel.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [

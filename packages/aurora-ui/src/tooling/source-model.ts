@@ -361,9 +361,9 @@ export function isPendingApprovalTool(tool: ToolApprovalCardModel): boolean {
 export function sourceSectionLabel(type: ToolingSourceType): string {
   switch (type) {
     case 'core': return 'Core tools'
-    case 'mcp': return 'MCP servers'
+    case 'mcp': return 'Connected tool sources'
     case 'plugin': return 'Plugins'
-    case 'mesh': return 'Mesh peers'
+    case 'mesh': return 'Connected devices'
     case 'unknown': return 'Unknown / quarantined'
     case 'blocked': return 'Blocked'
   }

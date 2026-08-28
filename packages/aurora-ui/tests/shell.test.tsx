@@ -2400,7 +2400,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.liveSessions.find((session) => session.stablePeerId === 'stable-peer')?.evidenceSource).toBe('Gateway.GetWebRTCDiagnostics')
     expect(snapshot.devices.find((device) => device.name === 'Studio Mac')).toEqual(
       expect.objectContaining({
-        trustLabel: 'trusted Auth device',
+        trustLabel: 'Trusted by Aurora',
         evidenceSource: 'Auth.ListDevices'
       })
     )

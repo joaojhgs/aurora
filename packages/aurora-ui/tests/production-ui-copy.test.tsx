@@ -9,6 +9,8 @@ import { AppShell } from '../src/shell'
 import { SettingsView } from '../src/settings-view'
 import { errorShellSnapshot, snapshotFromGraph, type AuroraShellSnapshot, type RouteAvailability } from '../src/shell-data'
 import { MeshPeersView, type MeshPeersSnapshot } from '../src/mesh-peers-view'
+import { AdminPluginsView, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
+import { AdminSchedulerView, type AdminSchedulerSnapshot } from '../src/admin-scheduler-view'
 import { OnboardingView, type OnboardingModePreferenceStore } from '../src/onboarding-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ServiceRoutingView, type ServiceRoutingSnapshot } from '../src/service-routing-view'
@@ -688,6 +690,154 @@ describe('production UI copy', () => {
 
     expect(text).toContain('Could not connect to this Aurora device')
     expect(text).not.toContain(rawDiagnostic)
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+  })
+
+  it('maps hostile mesh trust and availability states before rendering device details', () => {
+    const snapshot = meshSnapshot()
+    snapshot.liveSessions = [{
+      ...snapshot.liveSessions[0]!,
+      pairingState: 'auth timeout pending',
+      linkedPeerState: 'runtime peer authenticated',
+      authState: 'authenticated',
+    }]
+    snapshot.peers = [{
+      ...snapshot.peers[0]!,
+      lifecycleLabel: 'runtime peer connected',
+      trustLabel: 'outbound=approved; inbound=pending',
+      connectionStatus: 'disconnected',
+    }]
+    snapshot.warnings = ['WebRTC transport DataChannel failed']
+
+    const text = visibleText(renderToStaticMarkup(
+      <MeshPeersView snapshot={snapshot} route={route()} canManageLocalServiceConfiguration={false} />,
+    ))
+
+    expect(text).toContain('Review required')
+    expect(text).not.toContain('runtime peer')
+    expect(text).not.toContain('outbound=')
+    expect(text).not.toContain('DataChannel')
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+  })
+
+  it('maps hostile admin tool source policy and trust terms before rendering', () => {
+    const snapshot: AdminPluginsSnapshot = {
+      loadState: 'ready',
+      policy: {
+        mode: 'unrestricted_except_blocked',
+        defaultBehavior: 'allow',
+        activeGrantCount: 0,
+        pendingApprovalCount: 1,
+        blockedCount: 0,
+        sourceCount: 1,
+        bypassEnabled: true,
+        dryRunOnly: false,
+        denyAll: false,
+        lastChanged: 'not reported',
+        actor: 'Tooling.GetPolicySummary',
+        evidence: 'Tooling.GetPolicySummary',
+      },
+      sourceSummaries: [],
+      sourceDetails: {},
+      fallbackTools: [],
+      warnings: [],
+      error: null,
+      evidenceSource: 'Aurora',
+    }
+    const text = visibleText(renderToStaticMarkup(
+      <AdminPluginsView
+        client={client()}
+        route={route()}
+        initialSnapshot={{
+          ...snapshot,
+          sourceSummaries: [{
+            id: 'source-1',
+            label: 'External assistant tools',
+            kind: 'mcp',
+            providerKind: 'mcp',
+            transport: 'stdio',
+            providerPeerId: null,
+            providerServiceInstanceId: null,
+            trustTier: 'quarantined',
+            configuredTrustTier: null,
+            toolCount: 0,
+            blockedToolCount: 0,
+            approvalRequiredCount: 0,
+            status: 'stale',
+            cacheStatus: 'capability catalog fallback',
+            catalogCacheState: null,
+            lastAnnouncementAt: null,
+            generatedAt: null,
+          } as unknown as AdminPluginsSnapshot['sourceSummaries'][number]],
+        }}
+      />,
+    ))
+
+    expect(text).toContain('Review: Allow trusted')
+    expect(text).toContain('Connected tool sources')
+    expect(text).toContain('review needed')
+    expect(text).not.toContain('unrestricted_except_blocked')
+    expect(text).not.toContain('MCP')
+    expect(text).not.toContain('capability catalog')
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+  })
+
+  it('maps hostile scheduler status and tool reasons before rendering', () => {
+    const snapshot: AdminSchedulerSnapshot = {
+      loadState: 'ready',
+      jobs: [{
+        id: 'job-1',
+        name: 'Morning summary',
+        schedule: '0 8 * * *',
+        action: 'Orchestrator.ExternalUserInput',
+        enabled: true,
+        status: 'stale',
+        namespace: 'home',
+        ownership: 'local-owned',
+        ownerLabel: 'local-peer/local-principal',
+        targetLabel: 'local node',
+        approvalLabel: 'approval is saved; no delegated permissions; approval record not reported',
+        policyDecisionId: 'not reported',
+        auditReceipt: 'audit pending',
+        privacyClass: 'personal',
+        nextRun: 'not scheduled',
+        lastRun: 'never',
+        runHistory: 'last never run; 0 failures; this device; timezone UTC',
+        toolIntegration: 'Assistant external user input; delegated no delegated permissions',
+        blockedReason: 'capability catalog fallback stale_provider',
+        operationControls: [],
+      }],
+      createControl: {
+        available: true,
+        state: 'available-local',
+        reason: 'Ready',
+        requiresAdminAction: false,
+        targetOptions: [],
+      },
+      totals: { local: 1, delegatedOwned: 0, remoteRunning: 0, foreignDenied: 0 },
+      warnings: [],
+      error: null,
+      evidenceSource: 'Aurora',
+      secretsRedacted: true,
+      toolOptions: [{
+        id: 'tool-1',
+        label: 'Search (this device)',
+        localName: 'Search',
+        globalToolId: 'Search',
+        providerPeerId: null,
+        serviceInstanceId: null,
+        disabled: false,
+        reason: 'Available from reviewed Tools.',
+      }],
+    }
+    const text = visibleText(renderToStaticMarkup(
+      <AdminSchedulerView client={client()} route={route()} initialSnapshot={snapshot} />,
+    ))
+
+    expect(text).toContain('Assistant external user input')
+    expect(text).not.toContain('Orchestrator.ExternalUserInput')
+    expect(text).not.toContain('capability catalog')
+    expect(text).not.toContain('stale_provider')
     expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
   })
 })

@@ -265,8 +265,8 @@ export async function buildAdminDevicesSnapshot(client: AuroraClient): Promise<A
     failureMessage('devices', devicesResult),
     failureMessage('tokens', tokensResult),
     failureMessage('pending pairings', pairingsResult),
-    failureMessage('mesh peers', meshPeersResult),
-    failureMessage('capability catalog', catalogResult),
+    failureMessage('connected devices', meshPeersResult),
+    failureMessage('feature list', catalogResult),
     failureMessage('platform features', nativeResult, true)
   ].filter((message): message is string => Boolean(message))
   const denied = [devicesResult, tokensResult, pairingsResult, catalogResult].some(isDeniedFailure)
@@ -781,7 +781,7 @@ function buildDeviceRow(
       ? linkedMeshPeerSummary(linkedMeshPeer)
       : pendingPairing
         ? `${pendingPairing.remote_node_name || pendingPairing.remote_peer_id} pending pairing`
-        : 'no linked mesh peer reported',
+        : 'no linked device reported',
     meshPeerState: linkedState,
     meshPeerEvidence: linkedMeshPeer
       ? `Connected device ${linkedMeshPeer.node_name}; ${adminReasonText(linkedMeshPeer.connection_status, 'Status needs attention')}`
@@ -818,7 +818,7 @@ function pendingPairingRow(entry: PendingPairingEntry, meshPeers: MeshPeerInfo[]
       ? linkedMeshPeerSummary(linkedPeer)
       : entry.remote_peer_id
         ? `${entry.remote_node_name || entry.remote_peer_id} pending peer`
-        : 'no mesh peer id reported',
+        : 'no connected device reported',
     linkedMeshPeerState: linkedPeer ? meshPeerAvailability(linkedPeer) : 'pending',
     approveAction: actionsAvailable ? buildPendingPairingAdminAction(entry, 'approve', 'Approve pending device pairing from /admin/devices') : null,
     denyAction: actionsAvailable ? buildPendingPairingAdminAction(entry, 'deny', 'Deny pending device pairing from /admin/devices') : null
@@ -837,7 +837,7 @@ function buildTrustActionForDevice(
   if (!linkedMeshPeer || device.is_trusted || meshPeerActionState === 'unsupported' || meshPeerActionState === 'denied' || meshPeerActionState === 'pending') {
     return null
   }
-  return buildDeviceMeshPeerAdminAction(linkedMeshPeer, 'trust', `Trust mesh peer for device ${device.name}`)
+  return buildDeviceMeshPeerAdminAction(linkedMeshPeer, 'trust', `Trust connected device for ${device.name}`)
 }
 
 function findLinkedMeshPeer(deviceName: string, meshPeers: MeshPeerInfo[]): MeshPeerInfo | undefined {

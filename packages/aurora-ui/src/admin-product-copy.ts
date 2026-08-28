@@ -86,7 +86,6 @@ export function adminRouteCopy(route: Pick<RouteAvailability, 'state' | 'disable
 export function adminReasonText(value: string | null | undefined, fallback = 'This action needs attention before it can run.'): string {
   const text = value?.trim()
   if (!text) return fallback
-  if (hasUnsafeAdminCopy(text)) return fallback
   const softened = sanitizeAdminText(text, fallback)
   return isAllowedAdminReasonCopy(softened) ? softened : fallback
 }
@@ -124,8 +123,18 @@ const PRODUCT_ACTION_LABELS: Record<string, string> = {
 }
 
 export function sanitizeAdminText(value: string, fallback = 'This item needs attention.'): string {
-  if (hasUnsafeAdminCopy(value)) return fallback
+  if (findForbiddenProductionCopyTerms(value).length >= 3) return fallback
+  if (
+    ADMIN_METHOD_PATTERN.test(value) ||
+    ADMIN_KEY_PATH_PATTERN.test(value) ||
+    ADMIN_SLASH_PATH_PATTERN.test(value) ||
+    ADMIN_SECRET_LIKE_PATTERN.test(value) ||
+    /(?:^|[^a-z0-9])room[_ -]?password(?:$|[^a-z0-9])/iu.test(value)
+  ) {
+    return fallback
+  }
   const softened = value
+    .replace(/\bcapability\s+catalog\b/giu, 'feature list')
     .replace(/(Auth|Gateway|Scheduler|Config|Tooling|Orchestrator|Backup)\.([A-Za-z0-9_.-]+)/gu, (_match, module, action) => `${adminModuleLabel(String(module))} ${humanizeAction(String(action))}`)
     .replace(/\bAdminAction\b/giu, 'admin approval')
     .replace(/\bSDK\b/gu, 'Aurora')
@@ -216,14 +225,14 @@ function hasUnsafeAdminCopy(value: string): boolean {
 }
 
 function isAllowedAdminReasonCopy(value: string): boolean {
-  if (hasUnsafeAdminCopy(value)) return false
   if (
-    /^(?:devices|tokens|pending pairings|mesh peers|capability catalog|platform features): (?:Connection lost\. Reconnecting\.\.\.|This Aurora version cannot use that feature yet|Permission is needed to use this feature)$/iu.test(
+    /^(?:devices|tokens|pending pairings|connected devices|mesh peers|feature list|capability catalog|platform features): (?:Connection lost\. Reconnecting\.\.\.|This Aurora version cannot use that feature yet|Permission is needed to use this feature)$/iu.test(
       value
     )
   ) {
     return true
   }
+  if (hasUnsafeAdminCopy(value)) return false
   return /^(?:Ready|none)$/iu.test(value) ||
     /^(?:This action|This device|This Aurora version|Permission is needed|Admin approval is required|Connection lost|Checking Aurora|Status needs attention|Available after admin confirmation)\b[\w\s.,'/-]*$/iu.test(value) ||
     /^(?:Source|Tool source|Backup list|Backup action|Device update|Settings update|Review|Rollback|Audit status|Device\/session status|RBAC status|Configuration editor)\b[\w\s.,'/-]*$/iu.test(value)

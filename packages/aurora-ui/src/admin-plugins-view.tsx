@@ -221,16 +221,16 @@ export function AdminPluginsView({ client, route, initialSnapshot, initialTab }:
             Tools &amp; Plugins
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Core tools, MCP servers, plugins and mesh peer tools, grouped by source with policy and approvals.
+            Core tools, connected tool sources, plugins, and tools from approved devices, grouped with review settings and approvals.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="font-normal">
-            Policy: <strong className="ml-1 font-semibold">{snapshot.policy.mode}</strong>
+            Review: <strong className="ml-1 font-semibold">{policyModeLabel(snapshot.policy.mode)}</strong>
           </Badge>
           <ToneBadge tone="warning">{snapshot.policy.pendingApprovalCount} pending</ToneBadge>
           <Button variant="primary" icon={<Plug size={14} aria-hidden />} onClick={() => setMcpWizardOpen(true)}>
-            Add MCP source
+            Add tool source
           </Button>
         </div>
       </div>
@@ -397,7 +397,7 @@ function ToolsTab({
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-medium">{source.name}</span>
                     <ToneBadge tone={trustTone(source.effectiveTrust)} className="shrink-0">
-                      {source.effectiveTrust}
+                      {toolSourceTrustLabel(source.effectiveTrust)}
                     </ToneBadge>
                   </div>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -418,7 +418,7 @@ function ToolsTab({
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="font-mono text-base font-semibold">{selectedSource.name}</h2>
-                  <ToneBadge tone={trustTone(selectedSource.effectiveTrust)}>{selectedSource.effectiveTrust}</ToneBadge>
+                  <ToneBadge tone={trustTone(selectedSource.effectiveTrust)}>{toolSourceTrustLabel(selectedSource.effectiveTrust)}</ToneBadge>
                 </div>
                 <p className="mt-1 max-w-xl text-sm text-muted-foreground">{sourceDescription(selectedSource)}</p>
               </div>
@@ -535,8 +535,8 @@ function AddMcpSourceDialog({
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add MCP source</DialogTitle>
-          <DialogDescription>Register a new MCP server. It starts quarantined until reviewed and approved.</DialogDescription>
+          <DialogTitle>Add tool source</DialogTitle>
+          <DialogDescription>Register a new connected tool source. It starts quarantined until reviewed and approved.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <FormField label="Name" htmlFor="mcp-source-name">
@@ -670,11 +670,25 @@ function PluginConfigDialog({
 
 function sourceDescription(source: ToolingSourceModel): string {
   if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
-  if (source.type === 'mcp') return `MCP source with ${source.toolCount} tool(s).`
+  if (source.type === 'mcp') return `Connected tool source with ${source.toolCount} tool(s).`
   if (source.type === 'mesh') return `Tools announced by connected device ${source.name}.`
   if (source.type === 'unknown') return 'Announced tools from an unverified source. Quarantined until reviewed.'
   if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
   return sanitizeAdminText(source.catalogEvidence)
+}
+
+function policyModeLabel(mode: string): string {
+  if (mode === 'deny_all') return 'Paused'
+  if (mode === 'dry_run_only') return 'Review only'
+  if (mode === 'unrestricted_except_blocked') return 'Allow trusted'
+  return 'Review required'
+}
+
+function toolSourceTrustLabel(trust: string): string {
+  if (trust === 'trusted') return 'trusted'
+  if (trust === 'approval-required' || trust === 'quarantined' || trust === 'mixed') return 'review needed'
+  if (trust === 'blocked') return 'blocked'
+  return 'unknown'
 }
 
 function productPluginUpdateErrorCopy(sourceLabel: string, detail: string): { tone: 'error'; title: string; detail: string } {

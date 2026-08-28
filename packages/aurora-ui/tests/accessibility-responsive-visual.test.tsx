@@ -67,9 +67,9 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
     mobile: 'c36699053885'
   },
   admin: {
-    desktop: '80c0ccddaec4',
-    tablet: 'b0b12ff614d9',
-    mobile: '87dc0e4d457a'
+    desktop: 'c18428174bed',
+    tablet: '59d0749db06f',
+    mobile: '3c7f07aeb80a'
   },
   'native-settings': {
     desktop: '9f00fa3874aa',

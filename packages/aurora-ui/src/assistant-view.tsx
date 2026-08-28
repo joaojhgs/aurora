@@ -5445,7 +5445,7 @@ function createAttachmentDraft(input: {
     progress: 0,
     message: input.contentText
       ? 'Ready for review.'
-      : 'Preview staged; Aurora will receive file metadata only until binary extraction is enabled.',
+      : 'Preview staged; Aurora will receive file details only until full file reading is available.',
     reasonCode: null,
     redacted: false
   }
@@ -5479,7 +5479,7 @@ async function fileToAttachmentDraft(
   const previewUrl = isImage || validation.kind === 'pdf' ? URL.createObjectURL(file) : null
   const contentText = isTextLike
     ? await file.text()
-    : `${isImage ? 'Image' : 'PDF'} attachment: ${file.name} (${file.type || validation.mimeType || 'unknown type'}, ${formatBytes(file.size)}). Binary content is previewed in the UI; extracted file content is not included in this text context yet.`
+    : `${isImage ? 'Image' : 'PDF'} attachment: ${file.name} (${file.type || validation.mimeType || 'unknown type'}, ${formatBytes(file.size)}). The file preview is available; its full contents are not included in the message yet.`
   return createAttachmentDraft({
     kind: isImage ? 'image' : 'file',
     label: file.name,

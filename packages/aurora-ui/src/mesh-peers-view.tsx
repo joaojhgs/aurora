@@ -3383,8 +3383,8 @@ function LiveSessionsPanel({ sessions, fixtureOnly }: { sessions: MeshLiveSessio
                 <DetailItem label="Status" value={meshStateLabel(session.state)} />
                 <DetailItem label="Access" value={productConnectionState(session.authState)} />
                 <DetailItem label="Response time" value={session.latencyMs === null ? 'Response time unavailable' : formatLatencyMs(session.latencyMs)} />
-                <DetailItem label="Pairing" value={session.pairingState} />
-                <DetailItem label="Linked peer" value={session.linkedPeerState} />
+                <DetailItem label="Pairing" value={productConnectionState(session.pairingState)} />
+                <DetailItem label="Linked device" value={session.linkedPeerState} />
                 <DetailItem label="Details" value={fixtureOnly ? 'Sample data' : 'Available'} />
               </CardContent>
             </Card>
@@ -3440,8 +3440,8 @@ function WarningsPanel({ snapshot }: { snapshot: MeshPeersSnapshot }) {
           warnings.map((warning) => (
             <Alert key={warning}>
               <AlertTriangle />
-              <AlertTitle>Mesh detail</AlertTitle>
-              <AlertDescription>{warning}</AlertDescription>
+              <AlertTitle>Device detail</AlertTitle>
+              <AlertDescription>{sanitizeMeshDetail(warning)}</AlertDescription>
             </Alert>
           ))
         )}
@@ -3805,7 +3805,7 @@ function buildMeshLiveSessionRows(diagnostics: WebRTCDiagnosticsResponse | null,
       identitySource: session.identity_source,
       permissions: `${session.effective_permission_count} effective permissions${session.is_admin ? '; admin principal' : ''}`,
       pairingState: [session.pairing_active ? 'pairing active' : null, session.auth_timeout_pending ? 'auth timeout pending' : null, session.pending_pairing_task ? 'pending pairing work' : null].filter(Boolean).join('; ') || 'no pairing work reported',
-      linkedPeerState: persisted ? `Auth peer ${persisted.outbound_status}/${persisted.inbound_status}` : runtime ? `runtime peer ${runtime.status}` : 'no persisted peer record',
+      linkedPeerState: persisted ? trustPairLabel(persisted.outbound_status, persisted.inbound_status) : runtime ? productConnectionState(runtime.status) : 'No saved device record',
       evidenceSource: 'Gateway.GetWebRTCDiagnostics',
     }
   })
@@ -3819,7 +3819,7 @@ function buildMeshDeviceRows(devices: DeviceResponse[], peers: MeshPeerRow[], se
       name: device.name,
       principalId: device.user_id ?? null,
       state: device.is_trusted ? 'available-local' : 'denied',
-      trustLabel: device.is_trusted ? 'trusted Auth device' : 'untrusted Auth device',
+      trustLabel: device.is_trusted ? 'Trusted by Aurora' : 'Not trusted yet',
       linkedPeerId: linkedPeer?.peerId ?? null,
       linkedPeerLabel: linkedPeer ? `${linkedPeer.nodeName} (${linkedPeer.source})` : 'not linked to a device by service status',
       lastSeen: device.last_seen ?? null,
@@ -3917,9 +3917,9 @@ function buildMeshPeerRow(peerId: string, persisted: MeshPeerInfo | null, runtim
     nodeName: persisted?.node_name || runtime?.node_name || pairing?.remote_node_name || pairing?.device_name || 'Unnamed device',
     roomName: persisted?.room_name ?? 'not reported',
     lifecycleState,
-    lifecycleLabel: runtime?.status ?? persisted?.connection_status ?? 'No recent status',
+    lifecycleLabel: productConnectionState(runtime?.status ?? persisted?.connection_status ?? 'No recent status'),
     trustState,
-    trustLabel: `outbound=${outboundStatus}; inbound=${inboundStatus}`,
+    trustLabel: trustPairLabel(outboundStatus, inboundStatus),
     outboundStatus,
     inboundStatus,
     connectionStatus: persisted?.connection_status ?? webrtcConnectionFor(peerId, diagnostics) ?? 'not reported',
@@ -4082,10 +4082,27 @@ function hasInternalCopy(value: string): boolean {
   return /\b(?:webrtc|gateway|transport|runtime|manifest|config|preview|schema|contract|fallback|provider|consumer|hybrid|sqlite|indexeddb|opfs|sidecar|thin|datachannel|signaling|room password)\b|(?:services|auth|gateway|config)\.[a-z0-9_.]+/iu.test(value)
 }
 
+function sanitizeMeshDetail(value: string, fallback = 'Check this device, then refresh.'): string {
+  const trimmed = value.trim()
+  if (!trimmed) return fallback
+  if (hasInternalCopy(trimmed)) return fallback
+  return trimmed
+}
+
+function trustPairLabel(outbound: string, inbound: string): string {
+  if (outbound === 'approved' && inbound === 'approved') return 'Approved both ways'
+  if (outbound === 'approved') return 'This device approved'
+  if (inbound === 'approved') return 'Other device approved'
+  if (outbound === 'pending' || inbound === 'pending') return 'Review needed'
+  if (outbound === 'denied' || inbound === 'denied') return 'Not allowed'
+  if (outbound === 'removed' || inbound === 'removed') return 'Removed'
+  return 'Not set up'
+}
+
 function productConnectionState(value: string): string {
-  if (/authorized|authenticated|approved|connected|ready/iu.test(value)) return 'Ready'
+  if (/denied|failed|error|closed|stale|timeout|disconnected/iu.test(value)) return 'Needs attention'
   if (/pending|pairing|connecting/iu.test(value)) return 'Waiting'
-  if (/denied|failed|error|closed|stale|timeout/iu.test(value)) return 'Needs attention'
+  if (/authorized|authenticated|approved|\bconnected\b|ready/iu.test(value)) return 'Ready'
   return 'Checking'
 }
 
