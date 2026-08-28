@@ -16,9 +16,12 @@ vi.mock('@aurora/voice-web/browser', () => ({
     openExisting: voiceWeb.openExistingHost,
   },
   openActiveBrowserModelPack: voiceWeb.openActive,
+  installVerifiedBrowserModelPack: voiceWeb.installPack,
+}))
+
+vi.mock('@aurora/voice-web/catalog', () => ({
   listAuroraBrowserVoiceCatalogEntries: voiceWeb.listCatalog,
   findAuroraBrowserVoiceCatalogEntry: voiceWeb.findCatalogEntry,
-  installVerifiedBrowserModelPack: voiceWeb.installPack,
 }))
 
 import {

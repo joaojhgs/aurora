@@ -19,6 +19,11 @@
       "import": "./dist/browser.js",
       "default": "./dist/browser.js"
     },
+    "./catalog": {
+      "types": "./dist/browser-voice-catalog.d.ts",
+      "import": "./dist/browser-voice-catalog.js",
+      "default": "./dist/browser-voice-catalog.js"
+    },
     "./test-doubles": {
       "types": "./dist/test-doubles/index.d.ts",
       "import": "./dist/test-doubles/index.js",

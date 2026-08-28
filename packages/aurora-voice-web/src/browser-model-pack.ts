@@ -1,6 +1,7 @@
 import type { AuroraWebModelStoreHost } from './model-store-host.js'
 import type { AuroraVoiceWebModelDescriptor } from './types.js'
 import type * as AuroraVoiceWasmModule from './wasm/aurora_voice_wasm.js'
+import { IncrementalSha256 } from './incremental-sha256.js'
 
 export const AURORA_NON_PRODUCTION_MODEL_PACK_KEY_ID = 'aurora-nonproduction-web-wasm-test'
 export const AURORA_MODEL_PACK_SIGNATURE_ALGORITHM = 'ed25519'
@@ -1150,15 +1151,15 @@ function throwInstallFailure(
 }
 
 async function hashPromotedFile(host: AuroraWebModelStoreHost, storageKey: string, byteLength: number): Promise<string> {
-  const chunks: Uint8Array[] = []
+  const digest = new IncrementalSha256()
   let offset = 0
   while (offset < byteLength) {
     const chunk = await host.readPromotedChunk(storageKey, offset, Math.min(HASH_CHUNK_BYTES, byteLength - offset))
     if (chunk.offset !== offset || chunk.bytes.byteLength === 0) throw modelPackError('missing_file')
-    chunks.push(chunk.bytes)
+    digest.update(chunk.bytes)
     offset += chunk.bytes.byteLength
   }
-  return sha256Hex(concat(chunks, byteLength))
+  return digest.digestHex()
 }
 
 async function readPromotedExact(
@@ -1430,16 +1431,6 @@ async function verifyEd25519(publicKeyBase64: string, signatureBase64: string, p
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
-function concat(chunks: readonly Uint8Array[], byteLength: number): Uint8Array {
-  const output = new Uint8Array(byteLength)
-  let offset = 0
-  for (const chunk of chunks) {
-    output.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return output
 }
 
 function encodeUtf8(value: string): Uint8Array {

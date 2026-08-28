@@ -81,6 +81,10 @@ class FakeBrowserPort implements AuroraBrowserModelStorePort {
   async listBlobKeys(): Promise<readonly string[]> {
     return [...this.blobs.keys()].sort()
   }
+
+  async listBlobDependencies(_physicalKey: string): Promise<readonly string[]> {
+    return []
+  }
 }
 
 class UnavailablePort extends FakeBrowserPort {
@@ -444,6 +448,42 @@ describe('AuroraBrowserModelStoreHost', () => {
     const recovered = new AuroraBrowserModelStoreHost(port)
     await expect(recovered.promotedStat('pack@file')).resolves.toEqual({ byteLength: 3, sha256: null })
     await expect(recovered.listPromotedKeys()).resolves.toEqual(['pack@file'])
+  })
+
+  it.each(['opfs', 'indexeddb'] as const)('reclaims unreferenced %s blobs without a journal', async (kind) => {
+    const port = new FakeBrowserPort(kind)
+    const liveKey = 'aurora-json-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const orphanKey = 'aurora-json-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    port.snapshot = {
+      schemaVersion: 1,
+      json: [{ key: 'pack@meta', physicalKey: liveKey, byteLength: 2 }],
+      staging: [],
+      promoted: [],
+      journal: null
+    }
+    port.blobs.set(liveKey, new TextEncoder().encode('{}'))
+    port.blobs.set(orphanKey, new TextEncoder().encode('orphan'))
+
+    await expect(new AuroraBrowserModelStoreHost(port).readJson('pack@meta')).resolves.toBe('{}')
+
+    expect(port.blobs.has(liveKey)).toBe(true)
+    expect(port.blobs.has(orphanKey)).toBe(false)
+  })
+
+  it('reclaims IndexedDB chunks that are absent from the live parent record', async () => {
+    const indexedDB = new FakeIndexedDb()
+    const port = new IndexedDbBrowserModelStorePort({ indexedDB: indexedDB.factory() })
+    const host = new AuroraBrowserModelStoreHost(port)
+    await host.appendStaging('pack@file', 0, new Uint8Array([1, 2]))
+    const staging = (await port.readSnapshot())?.staging[0]
+    if (!staging) throw new Error('missing staging')
+    const orphanChunk = `${staging.physicalKey}.chunk.99`
+    indexedDB.store('blobs').set(orphanChunk, new Uint8Array([9]))
+
+    await expect(new AuroraBrowserModelStoreHost(port).stagingLen('pack@file')).resolves.toBe(2)
+
+    expect(indexedDB.store('blobs').has(orphanChunk)).toBe(false)
+    expect(await port.statBlob(staging.physicalKey)).toBe(2)
   })
 
   it('replacement promotion remaps to the new staged blob instead of old same-size bytes', async () => {

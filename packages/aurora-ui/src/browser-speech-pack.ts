@@ -1,15 +1,17 @@
 import {
   AuroraBrowserModelStoreHost,
-  findAuroraBrowserVoiceCatalogEntry,
   installVerifiedBrowserModelPack,
-  listAuroraBrowserVoiceCatalogEntries,
   openActiveBrowserModelPack,
   type AuroraBrowserActiveModelPack,
   type AuroraBrowserModelPackInstallReceipt as VoiceWebBrowserModelPackInstallReceipt,
   type AuroraBrowserModelPackScope,
   type AuroraBrowserModelPackReleaseTrustKey,
-  type AuroraBrowserVoiceCatalogEntry,
 } from '@aurora/voice-web/browser'
+import {
+  findAuroraBrowserVoiceCatalogEntry,
+  listAuroraBrowserVoiceCatalogEntries,
+  type AuroraBrowserVoiceCatalogEntry,
+} from '@aurora/voice-web/catalog'
 import {
   resolvePocketReferenceAudioMode,
   type AuroraVoiceWebModelBindings,

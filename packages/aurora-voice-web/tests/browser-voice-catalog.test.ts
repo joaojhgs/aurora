@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import * as browserExports from '../src/browser.js'
+import * as rootExports from '../src/index.js'
+
 import {
   auroraBrowserVoiceCatalogSummary,
   findAuroraBrowserVoiceCatalogEntry,
@@ -7,6 +10,10 @@ import {
 } from '../src/browser-voice-catalog.js'
 
 describe('browser voice catalog', () => {
+  it('keeps the generated catalog out of the root and browser entrypoints', () => {
+    expect(rootExports).not.toHaveProperty('listAuroraBrowserVoiceCatalogEntries')
+    expect(browserExports).not.toHaveProperty('listAuroraBrowserVoiceCatalogEntries')
+  })
   it('exports every metadata-only speech and TTS catalog entry', () => {
     const summary = auroraBrowserVoiceCatalogSummary()
 

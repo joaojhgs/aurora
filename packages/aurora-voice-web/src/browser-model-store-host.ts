@@ -26,6 +26,7 @@ export interface AuroraBrowserModelStorePort {
   copyBlob(fromPhysicalKey: string, toPhysicalKey: string, expectedBytes: number): Promise<void>
   deleteBlob(physicalKey: string): Promise<void>
   listBlobKeys(): Promise<readonly string[]>
+  listBlobDependencies(physicalKey: string): Promise<readonly string[]>
 }
 
 export interface AuroraBrowserModelStoreLimits {
@@ -377,34 +378,48 @@ export class AuroraBrowserModelStoreHost implements AuroraWebModelStoreHost {
 
   private async recoverOnce(): Promise<void> {
     if (this.recovered) return
-    const snapshot = validateSnapshot(await this.port.readSnapshot())
+    let snapshot = validateSnapshot(await this.port.readSnapshot())
     const journal = snapshot.journal
-    if (!journal) {
-      this.recovered = true
-      return
-    }
-    const promoted = await this.port.readBlob(journal.promotedPhysicalKey)
-    if (promoted !== null && promoted.byteLength === journal.byteLength) {
-      await this.port.writeSnapshot({
-        ...snapshot,
-        staging: snapshot.staging.filter((entry) => entry.key !== journal.key),
-        promoted: replaceBlob(snapshot.promoted, {
-          key: journal.key,
-          physicalKey: journal.promotedPhysicalKey,
-          byteLength: journal.byteLength,
-          packId: packIdFromStorageKey(journal.key)
-        }),
-        journal: null
-      })
-      if (journal.stagingPhysicalKey !== journal.promotedPhysicalKey) {
-        await this.port.deleteBlob(journal.stagingPhysicalKey)
+    if (journal) {
+      const promoted = await this.port.readBlob(journal.promotedPhysicalKey)
+      if (promoted !== null && promoted.byteLength === journal.byteLength) {
+        snapshot = {
+          ...snapshot,
+          staging: snapshot.staging.filter((entry) => entry.key !== journal.key),
+          promoted: replaceBlob(snapshot.promoted, {
+            key: journal.key,
+            physicalKey: journal.promotedPhysicalKey,
+            byteLength: journal.byteLength,
+            packId: packIdFromStorageKey(journal.key)
+          }),
+          journal: null
+        }
+        await this.port.writeSnapshot(snapshot)
+        if (journal.stagingPhysicalKey !== journal.promotedPhysicalKey) {
+          await this.port.deleteBlob(journal.stagingPhysicalKey)
+        }
+      } else {
+        await this.port.deleteBlob(journal.promotedPhysicalKey)
+        snapshot = { ...snapshot, journal: null }
+        await this.port.writeSnapshot(snapshot)
       }
-      this.recovered = true
-      return
     }
-    await this.port.deleteBlob(journal.promotedPhysicalKey)
-    await this.port.writeSnapshot({ ...snapshot, journal: null })
+    await this.reconcileUnreferencedBlobs(snapshot)
     this.recovered = true
+  }
+
+  private async reconcileUnreferencedBlobs(snapshot: AuroraBrowserModelStoreSnapshot): Promise<void> {
+    const referenced = new Set(
+      [...snapshot.json, ...snapshot.staging, ...snapshot.promoted].map((entry) => entry.physicalKey)
+    )
+    for (const physicalKey of [...referenced]) {
+      for (const dependency of await this.port.listBlobDependencies(physicalKey)) {
+        referenced.add(dependency)
+      }
+    }
+    for (const physicalKey of await this.port.listBlobKeys()) {
+      if (!referenced.has(physicalKey)) await this.port.deleteBlob(physicalKey)
+    }
   }
 
   private async readBlobChunk(
@@ -615,6 +630,11 @@ export class OpfsBrowserModelStorePort implements AuroraBrowserModelStorePort {
     return []
   }
 
+  async listBlobDependencies(physicalKey: string): Promise<readonly string[]> {
+    validatePhysicalKey(physicalKey)
+    return []
+  }
+
   async deleteBlob(physicalKey: string): Promise<void> {
     validatePhysicalKey(physicalKey)
     try {
@@ -811,6 +831,12 @@ export class IndexedDbBrowserModelStorePort implements AuroraBrowserModelStorePo
       request.onerror = () => reject(redactedError('storage'))
       request.onsuccess = () => resolve(request.result.map(String).sort())
     })
+  }
+
+  async listBlobDependencies(physicalKey: string): Promise<readonly string[]> {
+    validatePhysicalKey(physicalKey)
+    const value = await this.get(BLOB_STORE, physicalKey)
+    return isIndexedDbChunkedBlobRecord(value) ? [...value.chunks] : []
   }
 
   private async get(storeName: string, key: string): Promise<unknown> {
