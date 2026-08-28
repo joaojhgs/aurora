@@ -1,5 +1,6 @@
-"""Regression tests for durable SAS-bound mesh pairing denials."""
+"""Regression tests for durable SAS-bound mesh pairing lifecycle behavior."""
 
+import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -29,6 +30,51 @@ def _pending_mesh_request() -> dict[str, object]:
         "pairing_session_id": "a" * 64,
         "verification_code": "48271935",
     }
+
+
+@pytest.mark.asyncio
+async def test_slow_pairing_start_does_not_block_unrelated_approval() -> None:
+    manager = AuthManager(bus=AsyncMock())
+    manager.pairing_requests["unrelated-code"] = {
+        **_pending_mesh_request(),
+        "id": "unrelated-request",
+        "remote_peer_id": "",
+        "room_name": "",
+        "pairing_session_id": "",
+    }
+    manager._publish_pairing_lifecycle_event = AsyncMock()
+    manager._audit_pairing_lifecycle = AsyncMock()
+    db_request_started = asyncio.Event()
+    release_db_request = asyncio.Event()
+
+    async def stalled_db_request(*_args, **_kwargs):
+        db_request_started.set()
+        await release_db_request.wait()
+        return {"rows": [], "rowcount": 0}
+
+    manager._db_request = AsyncMock(side_effect=stalled_db_request)
+    stalled_start = asyncio.create_task(
+        manager.start_pairing(
+            "Aurora One",
+            "unknown",
+            remote_peer_id="stable-peer-one",
+            remote_node_name="Aurora One",
+            room_name="private-room",
+            pairing_session_id="b" * 64,
+            verification_code="48271935",
+            trusted_rate_limit_key="webrtc:transport-one",
+        )
+    )
+    await db_request_started.wait()
+
+    assert await asyncio.wait_for(
+        manager.approve_pairing("unrelated-code", "admin-one"),
+        timeout=0.1,
+    )
+    assert manager.pairing_requests["unrelated-code"]["status"] == "approved"
+
+    release_db_request.set()
+    assert await stalled_start is None
 
 
 @pytest.mark.asyncio

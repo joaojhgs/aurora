@@ -15,6 +15,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
+from weakref import WeakValueDictionary
 
 from passlib.context import CryptContext
 
@@ -103,10 +104,12 @@ class AuthManager:
         self.bus = bus
         self.pairing_requests: dict[str, dict[str, Any]] = {}
         self.pairing_attempts: dict[str, int] = {}
-        # One lock owns the complete in-memory pairing lifecycle. Separate
-        # start/exchange locks allowed reconnect supersession or expiry to pop a
-        # request while its credential graph was still being committed.
-        self._pairing_lifecycle_lock = asyncio.Lock()
+        # Serialize one pairing/source without making an unrelated slow DB
+        # operation block every other device's approval lifecycle. Weak values
+        # release locks after the last waiter/owner drops its reference.
+        self._pairing_operation_locks: WeakValueDictionary[str, asyncio.Lock] = (
+            WeakValueDictionary()
+        )
         self._default_device_permissions: list[str] = []
         self.login_attempts: dict[str, int] = {}
         self._mesh_inbound_key: bytes | None = None
@@ -114,6 +117,15 @@ class AuthManager:
     def invalidate_mesh_inbound_key_cache(self) -> None:
         """Clear cached mesh crypto key after services.gateway.api.token_secret changes."""
         self._mesh_inbound_key = None
+
+    def _pairing_operation_lock(self, key: str) -> asyncio.Lock:
+        """Return the stable in-process lock for one pairing operation key."""
+
+        lock = self._pairing_operation_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._pairing_operation_locks[key] = lock
+        return lock
 
     async def _aget_mesh_inbound_key(self) -> bytes:
         """Lazy-load encryption key for inbound tokens via ConfigService (bus).
@@ -732,23 +744,22 @@ class AuthManager:
     ) -> Identity | None:
         """Resolve only the bearer minted by one exact bilateral SAS session."""
 
-        async with self._pairing_lifecycle_lock:
-            matches = [
-                request
-                for request in self.pairing_requests.values()
-                if request.get("status") == "exchanged"
-                and hmac.compare_digest(
-                    str(request.get("pairing_session_id") or ""), pairing_session_id
-                )
-                and hmac.compare_digest(str(request.get("remote_peer_id") or ""), claimant_peer_id)
-                and hmac.compare_digest(str(request.get("room_name") or ""), room_name)
-            ]
-            if len(matches) != 1:
-                return None
-            exchange_result = matches[0].get("exchange_result")
-            if not isinstance(exchange_result, dict):
-                return None
-            token_id = str(exchange_result.get("token_id") or "")
+        matches = [
+            request
+            for request in self.pairing_requests.values()
+            if request.get("status") == "exchanged"
+            and hmac.compare_digest(
+                str(request.get("pairing_session_id") or ""), pairing_session_id
+            )
+            and hmac.compare_digest(str(request.get("remote_peer_id") or ""), claimant_peer_id)
+            and hmac.compare_digest(str(request.get("room_name") or ""), room_name)
+        ]
+        if len(matches) != 1:
+            return None
+        exchange_result = matches[0].get("exchange_result")
+        if not isinstance(exchange_result, dict):
+            return None
+        token_id = str(exchange_result.get("token_id") or "")
         if not token_id:
             return None
 
@@ -821,7 +832,8 @@ class AuthManager:
         raise_on_denied: bool = False,
     ) -> str | None:
         """Create one idempotent request even under concurrent RPC retries."""
-        async with self._pairing_lifecycle_lock:
+        attempt_key = trusted_rate_limit_key or _UNATTRIBUTED_PAIRING_RATE_KEY
+        async with self._pairing_operation_lock(f"start:{attempt_key}"):
             return await self._start_pairing_locked(
                 device_name,
                 client_ip,
@@ -1009,8 +1021,7 @@ class AuthManager:
     async def list_pending_pairings(
         self, include_non_pending: bool = False
     ) -> tuple[list[dict[str, Any]], int]:
-        async with self._pairing_lifecycle_lock:
-            return await self._list_pending_pairings_locked(include_non_pending)
+        return await self._list_pending_pairings_locked(include_non_pending)
 
     async def _list_pending_pairings_locked(
         self, include_non_pending: bool
@@ -1032,7 +1043,7 @@ class AuthManager:
         pairing_session_id: str = "",
         trusted_rate_limit_key: str | None = None,
     ) -> dict[str, Any] | None:
-        async with self._pairing_lifecycle_lock:
+        async with self._pairing_operation_lock(f"pairing:{pairing_code}"):
             return await self._connect_pairing_locked(
                 pairing_code,
                 pairing_session_id=pairing_session_id,
@@ -1069,7 +1080,7 @@ class AuthManager:
         permissions: list[str] | None = None,
         is_admin: bool = False,
     ) -> bool:
-        async with self._pairing_lifecycle_lock:
+        async with self._pairing_operation_lock(f"pairing:{pairing_code}"):
             return await self._approve_pairing_locked(
                 pairing_code,
                 user_id,
@@ -1151,7 +1162,7 @@ class AuthManager:
         user_id: str,
         reason: str = "",
     ) -> bool:
-        async with self._pairing_lifecycle_lock:
+        async with self._pairing_operation_lock(f"pairing:{pairing_code}"):
             return await self._deny_pairing_locked(pairing_code, user_id, reason=reason)
 
     async def _deny_pairing_locked(
@@ -1217,7 +1228,7 @@ class AuthManager:
         """Issue at most one credential for concurrent identical exchanges."""
         if pairing_code not in self.pairing_requests:
             return None
-        async with self._pairing_lifecycle_lock:
+        async with self._pairing_operation_lock(f"pairing:{pairing_code}"):
             return await self._exchange_pairing_locked(
                 pairing_code,
                 pairing_session_id=pairing_session_id,
@@ -1443,14 +1454,20 @@ class AuthManager:
 
     async def _prune_expired_pairings(self) -> int:
         now = datetime.now()
-        expired = [
-            (code, request)
+        expired_codes = [
+            code
             for code, request in list(self.pairing_requests.items())
             if request.get("expires_at") and request["expires_at"] < now
         ]
-        for code, request in expired:
-            await self._expire_pairing(code, request)
-        return len(expired)
+        expired_count = 0
+        for code in expired_codes:
+            async with self._pairing_operation_lock(f"pairing:{code}"):
+                request = self.pairing_requests.get(code)
+                if request is None or request.get("expires_at", datetime.max) >= datetime.now():
+                    continue
+                await self._expire_pairing(code, request)
+                expired_count += 1
+        return expired_count
 
     async def _expire_pairing(self, pairing_code: str, request: dict[str, Any]) -> None:
         if request.get("status") != "exchanged":
@@ -1999,8 +2016,11 @@ class AuthManager:
     ) -> None:
         """Apply a durable peer approval to at most one live pairing request."""
 
-        async with self._pairing_lifecycle_lock:
-            for code, req in list(self.pairing_requests.items()):
+        for code in list(self.pairing_requests):
+            async with self._pairing_operation_lock(f"pairing:{code}"):
+                req = self.pairing_requests.get(code)
+                if req is None:
+                    continue
                 request_room = str(req.get("room_name") or "")
                 exact_room_approved = (
                     request_room in approved_rooms if request_room else len(approved_rooms) == 1
@@ -2018,7 +2038,7 @@ class AuthManager:
                     log_info(
                         f"MeshApprovePeer also approved pairing code {code} for peer {peer_id}"
                     )
-                    break  # At most one active code per peer
+                    return  # At most one active code per peer
 
     async def deny_mesh_peer(self, peer_id: str) -> bool:
         """Atomically revoke the peer authority graph while retaining its row."""
@@ -2065,13 +2085,16 @@ class AuthManager:
             return False
         await self._publish_authority_changes(data)
 
-        async with self._pairing_lifecycle_lock:
-            stale_pairings = [
-                (code, request)
-                for code, request in self.pairing_requests.items()
-                if request.get("remote_peer_id") == peer_id
-            ]
-            for code, request in stale_pairings:
+        stale_codes = [
+            code
+            for code, request in self.pairing_requests.items()
+            if request.get("remote_peer_id") == peer_id
+        ]
+        for code in stale_codes:
+            async with self._pairing_operation_lock(f"pairing:{code}"):
+                request = self.pairing_requests.get(code)
+                if request is None or request.get("remote_peer_id") != peer_id:
+                    continue
                 self.pairing_requests.pop(code, None)
                 if not request.get("rate_limit_released"):
                     self._release_pairing_attempt(request)
