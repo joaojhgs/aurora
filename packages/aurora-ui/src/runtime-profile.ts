@@ -1,5 +1,15 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import type { AuroraThinConnectionMode } from './connection-mode'
+import {
+  isRecord,
+  isSecretFieldName,
+  optionalProfileText,
+  rejectSecretFields,
+  requiredProfileText,
+  sanitizeRuntimeEndpoint,
+  sanitizeWebRtcConnectionProfile,
+  utf8ByteLength,
+} from './profile-sanitizer'
 
 const MAX_RUNTIME_PROFILE_COUNT = 64
 const MAX_RUNTIME_PROFILE_DOCUMENT_BYTES = 128 * 1024
@@ -467,8 +477,8 @@ function sanitizeHomeConnection(value: AuroraHomeConnectionProfile): AuroraHomeC
   if (mode !== 'http-only' && mode !== 'webrtc-only' && mode !== 'webrtc-preferred') {
     throw new Error('Runtime profile connection mode is invalid')
   }
-  const gatewayUrl = optionalRuntimeEndpoint(value.gatewayUrl, 'Aurora address', new Set(['http:', 'https:']))
-  const signalingUrl = optionalRuntimeEndpoint(value.signalingUrl, 'signaling address', new Set(['ws:', 'wss:']))
+  const gatewayUrl = sanitizeRuntimeEndpoint(value.gatewayUrl, 'Aurora address', new Set(['http:', 'https:']), 'Runtime profile')
+  const signalingUrl = sanitizeRuntimeEndpoint(value.signalingUrl, 'signaling address', new Set(['ws:', 'wss:']), 'Runtime profile')
   const webrtcProfile = value.webrtcProfile
     ? sanitizeWebRtcProfile(value.webrtcProfile, signalingUrl, mode)
     : undefined
@@ -524,7 +534,7 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
 
 function sanitizeMeshMembership(value: AuroraMeshMembershipProfile): AuroraMeshMembershipProfile {
   if (!isRecord(value)) throw new Error('Runtime profile mesh membership is invalid')
-  const signalingUrl = optionalRuntimeEndpoint(value.signalingUrl, 'mesh membership address', new Set(['ws:', 'wss:']))
+  const signalingUrl = sanitizeRuntimeEndpoint(value.signalingUrl, 'mesh membership address', new Set(['ws:', 'wss:']), 'Runtime profile')
   if (!signalingUrl) throw new Error('Mesh membership requires a signaling address')
   return {
     signalingUrl,
@@ -660,106 +670,18 @@ function sanitizeWebRtcProfile(
   signalingOverride: string,
   mode: AuroraConnectionMode,
 ): WebRtcPeerConnectionProfile {
-  if (!isRecord(value)) throw new Error('Runtime profile WebRTC invite is invalid')
-  const appId = requiredText(value.appId, 'WebRTC app id', 256)
-  const room = requiredText(value.room, 'WebRTC room', 512)
-  const roomSecretRef = requiredText(value.roomSecretRef, 'WebRTC room-secret reference', 1024)
-  const configuredBrokers = signalingOverride
-    ? [signalingOverride]
-    : Array.isArray(value.signalingBrokers)
-      ? [...value.signalingBrokers]
-      : []
-  if (configuredBrokers.length === 0 || configuredBrokers.length > 16) {
-    throw new Error('Runtime profile WebRTC signaling broker list is invalid')
-  }
-  const signalingBrokers = configuredBrokers.map((broker) =>
-    optionalRuntimeEndpoint(broker, 'signaling broker', new Set(['ws:', 'wss:'])),
-  )
-  const out: WebRtcPeerConnectionProfile = {
-    mode: mode === 'webrtc-only' ? 'webrtc-only' : 'webrtc-preferred',
-    appId,
-    room,
-    roomSecretRef,
-    signalingBrokers,
-  }
-  copyOptionalText(value.expectedStablePeerId, out, 'expectedStablePeerId', 256)
-  copyOptionalText(value.expectedSignalingPeerId, out, 'expectedSignalingPeerId', 256)
-  copyOptionalText(value.nodeName, out, 'nodeName', 160)
-  copyOptionalBoolean(value.production, out, 'production')
-  copyOptionalBoolean(value.allowInsecureLoopbackSignaling, out, 'allowInsecureLoopbackSignaling')
-  copyOptionalBoolean(value.requireAppLayerE2ee, out, 'requireAppLayerE2ee')
-  const stunServers = sanitizeIceServers(value.stunServers, new Set(['stun:', 'stuns:']))
-  const turnServers = sanitizeIceServers(value.turnServers, new Set(['turn:', 'turns:']))
-  if (stunServers) out.stunServers = stunServers
-  if (turnServers) out.turnServers = turnServers
-  return out
-}
-
-function optionalRuntimeEndpoint(
-  value: unknown,
-  label: string,
-  protocols: Set<string>,
-): string {
-  const trimmed = typeof value === 'string' ? value.trim() : ''
-  if (!trimmed) return ''
-  const url = new URL(trimmed)
-  if (!protocols.has(url.protocol) || url.username || url.password) {
-    throw new Error(
-      `${label} must use ${[...protocols].join('/')} without embedded credentials`,
-    )
-  }
-  if (url.hash) throw new Error(`${label} must not contain URL fragments`)
-  for (const key of url.searchParams.keys()) {
-    if (isSecretFieldName(key)) {
-      throw new Error(`${label} must not store credentials in URL query parameters`)
-    }
-  }
-  return url.toString().replace(/\/$/, '')
-}
-
-function sanitizeIceServers(
-  values: readonly string[] | undefined,
-  protocols: Set<string>,
-): string[] | undefined {
-  if (values === undefined) return undefined
-  if (!Array.isArray(values) || values.length > 16) throw new Error('Runtime profile ICE server list is invalid')
-  return values.map((value) => {
-    if (typeof value !== 'string') throw new Error('Runtime profile ICE server URL is invalid')
-    const trimmed = value.trim()
-    const protocol = trimmed.slice(0, trimmed.indexOf(':') + 1).toLowerCase()
-    if (!protocols.has(protocol) || trimmed.length > 2048 || trimmed !== value) {
-      throw new Error('Runtime profile ICE server URL is invalid')
-    }
-    validateIceServerUrl(trimmed, protocol)
-    return trimmed
+  return sanitizeWebRtcConnectionProfile(value, signalingOverride, mode, {
+    errorPrefix: 'Runtime profile',
+    invalidProfileMessage: 'Runtime profile WebRTC invite is invalid',
   })
 }
 
-function validateIceServerUrl(value: string, protocol: string): void {
-  const rest = value.slice(protocol.length)
-  const queryIndex = rest.indexOf('?')
-  const authority = queryIndex >= 0 ? rest.slice(0, queryIndex) : rest
-  const query = queryIndex >= 0 ? rest.slice(queryIndex + 1) : ''
-  if (authority.includes('@')) {
-    throw new Error('Runtime profile ICE server URL must not contain embedded credentials')
-  }
-  const params = new URLSearchParams(query)
-  for (const key of params.keys()) {
-    if (isSecretFieldName(key)) {
-      throw new Error('Runtime profile ICE server URL must not store credentials in query parameters')
-    }
-  }
-}
-
 function requiredText(value: unknown, label: string, maxLength: number): string {
-  const trimmed = typeof value === 'string' ? value.trim() : ''
-  if (!trimmed || utf8ByteLength(trimmed) > maxLength) throw new Error(`Runtime profile ${label} is required`)
-  return trimmed
+  return requiredProfileText(value, label, maxLength, 'Runtime profile')
 }
 
 function optionalText(value: unknown, label: string, maxLength: number): string | undefined {
-  if (value === undefined) return undefined
-  return requiredText(value, label, maxLength)
+  return optionalProfileText(value, label, maxLength, 'Runtime profile')
 }
 
 function requiredCatalogText(value: unknown, label: string, maxLength: number): string {
@@ -878,55 +800,4 @@ function requiredPhraseText(value: unknown, label: string, maxLength: number): s
     throw new Error(`Runtime profile ${label} is invalid`)
   }
   return text
-}
-
-function copyOptionalText(
-  value: string | undefined,
-  target: WebRtcPeerConnectionProfile,
-  key: 'expectedStablePeerId' | 'expectedSignalingPeerId' | 'nodeName',
-  maxLength: number,
-): void {
-  if (value === undefined) return
-  target[key] = requiredText(value, key, maxLength)
-}
-
-function copyOptionalBoolean(
-  value: boolean | undefined,
-  target: WebRtcPeerConnectionProfile,
-  key: 'production' | 'allowInsecureLoopbackSignaling' | 'requireAppLayerE2ee',
-): void {
-  if (value !== undefined) {
-    if (typeof value !== 'boolean') throw new Error(`Runtime profile ${key} is invalid`)
-    target[key] = value
-  }
-}
-
-function rejectSecretFields(value: unknown, path: string[]): void {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => rejectSecretFields(item, [...path, String(index)]))
-    return
-  }
-  if (!isRecord(value)) return
-  for (const [key, child] of Object.entries(value)) {
-    if (isSecretFieldName(key) && !isAllowedSecretReferenceField(key)) {
-      throw new Error(`Runtime profile must not contain secret field ${[...path, key].join('.')}`)
-    }
-    rejectSecretFields(child, [...path, key])
-  }
-}
-
-function isSecretFieldName(value: string): boolean {
-  return /(?:token|secret|password|credential|authorization|bearer)/iu.test(value)
-}
-
-function isAllowedSecretReferenceField(value: string): boolean {
-  return value === 'roomSecretRef'
-}
-
-function utf8ByteLength(value: string): number {
-  return new TextEncoder().encode(value).byteLength
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

@@ -1097,6 +1097,36 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(peer.disconnectedReasons).toContain('forget saved device')
   })
 
+  it('forgets the selected peer id even before a live WebRTC snapshot is available', async () => {
+    const peer = new FakeBrowserPeer({ status: 'idle', state: 'idle' })
+    const credentialStore = new MemoryPeerCredentialStore()
+    await credentialStore.save('peer-portugal', {
+      tokenId: 'token-row-local',
+      claimantPeerId: 'local-stable',
+      verifierPeerId: 'peer-portugal',
+      claimantSignalingPeerId: 'a-local',
+      verifierSignalingPeerId: 'z-remote',
+      roomName: 'room-1',
+      rawBearerToken: 'saved-local-token',
+    })
+    await credentialStore.save('peer-brazil', {
+      tokenId: 'token-row-local-2',
+      claimantPeerId: 'local-stable',
+      verifierPeerId: 'peer-brazil',
+      claimantSignalingPeerId: 'a-local',
+      verifierSignalingPeerId: 'z-remote-2',
+      roomName: 'room-1',
+      rawBearerToken: 'saved-local-token-2',
+    })
+    const controller = new BrowserWebRtcPeerController(peer as any, 'webrtc-only', { httpFallback: false, credentialStore })
+
+    const result = await controller.forgetSavedPeer('peer-portugal')
+
+    expect(result).toMatchObject({ peerId: 'peer-portugal', cleared: true })
+    expect(await credentialStore.get('peer-portugal')).toBeUndefined()
+    expect(await credentialStore.get('peer-brazil')).toBeDefined()
+  })
+
   it('forgets a saved device without throwing when the local store cannot remove it', async () => {
     const peer = new FakeBrowserPeer({ status: 'authorized', state: 'authorized', expectedStablePeerId: 'peer-remote' })
     const credentialStore = Object.assign(new MemoryPeerCredentialStore(), {

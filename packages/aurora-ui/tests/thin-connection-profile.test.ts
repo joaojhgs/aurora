@@ -81,6 +81,12 @@ describe('thin connection profiles', () => {
     expect(isThinConnectionProfileConfigured(direct)).toBe(true)
   })
 
+  it('applies shared UTF-8 byte limits to v1 profile text', () => {
+    expect(() =>
+      sanitizeThinConnectionProfile(webRtcProfile({ label: 'é'.repeat(61) })),
+    ).toThrow(/profile label/u)
+  })
+
   it('requires the transports selected by the runtime connection mode', () => {
     expect(() =>
       sanitizeThinConnectionProfile(httpProfile({ gatewayUrl: '' })),

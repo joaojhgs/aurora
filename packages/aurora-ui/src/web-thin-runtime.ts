@@ -963,8 +963,8 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
    * the other device to drop its own side separately and treat that as
    * best-effort; failure there is reported, never thrown.
    */
-  async forgetSavedPeer(): Promise<BrowserForgetSavedPeerResult> {
-    const peerId = this.peer?.snapshot()?.expectedStablePeerId ?? this.sdkSnapshot?.expectedStablePeerId ?? null
+  async forgetSavedPeer(peerIdOverride?: string): Promise<BrowserForgetSavedPeerResult> {
+    const peerId = peerIdOverride ?? this.peer?.snapshot()?.expectedStablePeerId ?? this.sdkSnapshot?.expectedStablePeerId ?? null
     let cleared = false
     let failureReason: string | undefined
     try {

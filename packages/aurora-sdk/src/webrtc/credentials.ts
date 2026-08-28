@@ -1,3 +1,4 @@
+import { AuroraError } from '../errors.js'
 import { computeReconnectProofHex, type ReconnectProofInput } from './crypto.js'
 import { utf8ToBytes, zeroBytes } from './encoding.js'
 
@@ -386,6 +387,10 @@ export class NativePeerCredentialStore implements PeerCredentialStore {
 
   async clear(): Promise<void> {
     this.assertOpen()
+    throw new AuroraError({
+      code: 'unsupported_feature',
+      message: 'Native peer credential removal requires explicit peer IDs'
+    })
   }
 
   async close(): Promise<void> {

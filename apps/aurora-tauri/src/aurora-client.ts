@@ -1256,7 +1256,14 @@ class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore 
     await this.pendingRoomSecretWrites.catch(() => undefined);
     for (const value of this.roomSecrets.values()) value.fill(0);
     this.roomSecrets.clear();
-    await this.nativeStore.clear();
+    const savedPeerIds = this.profileMetadataStore
+      .loadPeerConnectionProfiles()
+      .flatMap((profile) => profile.expectedStablePeerId ? [profile.expectedStablePeerId] : []);
+    const uniquePeerIds = [...new Set(savedPeerIds)];
+    // Native vaults intentionally expose exact-peer deletion only. Profiles are
+    // therefore the deletion index; credentials orphaned outside that index
+    // cannot be enumerated and must never be reported as successfully cleared.
+    for (const peerId of uniquePeerIds) await this.nativeStore.remove(peerId);
     await this.profileMetadataStore.clear();
   }
 

@@ -1,5 +1,10 @@
 import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 import type { AuroraThinConnectionMode } from './connection-mode'
+import {
+  requiredProfileText,
+  sanitizeRuntimeEndpoint,
+  sanitizeWebRtcConnectionProfile,
+} from './profile-sanitizer'
 export * from './runtime-profile'
 
 export interface ThinConnectionProfile {
@@ -84,15 +89,17 @@ export function sanitizeThinConnectionProfile(
   if (mode !== 'http-only' && mode !== 'webrtc-only' && mode !== 'webrtc-preferred') {
     throw new Error('Thin-client connection mode is invalid')
   }
-  const gatewayUrl = optionalRuntimeEndpoint(
+  const gatewayUrl = sanitizeRuntimeEndpoint(
     profile.gatewayUrl,
     'Gateway',
     new Set(['http:', 'https:']),
+    'Thin-client',
   )
-  const signalingUrl = optionalRuntimeEndpoint(
+  const signalingUrl = sanitizeRuntimeEndpoint(
     profile.signalingUrl,
     'signaling',
     new Set(['ws:', 'wss:']),
+    'Thin-client',
   )
   const webrtcProfile = profile.webrtcProfile
     ? sanitizeWebRtcProfile(profile.webrtcProfile, signalingUrl, mode)
@@ -172,120 +179,12 @@ function sanitizeWebRtcProfile(
   signalingOverride: string,
   mode: AuroraThinConnectionMode,
 ): WebRtcPeerConnectionProfile {
-  const appId = requiredText(value.appId, 'WebRTC app id', 256)
-  const room = requiredText(value.room, 'WebRTC room', 512)
-  const roomSecretRef = requiredText(value.roomSecretRef, 'WebRTC room-secret reference', 1024)
-  const configuredBrokers = signalingOverride
-    ? [signalingOverride]
-    : [...value.signalingBrokers]
-  if (configuredBrokers.length === 0 || configuredBrokers.length > 16) {
-    throw new Error('Thin-client WebRTC signaling broker list is invalid')
-  }
-  const signalingBrokers = configuredBrokers.map((broker) =>
-    optionalRuntimeEndpoint(broker, 'signaling broker', new Set(['ws:', 'wss:'])),
-  )
-  const out: WebRtcPeerConnectionProfile = {
-    mode: mode === 'webrtc-only' ? 'webrtc-only' : 'webrtc-preferred',
-    appId,
-    room,
-    roomSecretRef,
-    signalingBrokers,
-  }
-  copyOptionalText(value.expectedStablePeerId, out, 'expectedStablePeerId', 256)
-  copyOptionalText(value.expectedSignalingPeerId, out, 'expectedSignalingPeerId', 256)
-  copyOptionalText(value.nodeName, out, 'nodeName', 160)
-  copyOptionalBoolean(value.production, out, 'production')
-  copyOptionalBoolean(
-    value.allowInsecureLoopbackSignaling,
-    out,
-    'allowInsecureLoopbackSignaling',
-  )
-  copyOptionalBoolean(value.requireAppLayerE2ee, out, 'requireAppLayerE2ee')
-  const stunServers = sanitizeIceServers(value.stunServers, new Set(['stun:', 'stuns:']))
-  const turnServers = sanitizeIceServers(value.turnServers, new Set(['turn:', 'turns:']))
-  if (stunServers) out.stunServers = stunServers
-  if (turnServers) out.turnServers = turnServers
-  return out
-}
-
-function optionalRuntimeEndpoint(
-  value: string,
-  label: string,
-  protocols: Set<string>,
-): string {
-  const trimmed = typeof value === 'string' ? value.trim() : ''
-  if (!trimmed) return ''
-  const url = new URL(trimmed)
-  if (!protocols.has(url.protocol) || url.username || url.password) {
-    throw new Error(
-      `Thin-client ${label} must use ${[...protocols].join('/')} without embedded credentials`,
-    )
-  }
-  if (url.hash) throw new Error(`Thin-client ${label} must not contain URL fragments`)
-  for (const key of url.searchParams.keys()) {
-    if (/(?:^|[_-])(?:access|refresh|api)?[_-]?(?:token|secret|password|credential|authorization|key)(?:$|[_-])/iu.test(key)) {
-      throw new Error(`Thin-client ${label} must not store credentials in URL query parameters`)
-    }
-  }
-  return url.toString().replace(/\/$/, '')
-}
-
-function sanitizeIceServers(
-  values: readonly string[] | undefined,
-  protocols: Set<string>,
-): string[] | undefined {
-  if (values === undefined) return undefined
-  if (values.length > 16) throw new Error('Thin-client ICE server list is too large')
-  return values.map((value) => {
-    if (typeof value !== 'string') throw new Error('Thin-client ICE server URL is invalid')
-    const trimmed = value.trim()
-    const protocol = trimmed.slice(0, trimmed.indexOf(':') + 1).toLowerCase()
-    if (!protocols.has(protocol) || trimmed.length > 2048 || trimmed !== value) {
-      throw new Error('Thin-client ICE server URL is invalid')
-    }
-    validateIceServerUrl(trimmed, protocol)
-    return trimmed
+  return sanitizeWebRtcConnectionProfile(value, signalingOverride, mode, {
+    errorPrefix: 'Thin-client',
+    invalidProfileMessage: 'Thin-client WebRTC invite is invalid',
   })
 }
 
-function validateIceServerUrl(value: string, protocol: string): void {
-  const rest = value.slice(protocol.length)
-  const queryIndex = rest.indexOf('?')
-  const authority = queryIndex >= 0 ? rest.slice(0, queryIndex) : rest
-  const query = queryIndex >= 0 ? rest.slice(queryIndex + 1) : ''
-  if (authority.includes('@')) {
-    throw new Error('Thin-client ICE server URL must not contain embedded credentials')
-  }
-  const params = new URLSearchParams(query)
-  for (const key of params.keys()) {
-    if (/(?:^|[_-])(?:access|refresh|api)?[_-]?(?:token|secret|password|credential|authorization|key)(?:$|[_-])/iu.test(key)) {
-      throw new Error('Thin-client ICE server URL must not store credentials in query parameters')
-    }
-  }
-}
-
 function requiredText(value: string, label: string, maxLength: number): string {
-  const trimmed = typeof value === 'string' ? value.trim() : ''
-  if (!trimmed || trimmed.length > maxLength) {
-    throw new Error(`Thin-client ${label} is required`)
-  }
-  return trimmed
-}
-
-function copyOptionalText(
-  value: string | undefined,
-  target: WebRtcPeerConnectionProfile,
-  key: 'expectedStablePeerId' | 'expectedSignalingPeerId' | 'nodeName',
-  maxLength: number,
-): void {
-  if (value === undefined) return
-  target[key] = requiredText(value, key, maxLength)
-}
-
-function copyOptionalBoolean(
-  value: boolean | undefined,
-  target: WebRtcPeerConnectionProfile,
-  key: 'production' | 'allowInsecureLoopbackSignaling' | 'requireAppLayerE2ee',
-): void {
-  if (value !== undefined) target[key] = value
+  return requiredProfileText(value, label, maxLength, 'Thin-client')
 }

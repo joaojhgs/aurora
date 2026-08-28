@@ -409,12 +409,28 @@ describe('NativePeerCredentialStore', () => {
     })
     expect(meta).toMatchObject({ tokenId: reconnect.inputs.token_id, roomName: reconnect.inputs.room_name })
     await store.remove('stable-answer')
-    await store.clear()
+    await expect(store.clear()).rejects.toMatchObject({
+      code: 'unsupported_feature',
+      message: expect.stringMatching(/explicit peer IDs/u)
+    })
     await store.close()
     await expect(store.status('stable-answer')).rejects.toThrow(/closed/u)
     expect(commands).toEqual([
       DEFAULT_NATIVE_PEER_CREDENTIAL_COMMANDS.set,
       DEFAULT_NATIVE_PEER_CREDENTIAL_COMMANDS.delete
     ])
+  })
+
+  it('fails closed for native whole-store clear because native backends cannot enumerate safely', async () => {
+    const commands: string[] = []
+    const store = new NativePeerCredentialStore({
+      invoke: async (command) => {
+        commands.push(command)
+        return null
+      }
+    })
+
+    await expect(store.clear()).rejects.toMatchObject({ code: 'unsupported_feature' })
+    expect(commands).toEqual([])
   })
 })

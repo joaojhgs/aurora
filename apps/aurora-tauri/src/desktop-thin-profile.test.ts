@@ -1535,6 +1535,17 @@ describe('desktop-thin live connection profiles', () => {
     expect(restored.loadPeerConnectionProfiles?.()).toEqual([
       expect.objectContaining({ expectedStablePeerId: 'peer-python', nodeName: 'Python node' }),
     ])
+    restored.savePeerConnectionProfile?.({
+      ...roomProfile,
+      expectedStablePeerId: 'peer-browser',
+      nodeName: 'Hosted browser',
+    })
+    await restored.clear()
+    expect(restored.loadPeerConnectionProfiles?.()).toEqual([])
+    expect(baseInvoke.mock.calls
+      .filter(([command]) => command === 'aurora_thin_peer_credential_delete')
+      .map(([, args]) => (args?.request as { peerId?: string }).peerId)
+    ).toEqual(['peer-browser', 'peer-python', 'peer-browser'])
     await restored.close()
     window.localStorage.clear()
   })

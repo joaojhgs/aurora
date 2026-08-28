@@ -678,7 +678,7 @@ export function MeshPeersResource({
           remoteForgotten = false
         }
       }
-      const result = await thinPeer.forgetSavedPeer()
+      const result = await thinPeer.forgetSavedPeer(peer.peerId)
       setForgetPendingPeerId(null)
       if (!result.cleared) {
         setForgetWarning(
