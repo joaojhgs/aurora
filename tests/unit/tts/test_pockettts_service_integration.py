@@ -14,7 +14,7 @@ import tempfile
 import types
 import wave
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
@@ -2032,7 +2032,7 @@ async def test_concurrent_voice_import_starts_respect_capacity(mock_bus) -> None
     service._voice_import_sessions = {
         f"existing-{index}": types.SimpleNamespace(
             owner="principal=principal-a|peer=peer-a",
-            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
         )
         for index in range(7)
     }

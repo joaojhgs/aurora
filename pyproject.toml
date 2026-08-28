@@ -48,7 +48,8 @@ dependencies = [
     # Basic utilities (always needed)
     "psutil>=5.0.0",
     "tenacity>=8.2.3,<10.0",
-    
+    "tomli>=2.0.0; python_version < '3.11'",
+
     # Core data handling
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
@@ -691,7 +692,7 @@ app = [
 [tool.ruff]
 # Line length matches black's default
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 # Exclude common directories
 exclude = [

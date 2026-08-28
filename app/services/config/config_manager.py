@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from threading import RLock
@@ -1466,7 +1466,7 @@ class ConfigManager:
             "payload": payload,
             "consumed": False,
             "expires_at": (
-                datetime.now(UTC) + timedelta(seconds=_PREVIEW_TOKEN_TTL_SECONDS)
+                datetime.now(timezone.utc) + timedelta(seconds=_PREVIEW_TOKEN_TTL_SECONDS)
             ).isoformat(),
         }
         if len(self._preview_tokens) > _MAX_PREVIEW_TOKENS:
@@ -1477,7 +1477,7 @@ class ConfigManager:
         return token
 
     def _cleanup_preview_tokens(self) -> None:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         for token, record in list(self._preview_tokens.items()):
             expires_at = record.get("expires_at")
             expired = False
@@ -1598,7 +1598,7 @@ class ConfigManager:
         self._version_history.append(
             {
                 "version_id": f"cfgv_{uuid.uuid4().hex}",
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "key_path": key_path,
                 "old_value": deepcopy(old_value),
                 "new_value": deepcopy(new_value),

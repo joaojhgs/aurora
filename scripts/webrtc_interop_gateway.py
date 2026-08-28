@@ -21,7 +21,7 @@ import sys
 import time
 from collections.abc import AsyncIterator
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -136,7 +136,7 @@ def ac18_digest(value: dict[str, Any]) -> str:
 
 
 def now() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def build_ac18_mesh_config(*, timeout_seconds: float) -> MeshConfig:

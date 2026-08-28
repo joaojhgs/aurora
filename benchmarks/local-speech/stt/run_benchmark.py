@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -259,7 +259,7 @@ def _generated_at(value: str) -> str:
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", "0"))
     if epoch == 0:
         return "1970-01-01T00:00:00Z"
-    return datetime.fromtimestamp(epoch, tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

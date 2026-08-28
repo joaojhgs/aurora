@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiosqlite
@@ -136,7 +136,7 @@ async def _authority_rows(db_path: str) -> list[tuple[object, ...]]:
 async def test_prunes_only_old_never_approved_credentialless_mesh_peer_rows(tmp_path) -> None:
     db_path = str(tmp_path / "mesh-orphan-prune.db")
     await _create_mesh_peer_schema(db_path)
-    now = datetime(2026, 8, 21, 12, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
     old = now - timedelta(days=40)
     recent = now - timedelta(hours=6)
 
@@ -231,7 +231,7 @@ async def test_prunes_only_old_never_approved_credentialless_mesh_peer_rows(tmp_
 async def test_orphan_prune_is_bounded_by_max_rows(tmp_path) -> None:
     db_path = str(tmp_path / "mesh-orphan-prune-bounded.db")
     await _create_mesh_peer_schema(db_path)
-    now = datetime(2026, 8, 21, 12, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
     old = now - timedelta(days=40)
 
     async with aiosqlite.connect(db_path) as db:
@@ -261,14 +261,14 @@ async def test_orphan_prune_is_bounded_by_max_rows(tmp_path) -> None:
         ("outbound_token_id", "issued-token"),
         ("outbound_device_id", "issued-device"),
         ("outbound_user_id", "issued-user"),
-        ("outbound_approved_at", datetime(2026, 7, 1, 12, 0, tzinfo=UTC)),
+        ("outbound_approved_at", datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)),
         ("outbound_approved_by", "admin-user"),
         ("inbound_permissions", '["Tooling.GetTools"]'),
         ("inbound_token", "sealed-token"),
         ("inbound_token_id", "remote-token-id"),
         ("inbound_device_id", "remote-device"),
         ("inbound_user_id", "remote-user"),
-        ("inbound_approved_at", datetime(2026, 7, 1, 12, 0, tzinfo=UTC)),
+        ("inbound_approved_at", datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)),
     ],
 )
 async def test_orphan_prune_preserves_each_trust_bearing_field(
@@ -278,7 +278,7 @@ async def test_orphan_prune_preserves_each_trust_bearing_field(
 ) -> None:
     db_path = str(tmp_path / f"mesh-orphan-preserve-{field_name}.db")
     await _create_mesh_peer_schema(db_path)
-    now = datetime(2026, 8, 21, 12, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 21, 12, 0, tzinfo=timezone.utc)
     old = now - timedelta(days=40)
 
     async with aiosqlite.connect(db_path) as db:

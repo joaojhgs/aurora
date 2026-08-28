@@ -6,7 +6,6 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 import types
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +14,11 @@ import pytest
 
 from scripts import build as build_script
 from scripts.wheel_installer import WheelInstaller
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
 
 PYTORCH_CUDA_CHILDREN = {
     "nvidia-cublas-cu12",

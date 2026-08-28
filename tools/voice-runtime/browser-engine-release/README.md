@@ -14,10 +14,10 @@ Example staging from existing neutral artifacts:
 
 ```bash
 python tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py \
-  --artifact-root /home/developer/projects/aurora/.artifacts/pockettts/p4-native-voice \
-  --source-root /home/developer/projects/aurora/.artifacts/sherpa-onnx-1.13.4-neutral-20260814053955 \
-  --tts-artifact-root /home/developer/projects/aurora/.artifacts/sherpa-onnx-1.13.4-neutral-tts-wasm-202608140712 \
-  --output-root /home/developer/projects/aurora/.artifacts/voice-runtime/browser-engine-release/current
+  --artifact-root "$PWD/.artifacts/pockettts/p4-native-voice" \
+  --source-root "$PWD/.artifacts/sherpa-onnx-1.13.5-neutral" \
+  --tts-artifact-root "$PWD/.artifacts/sherpa-onnx-1.13.5-neutral-tts-wasm" \
+  --output-root "$PWD/.artifacts/voice-runtime/browser-engine-release/current"
 ```
 
 The output contains:

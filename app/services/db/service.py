@@ -13,7 +13,7 @@ import asyncio
 import inspect
 import re
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -464,7 +464,7 @@ class DBService(BaseService):
         return namespace.replace("|", ".")
 
     def _now_iso(self) -> str:
-        return datetime.now(UTC).isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     def _new_policy_decision_id(self, supplied: str | None = None) -> str:
         return supplied or f"rag-policy-{uuid4()}"

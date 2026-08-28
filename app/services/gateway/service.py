@@ -17,7 +17,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -1570,7 +1570,7 @@ class GatewayService(BaseService):
             module=data.module,
             status="unknown",
             checks={"registry": "missing"},
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             error="service is not present in Gateway registry",
         )
 
@@ -1617,7 +1617,7 @@ class GatewayService(BaseService):
             container_topology_hints=self._container_topology_hints(),
             mode_capability_degradations=sorted(set(degradations)),
             mesh_peer_topology_trusted=False if mesh_status.peers else None,
-            generated_at=datetime.now(UTC).isoformat(),
+            generated_at=datetime.now(timezone.utc).isoformat(),
             secrets_redacted=True,
         )
 
@@ -1967,7 +1967,7 @@ class GatewayService(BaseService):
         )
 
         return GatewaySupportBundleResponse(
-            generated_at=datetime.now(UTC).isoformat(),
+            generated_at=datetime.now(timezone.utc).isoformat(),
             correlation_id=data.correlation_id,
             registry=registry_export,
             services=services,
@@ -2970,7 +2970,7 @@ class GatewayService(BaseService):
                 "heartbeat": service.status,
                 "contracts": "present" if service.method_count else "empty",
             },
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     async def _build_bus_health(self) -> BusHealth:

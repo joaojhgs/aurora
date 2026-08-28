@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.shared.contracts.models.stt import (
@@ -69,7 +69,7 @@ class AudioSessionService(BaseService):
             raise ValueError("audio session requires an explicit peer/provider selector")
         self._validate_audio_sample_format(data.sample_rate, data.channels, data.format, 0)
 
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=min(data.requested_ttl_s, 3600))
         session_id = str(uuid.uuid4())
         correlation_id = data.correlation_id or str(uuid.uuid4())
@@ -145,7 +145,7 @@ class AudioSessionService(BaseService):
                 reason=data.reason or "denied",
             )
 
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         expires_at: datetime = session["expires_at"]
         if data.expires_in_s is not None:
             expires_at = min(expires_at, now + timedelta(seconds=data.expires_in_s))
@@ -253,7 +253,7 @@ class AudioSessionService(BaseService):
     def _assert_session_valid(self, session: dict[str, Any], consent_token: str) -> None:
         if session["status"] in {"stopped", "denied", "expired"}:
             raise PermissionError(f"audio session is {session['status']}")
-        if datetime.now(UTC) >= session["expires_at"]:
+        if datetime.now(timezone.utc) >= session["expires_at"]:
             session["status"] = "expired"
             raise PermissionError("audio session expired")
         if not session.get("consent_granted") or not session.get("consent_token"):

@@ -17,7 +17,7 @@ import tempfile
 import time
 import wave
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -153,7 +153,7 @@ def run(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     ok = all(result["status"] == "ok" for result in results)
     report = {
         "schema_version": SCHEMA_VERSION,
-        "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "physical_device_claim": False,
         "thermal_state": "unavailable_in_linux_ci",
         "host": {
@@ -954,7 +954,7 @@ def ensure_redacted(value: Any) -> None:
 def failure_report(reason: str) -> dict[str, Any]:
     report = {
         "schema_version": SCHEMA_VERSION,
-        "generated_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "physical_device_claim": False,
         "thermal_state": "unavailable_in_linux_ci",
         "host": {

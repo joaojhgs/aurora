@@ -7,25 +7,59 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py"
-NEUTRAL_SOURCE = Path(
-    "/home/developer/projects/aurora/.artifacts/sherpa-onnx-1.13.4-neutral-20260814053955"
-)
-NEUTRAL_TTS = Path(
-    "/home/developer/projects/aurora/.artifacts/sherpa-onnx-1.13.4-neutral-tts-wasm-202608140712"
-)
-PHASE4_ROOT = Path("/home/developer/projects/aurora/.artifacts/pockettts/p4-native-voice")
 
 
-def run_stage(output_root: Path) -> subprocess.CompletedProcess[str]:
+def write_asset(root: Path, relative: str, body: bytes = b"asset") -> None:
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+
+
+def create_neutral_source_roots(tmp_path: Path) -> tuple[Path, Path]:
+    source_root = tmp_path / "sherpa-onnx-1.13.5-neutral"
+    tts_root = tmp_path / "sherpa-onnx-1.13.5-neutral-tts"
+    write_asset(
+        source_root,
+        "build-wasm-simd-vad-asr/install/bin/wasm/vad-asr/sherpa-onnx-wasm-main-vad-asr.js",
+    )
+    write_asset(
+        source_root,
+        "build-wasm-simd-vad-asr/install/bin/wasm/vad-asr/sherpa-onnx-wasm-main-vad-asr.wasm",
+    )
+    write_asset(
+        source_root,
+        "build-wasm-simd-vad-asr/install/bin/wasm/vad-asr/sherpa-onnx-vad.js",
+    )
+    write_asset(
+        source_root,
+        "build-wasm-simd-vad-asr/install/bin/wasm/vad-asr/sherpa-onnx-asr.js",
+    )
+    write_asset(
+        source_root,
+        "build-wasm-simd-kws/install/bin/wasm/sherpa-onnx-wasm-kws-main.js",
+    )
+    write_asset(
+        source_root,
+        "build-wasm-simd-kws/install/bin/wasm/sherpa-onnx-wasm-kws-main.wasm",
+    )
+    write_asset(source_root, "build-wasm-simd-kws/install/bin/wasm/sherpa-onnx-kws.js")
+    write_asset(tts_root, "sherpa-onnx-wasm-main-tts.js")
+    write_asset(tts_root, "sherpa-onnx-wasm-main-tts.wasm")
+    write_asset(tts_root, "sherpa-onnx-tts.js")
+    write_asset(tts_root, "sherpa-onnx-tts.worker.js")
+    return source_root, tts_root
+
+
+def run_stage(
+    output_root: Path, source_root: Path, tts_root: Path
+) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
         str(SCRIPT),
-        "--artifact-root",
-        str(PHASE4_ROOT),
         "--source-root",
-        str(NEUTRAL_SOURCE),
+        str(source_root),
         "--tts-artifact-root",
-        str(NEUTRAL_TTS),
+        str(tts_root),
         "--output-root",
         str(output_root),
     ]
@@ -33,7 +67,8 @@ def run_stage(output_root: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_stages_engine_code_without_model_payloads(tmp_path: Path) -> None:
-    result = run_stage(tmp_path / "release")
+    source_root, tts_root = create_neutral_source_roots(tmp_path)
+    result = run_stage(tmp_path / "release", source_root, tts_root)
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["capabilities"] == {"kws": True, "stt": True, "tts": True, "vad": True}
@@ -71,8 +106,9 @@ def test_stages_engine_code_without_model_payloads(tmp_path: Path) -> None:
 
 
 def test_rejects_forbidden_payloads(tmp_path: Path) -> None:
+    source_root, tts_root = create_neutral_source_roots(tmp_path)
     release = tmp_path / "release"
-    result = run_stage(release)
+    result = run_stage(release, source_root, tts_root)
     assert result.returncode == 0, result.stderr
     leak = release / "assets" / "kws" / "tokens.txt"
     leak.write_text("not allowed in engine release\n", encoding="utf-8")
@@ -81,9 +117,9 @@ def test_rejects_forbidden_payloads(tmp_path: Path) -> None:
         sys.executable,
         str(SCRIPT),
         "--source-root",
-        str(NEUTRAL_SOURCE),
+        str(source_root),
         "--tts-artifact-root",
-        str(NEUTRAL_TTS),
+        str(tts_root),
         "--output-root",
         str(release),
         "--skip-stage",

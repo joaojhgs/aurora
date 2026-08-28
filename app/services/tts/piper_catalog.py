@@ -10,7 +10,7 @@ import shutil
 import tarfile
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from importlib import resources
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -574,7 +574,7 @@ class PiperCatalogManager:
             "archive_size_bytes": entry.archive.byte_size,
             "display_name": entry.display_name,
             "language": entry.language,
-            "installed_at": datetime.now(UTC).isoformat(),
+            "installed_at": datetime.now(timezone.utc).isoformat(),
             "sample_rate": sample_rate,
             "paths": {
                 "model": entry.bindings.model,

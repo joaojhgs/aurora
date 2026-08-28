@@ -11,7 +11,7 @@ from __future__ import annotations
 import contextlib
 import math
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_info, log_warning
@@ -136,7 +136,7 @@ def generate_manifest(
         projection_supported=True,
         projection_active=False,
         recipient_projection_evidence=None,
-        timestamp=datetime.now(UTC).isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
     log_info(
@@ -415,7 +415,7 @@ def manifest_from_projection(
         projection_supported=True,
         projection_active=True,
         recipient_projection_evidence=evidence,
-        timestamp=timestamp or datetime.now(UTC).isoformat(),
+        timestamp=timestamp or datetime.now(timezone.utc).isoformat(),
     )
 
 

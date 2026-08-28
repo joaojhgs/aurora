@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -78,7 +78,9 @@ class BackupService(BaseService):
         required_perms=["Backup.manage"],
     )
     async def create_backup(self, data: BackupCreateRequest) -> BackupCreateResponse:
-        backup_id = f"backup-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+        backup_id = (
+            f"backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
+        )
         audit_receipt = self._audit_receipt("create", backup_id)
         try:
             components = await self._collect_components(data.components, data.include_personal_data)
@@ -371,7 +373,7 @@ class BackupService(BaseService):
     ) -> BackupManifestSummary:
         manifest = BackupManifestSummary(
             backup_id=backup_id,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             status=status,
             storage=self._safe_storage(storage),
             components=components,

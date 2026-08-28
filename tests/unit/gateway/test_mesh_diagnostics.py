@@ -1,7 +1,7 @@
 """Unit tests for Gateway mesh diagnostics."""
 
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -365,7 +365,7 @@ async def test_rtc_client_diagnostics_reports_ice_channel_auth_and_redacts_error
     client._diagnostic_errors = deque(
         [
             WebRTCDiagnosticError(
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 code="auth_failed",
                 message="redacted diagnostic event",
                 peer_id="session-peer",

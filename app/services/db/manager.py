@@ -5,7 +5,7 @@ Handles all database operations using aiosqlite.
 
 import contextlib
 import json
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -163,7 +163,7 @@ class DatabaseManager:
         else:
             parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if parsed.tzinfo is not None:
-            parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
         return parsed.isoformat()
 
     @classmethod
@@ -708,7 +708,7 @@ class DatabaseManager:
     def _utc_now() -> datetime:
         """Return an aware UTC timestamp for session ordering."""
 
-        return datetime.now(UTC)
+        return datetime.now(timezone.utc)
 
     @staticmethod
     def _parse_session_datetime(value: str | datetime) -> datetime:
@@ -719,8 +719,8 @@ class DatabaseManager:
         else:
             parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     @classmethod
     def _session_from_row(cls, row: aiosqlite.Row) -> Session:
@@ -961,7 +961,7 @@ class DatabaseManager:
         session_type = session_type.strip()
         if not session_type:
             raise ValueError("session type must be explicit")
-        resolved_now = (now or self._utc_now()).astimezone(UTC)
+        resolved_now = (now or self._utc_now()).astimezone(timezone.utc)
         cutoff = resolved_now - timedelta(seconds=stale_after_seconds)
         db: aiosqlite.Connection | None = None
         try:
@@ -2202,8 +2202,8 @@ class DatabaseManager:
     ) -> DBPruneOrphanedMeshPeerRowsResponse:
         """Garbage-collect old mesh rows that never gained trust or credentials."""
 
-        now = request.now if request.now is not None else datetime.now(UTC).timestamp()
-        cutoff = datetime.fromtimestamp(now - request.retention_seconds, UTC)
+        now = request.now if request.now is not None else datetime.now(timezone.utc).timestamp()
+        cutoff = datetime.fromtimestamp(now - request.retention_seconds, timezone.utc)
         cutoff_text = cutoff.replace(tzinfo=None).isoformat(sep=" ", timespec="seconds")
         age_expr = "datetime(COALESCE(last_seen_at, first_seen_at))"
         eligible_where = f"""

@@ -3,11 +3,15 @@ from __future__ import annotations
 import io
 import json
 import tarfile
-import tomllib
 import zipfile
 from pathlib import Path
 
 from scripts.speech_runtime_abi import cli
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
 
 
 def _write_project(

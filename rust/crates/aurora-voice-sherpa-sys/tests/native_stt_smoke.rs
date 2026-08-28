@@ -11,7 +11,6 @@ use aurora_voice_sherpa_sys::{
     ErrorCode, OfflineSttConfig, OfflineSttRecognizer, OfflineSttResult, SttError,
 };
 
-const PHASE4_ROOT: &str = "/home/developer/projects/aurora-worktrees/pockettts-native-p4-evidence-20260806/.artifacts/pockettts/p4-native-voice";
 const MOONSHINE_MODEL: &str = "models/extracted/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27";
 const EXPECTED_TEXT: &str =
     "Ask not what your country can do for you. Ask what you can do for your country.";
@@ -190,18 +189,20 @@ fn phase4_config() -> Result<OfflineSttConfig, SttError> {
 fn phase4_model_path(file: &str) -> PathBuf {
     env::var_os("AURORA_SHERPA_ONNX_STT_MODEL_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(PHASE4_ROOT).join(MOONSHINE_MODEL))
+        .unwrap_or_else(|| phase4_root().join(MOONSHINE_MODEL))
         .join(file)
 }
 
 fn phase4_wav_path() -> PathBuf {
     env::var_os("AURORA_SHERPA_ONNX_STT_TEST_WAV")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            PathBuf::from(PHASE4_ROOT)
-                .join(MOONSHINE_MODEL)
-                .join("test_wavs/0.wav")
-        })
+        .unwrap_or_else(|| phase4_root().join(MOONSHINE_MODEL).join("test_wavs/0.wav"))
+}
+
+fn phase4_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join(".artifacts/pockettts/p4-native-voice")
 }
 
 fn read_pcm16_mono_wav(path: &Path) -> WavPcm {

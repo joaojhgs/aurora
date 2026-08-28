@@ -1,6 +1,6 @@
 """Regression tests for principal-owned persisted chat sessions."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiosqlite
@@ -157,7 +157,7 @@ async def test_last_opened_session_and_daemon_24_hour_cutoff(tmp_path: Path) -> 
     db_path = tmp_path / "daemon-sessions.db"
     manager = DatabaseManager(str(db_path))
     await manager.initialize()
-    fixed_now = datetime(2026, 7, 11, 12, 0, tzinfo=UTC)
+    fixed_now = datetime(2026, 7, 11, 12, 0, tzinfo=timezone.utc)
 
     recent = await manager.ensure_session(
         principal_id="user-a",

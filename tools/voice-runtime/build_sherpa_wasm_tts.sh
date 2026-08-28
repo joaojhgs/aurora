@@ -18,7 +18,6 @@ if ! command -v emcc >/dev/null 2>&1; then
     "${EMSDK:-}" \
     "$ROOT/.artifacts/sherpa-onnx/emsdk" \
     "$ROOT/tools/emsdk-4.0.23" \
-    "/home/developer/projects/aurora/.artifacts/sherpa-onnx/emsdk" \
     "$HOME/emsdk"
   do
     if [[ -n "$candidate" && -f "$candidate/emsdk_env.sh" ]]; then

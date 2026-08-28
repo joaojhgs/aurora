@@ -1,7 +1,7 @@
 """Unit tests for mesh event stream and support-bundle observability."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -207,7 +207,7 @@ def test_event_normalization_redacts_payload_and_extracts_correlation():
             payload={"token": "secret-token", "file_path": "/home/user/audio.wav"},
         ),
         correlation_id="corr-1",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
     )
 
     event = _event_from_envelope(envelope)
@@ -238,7 +238,7 @@ def test_live_display_payload_allows_chat_text_without_changing_diagnostics():
                     "api_key": "must-not-leak",
                 },
             },
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
         )
     )
 
@@ -286,7 +286,7 @@ def test_assistant_delta_event_preserves_correlation_and_safe_live_order_fields(
                 },
             },
             correlation_id="corr-delta",
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
         )
     )
     live_payload = _live_display_payload(
@@ -489,7 +489,7 @@ def test_tool_running_and_failed_events_are_visible_with_safe_redaction(
                 "token": "must-not-leak",
                 "error": "provider failed" if status == "failed" else None,
             },
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
         )
     )
     dumped = json.dumps(event.redacted_payload)
@@ -515,7 +515,7 @@ def test_event_normalization_handles_raw_audio_bytes_without_exposing_audio():
             sequence=7,
             format=AudioFormat(sample_rate=16000, channels=1),
         ),
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
     )
 
     event = _event_from_envelope(envelope)
@@ -708,7 +708,7 @@ async def test_gateway_event_capture_publishes_live_assistant_payload_without_st
             "session_id": "voice-live",
             "metadata": {"source": "stt", "model": "gpt-5.4-mini", "token": "secret"},
         },
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
     )
 
     await service._capture_gateway_event(envelope)

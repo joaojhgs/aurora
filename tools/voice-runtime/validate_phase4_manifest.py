@@ -10,9 +10,13 @@ import os
 import re
 import stat
 import sys
-import tomllib
 from pathlib import Path, PureWindowsPath
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
+    import tomli as tomllib
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")

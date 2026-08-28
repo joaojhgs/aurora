@@ -4,7 +4,7 @@ import { join, normalize, relative, sep } from 'node:path'
 
 const repoRoot = normalize(join(import.meta.dirname, '..', '..', '..', '..'))
 const packageRoot = join(repoRoot, 'packages', 'aurora-voice-web')
-const repoArtifactsRoot = process.env.AURORA_ARTIFACTS_ROOT ?? '/home/developer/projects/aurora/.artifacts'
+const repoArtifactsRoot = process.env.AURORA_ARTIFACTS_ROOT ?? join(repoRoot, '.artifacts')
 const preparedAssetRoot = join(repoArtifactsRoot, 'aurora-voice-web-sherpa-browser-smoke-assets')
 const nodeFsPromises = import('node:fs/promises').then((module) => module as unknown as NodeFsPromises)
 const selectedModelIds = new Set([

@@ -303,6 +303,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "tenacity" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.optional-dependencies]
@@ -1869,6 +1870,7 @@ requires-dist = [
     { name = "tokenizers", marker = "extra == 'runtime'", specifier = "==0.21.0" },
     { name = "toml", marker = "extra == 'build'", specifier = ">=0.10.2" },
     { name = "toml", marker = "extra == 'dev'", specifier = ">=0.10.2" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0.0" },
     { name = "torch", marker = "extra == 'metal'", specifier = "==2.6.0" },
     { name = "torch", marker = "extra == 'rpc'", specifier = "==2.6.0" },
     { name = "torch", marker = "extra == 'service-tts'", specifier = "==2.6.0" },

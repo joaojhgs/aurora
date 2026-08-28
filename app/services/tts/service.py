@@ -23,7 +23,7 @@ import uuid
 import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -1425,7 +1425,7 @@ class TTSService(BaseService):
         return descriptors
 
     def _expire_voice_import_sessions(self) -> None:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         for upload_id, session in list(self._voice_import_sessions.items()):
             if session.expires_at <= now:
                 del self._voice_import_sessions[upload_id]
@@ -2219,7 +2219,7 @@ class TTSService(BaseService):
                 )
                 raise ValueError("voice import session capacity reached")
             upload_id = uuid.uuid4().hex
-            expires_at = datetime.now(UTC) + timedelta(minutes=15)
+            expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
             session = _VoiceImportSession(
                 upload_id=upload_id,
                 owner=owner,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.shared.contracts.models.gateway import (
@@ -99,7 +99,7 @@ def build_capability_catalog(
         resources.append(_resource_from_graph(resource))
 
     return CapabilityCatalogResponse(
-        generated_at=datetime.now(UTC).isoformat(),
+        generated_at=datetime.now(timezone.utc).isoformat(),
         local_peer_id=graph.local_peer_id,
         local_node_name=graph.local_node_name,
         aurora_version=_get_package_version(),

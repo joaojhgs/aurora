@@ -16,7 +16,7 @@ from dataclasses import (
     dataclass,
     replace as dataclass_replace,
 )
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -2480,7 +2480,7 @@ class RTCClient:
         """Store a short redacted diagnostic error for operator snapshots."""
         self._diagnostic_errors.appendleft(
             WebRTCDiagnosticError(
-                timestamp=datetime.now(UTC).isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 code=code,
                 message=_redact_diagnostic_message(message),
                 peer_id=peer_id,
@@ -3792,7 +3792,7 @@ class RTCClient:
             projection_supported=True,
             projection_active=False,
             recipient_projection_evidence=None,
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     async def _request_tooling_projection_sync(

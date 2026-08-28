@@ -18,7 +18,7 @@ import secrets
 import time
 import traceback
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from jsonschema import (
@@ -1824,7 +1824,7 @@ class ToolingService(BaseService):
                 provider_id=provider_id,
                 service_instance_id=str(header["service_instance_id"]),
                 catalog_epoch=int(header["current_generation"]),
-                generated_at=datetime.now(UTC).isoformat(),
+                generated_at=datetime.now(timezone.utc).isoformat(),
                 tools=sorted(
                     tools_by_header[(peer_id, provider_id)],
                     key=lambda item: item.global_tool_id,
