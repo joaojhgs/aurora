@@ -45,6 +45,29 @@ def test_config_save_is_json_safe_with_secret_values(reset_config_manager) -> No
     assert reloaded.get("services.auth.enabled") is False
 
 
+def test_section_reads_cache_resolved_snapshot_per_revision(reset_config_manager) -> None:
+    manager = ConfigManager()
+
+    with patch.object(
+        manager,
+        "_resolve_env_fallbacks",
+        wraps=manager._resolve_env_fallbacks,
+    ) as resolve:
+        first = manager.get("services")
+        initial_enabled = first["auth"]["enabled"]
+        first["auth"]["enabled"] = "mutated-by-caller"
+        second = manager.get("services")
+
+        assert second["auth"]["enabled"] is initial_enabled
+        assert resolve.call_count == 1
+
+        manager.set("services.auth.enabled", not initial_enabled)
+        third = manager.get("services")
+
+    assert third["auth"]["enabled"] is not initial_enabled
+    assert resolve.call_count == 2
+
+
 def test_setting_unchanged_value_skips_persistence_and_reload_notification(
     reset_config_manager,
 ) -> None:

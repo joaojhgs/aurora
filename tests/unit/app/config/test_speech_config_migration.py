@@ -78,6 +78,13 @@ def test_nested_piper_config_wins_over_flat_legacy_config() -> None:
     assert piper["executable_path"] == "/opt/piper"
 
 
+def test_pockettts_normalization_uses_schema_preload_default() -> None:
+    normalized = _normalize({})
+
+    pockettts = normalized["services"]["tts"]["providers"]["pockettts"]
+    assert pockettts["preload_model"] is False
+
+
 def test_legacy_stt_language_seeds_missing_central_speech_languages() -> None:
     normalized = _normalize({"services": {"stt": {"language": "pt"}}})
 

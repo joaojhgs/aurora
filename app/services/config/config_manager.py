@@ -80,6 +80,7 @@ class ConfigManager:
             self._observers = []
             self._version_history: list[dict[str, Any]] = []
             self._revision = 0
+            self._resolved_config_cache: tuple[int, dict[str, Any]] | None = None
             self._preview_secret = secrets.token_bytes(32)
             self._preview_tokens: dict[str, dict[str, Any]] = {}
             self._migration_warning_emitted = False
@@ -481,7 +482,7 @@ class ConfigManager:
             "initialization_timeout_s": 120.0,
             "request_timeout_s": 120.0,
             "max_concurrent_requests": 1,
-            "preload_model": True,
+            "preload_model": False,
             "preload_voice_ids": [],
             "temperature": None,
             "lsd_decode_steps": 1,
@@ -1009,7 +1010,7 @@ class ConfigManager:
         """
         keys = key_path.split(".")
         has_nested_env_fallbacks = any(path.startswith(f"{key_path}.") for path in ENV_CONFIG_MAP)
-        config_copy: dict[str, Any] | None = None
+        resolved_section: Any = None
         with self.config_lock:
             config_val = self._config
             try:
@@ -1021,23 +1022,27 @@ class ConfigManager:
                 # Section reads must resolve nested secret fallbacks too. Returning
                 # the raw section after secret migration leaves cleared values in
                 # place and can make consumers generate replacement credentials.
-                config_copy = json.loads(json.dumps(self._to_json_safe(self._config)))
+                revision = getattr(self, "_revision", 0)
+                cached = getattr(self, "_resolved_config_cache", None)
+                if cached is None or cached[0] != revision:
+                    config_copy = json.loads(json.dumps(self._to_json_safe(self._config)))
+                    cached = (revision, self._resolve_env_fallbacks(config_copy))
+                    self._resolved_config_cache = cached
+                resolved_section = cached[1]
+                try:
+                    for key in keys:
+                        resolved_section = resolved_section[key]
+                except (KeyError, TypeError):
+                    resolved_section = None
             elif self._is_explicit_mesh_policy_list(key_path, config_val) or self._is_value_set(
                 config_val
             ):
                 return config_val
 
-        if config_copy is not None:
-            resolved_val: Any = self._resolve_env_fallbacks(config_copy)
-            try:
-                for key in keys:
-                    resolved_val = resolved_val[key]
-            except (KeyError, TypeError):
-                resolved_val = None
-            if self._is_explicit_mesh_policy_list(key_path, resolved_val):
-                return resolved_val
-            if self._is_value_set(resolved_val):
-                return resolved_val
+        if self._is_explicit_mesh_policy_list(key_path, resolved_section):
+            return deepcopy(resolved_section)
+        if self._is_value_set(resolved_section):
+            return deepcopy(resolved_section)
 
         env_info = ENV_CONFIG_MAP.get(key_path)
         if env_info:
