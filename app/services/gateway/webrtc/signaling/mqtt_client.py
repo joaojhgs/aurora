@@ -234,29 +234,39 @@ class MQTTSignaling:
         self._handlers[channel] = handler
 
     def _on_message(self, client, userdata, msg):
-        topic = msg.topic
-        parts = topic.split("/")
-        if len(parts) >= 4:
-            channel = parts[3]
-            # Presence subtopics (presence/{peer_id}) should route to
-            # the "presence" handler via the wildcard subscription.
-            if channel == "presence" and len(parts) >= 5:
-                handler = self._handlers.get("presence")
-                payload = msg.payload
-                if not payload:
-                    if self._encrypt_presence:
-                        return
-                    payload = json.dumps(
-                        {
-                            "type": "presence_departed",
-                            "peer_id": parts[-1],
-                        }
-                    ).encode()
-            else:
-                handler = self._handlers.get(channel)
-                payload = msg.payload
-            if handler and self._loop:
-                asyncio.run_coroutine_threadsafe(handler(payload), self._loop)
+        del client, userdata
+        topic = str(msg.topic)
+        prefix = f"{self._topic_root}/{self._app_id}/{self._room}/"
+        if not topic.startswith(prefix):
+            return
+
+        route = topic[len(prefix) :].split("/")
+        channel = route[0] if route else ""
+        is_presence = channel == "presence" and len(route) == 2 and bool(route[1])
+        is_direct = (
+            channel in {"offer", "answer", "candidate"}
+            and len(route) == 2
+            and route[1] == self._peer_id
+        )
+        is_broadcast = channel == "broadcast" and len(route) == 1
+        if not (is_presence or is_direct or is_broadcast):
+            return
+
+        handler = self._handlers.get(channel)
+        payload = msg.payload
+        if is_presence and not payload:
+            if self._encrypt_presence:
+                return
+            payload = json.dumps(
+                {
+                    "type": "presence_departed",
+                    "app_id": self._app_id,
+                    "room": self._room,
+                    "peer_id": route[1],
+                }
+            ).encode()
+        if handler and self._loop:
+            asyncio.run_coroutine_threadsafe(handler(payload), self._loop)
 
     async def send(self, channel: str, payload: bytes, to_peer: str | None = None) -> None:
         self._client.publish(self._topic(channel, to_peer), payload, qos=0, retain=False)

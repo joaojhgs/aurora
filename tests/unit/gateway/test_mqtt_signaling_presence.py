@@ -97,7 +97,12 @@ async def test_encrypted_presence_ignores_empty_retained_payload():
 
 @pytest.mark.asyncio
 async def test_empty_retained_presence_reports_departed_peer_from_topic():
-    signaling = MQTTSignaling(["mqtt://localhost:1883"])
+    signaling = MQTTSignaling(
+        ["mqtt://localhost:1883"],
+        app_id="private-app",
+        room="private-room",
+        peer_id="local-peer",
+    )
     signaling._loop = asyncio.get_running_loop()
     received = asyncio.Event()
     payloads: list[dict[str, str]] = []
@@ -120,9 +125,70 @@ async def test_empty_retained_presence_reports_departed_peer_from_topic():
     assert payloads == [
         {
             "type": "presence_departed",
+            "app_id": "private-app",
+            "room": "private-room",
             "peer_id": "dead-session",
         }
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "topic",
+    [
+        "other/private-app/private-room/broadcast",
+        "aurora/other-app/private-room/broadcast",
+        "aurora/private-app/other-room/broadcast",
+        "aurora/private-app/private-room/offer/other-peer",
+        "aurora/private-app/private-room/answer/local-peer/extra",
+        "aurora/private-app/private-room/presence/peer/extra",
+    ],
+)
+async def test_mqtt_signaling_rejects_messages_outside_exact_room_route(topic):
+    signaling = MQTTSignaling(
+        ["mqtt://localhost:1883"],
+        app_id="private-app",
+        room="private-room",
+        peer_id="local-peer",
+    )
+    signaling._loop = asyncio.get_running_loop()
+    handler = AsyncMock()
+    for channel in ("presence", "offer", "answer", "candidate", "broadcast"):
+        signaling.on_message(channel, handler)
+
+    signaling._on_message(None, None, SimpleNamespace(topic=topic, payload=b"frame"))
+    await asyncio.sleep(0)
+
+    handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_mqtt_signaling_accepts_exact_direct_recipient_route():
+    signaling = MQTTSignaling(
+        ["mqtt://localhost:1883"],
+        topic_root="custom/root",
+        app_id="private-app",
+        room="private-room",
+        peer_id="local-peer",
+    )
+    signaling._loop = asyncio.get_running_loop()
+    received = asyncio.Event()
+
+    async def handler(payload: bytes) -> None:
+        assert payload == b"frame"
+        received.set()
+
+    signaling.on_message("offer", handler)
+
+    signaling._on_message(
+        None,
+        None,
+        SimpleNamespace(
+            topic="custom/root/private-app/private-room/offer/local-peer",
+            payload=b"frame",
+        ),
+    )
+    await asyncio.wait_for(received.wait(), timeout=1.0)
 
 
 @pytest.mark.asyncio

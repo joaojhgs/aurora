@@ -216,6 +216,73 @@ def mock_deps():
 
 
 @pytest.mark.asyncio
+async def test_legacy_reauth_fails_closed_when_identity_resolution_returns_none(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    peer = "legacy-peer"
+    prior_identity = Identity(
+        principal_id="user-id",
+        principal_name="remote-peer",
+        is_admin=False,
+        effective_perms=frozenset({"read"}),
+        device_id="device-id",
+        source="webrtc_peer",
+    )
+    token = Token(
+        id="token-id",
+        token_hash="hash",
+        prefix="prefix",
+        device_id="device-id",
+        user_id="user-id",
+        scopes=["read"],
+    )
+    client._peer_acl[peer] = prior_identity
+    client._peer_tokens[peer] = token
+    auth_service.authenticate_token.return_value = token
+    auth_service.build_identity_from_token.return_value = None
+
+    assert await client._reauthenticate_legacy_peer(peer, "credential") is False
+
+    assert client._peer_acl[peer] == ANONYMOUS
+    assert peer not in client._peer_tokens
+    assert any(error.code == "reauth_failed" for error in client._diagnostic_errors)
+
+
+def test_signaling_envelope_requires_exact_room_and_recipient(mock_deps):
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service)
+    client._peer_id = "local-peer"
+
+    assert client._signaling_envelope_matches_room(
+        {
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": "remote-peer",
+            "to": "local-peer",
+        },
+        channel="offer",
+    )
+    assert not client._signaling_envelope_matches_room(
+        {
+            "app_id": "test-app",
+            "room": "other-room",
+            "from": "remote-peer",
+            "to": "local-peer",
+        },
+        channel="offer",
+    )
+    assert not client._signaling_envelope_matches_room(
+        {
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": "remote-peer",
+            "to": "other-peer",
+        },
+        channel="offer",
+    )
+
+
+@pytest.mark.asyncio
 async def test_on_open_never_sends_saved_bearer_for_spoofed_stable_identity(mock_deps):
     """Unauthenticated signaling metadata never releases a saved bearer."""
     settings, bus, registry, auth_service = mock_deps
@@ -2389,7 +2456,16 @@ async def test_initial_offer_failure_discards_pc_and_schedules_retry(mock_deps):
         "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
         return_value=mock_pc,
     ):
-        await client._on_presence(json.dumps({"type": "presence", "peer_id": peer}).encode())
+            await client._on_presence(
+                json.dumps(
+                    {
+                        "type": "presence",
+                        "app_id": "test-app",
+                        "room": "test-room",
+                        "peer_id": peer,
+                    }
+                ).encode()
+            )
 
     assert peer not in client._pcs
     mock_pc.close.assert_awaited_once()
@@ -2590,9 +2666,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     candidate = SimpleNamespace(sdpMid=None, sdpMLineIndex=None)
     simultaneous_offer = aead_seal(
         client._keys.k_sig,
-        {
-            "type": "offer",
-            "from": peer,
+            {
+                "type": "offer",
+                "app_id": "test-app",
+                "room": "test-room",
+                "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:losing-remote-offer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2601,9 +2679,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     )
     candidate_payload = aead_seal(
         client._keys.k_sig,
-        {
-            "type": "candidate",
-            "from": peer,
+            {
+                "type": "candidate",
+                "app_id": "test-app",
+                "room": "test-room",
+                "from": peer,
             "to": client._peer_id,
             "candidate": "1 1 udp 1 192.0.2.1 12345 typ host",
             "sdp_mid": "0",
@@ -2612,9 +2692,11 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
     )
     answer_payload = aead_seal(
         client._keys.k_sig,
-        {
-            "type": "answer",
-            "from": peer,
+            {
+                "type": "answer",
+                "app_id": "test-app",
+                "room": "test-room",
+                "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2667,9 +2749,11 @@ async def test_bad_queued_candidate_does_not_abort_valid_answer(mock_deps):
     client._cancel_negotiation_watchdog = MagicMock()
     answer_payload = aead_seal(
         client._keys.k_sig,
-        {
-            "type": "answer",
-            "from": peer,
+            {
+                "type": "answer",
+                "app_id": "test-app",
+                "room": "test-room",
+                "from": peer,
             "to": client._peer_id,
             "sdp": "v=0\r\na=ice-ufrag:remote-answer\r\n",
             "stable_peer_id": "stable-remote-peer",
@@ -2759,9 +2843,11 @@ async def test_departed_presence_stops_reconnect_to_stale_signaling_uuid(mock_de
 
     await client._on_presence(
         json.dumps(
-            {
-                "type": "presence_departed",
-                "peer_id": "dead-signaling-session",
+                {
+                    "type": "presence_departed",
+                    "app_id": "test-app",
+                    "room": "test-room",
+                    "peer_id": "dead-signaling-session",
             }
         ).encode()
     )
@@ -2805,7 +2891,14 @@ async def test_rtc_client_unanswered_offer_times_out_and_retries(mock_deps):
 
     mock_pc.close = AsyncMock(side_effect=close_peer_connection)
 
-    presence = json.dumps({"type": "presence", "peer_id": peer}).encode()
+    presence = json.dumps(
+        {
+            "type": "presence",
+            "app_id": "test-app",
+            "room": "test-room",
+            "peer_id": peer,
+        }
+    ).encode()
     with patch(
         "app.services.gateway.webrtc.rtc_client.RTCPeerConnection",
         return_value=mock_pc,

@@ -2487,6 +2487,68 @@ class RTCClient:
             )
         )
 
+    def _signaling_envelope_matches_room(
+        self,
+        msg: dict[str, Any],
+        *,
+        channel: str,
+        require_recipient: bool = True,
+    ) -> bool:
+        """Return whether one encrypted signaling frame is addressed here."""
+        peer = msg.get("from")
+        if (
+            msg.get("app_id") != self._settings.webrtc.app_id
+            or msg.get("room") != self._settings.webrtc.room
+        ):
+            log_debug(f"RTCClient: Ignoring {channel} for another signaling room")
+            self._record_diagnostic_error(
+                "signaling_room_mismatch",
+                f"Ignored {channel} frame for another signaling room",
+                str(peer) if peer else None,
+            )
+            return False
+        if require_recipient and msg.get("to") != self._peer_id:
+            log_debug(f"RTCClient: Ignoring {channel} addressed to another peer")
+            self._record_diagnostic_error(
+                "signaling_recipient_mismatch",
+                f"Ignored {channel} frame addressed to another peer",
+                str(peer) if peer else None,
+            )
+            return False
+        return True
+
+    async def _reauthenticate_legacy_peer(self, peer: str, token_str: str) -> bool:
+        """Replace one legacy peer identity or fail it closed to anonymous."""
+        try:
+            token = await self._auth_service.authenticate_token(token_str)
+            identity = (
+                await self._auth_service.build_identity_from_token(
+                    token,
+                    source="webrtc_peer",
+                )
+                if token
+                else None
+            )
+        except Exception:
+            token = None
+            identity = None
+
+        if token is None or identity is None:
+            self._peer_acl[peer] = ANONYMOUS
+            self._peer_tokens.pop(peer, None)
+            log_warning(f"Peer {peer} failed re-authentication")
+            self._record_diagnostic_error(
+                "reauth_failed",
+                "Peer failed token re-authentication",
+                peer,
+            )
+            return False
+
+        self._peer_acl[peer] = identity
+        self._peer_tokens[peer] = token
+        log_info(f"Peer {peer} re-authenticated as {identity.principal_name}")
+        return True
+
     # ── Mesh P2P helpers ─────────────────────────────────────────────────
 
     def _encode_datachannel_message(self, text: str) -> str | bytes:
@@ -4658,18 +4720,19 @@ class RTCClient:
             except Exception:
                 log_debug("RTCClient: Ignoring unauthenticated presence payload")
                 return
-            if (
-                msg.get("app_id") != self._settings.webrtc.app_id
-                or msg.get("room") != self._settings.webrtc.room
-            ):
-                log_debug("RTCClient: Ignoring presence for another signaling room")
-                return
         else:
             try:
                 msg = json.loads(payload)
             except Exception:
                 log_debug("RTCClient: Ignoring non-JSON presence payload (likely cleared retain)")
                 return
+
+        if not self._signaling_envelope_matches_room(
+            msg,
+            channel="presence",
+            require_recipient=False,
+        ):
+            return
 
         if msg.get("type") == "presence_departed":
             departed_peer = str(msg.get("peer_id") or "")
@@ -6178,23 +6241,7 @@ class RTCClient:
                                 return
 
                             async def reauth_peer() -> None:
-                                token = await self._auth_service.authenticate_token(token_str)
-                                if token:
-                                    identity = await self._auth_service.build_identity_from_token(
-                                        token, source="webrtc_peer"
-                                    )
-                                    self._peer_acl[peer] = identity
-                                    self._peer_tokens[peer] = token
-                                    log_info(
-                                        f"Peer {peer} re-authenticated as {identity.principal_name}"
-                                    )
-                                else:
-                                    log_warning(f"Peer {peer} failed re-authentication")
-                                    self._record_diagnostic_error(
-                                        "reauth_failed",
-                                        "Peer failed token re-authentication",
-                                        peer,
-                                    )
+                                await self._reauthenticate_legacy_peer(peer, token_str)
 
                             asyncio.create_task(reauth_peer())
                         return
@@ -6678,6 +6725,8 @@ class RTCClient:
         peer = msg.get("from")
         if not peer:
             return
+        if not self._signaling_envelope_matches_room(msg, channel="offer"):
+            return
 
         remote_stable_peer_id = str(msg.get("stable_peer_id") or "")
         remote_node_name = str(msg.get("node_name") or "")
@@ -6769,6 +6818,8 @@ class RTCClient:
         peer = msg.get("from")
         if not peer:
             return
+        if not self._signaling_envelope_matches_room(msg, channel="answer"):
+            return
 
         remote_stable_peer_id = str(msg.get("stable_peer_id") or "")
         remote_node_name = str(msg.get("node_name") or "")
@@ -6845,6 +6896,8 @@ class RTCClient:
         cand_sdp = msg.get("candidate")
         if not peer or not cand_sdp:
             return
+        if not self._signaling_envelope_matches_room(msg, channel="candidate"):
+            return
 
         try:
             candidate = candidate_from_sdp(cand_sdp)
@@ -6882,6 +6935,13 @@ class RTCClient:
             msg = aead_open(self._keys.k_sig, payload)
         except Exception as e:
             log_warning(f"RTCClient: Failed to unseal broadcast: {e}")
+            return
+
+        if not self._signaling_envelope_matches_room(
+            msg,
+            channel="broadcast",
+            require_recipient=False,
+        ):
             return
 
         btype = msg.get("type", "")
