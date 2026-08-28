@@ -39,6 +39,11 @@ MOBILE_NATIVE_TRIGGER_PATHS = (
     "rust/crates/**",
     "tools/voice-runtime/**",
 )
+PRIVILEGED_WORKFLOWS = (
+    REPO_ROOT / ".github/workflows/release.yml",
+    REPO_ROOT / ".github/workflows/docker-build.yml",
+    REPO_ROOT / ".github/workflows/sherpa-pockettts-language-packs.yml",
+)
 
 
 @pytest.mark.parametrize("workflow", MOBILE_WORKFLOWS, ids=lambda path: path.stem)
@@ -149,6 +154,18 @@ def test_only_canonical_workflow_owns_product_release_publication() -> None:
         text = workflow.read_text(encoding="utf-8")
         assert "python-semantic-release" not in text, workflow.name
         assert "gh release upload" not in text, workflow.name
+
+
+@pytest.mark.parametrize("workflow", PRIVILEGED_WORKFLOWS, ids=lambda path: path.stem)
+def test_privileged_workflows_pin_external_actions_to_full_commit_shas(workflow: Path) -> None:
+    text = workflow.read_text(encoding="utf-8")
+    external_actions = re.findall(r"uses:\s+([^@\s]+)@([^\s#]+)", text)
+
+    assert external_actions
+    for action, revision in external_actions:
+        if action.startswith("./"):
+            continue
+        assert re.fullmatch(r"[0-9a-f]{40}", revision), f"{workflow.name}: {action}@{revision}"
 
 
 def test_docker_publication_is_only_callable_by_the_canonical_release() -> None:
