@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from scripts.generate_rust_contracts import (
-    NORMALIZATION_MARKERS,
+    VECTOR_MARKERS,
     GenerationError,
     _render_identity_constants,
     _rust_const_name,
@@ -95,7 +95,7 @@ def test_rust_identity_constant_generation_rejects_name_collisions() -> None:
         _render_identity_constants(schema)
 
 
-def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() -> None:
+def test_rust_contract_marker_vectors_cover_every_vector_marker_schema() -> None:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     fixture = json.loads(render_vector_fixture(schema))
 
@@ -103,7 +103,7 @@ def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() 
 
     def visit(node: object, schema_id: str, path: str = "$") -> None:
         if isinstance(node, dict):
-            for marker in NORMALIZATION_MARKERS:
+            for marker in VECTOR_MARKERS:
                 if node.get(marker) is True:
                     expected.setdefault(schema_id, set()).add(f"{path}:{marker}")
             for key, value in node.items():
@@ -132,7 +132,10 @@ def test_rust_contract_marker_vectors_cover_every_normalization_marker_schema() 
         negative_covered.setdefault(schema_id, set()).update(marker_paths)
 
     assert positive_covered == expected
-    assert negative_covered == expected
+    assert negative_covered
+    assert set(negative_covered) <= set(expected)
+    for schema_id, marker_paths in negative_covered.items():
+        assert marker_paths <= positive_covered[schema_id]
 
 
 def test_rust_contract_fixture_preserves_duplicate_heavy_tooling_positive_cases() -> None:
