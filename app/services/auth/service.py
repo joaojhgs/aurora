@@ -510,14 +510,13 @@ class AuthService(BaseService):
     async def handle_pairing_start(
         self, data: PairingStartRequest, envelope: Envelope | None = None
     ) -> PairingStartResponse | dict[str, str]:
-        # caller_peer_id is set by the WebRTC RPC transport, outside the
-        # PairingStart payload. Fall back to one shared bucket rather than letting
-        # unauthenticated request fields select their own rate-limit bucket.
-        trusted_rate_limit_key = (
-            f"webrtc:{envelope.caller_peer_id}"
-            if envelope is not None and envelope.caller_peer_id
-            else None
-        )
+        # Both identifiers are set by trusted transports outside PairingStart.
+        # Never let unauthenticated payload fields choose their own bucket.
+        trusted_rate_limit_key = None
+        if envelope is not None and envelope.caller_peer_id:
+            trusted_rate_limit_key = f"webrtc:{envelope.caller_peer_id}"
+        elif envelope is not None and envelope.transport_source_id:
+            trusted_rate_limit_key = f"http:{envelope.transport_source_id}"
         trusted_mesh_context = bool(
             envelope is not None
             and envelope.caller_peer_id

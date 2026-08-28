@@ -18,7 +18,13 @@ from app.services.gateway.auth import (
     create_auth_middleware,
 )
 from app.services.gateway.route_generator import RouteGenerator
-from app.shared.contracts.models.auth import AuthMethods, LoginRequest, LoginResponse
+from app.shared.contracts.models.auth import (
+    AuthMethods,
+    LoginRequest,
+    LoginResponse,
+    PairingStartRequest,
+    PairingStartResponse,
+)
 from app.shared.contracts.models.gateway import MethodInfo
 
 
@@ -49,6 +55,21 @@ def _login_method(required_perms: list[str] | None = None) -> MethodInfo:
         output_model="LoginResponse",
         input_schema=LoginRequest.model_json_schema(),
         output_schema=LoginResponse.model_json_schema(),
+    )
+
+
+def _pairing_start_method() -> MethodInfo:
+    return MethodInfo(
+        name="PairingStart",
+        summary="Start pairing",
+        bus_topic=AuthMethods.PAIRING_START,
+        exposure="both",
+        method_type="use",
+        required_perms=[],
+        input_model="PairingStartRequest",
+        output_model="PairingStartResponse",
+        input_schema=PairingStartRequest.model_json_schema(),
+        output_schema=PairingStartResponse.model_json_schema(),
     )
 
 
@@ -208,6 +229,48 @@ async def test_generated_canonical_login_route_bypasses_auth_as_anonymous():
         bus.request.assert_awaited_once()
         assert bus.request.await_args.kwargs["origin"] == "external"
         assert bus.request.await_args.kwargs["principal_id"] == ANONYMOUS.principal_id
+    finally:
+        deps._gateway_auth = old_gateway_auth
+
+
+@pytest.mark.asyncio
+async def test_generated_pairing_route_hashes_trusted_socket_source_for_bus() -> None:
+    old_gateway_auth = deps._gateway_auth
+    deps._gateway_auth = GatewayAuth(enabled=True)
+    try:
+        bus = AsyncMock()
+        bus.request = AsyncMock(
+            return_value=QueryResult(
+                ok=True,
+                data={"code": "123456", "expires_in_seconds": 300},
+            )
+        )
+        app = FastAPI()
+        router = APIRouter()
+        generator = RouteGenerator(
+            bus=bus,
+            registry=_SingleMethodRegistry("Auth", _pairing_start_method()),
+        )
+        generator.set_router(router)
+        await generator.start()
+        app.include_router(router)
+        payload = {"device_name": "Phone", "client_ip": "spoofed-payload-source"}
+
+        same_source = ASGITransport(app=app, client=("198.51.100.10", 41000))
+        async with AsyncClient(transport=same_source, base_url="http://test") as client:
+            assert (await client.post("/api/Auth/PairingStart", json=payload)).status_code == 200
+            assert (await client.post("/api/Auth/PairingStart", json=payload)).status_code == 200
+
+        other_source = ASGITransport(app=app, client=("198.51.100.11", 41000))
+        async with AsyncClient(transport=other_source, base_url="http://test") as client:
+            assert (await client.post("/api/Auth/PairingStart", json=payload)).status_code == 200
+
+        source_ids = [call.kwargs["transport_source_id"] for call in bus.request.await_args_list]
+        assert source_ids[0] == source_ids[1]
+        assert source_ids[0] != source_ids[2]
+        assert all(len(source_id) == 64 for source_id in source_ids)
+        assert "198.51.100" not in "".join(source_ids)
+        assert "spoofed-payload-source" not in "".join(source_ids)
     finally:
         deps._gateway_auth = old_gateway_auth
 

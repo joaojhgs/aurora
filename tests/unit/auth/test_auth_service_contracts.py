@@ -142,6 +142,37 @@ async def test_pairing_start_uses_transport_peer_for_rate_limit_not_payload_iden
 
 
 @pytest.mark.asyncio
+async def test_pairing_start_uses_opaque_http_transport_bucket() -> None:
+    service = AuthService()
+    service._manager = SimpleNamespace(start_pairing=AsyncMock(return_value="123456"))
+    request = PairingStartRequest(
+        device_name="Untrusted request",
+        client_ip="spoofed-client-ip",
+    )
+    envelope = Envelope(
+        type="Auth.PairingStart",
+        payload=request,
+        origin="external",
+        identity_source="gateway_http",
+        transport_source_id="opaque-source-bucket",
+    )
+
+    response = await service.handle_pairing_start(request, envelope=envelope)
+
+    assert not isinstance(response, dict)
+    service.manager.start_pairing.assert_awaited_once_with(
+        "Untrusted request",
+        "spoofed-client-ip",
+        remote_peer_id="",
+        remote_node_name="",
+        room_name="",
+        pairing_session_id="",
+        verification_code="",
+        trusted_rate_limit_key="http:opaque-source-bucket",
+    )
+
+
+@pytest.mark.asyncio
 async def test_pairing_start_round_trips_bilateral_session_metadata() -> None:
     """The opaque request handle stays separate from the display-only SAS."""
     service = AuthService()

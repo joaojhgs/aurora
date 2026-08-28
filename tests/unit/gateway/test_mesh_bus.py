@@ -678,18 +678,28 @@ class TestMeshBusRequest:
     @pytest.mark.asyncio
     async def test_local_request(self, mesh_bus, inner_bus, routing_table):
         routing_table.resolve.return_value = RouteDecision(target="local", module="TTS")
-        result = await mesh_bus.request("TTS.Request", FakePayload())
+        result = await mesh_bus.request(
+            "TTS.Request",
+            FakePayload(),
+            transport_source_id="opaque-http-source",
+        )
         assert result.ok is True
         inner_bus.request.assert_awaited_once()
+        assert inner_bus.request.await_args.kwargs["transport_source_id"] == "opaque-http-source"
 
     @pytest.mark.asyncio
     async def test_remote_request(self, mesh_bus, routing_table, peer_bridge):
         routing_table.resolve.return_value = RouteDecision(
             target="remote", peer_id="peer-1", module="TTS", method_type="use"
         )
-        result = await mesh_bus.request("TTS.Request", FakePayload())
+        result = await mesh_bus.request(
+            "TTS.Request",
+            FakePayload(),
+            transport_source_id="opaque-http-source",
+        )
         assert result.ok is True
         peer_bridge.call.assert_awaited_once()
+        assert "transport_source_id" not in peer_bridge.call.await_args.kwargs
 
     @pytest.mark.asyncio
     async def test_remote_request_failure_does_not_fallback_local(

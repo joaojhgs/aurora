@@ -518,6 +518,7 @@ class TestLocalBusEdgeCases:
             identity_source="webrtc_rpc",
             method_type="use",
             caller_peer_id="peer-1",
+            transport_source_id="opaque-http-source",
             correlation_id="corr-identity",
         )
 
@@ -529,4 +530,5 @@ class TestLocalBusEdgeCases:
         assert env.identity_source == "webrtc_rpc"
         assert env.method_type == "use"
         assert env.caller_peer_id == "peer-1"
+        assert env.transport_source_id == "opaque-http-source"
         assert env.correlation_id == "corr-identity"

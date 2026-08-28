@@ -7,7 +7,9 @@ Uses lazy generation - routes are created when registry changes, not at startup.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
+import secrets
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -638,6 +640,9 @@ class RouteGenerator:
         self._registry = registry
         self._request_timeout = request_timeout
         self._admin_action_manager = admin_action_manager or AdminActionManager()
+        # Keep socket-level rate-limit buckets stable for this gateway process
+        # without retaining enumerable client addresses in messages or queues.
+        self._transport_source_key = secrets.token_bytes(32)
 
         # Track generated routes per service
         self._service_routes: dict[str, list[str]] = {}
@@ -665,6 +670,15 @@ class RouteGenerator:
     def set_bus(self, bus: MessageBus) -> None:
         """Replace the bus used by existing and future generated handlers."""
         self._bus = bus
+
+    def _transport_source_id(self, request: Any) -> str | None:
+        """Return an opaque bucket derived only from the trusted peer socket."""
+
+        client = getattr(request, "client", None)
+        host = str(getattr(client, "host", "") or "").strip().casefold()
+        if not host:
+            return None
+        return hmac.digest(self._transport_source_key, host.encode("utf-8"), "sha256").hex()
 
     async def start(self) -> None:
         """Start the route generator.
@@ -769,6 +783,7 @@ class RouteGenerator:
             principal_id: str | None = None,
             effective_perms: list[str] | None = None,
             identity_source: str | None = None,
+            transport_source_id: str | None = None,
         ) -> dict[str, Any]:
             """Handle API request by forwarding to service via bus."""
             from fastapi import HTTPException
@@ -824,6 +839,7 @@ class RouteGenerator:
                     effective_perms=effective_perms,
                     identity_source=identity_source or "gateway_http",
                     method_type=method_info.method_type or "use",
+                    transport_source_id=transport_source_id,
                     correlation_id=payload.get("correlation_id")
                     if isinstance(payload, dict)
                     else None,
@@ -985,6 +1001,11 @@ class RouteGenerator:
                     effective_perms=effective_perms,
                     identity_source=(
                         "gateway_admin_action" if admin_action_receipt else identity_source
+                    ),
+                    transport_source_id=(
+                        self._transport_source_id(http_request)
+                        if method_id == AuthMethods.PAIRING_START
+                        else None
                     ),
                 )
                 # Return the raw result dict - don't filter through response model

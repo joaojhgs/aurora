@@ -51,6 +51,7 @@ class Envelope(BaseModel):
     identity_source: str | None = None
     method_type: str | None = None
     caller_peer_id: str | None = None
+    transport_source_id: str | None = None
     auth_grant_revision: int | None = Field(default=None, ge=0)
     manifest_revision: int | None = Field(default=None, ge=0)
     projected_service_id: str | None = None
@@ -203,6 +204,7 @@ class MessageBus(Protocol):
         identity_source: str | None = None,
         method_type: str | None = None,
         caller_peer_id: str | None = None,
+        transport_source_id: str | None = None,
         auth_grant_revision: int | None = None,
         manifest_revision: int | None = None,
         projected_service_id: str | None = None,
@@ -223,6 +225,8 @@ class MessageBus(Protocol):
             ttl_ms: Time-to-live in milliseconds
             max_attempts: Maximum retry attempts
             correlation_id: Optional caller-supplied trace correlation ID
+            transport_source_id: Opaque trusted transport source bucket. This
+                internal value must never be accepted from a request payload.
 
         Returns:
             QueryResult containing the response data or error

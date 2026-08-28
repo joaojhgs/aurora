@@ -492,11 +492,13 @@ class TestBullMQBusInterface:
             message,
             event=False,
             reply_to="reply.TTS.123",
+            transport_source_id="opaque-http-source",
         )
 
         call_args = mock_bullmq["queue_instance"].add.call_args
         job_data = call_args[0][1]
         assert job_data["reply_to"] == "reply.TTS.123"
+        assert job_data["transport_source_id"] == "opaque-http-source"
 
     async def test_publish_with_correlation_id(self, mock_bullmq):
         """Reply jobs must carry correlation_id for request/response matching."""
