@@ -86,7 +86,7 @@ async def test_piper_synthesis_runs_cli_off_event_loop(tmp_path, monkeypatch) ->
     to_thread_calls: list[object] = []
     run_calls: list[dict[str, object]] = []
 
-    def fake_run(cmd, *, input, capture_output, check, shell):
+    def fake_run(cmd, *, input, capture_output, check, shell, timeout):
         output_path = cmd[cmd.index("-f") + 1]
         with wave.open(output_path, "wb") as wav_file:
             wav_file.setnchannels(1)
@@ -100,6 +100,7 @@ async def test_piper_synthesis_runs_cli_off_event_loop(tmp_path, monkeypatch) ->
                 "capture_output": capture_output,
                 "check": check,
                 "shell": shell,
+                "timeout": timeout,
             }
         )
 
@@ -140,6 +141,7 @@ async def test_piper_synthesis_runs_cli_off_event_loop(tmp_path, monkeypatch) ->
     assert run_calls[0]["capture_output"] is True
     assert run_calls[0]["check"] is True
     assert run_calls[0]["shell"] is False
+    assert run_calls[0]["timeout"] == 120.0
 
 
 @pytest.mark.asyncio
@@ -294,6 +296,38 @@ async def test_piper_synthesis_maps_cli_failure_without_request_text_or_stderr(
     assert "private request text" not in str(exc_info.value)
     assert "/secret/path" not in str(exc_info.value)
     assert "model unavailable" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_piper_synthesis_timeout_is_bounded_and_redacted(tmp_path, monkeypatch) -> None:
+    model_path = tmp_path / "voice.onnx"
+    model_path.write_bytes(b"model")
+
+    def fake_run(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["piper", "/secret/path"], timeout=kwargs["timeout"])
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+    provider = PiperTTSProvider(
+        piper_path="/usr/bin/piper",
+        voice=PiperVoiceConfig(
+            voice_id="default",
+            model_file=str(model_path),
+            expected_sample_rate=16000,
+        ),
+    )
+    await provider.start()
+
+    with pytest.raises(TTSProviderError) as exc_info:
+        await provider.synthesize(TTSSynthesisRequest(text="private request text"))
+
+    assert exc_info.value.code == "timeout"
+    assert str(exc_info.value) == "Piper synthesis took too long"
+    assert "private request text" not in str(exc_info.value)
+    assert "/secret/path" not in str(exc_info.value)
 
 
 @pytest.mark.asyncio

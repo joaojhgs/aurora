@@ -147,6 +147,7 @@ class TranscriptionService(BaseService):
         # remains memory-safe while preserving long-form requests for the
         # accurate final transcription.
         self._speech_segments: deque[bytes] = deque()
+        self._speech_segment_bytes = 0
         self._in_speech = False
         self._silence_chunks = 0
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
@@ -154,6 +155,7 @@ class TranscriptionService(BaseService):
         self._last_realtime_partial_text = ""
         self._partial_interval_seconds = 1.0
         self._partial_min_audio_length_ms = 700
+        self._max_speech_duration_s = 30
 
         # Configuration (will be loaded in on_start)
         self._language = ""
@@ -298,6 +300,9 @@ class TranscriptionService(BaseService):
             self._language_policy = policy
             self._realtime_enabled = realtime_enabled
             self._accurate_enabled = accurate_enabled
+            self._max_speech_duration_s = int(
+                self._cfg_value(transcription_cfg, "max_speech_duration_s") or 30
+            )
             self._realtime_model = new_realtime
             self._accurate_model = new_accurate
             if old_realtime and old_realtime is not new_realtime:
@@ -310,11 +315,20 @@ class TranscriptionService(BaseService):
     async def _load_config(self) -> None:
         """Load canonical speech and STT configuration."""
 
-        language, policy, _, realtime_enabled, accurate_enabled = await self._read_runtime_config()
+        (
+            language,
+            policy,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        ) = await self._read_runtime_config()
         self._language = language
         self._language_policy = policy
         self._realtime_enabled = realtime_enabled
         self._accurate_enabled = accurate_enabled
+        self._max_speech_duration_s = int(
+            self._cfg_value(transcription_cfg, "max_speech_duration_s") or 30
+        )
 
     async def _read_runtime_config(
         self,
@@ -593,14 +607,20 @@ class TranscriptionService(BaseService):
         if is_speech:
             # Add to speech segment
             self._speech_segments.append(audio_data)
+            self._speech_segment_bytes += len(audio_data)
             self._in_speech = True
             self._silence_chunks = 0
+            if source == "external" and self._external_segment_limit_reached():
+                self._transcribe_segment()
+                self._reset_speech_state()
+                return
             self._emit_realtime_partial_if_due()
         else:
             if self._in_speech:
                 # We're in speech but this chunk is silence
                 self._silence_chunks += 1
                 self._speech_segments.append(audio_data)  # Include trailing silence
+                self._speech_segment_bytes += len(audio_data)
 
                 # Check if we've accumulated enough silence to end segment
                 if self._silence_chunks >= self._min_silence_chunks:
@@ -640,6 +660,7 @@ class TranscriptionService(BaseService):
                     f"({duration_ms:.0f}ms, peak={fallback_peak:.1f}%)"
                 )
                 self._speech_segments.append(segment_data)
+                self._speech_segment_bytes += len(segment_data)
                 self._transcribe_segment()
                 self._reset_speech_state()
 
@@ -896,8 +917,19 @@ class TranscriptionService(BaseService):
     def _reset_speech_state(self) -> None:
         """Reset speech detection state after transcribing segment."""
         self._speech_segments.clear()
+        self._speech_segment_bytes = 0
         self._in_speech = False
         self._silence_chunks = 0
+
+    def _external_segment_limit_reached(self) -> bool:
+        """Return whether a remotely fed utterance reached its configured ceiling."""
+        audio_format = self._audio_format
+        if audio_format is None:
+            bytes_per_second = self._default_sample_rate * self._default_channels * 2
+        else:
+            bytes_per_sample = max(1, audio_format.bits_per_sample // 8)
+            bytes_per_second = audio_format.sample_rate * audio_format.channels * bytes_per_sample
+        return self._speech_segment_bytes >= bytes_per_second * self._max_speech_duration_s
 
     async def _process_audio_data(
         self,
@@ -1124,6 +1156,7 @@ class TranscriptionService(BaseService):
             with self._buffer_lock:
                 self._audio_buffer.clear()
                 self._speech_segments.clear()
+                self._speech_segment_bytes = 0
             self._in_speech = False
             self._silence_chunks = 0
             self._last_realtime_partial_at = 0.0

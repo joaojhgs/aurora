@@ -29,6 +29,8 @@ from app.services.tts.providers.base import (
     validate_synthesis_request,
 )
 
+PIPER_SYNTHESIS_TIMEOUT_SECONDS = 120.0
+
 
 @dataclass(frozen=True)
 class PiperVoiceConfig:
@@ -116,6 +118,7 @@ def synthesize_piper_cli(
     text: str,
     use_cuda: bool = False,
     debug: bool = False,
+    timeout_s: float = PIPER_SYNTHESIS_TIMEOUT_SECONDS,
 ) -> tuple[bytes, int]:
     """Run Piper synchronously and return raw 16-bit mono PCM plus sample rate."""
     model_file = _absolute_path(voice.model_file)
@@ -142,6 +145,7 @@ def synthesize_piper_cli(
             capture_output=True,
             check=True,
             shell=False,
+            timeout=timeout_s,
         )
 
         with wave.open(output_wav_path, "rb") as wav_file:
@@ -158,6 +162,8 @@ def synthesize_piper_cli(
             log_warning("Piper synthesis failed; stderr was redacted from provider error")
             log_debug(f"Redacted Piper stderr length={len(stderr)}")
         raise TTSProviderError("unavailable", "Piper synthesis failed") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise TTSProviderError("timeout", "Piper synthesis took too long") from exc
     finally:
         if os.path.isfile(output_wav_path):
             os.remove(output_wav_path)

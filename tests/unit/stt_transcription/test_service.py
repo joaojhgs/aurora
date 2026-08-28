@@ -136,6 +136,27 @@ def test_active_speech_segments_are_not_rolling_window_limited(service):
     assert service._speech_segments.maxlen is None
 
 
+def test_external_speech_segment_forces_transcription_at_configured_ceiling(service, monkeypatch):
+    """A speechy remote stream cannot grow the active PCM segment forever."""
+    service._audio_format = AudioFormat(
+        sample_rate=16000,
+        channels=1,
+        bits_per_sample=16,
+        encoding=AudioEncoding.PCM_S16LE,
+    )
+    service._max_speech_duration_s = 1
+    monkeypatch.setattr(service, "_detect_speech", lambda _data: True)
+    transcribe = MagicMock()
+    monkeypatch.setattr(service, "_transcribe_segment", transcribe)
+
+    service._process_audio_item(b"\x01" * 16_000, "external:one", "external")
+    service._process_audio_item(b"\x02" * 16_000, "external:one", "external")
+
+    transcribe.assert_called_once_with()
+    assert not service._speech_segments
+    assert service._speech_segment_bytes == 0
+
+
 @pytest.fixture
 def audio_chunk():
     """Create a sample AudioChunk."""
