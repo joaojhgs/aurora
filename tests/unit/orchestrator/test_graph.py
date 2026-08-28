@@ -854,6 +854,51 @@ class TestGraphOrchestratorToolExecution:
         graph_orchestrator.graph.ainvoke.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_terminal_approval_compaction_drops_memory_and_durable_row(
+        self, graph_orchestrator
+    ):
+        """Resolved approvals are continuation state, not an unbounded history table."""
+
+        from app.shared.contracts.models.orchestrator import OrchestratorPendingToolApproval
+        from app.shared.contracts.models.tooling import ToolingRequestApprovalRequest
+
+        pending = OrchestratorPendingToolApproval(
+            pending_id="thread-done:tool-done",
+            approval_request_id="approval-done",
+            status="executed",
+            run_id="thread-done",
+            thread_id="thread-done",
+            message_id="message-done",
+            tool_call_id="tool-done",
+            tool_name="list_tasks",
+            arguments_preview={},
+            created_at=1.0,
+        )
+        graph_orchestrator.pending_tool_approvals[pending.pending_id] = pending
+        graph_orchestrator._pending_tool_requests[pending.pending_id] = (
+            ToolingRequestApprovalRequest(tool_name="list_tasks", arguments={})
+        )
+        graph_orchestrator._pending_tool_call_ids_by_approval_id[pending.approval_request_id] = (
+            pending.pending_id
+        )
+        graph_orchestrator._durable_pending_approvals_ready = True
+        graph_orchestrator._db_sql = AsyncMock(return_value=[])
+
+        await graph_orchestrator._compact_terminal_pending_tool_approval(pending)
+
+        assert pending.pending_id not in graph_orchestrator.pending_tool_approvals
+        assert pending.pending_id not in graph_orchestrator._pending_tool_requests
+        assert (
+            pending.approval_request_id
+            not in graph_orchestrator._pending_tool_call_ids_by_approval_id
+        )
+        graph_orchestrator._db_sql.assert_awaited_once()
+        assert (
+            "DELETE FROM orchestrator_pending_tool_approvals"
+            in (graph_orchestrator._db_sql.await_args.args[0])
+        )
+
+    @pytest.mark.asyncio
     async def test_successful_approved_tool_has_visible_fallback_when_llm_resume_fails(
         self, graph_orchestrator, mock_bus
     ):

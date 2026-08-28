@@ -14,13 +14,16 @@ from app.messaging.local_bus import LocalBus
 from app.services.auth.service import AuthService
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
 from app.shared.contracts.models.db import DBExecuteSQLResponse, DBMethods
-from app.shared.messaging.bus_init import set_bus
 
 
 @pytest.fixture
-async def disabled_auth_service():
+async def disabled_auth_service(monkeypatch: pytest.MonkeyPatch):
+    import app.messaging.bus_runtime as bus_runtime
+    import app.shared.messaging.bus_init as bus_init
+
     bus = LocalBus(validate_topics=False)
-    set_bus(bus)
+    monkeypatch.setattr(bus_init, "_bus", bus)
+    monkeypatch.setattr(bus_runtime, "_bus", bus)
     service = AuthService()
     service._bus = bus
 

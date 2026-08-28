@@ -12,8 +12,7 @@ from app.messaging.local_bus import LocalBus
 from app.services.config.messages import ConfigChangedEvent
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.speech import SpeechMethodConstraints
-from app.shared.contracts.registry import clear_registry, method_contract
-from app.shared.messaging.bus_init import set_bus as set_shared_bus
+from app.shared.contracts.registry import clear_registry, method_contract, unregister_method
 from app.shared.services.base_service import BaseService
 
 
@@ -156,10 +155,14 @@ class InvalidPermissionlessCallableService(BaseService):
 
 
 @pytest_asyncio.fixture
-async def local_bus():
+async def local_bus(monkeypatch: pytest.MonkeyPatch):
+    import app.messaging.bus_runtime as bus_runtime
+    import app.shared.messaging.bus_init as bus_init
+
     bus = LocalBus(validate_topics=False)
     await bus.start()
-    set_shared_bus(bus)
+    monkeypatch.setattr(bus_init, "_bus", bus)
+    monkeypatch.setattr(bus_runtime, "_bus", bus)
     yield bus
     await bus.stop()
 
@@ -204,14 +207,21 @@ async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> Non
 
 
 @pytest.mark.asyncio
-async def test_config_subscription_failure_blocks_service_start() -> None:
+async def test_config_subscription_failure_blocks_service_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A service must not report started if config event readiness fails."""
+
+    import app.messaging.bus_runtime as bus_runtime
+    import app.shared.messaging.bus_init as bus_init
 
     class FailingConfigBus:
         async def subscribe_event(self, topic, handler) -> None:
             raise RuntimeError("config listener unavailable")
 
-    set_shared_bus(FailingConfigBus())
+    bus = FailingConfigBus()
+    monkeypatch.setattr(bus_init, "_bus", bus)
+    monkeypatch.setattr(bus_runtime, "_bus", bus)
     service = RuntimeLifecycleService()
 
     with pytest.raises(RuntimeError, match="config listener unavailable"):
@@ -220,6 +230,21 @@ async def test_config_subscription_failure_blocks_service_start() -> None:
     assert service._started is False
     assert service._runtime_state == "inactive"
     assert service._config_change_subscription is None
+
+
+@pytest.mark.asyncio
+async def test_contract_registry_skew_blocks_service_start(local_bus) -> None:
+    """Decorator metadata without a registered contract must fail readiness."""
+
+    service = RuntimeLifecycleService()
+    unregister_method("Auth.RuntimeLifecycleTest")
+
+    with pytest.raises(RuntimeError, match="no registered contract"):
+        await service.start()
+
+    assert "Auth.RuntimeLifecycleTest" not in local_bus._subs
+    assert service._started is False
+    assert service._runtime_state == "failed"
 
 
 @pytest.mark.asyncio

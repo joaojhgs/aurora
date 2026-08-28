@@ -22,6 +22,10 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.shared.messaging.bus_init import get_bus_singleton
 
 
+class ContractSubscriptionError(RuntimeError):
+    """Raised when decorator metadata cannot be bound to a bus contract."""
+
+
 class BaseService(ABC):
     """Base class for all Aurora services.
 
@@ -536,17 +540,14 @@ class BaseService(ABC):
                     topic = metadata.get("bus_topic") or metadata.get("method_id")
                     contract = get_contract(topic) if topic else None
                     if topic and contract is None:
-                        log_warning(
+                        raise ContractSubscriptionError(
                             f"{self.module}.{attr_name} has decorator metadata for {topic} "
-                            "but no registered contract; skipping subscription"
+                            "but no registered contract"
                         )
-                        continue
                     if contract is not None and not method_contract_advertisable(contract):
-                        log_warning(
-                            f"{self.module}.{attr_name} contract {topic} is not advertisable; "
-                            "skipping subscription"
+                        raise ContractSubscriptionError(
+                            f"{self.module}.{attr_name} contract {topic} is not advertisable"
                         )
-                        continue
                     input_model = (
                         contract.input_model
                         if contract is not None
@@ -816,6 +817,8 @@ class BaseService(ABC):
                             self._contract_subscriptions.append((f"stream:{topic}", stream_handler))
                         log_info(f"Auto-subscribed {attr_name} to {topic}")
 
+            except ContractSubscriptionError:
+                raise
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
 

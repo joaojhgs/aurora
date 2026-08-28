@@ -67,6 +67,7 @@ _PREVIEW_MAX_CHARS = 240
 _APPROVAL_PLACEHOLDER_MESSAGE_ID_KEY = "approval_placeholder_message_id"
 _APPROVAL_CHECKPOINT_POLL_ATTEMPTS = 6
 _APPROVAL_CHECKPOINT_POLL_DELAY_SECONDS = 0.1
+_COMPACTABLE_APPROVAL_STATUSES = frozenset({"denied", "executed"})
 _SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)bearer\s+[a-z0-9._~+/=-]{12,}"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
@@ -993,6 +994,7 @@ class GraphOrchestrator:
                     )
                 ],
             )
+            await self._compact_terminal_pending_tool_approval(pending)
             return pending, None, assistant_text, None
 
         try:
@@ -1096,6 +1098,7 @@ class GraphOrchestrator:
             resolved_id,
             assistant_text,
         )
+        await self._compact_terminal_pending_tool_approval(pending)
         return pending, execution.data, assistant_text, None
 
     def get_pending_tool_approval(
@@ -1351,6 +1354,15 @@ class GraphOrchestrator:
 
         try:
             await self._ensure_pending_approval_table()
+            now = time.time()
+            await self._db_sql(
+                """
+                DELETE FROM orchestrator_pending_tool_approvals
+                WHERE status NOT IN ('pending', 'failed')
+                   OR (expires_at IS NOT NULL AND expires_at <= ?)
+                """,
+                [now],
+            )
             rows = await self._db_sql(
                 """
                 SELECT pending_json, request_json FROM orchestrator_pending_tool_approvals
@@ -1358,7 +1370,7 @@ class GraphOrchestrator:
                   AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY created_at ASC
                 """,
-                [time.time()],
+                [now],
             )
             for row in rows:
                 pending = OrchestratorPendingToolApproval.model_validate(
@@ -1460,6 +1472,30 @@ class GraphOrchestrator:
             )
         except Exception as error:
             log_debug(f"Failed to update pending tool approval status: {error}")
+
+    async def _compact_terminal_pending_tool_approval(
+        self, pending: OrchestratorPendingToolApproval
+    ) -> None:
+        """Drop resolved continuation state once no retryable approval remains."""
+
+        if pending.status not in _COMPACTABLE_APPROVAL_STATUSES:
+            return
+        self.pending_tool_approvals.pop(pending.pending_id, None)
+        self._pending_tool_requests.pop(pending.pending_id, None)
+        if pending.approval_request_id:
+            self._pending_tool_call_ids_by_approval_id.pop(pending.approval_request_id, None)
+        if not self._durable_pending_approvals_ready:
+            return
+        try:
+            await self._db_sql(
+                """
+                DELETE FROM orchestrator_pending_tool_approvals
+                WHERE pending_id = ? AND status IN ('denied', 'executed')
+                """,
+                [pending.pending_id],
+            )
+        except Exception as error:
+            log_debug(f"Failed to compact pending tool approval: {error}")
 
     async def _emit_tool_stream_event(
         self,
