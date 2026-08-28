@@ -1473,7 +1473,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                 .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
                 .getString(THIN_PROFILE_KEY, null)
             ret.put("key", THIN_PROFILE_KEY)
-            if (stored != null) ret.put("value", stored)
+            ret.put("value", stored ?: JSONObject.NULL)
             invoke.resolve(ret)
         } catch (error: Exception) {
             invoke.reject(error.message ?: "thin_profile_get_failed")

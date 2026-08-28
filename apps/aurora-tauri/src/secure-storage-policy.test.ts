@@ -207,6 +207,28 @@ describe('Tauri secure storage policy', () => {
     expect(mobileThinBranch).not.toContain('secureStorageSet')
   })
 
+  it('represents an empty mobile profile store consistently at the Rust boundary', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const kotlinSource = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+      ),
+      'utf8',
+    )
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+
+    expect(kotlinSource).toContain('ret.put("value", stored ?: JSONObject.NULL)')
+    expect(swiftStorage).toContain('value = NSNull()')
+    expect(rustSource).toContain('Some(Value::Null) | None => None')
+  })
 
   it('documents iOS biometric credential scope without system assistant ownership claims', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')

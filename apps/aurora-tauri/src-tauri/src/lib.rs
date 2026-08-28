@@ -3893,12 +3893,18 @@ fn refresh_thin_profile_state_from_payload(
     profile_state: &SharedThinProfileState,
     response: &Value,
 ) -> Result<(), AuroraCommandError> {
-    let document = match response.get("value") {
+    replace_thin_profile_state(profile_state, thin_profile_document_from_payload(response)?)
+}
+
+#[cfg(any(test, target_os = "android", target_os = "ios"))]
+fn thin_profile_document_from_payload(
+    response: &Value,
+) -> Result<Option<String>, AuroraCommandError> {
+    Ok(match response.get("value") {
         Some(Value::String(value)) => Some(value.clone()),
-        Some(Value::Null) => None,
+        Some(Value::Null) | None => None,
         _ => return Err(AuroraCommandError::InvalidGatewayResponse),
-    };
-    replace_thin_profile_state(profile_state, document)
+    })
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -11323,6 +11329,30 @@ mod tests {
             Some("https://hosted.example/api")
         );
         clear_remote_env();
+    }
+
+    #[test]
+    fn mobile_profile_payload_accepts_an_empty_native_store() {
+        assert_eq!(
+            thin_profile_document_from_payload(&json!({
+                "platform": "android",
+                "persisted": true
+            }))
+            .unwrap(),
+            None
+        );
+        assert_eq!(
+            thin_profile_document_from_payload(&json!({ "value": null })).unwrap(),
+            None
+        );
+        assert_eq!(
+            thin_profile_document_from_payload(&json!({ "value": "profile" })).unwrap(),
+            Some("profile".to_string())
+        );
+        assert!(matches!(
+            thin_profile_document_from_payload(&json!({ "value": false })),
+            Err(AuroraCommandError::InvalidGatewayResponse)
+        ));
     }
 
     #[test]
