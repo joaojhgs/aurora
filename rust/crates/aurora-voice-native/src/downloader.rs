@@ -1,6 +1,5 @@
 //! Bounded, resumable native downloads for verified model-pack assets.
 
-#[cfg(not(target_os = "android"))]
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::time::Duration;
@@ -353,35 +352,23 @@ async fn client_for_pinned_url(
 ) -> Result<reqwest::Client, DownloadError> {
     let host = source.host_str().ok_or(DownloadError::UnsafeSource)?;
     #[cfg(target_os = "android")]
-    {
-        let _ = allow_loopback_http;
-        if !android_model_download_host_allowed(host) {
-            return Err(DownloadError::UnsafeSource);
-        }
-        reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|_| DownloadError::Request)
+    if !android_model_download_host_allowed(host) {
+        return Err(DownloadError::UnsafeSource);
     }
-    #[cfg(not(target_os = "android"))]
-    {
-        let port = source
-            .port_or_known_default()
-            .ok_or(DownloadError::UnsafeSource)?;
-        let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
-        reqwest::Client::builder()
-            // A proxy would bypass the DNS-pinned destination policy below and make
-            // client construction depend on untrusted process proxy variables.
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .resolve_to_addrs(host, &pinned)
-            .build()
-            .map_err(|_| DownloadError::Request)
-    }
+    let port = source
+        .port_or_known_default()
+        .ok_or(DownloadError::UnsafeSource)?;
+    let pinned = resolve_public_addrs(host, port, allow_loopback_http).await?;
+    reqwest::Client::builder()
+        // A proxy would bypass the DNS-pinned destination policy below and make
+        // client construction depend on untrusted process proxy variables.
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(host, &pinned)
+        .build()
+        .map_err(|_| DownloadError::Request)
 }
 
-#[cfg(not(target_os = "android"))]
 async fn resolve_public_addrs(
     host: &str,
     port: u16,
@@ -408,7 +395,6 @@ fn android_model_download_host_allowed(host: &str) -> bool {
     )
 }
 
-#[cfg(not(target_os = "android"))]
 fn ip_is_permitted(ip: IpAddr, allow_loopback_http: bool) -> bool {
     match ip {
         IpAddr::V4(ip) => {
@@ -977,6 +963,41 @@ mod tests {
         ] {
             assert!(!android_model_download_host_allowed(denied), "{denied}");
         }
+    }
+
+    #[test]
+    fn dns_pinning_rejects_private_and_special_addresses() {
+        for denied in [
+            "0.0.0.0",
+            "10.0.0.1",
+            "100.64.0.1",
+            "127.0.0.1",
+            "169.254.1.1",
+            "172.16.0.1",
+            "192.168.0.1",
+            "198.18.0.1",
+            "224.0.0.1",
+            "::",
+            "::1",
+            "fc00::1",
+            "fe80::1",
+            "2001:db8::1",
+        ] {
+            let address = denied.parse().expect("fixture IP address");
+            assert!(!ip_is_permitted(address, false), "{denied}");
+        }
+        assert!(ip_is_permitted(
+            "8.8.8.8".parse().expect("public IPv4"),
+            false
+        ));
+        assert!(ip_is_permitted(
+            "2606:4700:4700::1111".parse().expect("public IPv6"),
+            false
+        ));
+        assert!(ip_is_permitted(
+            "127.0.0.1".parse().expect("loopback IPv4"),
+            true
+        ));
     }
 
     #[test]

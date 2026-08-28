@@ -851,9 +851,13 @@ describe('Android native voice route policy', () => {
       plugin.indexOf('private fun normalizeVoicePackCatalog(raw: String)'),
       plugin.indexOf('private fun findCatalogEntry', plugin.indexOf('private fun normalizeVoicePackCatalog(raw: String)')),
     )
-    const downloadBody = plugin.slice(
-      plugin.indexOf('private fun downloadPackToCache('),
-      plugin.indexOf('private fun isPackDownloaded', plugin.indexOf('private fun downloadPackToCache(')),
+    const downloadCommandBody = plugin.slice(
+      plugin.indexOf('fun downloadVoicePack(invoke: Invoke)'),
+      plugin.indexOf('fun voicePackDownloadStatus(invoke: Invoke)'),
+    )
+    const nativeInstallBody = plugin.slice(
+      plugin.indexOf('private fun installPackForRuntime('),
+      plugin.indexOf('private fun removePackForRuntime', plugin.indexOf('private fun installPackForRuntime(')),
     )
     const foregroundStatusBody = plugin.slice(
       plugin.indexOf('private fun voiceForegroundServiceStatusObject'),
@@ -890,16 +894,9 @@ describe('Android native voice route policy', () => {
     expect(catalogBody).toContain('supportedAbis.isEmpty()')
     expect(catalogBody).toContain('tasks.isEmpty()')
 
-    expect(downloadBody).toContain('validateAndParseVoicePackUri(source)')
-    expect(downloadBody).toContain('resolvePackDownloadUri(uri, expectedSize)')
-    expect(downloadBody).toContain('total > expectedSize')
-    expect(downloadBody).toContain('total != expectedSize')
-    expect(downloadBody).toContain('sha256 != actualHash')
-    expect(downloadBody).toContain('replaceFileAtomically(temp, destination)')
-    expect(plugin).toContain('connection.instanceFollowRedirects = false')
-    expect(plugin).toContain('VOICE_PACK_DOWNLOAD_REDIRECT_LIMIT')
-    expect(plugin).toContain('InetAddress.getAllByName(host)')
-    expect(plugin).toContain('isPrivateOrLocalHostAddress')
+    expect(downloadCommandBody).toContain('installPackForRuntime(entry, task)')
+    expect(nativeInstallBody).toContain('AuroraNativeSpeechPackBridge.install')
+    expect(nativeInstallBody).not.toContain('HttpURLConnection')
     expect(plugin).toContain('uri.scheme?.lowercase(Locale.getDefault()) != "https"')
 
     expect(localLightBody).toContain('ret.put("available", activeCacheReady)')
@@ -922,14 +919,9 @@ describe('Android native voice route policy', () => {
       plugin.indexOf('private fun parseVoicePackUri'),
       plugin.indexOf('private fun validateAndParseVoicePackUri', plugin.indexOf('private fun parseVoicePackUri')),
     )
-    const resolvedUriValidationBody = plugin.slice(
-      plugin.indexOf('private fun validateAndParseVoicePackUri'),
-      plugin.indexOf('private fun isAllowedPackHost', plugin.indexOf('private fun validateAndParseVoicePackUri')),
-    )
     expect(downloadReadinessBody).toContain('parseVoicePackUri(entry.uri)')
     expect(downloadReadinessBody).not.toContain('InetAddress.getAllByName')
     expect(offlineUriValidationBody).not.toContain('InetAddress.getAllByName')
-    expect(resolvedUriValidationBody).toContain('InetAddress.getAllByName(host)')
     expect(plugin).toContain('private fun requestedPackTask(entry: VoicePackCatalogEntry, requestedTask: String): AuroraSpeechPackTask?')
     expect(plugin).toContain('requested == catalogTask -> requested')
     expect(plugin).toContain('else -> null')
