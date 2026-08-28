@@ -945,7 +945,7 @@ describe('createAuroraBrowserClient', () => {
     await expect(saveAuroraBrowserThinProfile(profile, {
       roomSecretRef: 'ref:browser:other-room',
       roomSecret: 'must-not-be-stored',
-    })).rejects.toThrow(/does not match/)
+    })).rejects.toThrow(/do not match/)
 
     expect(auroraBrowserRequiresOnboarding()).toBe(true)
   })
