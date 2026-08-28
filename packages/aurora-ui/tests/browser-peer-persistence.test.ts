@@ -246,6 +246,31 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await store.close()
   })
 
+  it('retries encrypted persistence after a transient vault failure', async () => {
+    const storage = new MapVaultStorage()
+    storage.failWrites = true
+    const store = new BrowserPersistentPeerCredentialStore({
+      storage,
+      metadataStorage: new MapMetadataStorage(),
+      crypto: globalThis.crypto,
+      origin: 'https://aurora.example.test',
+    })
+
+    await store.save('host-peer', credential)
+    expect(store.persistenceStatus()).toMatchObject({ backend: 'memory', secretsPersisted: false })
+
+    storage.failWrites = false
+    await store.save('host-peer-recovered', { ...credential, verifierPeerId: 'host-peer-recovered' })
+
+    expect(store.persistenceStatus()).toMatchObject({
+      backend: 'encrypted-indexeddb',
+      secretsPersisted: true,
+      profilePersisted: true,
+    })
+    expect(storage.values.has('credential:host-peer-recovered')).toBe(true)
+    await store.close()
+  })
+
   it('stores inbound verifier secrets only in the encrypted vault and restores them after restart', async () => {
     const storage = new MapVaultStorage()
     const metadata = new MapMetadataStorage()
@@ -337,7 +362,7 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     queuedFailure.failWrites = true
     queuedStore.setRoomSecret(profile.roomSecretRef, 'queued-room-secret')
     await expect(queuedStore.setOpaqueSecret(verifierSecretKey, verifierSecret))
-      .rejects.toThrow('Persistent inbound verifier storage is unavailable')
+      .rejects.toThrow('storage denied')
     expect(await queuedFailure.keys()).not.toContain(verifierSecretKey)
     await queuedStore.close()
 
@@ -351,8 +376,7 @@ describe('BrowserPersistentPeerCredentialStore', () => {
     await queuedReadStore.setOpaqueSecret(verifierSecretKey, verifierSecret)
     queuedReadFailure.failWrites = true
     queuedReadStore.setRoomSecret(profile.roomSecretRef, 'queued-room-secret')
-    await expect(queuedReadStore.getOpaqueSecret(verifierSecretKey))
-      .rejects.toThrow('Persistent inbound verifier storage is unavailable')
+    await expect(queuedReadStore.getOpaqueSecret(verifierSecretKey)).resolves.toBe(verifierSecret)
     await queuedReadStore.close()
 
     const failingWrites = new MapVaultStorage()
@@ -562,6 +586,15 @@ describe('BrowserPersistentPeerCredentialStore', () => {
       profilePersisted: false,
     })
     expect(store.persistenceStatus().fallbackReason).toContain('metadata denied')
+
+    metadata.failWrites = false
+    store.saveConnectionProfile(profile)
+    await store.save('host-peer', credential)
+    expect(store.persistenceStatus()).toMatchObject({
+      backend: 'encrypted-indexeddb',
+      secretsPersisted: true,
+      profilePersisted: true,
+    })
     await store.close()
   })
 

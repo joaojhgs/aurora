@@ -57,7 +57,7 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
 
   async read(profileId: string, localNodeId: string): Promise<BrowserLocalDataBackendPointer | null> {
     const storage = this.requireStorage()
-    const raw = storage.getItem(pointerKey(this.keyPrefix, profileId, localNodeId))
+    const raw = accessPointerStorage(() => storage.getItem(pointerKey(this.keyPrefix, profileId, localNodeId)))
     if (raw === null) return null
     let value: unknown
     try {
@@ -70,7 +70,10 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
 
   async write(pointer: BrowserLocalDataBackendPointer): Promise<void> {
     const storage = this.requireStorage()
-    storage.setItem(pointerKey(this.keyPrefix, pointer.profileId, pointer.localNodeId), JSON.stringify(parsePointer(pointer, pointer.profileId, pointer.localNodeId)))
+    accessPointerStorage(() => storage.setItem(
+      pointerKey(this.keyPrefix, pointer.profileId, pointer.localNodeId),
+      JSON.stringify(parsePointer(pointer, pointer.profileId, pointer.localNodeId))
+    ))
   }
 
   async delete(profileId: string, localNodeId: string): Promise<void> {
@@ -78,7 +81,7 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
     if (typeof storage.removeItem !== 'function') {
       throw new LocalDataError('unsupported_backend', 'Browser local data selection cleanup is unavailable', { reason: 'pointer_store_unavailable' })
     }
-    storage.removeItem(pointerKey(this.keyPrefix, profileId, localNodeId))
+    accessPointerStorage(() => storage.removeItem!(pointerKey(this.keyPrefix, profileId, localNodeId)))
   }
 
   private requireStorage(): Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>> {
@@ -86,6 +89,16 @@ export class LocalStorageBrowserLocalDataBackendPointerStore implements BrowserL
       throw new LocalDataError('unsupported_backend', 'Browser local data selection is unavailable', { reason: 'pointer_store_unavailable' })
     }
     return this.storage
+  }
+}
+
+function accessPointerStorage<T>(operation: () => T): T {
+  try {
+    return operation()
+  } catch {
+    throw new LocalDataError('unsupported_backend', 'Browser local data selection is unavailable', {
+      reason: 'pointer_store_access_failed'
+    })
   }
 }
 

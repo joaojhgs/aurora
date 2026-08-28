@@ -118,6 +118,8 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   private closed = false
   private storageUsable: boolean
   private metadataUsable: boolean
+  private storageHealthy: boolean
+  private metadataHealthy: boolean
   private fallbackReason: string | undefined
 
   constructor(options: BrowserPersistentPeerCredentialStoreOptions = {}) {
@@ -129,16 +131,18 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.memory = new MemoryPeerCredentialStore({ now: this.now })
     this.storageUsable = this.storage !== null && this.cryptoImpl?.subtle !== undefined
     this.metadataUsable = this.metadataStorage !== null && this.metadataStorage !== undefined
+    this.storageHealthy = this.storageUsable
+    this.metadataHealthy = this.metadataUsable
     if (!this.storageUsable) this.fallbackReason = 'IndexedDB or WebCrypto is unavailable'
     if (!this.metadataUsable) this.fallbackReason ??= 'Browser metadata storage is unavailable'
   }
 
   persistenceStatus(): BrowserPeerPersistenceStatus {
-    const secretsPersisted = this.storageUsable
+    const secretsPersisted = this.storageUsable && this.storageHealthy && this.metadataHealthy
     const out: BrowserPeerPersistenceStatus = {
       backend: secretsPersisted ? 'encrypted-indexeddb' : 'memory',
       secretsPersisted,
-      profilePersisted: this.metadataUsable,
+      profilePersisted: this.metadataUsable && this.metadataHealthy,
     }
     if (this.fallbackReason !== undefined) out.fallbackReason = this.fallbackReason
     return out
@@ -444,6 +448,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     try {
       await this.pendingWrites
       await this.storage.delete(key)
+      this.markStorageRecovered()
     } catch (error) {
       this.fallbackToMemory(error)
     }
@@ -468,6 +473,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
         updatedAtMs: this.now(),
       }
       await this.storage.set(key, record)
+      this.markStorageRecovered()
     } finally {
       plaintext.fill(0)
     }
@@ -477,6 +483,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     if (!this.storageUsable || this.storage === null || this.cryptoImpl === null) return null
     try {
       const value = await this.storage.get(key)
+      this.markStorageRecovered()
       if (!isEncryptedVaultRecord(value)) return null
       const plaintext = new Uint8Array(await this.cryptoImpl.subtle.decrypt(
         { name: 'AES-GCM', iv: fromBase64Url(value.nonce), additionalData: this.aad(key) },
@@ -518,6 +525,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
           updatedAtMs: this.now(),
         }
         await storage.set(key, record)
+        this.markStorageRecovered()
       } finally {
         plaintext.fill(0)
       }
@@ -533,6 +541,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       await this.pendingWrites
       this.assertDurableInboundVerifierStorage()
       const value = await this.storage!.get(key)
+      this.markStorageRecovered()
       if (value === undefined || value === null) return undefined
       if (!isEncryptedVaultRecord(value)) throw new Error('Persistent inbound verifier secret is unreadable')
       const plaintext = new Uint8Array(await this.cryptoImpl!.subtle.decrypt(
@@ -556,6 +565,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     try {
       await this.pendingWrites
       await this.storage!.delete(key)
+      this.markStorageRecovered()
     } catch (error) {
       this.fallbackToMemory(error)
       throw error
@@ -587,9 +597,16 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   }
 
   private fallbackToMemory(error: unknown): void {
-    this.storageUsable = false
+    this.storageHealthy = false
     this.keyPromise = null
     this.fallbackReason = error instanceof Error ? `Persistent vault unavailable: ${error.message}` : 'Persistent vault unavailable'
+  }
+
+  private markStorageRecovered(): void {
+    this.storageHealthy = true
+    if (this.metadataHealthy && this.fallbackReason?.startsWith('Persistent vault unavailable:')) {
+      this.fallbackReason = undefined
+    }
   }
 
   private readMetadata(key: string): string | null {
@@ -597,6 +614,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     if (!this.metadataUsable || this.metadataStorage == null) return fallback
     try {
       const persisted = this.metadataStorage.getItem(key)
+      this.markMetadataRecovered()
       return persisted ?? fallback
     } catch (error) {
       this.fallbackMetadataToMemory(error)
@@ -611,6 +629,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     }
     try {
       this.metadataStorage.setItem(key, value)
+      this.markMetadataRecovered()
     } catch (error) {
       this.fallbackMetadataToMemory(error)
       volatileMetadata.set(this.volatileMetadataKey(key), value)
@@ -622,20 +641,28 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     if (!this.metadataUsable || this.metadataStorage == null) return
     try {
       this.metadataStorage.removeItem(key)
+      this.markMetadataRecovered()
     } catch (error) {
       this.fallbackMetadataToMemory(error)
     }
   }
 
   private fallbackMetadataToMemory(error: unknown): void {
-    this.metadataUsable = false
+    this.metadataHealthy = false
     // Persisting secrets without the stable peer ID/profile needed to address
     // them after reload would create an unusable, misleading partial state.
-    this.storageUsable = false
+    this.storageHealthy = false
     this.keyPromise = null
     this.fallbackReason = error instanceof Error
       ? `Metadata storage unavailable: ${error.message}`
       : 'Metadata storage unavailable'
+  }
+
+  private markMetadataRecovered(): void {
+    this.metadataHealthy = true
+    if (this.fallbackReason?.startsWith('Metadata storage unavailable:')) {
+      this.fallbackReason = undefined
+    }
   }
 
   private volatileMetadataKey(key: string): string {

@@ -182,6 +182,10 @@ export function sha256Hex(input: string): string {
 }
 
 function sha256Bytes(input: Uint8Array): Uint8Array {
+  // This synchronous digest derives a deterministic, non-secret OPFS directory
+  // name during backend construction. WebCrypto is asynchronous and cannot
+  // replace this call without changing the storage factory contract; security
+  // decisions and credential hashing continue to use platform crypto APIs.
   const words = new Uint32Array(64)
   const hash = new Uint32Array([
     0x6a09e667,

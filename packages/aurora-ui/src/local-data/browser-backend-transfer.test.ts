@@ -240,6 +240,28 @@ describe('browser backend transfer', () => {
     await expect(store.read('profile-missing', 'node-1')).resolves.toBeNull()
   })
 
+  it('wraps browser storage access failures in bounded local-data errors', async () => {
+    const denied = () => {
+      throw new DOMException('blocked by browser privacy mode', 'SecurityError')
+    }
+    const store = new LocalStorageBrowserLocalDataBackendPointerStore({
+      storage: { getItem: denied, setItem: denied, removeItem: denied }
+    })
+
+    await expect(store.read('profile-1', 'node-1')).rejects.toMatchObject({
+      code: 'unsupported_backend',
+      metadata: { reason: 'pointer_store_access_failed' }
+    })
+    await expect(store.write(pointer('indexeddb'))).rejects.toMatchObject({
+      code: 'unsupported_backend',
+      metadata: { reason: 'pointer_store_access_failed' }
+    })
+    await expect(store.delete('profile-1', 'node-1')).rejects.toMatchObject({
+      code: 'unsupported_backend',
+      metadata: { reason: 'pointer_store_access_failed' }
+    })
+  })
+
   it('throws bounded errors for present invalid pointer values without rewriting storage', async () => {
     const invalidCases: Array<{
       readonly name: string

@@ -1781,6 +1781,56 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(controller.roster()?.primaryPeerId).toBe('peer-brazil')
   })
 
+  it('keeps snapshot reads pure and uses the injected document for focus state', () => {
+    const idle = {
+      state: 'idle',
+      connectionMode: 'webrtc-only',
+      icePathCategory: 'unknown',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-28T00:00:00.000Z',
+    } as PeerConnectionSnapshot
+    const pairing = {
+      ...idle,
+      state: 'awaiting-sas-confirmation',
+      pendingPairing: {
+        sessionId: 'pair-read-only',
+        verificationCode: '10293847',
+      },
+    } as PeerConnectionSnapshot
+    let current = idle
+    const peer = {
+      snapshot: () => current,
+      subscribe: () => () => undefined,
+      disconnect: vi.fn(async () => undefined),
+    }
+    const visibilityDocument = {
+      visibilityState: 'visible' as DocumentVisibilityState,
+      hasFocus: () => false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }
+    const controller = new BrowserWebRtcPeerController(peer as never, 'webrtc-only', {
+      httpFallback: false,
+      visibilityDocument,
+    })
+
+    current = pairing
+    expect(controller.snapshot()).toMatchObject({
+      pairingSessionId: 'pair-read-only',
+      focused: false,
+    })
+    current = idle
+    expect(controller.snapshot()).not.toHaveProperty('pairingSessionId')
+  })
+
   it('publishes a second peer pairing update from the mesh roster', () => {
     const active = {
       state: 'authorized',
@@ -2362,13 +2412,12 @@ describe('browser WebRTC thin-shell runtime', () => {
     expect(peer.disconnectedReasons.at(-1)).toBe('disconnect')
     expect(controller.snapshot().pairingSessionId).toBe('pair-session-9')
 
-    ;(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue = {
-      ...(peer as unknown as { snapshotValue: BrowserWebRtcSnapshot }).snapshotValue,
+    peer.setSnapshot({
       state: 'authorized',
       status: 'authorized',
       pairingSessionId: undefined,
       pairingVerificationCode: undefined,
-    }
+    })
     expect(controller.snapshot().pairingSessionId).toBeUndefined()
   })
 
@@ -2800,6 +2849,7 @@ class FakeBrowserPeer {
   disconnectedReasons: string[] = []
   selectedCandidatePairEvidenceCalls = 0
   selectedCandidatePairEvidencePeerIds: string[] = []
+  private readonly listeners = new Set<(snapshot: BrowserWebRtcSnapshot) => void>()
   private snapshotValue: BrowserWebRtcSnapshot
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}, private readonly connectError: unknown = null) {
     this.snapshotValue = {
@@ -2826,7 +2876,15 @@ class FakeBrowserPeer {
     }
   }
   snapshot() { return this.snapshotValue }
-  subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) { listener(this.snapshotValue); return () => undefined }
+  subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) {
+    this.listeners.add(listener)
+    listener(this.snapshotValue)
+    return () => this.listeners.delete(listener)
+  }
+  setSnapshot(next: Partial<BrowserWebRtcSnapshot>) {
+    this.snapshotValue = { ...this.snapshotValue, ...next }
+    for (const listener of this.listeners) listener(this.snapshotValue)
+  }
   importInvite(invite: string) { return webRtcProfileFromInvite(invite)! }
   async connect(profile?: WebRtcPeerConnectionProfile) {
     if (this.connectError) throw this.connectError

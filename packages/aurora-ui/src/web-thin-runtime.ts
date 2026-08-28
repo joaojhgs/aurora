@@ -114,7 +114,7 @@ export interface BrowserThinRuntimeConfig {
   scryptWorkerFactory?: BrowserWebRtcRuntimeOptions['scryptWorkerFactory']
   initialCredentials?: MeshPeerCredentialRecord[] | undefined
   credentialStore?: WebRtcPeerCredentialStore & Partial<BrowserWebRtcCredentialStore>
-  visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument']
+  visibilityDocument?: BrowserWebRtcRuntimeOptions['visibilityDocument'] & Partial<Pick<Document, 'hasFocus'>>
   windowLocation?: BrowserWebRtcRuntimeOptions['windowLocation']
   createClient?: (transport: AuroraTransport) => AuroraClient
   createDemoClient?: () => AuroraClient
@@ -548,11 +548,15 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.visibilityDocument = options.visibilityDocument
     if (peer) this.unsubscribe = peer.subscribe((snapshot) => {
       this.sdkSnapshot = snapshot
+      this.updatePendingPairingCache(snapshot)
       if (snapshot.state === 'authorized') this.authorizedRouteSeen = true
       this.emit()
     })
+    if (peer) this.updatePendingPairingCache(peer.snapshot())
     if (peer?.subscribeRoster && options.restoreKnownMeshPeers) {
       this.unsubscribeRoster = peer.subscribeRoster((roster) => {
+        const pending = roster.peers.find((entry) => entry.snapshot.pendingPairing)?.snapshot
+        if (pending) this.updatePendingPairingCache(pending)
         this.persistAuthorizedMeshPeerProfiles(roster)
         void this.restoreKnownMeshPeers(roster)
         this.emit()
@@ -569,19 +573,11 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     const sdk = pendingRosterSnapshot ?? this.peer?.snapshot() ?? this.sdkSnapshot ?? null
     const diagnostic = this.connectionDiagnostic ?? this.visibilityDiagnostic ?? this.disabledReason ?? diagnosticFromSnapshot(sdk) ?? diagnosticFromError(this.creationError)
     const snapshotPairing = pendingPairingFromSnapshot(sdk)
-    if (snapshotPairing) {
-      this.pendingPairingCache = {
-        cachedAt: Date.now(),
-      }
-      if (snapshotPairing.sessionId) this.pendingPairingCache.sessionId = snapshotPairing.sessionId
-      if (snapshotPairing.verificationCode) this.pendingPairingCache.verificationCode = snapshotPairing.verificationCode
-    } else if (sdk?.state) {
-      const staleCache = this.pendingPairingCache && Date.now() - this.pendingPairingCache.cachedAt > this.pairingCacheTtlMs
-      if (staleCache || sdk.state === 'authorized') {
-        this.pendingPairingCache = null
-      }
-    }
-    const pendingPairing = snapshotPairing ?? this.pendingPairingCache
+    const cachedPairing = this.pendingPairingCache && Date.now() - this.pendingPairingCache.cachedAt <= this.pairingCacheTtlMs
+      ? this.pendingPairingCache
+      : null
+    const pendingPairing = snapshotPairing ?? cachedPairing
+    const visibilityDocument = this.visibilityDocument ?? (typeof document === 'undefined' ? undefined : document)
     const persistence = this.credentialStore?.persistenceStatus?.()
     const out: BrowserWebRtcSnapshot = {
       state: sdk?.state ?? (this.disconnected ? 'closed' : this.creationError ? 'failed' : 'idle'),
@@ -606,7 +602,7 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
       visible: this.visibilityDocument
         ? this.visibilityDocument.visibilityState !== 'hidden'
         : typeof document === 'undefined' || document.visibilityState !== 'hidden',
-      focused: typeof document === 'undefined' || document.hasFocus(),
+      focused: typeof visibilityDocument?.hasFocus !== 'function' || visibilityDocument.hasFocus(),
       hasHttpFallback: this.httpFallback,
       secretsPersisted: persistence?.secretsPersisted ?? false,
       persistenceBackend: persistence?.backend ?? 'memory',
@@ -996,12 +992,23 @@ export class BrowserWebRtcPeerController implements PeerConnectionController {
     this.emit()
   }
 
+  private updatePendingPairingCache(snapshot: PeerConnectionSnapshot): void {
+    const pairing = pendingPairingFromSnapshot(snapshot)
+    if (pairing) {
+      this.pendingPairingCache = { cachedAt: Date.now() }
+      if (pairing.sessionId) this.pendingPairingCache.sessionId = pairing.sessionId
+      if (pairing.verificationCode) this.pendingPairingCache.verificationCode = pairing.verificationCode
+    } else if (snapshot.state === 'authorized') {
+      this.pendingPairingCache = null
+    }
+  }
+
   private installVisibilityPolicy(visibilityDocument: BrowserThinRuntimeConfig['visibilityDocument']): void {
     if (this.mode === 'http-only' || !this.peer) return
     const doc = visibilityDocument ?? (typeof document === 'undefined' ? undefined : document)
     const updateVisibility = () => {
       const hidden = doc?.visibilityState === 'hidden'
-      const blurred = typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()
+      const blurred = typeof doc?.hasFocus === 'function' && !doc.hasFocus()
       this.visibilityDiagnostic = hidden
         ? 'Connection continues while this page is in the background. Some updates may wait until you return.'
         : blurred
