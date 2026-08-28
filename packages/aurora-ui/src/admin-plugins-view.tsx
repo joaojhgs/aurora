@@ -181,7 +181,7 @@ export function AdminPluginsView({ client, route, initialSnapshot, initialTab }:
   )
 
   async function toggleSourceActive(source: ToolingSourceModel) {
-    const nextActive = source.effectiveTrust === 'blocked'
+    const nextActive = !sourceIsActive(source)
     setMutationError(null)
     try {
       await client.tools.upsertSourcePolicy({
@@ -424,9 +424,9 @@ function ToolsTab({
               </div>
               {selectedSource.type === 'plugin' ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{selectedSource.effectiveTrust === 'blocked' ? 'Inactive' : 'Active'}</span>
+                  <span className="text-xs text-muted-foreground">{sourceIsActive(selectedSource) ? 'Active' : 'Inactive'}</span>
                   <Switch
-                    checked={selectedSource.effectiveTrust !== 'blocked'}
+                    checked={sourceIsActive(selectedSource)}
                     onChange={() => onToggleActive(selectedSource)}
                     label={`Toggle ${selectedSource.name} active`}
                   />
@@ -460,7 +460,7 @@ function PluginsTab({
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3.5 pt-4">
       {configured.map((source) => {
-        const active = source.effectiveTrust !== 'blocked'
+        const active = sourceIsActive(source)
         return (
           <Card key={source.id}>
             <div className="flex items-start justify-between gap-2">
@@ -488,6 +488,10 @@ function PluginsTab({
       {configured.length === 0 && available.length === 0 ? <p className="text-sm text-muted-foreground">No plugins reported.</p> : null}
     </div>
   )
+}
+
+export function sourceIsActive(source: Pick<ToolingSourceModel, 'effectiveTrust'>): boolean {
+  return source.effectiveTrust === 'trusted'
 }
 
 function AddMcpSourceDialog({

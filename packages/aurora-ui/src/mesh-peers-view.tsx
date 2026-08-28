@@ -3326,7 +3326,15 @@ function InviteQr({ value }: { value: string }) {
     }
   }, [value])
   if (!svg) return <Skeleton className="size-56" aria-label="Generating QR code" />
-  return <div className="rounded-lg bg-background p-2 ring-1 ring-border" aria-label="Mesh invite QR code" dangerouslySetInnerHTML={{ __html: svg }} />
+  return (
+    <div className="rounded-lg bg-background p-2 ring-1 ring-border">
+      <img
+        alt="Aurora device invitation QR code"
+        className="size-56"
+        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
+      />
+    </div>
+  )
 }
 
 function MeshRuntimeOverview({ snapshot, route, expanded = false }: { snapshot: MeshPeersSnapshot; route: RouteAvailability; expanded?: boolean }) {

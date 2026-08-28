@@ -14,6 +14,7 @@ import {
   type ConfigVersionHistoryResponse
 } from '@aurora/client'
 import { AdminConfigView, buildAdminConfigModel } from '../src/admin-config-view'
+import { parseFieldValue } from '../src/config-editor-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -28,6 +29,12 @@ afterEach(() => {
 })
 
 describe('AdminConfigView', () => {
+  it('keeps empty and invalid numeric input invalid instead of coercing it', () => {
+    expect(parseFieldValue('', 'number')).toBe('')
+    expect(parseFieldValue('not-a-number', 'number')).toBe('not-a-number')
+    expect(parseFieldValue('42', 'integer')).toBe(42)
+  })
+
   it('renders schema-backed typed controls, reload impact, staged review, and redacts backend secret values', async () => {
     const client = new Aurora({ transport: configTransport() })
     const model = await buildAdminConfigModel(client, configRoute())

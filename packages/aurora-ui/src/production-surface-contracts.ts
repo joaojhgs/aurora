@@ -359,7 +359,7 @@ export const productionSurfaceContracts: ProductionSurfaceContract[] = [
     navItemIds: ['backups'],
     routeOracles: [routeOracle('backups', ['Backups & Restore'], ['Create backup'])],
     mockReferenceFiles: ['components/aurora/admin/secondary-surface.tsx'],
-    mockUxAnchors: ['Restore backup', 'Create backup', 'Restore dry-run complete', 'Restore and rollback require admin confirmation.'],
+    mockUxAnchors: ['Preview restore', 'Create backup', 'Restore preview complete', 'Backup actions need admin confirmation before they can run.'],
     componentFiles: ['backup-restore-view.tsx'],
     stateCoverage: ['loading', 'empty', 'error', 'offline', 'permission', 'unsupported', 'admin-action'],
     truthSources: [

@@ -4,7 +4,8 @@ import { AuroraClient as Aurora, MockAuroraTransport } from '@aurora/client'
 import {
   AdminRbacView,
   buildAdminRbacSnapshot,
-  buildRbacPermissionPatchAction
+  buildRbacPermissionPatchAction,
+  previewRbacActions
 } from '../src/index'
 
 describe('AdminRbacView', () => {
@@ -19,7 +20,8 @@ describe('AdminRbacView', () => {
     expect(markup).toContain('Roles define permission sets; principals are assigned a role.')
     expect(markup).toContain('Roles')
     expect(markup).toContain('Principals')
-    expect(markup).toContain('Last active')
+    expect(markup).toContain('Created')
+    expect(markup).not.toContain('Last active')
     expect(markup).toContain('Change role')
     expect(markup).not.toContain('Permission matrix')
     expect(markup).not.toContain('Recent access changes')
@@ -42,5 +44,25 @@ describe('AdminRbacView', () => {
     expect(action.auditReason).toBe('least privilege update')
     expect(action.requiresAdminAction).toBe(true)
     expect(JSON.stringify(action)).not.toContain('secret')
+  })
+
+  it('previews multi-principal role changes as one batch', () => {
+    const first = buildRbacPermissionPatchAction(
+      { id: 'principal-one', username: 'one', permissions: [] },
+      { grant: ['Gateway.use'], reason: 'role update' }
+    )
+    const second = buildRbacPermissionPatchAction(
+      { id: 'principal-two', username: 'two', permissions: [] },
+      { grant: ['Gateway.use'], reason: 'role update' }
+    )
+    const singles: string[] = []
+    let batch: readonly typeof first[] = []
+
+    previewRbacActions([first, second], (action) => singles.push(action.title), (actions) => {
+      batch = actions
+    })
+
+    expect(singles).toEqual([])
+    expect(batch).toEqual([first, second])
   })
 })

@@ -140,11 +140,13 @@ export interface AdminRbacSnapshot {
 export interface AdminRbacResourceProps {
   client: AuroraClient
   onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
+  onPreviewAdminActions?: ((actions: readonly AdminRbacAction[]) => void) | undefined
 }
 
 export interface AdminRbacViewProps {
   snapshot: AdminRbacSnapshot
   onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
+  onPreviewAdminActions?: ((actions: readonly AdminRbacAction[]) => void) | undefined
 }
 
 const loadingSnapshot: AdminRbacSnapshot = {
@@ -163,7 +165,7 @@ const loadingSnapshot: AdminRbacSnapshot = {
   evidenceSource: 'pending Aurora service calls'
 }
 
-export function AdminRbacResource({ client, onPreviewAdminAction }: AdminRbacResourceProps) {
+export function AdminRbacResource({ client, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacResourceProps) {
   const [snapshot, setSnapshot] = useState<AdminRbacSnapshot>(loadingSnapshot)
 
   useEffect(() => {
@@ -177,7 +179,13 @@ export function AdminRbacResource({ client, onPreviewAdminAction }: AdminRbacRes
     }
   }, [client])
 
-  return <AdminRbacView snapshot={snapshot} onPreviewAdminAction={onPreviewAdminAction} />
+  return (
+    <AdminRbacView
+      snapshot={snapshot}
+      onPreviewAdminAction={onPreviewAdminAction}
+      onPreviewAdminActions={onPreviewAdminActions}
+    />
+  )
 }
 
 export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<AdminRbacSnapshot> {
@@ -245,7 +253,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
   }
 }
 
-export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewProps) {
+export function AdminRbacView({ snapshot, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacViewProps) {
   const [editingRole, setEditingRole] = useState<AdminRbacRoleRow | null>(null)
   const [pendingConfirm, setPendingConfirm] = useState<PendingRbacConfirm | null>(null)
 
@@ -330,14 +338,21 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewP
         destructive
         onCancel={() => setPendingConfirm(null)}
         onConfirm={() => {
-          if (pendingConfirm) {
-            for (const action of pendingConfirm.actions) onPreviewAdminAction?.(action)
-          }
+          if (pendingConfirm) previewRbacActions(pendingConfirm.actions, onPreviewAdminAction, onPreviewAdminActions)
           setPendingConfirm(null)
         }}
       />
     </div>
   )
+}
+
+export function previewRbacActions(
+  actions: readonly AdminRbacAction[],
+  previewOne?: (action: AdminRbacAction) => void,
+  previewMany?: (actions: readonly AdminRbacAction[]) => void
+): void {
+  if (actions.length === 1) previewOne?.(actions[0]!)
+  else if (actions.length > 1) previewMany?.(actions)
 }
 
 interface PendingRbacConfirm {
@@ -399,7 +414,7 @@ function PrincipalsTable({
     },
     {
       key: 'lastActive',
-      header: 'Last active',
+      header: 'Created',
       hideAt: 'md',
       render: (principal) => principal.createdAt ?? '-'
     },

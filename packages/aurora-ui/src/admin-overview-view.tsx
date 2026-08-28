@@ -24,6 +24,7 @@ export interface AdminOverviewContentProps {
   manifest: AdminOverviewManifest | null
   transportKind: string
   error?: unknown
+  loading?: boolean
 }
 
 interface ActivityItem {
@@ -39,23 +40,27 @@ const chipLinkClass = buttonVariants({ variant: 'outline', size: 'sm' })
 
 export function AdminOverviewView({ client }: AdminOverviewViewProps) {
   const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
-  const [error, setError] = useState<unknown>(new Error('Loading Aurora service overview.'))
+  const [error, setError] = useState<unknown>(undefined)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setManifest(null)
-    setError(new Error('Loading Aurora service overview.'))
+    setError(undefined)
+    setLoading(true)
     void buildAdminOverviewSnapshot(client).then(
       (next) => {
         if (!cancelled) {
           setManifest(next)
           setError(undefined)
+          setLoading(false)
         }
       },
       (nextError: unknown) => {
         if (!cancelled) {
           setManifest(null)
           setError(nextError)
+          setLoading(false)
         }
       }
     )
@@ -64,14 +69,30 @@ export function AdminOverviewView({ client }: AdminOverviewViewProps) {
     }
   }, [client])
 
-  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} />
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} loading={loading} />
 }
 
 export async function buildAdminOverviewSnapshot(client: AuroraClient): Promise<AdminOverviewManifest> {
   return client.adminOverview.getManifest()
 }
 
-export function AdminOverviewContent({ manifest, transportKind, error }: AdminOverviewContentProps) {
+export function AdminOverviewContent({ manifest, transportKind, error, loading = false }: AdminOverviewContentProps) {
+  if (!manifest && loading) {
+    return (
+      <div className="flex flex-col gap-6" aria-busy="true" aria-live="polite">
+        <PageHeader
+          id="admin-overview-title"
+          eyebrow="Admin"
+          title="Admin overview"
+          description="Loading service health and availability."
+        />
+        <div className={emptyPanelClass}>
+          <h2 className="text-base font-semibold">Loading service overview</h2>
+          <p className="text-muted-foreground">Aurora is checking this setup.</p>
+        </div>
+      </div>
+    )
+  }
   if (!manifest) {
     return (
       <div className="flex flex-col gap-6">

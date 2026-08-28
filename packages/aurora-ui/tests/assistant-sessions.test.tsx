@@ -132,6 +132,62 @@ describe('Assistant persisted sessions', () => {
     await waitUntil(() => container.textContent?.includes('Beta message') === true)
     await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]') === null)
   })
+
+  it('ingests staged attachment content before sending the prompt', async () => {
+    const transport = new SessionTransport()
+    const client = new AuroraClient({ transport })
+    client.auth.setAuthenticated('user-a', ['DB.use', 'Orchestrator.use'])
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(<AssistantView client={client} route={assistantRoute()} />)
+    })
+    await waitUntil(() => container.textContent?.includes('Alpha message') === true)
+
+    const file = new File(['deployment notes'], 'notes.txt', { type: 'text/plain' })
+    if (typeof file.text !== 'function') {
+      Object.defineProperty(file, 'text', {
+        configurable: true,
+        value: async () => 'deployment notes'
+      })
+    }
+    const fileInput = container.querySelector<HTMLInputElement>('#assistant-context-file-input')
+    expect(fileInput).not.toBeNull()
+    Object.defineProperty(fileInput!, 'files', {
+      configurable: true,
+      value: [file]
+    })
+    await act(async () => {
+      fileInput!.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await waitUntil(() => container.textContent?.includes('notes.txt') === true)
+
+    const composer = container.querySelector<HTMLTextAreaElement>('#assistant-prompt')
+    expect(composer).not.toBeNull()
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')
+        ?.set?.call(composer, 'Summarize the attached notes')
+      composer!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const send = container.querySelector<HTMLButtonElement>('[data-composer-action="send"]')
+    expect(send?.disabled).toBe(false)
+    await act(async () => {
+      send!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await waitUntil(() => transport.calls.some((call) => call.method === ORCHESTRATOR_METHODS.externalUserInput))
+
+    const ingestIndex = transport.calls.findIndex((call) => call.method === ORCHESTRATOR_METHODS.ingestContext)
+    const sendIndex = transport.calls.findIndex((call) => call.method === ORCHESTRATOR_METHODS.externalUserInput)
+    expect(ingestIndex).toBeGreaterThanOrEqual(0)
+    expect(sendIndex).toBeGreaterThan(ingestIndex)
+    expect(transport.calls[ingestIndex]?.payload).toMatchObject({
+      items: [{ filename: 'notes.txt', content_text: 'deployment notes' }],
+      storage_policy: 'ephemeral'
+    })
+  })
 })
 
 class SessionTransport implements AuroraTransport {
@@ -198,6 +254,41 @@ class SessionTransport implements AuroraTransport {
           unavailable: [],
           internal_only: [],
           secrets_redacted: true
+        }
+        break
+      case ORCHESTRATOR_METHODS.ingestContext:
+        data = {
+          accepted: true,
+          rejected: false,
+          total_items: 1,
+          accepted_items: [{
+            item_id: 'context-0',
+            kind: 'file',
+            status: 'accepted',
+            storage_policy: 'ephemeral',
+            privacy_class: 'personal',
+            accepted_bytes: 16,
+            stored_namespace: 'assistant.attachments',
+            stored_key: null,
+            redacted: false,
+            redaction_reasons: [],
+            reason_code: null,
+            message: 'Accepted'
+          }],
+          rejected_items: [],
+          total_bytes: 16,
+          storage_policy: 'ephemeral',
+          privacy_class: 'personal',
+          audit_event: 'attachment_context_ingested',
+          correlation_id: null,
+          secrets_redacted: true
+        }
+        break
+      case ORCHESTRATOR_METHODS.externalUserInput:
+        data = {
+          text: 'Summary complete.',
+          session_id: principalSessions[0]?.id ?? null,
+          metadata: {}
         }
         break
       default:

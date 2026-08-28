@@ -1417,8 +1417,7 @@ export function AssistantView({
   async function submitCurrentPrompt() {
     const prompt = text.trim()
     if (!prompt || !canSend || hasContextUpload) return
-    // Attachment ingestion is intentionally not wired yet. Keep previews in the UI,
-    // but never block or mutate message sending until the backend contract supports it.
+    if (attachments.length > 0 && await ingestPendingAttachments() === 'blocked') return
     await startAssistantTurn(prompt)
   }
 
@@ -1993,15 +1992,15 @@ export function AssistantView({
       }))
     }
     if (update.kind === 'completed' || update.kind === 'fallback') {
+      const finalAssistantId = pendingId
       setLastResult({
-        id: pendingId,
+        id: finalAssistantId,
         role: 'assistant',
         text: update.text,
         createdAt: new Date().toISOString()
       })
-        const finalAssistantId = pendingId
-        lastAssistantMessageIdRef.current = finalAssistantId
-        setSession((current) => {
+      lastAssistantMessageIdRef.current = finalAssistantId
+      setSession((current) => {
         const existing = current.messages.find((message) => message.id === finalAssistantId)
         const baseMessage: AssistantUiMessage = existing ?? {
           id: finalAssistantId,
@@ -2021,7 +2020,6 @@ export function AssistantView({
           routeLabel: baseMessage.routeLabel ?? (selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label),
           executionPeerId: baseMessage.executionPeerId ?? selectedExecution.executionPeerId
         }, update)
-        lastAssistantMessageIdRef.current = terminalMessage.id
         const replaced = current.messages.some((message) => message.id === terminalMessage.id)
         return {
           sessionId: usesLocalConversationHistory
@@ -2290,27 +2288,28 @@ export function AssistantView({
     ownedVoiceSessionIdsRef.current.clear()
     coordinatorVoiceSessionIdsRef.current.clear()
     setStreamState((current) => ({ ...current, status: 'idle', message: 'Voice response received from Aurora.' }))
+    const finalAssistantId = pendingId ?? update.messageId ?? `assistant-voice-${Date.now()}`
+    const terminalCreatedAt = new Date().toISOString()
+    setLastResult({
+      id: finalAssistantId,
+      role: 'assistant',
+      text: update.text,
+      createdAt: terminalCreatedAt
+    })
+    lastAssistantMessageIdRef.current = finalAssistantId
     setSession((current) => {
-      const finalAssistantId = pendingId ?? update.messageId ?? `assistant-voice-${Date.now()}`
       const existing = current.messages.find((message) => message.id === finalAssistantId)
       const assistantMessage = applyAssistantTerminalUpdate({
         id: finalAssistantId,
         role: 'assistant',
         text: '',
-        createdAt: new Date().toISOString(),
+        createdAt: terminalCreatedAt,
         status: 'streaming',
         modelLabel: update.modelLabel ?? modelLabel,
         providerLabel,
         routeLabel: localExecutionMessageLabel,
         ...(existing || {})
       }, update)
-      setLastResult({
-        id: assistantMessage.id,
-        role: 'assistant',
-        text: assistantMessage.text,
-        createdAt: assistantMessage.createdAt
-      })
-      lastAssistantMessageIdRef.current = assistantMessage.id
       const replaced = current.messages.some((message) => message.id === assistantMessage.id)
       return {
         sessionId: update.sessionId ?? current.sessionId,

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { AuroraClient as Aurora, MockAuroraTransport, type ToolCatalogResponse } from '@aurora/client'
-import { AdminPluginsView, buildAdminPluginsSnapshot, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
+import { AdminPluginsView, buildAdminPluginsSnapshot, sourceIsActive, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
 
@@ -21,6 +21,13 @@ afterEach(() => {
 })
 
 describe('AdminPluginsView', () => {
+  it('treats only trusted plugin sources as active', () => {
+    expect(sourceIsActive({ effectiveTrust: 'trusted' })).toBe(true)
+    expect(sourceIsActive({ effectiveTrust: 'approval-required' })).toBe(false)
+    expect(sourceIsActive({ effectiveTrust: 'quarantined' })).toBe(false)
+    expect(sourceIsActive({ effectiveTrust: 'blocked' })).toBe(false)
+  })
+
   it('wires Tooling sources, policy, and fallback tools from Aurora for the Tools & Plugins screen', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const snapshot = await buildAdminPluginsSnapshot(client, pluginsRoute())

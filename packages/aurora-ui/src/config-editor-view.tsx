@@ -528,7 +528,11 @@ export function stringifyValue(value: JsonValue | undefined): string {
 }
 
 export function parseFieldValue(value: string, type: string): JsonValue {
-  if (type === 'integer' || type === 'number') return Number(value)
+  if (type === 'integer' || type === 'number') {
+    if (value.trim().length === 0) return value
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : value
+  }
   if (type === 'boolean') return value === 'true'
   if (type === 'array' || type === 'object') {
     try {
@@ -596,8 +600,11 @@ function validateConfigChanges(fields: ConfigFieldMetadata[], changes: ConfigCha
     if (!field) return [`${label}: Aurora could not read this item`]
     const errors: string[] = []
     if (field.secret) errors.push(`${label}: secret fields cannot be edited from the UI`)
-    if ((field.type === 'integer' || field.type === 'number') && (typeof change.value !== 'number' || Number.isNaN(change.value))) {
+    if ((field.type === 'integer' || field.type === 'number') && (typeof change.value !== 'number' || !Number.isFinite(change.value))) {
       errors.push(`${label}: must be a valid ${field.type}`)
+    }
+    if (field.type === 'integer' && typeof change.value === 'number' && !Number.isInteger(change.value)) {
+      errors.push(`${label}: must be a valid integer`)
     }
     if (field.type === 'boolean' && typeof change.value !== 'boolean') errors.push(`${label}: must be true or false`)
     if ((field.type === 'array' && !Array.isArray(change.value)) || (field.type === 'object' && !isPlainObject(change.value))) {

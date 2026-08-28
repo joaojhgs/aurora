@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AuroraClient as Aurora, AuroraError, MockAuroraTransport, backupListFixture } from '@aurora/client'
 import { BackupRestoreView, backupErrorMessage } from '../src/backup-restore-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
@@ -36,12 +36,12 @@ describe('BackupRestoreView', () => {
     )
 
     expect(markup).toContain('Backups')
-    expect(markup).toContain('Snapshots, verification and restore.')
+    expect(markup).toContain('Create and verify snapshots, or preview a restore before making changes.')
     expect(markup).toContain('Create backup now')
     expect(markup).toContain('backup-20260625T120000Z-config-rag')
     expect(markup).toContain('Config + Rag')
     expect(markup).toContain('Verify')
-    expect(markup).toContain('Restore')
+    expect(markup).toContain('Preview restore')
     expect(markup).not.toContain('AdminAction draft/confirm/audit')
     expect(markup).not.toContain('Manifest integrity')
   })
@@ -65,15 +65,15 @@ describe('BackupRestoreView', () => {
       Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes(label))
     expect(buttonByLabel('Create backup now')?.disabled).toBe(true)
     expect(buttonByLabel('Verify')?.disabled).toBe(true)
-    expect(buttonByLabel('Restore')?.disabled).toBe(true)
+    expect(buttonByLabel('Preview restore')?.disabled).toBe(true)
   })
 
-  it('opens a plain confirm dialog for restore that requires no reason capture', async () => {
+  it('opens a non-destructive preview dialog that requires no reason capture', async () => {
     const container = mount(
       <BackupRestoreView client={client()} route={backupRoute()} initialList={backupListFixture} />
     )
     const restoreTrigger = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent === 'Restore'
+      button.textContent === 'Preview restore'
     )
     await act(async () => {
       restoreTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -84,14 +84,39 @@ describe('BackupRestoreView', () => {
 
     const dialog = document.body.querySelector('[role="alertdialog"]')
     expect(dialog).not.toBeNull()
-    expect(dialog?.textContent).toContain('Restore backup')
-    expect(dialog?.textContent).toContain('recorded in the audit log')
+    expect(dialog?.textContent).toContain('Preview restore')
+    expect(dialog?.textContent).toContain('No saved data will be overwritten')
     expect(dialog?.querySelector('textarea')).toBeNull()
 
     const confirmButton = Array.from(document.body.querySelectorAll('[role="alertdialog"] button')).find((button) =>
-      button.textContent === 'Restore'
+      button.textContent === 'Preview restore'
     ) as HTMLButtonElement | undefined
     expect(confirmButton?.disabled).toBe(false)
+  })
+
+  it('handles a rejected restore preview without leaving the dialog busy', async () => {
+    const rejectingClient = client()
+    const restore = vi.spyOn(rejectingClient.backups, 'restore').mockRejectedValue(new Error('connection reset'))
+    const container = mount(
+      <BackupRestoreView client={rejectingClient} route={backupRoute()} initialList={backupListFixture} />
+    )
+    const restoreTrigger = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent === 'Preview restore'
+    )
+    await act(async () => {
+      restoreTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+    const confirmButton = Array.from(document.body.querySelectorAll('[role="alertdialog"] button')).find((button) =>
+      button.textContent === 'Preview restore'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(restore).toHaveBeenCalledOnce()
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
   it('maps backup SDK errors to operator-safe recovery copy', () => {

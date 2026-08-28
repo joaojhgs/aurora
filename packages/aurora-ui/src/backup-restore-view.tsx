@@ -51,10 +51,10 @@ const operationCopy: Record<BackupOperationKind, { title: string; confirmLabel: 
     describe: (backup) => `Aurora will check ${backup?.backup_id ?? 'this backup'} and record the action in the audit log.`
   },
   restore: {
-    title: 'Restore backup',
-    confirmLabel: 'Restore',
-    destructive: true,
-    describe: () => 'This is an admin-critical action and will be recorded in the audit log with your reason.'
+    title: 'Preview restore',
+    confirmLabel: 'Preview restore',
+    destructive: false,
+    describe: () => 'Aurora will check what would change. No saved data will be overwritten.'
   }
 }
 
@@ -127,12 +127,18 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
             components: backup.components.map((component) => component.component),
             dry_run: true,
             create_rollback: true,
-            reason: 'Backup restore dry-run requested from Aurora admin cockpit.'
+            reason: 'Backup restore preview requested from Aurora admin screen.'
           },
           { reauthConfirmed: true }
         )
-        applyResult(result, (restored) => restored.message ?? 'Restore dry-run complete; no data was overwritten.')
+        applyResult(result, (restored) => restored.message ?? 'Restore preview complete. No data was overwritten.')
       }
+    } catch (error) {
+      toast({
+        tone: 'error',
+        title: 'Backup action failed',
+        detail: productAdminErrorCopy(error, 'Backup action failed. Try again.')
+      })
     } finally {
       setBusy(false)
       setPending(null)
@@ -181,7 +187,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
             disabledReason={productAdminReasonCopy(disabledReason)}
             onClick={() => setPending({ kind: 'restore', backup })}
           >
-            Restore
+            Preview restore
           </Button>
         </div>
       )
@@ -195,7 +201,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
       <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <h1 id="admin-backups-title" className="text-xl font-semibold tracking-tight">Backups & Restore</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Snapshots, verification and restore. Restore and rollback require admin confirmation.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create and verify snapshots, or preview a restore before making changes.</p>
         </div>
         <Button
           variant="primary"

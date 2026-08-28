@@ -9642,11 +9642,6 @@ button,input,select,textarea { font:inherit }
 .aui-assistant-header { display:flex;align-items:flex-start;justify-content:space-between;gap:1rem }
 .aui-assistant-header h1 { margin:0.15rem 0 0;font-size:clamp(1.65rem,3vw,2.45rem);line-height:1.08 }
 .aui-assistant-badges { display:flex;flex-wrap:wrap;justify-content:flex-end;gap:0.45rem;max-width:42rem }
-.aui-assistant-runtime-strip { border:1px solid var(--aui-border);border-radius:0.5rem;background:color-mix(in srgb,var(--aui-primary) 5%,var(--aui-surface));padding:0.55rem 0.7rem }
-.aui-assistant-runtime-strip dl { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0.65rem;margin:0 }
-.aui-assistant-runtime-strip div { min-width:0 }
-.aui-assistant-runtime-strip dt { color:var(--aui-muted);font-size:0.72rem;font-weight:800;text-transform:uppercase }
-.aui-assistant-runtime-strip dd { margin:0.15rem 0 0;overflow-wrap:anywhere;font-size:0.86rem;font-weight:750 }
 .aui-stream-banner { display:flex;align-items:center;gap:0.6rem;min-width:0;border:1px solid color-mix(in srgb,var(--aui-warning) 36%,var(--aui-border));border-radius:0.5rem;padding:0.65rem 0.75rem;background:color-mix(in srgb,var(--aui-warning) 8%,var(--aui-surface));color:var(--aui-ink) }
 .aui-stream-banner span { min-width:0;overflow-wrap:anywhere }
 .aui-stream-banner button { display:inline-flex;align-items:center;gap:0.35rem;margin-left:auto;border:1px solid var(--aui-border);border-radius:0.45rem;padding:0.45rem 0.6rem;background:var(--aui-surface);color:var(--aui-ink);font-weight:750 }
@@ -11400,6 +11395,7 @@ body { font-size:14px;line-height:1.45 }
   .aui-composer-control-row>.aui-composer-icon,.aui-composer-control-row>.aui-composer-send { width:2.5rem;height:2.5rem;min-height:2.5rem }
   .aui-chat-user .aui-chat-message-content { max-width:92% }
 }
+
 /* G005 admin/onboarding cockpit parity refinements ------------------------ */
  .aui-service-card-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(18rem,100%),1fr));gap:0.85rem }
 .aui-service-card { display:grid;gap:0.75rem;min-width:0;border:1px solid var(--aui-border);border-radius:var(--aui-radius);background:color-mix(in srgb,var(--aui-surface-2) 42%,var(--aui-bg));padding:0.85rem }
@@ -12080,5 +12076,15 @@ body { font-size:14px;line-height:1.45 }
   }
   .aui-chat-user .aui-chat-message-content {
     max-width: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class^="aui-"],
+  [class*=" aui-"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
