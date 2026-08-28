@@ -431,16 +431,20 @@ async function* reconnectingStream<TEventPayload, TPayload>(
       continue
     }
     const iterator = subscription[Symbol.asyncIterator]()
+    let endedCleanly = false
     try {
       while (!signal.aborted) {
         const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
-        if (result.done || signal.aborted) return
+        if (signal.aborted) return
+        if (result.done) {
+          endedCleanly = true
+          break
+        }
         const event = result.value
         attempt = 0
         lastEventId = event.id ?? lastEventId
         yield event
       }
-      return
     } catch (error) {
       subscription.close(error)
       attempt += 1
@@ -448,6 +452,16 @@ async function* reconnectingStream<TEventPayload, TPayload>(
       await delay(backoff(attempt, reconnect), signal)
     } finally {
       subscription.close()
+    }
+    if (endedCleanly && !signal.aborted) {
+      attempt += 1
+      if (attempt > reconnect.maxAttempts) {
+        throw new AuroraError({
+          code: 'transport_loss',
+          message: 'Event stream ended before it was closed'
+        })
+      }
+      await delay(backoff(attempt, reconnect), signal)
     }
   }
 }
@@ -478,7 +492,8 @@ function normalizeReconnect(value: AuroraSubscribeOptions['reconnect']): Normali
 }
 
 function backoff(attempt: number, reconnect: NormalizedReconnectOptions): number {
-  return Math.min(reconnect.initialDelayMs * 2 ** Math.max(0, attempt - 1), reconnect.maxDelayMs)
+  const ceiling = Math.min(reconnect.initialDelayMs * 2 ** Math.max(0, attempt - 1), reconnect.maxDelayMs)
+  return Math.floor(Math.random() * (ceiling + 1))
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {

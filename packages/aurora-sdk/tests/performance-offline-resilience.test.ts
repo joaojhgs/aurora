@@ -25,6 +25,7 @@ const LARGE_LIST_BUDGET_MS = 100
 describe('Performance, offline, and resilience suite', () => {
   it('reconnects assistant event streams from the last backend-proven event id without duplicate replay', async () => {
     const subscribeLastEventIds: Array<string | null | undefined> = []
+    const controller = new AbortController()
     let streamAttempt = 0
     const transport = MockAuroraTransport.empty().stream('assistant', async function* (
       request: AuroraStreamRequest
@@ -39,12 +40,14 @@ describe('Performance, offline, and resilience suite', () => {
 
       yield assistantEvent('evt-2', 'assistant.delta', 'lo')
       yield assistantEvent('evt-3', 'assistant.completed', 'Hello')
+      controller.abort()
     })
     const client = new AuroraClient({ transport })
 
     const events = await collectEvents(
       client.events.streamAssistant(undefined, {
-        reconnect: { maxAttempts: 1, initialDelayMs: 0, maxDelayMs: 0 }
+        reconnect: { maxAttempts: 1, initialDelayMs: 0, maxDelayMs: 0 },
+        signal: controller.signal
       })
     )
 
@@ -53,6 +56,35 @@ describe('Performance, offline, and resilience suite', () => {
     expect(new Set(events.map((event) => event.id)).size).toBe(events.length)
     expect(events.every((event) => event.audit.transport === 'mock')).toBe(true)
     expect(events.every((event) => event.redaction.secretsRedacted)).toBe(true)
+  })
+
+  it('reconnects after clean EOF and resumes from the last event id', async () => {
+    const subscribeLastEventIds: Array<string | null | undefined> = []
+    const controller = new AbortController()
+    let streamAttempt = 0
+    const transport = MockAuroraTransport.empty().stream('assistant', async function* (
+      request: AuroraStreamRequest
+    ): AsyncIterable<Record<string, unknown>> {
+      subscribeLastEventIds.push(request.lastEventId)
+      streamAttempt += 1
+      if (streamAttempt === 1) {
+        yield assistantEvent('evt-eof-1', 'assistant.delta', 'Still ')
+        return
+      }
+      yield assistantEvent('evt-eof-2', 'assistant.completed', 'connected')
+      controller.abort()
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.events.streamAssistant(undefined, {
+        reconnect: { maxAttempts: 1, initialDelayMs: 0, maxDelayMs: 0 },
+        signal: controller.signal
+      })
+    )
+
+    expect(subscribeLastEventIds).toEqual([null, 'evt-eof-1'])
+    expect(events.map((event) => event.id)).toEqual(['evt-eof-1', 'evt-eof-2'])
   })
 
   it('reports offline transport loss and unsupported native/event surfaces without marking production ready', async () => {
