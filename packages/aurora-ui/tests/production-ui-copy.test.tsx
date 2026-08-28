@@ -773,7 +773,7 @@ describe('production UI copy', () => {
       />,
     ))
 
-    expect(text).toContain('Review: Allow trusted')
+    expect(text).toContain('Review: Wide access')
     expect(text).toContain('Connected tool sources')
     expect(text).toContain('review needed')
     expect(text).not.toContain('unrestricted_except_blocked')

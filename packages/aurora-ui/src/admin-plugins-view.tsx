@@ -680,7 +680,7 @@ function sourceDescription(source: ToolingSourceModel): string {
 function policyModeLabel(mode: string): string {
   if (mode === 'deny_all') return 'Paused'
   if (mode === 'dry_run_only') return 'Review only'
-  if (mode === 'unrestricted_except_blocked') return 'Allow trusted'
+  if (mode === 'unrestricted_except_blocked') return 'Wide access'
   return 'Review required'
 }
 
