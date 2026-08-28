@@ -7765,9 +7765,10 @@ fn current_unix_ms() -> u64 {
 }
 
 fn gateway_url() -> Result<Url, AuroraCommandError> {
-    let raw = env::var("AURORA_TAURI_REMOTE_GATEWAY_URL")
-        .or_else(|_| env::var("AURORA_GATEWAY_URL"))
-        .unwrap_or_else(|_| DEFAULT_GATEWAY_URL.to_string());
+    let raw = resolved_remote_gateway_from_profile()
+        .or_else(dev_remote_gateway_bootstrap_url)
+        .or_else(|| env::var("AURORA_GATEWAY_URL").ok())
+        .unwrap_or_else(|| DEFAULT_GATEWAY_URL.to_string());
     let url =
         Url::parse(&raw).map_err(|_| AuroraCommandError::InvalidGatewayOrigin(raw.clone()))?;
     if is_loopback_http_origin(&url) || remote_gateway_allowed_for(&url) {
@@ -7837,7 +7838,63 @@ fn is_secure_remote_http_or_ws_origin(url: &Url) -> bool {
 }
 
 fn is_thin_mode() -> bool {
-    env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").is_ok()
+    resolved_remote_gateway_from_profile().is_some() || dev_remote_gateway_bootstrap_url().is_some()
+}
+
+fn dev_remote_gateway_bootstrap_url() -> Option<String> {
+    if env::var("AURORA_TAURI_DEV_REMOTE_GATEWAY_BOOTSTRAP").as_deref() != Ok("1") {
+        return None;
+    }
+    env::var("AURORA_TAURI_REMOTE_GATEWAY_URL").ok()
+}
+
+fn resolved_remote_gateway_from_profile() -> Option<String> {
+    #[cfg(desktop)]
+    {
+        let entry = thin_profile_storage_entry().ok()?;
+        let value = entry.get_password().ok()?;
+        return remote_gateway_from_profile_document(&value);
+    }
+    #[cfg(not(desktop))]
+    {
+        None
+    }
+}
+
+fn remote_gateway_from_profile_document(value: &str) -> Option<String> {
+    let document = serde_json::from_str::<Value>(value).ok()?;
+    let version = document.get("version")?.as_u64()?;
+    match version {
+        1 => {
+            let active_id = document.get("activeProfileId")?.as_str()?;
+            document
+                .get("profiles")?
+                .as_array()?
+                .iter()
+                .find(|profile| profile.get("id").and_then(Value::as_str) == Some(active_id))
+                .and_then(|profile| profile.get("gatewayUrl"))
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        }
+        2 => {
+            let active_id = document.get("activeProfileId")?.as_str()?;
+            let profile = document
+                .get("profiles")?
+                .as_array()?
+                .iter()
+                .find(|profile| profile.get("id").and_then(Value::as_str) == Some(active_id))?;
+            let node_mode = profile.get("nodeMode").and_then(Value::as_str)?;
+            if node_mode != "remote-console" {
+                return None;
+            }
+            profile
+                .get("homeConnection")?
+                .get("gatewayUrl")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+        }
+        _ => None,
+    }
 }
 
 fn gateway_request_url(
@@ -8430,9 +8487,7 @@ fn random_hex_from_entropy<const N: usize>(
 
 fn fill_secure_random(bytes: &mut [u8]) -> Result<(), AuroraCommandError> {
     getrandom::getrandom(bytes).map_err(|error| {
-        AuroraCommandError::SidecarProcess(format!(
-            "secure random generator unavailable: {error}"
-        ))
+        AuroraCommandError::SidecarProcess(format!("secure random generator unavailable: {error}"))
     })
 }
 
@@ -9294,6 +9349,7 @@ mod tests {
     fn clear_remote_env() {
         env::remove_var("AURORA_TAURI_ALLOW_REMOTE_GATEWAY");
         env::remove_var("AURORA_TAURI_ALLOWED_REMOTE_ORIGINS");
+        env::remove_var("AURORA_TAURI_DEV_REMOTE_GATEWAY_BOOTSTRAP");
         env::remove_var("AURORA_TAURI_REMOTE_GATEWAY_URL");
         env::remove_var("AURORA_GATEWAY_URL");
         env::remove_var("AURORA_TAURI_GATEWAY_TOKEN");
@@ -11030,6 +11086,81 @@ mod tests {
         );
         assert!(canonical_remote_origin("https://*.example").is_err());
         clear_remote_env();
+    }
+
+    #[test]
+    fn remote_gateway_env_is_dev_bootstrap_only() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_remote_env();
+        env::set_var(
+            "AURORA_TAURI_REMOTE_GATEWAY_URL",
+            "https://hosted.example/api",
+        );
+
+        assert!(dev_remote_gateway_bootstrap_url().is_none());
+
+        env::set_var("AURORA_TAURI_DEV_REMOTE_GATEWAY_BOOTSTRAP", "1");
+        assert_eq!(
+            dev_remote_gateway_bootstrap_url().as_deref(),
+            Some("https://hosted.example/api")
+        );
+        clear_remote_env();
+    }
+
+    #[test]
+    fn persisted_profile_owns_remote_gateway_selection() {
+        let remote_console = json!({
+            "version": 2,
+            "activeProfileId": "remote",
+            "profiles": [{
+                "version": 2,
+                "id": "remote",
+                "label": "Home",
+                "nodeMode": "remote-console",
+                "runtimeTier": "none",
+                "homeConnection": {
+                    "mode": "http-only",
+                    "gatewayUrl": "https://hosted.example/api",
+                    "homePeerId": "peer-home"
+                },
+                "localNode": { "name": "Desk" }
+            }]
+        });
+        let mesh_node = json!({
+            "version": 2,
+            "activeProfileId": "local",
+            "profiles": [{
+                "version": 2,
+                "id": "local",
+                "label": "This device",
+                "nodeMode": "mesh-node",
+                "runtimeTier": "python-full",
+                "localNode": { "name": "Desk" }
+            }]
+        });
+        let legacy = json!({
+            "version": 1,
+            "activeProfileId": "legacy",
+            "profiles": [{
+                "id": "legacy",
+                "label": "Legacy",
+                "mode": "desktop-thin",
+                "gatewayUrl": "https://legacy.example/api",
+                "signalingUrl": "wss://legacy.example/signal",
+                "nodeName": "Desk",
+                "localStablePeerId": "peer-local"
+            }]
+        });
+
+        assert_eq!(
+            remote_gateway_from_profile_document(&remote_console.to_string()).as_deref(),
+            Some("https://hosted.example/api")
+        );
+        assert_eq!(
+            remote_gateway_from_profile_document(&legacy.to_string()).as_deref(),
+            Some("https://legacy.example/api")
+        );
+        assert!(remote_gateway_from_profile_document(&mesh_node.to_string()).is_none());
     }
 
     #[test]
