@@ -72,6 +72,12 @@ export AURORA_SHERPA_ONNX_LIB_DIR="$PWD/.artifacts/sherpa-onnx/native-runtime-bu
 export AURORA_SHERPA_ONNX_LINK_KIND=static
 ```
 
+The staged runtime includes `include/sherpa-onnx/c-api/c-api.h`. Native Cargo
+builds compile an ABI layout probe against that pinned header. For an isolated
+check, `AURORA_SHERPA_ONNX_INCLUDE_DIR` may point at another directory that
+contains the same `sherpa-onnx/c-api/c-api.h` path; incompatible or missing
+headers stop the build.
+
 macOS/Xcode CI selects `aarch64-apple-ios-sim` for unsigned simulator packages
 and `aarch64-apple-ios` for the optional signed device dry run. Build output,
 downloaded sources, ONNX Runtime archives, and generated metadata remain under

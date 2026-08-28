@@ -146,6 +146,11 @@ for abi in "${SELECTED_ABIS[@]}"; do
   mkdir -p "$ABI_OUTPUT_DIR"
   install -m 0755 "$INSTALL_DIR/lib/libsherpa-onnx-c-api.so" "$ABI_OUTPUT_DIR/"
   install -m 0755 "$ORT_LIB_DIR/libonnxruntime.so" "$ABI_OUTPUT_DIR/"
+  [[ -f "$INSTALL_DIR/include/sherpa-onnx/c-api/c-api.h" ]] || fail \
+    "Sherpa install is missing the pinned C API header for $abi"
+  install -d "$ABI_OUTPUT_DIR/include/sherpa-onnx/c-api"
+  install -m 0644 "$INSTALL_DIR/include/sherpa-onnx/c-api/c-api.h" \
+    "$ABI_OUTPUT_DIR/include/sherpa-onnx/c-api/c-api.h"
 
   if grep -aFq 'TTS is not enabled. Please rebuild sherpa-onnx' \
     "$ABI_OUTPUT_DIR/libsherpa-onnx-c-api.so"; then

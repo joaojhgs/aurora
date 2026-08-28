@@ -112,5 +112,8 @@ audio; it does not invent a transcript.
 Desktop and iOS Tauri builds set `AURORA_SHERPA_ONNX_LIB_DIR` to the staged
 target directory and `AURORA_SHERPA_ONNX_LINK_KIND=static`. The builder stages
 the complete Sherpa/ONNX Runtime archive set so unsigned packages do not depend
-on unbundled host shared libraries. Android continues to use its two patched,
-16-KiB-aligned shared-library ABI directories.
+on unbundled host shared libraries. Each staged target also carries the pinned
+Sherpa C API header. Native Cargo builds compile a size, alignment, and field
+offset probe against it and fail closed if Aurora's Rust FFI layouts drift.
+Android continues to use its two patched, 16-KiB-aligned shared-library ABI
+directories with the same header-backed gate.

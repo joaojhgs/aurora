@@ -181,7 +181,6 @@ struct SherpaOnnxHomophoneReplacerConfig {
     dict_dir: *const c_char,
     lexicon: *const c_char,
     rule_fsts: *const c_char,
-    rule_fars: *const c_char,
 }
 
 #[repr(C)]

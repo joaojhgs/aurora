@@ -39,6 +39,9 @@ def write_installed_static_libraries(
             continue
         filename = builder.static_library_filename(library, plan.target)
         (lib_dir / filename).write_bytes(f"archive:{library}".encode())
+    header = install / "include/sherpa-onnx/c-api/c-api.h"
+    header.parent.mkdir(parents=True)
+    header.write_text("/* pinned test header */\n", encoding="utf-8")
     return install
 
 
@@ -135,6 +138,9 @@ def test_static_runtime_staging_requires_complete_link_set(tmp_path: Path) -> No
     assert sorted(path.name for path in output.glob("*.a")) == sorted(
         builder.static_library_filename(name, plan.target) for name in builder.STATIC_LIBRARIES
     )
+    assert (output / "include/sherpa-onnx/c-api/c-api.h").read_text() == (
+        "/* pinned test header */\n"
+    )
 
     (lib_dir / "libonnxruntime.a").unlink()
     with pytest.raises(builder.NativeBuildError, match="missing"):
@@ -143,6 +149,23 @@ def test_static_runtime_staging_requires_complete_link_set(tmp_path: Path) -> No
             artifact_root,
             install,
             artifact_root / "runtime/incomplete",
+            None,
+        )
+
+
+def test_static_runtime_staging_requires_pinned_header(tmp_path: Path) -> None:
+    builder = load_builder()
+    plan = builder.TARGETS["x86_64-unknown-linux-gnu"]
+    artifact_root = tmp_path / "artifacts"
+    install = write_installed_static_libraries(builder, plan, artifact_root)
+    (install / "include/sherpa-onnx/c-api/c-api.h").unlink()
+
+    with pytest.raises(builder.NativeBuildError, match="C API header"):
+        builder.stage_runtime(
+            plan,
+            artifact_root,
+            install,
+            artifact_root / "runtime/missing-header",
             None,
         )
 

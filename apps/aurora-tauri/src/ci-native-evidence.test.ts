@@ -107,6 +107,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(builder).toContain('"--allow-aurora-pockettts-patches"')
     expect(builder).toContain('"-DBUILD_SHARED_LIBS=OFF"')
     expect(builder).toContain('"-DSHERPA_ONNX_ENABLE_TTS=ON"')
+    expect(builder).toContain('include/sherpa-onnx/c-api/c-api.h')
 
     for (const target of [
       'x86_64-unknown-linux-gnu',
@@ -130,6 +131,9 @@ describe('Tauri CI native evidence contract', () => {
     expect(iosReleaseWorkflow).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static')
 
     expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_LINK_KIND')
+    expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_INCLUDE_DIR')
+    expect(sherpaSysBuild).toContain('verify_abi_layout(&include_dir)')
+    expect(sherpaSysBuild).toContain('static_assert(offsetof(')
     expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LIB_DIR')
     expect(sherpaSysBuild).toContain('CARGO_AURORA_SHERPA_ONNX_LINK_KIND')
     expect(sherpaSysBuild).toContain('AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR')

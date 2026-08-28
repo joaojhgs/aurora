@@ -1,4 +1,6 @@
 use std::env;
+use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
@@ -7,6 +9,8 @@ fn main() {
     // canonical Aurora names; the aliases preserve that contract on iOS.
     println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_LIB_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=AURORA_SHERPA_ONNX_INCLUDE_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_AURORA_SHERPA_ONNX_INCLUDE_DIR");
     for variable in ANDROID_ABI_LIB_VARS {
         println!("cargo:rerun-if-env-changed={variable}");
         println!("cargo:rerun-if-env-changed=CARGO_{variable}");
@@ -48,6 +52,11 @@ fn main() {
         panic!("AURORA_SHERPA_ONNX_LIB_DIR must name an existing directory");
     }
 
+    let include_dir = env_os_with_cargo_alias("AURORA_SHERPA_ONNX_INCLUDE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| lib_dir.join("include"));
+    verify_abi_layout(&include_dir);
+
     let link_kind = select_link_kind(&lib_dir, &target_os);
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     match link_kind {
@@ -65,6 +74,157 @@ fn main() {
             }
             emit_static_platform_links(&target_os);
         }
+    }
+}
+
+const SHERPA_HEADER: &str = "sherpa-onnx/c-api/c-api.h";
+const ABI_LAYOUT_SOURCES: &[(&str, &str)] = &[
+    ("src/native.rs", include_str!("src/native.rs")),
+    ("src/native_kws.rs", include_str!("src/native_kws.rs")),
+    ("src/native_stt.rs", include_str!("src/native_stt.rs")),
+    ("src/native_tts.rs", include_str!("src/native_tts.rs")),
+];
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AbiStruct {
+    name: String,
+    fields: Vec<(String, String)>,
+}
+
+fn verify_abi_layout(include_dir: &Path) {
+    let header = include_dir.join(SHERPA_HEADER);
+    if !header.is_file() {
+        panic!("AURORA_SHERPA_ONNX_INCLUDE_DIR must contain the pinned {SHERPA_HEADER} header");
+    }
+    println!("cargo:rerun-if-changed={}", header.display());
+    for (path, _) in ABI_LAYOUT_SOURCES {
+        println!("cargo:rerun-if-changed={path}");
+    }
+
+    let layouts = parse_abi_structs();
+    let probe = render_abi_probe(&layouts);
+    let output = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo must set OUT_DIR"))
+        .join("aurora_sherpa_abi_probe.cc");
+    fs::write(&output, probe).expect("failed to write Sherpa ABI parity probe");
+
+    let mut compiler = cc::Build::new();
+    compiler
+        .cpp(true)
+        .cargo_metadata(false)
+        .include(include_dir)
+        .file(&output)
+        .warnings(true)
+        .warnings_into_errors(true);
+    compiler
+        .try_compile("aurora_sherpa_abi_probe")
+        .unwrap_or_else(|_| {
+            panic!("pinned Sherpa header is ABI-incompatible with Aurora's native Rust layouts")
+        });
+}
+
+fn parse_abi_structs() -> Vec<AbiStruct> {
+    let mut layouts = Vec::<AbiStruct>::new();
+    for (source_path, source) in ABI_LAYOUT_SOURCES {
+        let lines = source.lines().collect::<Vec<_>>();
+        let mut index = 0;
+        while index < lines.len() {
+            if lines[index].trim() != "#[repr(C)]" {
+                index += 1;
+                continue;
+            }
+            index += 1;
+            while index < lines.len()
+                && (lines[index].trim().is_empty() || lines[index].trim().starts_with("#["))
+            {
+                index += 1;
+            }
+            let declaration = lines
+                .get(index)
+                .unwrap_or_else(|| panic!("unterminated repr(C) declaration in {source_path}"))
+                .trim();
+            let Some(name) = declaration
+                .strip_prefix("struct ")
+                .and_then(|value| value.strip_suffix(" {"))
+            else {
+                panic!("unsupported repr(C) declaration in {source_path}: {declaration}");
+            };
+            index += 1;
+            let mut fields = Vec::new();
+            while index < lines.len() && lines[index].trim() != "}" {
+                let field = lines[index].trim();
+                if !field.is_empty() {
+                    let field = field.strip_suffix(',').unwrap_or_else(|| {
+                        panic!("ABI field must end with a comma in {source_path}: {field}")
+                    });
+                    let (field_name, field_type) = field.split_once(':').unwrap_or_else(|| {
+                        panic!("unsupported ABI field in {source_path}: {field}")
+                    });
+                    fields.push((field_name.trim().to_owned(), field_type.trim().to_owned()));
+                }
+                index += 1;
+            }
+            if index == lines.len() {
+                panic!("unterminated ABI struct {name} in {source_path}");
+            }
+            let layout = AbiStruct {
+                name: name.to_owned(),
+                fields,
+            };
+            if let Some(existing) = layouts.iter().find(|existing| existing.name == layout.name) {
+                if existing != &layout {
+                    panic!("duplicate ABI struct {name} has inconsistent Rust layouts");
+                }
+            } else {
+                layouts.push(layout);
+            }
+            index += 1;
+        }
+    }
+    if layouts.is_empty() {
+        panic!("no native Sherpa repr(C) layouts were discovered");
+    }
+    layouts
+}
+
+fn render_abi_probe(layouts: &[AbiStruct]) -> String {
+    let mut probe = String::from(
+        "#include <cstddef>\n#include <cstdint>\n#include \"sherpa-onnx/c-api/c-api.h\"\n\n",
+    );
+    for layout in layouts {
+        probe.push_str(&format!("typedef struct AuroraMirror{} {{\n", layout.name));
+        for (field, rust_type) in &layout.fields {
+            probe.push_str(&format!("  {} {};\n", c_type(rust_type), field));
+        }
+        probe.push_str(&format!("}} AuroraMirror{};\n", layout.name));
+        probe.push_str(&format!(
+            "static_assert(sizeof({0}) == sizeof(AuroraMirror{0}), \"ABI sizeof mismatch: {0}\");\n",
+            layout.name
+        ));
+        probe.push_str(&format!(
+            "static_assert(alignof({0}) == alignof(AuroraMirror{0}), \"ABI align mismatch: {0}\");\n",
+            layout.name
+        ));
+        for (field, _) in &layout.fields {
+            probe.push_str(&format!(
+                "static_assert(offsetof({0}, {1}) == offsetof(AuroraMirror{0}, {1}), \"ABI offset mismatch: {0}.{1}\");\n",
+                layout.name, field
+            ));
+        }
+        probe.push('\n');
+    }
+    probe
+}
+
+fn c_type(rust_type: &str) -> String {
+    match rust_type {
+        "c_int" => "std::int32_t".to_owned(),
+        "c_float" => "float".to_owned(),
+        "*const c_char" => "const char *".to_owned(),
+        "*const c_float" => "const float *".to_owned(),
+        "*mut c_float" => "float *".to_owned(),
+        "*const *const c_char" => "const char *const *".to_owned(),
+        nested if nested.starts_with("SherpaOnnx") => format!("AuroraMirror{nested}"),
+        unsupported => panic!("unsupported Rust Sherpa ABI field type: {unsupported}"),
     }
 }
 

@@ -378,6 +378,13 @@ def stage_runtime(
     output_parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", dir=output_parent))
     try:
+        header = install_dir / "include/sherpa-onnx/c-api/c-api.h"
+        if not header.is_file():
+            raise NativeBuildError(f"Sherpa install is missing pinned C API header {header}")
+        staged_header = staging / "include/sherpa-onnx/c-api/c-api.h"
+        staged_header.parent.mkdir(parents=True)
+        shutil.copy2(header, staged_header)
+
         for library in STATIC_LIBRARIES:
             filename = static_library_filename(library, plan.target)
             destination = staging / filename

@@ -92,6 +92,10 @@ archives, applies the Aurora patch queue, builds `arm64-v8a` and `x86_64`
 sequentially, and rejects native libraries without TTS or 16 KiB alignment.
 Point the Android bundle wrapper at its two ABI output directories through the
 existing `AURORA_SHERPA_ONNX_ANDROID_*_LIB_DIR` variables.
+Each ABI directory must also retain the pinned
+`include/sherpa-onnx/c-api/c-api.h`; the Rust system crate compiles a
+size/alignment/offset probe against that header and fails the build on any
+manual FFI layout drift.
 
 Desktop and iOS packaging must use
 `tools/voice-runtime/build_sherpa_native.py`. The builder verifies the same
@@ -102,6 +106,10 @@ Sherpa source and patch queue, verifies the target-specific ONNX Runtime
 `AURORA_SHERPA_ONNX_LINK_KIND=static` for Cargo/Tauri. Do not disable the
 native features for checks, and do not replace the static package with loose
 desktop or iOS shared libraries.
+The staged directory includes the pinned C API header beneath `include/`.
+Cargo discovers it there by default; an explicit
+`AURORA_SHERPA_ONNX_INCLUDE_DIR` may name another directory containing the
+same pinned header for isolated checks. Never bypass the build-time ABI probe.
 For iOS, keep the target architecture explicit: the builder may thin a
 universal XCFramework binary with `xcrun lipo`, then must verify archive magic
 before staging it as `libonnxruntime.a`. Never rename an unverified framework

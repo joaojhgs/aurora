@@ -15,5 +15,8 @@ native-tts = []
 
 [dependencies]
 
+[build-dependencies]
+cc = "1"
+
 [lints]
 workspace = true
