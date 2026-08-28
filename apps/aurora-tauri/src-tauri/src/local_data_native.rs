@@ -8,7 +8,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_double, c_int, c_void};
 use std::path::PathBuf;
 use std::ptr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager, State};
 
@@ -94,7 +94,7 @@ extern "C" {
 
 #[derive(Default)]
 pub(crate) struct LocalDataCommandState {
-    inner: Mutex<LocalDataState>,
+    inner: Arc<Mutex<LocalDataState>>,
 }
 
 #[derive(Default)]
@@ -368,6 +368,8 @@ struct SqliteConnection {
     raw: *mut sqlite3,
 }
 
+// SQLite is opened with SQLITE_OPEN_FULLMUTEX for every connection, and all
+// active transaction access is serialized through LocalDataCommandState.
 unsafe impl Send for SqliteConnection {}
 
 impl Drop for SqliteConnection {
@@ -555,49 +557,55 @@ pub(crate) async fn aurora_local_data_open(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataOpenRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let mut state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    if let (Some(open_profile), Some(open_node)) = (&state.profile_id, &state.local_node_id) {
-        if open_profile != &request.profile_id || open_node != &request.local_node_id {
-            return Err(local_data_error("identity_mismatch"));
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let mut state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        if let (Some(open_profile), Some(open_node)) = (&state.profile_id, &state.local_node_id) {
+            if open_profile != &request.profile_id || open_node != &request.local_node_id {
+                return Err(local_data_error("identity_mismatch"));
+            }
         }
-    }
-    let schema_version = open_local_data_at_path(
-        local_data_db_path_without_create(&app)?,
-        &request.profile_id,
-        &request.local_node_id,
-    )?;
-    state.profile_id = Some(request.profile_id.clone());
-    state.local_node_id = Some(request.local_node_id.clone());
-    state.schema_version = Some(schema_version);
-    Ok(status_value(
-        Some(request.profile_id),
-        Some(request.local_node_id),
-        Some(schema_version),
-        "applied",
-    ))
+        let schema_version = open_local_data_at_path(
+            local_data_db_path_without_create(&app)?,
+            &request.profile_id,
+            &request.local_node_id,
+        )?;
+        state.profile_id = Some(request.profile_id.clone());
+        state.local_node_id = Some(request.local_node_id.clone());
+        state.schema_version = Some(schema_version);
+        Ok(status_value(
+            Some(request.profile_id),
+            Some(request.local_node_id),
+            Some(schema_version),
+            "applied",
+        ))
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn aurora_local_data_status(
     state: State<'_, LocalDataCommandState>,
 ) -> Result<Value, AuroraCommandError> {
-    let state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    Ok(status_value(
-        state.profile_id.clone(),
-        state.local_node_id.clone(),
-        state.schema_version,
-        if state.profile_id.is_some() {
-            "applied"
-        } else {
-            "idle"
-        },
-    ))
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        Ok(status_value(
+            state.profile_id.clone(),
+            state.local_node_id.clone(),
+            state.schema_version,
+            if state.profile_id.is_some() {
+                "applied"
+            } else {
+                "idle"
+            },
+        ))
+    })
+    .await
 }
 
 /// Inspect the persisted database identity without opening a mutable app session.
@@ -605,24 +613,30 @@ pub(crate) async fn aurora_local_data_status(
 pub(crate) async fn aurora_local_data_inspect_identity(
     app: AppHandle,
 ) -> Result<Value, AuroraCommandError> {
-    inspect_local_data_identity_at_path(local_data_db_path_without_create(&app)?)
+    run_local_data_blocking(move || {
+        inspect_local_data_identity_at_path(local_data_db_path_without_create(&app)?)
+    })
+    .await
 }
 
 #[tauri::command]
 pub(crate) async fn aurora_local_data_close(
     state: State<'_, LocalDataCommandState>,
 ) -> Result<Value, AuroraCommandError> {
-    let mut state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    if let Some(active) = state.active_transaction.take() {
-        let _ = active.conn.exec("ROLLBACK;");
-    }
-    state.profile_id = None;
-    state.local_node_id = None;
-    state.schema_version = None;
-    Ok(status_value(None, None, None, "idle"))
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let mut state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        if let Some(active) = state.active_transaction.take() {
+            let _ = active.conn.exec("ROLLBACK;");
+        }
+        state.profile_id = None;
+        state.local_node_id = None;
+        state.schema_version = None;
+        Ok(status_value(None, None, None, "idle"))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -631,23 +645,26 @@ pub(crate) async fn aurora_local_data_transaction_begin(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataTransactionBeginRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let mut state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    ensure_open_state(&state)?;
-    let _ = request;
-    if state.active_transaction.is_some() {
-        return Err(transaction_scope_error("nested_transaction"));
-    }
-    let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
-    conn.exec("BEGIN IMMEDIATE;")?;
-    let tx_id = new_transaction_id()?;
-    state.active_transaction = Some(ActiveTransaction {
-        tx_id: tx_id.clone(),
-        conn,
-    });
-    Ok(json!({ "txId": tx_id, "begun": true }))
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let mut state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        ensure_open_state(&state)?;
+        let _ = request;
+        if state.active_transaction.is_some() {
+            return Err(transaction_scope_error("nested_transaction"));
+        }
+        let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
+        conn.exec("BEGIN IMMEDIATE;")?;
+        let tx_id = new_transaction_id()?;
+        state.active_transaction = Some(ActiveTransaction {
+            tx_id: tx_id.clone(),
+            conn,
+        });
+        Ok(json!({ "txId": tx_id, "begun": true }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -655,13 +672,16 @@ pub(crate) async fn aurora_local_data_transaction_commit(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataTransactionRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let mut state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    let active = take_active_transaction(&mut state, &request.tx_id)?;
-    active.conn.exec("COMMIT;")?;
-    Ok(json!({ "txId": request.tx_id, "committed": true }))
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let mut state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let active = take_active_transaction(&mut state, &request.tx_id)?;
+        active.conn.exec("COMMIT;")?;
+        Ok(json!({ "txId": request.tx_id, "committed": true }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -669,13 +689,16 @@ pub(crate) async fn aurora_local_data_transaction_rollback(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataTransactionRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let mut state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    let active = take_active_transaction(&mut state, &request.tx_id)?;
-    let _ = active.conn.exec("ROLLBACK;");
-    Ok(json!({ "txId": request.tx_id, "rolledBack": true }))
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let mut state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let active = take_active_transaction(&mut state, &request.tx_id)?;
+        let _ = active.conn.exec("ROLLBACK;");
+        Ok(json!({ "txId": request.tx_id, "rolledBack": true }))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -684,31 +707,34 @@ pub(crate) async fn aurora_local_data_repository_operation(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataRepositoryRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let state_guard = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    let (profile_id, local_node_id) = ensure_open_state(&state_guard)?;
-    if let Some(tx_id) = request.tx_id {
-        let active = state_guard
-            .active_transaction
-            .as_ref()
-            .ok_or_else(|| transaction_scope_error("transaction_not_found"))?;
-        if active.tx_id != tx_id {
-            return Err(transaction_scope_error("forged_transaction"));
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let state_guard = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let (profile_id, local_node_id) = ensure_open_state(&state_guard)?;
+        if let Some(tx_id) = request.tx_id {
+            let active = state_guard
+                .active_transaction
+                .as_ref()
+                .ok_or_else(|| transaction_scope_error("transaction_not_found"))?;
+            if active.tx_id != tx_id {
+                return Err(transaction_scope_error("forged_transaction"));
+            }
+            return run_repository_operation(
+                &active.conn,
+                &profile_id,
+                &local_node_id,
+                request.operation,
+            );
         }
-        return run_repository_operation(
-            &active.conn,
-            &profile_id,
-            &local_node_id,
-            request.operation,
-        );
-    }
-    if state_guard.active_transaction.is_some() {
-        return Err(transaction_scope_error("transaction_active"));
-    }
-    let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
-    run_repository_operation(&conn, &profile_id, &local_node_id, request.operation)
+        if state_guard.active_transaction.is_some() {
+            return Err(transaction_scope_error("transaction_active"));
+        }
+        let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
+        run_repository_operation(&conn, &profile_id, &local_node_id, request.operation)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -716,30 +742,38 @@ pub(crate) async fn aurora_local_data_export_v1(
     app: AppHandle,
     state: State<'_, LocalDataCommandState>,
 ) -> Result<Value, AuroraCommandError> {
-    let state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    let (profile_id, local_node_id) = ensure_open_state(&state)?;
-    let schema_version = state.schema_version.unwrap_or(0);
-    drop(state);
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let (profile_id, local_node_id) = ensure_open_state(&state)?;
+        let schema_version = state.schema_version.unwrap_or(0);
+        drop(state);
 
-    let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
-    let records = export_records(&conn, &profile_id, &local_node_id)?;
-    let record_counts = record_counts(&records);
-    let collection_hashes = collection_hashes(&records)?;
-    Ok(json!({
-        "version": 1,
-        "sourceBackend": "sqlite-tauri",
-        "schemaVersion": schema_version,
-        "profileId": profile_id,
-        "localNodeId": local_node_id,
-        "exportedAtMs": now_ms(),
-        "encryptionEnvelopeVersions": [1],
-        "recordCounts": record_counts,
-        "collectionHashes": collection_hashes,
-        "records": records
-    }))
+        let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
+        conn.exec("BEGIN;")?;
+        let result = (|| {
+            let records = export_records(&conn, &profile_id, &local_node_id)?;
+            let record_counts = record_counts(&records);
+            let collection_hashes = collection_hashes(&records)?;
+            Ok(json!({
+                "version": 1,
+                "sourceBackend": "sqlite-tauri",
+                "schemaVersion": schema_version,
+                "profileId": profile_id,
+                "localNodeId": local_node_id,
+                "exportedAtMs": now_ms(),
+                "encryptionEnvelopeVersions": [1],
+                "recordCounts": record_counts,
+                "collectionHashes": collection_hashes,
+                "records": records
+            }))
+        })();
+        let _ = conn.exec("ROLLBACK;");
+        result
+    })
+    .await
 }
 
 #[tauri::command]
@@ -748,35 +782,49 @@ pub(crate) async fn aurora_local_data_import_v1(
     state: State<'_, LocalDataCommandState>,
     request: LocalDataImportRequest,
 ) -> Result<Value, AuroraCommandError> {
-    let state = state
-        .inner
-        .lock()
-        .map_err(|_| local_data_error("local data state lock failed"))?;
-    let (profile_id, local_node_id) = ensure_open_state(&state)?;
-    let schema_version = state.schema_version.unwrap_or(0);
-    if state.active_transaction.is_some() {
-        return Err(transaction_scope_error("transaction_active"));
-    }
-    drop(state);
-    let document = validate_import_document(
-        request.document,
-        &profile_id,
-        &local_node_id,
-        schema_version,
-    )?;
-    let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
-    conn.exec("BEGIN IMMEDIATE;")?;
-    let result = import_records(&conn, &profile_id, &local_node_id, &document);
-    match result {
-        Ok(response) => {
-            conn.exec("COMMIT;")?;
-            Ok(response)
+    let state = Arc::clone(&state.inner);
+    run_local_data_blocking(move || {
+        let state = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let (profile_id, local_node_id) = ensure_open_state(&state)?;
+        let schema_version = state.schema_version.unwrap_or(0);
+        if state.active_transaction.is_some() {
+            return Err(transaction_scope_error("transaction_active"));
         }
-        Err(error) => {
-            let _ = conn.exec("ROLLBACK;");
-            Err(error)
+        drop(state);
+        let document = validate_import_document(
+            request.document,
+            &profile_id,
+            &local_node_id,
+            schema_version,
+        )?;
+        let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
+        conn.exec("BEGIN IMMEDIATE;")?;
+        let result = import_records(&conn, &profile_id, &local_node_id, &document);
+        match result {
+            Ok(response) => {
+                conn.exec("COMMIT;")?;
+                Ok(response)
+            }
+            Err(error) => {
+                let _ = conn.exec("ROLLBACK;");
+                Err(error)
+            }
         }
-    }
+    })
+    .await
+}
+
+async fn run_local_data_blocking<T>(
+    operation: impl FnOnce() -> Result<T, AuroraCommandError> + Send + 'static,
+) -> Result<T, AuroraCommandError>
+where
+    T: Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|error| local_data_error(format!("local data task failed: {error}")))?
 }
 
 fn run_repository_operation(

@@ -4808,7 +4808,7 @@ describe("Tauri CI/E2E route gates", () => {
         "/admin/plugins",
         [
           "Tools & Plugins",
-          "Core tools, MCP servers, plugins and mesh peer tools",
+          "Core tools, connected tool sources, plugins, and tools from approved devices",
         ],
       ],
       ["/admin/pairing", ["Pairing queue"]],
