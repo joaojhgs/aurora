@@ -7,6 +7,7 @@
 //! scrypt worker stay in TypeScript: they belong to the session, and the R0
 //! boundary note keeps session state out of the authority.
 
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const SHA256_BLOCK_BYTES: usize = 64;
@@ -177,6 +178,65 @@ fn push_json_member(out: &mut String, key: &str, value: &str, first: bool) {
 /// becomes a lowercase `\uXXXX` escape and the digest matches Python's
 /// `json.dumps(ensure_ascii=True)`.
 pub(crate) fn push_canonical_json_string(out: &mut String, value: &str) {
+    push_canonical_json_string_with_mode(out, value, CanonicalJsonAsciiMode::EscapeNonAscii);
+}
+
+/// Whether canonical JSON preserves UTF-8 or escapes every non-ASCII code point.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanonicalJsonAsciiMode {
+    /// Match `ensure_ascii=False` / JavaScript canonical object hashing.
+    PreserveUtf8,
+    /// Match `ensure_ascii=True` reconnect-proof transcripts.
+    EscapeNonAscii,
+}
+
+/// Serialize JSON with sorted object keys and an explicit non-ASCII policy.
+#[must_use]
+pub fn canonical_json(value: &Value, ascii_mode: CanonicalJsonAsciiMode) -> String {
+    let mut output = String::new();
+    push_canonical_json_value(&mut output, value, ascii_mode);
+    output
+}
+
+fn push_canonical_json_value(out: &mut String, value: &Value, ascii_mode: CanonicalJsonAsciiMode) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(true) => out.push_str("true"),
+        Value::Bool(false) => out.push_str("false"),
+        Value::Number(number) => out.push_str(&number.to_string()),
+        Value::String(string) => push_canonical_json_string_with_mode(out, string, ascii_mode),
+        Value::Array(items) => {
+            out.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index != 0 {
+                    out.push(',');
+                }
+                push_canonical_json_value(out, item, ascii_mode);
+            }
+            out.push(']');
+        }
+        Value::Object(object) => {
+            out.push('{');
+            let mut entries = object.iter().collect::<Vec<_>>();
+            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            for (index, (key, item)) in entries.into_iter().enumerate() {
+                if index != 0 {
+                    out.push(',');
+                }
+                push_canonical_json_string_with_mode(out, key, ascii_mode);
+                out.push(':');
+                push_canonical_json_value(out, item, ascii_mode);
+            }
+            out.push('}');
+        }
+    }
+}
+
+fn push_canonical_json_string_with_mode(
+    out: &mut String,
+    value: &str,
+    ascii_mode: CanonicalJsonAsciiMode,
+) {
     out.push('"');
     for character in value.chars() {
         match character {
@@ -191,6 +251,7 @@ pub(crate) fn push_canonical_json_string(out: &mut String, value: &str) {
                 push_unicode_escape(out, control as u32);
             }
             ascii if (ascii as u32) <= 0x7e => out.push(ascii),
+            wide if ascii_mode == CanonicalJsonAsciiMode::PreserveUtf8 => out.push(wide),
             wide => {
                 let code_point = wide as u32;
                 if code_point <= 0xffff {
@@ -286,6 +347,20 @@ mod tests {
         let mut out = String::new();
         push_canonical_json_string(&mut out, "a\u{7f}\u{e9}\u{1f600}\"\n");
         assert_eq!(out, "\"a\\u007f\\u00e9\\ud83d\\ude00\\\"\\n\"");
+    }
+
+    #[test]
+    fn canonical_json_uses_one_encoder_with_explicit_ascii_policy() {
+        let value = serde_json::json!({"z": "München🙂", "a": ["é", 1]});
+
+        assert_eq!(
+            canonical_json(&value, CanonicalJsonAsciiMode::PreserveUtf8),
+            "{\"a\":[\"é\",1],\"z\":\"München🙂\"}"
+        );
+        assert_eq!(
+            canonical_json(&value, CanonicalJsonAsciiMode::EscapeNonAscii),
+            "{\"a\":[\"\\u00e9\",1],\"z\":\"M\\u00fcnchen\\ud83d\\ude42\"}"
+        );
     }
 
     #[test]

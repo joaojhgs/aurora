@@ -961,7 +961,10 @@ enum AuroraThinPeerStorage {
       }
     }
     output += "\""
-    return output
+    // Match Android and Rust reconnect-proof canonicalization exactly. Swift's
+    // JSON encoder preserves Unicode by default, while the protocol requires
+    // deterministic ASCII escapes (including UTF-16 surrogate pairs).
+    return ensureAscii(output)
   }
 
   private static func validateLocalDataEnvelopeScope(_ purpose: String, _ profileId: String, _ localNodeId: String) throws {

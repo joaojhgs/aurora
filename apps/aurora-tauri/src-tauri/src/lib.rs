@@ -12428,6 +12428,7 @@ mod tests {
             "options: [.sortedKeys, .withoutEscapingSlashes]",
             "Data(ensureAscii(serialized).utf8)",
             "for codeUnit in value.utf16",
+            "return ensureAscii(output)",
             "\"token_id\": record.tokenId",
             "\"channel_binding\": challenge.channelBinding",
             "\"claimant_peer_id\": challenge.claimantPeerId",

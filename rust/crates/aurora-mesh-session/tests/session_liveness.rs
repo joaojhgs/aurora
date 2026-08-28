@@ -592,7 +592,7 @@ fn background_prepare_and_execute_validate_arguments_and_output_shape() {
         "method": "Tooling.PrepareExecution",
         "params": {
             "tool_name": "native.get_device_status",
-            "arguments": { "extra": true },
+            "arguments": { "extra": "München🙂" },
             "approval_token": "not-accepted"
         }
     });
@@ -612,6 +612,10 @@ fn background_prepare_and_execute_validate_arguments_and_output_shape() {
     assert_eq!(
         prepared["result"]["policy_decision"]["reason"],
         json!("approval_not_supported")
+    );
+    assert_eq!(
+        prepared["result"]["args_hash"],
+        json!("098b79748aa159b37cb13bbf7fa7e9ea142ba91aa673109ea0151c87c58eaf96")
     );
 
     let prepare = json!({

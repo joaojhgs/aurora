@@ -18,7 +18,7 @@
 //!   injection; Rust makes it explicit so the same core runs under WASM, Tauri
 //!   and tests.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,8 @@ use crate::crypto::{
 /// Reconnect challenge lifetime. The TypeScript store rejects any other value.
 pub const DEFAULT_CHALLENGE_TTL_MS: i64 = 20_000;
 const MAX_CHALLENGE_COLLISION_RETRIES: u32 = 8;
+/// Maximum diagnostic audit rows retained by the in-memory/WASM buffer.
+pub const MAX_MEMORY_AUDIT_RECORDS: usize = 1_024;
 const MAX_TOKEN_ID_LENGTH: usize = 128;
 const MAX_GRANT_ID_LENGTH: usize = 128;
 const MAX_ROOM_NAME_LENGTH: usize = 512;
@@ -1183,17 +1185,20 @@ fn found(
     }
 }
 
-/// An audit sink that keeps every row in memory, for tests and diagnostics.
+/// A bounded audit sink for tests, diagnostics, and the drainable WASM buffer.
 #[derive(Clone, Debug, Default)]
 pub struct MemoryPeerAuditSink {
-    /// Every row recorded so far, in order.
-    pub records: Vec<LocalPeerAuditRecord>,
+    /// Retained rows, oldest first. Oldest rows are dropped at the cap.
+    pub records: VecDeque<LocalPeerAuditRecord>,
 }
 
 #[async_trait]
 impl PeerAuditSink for MemoryPeerAuditSink {
     async fn record(&mut self, record: LocalPeerAuditRecord) -> AuthorityResult<()> {
-        self.records.push(record);
+        if self.records.len() == MAX_MEMORY_AUDIT_RECORDS {
+            self.records.pop_front();
+        }
+        self.records.push_back(record);
         Ok(())
     }
 }
@@ -2018,4 +2023,43 @@ pub fn sorted_unique(values: &[String]) -> Vec<String> {
     out.sort();
     out.dedup();
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn memory_audit_sink_drops_oldest_records_at_capacity() {
+        let mut sink = MemoryPeerAuditSink::default();
+        let subject = AuditSubject::Identity(PeerRelationshipIdentity {
+            claimant_peer_id: "claimant".to_owned(),
+            verifier_peer_id: "verifier".to_owned(),
+            room_name: "room".to_owned(),
+        });
+
+        for created_at_ms in 0..=(MAX_MEMORY_AUDIT_RECORDS as i64) {
+            sink.record(
+                audit_record(
+                    LocalPeerAuditAction::GrantCheck,
+                    subject.clone(),
+                    LocalPeerAuditDecision::Accepted,
+                    created_at_ms,
+                )
+                .expect("valid audit record"),
+            )
+            .await
+            .expect("memory audit record");
+        }
+
+        assert_eq!(sink.records.len(), MAX_MEMORY_AUDIT_RECORDS);
+        assert_eq!(
+            sink.records.front().map(|record| record.created_at_ms),
+            Some(1)
+        );
+        assert_eq!(
+            sink.records.back().map(|record| record.created_at_ms),
+            Some(MAX_MEMORY_AUDIT_RECORDS as i64)
+        );
+    }
 }

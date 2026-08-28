@@ -39,6 +39,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use aurora_contracts::{ids, method_by_id, normalize_generated_contract, ContractParseError};
 use aurora_mesh_authority::authority::AuthenticatedPeerContext;
+use aurora_mesh_authority::crypto::{canonical_json, CanonicalJsonAsciiMode};
 use aurora_mesh_authority::types::{
     PeerHostAuthorizationDecision, PeerHostAuthorizeRequest, PeerHostIdentity,
 };
@@ -911,43 +912,9 @@ fn percent_encode_identity_component(value: &str) -> String {
 }
 
 fn sha256_hex(value: &Value) -> String {
-    let canonical = canonical_json(value);
+    let canonical = canonical_json(value, CanonicalJsonAsciiMode::PreserveUtf8);
     let digest = Sha256::digest(canonical.as_bytes());
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn canonical_json(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_owned(),
-        Value::Bool(true) => "true".to_owned(),
-        Value::Bool(false) => "false".to_owned(),
-        Value::Number(number) => number.to_string(),
-        Value::String(string) => serde_json::to_string(string).expect("json string serializes"),
-        Value::Array(items) => format!(
-            "[{}]",
-            items
-                .iter()
-                .map(canonical_json)
-                .collect::<Vec<String>>()
-                .join(",")
-        ),
-        Value::Object(object) => {
-            let mut entries = object.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
-            format!(
-                "{{{}}}",
-                entries
-                    .into_iter()
-                    .map(|(key, item)| format!(
-                        "{}:{}",
-                        serde_json::to_string(key).expect("json key serializes"),
-                        canonical_json(item)
-                    ))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            )
-        }
-    }
 }
 
 /// One peer's live session, from the transport's point of view.
