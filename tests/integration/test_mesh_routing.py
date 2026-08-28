@@ -181,8 +181,12 @@ class TestMeshRoutingEndToEnd:
                 }
             }
         )
-        mesh_bus._config = mesh_config
-        mesh_bus._routing_table._config = mesh_config
+        mesh_bus = MeshBus(
+            inner_bus,
+            RoutingTable(mesh_config, peer_registry),
+            peer_bridge,
+            mesh_config,
+        )
         await peer_registry.register_peer("remote-tools", "remote-node")
         manifest = verified_peer_manifest(
             "remote-tools",

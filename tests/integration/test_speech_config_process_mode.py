@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 
@@ -44,7 +45,17 @@ pytestmark = [
 ]
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")
-TEST_REDIS_URL = os.environ.get("AURORA_PROCESS_TEST_REDIS_URL", f"{REDIS_URL}/15")
+
+
+def _redis_db_url(base_url: str, db: int) -> str:
+    parsed = urlsplit(base_url)
+    return urlunsplit((parsed.scheme, parsed.netloc, f"/{db}", parsed.query, parsed.fragment))
+
+
+TEST_REDIS_URL = os.environ.get(
+    "AURORA_PROCESS_TEST_REDIS_URL",
+    _redis_db_url(REDIS_URL, 15),
+)
 SUBPROCESS_TIMEOUT_S = 10.0
 
 TTS_MESH_POLICY: dict[str, Any] = {

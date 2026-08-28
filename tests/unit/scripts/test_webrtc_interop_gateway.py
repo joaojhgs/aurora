@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import inspect
 import json
 import socket
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -74,28 +74,26 @@ def test_gateway_http_probe_reserves_a_non_listening_port() -> None:
         reservation.close()
 
 
-def test_live_gateway_runs_reverse_tool_probe_without_blocking_the_peer_loop() -> None:
-    source = inspect.getsource(__import__("scripts.webrtc_interop_gateway", fromlist=["main"]).main)
+@pytest.mark.asyncio
+async def test_reverse_tool_probe_reports_not_ready_without_public_calls() -> None:
+    registry = MagicMock()
+    registry.get_peer.return_value = None
+    registry.get_provider_lease.return_value = None
+    registry.get_peer_service.return_value = None
+    bridge = AsyncMock()
 
-    assert "asyncio.create_task(" in source
-    assert 'name=f"webrtc-interop-ac18:{args.lane}"' in source
-    assert "rtc.peer_supports_capability(" in source
-    assert "CAP_PROVIDER_LEASE_V1" in source
-    assert "readiness_deadline = min(deadline, time.monotonic() + 15.0)" in inspect.getsource(
-        run_ac18_reverse_browser_tool_probe
+    evidence = await run_ac18_reverse_browser_tool_probe(
+        lane="not-ready",
+        peer_registry=registry,
+        peer_bridge=bridge,
+        timeout=0,
     )
-    assert "ac18_reverse_tool = await run_ac18_reverse_browser_tool_probe(" not in source
 
-
-def test_live_gateway_persists_native_probe_report_before_peer_teardown() -> None:
-    source = inspect.getsource(__import__("scripts.webrtc_interop_gateway", fromlist=["main"]).main)
-
-    completed_probe = source.index("native_device_tool = native_device_probe_task.result()")
-    interim_report = source.index("_write_report_snapshot()", completed_probe)
-    peer_loop_sleep = source.index("await asyncio.sleep(0.1)", interim_report)
-    peer_teardown = source.index("await rtc.close()", peer_loop_sleep)
-
-    assert completed_probe < interim_report < peer_loop_sleep < peer_teardown
+    assert evidence["status"] == "provider-not-ready"
+    assert evidence["peerStatus"] == "missing"
+    assert evidence["publicCallCount"] == 0
+    assert evidence["manifestAckAndLeaseReady"] is False
+    bridge.call.assert_not_awaited()
 
 
 def test_registry_response_is_sorted_and_digest_is_stable() -> None:

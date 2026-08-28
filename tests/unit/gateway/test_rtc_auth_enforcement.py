@@ -69,6 +69,34 @@ class MockPeerConnectionWithEvents:
             await callback()
 
 
+class ImmediateSleeper:
+    """Record timeout scheduling while advancing without wall-clock delay."""
+
+    def __init__(self) -> None:
+        self.delays: list[float] = []
+
+    async def __call__(self, delay: float) -> None:
+        self.delays.append(delay)
+        await asyncio.sleep(0)
+
+
+class PairingWindowSleeper:
+    """Advance the auth deadline, then hold inside the pairing extension."""
+
+    def __init__(self) -> None:
+        self.delays: list[float] = []
+        self.pairing_window_started = asyncio.Event()
+        self._release_pairing_window = asyncio.Event()
+
+    async def __call__(self, delay: float) -> None:
+        self.delays.append(delay)
+        if len(self.delays) == 1:
+            await asyncio.sleep(0)
+            return
+        self.pairing_window_started.set()
+        await self._release_pairing_window.wait()
+
+
 def install_pairing_transport(
     client: RTCClient,
     peer: str,
@@ -288,6 +316,8 @@ async def test_auth_timeout_disconnects_anonymous(mock_deps):
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._auth_timeout = 0.1  # Short timeout for testing
+    timeout_sleep = ImmediateSleeper()
+    client._auth_timeout_sleep = timeout_sleep
     client._system_token = "system-token"
     client._saved_auth_tokens["peer1"] = "unanswered-saved-token"
 
@@ -302,10 +332,12 @@ async def test_auth_timeout_disconnects_anonymous(mock_deps):
 
         # Trigger 'open' event to start the timeout
         mock_channel.emit("open")
-        await asyncio.sleep(0.3)  # Wait past auth timeout
+        timeout_task = client._peer_timeout_tasks["peer1"]
+        await timeout_task
 
         # The whole peer connection must close so lifecycle cleanup can run.
         mock_pc.close.assert_awaited_once()
+        assert timeout_sleep.delays == [client._auth_timeout]
 
 
 @pytest.mark.asyncio
@@ -492,6 +524,8 @@ async def test_pairing_timeout_extends_window(mock_deps):
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._auth_timeout = 0.1
     client._pairing_timeout = 0.5
+    timeout_sleep = PairingWindowSleeper()
+    client._auth_timeout_sleep = timeout_sleep
     client._system_token = "system-token"
 
     mock_pc = MagicMock()
@@ -508,11 +542,14 @@ async def test_pairing_timeout_extends_window(mock_deps):
         # Simulate pairing flow starting (peer added to _peer_pairing_active)
         client._peer_pairing_active.add("peer1")
 
-        # Wait past auth timeout but within pairing timeout
-        await asyncio.sleep(0.2)
+        timeout_task = client._peer_timeout_tasks["peer1"]
+        await timeout_sleep.pairing_window_started.wait()
 
         # Channel should still be open
         assert not mock_channel._closed
+        assert timeout_sleep.delays == pytest.approx([client._auth_timeout, 0.4])
+        timeout_task.cancel()
+        await asyncio.gather(timeout_task, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -522,6 +559,8 @@ async def test_pairing_timeout_eventually_disconnects(mock_deps):
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._auth_timeout = 0.1
     client._pairing_timeout = 0.3
+    timeout_sleep = ImmediateSleeper()
+    client._auth_timeout_sleep = timeout_sleep
     client._system_token = "system-token"
     client._run_bilateral_pairing = AsyncMock()
 
@@ -537,11 +576,12 @@ async def test_pairing_timeout_eventually_disconnects(mock_deps):
         mock_channel.emit("open")
         client._peer_pairing_active.add("peer1")
 
-        # Wait past both timeouts
-        await asyncio.sleep(0.6)
+        timeout_task = client._peer_timeout_tasks["peer1"]
+        await timeout_task
 
         # The whole peer connection must close, not only the DataChannel.
         mock_pc.close.assert_awaited_once()
+        assert timeout_sleep.delays == pytest.approx([client._auth_timeout, 0.2])
 
 
 @pytest.mark.asyncio
@@ -561,6 +601,8 @@ async def test_pairing_timeout_cleans_transport_and_retries_from_tie_breaker(
     client._auth_timeout = 0.01
     client._pairing_timeout = 0.03
     client._pairing_retry_delay = 0.0
+    timeout_sleep = ImmediateSleeper()
+    client._auth_timeout_sleep = timeout_sleep
     client._adapter = MagicMock()
     client._audit = AsyncMock()
     client.connect_to = AsyncMock()
@@ -578,7 +620,8 @@ async def test_pairing_timeout_cleans_transport_and_retries_from_tie_breaker(
         channel.emit("open")
         client._peer_pairing_active.add("m-remote-peer")
 
-        await asyncio.sleep(0.2)
+        timeout_task = client._peer_timeout_tasks["m-remote-peer"]
+        await timeout_task
 
     peer_connection.close.assert_awaited_once()
     assert "m-remote-peer" not in client._pcs
@@ -588,6 +631,7 @@ async def test_pairing_timeout_cleans_transport_and_retries_from_tie_breaker(
         client.connect_to.assert_awaited_once_with("m-remote-peer")
     else:
         client.connect_to.assert_not_awaited()
+    assert timeout_sleep.delays == pytest.approx([client._auth_timeout, 0.1])
 
 
 @pytest.mark.asyncio
@@ -626,6 +670,7 @@ async def test_empty_password_warns_no_auth(mock_deps):
 
     with patch("app.services.gateway.webrtc.rtc_client.MQTTSignaling") as mock_mqtt:
         mock_adapter = AsyncMock()
+        mock_adapter.on_message = MagicMock()
         mock_mqtt.return_value = mock_adapter
 
         with patch("app.services.gateway.webrtc.rtc_client.log_warning") as mock_warn:
@@ -658,6 +703,7 @@ async def test_public_broker_warning_when_auth_enabled(mock_deps):
         patch("app.services.gateway.webrtc.rtc_client.MQTTSignaling") as mock_mqtt,
     ):
         mock_adapter = AsyncMock()
+        mock_adapter.on_message = MagicMock()
         mock_mqtt.return_value = mock_adapter
 
         with patch("app.services.gateway.webrtc.rtc_client.log_warning") as mock_warn:

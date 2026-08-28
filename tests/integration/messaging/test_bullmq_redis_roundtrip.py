@@ -31,30 +31,27 @@ def _redis_url() -> str:
     return os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")
 
 
-def _redis_db_url(db: int) -> str:
-    parsed = urlsplit(_redis_url())
+def _redis_db_url(base_url: str, db: int) -> str:
+    parsed = urlsplit(base_url)
     return urlunsplit((parsed.scheme, parsed.netloc, f"/{db}", parsed.query, parsed.fragment))
 
 
 @pytest.fixture
-def redis_live():
-    """Skip if Redis is not reachable (no redis-py or connection error)."""
+def isolated_redis_url():
+    """Use this suite's overridable Redis database and clean only that database."""
     if redis_sync is None:
         pytest.skip("redis package missing")
-    client = redis_sync.Redis.from_url(_redis_url(), decode_responses=True)
+    url = os.environ.get(
+        "AURORA_BULLMQ_ROUNDTRIP_TEST_REDIS_URL",
+        _redis_db_url(_redis_url(), 13),
+    )
+    client = redis_sync.Redis.from_url(url, decode_responses=True)
     try:
         client.ping()
     except redis_sync.ConnectionError:
-        pytest.skip("Redis not reachable — start Redis or set REDIS_URL")
-    yield client
-    client.close()
-
-
-@pytest.fixture
-def isolated_redis_url(redis_live):
-    """Use a dedicated Redis DB for live BullMQ fanout checks."""
-    url = _redis_db_url(15)
-    client = redis_sync.Redis.from_url(url, decode_responses=True)
+        pytest.skip(
+            "Redis not reachable — start Redis or set AURORA_BULLMQ_ROUNDTRIP_TEST_REDIS_URL"
+        )
     client.flushdb()
     try:
         yield url
@@ -78,11 +75,11 @@ class TestBullMQRedisRoundtrip:
     """End-to-end BullMQBus against a real Redis."""
 
     @pytest.mark.asyncio
-    async def test_command_publish_delivered_to_handler(self, redis_live) -> None:
+    async def test_command_publish_delivered_to_handler(self, isolated_redis_url) -> None:
         """A command job is consumed by a Worker and passed to the handler."""
         ns = uuid.uuid4().hex[:12]
         topic = f"AuroraTest.Bullmq.{ns}.Ping"
-        bus = BullMQBus(redis_url=_redis_url(), validate_topics=False)
+        bus = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
         await bus.start()
         received: dict[str, object] = {}
 
@@ -108,13 +105,13 @@ class TestBullMQRedisRoundtrip:
             await bus.stop()
 
     @pytest.mark.asyncio
-    async def test_request_response_two_bus_instances(self, redis_live) -> None:
+    async def test_request_response_two_bus_instances(self, isolated_redis_url) -> None:
         """Client request() completes when a peer bus handles the job and replies."""
         ns = uuid.uuid4().hex[:12]
         cmd_topic = f"AuroraTest.Bullmq.{ns}.Rpc"
 
-        server = BullMQBus(redis_url=_redis_url(), validate_topics=False)
-        client = BullMQBus(redis_url=_redis_url(), validate_topics=False)
+        server = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        client = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
         await server.start()
         await client.start()
 

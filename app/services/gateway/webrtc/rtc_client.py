@@ -533,6 +533,7 @@ class RTCClient:
         self._provider_lease_tasks: dict[str, tuple[str, str, int, asyncio.Task[None]]] = {}
         self._provider_lease_clock_ms: Callable[[], int] = lambda: int(time.time() * 1000)
         self._provider_lease_sleep: Callable[[float], Any] = asyncio.sleep
+        self._auth_timeout_sleep: Callable[[float], Any] = asyncio.sleep
 
     _PUBLIC_BROKERS = {"broker.emqx.io", "test.mosquitto.org"}
 
@@ -5900,7 +5901,7 @@ class RTCClient:
                         nonlocal retry_after_pairing_timeout
                         current_task = asyncio.current_task()
                         try:
-                            await asyncio.sleep(self._auth_timeout)
+                            await self._auth_timeout_sleep(self._auth_timeout)
                             if self._pcs.get(peer) is not pc:
                                 return  # Already disconnected
 
@@ -5924,7 +5925,7 @@ class RTCClient:
                                     f"Peer {peer[:8]}… reconnect verification heartbeat "
                                     f"({elapsed:.0f}s / {self._pairing_timeout}s)"
                                 )
-                                await asyncio.sleep(heartbeat_interval)
+                                await self._auth_timeout_sleep(heartbeat_interval)
                                 elapsed += heartbeat_interval
                                 proof_entry = self._reconnect_proof_tasks.get(peer)
 
@@ -5948,7 +5949,7 @@ class RTCClient:
                                         f"Peer {peer[:8]}… pairing heartbeat "
                                         f"({elapsed:.0f}s / {self._pairing_timeout}s)"
                                     )
-                                    await asyncio.sleep(heartbeat_interval)
+                                    await self._auth_timeout_sleep(heartbeat_interval)
                                     elapsed += heartbeat_interval
 
                                 if self._pcs.get(peer) is not pc:

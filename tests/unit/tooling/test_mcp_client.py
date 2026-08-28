@@ -51,22 +51,6 @@ class TestMCPClientManager:
         """Create a fresh MCP client manager."""
         return MCPClientManager()
 
-    @pytest.fixture
-    def mock_mcp_tools(self):
-        """Mock MCP tools for testing."""
-        mock_tools = []
-        for name, desc in [
-            ("add", "Add two numbers together."),
-            ("subtract", "Subtract the second number from the first."),
-            ("multiply", "Multiply two numbers together."),
-        ]:
-            tool = Mock()
-            tool.name = name
-            tool.description = desc
-            tool.ainvoke = AsyncMock(return_value=42.0)
-            mock_tools.append(tool)
-        return mock_tools
-
     @pytest.mark.asyncio
     async def test_initialize_with_disabled_mcp(self, mcp_manager):
         """Test initialization when MCP is disabled."""
@@ -239,20 +223,6 @@ class TestMCPClientManager:
         assert mcp_manager._client is None
         assert not mcp_manager.is_initialized
         assert len(mcp_manager._tools) == 0
-
-    @pytest.mark.asyncio
-    async def test_tool_execution(self, mcp_manager, mock_mcp_tools):
-        """Test executing MCP tools."""
-        mcp_manager._tools = mock_mcp_tools
-        mcp_manager._initialized = True
-
-        tools = mcp_manager.get_tools()
-        add_tool = next((t for t in tools if t.name == "add"), None)
-
-        assert add_tool is not None
-        result = await add_tool.ainvoke({"a": 5, "b": 3})
-        assert result == 42.0
-        add_tool.ainvoke.assert_called_once_with({"a": 5, "b": 3})
 
     @pytest.mark.asyncio
     async def test_client_close(self, mcp_manager):

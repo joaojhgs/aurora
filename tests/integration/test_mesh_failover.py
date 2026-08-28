@@ -27,6 +27,26 @@ class DummyPayload(BaseModel):
     text: str = "test"
 
 
+REQUEST_TIMEOUT_S = 1.0
+RESPONSE_DEADLINE_MARGIN_S = 0.1
+
+
+async def _wait_for_pending_call(
+    peer_bridge: PeerBridge,
+    peer_id: str,
+    *,
+    deadline: float,
+):
+    """Return a pending call before the request deadline or fail clearly."""
+    loop = asyncio.get_running_loop()
+    while loop.time() < deadline:
+        for (pending_peer_id, request_id), future in list(peer_bridge._pending_calls.items()):
+            if pending_peer_id == peer_id and not future.done():
+                return request_id, future
+        await asyncio.sleep(min(0.01, max(0.0, deadline - loop.time())))
+    pytest.fail(f"pending call for {peer_id} was not created before the request deadline")
+
+
 @pytest.fixture
 def mesh_config():
     return MeshConfig(
@@ -150,22 +170,28 @@ class TestRemoteFailureFallback:
         mock_rtc_client.send_to_peer.side_effect = [False, True]
 
         async def simulate_backup_response():
-            for _ in range(20):
-                for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
-                    if pending_peer_id == "backup-peer" and not fut.done():
-                        peer_bridge.on_response(
-                            pending_peer_id,
-                            {
-                                "type": "result",
-                                "id": req_id,
-                                "result": {"source": "backup-peer"},
-                            },
-                        )
-                        return
-                await asyncio.sleep(0.01)
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + REQUEST_TIMEOUT_S - RESPONSE_DEADLINE_MARGIN_S
+            request_id, _ = await _wait_for_pending_call(
+                peer_bridge,
+                "backup-peer",
+                deadline=deadline,
+            )
+            peer_bridge.on_response(
+                "backup-peer",
+                {
+                    "type": "result",
+                    "id": request_id,
+                    "result": {"source": "backup-peer"},
+                },
+            )
 
         task = asyncio.create_task(simulate_backup_response())
-        result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, DummyPayload(), timeout=1.0)
+        result = await mesh_bus.request(
+            OrchestratorMethods.USER_INPUT,
+            DummyPayload(),
+            timeout=REQUEST_TIMEOUT_S,
+        )
         await task
 
         assert result.ok is True
@@ -208,19 +234,23 @@ class TestNetworkFallbackToAnotherPeer:
 
     @pytest.mark.asyncio
     async def test_first_peer_timeout_does_not_try_second_peer(
-        self, mesh_bus, inner_bus, peer_registry, peer_bridge, mock_rtc_client
+        self, inner_bus, peer_registry, peer_bridge, mock_rtc_client, mesh_config
     ):
         """Ambiguous timeout is terminal even when another peer exists."""
-        mesh_config = mesh_bus._config.model_copy(
+        mesh_config = mesh_config.model_copy(
             update={
                 "services": {
-                    **dict(mesh_bus._config.services),
+                    **dict(mesh_config.services),
                     "Orchestrator": mesh_policy(prefer="network", fallback="network"),
                 }
             }
         )
-        mesh_bus._config = mesh_config
-        mesh_bus._routing_table = RoutingTable(mesh_config, peer_registry)
+        mesh_bus = MeshBus(
+            inner_bus,
+            RoutingTable(mesh_config, peer_registry),
+            peer_bridge,
+            mesh_config,
+        )
         await _register_peer(peer_registry, "peer-1", ["Orchestrator"], latency=10.0)
         await _register_peer(peer_registry, "peer-2", ["Orchestrator"], latency=20.0)
 
@@ -233,55 +263,65 @@ class TestNetworkFallbackToAnotherPeer:
 
     @pytest.mark.asyncio
     async def test_capability_changed_preaccept_tries_second_peer(
-        self, mesh_bus, inner_bus, peer_registry, peer_bridge, mock_rtc_client
+        self, inner_bus, peer_registry, peer_bridge, mock_rtc_client, mesh_config
     ):
         """Structured preaccept rejection can be retried against another peer."""
-        mesh_config = mesh_bus._config.model_copy(
+        mesh_config = mesh_config.model_copy(
             update={
                 "services": {
-                    **dict(mesh_bus._config.services),
+                    **dict(mesh_config.services),
                     "Orchestrator": mesh_policy(prefer="network", fallback="network"),
                 }
             }
         )
-        mesh_bus._config = mesh_config
-        mesh_bus._routing_table = RoutingTable(mesh_config, peer_registry)
+        mesh_bus = MeshBus(
+            inner_bus,
+            RoutingTable(mesh_config, peer_registry),
+            peer_bridge,
+            mesh_config,
+        )
         await _register_peer(peer_registry, "peer-1", ["Orchestrator"], latency=10.0)
         await _register_peer(peer_registry, "peer-2", ["Orchestrator"], latency=20.0)
 
         async def simulate_preaccept_then_success():
-            rejected = False
-            for _ in range(40):
-                for (pending_peer_id, req_id), fut in list(peer_bridge._pending_calls.items()):
-                    if fut.done():
-                        continue
-                    if pending_peer_id == "peer-1" and not rejected:
-                        peer_bridge.on_response(
-                            pending_peer_id,
-                            {
-                                "type": "result",
-                                "id": req_id,
-                                "result": {
-                                    "accepted": False,
-                                    "reason_code": "capability_changed",
-                                },
-                            },
-                        )
-                        rejected = True
-                    elif pending_peer_id == "peer-2" and rejected:
-                        peer_bridge.on_response(
-                            pending_peer_id,
-                            {
-                                "type": "result",
-                                "id": req_id,
-                                "result": {"source": "peer-2"},
-                            },
-                        )
-                        return
-                await asyncio.sleep(0.01)
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + REQUEST_TIMEOUT_S - RESPONSE_DEADLINE_MARGIN_S
+            first_request_id, _ = await _wait_for_pending_call(
+                peer_bridge,
+                "peer-1",
+                deadline=deadline,
+            )
+            peer_bridge.on_response(
+                "peer-1",
+                {
+                    "type": "result",
+                    "id": first_request_id,
+                    "result": {
+                        "accepted": False,
+                        "reason_code": "capability_changed",
+                    },
+                },
+            )
+            second_request_id, _ = await _wait_for_pending_call(
+                peer_bridge,
+                "peer-2",
+                deadline=deadline,
+            )
+            peer_bridge.on_response(
+                "peer-2",
+                {
+                    "type": "result",
+                    "id": second_request_id,
+                    "result": {"source": "peer-2"},
+                },
+            )
 
         task = asyncio.create_task(simulate_preaccept_then_success())
-        result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, DummyPayload(), timeout=1.0)
+        result = await mesh_bus.request(
+            OrchestratorMethods.USER_INPUT,
+            DummyPayload(),
+            timeout=REQUEST_TIMEOUT_S,
+        )
         await task
 
         assert result.ok is True
