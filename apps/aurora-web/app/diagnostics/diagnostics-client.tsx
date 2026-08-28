@@ -103,7 +103,7 @@ export function DiagnosticsClientPage({ diagnosticsRoute }: { diagnosticsRoute: 
     <div className="aw-page-stack adx-page">
       <section className="aw-panel adx-hero" aria-labelledby="diagnostics-title">
         <div>
-          <p className="adx-kicker">ADM-009</p>
+          <p className="adx-kicker">Support</p>
           <h1 id="diagnostics-title">Diagnostics</h1>
           <p>
             Aurora checks service health, trusted devices, privacy protection, and support export readiness.

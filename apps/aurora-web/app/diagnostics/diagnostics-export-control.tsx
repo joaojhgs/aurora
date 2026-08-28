@@ -107,7 +107,7 @@ export function DiagnosticsExportControl({
               <dd>{bundle.native_capabilities.length ? summarizeItems(bundle.native_capabilities) : 'None returned'}</dd>
             </div>
             <div>
-              <dt>Service Notes</dt>
+              <dt>Device Notes</dt>
               <dd>{bundle.sidecar_logs.length ? summarizeItems(bundle.sidecar_logs) : 'None returned'}</dd>
             </div>
             <div>

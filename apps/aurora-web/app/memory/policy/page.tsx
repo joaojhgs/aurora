@@ -10,7 +10,7 @@ export default async function Page() {
       <StateSurface
         title="Data Policy"
         state="unsupported"
-        description="Data policy route availability could not be resolved from the AuroraClient capability graph."
+        description="Data settings are not available from this connection yet. Check the affected device, then try again."
         evidence={snapshot.evidenceSource}
       />
     )

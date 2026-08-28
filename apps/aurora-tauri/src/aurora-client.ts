@@ -1841,7 +1841,7 @@ function createThinProfileController(
           sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
         ) {
           throw new Error(
-            "Thin-client room secret does not match the saved WebRTC profile",
+            "Saved invite details do not match this connection profile.",
           );
         }
         await persistTauriRoomSecret(
@@ -1925,7 +1925,7 @@ function createRuntimeBackedThinProfileController(
           runtimeProfile.homeConnection?.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
         ) {
           throw new Error(
-            "Runtime profile room secret does not match the saved WebRTC profile",
+            "Saved invite details do not match this connection profile.",
           );
         }
         await persistTauriRoomSecret(
@@ -2135,7 +2135,7 @@ function runtimeProfileFromThinProfile({
   const signalingUrl = homeConnection?.signalingUrl
     ?? webrtcProfile?.signalingBrokers[0];
   if (!homeConnection || !webrtcProfile || !signalingUrl) {
-    throw new Error("Making this device available requires a complete Aurora invite");
+    throw new Error("This device needs a complete Aurora invite before it can be made available.");
   }
 
   return sanitizeRuntimeProfile({

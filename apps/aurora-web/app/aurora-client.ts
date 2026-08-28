@@ -679,7 +679,7 @@ export async function saveAuroraBrowserThinProfile(
   const store = ensureBrowserCredentialStore()
   if (roomSecret) {
     if (sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef) {
-      throw new Error('Browser thin-client room secret does not match the saved WebRTC profile')
+      throw new Error('Saved invite details do not match this connection profile.')
     }
     store.setRoomSecret(roomSecret.roomSecretRef, roomSecret.roomSecret)
   }
@@ -710,7 +710,7 @@ export async function saveAuroraBrowserOnboardingProfile(
   const sanitized = sanitizeThinConnectionProfile(profile)
   const selectedNodeMode = normalizeOnboardingNodeMode(nodeMode)
   if (selectedNodeMode === 'mesh-node' && !sanitized.webrtcProfile) {
-    throw new Error('Browser mesh-node onboarding requires an Aurora WebRTC invite')
+    throw new Error('This device needs a saved Aurora invite before it can be made available.')
   }
   const homeConnection = selectedNodeMode === 'remote-console'
     ? {
@@ -770,7 +770,7 @@ export async function saveAuroraBrowserRuntimeProfile(
       sanitized.localNode.meshMembership?.webrtcProfile.roomSecretRef,
     ].filter((value): value is string => typeof value === 'string' && value.length > 0))
     if (!allowedRefs.has(roomSecret.roomSecretRef)) {
-      throw new Error('Browser runtime profile room secret does not match the saved WebRTC profile')
+      throw new Error('Saved invite details do not match this connection profile.')
     }
     store.setRoomSecret(roomSecret.roomSecretRef, roomSecret.roomSecret)
   }

@@ -90,16 +90,16 @@ describe('thin connection profiles', () => {
   it('requires the transports selected by the runtime connection mode', () => {
     expect(() =>
       sanitizeThinConnectionProfile(httpProfile({ gatewayUrl: '' })),
-    ).toThrow(/requires an HTTP or HTTPS Gateway endpoint/i)
+    ).toThrow(/needs a valid Aurora address/i)
     expect(() =>
       sanitizeThinConnectionProfile(webRtcProfile({ webrtcProfile: undefined })),
-    ).toThrow(/requires an Aurora WebRTC invite/i)
+    ).toThrow(/needs a saved Aurora invite/i)
     expect(() =>
       sanitizeThinConnectionProfile(webRtcProfile({
         mode: 'webrtc-preferred',
         gatewayUrl: '',
       })),
-    ).toThrow(/requires an HTTP or HTTPS Gateway endpoint/i)
+    ).toThrow(/needs a valid Aurora address/i)
   })
 
   it('converts an invite profile to an HTTP-only manual address profile', () => {

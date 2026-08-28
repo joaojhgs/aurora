@@ -87,7 +87,7 @@ export function sanitizeThinConnectionProfile(
   const localStablePeerId = requiredText(profile.localStablePeerId, 'stable peer id', 160)
   const mode = profile.mode
   if (mode !== 'http-only' && mode !== 'webrtc-only' && mode !== 'webrtc-preferred') {
-    throw new Error('Thin-client connection mode is invalid')
+    throw new Error('This connection option is not supported.')
   }
   const gatewayUrl = sanitizeRuntimeEndpoint(
     profile.gatewayUrl,
@@ -106,10 +106,10 @@ export function sanitizeThinConnectionProfile(
     : undefined
 
   if (mode !== 'webrtc-only' && !gatewayUrl) {
-    throw new Error(`${mode} requires an HTTP or HTTPS Gateway endpoint`)
+    throw new Error('This connection needs a valid Aurora address.')
   }
   if (mode !== 'http-only' && !webrtcProfile) {
-    throw new Error(`${mode} requires an Aurora WebRTC invite`)
+    throw new Error('This connection needs a saved Aurora invite.')
   }
 
   return {
@@ -180,8 +180,8 @@ function sanitizeWebRtcProfile(
   mode: AuroraThinConnectionMode,
 ): WebRtcPeerConnectionProfile {
   return sanitizeWebRtcConnectionProfile(value, signalingOverride, mode, {
-    errorPrefix: 'Thin-client',
-    invalidProfileMessage: 'Thin-client WebRTC invite is invalid',
+    errorPrefix: 'Aurora connection',
+    invalidProfileMessage: 'This connection needs a valid Aurora invite.',
   })
 }
 

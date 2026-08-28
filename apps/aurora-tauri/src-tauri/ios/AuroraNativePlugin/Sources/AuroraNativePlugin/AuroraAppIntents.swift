@@ -3,7 +3,7 @@ import Foundation
 
 @available(iOS 16.0, macOS 13.0, *)
 public struct AuroraIntentHandoff: AppEntity, Encodable {
-  public static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Aurora handoff")
+  public static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Aurora action")
   public static var defaultQuery = AuroraIntentHandoffQuery()
 
   public let id: String
@@ -17,9 +17,24 @@ public struct AuroraIntentHandoff: AppEntity, Encodable {
 
   public var displayRepresentation: DisplayRepresentation {
     DisplayRepresentation(
-      title: "\(action)",
-      subtitle: "\(backendMethod) / \(correlationId)"
+      title: "\(AuroraIntentHandoff.displayTitle(for: action))",
+      subtitle: "\(requiresConfirmation ? "Review before sending" : "Ready for Aurora")"
     )
+  }
+
+  private static func displayTitle(for action: String) -> String {
+    switch action {
+    case "askAuroraAppIntent":
+      return "Ask Aurora"
+    case "askAuroraShortcut":
+      return "Ask Aurora Shortcut"
+    case "summarizeSharedContentShortcut":
+      return "Summarize with Aurora"
+    case "stopAuroraSpeechAppIntent":
+      return "Stop Aurora speech"
+    default:
+      return "Aurora action"
+    }
   }
 }
 
@@ -76,10 +91,10 @@ public enum AuroraIntentHandoffFactory {
 @available(iOS 16.0, macOS 13.0, *)
 public struct AskAuroraIntent: AppIntent {
   public static var title: LocalizedStringResource = "Ask Aurora"
-  public static var description = IntentDescription("Send an app-owned prompt handoff to Aurora.")
+  public static var description = IntentDescription("Send a prompt to Aurora.")
   public static var openAppWhenRun = true
 
-  @Parameter(title: "Prompt", description: "Prompt to hand off to Aurora.")
+  @Parameter(title: "Prompt", description: "Prompt for Aurora.")
   public var prompt: String?
 
   public init() {}
@@ -99,7 +114,7 @@ public struct AskAuroraIntent: AppIntent {
     let handoff = makeHandoff()
     return .result(
       value: handoff,
-      dialog: IntentDialog("Aurora handoff prepared for Orchestrator.")
+      dialog: IntentDialog("Aurora is ready to send your prompt.")
     )
   }
 }
@@ -107,10 +122,10 @@ public struct AskAuroraIntent: AppIntent {
 @available(iOS 16.0, macOS 13.0, *)
 public struct AskAuroraShortcutIntent: AppIntent {
   public static var title: LocalizedStringResource = "Ask Aurora Shortcut"
-  public static var description = IntentDescription("Open Aurora from a Shortcut and preserve backend handoff metadata.")
+  public static var description = IntentDescription("Open Aurora from a Shortcut with your prompt.")
   public static var openAppWhenRun = true
 
-  @Parameter(title: "Prompt", description: "Prompt to hand off to Aurora.")
+  @Parameter(title: "Prompt", description: "Prompt for Aurora.")
   public var prompt: String?
 
   public init() {}
@@ -130,7 +145,7 @@ public struct AskAuroraShortcutIntent: AppIntent {
     let handoff = makeHandoff()
     return .result(
       value: handoff,
-      dialog: IntentDialog("Aurora shortcut handoff prepared.")
+      dialog: IntentDialog("Aurora is ready to open from Shortcuts.")
     )
   }
 }
@@ -138,7 +153,7 @@ public struct AskAuroraShortcutIntent: AppIntent {
 @available(iOS 16.0, macOS 13.0, *)
 public struct SummarizeSharedContentIntent: AppIntent {
   public static var title: LocalizedStringResource = "Summarize shared content"
-  public static var description = IntentDescription("Hand shared text to Aurora with sensitive-data confirmation.")
+  public static var description = IntentDescription("Share selected text with Aurora after confirmation.")
   public static var openAppWhenRun = true
 
   @Parameter(title: "Shared text", description: "Text selected by the user for Aurora to summarize.")
@@ -161,7 +176,7 @@ public struct SummarizeSharedContentIntent: AppIntent {
     let handoff = makeHandoff()
     return .result(
       value: handoff,
-      dialog: IntentDialog("Aurora shared-content handoff prepared.")
+      dialog: IntentDialog("Aurora is ready to review shared content.")
     )
   }
 }
@@ -169,7 +184,7 @@ public struct SummarizeSharedContentIntent: AppIntent {
 @available(iOS 16.0, macOS 13.0, *)
 public struct StopAuroraSpeechIntent: AppIntent {
   public static var title: LocalizedStringResource = "Stop Aurora speech"
-  public static var description = IntentDescription("Stop Aurora-owned playback without controlling Siri or system assistant audio.")
+  public static var description = IntentDescription("Stop Aurora speech playback.")
   public static var openAppWhenRun = true
 
   public init() {}
@@ -188,7 +203,7 @@ public struct StopAuroraSpeechIntent: AppIntent {
     let handoff = makeHandoff()
     return .result(
       value: handoff,
-      dialog: IntentDialog("Aurora speech stop handoff prepared.")
+      dialog: IntentDialog("Aurora speech stop request is ready.")
     )
   }
 }

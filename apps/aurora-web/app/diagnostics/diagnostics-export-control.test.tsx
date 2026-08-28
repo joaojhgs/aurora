@@ -81,7 +81,7 @@ describe('DiagnosticsExportControl', () => {
     expect(rendered).toContain('Support Record Recorded')
     expect(rendered).toContain('1 related item')
     expect(rendered).toContain('Device Features 2 items checked; available: Yes')
-    expect(rendered).toContain('Service Notes 2 items checked; available: No')
+    expect(rendered).toContain('Device Notes 2 items checked; available: No')
     expect(`${rendered} ${attributes}`).not.toMatch(/Gateway\.|\/home\/|room-password|WebRTC|DataChannel|sidecar|SDK provider|raw|token/i)
 
     root.unmount()

@@ -79,6 +79,8 @@ describe('DiagnosticsClientPage', () => {
       topic: 'Tooling.ExecuteTool',
       include_candidates: true,
     })
+    expect(container.textContent).toContain('Support')
+    expect(container.textContent).not.toContain('ADM-009')
   })
 })
 
