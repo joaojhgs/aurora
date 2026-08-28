@@ -25,10 +25,10 @@ import {
   type ToolingProjectionInvalidated,
   type ToolingProjectionToolInfo,
 } from "@aurora/client";
+import { getProductionRouteOracle } from "@aurora/ui/testing";
 import {
   auroraNavSections,
   buildShellSnapshot,
-  getProductionRouteOracle,
   loadingShellSnapshot,
   encodeMeshInviteToken,
   normalizeAuroraWebRtcRolloutFlags,

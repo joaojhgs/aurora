@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
+import { auroraNavSections } from '@aurora/ui'
+import { getProductionRouteOracle } from '@aurora/ui/testing'
 
 const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 

@@ -90,10 +90,6 @@ import {
   buildConfigEditorModel,
   buildSettingsPermissionsModel,
   errorShellSnapshot,
-  productionSurfaceContracts,
-  productionRouteOracles,
-  productionGlobalMockReferences,
-  requiredProductionMockReferenceFiles,
   snapshotFromGraph,
   parsePermissionList,
   pairingErrorMessage,
@@ -120,6 +116,21 @@ import {
   getAuroraSurfaceProfile,
   type BrowserWebRtcSnapshot
 } from '../src/index'
+import {
+  productionSurfaceContracts,
+  productionRouteOracles,
+  productionGlobalMockReferences,
+  requiredProductionMockReferenceFiles,
+} from '../src/testing'
+
+it('keeps production route oracle helpers on the test-only package subpath', () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+  const uiPackageJson = JSON.parse(readFileSync(resolve(repoRoot, 'packages/aurora-ui/package.json'), 'utf8')) as { exports?: Record<string, unknown> }
+  const rootBarrel = readFileSync(resolve(repoRoot, 'packages/aurora-ui/src/index.ts'), 'utf8')
+
+  expect(uiPackageJson.exports?.['./testing']).toBeDefined()
+  expect(rootBarrel).not.toContain('production-surface-contracts')
+})
 
 
 it('centralizes voice capture ownership by target surface', () => {

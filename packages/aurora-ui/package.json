@@ -32,6 +32,11 @@
       "import": "./src/local-assistant/index.ts",
       "default": "./src/local-assistant/index.ts"
     },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
+    },
     "./styles.css": "./src/styles.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/shadcn-lib/*.ts",

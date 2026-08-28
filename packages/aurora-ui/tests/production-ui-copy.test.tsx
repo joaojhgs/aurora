@@ -75,6 +75,60 @@ describe('production UI copy', () => {
     expect(html).not.toContain('peer-studio')
   })
 
+  it('maps device connection setting metadata before rendering the settings dialog', async () => {
+    const hostileConfigSnapshot: MeshPeersSnapshot = {
+      ...meshSnapshot(),
+      config: {
+        ...meshSnapshot().config,
+        editable: true,
+        fields: [{
+          key_path: 'services.gateway.webrtc.enable_app_layer_e2ee',
+          title: 'Application E2EE WebRTC Gateway config',
+          description: 'Whether app-layer peer encryption is enabled by Gateway schema fallback.',
+          type: 'boolean',
+          current_value: true,
+          default: true,
+          secret: false,
+          source_layer: 'user',
+          reload_required: false,
+          restart_required: false,
+          affected_services: [],
+          constraints: {},
+        }],
+      },
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <MeshPeersView
+          snapshot={hostileConfigSnapshot}
+          route={route()}
+          canManageLocalServiceConfiguration
+          onConfigChange={() => undefined}
+        />,
+      )
+    })
+    await flushReactWork()
+    await act(async () => {
+      buttonByText(container, 'Device network settings').click()
+    })
+    await flushReactWork()
+
+    const text = visibleText(document.body.innerHTML)
+    expect(text).toContain('Extra message protection')
+    expect(text).toContain('Add another protection layer')
+    expect(text).not.toContain('Application E2EE WebRTC Gateway config')
+    expect(text).not.toContain('Gateway schema fallback')
+    expect(findForbiddenProductionCopyTerms(text).map((term) => term.id)).toEqual([])
+
+    root.unmount()
+    container.remove()
+    document.body.innerHTML = ''
+  })
+
   it('maps hostile shell errors before the activity rail renders them', () => {
     const raw = 'thin client HTTP Gateway WebRTC invite failed'
     const snapshot = errorShellSnapshot('http', new Error(raw))

@@ -5,7 +5,7 @@ import { ConfigEditorView, buildConfigEditorModel } from '../src/config-editor-v
 import { auroraEmbeddedNavItems, navItemSnapshot } from '../src/nav'
 import { AdminContractsView, buildAdminServicesSnapshot } from '../src/admin-services-view'
 import { buildShellSnapshot, type RouteAvailability } from '../src/shell-data'
-import { productionSurfaceContracts } from '../src/production-surface-contracts'
+import { productionSurfaceContracts } from '../src/testing'
 
 describe('admin route checkpoint status', () => {
   it('keeps sensitive admin read pages routeable while mutation surfaces stay AdminAction-scoped', async () => {

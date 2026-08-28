@@ -3005,7 +3005,7 @@ function MeshConfigurationPanel({ snapshot, disabled, pendingKey, onConfigChange
             <div key={field.key_path} className="grid gap-3 rounded-xl border border-border bg-background/60 p-3 transition-colors data-[changed=true]:border-primary/50 data-[changed=true]:bg-primary/5 sm:grid-cols-[minmax(0,1fr)_minmax(180px,240px)] sm:items-center" data-changed={changed || undefined}>
               <div className="min-w-0 space-y-1">
                 <Label htmlFor={field.key_path} className="text-sm font-semibold normal-case tracking-normal">
-                  {field.title || configFieldFallbackTitle(field.key_path)}
+                  {productConfigTitle(field)}
                 </Label>
                 <p className="line-clamp-2 text-xs text-muted-foreground">{productConfigDescription(field)}</p>
                 <div className="flex flex-wrap gap-1">
@@ -3510,21 +3510,85 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 }
 
 function titleForConfigKey(keyPath: string): string {
+  const productTitle = PRODUCT_CONFIG_TITLES[keyPath]
+  if (productTitle) return productTitle
   const last = keyPath.split('.').at(-1) ?? keyPath
   return last.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
 function descriptionForConfigKey(keyPath: string): string {
-  if (keyPath.includes('.mesh_network.')) return 'Mesh network setting.'
+  const productDescription = PRODUCT_CONFIG_DESCRIPTIONS[keyPath]
+  if (productDescription) return productDescription
+  if (keyPath.includes('.mesh_network.')) return 'Device connection setting.'
   if (keyPath.includes('.webrtc.')) return 'Direct connection setting.'
   if (keyPath.includes('.signaling_mqtt.')) return 'Invite service setting.'
   return 'Pairing and authentication setting.'
+}
+
+function productConfigTitle(field: ConfigFieldMetadata): string {
+  return field.title && !hasInternalCopy(field.title)
+    ? field.title
+    : titleForConfigKey(field.key_path)
 }
 
 function productConfigDescription(field: ConfigFieldMetadata): string {
   return field.description && !hasInternalCopy(field.description)
     ? field.description
     : descriptionForConfigKey(field.key_path)
+}
+
+const PRODUCT_CONFIG_TITLES: Record<string, string> = {
+  'services.auth.default_pairing_permissions': 'Default sharing',
+  'services.auth.enabled': 'Device approvals',
+  'services.auth.webrtc_auth_timeout_seconds': 'Access timeout',
+  'services.auth.webrtc_pairing_timeout_seconds': 'Pairing timeout',
+  'services.gateway.mesh_network.enabled': 'Device discovery',
+  'services.gateway.mesh_network.node_name': 'Device name',
+  'services.gateway.mesh_network.version_policy': 'Compatibility',
+  'services.gateway.mesh_network.peer_selection': 'Device selection',
+  'services.gateway.mesh_network.ping_interval_s': 'Speed check interval',
+  'services.gateway.mesh_network.registry_announce_interval_s': 'Availability update interval',
+  'services.gateway.mesh_network.stale_peer_timeout_s': 'Offline timeout',
+  'services.gateway.mesh_network.remote_timeout_s': 'Request timeout',
+  'services.gateway.signaling_mqtt.brokers': 'Invite service addresses',
+  'services.gateway.signaling_mqtt.topic_root': 'Invite group',
+  'services.gateway.webrtc.enabled': 'Direct device connections',
+  'services.gateway.webrtc.strategy': 'Invite service',
+  'services.gateway.webrtc.app_id': 'Aurora network name',
+  'services.gateway.webrtc.room': 'Private invite room',
+  'services.gateway.webrtc.password': 'Private invite secret',
+  'services.gateway.webrtc.encrypt_signaling': 'Private invite visibility',
+  'services.gateway.webrtc.enable_app_layer_e2ee': 'Extra message protection',
+  'services.gateway.webrtc.legacy_event_broadcast': 'Older device support',
+  'services.gateway.webrtc.stun_servers': 'Connection helpers',
+  'services.gateway.webrtc.turn_servers': 'Relay helpers',
+}
+
+const PRODUCT_CONFIG_DESCRIPTIONS: Record<string, string> = {
+  'services.auth.default_pairing_permissions': 'Features shared when you approve a new device.',
+  'services.auth.enabled': 'Allow this device to review and approve other Aurora devices.',
+  'services.auth.webrtc_auth_timeout_seconds': 'How long an approved connection can wait before access expires.',
+  'services.auth.webrtc_pairing_timeout_seconds': 'How long a new pairing request remains available for review.',
+  'services.gateway.mesh_network.enabled': 'Allow approved Aurora devices to find this device.',
+  'services.gateway.mesh_network.node_name': 'Name shown to approved Aurora devices.',
+  'services.gateway.mesh_network.version_policy': 'How Aurora handles devices on different versions.',
+  'services.gateway.mesh_network.peer_selection': 'How Aurora chooses a device for a request.',
+  'services.gateway.mesh_network.ping_interval_s': 'How often Aurora checks connection speed.',
+  'services.gateway.mesh_network.registry_announce_interval_s': 'How often this device shares that it is available.',
+  'services.gateway.mesh_network.stale_peer_timeout_s': 'How long Aurora waits before showing a quiet device as offline.',
+  'services.gateway.mesh_network.remote_timeout_s': 'How long Aurora waits for another device to answer.',
+  'services.gateway.signaling_mqtt.brokers': 'Private addresses used to exchange invitations.',
+  'services.gateway.signaling_mqtt.topic_root': 'Private group name used by your Aurora devices.',
+  'services.gateway.webrtc.enabled': 'Allow approved devices to connect directly when possible.',
+  'services.gateway.webrtc.strategy': 'How Aurora prepares private device invitations.',
+  'services.gateway.webrtc.app_id': 'Name that keeps your Aurora device invitations together.',
+  'services.gateway.webrtc.room': 'Private room used while devices find each other.',
+  'services.gateway.webrtc.password': 'Secret that protects the private invite room.',
+  'services.gateway.webrtc.encrypt_signaling': 'Hide invitation presence from unrelated devices.',
+  'services.gateway.webrtc.enable_app_layer_e2ee': 'Add another protection layer to messages between approved devices.',
+  'services.gateway.webrtc.legacy_event_broadcast': 'Temporary compatibility for older approved devices.',
+  'services.gateway.webrtc.stun_servers': 'Helpers used to find the best direct path.',
+  'services.gateway.webrtc.turn_servers': 'Helpers used when devices need a relay.',
 }
 
 function typeForConfigValue(value: JsonValue, keyPath: string): string {
@@ -3537,17 +3601,17 @@ function typeForConfigValue(value: JsonValue, keyPath: string): string {
 
 function buildRuntimeConfigFields(status: MeshStatusResponse | null, diagnostics: WebRTCDiagnosticsResponse | null): ConfigFieldMetadata[] {
   return sortConfigFields([
-    fallbackConfigField('services.gateway.mesh_network.enabled', 'Mesh enabled', 'Whether mesh routing is enabled.', 'boolean', status?.local.mesh_enabled ?? diagnostics?.mesh_enabled ?? null),
-    fallbackConfigField('services.gateway.mesh_network.node_name', 'Node name', 'Local node name reported by Gateway.', 'string', status?.local.node_name ?? diagnostics?.local_node_name ?? null),
-    fallbackConfigField('services.gateway.mesh_network.version_policy', 'Version policy', 'Device compatibility policy.', 'string', status?.local.version_policy ?? null),
-    fallbackConfigField('services.gateway.mesh_network.peer_selection', 'Peer selection', 'Device selection strategy.', 'string', status?.local.peer_selection ?? null),
-    fallbackConfigField('services.gateway.webrtc.enabled', 'Direct connections enabled', 'Whether direct connections are enabled.', 'boolean', diagnostics?.enabled ?? status?.local.webrtc_started ?? null),
-    fallbackConfigField('services.gateway.webrtc.strategy', 'Invite service strategy', 'Invite service strategy.', 'string', diagnostics?.signaling.strategy ?? null),
-    fallbackConfigField('services.gateway.webrtc.encrypt_signaling', 'Encrypt signaling', 'Whether signaling presence is encrypted.', 'boolean', diagnostics?.signaling.encrypted_presence ?? null),
-    fallbackConfigField('services.gateway.webrtc.enable_app_layer_e2ee', 'Application E2EE', 'Whether app-layer peer encryption is enabled.', 'boolean', diagnostics?.app_layer_e2ee_enabled ?? null),
-    fallbackConfigField('services.gateway.webrtc.legacy_event_broadcast', 'Event compatibility', 'Temporary compatibility for older approved devices.', 'boolean', null),
-    fallbackConfigField('services.auth.webrtc_auth_timeout_seconds', 'Access timeout', 'Access timeout in seconds.', 'integer', diagnostics?.auth_timeout_seconds ?? null),
-    fallbackConfigField('services.auth.webrtc_pairing_timeout_seconds', 'Pairing timeout', 'Pairing approval timeout in seconds.', 'integer', diagnostics?.pairing_timeout_seconds ?? null),
+    fallbackConfigField('services.gateway.mesh_network.enabled', titleForConfigKey('services.gateway.mesh_network.enabled'), descriptionForConfigKey('services.gateway.mesh_network.enabled'), 'boolean', status?.local.mesh_enabled ?? diagnostics?.mesh_enabled ?? null),
+    fallbackConfigField('services.gateway.mesh_network.node_name', titleForConfigKey('services.gateway.mesh_network.node_name'), descriptionForConfigKey('services.gateway.mesh_network.node_name'), 'string', status?.local.node_name ?? diagnostics?.local_node_name ?? null),
+    fallbackConfigField('services.gateway.mesh_network.version_policy', titleForConfigKey('services.gateway.mesh_network.version_policy'), descriptionForConfigKey('services.gateway.mesh_network.version_policy'), 'string', status?.local.version_policy ?? null),
+    fallbackConfigField('services.gateway.mesh_network.peer_selection', titleForConfigKey('services.gateway.mesh_network.peer_selection'), descriptionForConfigKey('services.gateway.mesh_network.peer_selection'), 'string', status?.local.peer_selection ?? null),
+    fallbackConfigField('services.gateway.webrtc.enabled', titleForConfigKey('services.gateway.webrtc.enabled'), descriptionForConfigKey('services.gateway.webrtc.enabled'), 'boolean', diagnostics?.enabled ?? status?.local.webrtc_started ?? null),
+    fallbackConfigField('services.gateway.webrtc.strategy', titleForConfigKey('services.gateway.webrtc.strategy'), descriptionForConfigKey('services.gateway.webrtc.strategy'), 'string', diagnostics?.signaling.strategy ?? null),
+    fallbackConfigField('services.gateway.webrtc.encrypt_signaling', titleForConfigKey('services.gateway.webrtc.encrypt_signaling'), descriptionForConfigKey('services.gateway.webrtc.encrypt_signaling'), 'boolean', diagnostics?.signaling.encrypted_presence ?? null),
+    fallbackConfigField('services.gateway.webrtc.enable_app_layer_e2ee', titleForConfigKey('services.gateway.webrtc.enable_app_layer_e2ee'), descriptionForConfigKey('services.gateway.webrtc.enable_app_layer_e2ee'), 'boolean', diagnostics?.app_layer_e2ee_enabled ?? null),
+    fallbackConfigField('services.gateway.webrtc.legacy_event_broadcast', titleForConfigKey('services.gateway.webrtc.legacy_event_broadcast'), descriptionForConfigKey('services.gateway.webrtc.legacy_event_broadcast'), 'boolean', null),
+    fallbackConfigField('services.auth.webrtc_auth_timeout_seconds', titleForConfigKey('services.auth.webrtc_auth_timeout_seconds'), descriptionForConfigKey('services.auth.webrtc_auth_timeout_seconds'), 'integer', diagnostics?.auth_timeout_seconds ?? null),
+    fallbackConfigField('services.auth.webrtc_pairing_timeout_seconds', titleForConfigKey('services.auth.webrtc_pairing_timeout_seconds'), descriptionForConfigKey('services.auth.webrtc_pairing_timeout_seconds'), 'integer', diagnostics?.pairing_timeout_seconds ?? null),
   ])
 }
 
@@ -3567,7 +3631,7 @@ function fallbackConfigField(keyPath: string, title: string, description: string
     secret: false,
     reload_required: true,
     restart_required: false,
-    affected_services: ['gateway'],
+    affected_services: ['device connections'],
     constraints: {},
     choices: null,
   }

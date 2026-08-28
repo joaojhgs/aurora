@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { auroraEmbeddedNavItems, auroraNavSections, getProductionRouteOracle } from '@aurora/ui'
+import { auroraEmbeddedNavItems, auroraNavSections } from '@aurora/ui'
+import { getProductionRouteOracle } from '@aurora/ui/testing'
 import { describe, expect, it } from 'vitest'
 import {
   auroraWebHiddenRouteIds,
