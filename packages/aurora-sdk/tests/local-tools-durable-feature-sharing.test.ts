@@ -347,7 +347,7 @@ describe('durable local feature sharing controller', () => {
     await expect(issuer.issue(selector, { featureIds: [descriptor.toolContractId] })).rejects.toMatchObject({
       code: 'sharing_unavailable'
     })
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toEqual({ found: false })
     expect((await fixture.controller.load()).approvedDevices).toEqual([])
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
@@ -380,8 +380,8 @@ describe('durable local feature sharing controller', () => {
     await issuer.issue(selector, { featureIds: [descriptor.toolContractId] })
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toEqual({ found: false })
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toMatchObject({ found: true })
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -412,8 +412,8 @@ describe('durable local feature sharing controller', () => {
       'old verifier deletion failed'
     )
 
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeDefined()
-    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toMatchObject({ found: true })
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toEqual({ found: false })
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -425,8 +425,8 @@ describe('durable local feature sharing controller', () => {
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toEqual({ found: false })
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toMatchObject({ found: true })
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{
@@ -456,15 +456,15 @@ describe('durable local feature sharing controller', () => {
       code: 'sharing_unavailable'
     })
 
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeUndefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toEqual({ found: false })
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toEqual({ found: false })
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toHaveLength(1)
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toEqual([])
 
     await issuer.issue(secondSelector, { featureIds: [descriptor.toolContractId] })
 
-    await expect(authority.getVerifier(selector, 101)).resolves.toBeUndefined()
-    await expect(authority.getVerifier(secondSelector, 101)).resolves.toBeDefined()
+    await expect(authority.getVerifier(selector, 101)).resolves.toEqual({ found: false })
+    await expect(authority.getVerifier(secondSelector, 101)).resolves.toMatchObject({ found: true })
     await expect(fixture.grantManager.listActiveGrants(selector)).resolves.toEqual([])
     await expect(fixture.grantManager.listActiveGrants(secondSelector)).resolves.toHaveLength(1)
     expect((await fixture.controller.load()).approvedDevices).toEqual([{

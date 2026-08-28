@@ -1306,29 +1306,37 @@ function selectedCandidatePairEvidenceFromStats(
   report: RTCStatsReport | Map<string, unknown>,
   hints: { configuredStunServers?: readonly string[] } = {}
 ): SelectedCandidatePairEvidence {
-  const stats = new Map<string, any>()
-  ;(report as any).forEach((value: unknown, key: string) => stats.set(String(key), value))
-  let pair: any | undefined
+  const stats = new Map<string, RtcStatRecord>()
+  const iterable = report as unknown as {
+    forEach(callback: (value: unknown, key: string) => void): void
+  }
+  iterable.forEach((value, key) => {
+    if (isRtcStatRecord(value)) stats.set(String(key), value)
+  })
+  let pair: RtcStatRecord | undefined
   for (const item of stats.values()) {
-    if (item?.type === 'transport' && typeof item.selectedCandidatePairId === 'string') {
-      pair = stats.get(item.selectedCandidatePairId)
+    const selectedPairId = statString(item, 'selectedCandidatePairId')
+    if (statString(item, 'type') === 'transport' && selectedPairId !== undefined) {
+      pair = stats.get(selectedPairId)
       if (pair) break
     }
   }
   if (!pair) {
-    const candidatePairs = Array.from(stats.values()).filter((item) => item?.type === 'candidate-pair')
-    pair = candidatePairs.find((item) => item.selected === true)
+    const candidatePairs = Array.from(stats.values()).filter((item) => statString(item, 'type') === 'candidate-pair')
+    pair = candidatePairs.find((item) => statBoolean(item, 'selected') === true)
       ?? candidatePairs
-        .filter((item) => item.nominated === true && item.state === 'succeeded')
+        .filter((item) => statBoolean(item, 'nominated') === true && statString(item, 'state') === 'succeeded')
         .sort((a, b) => candidatePairTrafficScore(b) - candidatePairTrafficScore(a))[0]
       ?? candidatePairs
-        .filter((item) => item.state === 'succeeded')
+        .filter((item) => statString(item, 'state') === 'succeeded')
         .sort((a, b) => candidatePairTrafficScore(b) - candidatePairTrafficScore(a))[0]
-      ?? candidatePairs.find((item) => item.nominated === true)
+      ?? candidatePairs.find((item) => statBoolean(item, 'nominated') === true)
   }
   if (!pair) return emptySelectedCandidatePairEvidence()
-  const local = typeof pair.localCandidateId === 'string' ? stats.get(pair.localCandidateId) : undefined
-  const remote = typeof pair.remoteCandidateId === 'string' ? stats.get(pair.remoteCandidateId) : undefined
+  const localCandidateId = statString(pair, 'localCandidateId')
+  const remoteCandidateId = statString(pair, 'remoteCandidateId')
+  const local = localCandidateId === undefined ? undefined : stats.get(localCandidateId)
+  const remote = remoteCandidateId === undefined ? undefined : stats.get(remoteCandidateId)
   const localType = safeCandidateType(local)
   const remoteType = safeCandidateType(remote)
   const category = selectedPairCategory(localType, remoteType)
@@ -1341,20 +1349,26 @@ function selectedCandidatePairEvidenceFromStats(
   }
   const roundTripTimeMs = candidatePairRoundTripTimeMs(pair)
   if (roundTripTimeMs !== undefined) out.roundTripTimeMs = roundTripTimeMs
-  if (typeof pair.state === 'string') out.pairState = pair.state
-  if (typeof pair.nominated === 'boolean') out.nominated = pair.nominated
+  const pairState = statString(pair, 'state')
+  const nominated = statBoolean(pair, 'nominated')
+  if (pairState !== undefined) out.pairState = pairState
+  if (nominated !== undefined) out.nominated = nominated
   if (localType !== undefined) out.localCandidateType = localType
   if (remoteType !== undefined) out.remoteCandidateType = remoteType
-  if (typeof local?.protocol === 'string') out.localProtocol = local.protocol
-  if (typeof remote?.protocol === 'string') out.remoteProtocol = remote.protocol
-  if (typeof local?.relayProtocol === 'string') out.localRelayProtocol = local.relayProtocol
-  if (typeof remote?.relayProtocol === 'string') out.remoteRelayProtocol = remote.relayProtocol
+  const localProtocol = statString(local, 'protocol')
+  const remoteProtocol = statString(remote, 'protocol')
+  const localRelayProtocol = statString(local, 'relayProtocol')
+  const remoteRelayProtocol = statString(remote, 'relayProtocol')
+  if (localProtocol !== undefined) out.localProtocol = localProtocol
+  if (remoteProtocol !== undefined) out.remoteProtocol = remoteProtocol
+  if (localRelayProtocol !== undefined) out.localRelayProtocol = localRelayProtocol
+  if (remoteRelayProtocol !== undefined) out.remoteRelayProtocol = remoteRelayProtocol
   if (stunServerReflexiveCandidate.gathered) out.stunServerReflexiveCandidate = stunServerReflexiveCandidate
   return out
 }
 
-function candidatePairRoundTripTimeMs(pair: any): number | undefined {
-  const current = pair?.currentRoundTripTime
+function candidatePairRoundTripTimeMs(pair: RtcStatRecord): number | undefined {
+  const current = statFiniteNumber(pair, 'currentRoundTripTime')
   // The native webrtc-rs report currently emits numeric zero before it has an
   // RTT sample (and, on some Android paths, for the lifetime of the selected
   // pair). Treating that sentinel as a measurement masks the Gateway's real
@@ -1362,14 +1376,12 @@ function candidatePairRoundTripTimeMs(pair: any): number | undefined {
   if (typeof current === 'number' && Number.isFinite(current) && current > 0) {
     return current * 1_000
   }
-  const total = pair?.totalRoundTripTime
-  const responses = pair?.responsesReceived
+  const total = statFiniteNumber(pair, 'totalRoundTripTime')
+  const responses = statFiniteNumber(pair, 'responsesReceived')
   if (
-    typeof total === 'number'
-    && Number.isFinite(total)
+    total !== undefined
     && total > 0
-    && typeof responses === 'number'
-    && Number.isFinite(responses)
+    && responses !== undefined
     && responses > 0
   ) {
     return (total / responses) * 1_000
@@ -1377,14 +1389,14 @@ function candidatePairRoundTripTimeMs(pair: any): number | undefined {
   return undefined
 }
 
-function candidatePairTrafficScore(pair: any): number {
-  const sent = typeof pair?.bytesSent === 'number' ? pair.bytesSent : 0
-  const received = typeof pair?.bytesReceived === 'number' ? pair.bytesReceived : 0
+function candidatePairTrafficScore(pair: RtcStatRecord): number {
+  const sent = statFiniteNumber(pair, 'bytesSent') ?? 0
+  const received = statFiniteNumber(pair, 'bytesReceived') ?? 0
   return sent + received
 }
 
-function safeCandidateType(candidate: any): string | undefined {
-  const value = candidate?.candidateType
+function safeCandidateType(candidate: RtcStatRecord | undefined): string | undefined {
+  const value = statString(candidate, 'candidateType')
   if (value === 'host' || value === 'srflx' || value === 'relay' || value === 'prflx') return value
   return undefined
 }
@@ -1401,14 +1413,14 @@ function selectedPairCategory(
 }
 
 function stunServerReflexiveCandidateEvidenceFromStats(
-  stats: Map<string, any>,
+  stats: Map<string, RtcStatRecord>,
   configuredStunServers: readonly string[]
 ): StunServerReflexiveCandidateEvidence {
   const configured = new Set(configuredStunServers)
   const configuredStunServerCount = configuredStunServers.length
   for (const candidate of stats.values()) {
-    if (candidate?.type !== 'local-candidate' || candidate.candidateType !== 'srflx') continue
-    const url = typeof candidate.url === 'string' ? candidate.url : undefined
+    if (statString(candidate, 'type') !== 'local-candidate' || statString(candidate, 'candidateType') !== 'srflx') continue
+    const url = statString(candidate, 'url')
     const urlScheme = url?.startsWith('stuns:') ? 'stuns' : url?.startsWith('stun:') ? 'stun' : undefined
     return {
       gathered: true,
@@ -1426,6 +1438,27 @@ function stunServerReflexiveCandidateEvidenceFromStats(
     statsSource: 'RTCPeerConnection.getStats',
     rawAddressRedacted: true
   }
+}
+
+type RtcStatRecord = Record<string, unknown>
+
+function isRtcStatRecord(value: unknown): value is RtcStatRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function statString(record: RtcStatRecord | undefined, key: string): string | undefined {
+  const value = record?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function statBoolean(record: RtcStatRecord | undefined, key: string): boolean | undefined {
+  const value = record?.[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function statFiniteNumber(record: RtcStatRecord | undefined, key: string): number | undefined {
+  const value = record?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function isStunServerUrl(url: string): boolean {

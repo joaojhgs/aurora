@@ -390,6 +390,30 @@ describe('WebRtcPeerSession', () => {
     expect(evidence).not.toHaveProperty('roundTripTimeMs')
   })
 
+  it('ignores malformed RTC stats without inventing candidate evidence', async () => {
+    const { session, pc } = await authorizedAnswerer()
+    pc.statsReport = new Map<string, unknown>([
+      ['null', null],
+      ['array', ['candidate-pair']],
+      ['scalar', 'candidate-pair'],
+      ['pair', {
+        type: 'candidate-pair',
+        selected: 'true',
+        nominated: 'true',
+        state: 7,
+        currentRoundTripTime: '0.125',
+        bytesSent: Number.NaN
+      }]
+    ])
+
+    await expect(session.getSelectedCandidatePairEvidence()).resolves.toEqual({
+      selected: false,
+      category: 'unknown',
+      statsSource: 'RTCPeerConnection.getStats',
+      rawAddressRedacted: true
+    })
+  })
+
   it('uses a native application ping instead of the WebRTC zero RTT placeholder', async () => {
     const { session, pc } = await authorizedAnswerer()
     pc.measuredRoundTripTimeMs = 18.75

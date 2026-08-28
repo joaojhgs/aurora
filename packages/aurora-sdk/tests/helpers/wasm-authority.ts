@@ -74,7 +74,12 @@ interface MeshAuthorityBindings {
   getVerifier(
     selector: unknown,
     nowMs: number
-  ): Promise<LocalPeerCredentialVerifierV1 | undefined>
+  ): Promise<unknown>
+}
+
+export interface WasmVerifierStatus {
+  found: boolean
+  credentialRevision?: number
 }
 
 interface MeshAuthorityModule {
@@ -120,7 +125,7 @@ export interface TestAuthority {
   getVerifier(
     selector: PeerRelationshipSelector,
     nowMs: number
-  ): Promise<LocalPeerCredentialVerifierV1 | undefined>
+  ): Promise<WasmVerifierStatus>
   /**
    * Sharing settings, answered by the real authority.
    *
@@ -228,7 +233,7 @@ export async function createTestAuthority(
       ).asGrantManagerPort(now, durable)
     },
     async getVerifier(selector, nowMs) {
-      return await authority.getVerifier(selector, nowMs)
+      return verifierStatus(await authority.getVerifier(selector, nowMs))
     },
     async hydrateVerifier(verifier) {
       await authority.hydrateVerifier(verifier)
@@ -248,4 +253,21 @@ export async function createTestAuthority(
       return compute.createReconnectProofForBearer(bearerToken, selector, transport, challenge)
     }
   }
+}
+
+function verifierStatus(value: unknown): WasmVerifierStatus {
+  const serialized = JSON.stringify(value)
+  if (/(?:tokenHashHex|rawBearerToken|verifierKey)/u.test(serialized)) {
+    throw new Error('WASM verifier status exposed credential proof material')
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('WASM verifier status is malformed')
+  }
+  const record = value as Record<string, unknown>
+  if (typeof record.found !== 'boolean') throw new Error('WASM verifier status is malformed')
+  if (record.credentialRevision === undefined) return { found: record.found }
+  if (typeof record.credentialRevision !== 'number' || !Number.isSafeInteger(record.credentialRevision)) {
+    throw new Error('WASM verifier status is malformed')
+  }
+  return { found: record.found, credentialRevision: record.credentialRevision }
 }
