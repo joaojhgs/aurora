@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  buildLocalDataExportV1,
   localDataMigrationManifest,
   LocalDataError,
   MemoryLocalDataBackend,
@@ -123,6 +124,28 @@ describe('browser sqlite worker client backend', () => {
       code: 'invalid_record',
       metadata: { reason: 'message_too_large' }
     })
+    await backend.close()
+  })
+
+  it('allows bounded atomic imports larger than the ordinary worker request limit', async () => {
+    installBrowserStorageProbe()
+    const fakeWorker = new MemoryProtocolWorker()
+    const backend = new BrowserSqliteLocalDataBackend({
+      createWorker: () => fakeWorker,
+      lock: new GrantedLock(),
+      timeoutMs: 10_000,
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })
+    const session = await backend.open('profile-1', 'node-1')
+    const document = largeTransferDocument()
+
+    expect(new TextEncoder().encode(JSON.stringify({ id: 'import-large', command: 'importV1', document })).byteLength)
+      .toBeGreaterThan(2 * 1024 * 1024)
+    await expect(session.importV1(document)).resolves.toMatchObject({
+      imported: true,
+      recordCounts: { localAudit: 40 }
+    })
+    expect(fakeWorker.messages.some((message) => message.command === 'importV1')).toBe(true)
     await backend.close()
   })
 
@@ -380,4 +403,26 @@ function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAuditReco
     createdAtMs: 1700,
     ...overrides
   }
+}
+
+function largeTransferDocument() {
+  return buildLocalDataExportV1({
+    sourceBackend: 'indexeddb',
+    schemaVersion: localDataMigrationManifest.latestVersion,
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    exportedAtMs: 2000,
+    records: {
+      conversations: [],
+      messages: [],
+      memoryItems: [],
+      localToolStates: [],
+      peerGrantMetadata: [],
+      localAudit: Array.from({ length: 40 }, (_, index) => auditFixture({
+        id: `audit-large-${index}`,
+        redactedDetailJson: { note: 'A'.repeat(60 * 1024) },
+        createdAtMs: 2000 + index
+      }))
+    }
+  })
 }

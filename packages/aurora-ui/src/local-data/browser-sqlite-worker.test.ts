@@ -48,6 +48,32 @@ describe('browser sqlite worker protocol guardrails', () => {
     })
   })
 
+  it('keeps the large-message exemption limited to atomic imports', async () => {
+    const document = largeTransferDocument()
+    const request = { id: 'large-import-1', command: 'importV1', document } as const
+    expect(new TextEncoder().encode(JSON.stringify(request)).byteLength).toBeGreaterThan(2 * 1024 * 1024)
+
+    const responses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage(
+      request,
+      (response) => responses.push(response),
+      openWorkerState(new FakeSqliteDatabase({}), 'profile-1', 'node-1') as never
+    )
+
+    expect(responses).toHaveLength(1)
+    expect(responses[0]).toMatchObject({
+      id: 'large-import-1',
+      result: { ok: true }
+    })
+    await expect(handleBrowserSqliteWorkerMessage(
+      { id: 'large-status-1', command: 'status', payload: JSON.stringify(document) },
+      () => undefined
+    )).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'message_too_large' }
+    })
+  })
+
   it('acknowledges cancellation requests by correlation id', async () => {
     const responses: BrowserSqliteWorkerResponse[] = []
     await handleBrowserSqliteWorkerMessage(
@@ -582,6 +608,28 @@ function openWorkerState(db: FakeSqliteDatabase | SnapshotSqliteDatabase, profil
     operationQueue: Promise.resolve(),
     cancelled: new Set<string>()
   }
+}
+
+function largeTransferDocument() {
+  return buildLocalDataExportV1({
+    sourceBackend: 'indexeddb',
+    schemaVersion: 3,
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    exportedAtMs: 2000,
+    records: {
+      conversations: [],
+      messages: [],
+      memoryItems: [],
+      localToolStates: [],
+      peerGrantMetadata: [],
+      localAudit: Array.from({ length: 40 }, (_, index) => auditFixture({
+        id: `audit-large-${index}`,
+        redactedDetailJson: { note: 'A'.repeat(60 * 1024) },
+        createdAtMs: 2000 + index
+      }))
+    }
+  })
 }
 
 function sqliteCollisionCases(): Array<{

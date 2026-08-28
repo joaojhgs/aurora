@@ -40,9 +40,9 @@ import type {
   BrowserSqliteWorkerRequest,
   BrowserSqliteWorkerResponse
 } from './browser-sqlite-worker'
+import { browserSqliteRequestByteLimit } from './browser-sqlite-worker-limits'
 
 const DEFAULT_TIMEOUT_MS = 10_000
-const MAX_OUTBOUND_BYTES = 2 * 1024 * 1024
 
 export interface BrowserSqliteLocalDataBackendOptions {
   readonly createWorker?: BrowserSqliteWorkerConstructor
@@ -231,7 +231,7 @@ export class BrowserSqliteWorkerClient {
     const id = `browser-sqlite-${++this.sequence}`
     const request = { ...message, id } as BrowserSqliteWorkerRequest
     const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength
-    if (bytes > MAX_OUTBOUND_BYTES) {
+    if (bytes > browserSqliteRequestByteLimit(request.command)) {
       throw new LocalDataError('invalid_record', 'Browser local data request is too large', { reason: 'message_too_large' })
     }
     return await new Promise<T>((resolve, reject) => {

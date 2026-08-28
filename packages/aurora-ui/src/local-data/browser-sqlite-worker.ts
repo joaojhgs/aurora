@@ -26,6 +26,7 @@ import {
 } from '@aurora/client/local-data'
 
 import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs'
+import { browserSqliteRequestByteLimit } from './browser-sqlite-worker-limits'
 
 type WorkerResult =
   | { readonly ok: true; readonly value: unknown }
@@ -102,7 +103,6 @@ type SqliteModule = {
   installOpfsSAHPoolVfs: (options: { directory: string; name?: string; clearOnInit?: boolean }) => Promise<{ OpfsSAHPoolDb: new (filename: string) => SqliteDatabase }>
 }
 
-const MAX_REQUEST_BYTES = 2 * 1024 * 1024
 const CURRENT_SCHEMA_VERSION = localDataMigrationManifest.latestVersion
 
 const state: WorkerState = {
@@ -906,16 +906,16 @@ function rowToAudit(row: AuditRow): LocalAuditRecord {
 }
 
 function parseWorkerRequest(value: unknown): BrowserSqliteWorkerRequest {
-  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
-  if (bytes > MAX_REQUEST_BYTES) {
-    throw new LocalDataError('invalid_record', 'Local data worker request is too large', { reason: 'message_too_large' })
-  }
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new LocalDataError('invalid_record', 'Local data worker request is invalid', { reason: 'invalid_message' })
   }
   const request = value as BrowserSqliteWorkerRequest
   if (typeof request.id !== 'string' || request.id.length < 1 || typeof request.command !== 'string') {
     throw new LocalDataError('invalid_record', 'Local data worker request is invalid', { reason: 'invalid_message' })
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+  if (bytes > browserSqliteRequestByteLimit(request.command)) {
+    throw new LocalDataError('invalid_record', 'Local data worker request is too large', { reason: 'message_too_large' })
   }
   return request
 }
