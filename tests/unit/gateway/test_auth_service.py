@@ -315,8 +315,8 @@ async def test_pairing_exchange_logs_redacted_identity_fallback(auth_service):
 
 
 @pytest.mark.asyncio
-async def test_pairing_reconnect_cannot_supersede_request_mid_exchange(auth_service):
-    """All pairing lifecycle transitions share the exchange commit lock."""
+async def test_unrelated_pairing_start_does_not_wait_for_exchange(auth_service):
+    """A slow exchange must not block an unrelated pairing source."""
     pairing_code = await auth_service.start_pairing("First device", "127.0.0.1")
     assert pairing_code is not None
     assert await auth_service.approve_pairing(pairing_code, "admin-id") is True
@@ -335,12 +335,13 @@ async def test_pairing_reconnect_cannot_supersede_request_mid_exchange(auth_serv
     await exchange_entered.wait()
 
     reconnect_task = asyncio.create_task(auth_service.start_pairing("Reconnect", "127.0.0.2"))
-    await asyncio.sleep(0)
-    assert reconnect_task.done() is False
+    try:
+        reconnect_code = await asyncio.wait_for(reconnect_task, timeout=1)
+        assert exchange_task.done() is False
+    finally:
+        release_exchange.set()
 
-    release_exchange.set()
     exchange_result = await exchange_task
-    reconnect_code = await reconnect_task
 
     assert exchange_result is not None
     assert reconnect_code is not None

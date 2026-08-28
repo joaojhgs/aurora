@@ -117,6 +117,16 @@ def _install_approved_peer_authority(mock_bus) -> AsyncMock:
     """Make remote-tool tests model the Auth authority required in production."""
 
     async def request(method, payload, **_kwargs):
+        if method == DBMethods.EXECUTE_SQL:
+            sql = str(getattr(payload, "sql", "") or "").strip().upper()
+            return QueryResult(
+                ok=True,
+                data={
+                    "rows": [],
+                    "rowcount": 0 if sql.startswith("SELECT") else 1,
+                    "success": True,
+                },
+            )
         if method == AuthMethods.MESH_GET_PEER:
             peer_id = str(payload.peer_id)
             return QueryResult(

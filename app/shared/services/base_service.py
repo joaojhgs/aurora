@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -74,8 +75,8 @@ class BaseService(ABC):
                 if isinstance(descriptor, property):
                     continue
                 attr = getattr(self, attr_name)
-                if hasattr(attr, "_contract_metadata"):
-                    metadata = attr._contract_metadata
+                metadata = getattr(attr, "_contract_metadata", None)
+                if isinstance(metadata, Mapping):
                     method_id = metadata.get("method_id")
 
                     if method_id:
@@ -534,8 +535,8 @@ class BaseService(ABC):
                 if isinstance(descriptor, property):
                     continue
                 attr = getattr(self, attr_name)
-                if hasattr(attr, "_contract_metadata"):
-                    metadata = attr._contract_metadata
+                metadata = getattr(attr, "_contract_metadata", None)
+                if isinstance(metadata, Mapping):
                     # Use method_id as topic (e.g., "TTS.Request", "Config.Get")
                     topic = metadata.get("bus_topic") or metadata.get("method_id")
                     contract = get_contract(topic) if topic else None
