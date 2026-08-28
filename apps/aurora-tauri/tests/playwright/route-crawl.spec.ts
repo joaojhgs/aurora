@@ -16,7 +16,7 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   services: ['Services', 'Service health and restart controls'],
   access: ['Access & RBAC', 'Roles define permission sets', 'Principals'],
   tokens: ['Tokens', 'API tokens issued to principals'],
-  backups: ['Backups', 'Snapshots, verification and restore'],
+  backups: ['Backups & Restore', 'Create and verify snapshots, or preview a restore before making changes.'],
   scheduler: ['Scheduler'],
   audit: ['Audit log'],
   models: ['Models & Sources', 'Compare at a glance'],
