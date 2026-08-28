@@ -435,10 +435,19 @@ where
             revoked_at_ms: None,
             grant_revision: next_revision,
         };
-        self.repository
-            .upsert_grant(grant.clone())
-            .await
-            .map_err(|_| PeerGrantManagementError::repository_unavailable())?;
+        if self.repository.upsert_grant(grant.clone()).await.is_err() {
+            // Revocation and replacement are separate repository operations.
+            // If the replacement write fails, re-issue every previously live
+            // grant at a newer revision so repositories with monotonic-write
+            // guards cannot leave the relationship accidentally unshared.
+            let restore_revision = next_revision.saturating_add(1);
+            for (offset, mut previous) in active_existing.into_iter().enumerate() {
+                previous.revoked_at_ms = None;
+                previous.grant_revision = restore_revision.saturating_add(offset as i64);
+                let _ = self.repository.upsert_grant(previous).await;
+            }
+            return Err(PeerGrantManagementError::repository_unavailable());
+        }
         Ok(summarize_grant(&grant, now_ms))
     }
 
