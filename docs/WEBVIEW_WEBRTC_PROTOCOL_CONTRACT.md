@@ -49,6 +49,15 @@ WebAssembly on web. Linux desktop uses the shared protocol through a native
 - Mesh-node approval presents only local features currently reported as available by the local feature-sharing catalog. The selected feature IDs are applied to the credential relationship; generic Gateway permissions are not offered as mobile-node resources.
 - Hosted-browser reconnect material is encrypted before IndexedDB persistence with a non-extractable origin-scoped WebCrypto AES-GCM key. Unsupported or denied durable storage falls back to memory-only. Desktop/mobile native stores persist scoped reconnect material through OS credential stores. Profiles must not store raw invite secrets or bearer tokens.
 - Revoked credentials fail closed; mutation retry logic must not replay uncertain in-flight mutations on a different transport. Current live proof covers a mutation started event followed by disconnect before response settlement with execution count 1, not a broad exactly-once guarantee.
+- Browser/WebView peers answer the Python peer's protocol `ping` frames with
+  `pong`; they do not run a second client-initiated application keepalive loop.
+  Python owns the 120-second stale-peer lease, while every client RPC has a
+  bounded deadline and transport generations close pending work on observed
+  channel loss. A black-holed channel that the browser still reports as open can
+  therefore surface at the current call deadline before the stale-peer lease
+  expires. `webrtc-only` remains fail-closed and never hides that condition with
+  an HTTP retry; native mobile separately performs bounded background RTT probes
+  for notification and session health.
 - Event delivery is subscription/correlation scoped. Wildcard or wrong-correlation event leakage is a test failure. Scoped authorization stays on public production Auth/Gateway/DataChannel boundaries rather than private service calls.
 - After authentication, a narrow redacted bootstrap-read allowlist may bypass mesh service-export projection so a thin client can discover its own identity, peer state, registry/services/health/topology, Mesh/WebRTC diagnostics, capability graph/catalog, and route explanation before choosing a shared service route. Normal exposure and RBAC checks still apply; for example `Auth.ListPendingPairings` still requires `Auth.manage`, `Gateway.GetCapabilityCatalog` still requires Gateway permission, and secret-bearing invite configuration is not in the bypass.
 - Provider manifests are recipient-specific projections. A TypeScript peer host does not accept generated method calls until the remote structured ACK partitions every advertised service as compatible, incompatible, or unused; every required service must be compatible, and the ACK must match the active protocol/tier, projection digest, registry revision, export-policy revision, and auth-grant revision. A stale ACK may retransmit the same pending manifest only through the bounded retry path; it never activates the provider.

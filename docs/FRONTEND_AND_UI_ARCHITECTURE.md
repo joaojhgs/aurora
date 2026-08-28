@@ -52,6 +52,12 @@ The runtime-role work is now represented as separate axes instead of a transport
 - `apps/aurora-tauri/src/aurora-client.ts` composes the production Tauri runtime from the saved profile and optional native assistant provider. Provider secrets stay behind Rust/native secure storage; JavaScript receives status/proof/catalog surfaces instead of raw credentials.
 - The browser clear-device-data lifecycle is scoped to Aurora-owned client data. It removes the scoped Aurora peer vault/profile metadata, selected local-data backend pointer, storage lease, envelope-key database, local-data IndexedDB database, and OPFS node directory, while preserving unrelated same-origin data. A structured partial failure is not success and must keep reporting the affected cleanup step.
 
+Onboarding follows the same separation. Physical surface and capability truth
+always comes from `getAuroraSurfaceProfile()`; onboarding may use current
+runtime profile, connection, and transport state to decide which choices are
+available, but it must not reclassify Android, iOS, desktop, or hosted web from
+those runtime values.
+
 The selected direct-peer direction is implemented through the SDK/WebView runtime, with native shells using Rust for the authority and native session work that must survive a frozen WebView. Hosted web keeps the browser `RTCPeerConnection` path and calls the same Rust authority through `@aurora/mesh-authority-web`; desktop and mobile Tauri call the Rust authority/session through IPC. Current live proof covers Chromium, Firefox, and Playwright-WebKit direct, configured-STUN, and forced-TURN browser-to-Python Gateway sessions over MQTT signaling and the `aurora-rpc` DataChannel with the Python HTTP API disabled. Separate hosted-Chromium UI, hosted mesh-node, and web persistence E2Es start the real Python service and Next shell, import a runtime invite, prove matching bilateral SAS approval with a scoped non-admin principal, exercise large registry/catalog and Mesh reads over the DataChannel with zero browser Gateway HTTP requests, survive the runtime's blur event, and reconnect after reload from encrypted IndexedDB state without pairing again. Packaged Linux desktop live E2E also passes with the native Rust WebRTC fallback, Python HTTP API disabled, role switching, restart/reconnect, revocation fail-closed, no Python child process or sidecar, and no compiled endpoints or secrets. Android Waydroid full-stack acceptance passes against the real `main.py` supervisor for pairing, background native ping/tool serving, ordered resume, reconnect after app force-stop and server restart, and assistant turns through the selected provider. This is local protocol/service evidence, not physical-device Doze, OEM-kill, battery, thermal, signing/store, or iOS evidence. iOS MobileSafari/packaged-Tauri-WKWebView simulator gates still require macOS/Xcode.
 
 The shared runtime also owns rollout behavior. Hosted web reads
@@ -64,6 +70,24 @@ credentials, while `webrtc-only` fails closed. Capability gates are carried in
 the local protocol hello and therefore take effect only through the
 Python/TypeScript negotiated intersection. A profile that requires
 application-layer E2EE never downgrades to plaintext.
+
+## Browser resource boundaries
+
+The browser speech-pack adapter currently materializes every selected model file
+as a byte array before initializing the Sherpa WebAssembly engine. Catalog and
+persistent-storage operations are bounded and moved off the UI thread, but the
+engine mount API still makes peak memory proportional to the complete selected
+task pack. Select one appropriate pack per task and do not claim low-memory
+browser support from the current implementation. True streaming initialization
+requires a coordinated engine/store binding redesign rather than an unbounded
+queue or a second copy in React state.
+
+The IndexedDB local-data backend is an emergency compatibility path for bounded
+local profiles. It preserves the atomic export/import contract but rewrites the
+bounded document on each mutation. SQLite/OPFS is the preferred browser backend
+for larger histories. A future normalized IndexedDB schema must preserve atomic
+imports, pointer verification, encrypted reconnect material, and clear-data
+semantics; changing only one repository method would not be a safe optimization.
 
 ## Assistant streaming and voice playback
 
@@ -119,6 +143,13 @@ UI copy and controls must report capabilities from SDK/native evidence, not from
 ## Tauri security posture
 
 The Tauri shell grants only Aurora-owned command/capability surfaces needed by the SDK. Broad shell, filesystem, process-spawn, notification, dialog, clipboard, and updater capabilities remain denied unless explicitly documented and tested.
+
+Tauri applies one CSP to the application rather than a separate policy per
+window. Browser voice requires WebAssembly evaluation and blob-backed Workers,
+so the current `wasm-unsafe-eval` and `worker-src blob:` allowances also cover
+the native background overlay window. The overlay remains limited by its narrow
+Tauri command capability set. Revisit this shared CSP only when the shell can
+enforce a tested per-window policy without breaking browser voice initialization.
 
 See `apps/aurora-tauri/SECURITY.md`.
 

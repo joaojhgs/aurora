@@ -126,6 +126,29 @@ Request/response pattern:
 
 Each `bus.request()` uses a unique topic `reply.{ModelName}.{uuid}`. **BullMQBus** tears these down after the call completes so Workers (on the caller) and Queue clients (after publishing a one-shot reply on the callee) do not accumulate and exhaust file descriptors (`EMFILE`). Stable service topics are unchanged.
 
+#### BullMQ / processes mode: event fanout cost
+
+Exact subscribers receive events through durable per-subscriber BullMQ queues.
+BullMQBus also serializes each event once onto Redis pub/sub because wildcard
+subscriptions owned by another process are not visible in the publisher's
+in-memory subscription registry. The pub/sub copy is intentional correctness
+overhead, not a second product delivery path. Raw audio and other hardware-rate
+streams must remain local or use an explicit streaming transport; they are not
+appropriate ordinary BullMQ events. Avoid optimizing this with distributed
+"pattern interested" flags unless their crash and stale-state semantics are
+defined, because a false negative would silently drop wildcard events.
+
+#### Mesh command fallback boundary
+
+MeshBus may choose a local or alternate eligible route when a remote route is
+unavailable before dispatch, or when the peer returns a structured pre-accept
+rejection. Once a remote send may have been accepted, a timeout, transport
+failure, or application error is terminal. Aurora does not replay that uncertain
+operation locally or on another peer because it might duplicate a mutation.
+Explicit peer selectors are always terminal on failure and never transparently
+change targets. Product surfaces translate the structured terminal result into
+an actionable device-unavailable state without hiding the routing boundary.
+
 #### Config access in process mode
 
 - **Full pattern (required reading for new services):** [`CONFIG_SERVICE_PATTERN.md`](./CONFIG_SERVICE_PATTERN.md).

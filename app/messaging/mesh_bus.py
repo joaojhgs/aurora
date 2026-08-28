@@ -7,7 +7,10 @@ For each ``publish()`` or ``request()`` call:
 1. Check routing config for the topic's module
 2. If prefer=local → deliver locally via inner bus
 3. If prefer=network → find best remote peer, send via PeerBridge
-4. On failure → apply fallback strategy (local, network, error)
+4. Before remote acceptance, apply the configured fallback strategy when the
+   route is unavailable or explicitly rejects the call. Once a remote send may
+   have been accepted, timeouts and transport/application failures are terminal
+   so an uncertain mutation is never replayed locally or on another peer.
 
 Events (``event=True``) are **always** delivered locally first. Additionally,
 if the caller passes ``mesh=True`` **and** the event's module has
