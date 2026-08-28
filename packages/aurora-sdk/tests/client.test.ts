@@ -5128,12 +5128,12 @@ describe('AuroraClient', () => {
     const client = new AuroraClient({ transport })
     client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use'])
 
-    expect(await collectEvents(client.assistant.streamVoiceEvents(), 1)).toEqual([])
-    expect(await collectEvents(client.assistant.streamVoiceAssistantResponses(), 1)).toEqual([])
+    expect(await collectEvents(client.assistant.streamVoiceEvents({ reconnect: false }), 1)).toEqual([])
+    expect(await collectEvents(client.assistant.streamVoiceAssistantResponses({ reconnect: false }), 1)).toEqual([])
     expect(requests).toEqual([])
 
     client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use', 'STTCoordinator.use'])
-    expect(await collectEvents(client.assistant.streamVoiceEvents(), 1)).toEqual([])
+    expect(await collectEvents(client.assistant.streamVoiceEvents({ reconnect: false }), 1)).toEqual([])
     expect(requests).toHaveLength(1)
     expect(requests[0]?.stream).toBe('voice')
     expect(requests[0]?.topics).toEqual(expect.arrayContaining([
