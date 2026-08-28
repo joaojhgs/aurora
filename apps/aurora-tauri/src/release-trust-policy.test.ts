@@ -23,6 +23,17 @@ const expectedDependencyInventoryCommand = 'pnpm --dir apps/aurora-tauri run ver
 const expectedDependencyInventoryReportPath = 'apps/aurora-tauri/reports/release-dependency-inventory.json'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
 const expectedSemanticReleaseCommand = 'uv run semantic-release version --print --no-commit --no-tag --no-push --no-vcs-release'
+const releaseActionRefs = {
+  checkout: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+  setupPython: 'actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065',
+  setupUv: 'astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86',
+  setupPnpm: 'pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1',
+  setupNode: 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+  rustToolchain: 'dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b',
+  installAction: 'taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d',
+  uploadArtifact: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  semanticRelease: 'python-semantic-release/python-semantic-release@4d4cb0ab842247caea1963132c242c62aab1e4d5',
+} as const
 const currentSourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
   cwd: repoRoot,
   encoding: 'utf8',
@@ -1243,10 +1254,10 @@ jobs:
       ['checkout token', validWorkflow().replace('          fetch-depth: 0', `          fetch-depth: 0
           token: \${{ secrets.ATTACKER_TOKEN }}`)],
       ['python version change', validWorkflow().replace('          python-version: "3.11.11"', '          python-version: "3.12"')],
-      ['pnpm run install', validWorkflow().replace('        uses: pnpm/action-setup@v4', `        uses: pnpm/action-setup@v4
+      ['pnpm run install', validWorkflow().replace(`        uses: ${releaseActionRefs.setupPnpm}`, `        uses: ${releaseActionRefs.setupPnpm}
         with:
           run_install: true`)],
-      ['rust toolchain version change', validWorkflow().replace('dtolnay/rust-toolchain@1.88.0', 'dtolnay/rust-toolchain@stable')],
+      ['rust toolchain version change', validWorkflow().replace(releaseActionRefs.rustToolchain, 'dtolnay/rust-toolchain@stable')],
       ['rust wasm target change', validWorkflow().replace('          targets: wasm32-unknown-unknown', '          targets: wasm32-wasip1')],
       ['browser voice tool version change', validWorkflow().replace('          tool: wasm-bindgen-cli@0.2.126', '          tool: wasm-bindgen-cli@latest')],
       ['browser voice tool fallback change', validWorkflow().replace('          fallback: none', '          fallback: cargo')],
@@ -1337,7 +1348,7 @@ ${controlLine}
     )
   })
 
-  it('requires the trust report upload action to use exactly actions/upload-artifact v4', () => {
+  it('requires the trust report upload action to use the pinned v4 commit', () => {
     const fixture = createFixture()
     writeFileSync(fixture.workflow, `
 name: Release
@@ -1775,7 +1786,7 @@ ${step}
     const cases = [
       ['renamed action job', renamedReleaseJob],
       ['duplicate release producer', duplicateReleaseJob],
-      ['renamed publish signal job', renamedReleaseJob.replace('        uses: python-semantic-release/python-semantic-release@v10.4.1', '        run: semantic-release publish')],
+      ['renamed publish signal job', renamedReleaseJob.replace(`        uses: ${releaseActionRefs.semanticRelease}`, '        run: semantic-release publish')],
       ['extra gh release job', extraJob('      - run: gh release create v9.9.9 --notes owned')],
       ['extra release action job', extraJob('      - uses: softprops/action-gh-release@v2')],
       ['extra release API job', extraJob('      - run: curl -X POST https://api.github.com/repos/example/project/releases')],
@@ -1803,7 +1814,7 @@ ${step}
         os: [ubuntu-latest]
 `)],
       ['job-level uses', validWorkflow().replace(`    steps:
-      - uses: actions/checkout@v4
+      - uses: ${releaseActionRefs.checkout}
         with:
           fetch-depth: 0
           token: \${{ secrets.PAT_RELEASE || github.token }}
@@ -1812,7 +1823,7 @@ ${step}
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Python Semantic Release
-        uses: python-semantic-release/python-semantic-release@v10.4.1
+        uses: ${releaseActionRefs.semanticRelease}
         env:
           GH_TOKEN: \${{ secrets.PAT_RELEASE || github.token }}
         with:
@@ -1859,7 +1870,7 @@ ${step}
       const fixture = createFixture()
       writeFileSync(
         fixture.workflow,
-        validWorkflow().replace('python-semantic-release/python-semantic-release@v10.4.1', action),
+        validWorkflow().replace(releaseActionRefs.semanticRelease, action),
       )
       const result = runPolicy(fixture)
 
@@ -1880,9 +1891,9 @@ ${step}
       - name: Extra after release
         run: echo ok
 `],
-      ['semantic-release publish run', validWorkflow().replace('        uses: python-semantic-release/python-semantic-release@v10.4.1', '        run: semantic-release publish')],
-      ['gh release create run', validWorkflow().replace('        uses: python-semantic-release/python-semantic-release@v10.4.1', '        run: gh release create v1.2.3')],
-      ['softprops action', validWorkflow().replace('python-semantic-release/python-semantic-release@v10.4.1', 'softprops/action-gh-release@v2')],
+      ['semantic-release publish run', validWorkflow().replace(`        uses: ${releaseActionRefs.semanticRelease}`, '        run: semantic-release publish')],
+      ['gh release create run', validWorkflow().replace(`        uses: ${releaseActionRefs.semanticRelease}`, '        run: gh release create v1.2.3')],
+      ['softprops action', validWorkflow().replace(releaseActionRefs.semanticRelease, 'softprops/action-gh-release@v2')],
       ['checkout ref drift', validWorkflow().replace('          token: ${{ secrets.PAT_RELEASE || github.token }}', `          token: \${{ secrets.PAT_RELEASE || github.token }}
           ref: attacker`)],
       ['checkout token drift', validWorkflow().replace('          token: ${{ secrets.PAT_RELEASE || github.token }}', '          token: ${{ secrets.ATTACKER_TOKEN }}')],
@@ -2149,19 +2160,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: ${releaseActionRefs.checkout}
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ${releaseActionRefs.setupPython}
         with:
           python-version: "3.11.11"
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: ${releaseActionRefs.setupUv}
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: ${releaseActionRefs.setupPnpm}
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: ${releaseActionRefs.setupNode}
         with:
           node-version: 24
           cache: pnpm
@@ -2900,28 +2911,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: ${releaseActionRefs.checkout}
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ${releaseActionRefs.setupPython}
         with:
           python-version: "3.11.11"
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: ${releaseActionRefs.setupUv}
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: ${releaseActionRefs.setupPnpm}
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: ${releaseActionRefs.setupNode}
         with:
           node-version: 24
           cache: pnpm
       - name: Set up Rust for browser voice runtime
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: ${releaseActionRefs.rustToolchain}
         with:
           targets: wasm32-unknown-unknown
       - name: Install pinned browser voice toolchain
-        uses: taiki-e/install-action@v2
+        uses: ${releaseActionRefs.installAction}
         with:
           tool: wasm-bindgen-cli@0.2.126
           fallback: none
@@ -2933,7 +2944,7 @@ jobs:
         run: ${expectedDependencyInventoryCommand}
       - name: Upload release dependency inventory report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ${releaseActionRefs.uploadArtifact}
         with:
           name: release-dependency-inventory
           path: ${expectedDependencyInventoryReportPath}
@@ -2944,7 +2955,7 @@ jobs:
           ${expectedTrustCommand}
       - name: Upload trust policy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ${releaseActionRefs.uploadArtifact}
         with:
           name: release-trust-policy
           path: ${expectedTrustReportPath}
@@ -2961,7 +2972,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: ${releaseActionRefs.checkout}
         with:
           fetch-depth: 0
           token: \${{ secrets.PAT_RELEASE || github.token }}
@@ -2970,7 +2981,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Python Semantic Release
-        uses: python-semantic-release/python-semantic-release@v10.4.1
+        uses: ${releaseActionRefs.semanticRelease}
         env:
           GH_TOKEN: \${{ secrets.PAT_RELEASE || github.token }}
         with:

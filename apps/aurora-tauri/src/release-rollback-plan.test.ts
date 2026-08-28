@@ -12,6 +12,7 @@ const repoRoot = resolve(packageRoot, '..', '..')
 const script = join(packageRoot, 'scripts', 'assert-release-rollback-plan.mjs')
 const canonicalPlan = join(repoRoot, 'tools', 'voice-runtime', 'release', 'native-voice-rollback-plan.json')
 const releaseWorkflow = join(repoRoot, '.github', 'workflows', 'release.yml')
+const pinnedUploadArtifactRef = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
 
 interface RollbackPlan {
   policyId: string
@@ -584,7 +585,7 @@ describe('RAC-54 release rollback plan policy gate', () => {
     expect(workflow).toContain('pnpm --filter @aurora/tauri-ui verify:static-release-rollback-policy')
     expect(workflow).toContain('apps/aurora-tauri/reports/release-rollback-plan-policy.json')
     expect(workflow).toContain('if: always()')
-    expect(workflow).toContain('actions/upload-artifact@v4')
+    expect(workflow).toContain(pinnedUploadArtifactRef)
   })
 
   it('accepts an unrelated earlier artifact upload before the rollback report upload', () => {
@@ -606,7 +607,7 @@ jobs:
           pnpm --filter @aurora/tauri-ui verify:static-release-rollback-policy
       - name: Upload static release rollback policy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ${pinnedUploadArtifactRef}
         with:
           path: apps/aurora-tauri/reports/release-rollback-plan-policy.json
       - name: Check next semantic version

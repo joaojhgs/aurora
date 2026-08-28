@@ -24,6 +24,7 @@ const releaseWorkflowPath = resolve(
     ?? process.env.AURORA_RELEASE_WORKFLOW_PATH
     ?? join(repoRoot, '.github', 'workflows', 'release.yml'),
 )
+const pinnedUploadArtifactRef = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
 
 const requiredCapabilityGroups = [
   'web-local-speech',
@@ -530,7 +531,12 @@ function validateReleaseWorkflow() {
   }
   const nextStepAfterUpload = findNextStepLine(lines, uploadStart + 1)
   const uploadIfLine = findLineBetween(lines, uploadStart + 1, nextStepAfterUpload, /^\s*if:\s+always\(\)\s*$/)
-  const uploadUsesLine = findLineBetween(lines, uploadStart + 1, nextStepAfterUpload, /^\s*uses:\s+actions\/upload-artifact@v4\s*$/)
+  const uploadUsesLine = findLineBetween(
+    lines,
+    uploadStart + 1,
+    nextStepAfterUpload,
+    /^\s*uses:\s+actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02(?:\s+#\s*v4)?\s*$/,
+  )
   const uploadPathLine = findLineBetween(
     lines,
     uploadStart + 1,
@@ -539,7 +545,7 @@ function validateReleaseWorkflow() {
   )
   for (const [line, label] of [
     [uploadIfLine, 'if: always()'],
-    [uploadUsesLine, 'actions/upload-artifact@v4'],
+    [uploadUsesLine, pinnedUploadArtifactRef],
     [uploadPathLine, 'report path'],
   ]) {
     if (line === -1 || line <= uploadStart || line >= nextStepAfterUpload) {

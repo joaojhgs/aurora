@@ -116,7 +116,7 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
     "Review tool sources",
   ],
   mesh: ["Connected devices", "Connect trusted devices and choose what each one can use."],
-  backups: ["Backups", "Snapshots, verification and restore"],
+  backups: ["Backups & Restore", "Create and verify snapshots, or preview a restore before making changes."],
   settings: ["Settings", "This device"],
   models: ["Models & Sources", "Loading model sources from Aurora"],
   onboarding: ["Welcome to Aurora", "Detected installation"],

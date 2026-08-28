@@ -40,6 +40,17 @@ const expectedDependencyInventoryArtifactName = 'release-dependency-inventory'
 const expectedDependencyInventoryReportPath = 'apps/aurora-tauri/reports/release-dependency-inventory.json'
 const expectedTrustReportArtifactName = 'release-trust-policy'
 const expectedTrustReportPath = 'apps/aurora-tauri/reports/release-trust-policy.json'
+const releaseActionRefs = Object.freeze({
+  checkout: 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+  setupPython: 'actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065',
+  setupUv: 'astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86',
+  setupPnpm: 'pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1',
+  setupNode: 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+  rustToolchain: 'dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b',
+  installAction: 'taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d',
+  uploadArtifact: 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02',
+  semanticRelease: 'python-semantic-release/python-semantic-release@4d4cb0ab842247caea1963132c242c62aab1e4d5',
+})
 const sourceCommit = resolveReleaseSourceCommit(readOption('--source-commit') ?? 'HEAD')
 const nonPublicOrSpecialPurposeIPv4Ranges = [
   ['0.0.0.0', 8],
@@ -1773,7 +1784,7 @@ function isPythonSemanticReleaseAction(value) {
 }
 
 function isCanonicalPythonSemanticReleaseAction(value) {
-  return String(value).trim() === 'python-semantic-release/python-semantic-release@v10.4.1'
+  return String(value).trim() === releaseActionRefs.semanticRelease
 }
 
 function isSemanticReleaseAction(value) {
@@ -1832,7 +1843,7 @@ function shellCommandTokens(value) {
 }
 
 function isTrustReportUploadStep(step) {
-  return step.uses === 'actions/upload-artifact@v4' &&
+  return step.uses === releaseActionRefs.uploadArtifact &&
     step.if === 'always()' &&
     isAbsentOrCanonicalFalse(step.continueOnError) &&
     step.with.name === expectedTrustReportArtifactName &&
@@ -1868,7 +1879,7 @@ function isCanonicalDependencyInventoryStep(step) {
 }
 
 function isDependencyInventoryReportUploadStep(step) {
-  return step.uses === 'actions/upload-artifact@v4' &&
+  return step.uses === releaseActionRefs.uploadArtifact &&
     step.name === 'Upload release dependency inventory report' &&
     step.if === 'always()' &&
     isAbsentOrCanonicalFalse(step.continueOnError) &&
@@ -1892,13 +1903,13 @@ function isDependencyInventoryReportUploadCandidate(step) {
 
 function hasCanonicalPregateSetupSequence(steps) {
   return steps.length === 11 &&
-    isExactUsesStep(steps[0], 'actions/checkout@v4', { 'fetch-depth': '0' }, { name: '' }) &&
-    isExactUsesStep(steps[1], 'actions/setup-python@v5', { 'python-version': '3.11.11' }, { name: 'Set up Python' }) &&
-    isExactUsesStep(steps[2], 'astral-sh/setup-uv@v5', {}, { name: 'Install uv' }) &&
-    isExactUsesStep(steps[3], 'pnpm/action-setup@v4', {}, { name: 'Set up pnpm' }) &&
-    isExactUsesStep(steps[4], 'actions/setup-node@v4', { 'node-version': '24', cache: 'pnpm' }, { name: 'Set up Node' }) &&
-    isExactUsesStep(steps[5], 'dtolnay/rust-toolchain@1.88.0', { targets: 'wasm32-unknown-unknown' }, { name: 'Set up Rust for browser voice runtime' }) &&
-    isExactUsesStep(steps[6], 'taiki-e/install-action@v2', {
+    isExactUsesStep(steps[0], releaseActionRefs.checkout, { 'fetch-depth': '0' }, { name: '' }) &&
+    isExactUsesStep(steps[1], releaseActionRefs.setupPython, { 'python-version': '3.11.11' }, { name: 'Set up Python' }) &&
+    isExactUsesStep(steps[2], releaseActionRefs.setupUv, {}, { name: 'Install uv' }) &&
+    isExactUsesStep(steps[3], releaseActionRefs.setupPnpm, {}, { name: 'Set up pnpm' }) &&
+    isExactUsesStep(steps[4], releaseActionRefs.setupNode, { 'node-version': '24', cache: 'pnpm' }, { name: 'Set up Node' }) &&
+    isExactUsesStep(steps[5], releaseActionRefs.rustToolchain, { targets: 'wasm32-unknown-unknown' }, { name: 'Set up Rust for browser voice runtime' }) &&
+    isExactUsesStep(steps[6], releaseActionRefs.installAction, {
       tool: 'wasm-bindgen-cli@0.2.126',
       fallback: 'none',
     }, { name: 'Install pinned browser voice toolchain' }) &&
@@ -1924,7 +1935,7 @@ function hasCanonicalCreateReleaseSteps(steps) {
     env: { GH_TOKEN: '${{ secrets.PAT_RELEASE || github.token }}' },
   }
   return steps.length === 3 &&
-    isExactUsesStep(steps[0], 'actions/checkout@v4', {
+    isExactUsesStep(steps[0], releaseActionRefs.checkout, {
       'fetch-depth': '0',
       token: '${{ secrets.PAT_RELEASE || github.token }}',
     }, { name: '' }) &&
@@ -1935,13 +1946,13 @@ function hasCanonicalCreateReleaseSteps(steps) {
     (
       isExactUsesStep(
         steps[2],
-        'python-semantic-release/python-semantic-release@v10.4.1',
+        releaseActionRefs.semanticRelease,
         semanticReleaseWith,
         semanticReleaseOptions,
       ) ||
       isExactUsesStep(
         steps[2],
-        'python-semantic-release/python-semantic-release@v10.4.1',
+        releaseActionRefs.semanticRelease,
         semanticReleaseWith,
         { ...semanticReleaseOptions, id: 'release' },
       )
