@@ -18,6 +18,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::runtime::Builder as TokioRuntimeBuilder;
 use url::Url;
@@ -27,27 +28,58 @@ pub const AUDIO_BACKPRESSURE: jint = 1;
 pub const AUDIO_CLOSED: jint = 2;
 pub const AUDIO_INVALID_ARGUMENT: jint = -1;
 
-fn state_from_handle(handle: jlong) -> Option<&'static AndroidPcmIngress> {
-    if handle == 0 {
-        return None;
-    }
-    // The Kotlin owner joins the AudioRecord thread before nativeFree, so this
-    // opaque handle cannot be used after its Rust allocation is released.
-    Some(unsafe { &*(handle as *const AndroidPcmIngress) })
+static NEXT_NATIVE_HANDLE: AtomicI64 = AtomicI64::new(1);
+static PCM_HANDLES: OnceLock<Mutex<HashMap<jlong, AndroidPcmIngress>>> = OnceLock::new();
+static OUTPUT_HANDLES: OnceLock<Mutex<HashMap<jlong, AndroidAudioOutput>>> = OnceLock::new();
+static SESSION_HANDLES: OnceLock<Mutex<HashMap<jlong, Arc<AndroidVoiceSession>>>> = OnceLock::new();
+
+fn allocate_handle<T>(registry: &OnceLock<Mutex<HashMap<jlong, T>>>, value: T) -> jlong {
+    let Ok(handle) = NEXT_NATIVE_HANDLE.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+        (next < i64::MAX).then_some(next + 1)
+    }) else {
+        return 0;
+    };
+    let Ok(mut handles) = registry.get_or_init(|| Mutex::new(HashMap::new())).lock() else {
+        return 0;
+    };
+    handles.insert(handle, value);
+    handle
 }
 
-fn output_from_handle(handle: jlong) -> Option<&'static AndroidAudioOutput> {
+fn clone_handle<T: Clone>(
+    registry: &OnceLock<Mutex<HashMap<jlong, T>>>,
+    handle: jlong,
+) -> Option<T> {
     if handle == 0 {
         return None;
     }
-    Some(unsafe { &*(handle as *const AndroidAudioOutput) })
+    registry
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .ok()?
+        .get(&handle)
+        .cloned()
 }
 
-fn session_from_handle(handle: jlong) -> Option<&'static AndroidVoiceSession> {
+fn remove_handle<T>(registry: &OnceLock<Mutex<HashMap<jlong, T>>>, handle: jlong) {
     if handle == 0 {
-        return None;
+        return;
     }
-    Some(unsafe { &*(handle as *const AndroidVoiceSession) })
+    if let Ok(mut handles) = registry.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+        handles.remove(&handle);
+    }
+}
+
+fn state_from_handle(handle: jlong) -> Option<AndroidPcmIngress> {
+    clone_handle(&PCM_HANDLES, handle)
+}
+
+fn output_from_handle(handle: jlong) -> Option<AndroidAudioOutput> {
+    clone_handle(&OUTPUT_HANDLES, handle)
+}
+
+fn session_from_handle(handle: jlong) -> Option<Arc<AndroidVoiceSession>> {
+    clone_handle(&SESSION_HANDLES, handle)
 }
 
 fn session_error_code(error: AndroidVoiceSessionCommandError) -> jint {
@@ -417,10 +449,10 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
     capacity_chunks: jint,
     max_chunk_samples: jint,
 ) -> jlong {
-    Box::into_raw(Box::new(AndroidPcmIngress::new(
+    allocate_handle(&PCM_HANDLES, AndroidPcmIngress::new(
         capacity_chunks.max(0) as usize,
         max_chunk_samples.max(0) as usize,
-    ))) as jlong
+    ))
 }
 
 #[no_mangle]
@@ -501,9 +533,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
     _class: JClass<'_>,
     handle: jlong,
 ) {
-    if handle != 0 {
-        unsafe { drop(Box::from_raw(handle as *mut AndroidPcmIngress)) };
-    }
+    remove_handle(&PCM_HANDLES, handle);
 }
 
 #[no_mangle]
@@ -539,9 +569,10 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
     _class: JClass<'_>,
     capacity_chunks: jint,
 ) -> jlong {
-    Box::into_raw(Box::new(AndroidAudioOutput::new(
-        capacity_chunks.max(0) as usize
-    ))) as jlong
+    allocate_handle(
+        &OUTPUT_HANDLES,
+        AndroidAudioOutput::new(capacity_chunks.max(0) as usize),
+    )
 }
 
 #[no_mangle]
@@ -630,9 +661,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
     _class: JClass<'_>,
     handle: jlong,
 ) {
-    if handle != 0 {
-        unsafe { drop(Box::from_raw(handle as *mut AndroidAudioOutput)) };
-    }
+    remove_handle(&OUTPUT_HANDLES, handle);
 }
 
 /// Create the shared Rust voice executor. Credentials are accepted only from
@@ -671,7 +700,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return 0;
     };
     AndroidVoiceSession::new(config, 8, 4_096, 16)
-        .map(|session| Box::into_raw(Box::new(session)) as jlong)
+        .map(|session| allocate_handle(&SESSION_HANDLES, Arc::new(session)))
         .unwrap_or(0)
 }
 
@@ -760,7 +789,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         config = config.with_tts_reference_profile(profile);
     }
     AndroidVoiceSession::new(config, 8, 4_096, 16)
-        .map(|session| Box::into_raw(Box::new(session)) as jlong)
+        .map(|session| allocate_handle(&SESSION_HANDLES, Arc::new(session)))
         .unwrap_or(0)
 }
 
@@ -807,8 +836,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     _class: JClass<'_>,
     handle: jlong,
 ) -> jstring {
-    let Some(transcript) =
-        session_from_handle(handle).and_then(AndroidVoiceSession::take_focused_transcript)
+    let Some(transcript) = session_from_handle(handle)
+        .and_then(|session| session.take_focused_transcript())
     else {
         return ptr::null_mut();
     };
@@ -823,8 +852,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     _class: JClass<'_>,
     handle: jlong,
 ) -> jstring {
-    let Some(result) =
-        session_from_handle(handle).and_then(AndroidVoiceSession::take_background_result)
+    let Some(result) = session_from_handle(handle)
+        .and_then(|session| session.take_background_result())
     else {
         return ptr::null_mut();
     };
@@ -1096,7 +1125,22 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     _class: JClass<'_>,
     handle: jlong,
 ) {
-    if handle != 0 {
-        unsafe { drop(Box::from_raw(handle as *mut AndroidVoiceSession)) };
+    remove_handle(&SESSION_HANDLES, handle);
+}
+
+#[cfg(test)]
+mod handle_tests {
+    use super::*;
+
+    #[test]
+    fn native_handle_registry_rejects_stale_and_cross_type_handles() {
+        let handle = allocate_handle(&PCM_HANDLES, AndroidPcmIngress::new(2, 4));
+        assert_ne!(handle, 0);
+        assert!(state_from_handle(handle).is_some());
+        assert!(output_from_handle(handle).is_none());
+
+        remove_handle(&PCM_HANDLES, handle);
+        assert!(state_from_handle(handle).is_none());
+        remove_handle(&PCM_HANDLES, handle);
     }
 }

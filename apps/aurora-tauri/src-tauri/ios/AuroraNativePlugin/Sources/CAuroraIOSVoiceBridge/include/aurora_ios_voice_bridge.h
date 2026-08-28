@@ -120,8 +120,8 @@ void aurora_ios_audio_output_acknowledge(AuroraIosAudioOutput *output);
 void aurora_ios_audio_output_close(AuroraIosAudioOutput *output);
 
 // `gateway` and `bearer` are copied during this call. The returned session
-// owns its audio queues; borrowed state/output pointers remain valid only
-// until `aurora_ios_voice_session_free` is called.
+// owns its audio queues. The state/output accessors return independently owned
+// queue handles that must be released with their matching free functions.
 AuroraIosVoiceSession *aurora_ios_voice_session_new(
     const char *gateway,
     const char *bearer,

@@ -41,17 +41,16 @@ public final class AuroraIOSVoiceCapture {
     self.ownsState = true
   }
 
-  /// Create an audio host over a Rust voice session's borrowed ingress queue.
-  /// The session owner remains responsible for closing and freeing that queue.
+  /// Adopt a cloned Rust voice-session ingress queue handle.
   public init(
-    borrowingState state: OpaquePointer,
+    adoptingState state: OpaquePointer,
     session: AVAudioSession = .sharedInstance(),
     maxChunkSamples: Int = 4096
   ) {
     self.session = session
     self.maxChunkSamples = AVAudioFrameCount(max(1, maxChunkSamples))
     self.state = state
-    self.ownsState = false
+    self.ownsState = true
   }
 
   deinit {

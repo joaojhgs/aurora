@@ -698,25 +698,29 @@ pub unsafe extern "C" fn aurora_ios_voice_session_free(session: *mut IosVoiceSes
 }
 
 /// # Safety
-/// `session` must be null or a valid session pointer. The returned pointer is
-/// borrowed and becomes invalid when `session` is freed.
+/// `session` must be null or a valid session pointer. The returned pointer owns
+/// a cloned queue handle and must be released with `aurora_ios_audio_state_free`.
 #[no_mangle]
 pub unsafe extern "C" fn aurora_ios_voice_session_audio_state(
     session: *mut IosVoiceSession,
 ) -> *mut AuroraIosAudioState {
     // SAFETY: the caller guarantees that a non-null pointer is valid.
-    unsafe { session.as_ref() }.map_or(std::ptr::null_mut(), IosVoiceSession::audio_state_ptr)
+    unsafe { session.as_ref() }.map_or(std::ptr::null_mut(), |session| {
+        Box::into_raw(Box::new(session.audio_state()))
+    })
 }
 
 /// # Safety
-/// `session` must be null or a valid session pointer. The returned pointer is
-/// borrowed and becomes invalid when `session` is freed.
+/// `session` must be null or a valid session pointer. The returned pointer owns
+/// a cloned queue handle and must be released with `aurora_ios_audio_output_free`.
 #[no_mangle]
 pub unsafe extern "C" fn aurora_ios_voice_session_output(
     session: *mut IosVoiceSession,
 ) -> *mut AuroraIosAudioOutput {
     // SAFETY: the caller guarantees that a non-null pointer is valid.
-    unsafe { session.as_ref() }.map_or(std::ptr::null_mut(), IosVoiceSession::output_ptr)
+    unsafe { session.as_ref() }.map_or(std::ptr::null_mut(), |session| {
+        Box::into_raw(Box::new(session.output()))
+    })
 }
 
 /// # Safety

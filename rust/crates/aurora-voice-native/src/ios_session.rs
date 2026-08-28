@@ -655,18 +655,8 @@ impl IosVoiceSession {
         self.audio_state.clone()
     }
 
-    /// Return a borrowed opaque pointer valid while this session remains alive.
-    pub fn audio_state_ptr(&self) -> *mut AuroraIosAudioState {
-        (&self.audio_state as *const AuroraIosAudioState).cast_mut()
-    }
-
     pub fn output(&self) -> AuroraIosAudioOutput {
         self.output.clone()
-    }
-
-    /// Return a borrowed opaque pointer valid while this session remains alive.
-    pub fn output_ptr(&self) -> *mut AuroraIosAudioOutput {
-        (&self.output as *const AuroraIosAudioOutput).cast_mut()
     }
 
     pub fn capture_control(&self) -> AuroraIosCaptureControl {

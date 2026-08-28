@@ -22,6 +22,8 @@ public final class AuroraIOSVoicePlayback {
 
   deinit {
     stop()
+    aurora_ios_audio_output_close(output)
+    aurora_ios_audio_output_free(output)
   }
 
   public func start() throws {

@@ -14,6 +14,7 @@ use std::sync::{
 use thiserror::Error;
 
 const MAX_TTS_RECOVERY_SEGMENTS: usize = 32;
+const MAX_VOICE_TRANSITION_HISTORY: usize = 256;
 
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
@@ -783,6 +784,9 @@ impl VoiceStateMachine {
             at,
         };
         self.state = to;
+        if self.transitions.len() == MAX_VOICE_TRANSITION_HISTORY {
+            self.transitions.remove(0);
+        }
         self.transitions.push(transition.clone());
         Ok(transition)
     }
@@ -1899,7 +1903,6 @@ where
                 RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
             )?,
         };
-        let mut sample_frames = Vec::<Vec<f32>>::new();
         cancellation.check()?;
         while let Some(frame) = self.audio.next_frame().await? {
             if cancellation.is_cancelled() {
@@ -1914,17 +1917,10 @@ where
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
             }
-            sample_frames.push(frame.samples().to_vec());
+            stt_audio.push_frame(frame.samples())?;
         }
-        self.finish_voice_turn_with_builder(
-            lease,
-            at,
-            cancellation,
-            stt_binding,
-            stt_audio,
-            sample_frames,
-        )
-        .await
+        self.finish_voice_turn_with_builder(lease, at, cancellation, stt_binding, stt_audio)
+            .await
     }
 
     async fn finish_voice_transcription(
@@ -2020,7 +2016,7 @@ where
         {
             return Err(VoiceCoreError::Engine(EngineError::InvalidRequest));
         }
-        let stt_audio = match stt_binding.clone() {
+        let mut stt_audio = match stt_binding.clone() {
             FiniteSttProviderBinding::LocalTask(binding) => {
                 let task_request = BoundTaskRequest::new(
                     TaskRequest {
@@ -2036,15 +2032,12 @@ where
                 RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
             )?,
         };
-        self.finish_voice_turn_with_builder(
-            lease,
-            at,
-            cancellation,
-            stt_binding,
-            stt_audio,
-            sample_frames,
-        )
-        .await
+        for samples in sample_frames {
+            cancellation.check()?;
+            stt_audio.push_frame(&samples)?;
+        }
+        self.finish_voice_turn_with_builder(lease, at, cancellation, stt_binding, stt_audio)
+            .await
     }
 
     async fn finish_voice_turn_with_builder(
@@ -2054,12 +2047,7 @@ where
         cancellation: CancellationToken,
         stt_binding: FiniteSttProviderBinding,
         mut stt_audio: FiniteSttAudioBuilder,
-        sample_frames: Vec<Vec<f32>>,
     ) -> Result<String, VoiceCoreError> {
-        for samples in sample_frames {
-            cancellation.check()?;
-            stt_audio.push_frame(&samples)?;
-        }
         if cancellation.is_cancelled() {
             stt_audio.clear();
             return Err(VoiceCoreError::Cancelled);
@@ -2708,6 +2696,10 @@ mod tests {
 
         fn preparation_events(&self) -> Arc<Mutex<Vec<&'static str>>> {
             Arc::clone(&self.preparation_events)
+        }
+
+        fn remaining_frames(&self) -> usize {
+            self.frames.borrow().len()
         }
     }
 
@@ -3595,6 +3587,46 @@ mod tests {
     }
 
     #[test]
+    fn state_machine_bounds_transition_history_to_recent_events() -> Result<(), VoiceCoreError> {
+        let mut machine = VoiceStateMachine::new("desktop");
+        machine.transition(
+            VoiceState::Idle,
+            TransitionReason::Enable,
+            Generation(1),
+            RouteRevision(1),
+            TimestampMicros(0),
+        )?;
+        for index in 1..=MAX_VOICE_TRANSITION_HISTORY {
+            let (to, reason) = match index % 3 {
+                1 => (VoiceState::Suspended, TransitionReason::Suspend),
+                2 => (VoiceState::Recovering, TransitionReason::Recover),
+                _ => (VoiceState::Idle, TransitionReason::Provisioned),
+            };
+            machine.transition(
+                to,
+                reason,
+                Generation(1),
+                RouteRevision(1),
+                TimestampMicros(index as u64),
+            )?;
+        }
+
+        assert_eq!(machine.transitions().len(), MAX_VOICE_TRANSITION_HISTORY);
+        assert_eq!(
+            machine
+                .transitions()
+                .first()
+                .map(|transition| transition.at),
+            Some(TimestampMicros(1))
+        );
+        assert_eq!(
+            machine.transitions().last().map(|transition| transition.at),
+            Some(TimestampMicros(MAX_VOICE_TRANSITION_HISTORY as u64))
+        );
+        Ok(())
+    }
+
+    #[test]
     fn assistant_turn_ids_include_validated_runtime_namespace() -> Result<(), VoiceCoreError> {
         let native = AssistantTurnNamespace::new("native-runtime")?;
         let web = AssistantTurnNamespace::new("web.runtime")?;
@@ -3824,6 +3856,43 @@ mod tests {
         assert!(output_probe.played_generations().is_empty());
         assert_eq!(runtime.state(), VoiceState::Idle);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn push_to_talk_stops_reading_when_finite_stt_audio_reaches_its_cap() {
+        let frames = (0..162)
+            .map(|sequence| {
+                frame_with_samples(sequence, Generation(1), vec![0.1; 1_000]).expect("valid frame")
+            })
+            .collect();
+        let audio = FakeAudioInput::new(frames);
+        let audio_probe = audio.clone();
+        let engine = FakeEngine::new("unused");
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "android",
+            "bounded-push-to-talk-test",
+        )
+        .expect("runtime");
+
+        let result = runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::Engine(EngineError::InvalidRequest))
+        ));
+        assert_eq!(audio_probe.remaining_frames(), 1);
     }
 
     #[tokio::test]

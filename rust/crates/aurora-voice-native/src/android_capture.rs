@@ -237,6 +237,7 @@ pub struct AndroidAudioInput {
     route_revision: RouteRevision,
     started_at: TimestampMicros,
     next_sequence: u64,
+    emitted_samples: u64,
     expected_ingress_sequence: Option<u64>,
 }
 
@@ -287,6 +288,7 @@ impl AndroidAudioInput {
             route_revision: RouteRevision(0),
             started_at: TimestampMicros(0),
             next_sequence: 0,
+            emitted_samples: 0,
             expected_ingress_sequence: None,
         }
     }
@@ -314,6 +316,7 @@ impl AudioInput for AndroidAudioInput {
         self.route_revision = lease.route_revision;
         self.started_at = lease.created_at;
         self.next_sequence = 0;
+        self.emitted_samples = 0;
         self.expected_ingress_sequence = None;
         self.control.set_generation(self.active_generation);
         Ok(())
@@ -346,11 +349,12 @@ impl AudioInput for AndroidAudioInput {
                         .into_iter()
                         .map(|sample| f32::from(sample) / 32_768.0)
                         .collect::<Vec<_>>();
-                    let timestamp = TimestampMicros(
-                        self.started_at
-                            .0
-                            .saturating_add(self.next_sequence.saturating_mul(1_000_000) / 16_000),
-                    );
+                    let timestamp =
+                        TimestampMicros(self.started_at.0.saturating_add(
+                            self.emitted_samples.saturating_mul(1_000_000) / 16_000,
+                        ));
+                    self.emitted_samples =
+                        self.emitted_samples.saturating_add(samples.len() as u64);
                     let frame = PcmFrame::new(
                         samples,
                         timestamp,
@@ -519,6 +523,14 @@ mod tests {
         assert_eq!(frame.generation(), Generation(9));
         assert_eq!(frame.route_revision(), RouteRevision(3));
         assert_eq!(frame.samples(), &[0.5, -0.5]);
+        assert_eq!(frame.timestamp(), TimestampMicros(100));
+        ingress.push(&[1, 2, 3, 4], 5);
+        let second = input
+            .next_frame()
+            .await
+            .expect("second frame")
+            .expect("second frame");
+        assert_eq!(second.timestamp(), TimestampMicros(225));
         input.control().finish(Generation(9));
         assert!(input.next_frame().await.expect("finish frame").is_none());
     }

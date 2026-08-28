@@ -123,7 +123,7 @@ public final class AuroraIOSVoiceSessionHost {
     self.audioSession = audioSession
     self.boundTaskPacks = boundPacks
     self.capture = AuroraIOSVoiceCapture(
-      borrowingState: state,
+      adoptingState: state,
       session: audioSession
     )
     if let output = self.output {
@@ -310,8 +310,8 @@ public final class AuroraIOSVoiceSessionHost {
     playback?.stop()
     playback = nil
     capture?.stop()
-    // Destroy the Swift audio host while the Rust-owned borrowed queue is
-    // still valid, then close and free the opaque Rust session.
+    // Destroy the Swift audio hosts and their cloned queue handles before
+    // closing and freeing the opaque Rust session.
     capture = nil
     if let nativeSession {
       aurora_ios_voice_session_close(nativeSession)

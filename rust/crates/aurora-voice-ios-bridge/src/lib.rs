@@ -127,7 +127,9 @@ impl AuroraIosAudioState {
         {
             return AURORA_IOS_AUDIO_INVALID_ARGUMENT;
         }
-        let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
+        let Ok(mut inner) = self.inner.lock() else {
+            return AURORA_IOS_AUDIO_CLOSED;
+        };
         if inner.stats.closed != 0 {
             return AURORA_IOS_AUDIO_CLOSED;
         }
@@ -153,7 +155,9 @@ impl AuroraIosAudioState {
 
     /// Drain one owned chunk for a native runtime adapter.
     pub fn drain_chunk(&self) -> Option<AuroraIosAudioChunk> {
-        let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
+        let Ok(mut inner) = self.inner.lock() else {
+            return None;
+        };
         inner.queue.pop_front().map(|chunk| AuroraIosAudioChunk {
             samples: chunk.samples,
             sequence: chunk.sequence,
@@ -166,13 +170,16 @@ impl AuroraIosAudioState {
     }
 
     pub fn close(&self) {
-        let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
-        inner.stats.closed = 1;
-        inner.queue.clear();
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.stats.closed = 1;
+            inner.queue.clear();
+        }
     }
 
     fn reset(&self) -> i32 {
-        let mut inner = self.inner.lock().expect("iOS audio state mutex poisoned");
+        let Ok(mut inner) = self.inner.lock() else {
+            return AURORA_IOS_AUDIO_CLOSED;
+        };
         if inner.stats.closed != 0 {
             return AURORA_IOS_AUDIO_CLOSED;
         }
@@ -182,7 +189,12 @@ impl AuroraIosAudioState {
     }
 
     fn stats(&self) -> AuroraIosAudioStats {
-        let inner = self.inner.lock().expect("iOS audio state mutex poisoned");
+        let Ok(inner) = self.inner.lock() else {
+            return AuroraIosAudioStats {
+                closed: 1,
+                ..AuroraIosAudioStats::default()
+            };
+        };
         let mut stats = inner.stats;
         stats.queued_chunks = inner.queue.len() as u32;
         stats
@@ -240,6 +252,7 @@ pub struct AuroraIosAudioInput {
     route_revision: RouteRevision,
     started_at: TimestampMicros,
     next_sequence: u64,
+    emitted_samples: u64,
     expected_ingress_sequence: Option<u64>,
 }
 
@@ -252,6 +265,7 @@ impl AuroraIosAudioInput {
             route_revision: RouteRevision(0),
             started_at: TimestampMicros(0),
             next_sequence: 0,
+            emitted_samples: 0,
             expected_ingress_sequence: None,
         }
     }
@@ -275,6 +289,7 @@ impl AudioInput for AuroraIosAudioInput {
         self.route_revision = lease.route_revision;
         self.started_at = lease.created_at;
         self.next_sequence = 0;
+        self.emitted_samples = 0;
         self.expected_ingress_sequence = None;
         self.control.set_generation(self.active_generation);
         Ok(())
@@ -302,9 +317,10 @@ impl AudioInput for AuroraIosAudioInput {
                 self.expected_ingress_sequence = Some(chunk.sequence.saturating_add(1));
                 let samples = resample_to_runtime_rate(&chunk.samples, chunk.sample_rate_hz)?;
                 let timestamp = TimestampMicros(self.started_at.0.saturating_add(
-                    self.next_sequence.saturating_mul(1_000_000)
+                    self.emitted_samples.saturating_mul(1_000_000)
                         / u64::from(IOS_RUNTIME_SAMPLE_RATE_HZ),
                 ));
+                self.emitted_samples = self.emitted_samples.saturating_add(samples.len() as u64);
                 let frame = PcmFrame::new(
                     samples,
                     timestamp,
@@ -782,6 +798,23 @@ mod tests {
     }
 
     #[test]
+    fn poisoned_audio_state_fails_closed_without_panicking() {
+        let state = AuroraIosAudioState::new(2, 2);
+        let poisoned = Arc::clone(&state.inner);
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoned.lock().expect("lock before poisoning");
+            panic!("poison test lock");
+        })
+        .join();
+
+        assert_eq!(state.push_pcm(&[0.0], 1, 16_000), AURORA_IOS_AUDIO_CLOSED);
+        assert!(state.drain_chunk().is_none());
+        assert_eq!(state.reset(), AURORA_IOS_AUDIO_CLOSED);
+        assert_eq!(state.stats().closed, 1);
+        state.close();
+    }
+
+    #[test]
     fn resampling_normalizes_non_16khz_capture() {
         let output = resample_to_runtime_rate(&[0.0, 1.0, 0.0], 8_000).expect("resample");
         assert_eq!(output.len(), 6);
@@ -817,6 +850,17 @@ mod tests {
         assert_eq!(frame.sequence(), 0);
         assert!(!frame.discontinuity());
         assert_eq!(frame.samples(), &[0.0, 0.5]);
+        assert_eq!(frame.timestamp(), TimestampMicros(100));
+        assert_eq!(
+            input.state.push_pcm(&[0.25, 0.5, 0.75, 1.0], 5, 16_000),
+            AURORA_IOS_AUDIO_OK
+        );
+        let second = input
+            .next_frame()
+            .await
+            .expect("second frame")
+            .expect("second frame");
+        assert_eq!(second.timestamp(), TimestampMicros(225));
         input.control().finish(Generation(7));
         assert!(input.next_frame().await.expect("finish").is_none());
     }
