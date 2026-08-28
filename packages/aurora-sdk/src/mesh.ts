@@ -561,17 +561,52 @@ function readRemoteMeshCode(error: unknown): string | null {
   return null
 }
 
+const REMOTE_MESH_CODE_CLASSIFICATIONS: Readonly<Record<string, AuroraErrorCode>> = {
+  auth: 'auth',
+  unauthenticated: 'auth',
+  authentication_required: 'auth',
+  peer_not_authenticated: 'auth',
+  reauth_required: 'auth',
+  token_invalid: 'auth',
+  token_expired: 'auth',
+  permission: 'permission',
+  permission_denied: 'permission',
+  forbidden: 'permission',
+  grant_not_found: 'permission',
+  grant_expired: 'permission',
+  grant_revoked: 'permission',
+  peer_authority_revoked: 'permission',
+  privacy_blocked: 'privacy_blocked',
+  privacy_denied: 'privacy_blocked',
+  native_permission_missing: 'native_permission_missing',
+  native_permission_denied: 'native_permission_missing',
+  native_permission_unavailable: 'native_permission_missing',
+  validation: 'validation',
+  schema_validation_failed: 'validation',
+  contract_validation_failed: 'validation',
+  invalid_request: 'validation',
+  invalid_params: 'validation',
+  request_invalid: 'validation',
+  timeout: 'timeout',
+  timed_out: 'timeout',
+  request_timeout: 'timeout',
+  transport_loss: 'transport_loss',
+  channel_closed: 'transport_loss',
+  datachannel_closed: 'transport_loss',
+  data_channel_closed: 'transport_loss',
+  connection_closed: 'transport_loss',
+  unsupported: 'unsupported_feature',
+  unsupported_feature: 'unsupported_feature',
+  method_not_supported: 'unsupported_feature',
+  unavailable_service: 'unavailable_service',
+  service_unavailable: 'unavailable_service',
+  provider_unavailable: 'unavailable_service',
+  provider_not_ready: 'unavailable_service',
+  no_route: 'unavailable_service'
+}
+
 function classifyStructuredMeshCode(code: string): AuroraErrorCode | null {
-  if (code.includes('native_permission')) return 'native_permission_missing'
-  if (code.includes('privacy')) return 'privacy_blocked'
-  if (code.includes('permission') || code.includes('forbidden')) return 'permission'
-  if (code.includes('auth') || code === 'unauthenticated') return 'auth'
-  if (code.includes('validation') || code === 'invalid_request') return 'validation'
-  if (code.includes('timeout') || code.includes('timed_out')) return 'timeout'
-  if (code.includes('transport_loss') || code.includes('channel_closed') || code.includes('datachannel_closed')) return 'transport_loss'
-  if (code.includes('unsupported')) return 'unsupported_feature'
-  if (code.includes('unavailable') || code === 'no_route') return 'unavailable_service'
-  return null
+  return REMOTE_MESH_CODE_CLASSIFICATIONS[code] ?? null
 }
 
 function classifyMeshStatus(status: number): AuroraErrorCode {

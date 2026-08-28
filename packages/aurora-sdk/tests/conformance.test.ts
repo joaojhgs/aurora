@@ -271,6 +271,20 @@ describe('SDK transport conformance', () => {
     expect(structuredResult.ok).toBe(false)
     if (!structuredResult.ok) expect(structuredResult.error.code).toBe('permission')
 
+    const structuredSubstring = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { reason_code: 'not_permission_denied_but_contains_it', message: 'access denied' } }
+          }
+        }
+      })
+    })
+    const substringResult = await structuredSubstring.requestResult('Gateway.GetRegistry')
+    expect(substringResult.ok).toBe(false)
+    if (!substringResult.ok) expect(substringResult.error.code).toBe('unknown')
+
     const numericStatus = new AuroraClient({
       transport: new MeshP2PTransport({
         defaultPeerId: 'peer-conformance',
