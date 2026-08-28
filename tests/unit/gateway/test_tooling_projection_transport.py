@@ -519,6 +519,10 @@ async def test_gateway_page_proxy_addresses_stable_peer_and_stamps_authority_rev
     assert call.kwargs["caller_peer_id"] == "stable-local"
     assert call.kwargs["auth_grant_revision"] == 17
     assert call.kwargs["manifest_revision"] == 23
+    assert call.kwargs["effective_perms"] == [
+        "Native.GetDeviceStatus",
+        "Tooling.GetExportCatalog",
+    ]
     assert "provider_peer_id" not in call.args[2].model_dump()
 
 

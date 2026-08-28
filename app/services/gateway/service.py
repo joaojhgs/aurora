@@ -2900,7 +2900,7 @@ class GatewayService(BaseService):
             request.request,
             timeout=30.0,
             principal_id=f"mesh:{local_peer_id}",
-            effective_perms=["Tooling.use"],
+            effective_perms=list(granted_permissions),
             identity_source="gateway_tooling_projection_proxy",
             method_type="use",
             caller_peer_id=local_peer_id,
