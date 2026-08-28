@@ -833,7 +833,12 @@ class AuthManager:
     ) -> str | None:
         """Create one idempotent request even under concurrent RPC retries."""
         attempt_key = trusted_rate_limit_key or _UNATTRIBUTED_PAIRING_RATE_KEY
-        async with self._pairing_operation_lock(f"start:{attempt_key}"):
+        if pairing_session_id and remote_peer_id and room_name:
+            stable_mesh_key = hashlib.sha256(f"{remote_peer_id}\0{room_name}".encode()).hexdigest()
+            start_lock_key = f"start:mesh:{stable_mesh_key}"
+        else:
+            start_lock_key = f"start:{attempt_key}"
+        async with self._pairing_operation_lock(start_lock_key):
             return await self._start_pairing_locked(
                 device_name,
                 client_ip,
@@ -896,21 +901,33 @@ class AuthManager:
             # PairingStart can be retried when an RPC response is lost. Return
             # the same opaque handle only when the entire transport-bound
             # request is identical; conflicting reuse is a protocol error.
+            duplicate_session_code: str | None = None
             for existing_code, existing in self.pairing_requests.items():
                 if existing.get("pairing_session_id") != pairing_session_id:
                     continue
-                identical = (
-                    existing.get("rate_limit_key") == attempt_key
-                    and existing.get("device_name") == device_name
-                    and existing.get("remote_peer_id", "") == remote_peer_id
-                    and existing.get("remote_node_name", "") == remote_node_name
-                    and existing.get("room_name", "") == room_name
-                    and existing.get("verification_code", "") == verification_code
-                )
-                if identical:
-                    return existing_code
-                log_warning("Rejected conflicting duplicate pairing session")
-                return None
+                duplicate_session_code = existing_code
+                break
+
+            if duplicate_session_code is not None:
+                async with self._pairing_operation_lock(f"pairing:{duplicate_session_code}"):
+                    existing = self.pairing_requests.get(duplicate_session_code)
+                    if existing is None:
+                        return None
+                    if existing.get("pairing_session_id") != pairing_session_id:
+                        log_warning("Rejected conflicting duplicate pairing session")
+                        return None
+                    identical = (
+                        existing.get("rate_limit_key") == attempt_key
+                        and existing.get("device_name") == device_name
+                        and existing.get("remote_peer_id", "") == remote_peer_id
+                        and existing.get("remote_node_name", "") == remote_node_name
+                        and existing.get("room_name", "") == room_name
+                        and existing.get("verification_code", "") == verification_code
+                    )
+                    if identical:
+                        return duplicate_session_code
+                    log_warning("Rejected conflicting duplicate pairing session")
+                    return None
 
             # A reconnect creates a new channel transcript while the user may
             # still be comparing or approving the prior request. Keep that
@@ -918,6 +935,7 @@ class AuthManager:
             # creating another approval row. If the first side already approved,
             # the approved status and grants must survive the retry.
             if trusted_rate_limit_key:
+                reconnect_code: str | None = None
                 for existing_code, existing in self.pairing_requests.items():
                     if (
                         not existing.get("pairing_session_id")
@@ -926,24 +944,41 @@ class AuthManager:
                         or existing.get("room_name") != room_name
                     ):
                         continue
-                    previous_key = existing.get("rate_limit_key") or _UNATTRIBUTED_PAIRING_RATE_KEY
-                    if previous_key != attempt_key:
-                        self._release_pairing_attempt(existing)
-                        self.pairing_attempts[attempt_key] = (
-                            self.pairing_attempts.get(attempt_key, 0) + 1
-                        )
-                    existing.update(
-                        {
-                            "device_name": device_name,
-                            "client_ip": client_ip,
-                            "rate_limit_key": attempt_key,
-                            "remote_node_name": remote_node_name,
-                            "pairing_session_id": pairing_session_id,
-                            "verification_code": verification_code,
-                            "expires_at": now + timedelta(minutes=5),
-                        }
-                    )
-                    return existing_code
+                    reconnect_code = existing_code
+                    break
+
+                if reconnect_code is not None:
+                    async with self._pairing_operation_lock(f"pairing:{reconnect_code}"):
+                        existing = self.pairing_requests.get(reconnect_code)
+                        if (
+                            existing is None
+                            or not existing.get("pairing_session_id")
+                            or existing.get("status") not in {"pending", "approved"}
+                            or existing.get("remote_peer_id") != remote_peer_id
+                            or existing.get("room_name") != room_name
+                        ):
+                            existing = None
+                        if existing is not None:
+                            previous_key = (
+                                existing.get("rate_limit_key") or _UNATTRIBUTED_PAIRING_RATE_KEY
+                            )
+                            if previous_key != attempt_key:
+                                self._release_pairing_attempt(existing)
+                                self.pairing_attempts[attempt_key] = (
+                                    self.pairing_attempts.get(attempt_key, 0) + 1
+                                )
+                            existing.update(
+                                {
+                                    "device_name": device_name,
+                                    "client_ip": client_ip,
+                                    "rate_limit_key": attempt_key,
+                                    "remote_node_name": remote_node_name,
+                                    "pairing_session_id": pairing_session_id,
+                                    "verification_code": verification_code,
+                                    "expires_at": now + timedelta(minutes=5),
+                                }
+                            )
+                            return reconnect_code
 
             if not await self.upsert_mesh_peer(
                 peer_id=remote_peer_id,

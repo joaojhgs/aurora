@@ -349,6 +349,87 @@ async def test_unrelated_pairing_start_does_not_wait_for_exchange(auth_service):
 
 
 @pytest.mark.asyncio
+async def test_same_mesh_peer_reconnect_cannot_rebind_exchange_session(auth_service):
+    """Credential issuance keeps the SAS transcript that the admin approved."""
+    stable_peer_id = "stable-peer-a"
+    room_name = "private-mesh-room"
+    original_session = "a" * 64
+    original_source = "webrtc:old-signaling-session"
+    auth_service._bus_router.on(
+        DBMethods.APPROVE_MESH_PEER,
+        _ok({"success": True, "approved_rooms": [room_name], "authority_changes": []}),
+    )
+
+    issue_entered = asyncio.Event()
+    reconnect_preflight_complete = asyncio.Event()
+    release_issue = asyncio.Event()
+    router = auth_service._bus_router
+
+    async def blocked_issue_router(topic, payload, **kwargs):
+        if topic == DBMethods.ISSUE_MESH_PEER_CREDENTIAL:
+            issue_entered.set()
+            await release_issue.wait()
+            return _ok({"success": True, "authority_changes": []})
+        if topic == DBMethods.EXECUTE_SQL and issue_entered.is_set():
+            reconnect_preflight_complete.set()
+        return router(topic, payload, **kwargs)
+
+    auth_service.bus.request = AsyncMock(side_effect=blocked_issue_router)
+    pairing_code = await auth_service.start_pairing(
+        "Aurora 1",
+        "unknown",
+        remote_peer_id=stable_peer_id,
+        remote_node_name="Aurora 1",
+        room_name=room_name,
+        pairing_session_id=original_session,
+        verification_code="11112222",
+        trusted_rate_limit_key=original_source,
+    )
+    assert pairing_code is not None
+    assert await auth_service.approve_pairing(pairing_code, "admin") is True
+
+    exchange_task = asyncio.create_task(
+        auth_service.exchange_pairing(
+            pairing_code,
+            pairing_session_id=original_session,
+            trusted_rate_limit_key=original_source,
+        )
+    )
+    await issue_entered.wait()
+    reconnect_task = asyncio.create_task(
+        auth_service.start_pairing(
+            "Aurora 1",
+            "unknown",
+            remote_peer_id=stable_peer_id,
+            remote_node_name="Aurora 1",
+            room_name=room_name,
+            pairing_session_id="b" * 64,
+            verification_code="33334444",
+            trusted_rate_limit_key="webrtc:new-signaling-session",
+        )
+    )
+
+    try:
+        await reconnect_preflight_complete.wait()
+        await asyncio.sleep(0)
+        assert reconnect_task.done() is False
+    finally:
+        release_issue.set()
+
+    exchange_result = await exchange_task
+    reconnect_code = await reconnect_task
+
+    assert exchange_result is not None
+    assert reconnect_code is not None
+    assert reconnect_code != pairing_code
+    exchanged_request = auth_service.pairing_requests[pairing_code]
+    assert exchanged_request["status"] == "exchanged"
+    assert exchanged_request["pairing_session_id"] == original_session
+    assert exchanged_request["rate_limit_key"] == original_source
+    assert auth_service.pairing_requests[reconnect_code]["pairing_session_id"] == "b" * 64
+
+
+@pytest.mark.asyncio
 async def test_pairing_lifecycle_logs_do_not_expose_codes(auth_service):
     with patch("app.services.auth.auth_manager.log_info") as log_info:
         approved_code = await auth_service.start_pairing("Approved Device", "127.0.0.1")
