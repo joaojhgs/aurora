@@ -66,7 +66,7 @@ type PendingSubscribe = {
   resolve(value: SubscribeAck): void
   reject(error: unknown): void
   timer: unknown
-  cleanup(): void
+  cleanup(options?: { keepAbortListener?: boolean }): void
 }
 
 type PendingManifest = {
@@ -153,6 +153,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly localProtocol: ProtocolHello
   private reassembler: FragmentReassembler
   private readonly timers = new Set<unknown>()
+  private manifestWaiterSequence = 0
+  private generatedFrameSequence = 0
   private remoteProtocol: NegotiatedPeerProtocol | null = null
   private closed = false
   private manifest: MeshPeerManifest | null = null
@@ -228,7 +230,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.assertOpen()
     this.assertPeer(request.peerId)
     if (request.signal?.aborted) throw abortError()
-    const id = request.correlationId ?? this.randomId()
+    const id = this.resolveOutboundFrameId(request.correlationId, 'call')
     const frame: Record<string, unknown> = {
       type: 'call',
       id,
@@ -295,10 +297,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       throw new Error('correlation_id is required for scoped event topics')
     }
     if (request.signal?.aborted) throw abortError()
-    const id = this.randomId()
+    const id = this.allocateOutboundFrameId()
     const stream: StreamController = { id, topics, correlationIds, queue: [], waiters: [], done: false, error: null }
     const abort = () => {
       this.cancelSubscription(id, abortError())
+      this.failStream(stream, abortError())
       void this.sendLogicalFrame({ type: 'unsubscribe', id }).catch(() => undefined)
     }
     request.signal?.addEventListener('abort', abort, { once: true })
@@ -335,10 +338,14 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (!this.manifestParser) return null
     if (this.pendingManifests.size > 0) {
       return await new Promise<MeshPeerManifest | null>((resolve, reject) => {
-        this.pendingManifests.set(`wait-${this.pendingManifests.size + 1}`, {
+        const key = this.nextManifestWaiterId()
+        this.pendingManifests.set(key, {
           resolve,
           reject,
-          timer: this.armTimer(this.timeoutMs, () => reject(new TimeoutError('WebRTC mesh manifest request timed out')))
+          timer: this.armTimer(this.timeoutMs, () => {
+            this.pendingManifests.delete(key)
+            reject(new TimeoutError('WebRTC mesh manifest request timed out'))
+          })
         })
       })
     }
@@ -431,9 +438,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private async openSubscription(id: string, topics: string[], correlationIds: string[], timeoutMs: number, signal?: AbortSignal, abortListener?: () => void): Promise<void> {
     const ack = await new Promise<SubscribeAck>((resolve, reject) => {
       let pending: PendingSubscribe
-      const cleanup = () => {
+      const cleanup = (options: { keepAbortListener?: boolean } = {}) => {
         this.clearTimer(pending.timer)
-        if (abortListener) signal?.removeEventListener('abort', abortListener)
+        if (!options.keepAbortListener && abortListener) signal?.removeEventListener('abort', abortListener)
       }
       pending = {
         id,
@@ -487,7 +494,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.assertOpen()
     this.assertPeer(request.peerId)
     if (request.signal?.aborted) throw abortError()
-    const id = request.correlationId ?? this.randomId()
+    const id = this.resolveOutboundFrameId(request.correlationId, 'stream')
     const timeoutMs = request.timeoutMs || this.timeoutMs
     const stream: RpcStreamController = {
       id,
@@ -804,6 +811,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     stream.completed = true
     stream.done = true
     this.clearTimer(stream.timer)
+    this.removeRpcStreamAbortListener(stream)
     this.wakeRpcStream(stream)
     return true
   }
@@ -814,6 +822,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     stream.completed = true
     stream.done = true
     this.clearTimer(stream.timer)
+    this.removeRpcStreamAbortListener(stream)
     this.wakeRpcStream(stream)
     return true
   }
@@ -829,6 +838,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     if (stream.done) return
     stream.error = error
     stream.done = true
+    this.removeRpcStreamAbortListener(stream)
     this.wakeRpcStream(stream)
   }
 
@@ -839,7 +849,13 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private cleanupRpcStream(stream: RpcStreamController): void {
     this.rpcStreams.delete(stream.id)
     this.clearTimer(stream.timer)
-    if (stream.abortListener) stream.signal?.removeEventListener('abort', stream.abortListener)
+    this.removeRpcStreamAbortListener(stream)
+  }
+
+  private removeRpcStreamAbortListener(stream: RpcStreamController): void {
+    if (!stream.abortListener) return
+    stream.signal?.removeEventListener('abort', stream.abortListener)
+    stream.abortListener = undefined
   }
 
   private async sendRpcStreamCancel(stream: RpcStreamController): Promise<void> {
@@ -896,7 +912,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     const pending = this.pendingSubscribes.get(frame.id)
     if (!pending) return
     this.pendingSubscribes.delete(frame.id)
-    pending.cleanup()
+    pending.cleanup({ keepAbortListener: true })
     try {
       const acceptedTopics = normalizeTopics(frame.accepted_topics)
       const acceptedCorrelations = normalizeCorrelationIds(frame.correlation_ids)
@@ -1063,7 +1079,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
 
   private async waitForIncomingManifest(): Promise<MeshPeerManifest | null> {
     return await new Promise<MeshPeerManifest | null>((resolve, reject) => {
-      const key = `wait-${this.pendingManifests.size + 1}`
+      const key = this.nextManifestWaiterId()
       this.pendingManifests.set(key, {
         resolve,
         reject,
@@ -1224,6 +1240,45 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
 
   private clearAllTimers(): void {
     for (const timer of [...this.timers]) this.clearTimer(timer)
+  }
+
+  private allocateOutboundFrameId(): string {
+    let lastCandidate = ''
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      const id = requireIdentifier(this.randomId(), 'generated frame id')
+      lastCandidate = id
+      if (!this.isOutboundFrameIdInUse(id)) return id
+    }
+    for (let attempt = 0; attempt < 1024; attempt += 1) {
+      this.generatedFrameSequence += 1
+      const id = `${lastCandidate}-${this.generatedFrameSequence}`
+      if (!this.isOutboundFrameIdInUse(id)) return id
+    }
+    throw new Error('WebRTC mesh generated frame id collision')
+  }
+
+  private resolveOutboundFrameId(provided: string | undefined, operation: 'call' | 'stream'): string {
+    if (provided === undefined) return this.allocateOutboundFrameId()
+    const id = requireIdentifier(provided, 'correlationId')
+    if (this.isOutboundFrameIdInUse(id)) throw new Error(`duplicate WebRTC mesh ${operation} correlation id`)
+    return id
+  }
+
+  private isOutboundFrameIdInUse(id: string): boolean {
+    return this.pending.has(id)
+      || this.pendingSubscribes.has(id)
+      || this.pendingManifests.has(id)
+      || this.streams.has(id)
+      || this.rpcStreams.has(id)
+  }
+
+  private nextManifestWaiterId(): string {
+    for (let attempt = 0; attempt < 1024; attempt += 1) {
+      this.manifestWaiterSequence += 1
+      const id = `manifest-wait-${this.manifestWaiterSequence}`
+      if (!this.pendingManifests.has(id)) return id
+    }
+    throw new Error('WebRTC mesh manifest waiter id collision')
   }
 
   private assertOpen(): void {

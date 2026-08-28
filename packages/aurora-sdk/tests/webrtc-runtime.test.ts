@@ -268,11 +268,12 @@ describe('browser WebRTC Aurora runtime facade', () => {
             : code === 'permission'
               ? 'permission denied'
               : 'programming invariant violated'
+      const reasonCode = code === 'unknown' ? undefined : code
       channel.receive(await encodeInbound({
         type: 'error',
         id: call.id,
         correlation_id: call.correlation_id,
-        error: { code: 500, message }
+        error: { code: 500, reason_code: reasonCode, message }
       }))
       if (shouldFallback) {
         await expect(request).resolves.toMatchObject({ via: 'http-fallback' })
@@ -306,7 +307,7 @@ describe('browser WebRTC Aurora runtime facade', () => {
       type: 'error',
       id: call.id,
       correlation_id: call.correlation_id,
-      error: { code: 500, message: 'transport datachannel not connected after partial send' }
+      error: { code: 500, reason_code: 'transport_loss', message: 'transport datachannel not connected after partial send' }
     }))
 
     await expect(request).resolves.toMatchObject({ ok: false, error: expect.objectContaining({ code: 'transport_loss' }) })
@@ -331,7 +332,7 @@ describe('browser WebRTC Aurora runtime facade', () => {
       type: 'error',
       id: call.id,
       correlation_id: call.correlation_id,
-      error: { code: 500, message: 'transport datachannel not connected before response' }
+      error: { code: 500, reason_code: 'transport_loss', message: 'transport datachannel not connected before response' }
     }))
 
     await expect(request).resolves.toMatchObject({ via: 'http-fallback' })

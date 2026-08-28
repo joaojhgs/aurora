@@ -242,6 +242,50 @@ describe('SDK transport conformance', () => {
     }
   })
 
+  it('classifies mesh peer errors from structured fields, not generic message text', async () => {
+    const messageOnly = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { message: 'forbidden unavailable unsupported timeout privacy auth validation' } }
+          }
+        }
+      })
+    })
+    const messageOnlyResult = await messageOnly.requestResult('Gateway.GetRegistry')
+    expect(messageOnlyResult.ok).toBe(false)
+    if (!messageOnlyResult.ok) expect(messageOnlyResult.error.code).toBe('unknown')
+
+    const structuredReason = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { reason_code: 'permission_denied', message: 'access denied' } }
+          }
+        }
+      })
+    })
+    const structuredResult = await structuredReason.requestResult('Gateway.GetRegistry')
+    expect(structuredResult.ok).toBe(false)
+    if (!structuredResult.ok) expect(structuredResult.error.code).toBe('permission')
+
+    const numericStatus = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { message: 'peer rejected request', status: 503 } }
+          }
+        }
+      })
+    })
+    const statusResult = await numericStatus.requestResult('Gateway.GetRegistry')
+    expect(statusResult.ok).toBe(false)
+    if (!statusResult.ok) expect(statusResult.error.code).toBe('unavailable_service')
+  })
+
   it('compares SDK registry fixtures against the generated backend inventory snapshot', () => {
     const generated = describeBackendInventory(backendInventoryFixture)
     const comparison = compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture)

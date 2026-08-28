@@ -185,7 +185,7 @@ export class MeshP2PTransport implements AuroraTransport {
     try {
       const response = await this.bridge.call<TPayload>(callRequest)
       const envelope = toMeshEnvelope<TData>(response, request, resolution.peerId, candidates)
-      if (envelope.error !== undefined) throw meshError(classifyMeshError(envelope.error), readMeshErrorMessage(envelope.error), request, envelope.error)
+      if (envelope.error !== undefined) throw meshError(classifyRemoteMeshError(envelope.error, envelope.status), readMeshErrorMessage(envelope.error), request, envelope.error)
       return {
         data: envelope.data as TData,
         status: envelope.status,
@@ -233,7 +233,7 @@ export class MeshP2PTransport implements AuroraTransport {
     try {
       const response = await this.bridge.call<TPayload>(callRequest)
       const envelope = toMeshEnvelope<TData>(response, request, normalizedPeerId, candidates)
-      if (envelope.error !== undefined) throw meshError(classifyMeshError(envelope.error), readMeshErrorMessage(envelope.error), request, envelope.error)
+      if (envelope.error !== undefined) throw meshError(classifyRemoteMeshError(envelope.error, envelope.status), readMeshErrorMessage(envelope.error), request, envelope.error)
       return {
         data: envelope.data as TData,
         status: envelope.status,
@@ -543,6 +543,46 @@ function classifyMeshError(error: unknown): AuroraErrorCode {
   return 'unknown'
 }
 
+function classifyRemoteMeshError(error: unknown, status: unknown): AuroraErrorCode {
+  const code = readRemoteMeshCode(error)?.toLowerCase()
+  const byCode = code ? classifyStructuredMeshCode(code) : null
+  if (byCode) return byCode
+  const numericStatus = readNumericStatus(status) ?? (isObject(error) ? readNumericStatus(error.status) : null)
+  if (numericStatus !== null) return classifyMeshStatus(numericStatus)
+  return 'unknown'
+}
+
+function readRemoteMeshCode(error: unknown): string | null {
+  if (!isObject(error)) return null
+  for (const key of ['code', 'error_code', 'reason_code', 'reason'] as const) {
+    const value = error[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return null
+}
+
+function classifyStructuredMeshCode(code: string): AuroraErrorCode | null {
+  if (code.includes('native_permission')) return 'native_permission_missing'
+  if (code.includes('privacy')) return 'privacy_blocked'
+  if (code.includes('permission') || code.includes('forbidden')) return 'permission'
+  if (code.includes('auth') || code === 'unauthenticated') return 'auth'
+  if (code.includes('validation') || code === 'invalid_request') return 'validation'
+  if (code.includes('timeout') || code.includes('timed_out')) return 'timeout'
+  if (code.includes('transport_loss') || code.includes('channel_closed') || code.includes('datachannel_closed')) return 'transport_loss'
+  if (code.includes('unsupported')) return 'unsupported_feature'
+  if (code.includes('unavailable') || code === 'no_route') return 'unavailable_service'
+  return null
+}
+
+function classifyMeshStatus(status: number): AuroraErrorCode {
+  if (status === 401) return 'auth'
+  if (status === 403 || status === 428) return 'permission'
+  if (status === 408 || status === 504) return 'timeout'
+  if (status === 400 || status === 422) return 'validation'
+  if (status === 503) return 'unavailable_service'
+  return 'unknown'
+}
+
 function readMeshErrorMessage(error: unknown): string {
   if (typeof error === 'string') return error
   if (isObject(error)) {
@@ -556,6 +596,12 @@ function readMeshErrorMessage(error: unknown): string {
 function readStatus(status: unknown): string | null {
   if (typeof status === 'string') return status
   if (typeof status === 'number') return String(status)
+  return null
+}
+
+function readNumericStatus(status: unknown): number | null {
+  if (typeof status === 'number' && Number.isInteger(status)) return status
+  if (typeof status === 'string' && /^[1-5][0-9]{2}$/u.test(status)) return Number(status)
   return null
 }
 

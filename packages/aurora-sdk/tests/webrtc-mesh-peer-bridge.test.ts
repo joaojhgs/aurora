@@ -381,8 +381,8 @@ describe('WebRtcMeshPeerBridge', () => {
       remoteSignalingId: 'sig-peer-b',
       expectedRemoteStableId: 'peer-b'
     }
-    const bridgeA = new WebRtcMeshPeerBridge({ session: sessionA, remotePeerId: 'peer-a', randomId: () => 'sub-a' })
-    const bridgeB = new WebRtcMeshPeerBridge({ session: sessionB, remotePeerId: 'peer-b', randomId: () => 'sub-b' })
+    const bridgeA = new WebRtcMeshPeerBridge({ session: sessionA, remotePeerId: 'peer-a', randomId: nextId('sub-a', 'call-a') })
+    const bridgeB = new WebRtcMeshPeerBridge({ session: sessionB, remotePeerId: 'peer-b', randomId: nextId('sub-b', 'call-b') })
     sessionA.sendFrameGate = (frame) => {
       if ((frame as any).type === 'call' && (frame as any).method === 'Tooling.GetExportCatalog') {
         sessionA.emit({ type: 'result', id: (frame as any).id, result: projectionPageForPeer('peer-a', 'peer-a.search') })
@@ -452,6 +452,129 @@ describe('WebRtcMeshPeerBridge', () => {
       payload: { correlation_ids: [''] },
       candidates: []
     } as any)).toThrow('correlation ids must be non-empty bounded strings')
+    bridge.close()
+  })
+
+  it('keeps active subscription abortable after subscribe ACK cleanup', async () => {
+    const session = new FakeSession()
+    const controller = new AbortController()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'active-sub' })
+    session.emit(hello())
+
+    const stream = bridge.subscribe({
+      peerId: 'peer-a',
+      stream: 'assistant',
+      topics: ['Tooling.ProjectionInvalidated'],
+      candidates: [],
+      signal: controller.signal
+    } as any)
+    await flush()
+    session.emit({
+      type: 'subscribed',
+      id: 'active-sub',
+      subscription_id: 'active-sub',
+      accepted: true,
+      accepted_topics: ['Tooling.ProjectionInvalidated'],
+      rejected_topics: [],
+      correlation_ids: [],
+      ttl_seconds: 60,
+      reason: null,
+      idempotent: false
+    })
+    await stream.ready
+
+    controller.abort()
+    await flush()
+
+    expect(session.sent.filter((frame) => (frame as any).type === 'unsubscribe' && (frame as any).id === 'active-sub')).toHaveLength(1)
+    await expect(stream[Symbol.asyncIterator]().next()).rejects.toThrow(/aborted|abort/i)
+    expect(bridge.getDiagnostics().pendingStreamCount).toBe(0)
+  })
+
+  it('rejects duplicate explicit call and stream correlation IDs', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a' })
+    session.emit(hello())
+
+    const pending = bridge.call({
+      peerId: 'peer-a',
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: [],
+      correlationId: 'duplicate-corr'
+    })
+    await flush()
+    await expect(bridge.call({
+      peerId: 'peer-a',
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: [],
+      correlationId: 'duplicate-corr'
+    })).rejects.toThrow('duplicate WebRTC mesh call correlation id')
+
+    session.emit({ type: 'result', id: 'duplicate-corr', result: { ok: true } })
+    await pending
+
+    const stream = bridge.streamCall({
+      peerId: 'peer-a',
+      method: 'Orchestrator.StreamInferChat',
+      busTopic: 'Orchestrator.StreamInferChat',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: [],
+      correlationId: 'stream-corr'
+    })
+    const iterator = stream[Symbol.asyncIterator]()
+    const next = iterator.next()
+    await flush()
+    const duplicateStream = bridge.streamCall({
+      peerId: 'peer-a',
+      method: 'Orchestrator.StreamInferChat',
+      busTopic: 'Orchestrator.StreamInferChat',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: [],
+      correlationId: 'stream-corr'
+    })
+    await expect(duplicateStream[Symbol.asyncIterator]().next()).rejects.toThrow('duplicate WebRTC mesh stream correlation id')
+
+    session.emit({ type: 'eof', id: 'stream-corr' })
+    await expect(next).resolves.toEqual({ value: undefined, done: true })
+  })
+
+  it('skips generated frame IDs that collide with active operations', async () => {
+    const session = new FakeSession()
+    const ids = ['generated-collide', 'generated-collide', 'generated-next']
+    const bridge = new WebRtcMeshPeerBridge({
+      session,
+      remotePeerId: 'peer-a',
+      randomId: () => ids.shift() ?? 'generated-next'
+    })
+    session.emit(hello())
+
+    const pending = bridge.call({
+      peerId: 'peer-a',
+      method: 'Gateway.GetRegistry',
+      busTopic: 'Gateway.GetRegistry',
+      payload: {},
+      timeoutMs: 1000,
+      candidates: []
+    })
+    await flush()
+    expect(session.sent[0]).toMatchObject({ type: 'call', id: 'generated-collide' })
+
+    const stream = bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Tooling.ProjectionInvalidated'], candidates: [] } as any)
+    await flush()
+    expect(session.sent[1]).toMatchObject({ type: 'subscribe', id: 'generated-next' })
+
+    session.emit({ type: 'result', id: 'generated-collide', result: { ok: true } })
+    await pending
+    const iterator = stream[Symbol.asyncIterator]()
+    await iterator.return?.()
     bridge.close()
   })
 
@@ -1871,6 +1994,11 @@ function projectionPageForPeer(peerId: string, toolName: string): ToolingGetExpo
     final_checksum: digest
   }
   return { ...page, page_hash: computeProjectionPageHash(page) } as ToolingGetExportCatalogResponse
+}
+
+function nextId(...ids: string[]): () => string {
+  const remaining = [...ids]
+  return () => remaining.shift() ?? ids.at(-1) ?? 'generated-id'
 }
 
 function remoteProjectionTool(peerId: string, name: string): ToolingProjectionToolInfo {
