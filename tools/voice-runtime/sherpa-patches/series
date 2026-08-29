@@ -4,3 +4,4 @@
 0002-wasm-tts-neutral-no-preload.patch
 0003-pockettts-fixed-voice-state.patch
 0004-macos-onnxruntime-release-hash.patch
+0005-wasm-neutral-vad-asr-kws-no-preload.patch

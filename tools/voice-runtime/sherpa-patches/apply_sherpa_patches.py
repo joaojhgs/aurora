@@ -29,6 +29,9 @@ PATCH_SHA256 = {
     "0004-macos-onnxruntime-release-hash.patch": (
         "92fcf20803338a77bfd43330fa3b438fdfef57c9ededb47dc6def9892be65c52"
     ),
+    "0005-wasm-neutral-vad-asr-kws-no-preload.patch": (
+        "c5c38c0fd873cd5164300730456c432fc144f21c661e132aa24ee9798172eac4"
+    ),
 }
 
 
@@ -204,6 +207,8 @@ def patched_tree_identity(source_root: Path) -> dict[str, Any]:
         "sherpa-onnx/csrc/offline-tts-pocket-model.cc",
         "sherpa-onnx/csrc/offline-tts-pocket-impl.h",
         "wasm/tts/CMakeLists.txt",
+        "wasm/vad-asr/CMakeLists.txt",
+        "wasm/kws/CMakeLists.txt",
         "cmake/onnxruntime-osx-arm64-static.cmake",
     ]
     records = []

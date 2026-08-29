@@ -31,6 +31,7 @@ Apply in `series` order.
 | `0002-wasm-tts-neutral-no-preload.patch` | `d92ad64c4c00c29ec85df0ec2f1a406eaa605090bed73fb4979f38ead54597f0` | Neutral WASM TTS build without `--preload-file` / `.data`, with an ES-module factory and helper exports for Aurora's controlled worker loader | `wasm/tts/CMakeLists.txt` |
 | `0003-pockettts-fixed-voice-state.patch` | `640e64ba79fa038370310ed5bb5530f4c8d801ddc92c82d2feb56333828eb12a` | Load fixed Kyutai voice KV state without a synthetic reference WAV, seed alternating LM cache/offset inputs, skip reference encoding, and support filesystem plus Android/OHOS asset sidecars | `sherpa-onnx/csrc/offline-tts-pocket-model.h`, `offline-tts-pocket-model.cc`, `offline-tts-pocket-impl.h` |
 | `0004-macos-onnxruntime-release-hash.patch` | `92fcf20803338a77bfd43330fa3b438fdfef57c9ededb47dc6def9892be65c52` | Match Sherpa's macOS arm64 CMake integrity check to the SHA-256 of the pinned ONNX Runtime 1.27.1 release asset | `cmake/onnxruntime-osx-arm64-static.cmake` |
+| `0005-wasm-neutral-vad-asr-kws-no-preload.patch` | `c5c38c0fd873cd5164300730456c432fc144f21c661e132aa24ee9798172eac4` | Neutral VAD/ASR and KWS WASM builds without model preloads or `.data`, with ES-module factories and named helper exports for Aurora's controlled worker loader | `wasm/vad-asr/CMakeLists.txt`, `wasm/kws/CMakeLists.txt` |
 
 English PocketTTS packs without `pocket_protocol.json` keep stock v1.13.5
 behavior (`empty_kv_seq_len=1`, no BOS concat, `frames_after_eos=3`).
@@ -65,11 +66,11 @@ python tools/voice-runtime/sherpa-patches/apply_sherpa_patches.py \
 
 The command verifies the archive digest, extracts it, applies `git apply`
 `--unidiff-zero` with Git line-ending conversion disabled, and prints the
-patched-tree identity over the five touched files. Disabling conversion keeps
+patched-tree identity over the seven touched files. Disabling conversion keeps
 the byte-pinned source identity identical on Linux, macOS, and Windows. Current
 patched-tree SHA-256:
 
-`621ecdabd3c32b48de378b9ac5ee64f0ab154124f11f3cddb2a291a541912d14`
+`0038377c780a09353f8b5714da4c2f2f38d05f3d1d301354272ce8266508cfd6`
 
 Native CMake must go through `tools/voice-runtime/run_sherpa_cmake.py` so the
 source identity wrapper still suppresses an enclosing Aurora Git directory.
@@ -86,6 +87,12 @@ ES-module factory and stages `sherpa-onnx-tts.js` with explicit named helper
 exports. Aurora imports both directly inside its module worker; smoke tests
 must consume the staged files unchanged and must not append exports at test
 time.
+
+Neutral VAD/ASR and KWS builds are selected by
+`AURORA_SHERPA_WASM_ENGINE_NEUTRAL=1`. They likewise emit ES-module factories
+and named helper exports while omitting model preloads and `.data` files. The
+browser release builder sets this policy variable for every configure and
+build command.
 
 ## Upgrade / rebase
 

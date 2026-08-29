@@ -1,13 +1,27 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tarfile
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "tools/voice-runtime/browser-engine-release/stage_browser_engine_release.py"
+
+
+def load_release_module(name: str):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_asset(root: Path, relative: str, body: bytes = b"asset") -> None:
@@ -164,3 +178,51 @@ def test_archive_sources_extract_outside_release_tree(tmp_path: Path, monkeypatc
 
     assert extracted.is_dir()
     assert release not in extracted.parents
+
+
+def test_neutral_build_sets_policy_environment_for_every_command(
+    tmp_path: Path, monkeypatch
+) -> None:
+    module = load_release_module("stage_browser_engine_release_build")
+    commands: list[list[str]] = []
+    environments: list[dict[str, str]] = []
+
+    monkeypatch.setattr(module.shutil, "which", lambda command: f"/tools/{command}")
+
+    def fake_run(command: list[str], **kwargs):
+        commands.append(command)
+        environments.append(kwargs["env"])
+        return subprocess.CompletedProcess(command, 0, stdout="ok")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    reports = module.run_build(tmp_path)
+
+    assert len(reports) == 4
+    assert len(commands) == 4
+    configure_commands = commands[::2]
+    assert all(
+        any(argument.startswith("-DCMAKE_INSTALL_PREFIX=") for argument in command)
+        for command in configure_commands
+    )
+    assert all("-DSHERPA_ONNX_ENABLE_BINARY=OFF" in command for command in configure_commands)
+    assert all("-DSHERPA_ONNX_ENABLE_C_API=OFF" not in command for command in configure_commands)
+    assert all("-DSHERPA_ONNX_ENABLE_TTS=OFF" in command for command in configure_commands)
+    assert all(
+        environment["AURORA_SHERPA_WASM_ENGINE_NEUTRAL"] == "1" for environment in environments
+    )
+    assert all(environment.get("PATH") == os.environ.get("PATH") for environment in environments)
+
+
+def test_neutral_build_failure_includes_captured_output(tmp_path: Path, monkeypatch) -> None:
+    module = load_release_module("stage_browser_engine_release_failure")
+    monkeypatch.setattr(module.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 1, stdout="CMake refused a required neutral build input"
+        ),
+    )
+
+    with pytest.raises(module.ReleaseError, match="CMake refused a required neutral build input"):
+        module.run_build(tmp_path)

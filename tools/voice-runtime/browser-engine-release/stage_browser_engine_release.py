@@ -290,8 +290,13 @@ def run_build(source_root: Path) -> list[dict[str, Any]]:
                 "-DSHERPA_ONNX_ENABLE_WASM_VAD_ASR=ON",
                 "-DSHERPA_ONNX_ENABLE_WASM_KWS=OFF",
                 "-DSHERPA_ONNX_ENABLE_WASM_TTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_BINARY=OFF",
+                "-DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF",
                 "-DSHERPA_ONNX_ENABLE_PYTHON=OFF",
+                "-DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=OFF",
                 "-DSHERPA_ONNX_ENABLE_TESTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_TTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF",
                 "-DSHERPA_ONNX_ENABLE_CHECK=OFF",
                 "-DCMAKE_BUILD_TYPE=Release",
             ],
@@ -304,14 +309,21 @@ def run_build(source_root: Path) -> list[dict[str, Any]]:
                 "-DSHERPA_ONNX_ENABLE_WASM_KWS=ON",
                 "-DSHERPA_ONNX_ENABLE_WASM_VAD_ASR=OFF",
                 "-DSHERPA_ONNX_ENABLE_WASM_TTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_BINARY=OFF",
+                "-DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF",
                 "-DSHERPA_ONNX_ENABLE_PYTHON=OFF",
+                "-DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=OFF",
                 "-DSHERPA_ONNX_ENABLE_TESTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_TTS=OFF",
+                "-DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF",
                 "-DSHERPA_ONNX_ENABLE_CHECK=OFF",
                 "-DCMAKE_BUILD_TYPE=Release",
             ],
         },
     ]
     reports: list[dict[str, Any]] = []
+    build_env = os.environ.copy()
+    build_env["AURORA_SHERPA_WASM_ENGINE_NEUTRAL"] = "1"
     for step in build_steps:
         build_dir = Path(step["build_dir"])
         build_dir.mkdir(parents=True, exist_ok=True)
@@ -322,6 +334,7 @@ def run_build(source_root: Path) -> list[dict[str, Any]]:
             str(source_root),
             "-B",
             str(build_dir),
+            f"-DCMAKE_INSTALL_PREFIX={build_dir / 'install'}",
             *step["cmake_args"],
         ]
         build = [cmake, "--build", str(build_dir), "--target", "install", "--parallel"]
@@ -333,6 +346,7 @@ def run_build(source_root: Path) -> list[dict[str, Any]]:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 check=False,
+                env=build_env,
             )
             reports.append(
                 {
@@ -343,7 +357,10 @@ def run_build(source_root: Path) -> list[dict[str, Any]]:
                 }
             )
             if result.returncode != 0:
-                raise ReleaseError(f"build failed for {step['task']}: {' '.join(command)}")
+                output_tail = result.stdout[-4000:].strip()
+                raise ReleaseError(
+                    f"build failed for {step['task']}: {' '.join(command)}\n{output_tail}"
+                )
     return reports
 
 
