@@ -77,7 +77,7 @@ replaceOnce(
 )
 replaceOnce(
   join(repoRoot, 'apps/aurora-tauri/src-tauri/Cargo.lock'),
-  /(\[\[package\]\]\nname = "aurora-tauri"\nversion = )"[^"]+"/u,
+  /(\[\[package\]\]\r?\nname = "aurora-tauri"\r?\nversion = )"[^"]+"/u,
   `$1"${version}"`,
   writes,
   'Tauri Cargo lock version',

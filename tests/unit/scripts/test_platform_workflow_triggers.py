@@ -347,6 +347,9 @@ def test_release_version_script_synchronizes_every_package_surface(
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / relative_path, destination)
 
+    cargo_lock = tmp_path / "apps/aurora-tauri/src-tauri/Cargo.lock"
+    cargo_lock.write_bytes(cargo_lock.read_bytes().replace(b"\n", b"\r\n"))
+
     result = subprocess.run(
         ["node", str(REPO_ROOT / "scripts/set_release_version.mjs"), "2.3.4"],
         cwd=REPO_ROOT,
