@@ -260,6 +260,9 @@ jobs:
   validate-containers:
     name: Validate container images
     needs: release-readiness
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/docker-build.yml
     with:
       publish_images: false
