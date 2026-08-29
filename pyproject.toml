@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=65.0", "wheel"]
+requires = ["setuptools>=77.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "aurora"
 version = "1.0.0"
 description = "Intelligent Voice Assistant for Local Automation and Productivity"
 readme = "readme.md"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "Aurora Team"}
 ]
@@ -25,9 +26,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -673,14 +672,15 @@ service-auth = "app.services.auth.__main__:run"
 service-gateway = "app.services.gateway.__main__:run"
 service-backup = "app.services.backup.__main__:run"
 aurora-build = "scripts.build:main"
-aurora-setup = "scripts.setup:main"
+aurora-setup = "scripts.setup.setup:main"
 
-[tool.setuptools]
-packages = ["app", "modules"]
+[tool.setuptools.packages.find]
+include = ["app*", "scripts*"]
 
 [tool.setuptools.package-data]
 app = [
-    "database/migrations/*.sql",
+    "services/config/*.json",
+    "services/db/migrations/*.sql",
     "services/tts/resources/*.json",
 ]
 # Model files are now stored at root level and excluded from package builds
