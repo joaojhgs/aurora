@@ -100,6 +100,54 @@ const effective = resolveEffectivePermissions({
 })
 ```
 
+## Generated Speech Client And Peer Host
+
+`AuroraClient.speech` is generated-contract-backed and grouped by service responsibility:
+
+```ts
+const capabilities = await client.speech.tts.getCapabilities({
+  mesh_selector: { peer_id: 'peer-studio', module: 'TTS' }
+})
+
+const synthesis = await client.speech.tts.synthesize({
+  text: 'Hello',
+  language: 'en',
+  voice: 'standard:starter_en:alba',
+  mesh_selector: { peer_id: 'peer-studio', module: 'TTS' }
+})
+
+const route = await client.routes.explain({
+  topic: 'TTS.Synthesize',
+  selector: { peer_id: 'peer-studio', module: 'TTS' },
+  speech: {
+    language_requirement: { mode: 'exact', language: 'en' },
+    voice_id: 'standard:starter_en:alba'
+  }
+})
+```
+
+The namespaces are `speech.tts`, `speech.stt`, `speech.wakeWord`, and `speech.transcription`. TTS includes capability/voice discovery, profile and import management, playback/streaming, and synthesis. Focused listening, bounded wake detection, and transcription are exposed through their matching namespaces. Continuous `WakeWord.ProcessAudio` is intentionally absent and fails with `privacy_blocked` if runtime typing is bypassed.
+
+Requests and responses are parsed with the generated Zod schemas at HTTP, WebRTC, Tauri, or native-mobile boundaries. The SDK preserves backend method IDs, route paths, method types, permissions, and speech metadata; it does not maintain a second speech DTO model.
+
+Lightweight providers can register generated handlers through `@aurora/client/webrtc`:
+
+```ts
+import {
+  PeerHostContractRegistry,
+  registerGeneratedPeerHostMethod
+} from '@aurora/client/webrtc'
+
+const registry = new PeerHostContractRegistry()
+registerGeneratedPeerHostMethod(registry, 'TTS.Synthesize', synthesizeHandler, {
+  speechConstraints: residentSpeechConstraints
+})
+```
+
+Generated peer-host registration derives input/output schemas, projection method type, permissions, callable features, and default speech metadata from the backend artifact. Recipient grants decide which methods appear in the manifest; forged frame permissions cannot add a method. The host remains unavailable until a structured manifest ACK classifies every advertised service and matches protocol, projection digest, registry revision, export-policy revision, and auth-grant revision. Only then does it publish a provider lease.
+
+`provider_unavailable` tombstones withdraw the lease and cancel active work. Call, stream, and subscription IDs share one reservation boundary: a duplicate active ID is rejected before handler dispatch, and the ID becomes reusable only after the original work is fully released.
+
 ## Tauri Local
 
 ```ts
@@ -155,6 +203,19 @@ const file = picked.cancelled ? null : await transport.readLocalFile(picked.path
 Internal bus access is explicit to the Tauri command implementation. The SDK preserves `method`, `busTopic`, payload, timeout, audit hints, permission casing, and returned correlation/redaction metadata when it invokes `aurora_command`.
 
 ## Mesh
+
+The SDK runtime is multi-peer for mesh-node profiles. `WebRtcPeerRuntime` keeps
+one session per stable peer, `WebRtcMeshBridgeRouter` selects the peer-bound
+bridge requested by routing, and `WebRtcPeerHost` keeps manifest, ACK, lease,
+pending-work, subscription, and connection-epoch state per recipient. Connect
+profiles remain intentionally single-home-peer.
+
+Grant and permission decisions are not implemented twice in TypeScript. Native
+Tauri clients call the Rust `aurora-mesh-authority` command surface; hosted web
+uses the same Rust core through `@aurora/mesh-authority-web`. TypeScript retains
+session/roster orchestration, durable storage adapters, provider handlers, and
+manifest/lease transport. Stale or cross-peer authority evidence fails closed,
+and each `WebRtcMeshPeerBridge` remains bound to one `remotePeerId`.
 
 ```ts
 import { AuroraClient, MeshP2PTransport } from '@aurora/client'
@@ -253,9 +314,29 @@ client.auth.updateFromPairingExchange({
 client.permissions.check(['TTS.Synthesize'], 'use').allowed
 ```
 
-`MeshP2PTransport` is an interface over peer RPC rather than a WebRTC implementation. The bridge owns DataChannel/native details; the SDK preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
+`MeshP2PTransport` remains the transport-facing interface over peer RPC. The implemented WebRTC bridge lives under `@aurora/client/webrtc` (`WebRtcMeshPeerBridge` and the browser runtime), owns DataChannel/signaling details, and preserves `method`, `busTopic`, selector, route candidates, fallback hints, timeout, peer IDs, correlation ID, and redaction metadata. Route resolution can come from `Gateway.ExplainRoute`, `Gateway.GetCapabilityCatalog`, a Tauri local command, the WebRTC peer runtime, or a deterministic test resolver, but UI code should still use the same `AuroraClient` calls.
 
 Mesh errors are classified into the shared SDK codes: `auth`, `permission`, `validation`, `timeout`, `unavailable_service`, `unsupported_feature`, `privacy_blocked`, `native_permission_missing`, and `transport_loss`. Mesh UI should show selected provider peer, service instance, fallback behavior, blockers, and correlation/audit metadata when available.
+
+The browser runtime accepts an explicit local capability list and intersects it
+with the authenticated Python peer's `protocol_hello`. Fragmentation,
+backpressure, and scoped subscriptions are used only when both peers advertise
+them; `consumer_only_v1` remains mandatory for the thin client. The
+`appLayerE2eeAllowed` rollout input is subordinate to the connection profile:
+profiles that require application-layer E2EE fail with
+`unsupported_feature` when the local gate is off, while profiles that
+explicitly permit DTLS-only JSON can use plaintext DataChannel frames. There
+is no automatic security downgrade.
+
+Inbound encrypted frames are decoded as they arrive. Non-RPC application
+frames are then handled through one strict arrival-order queue so asynchronous
+decryption or a slow pairing handler cannot let a later commitment/reveal or
+event overtake an earlier frame. RPC `call`, `result`, and `error` frames with
+an ID use a control fast path: bilateral pairing/reconnect handlers may wait
+for reciprocal calls or replies on the same DataChannel, so placing those
+control frames behind the waiting application operation would deadlock the
+session. Tests cover both the non-RPC ordering invariant and re-entrant
+bilateral RPC completion.
 
 ## Route And Privacy Policy
 
@@ -356,6 +437,19 @@ for await (const event of subscription) {
   if (event.kind === 'tool.requested') showToolApproval(event.audit.toolId, event.audit.correlationId)
 }
 ```
+
+High-level assistant helpers subscribe to both `Orchestrator.Response` and `TTS.AudioChunk` when the backend supports correlated streaming. Token deltas, tool states, terminal results, and audio chunks are normalized into `AssistantStreamUpdate`:
+
+```ts
+for await (const update of client.assistant.streamMessage('Plan my morning')) {
+  if (update.kind === 'delta') appendAssistantText(update.textDelta)
+  if (update.kind === 'tool') renderToolCard(update.tool)
+  if (update.kind === 'tts_audio_chunk' && !update.ttsAudio?.final) playChunk(update.ttsAudio)
+  if (update.kind === 'completed') markTurnDone(update.text)
+}
+```
+
+`AssistantToolStreamEvent.payloadPreview` and `resultPreview` are already redacted by backend policy. `AssistantTtsAudioChunkEvent.audioData` is base64 encoded audio intended for client playback in web/thin/mobile surfaces; local daemon voice requests can set `TTS.StreamStart.play_on_server` so the Python TTS service also speaks through local audio output.
 
 HTTP transports support SSE by default and WebSocket when requested. The live backend path is intentionally configurable until the unified backend event contract lands:
 
@@ -511,6 +605,34 @@ const transport = new MockAuroraTransport()
 ```
 
 The mock fixtures are test/development data only. Production UI code should call `AuroraClient` namespaces and treat Gateway/native responses as the truth source.
+
+
+## Scheduler typed actions
+
+Use `client.scheduler.scheduleAction(...)` for new schedules. It mirrors the
+backend `Scheduler.ScheduleAction` contract and accepts a discriminated
+`action_spec` union: `tts.speak`, `orchestrator.user_input`, or
+`tooling.execute`. Tooling schedules should carry the Tooling catalog binding
+(`tool_name`, optional `global_tool_id`, provider peer/service IDs, and
+`args_schema_hash`) plus arguments and an optional mesh selector. The backend
+prepares and validates Tooling actions before persistence, then fires through
+`Tooling.ExecuteTool`; SDK callers should treat legacy `schedule(...)` as a
+compatibility adapter only.
+
+```ts
+await client.scheduler.scheduleAction({
+  name: 'Turn off oven reminder',
+  schedule: '2026-07-05 13:31:00',
+  action_spec: {
+    kind: 'tooling.execute',
+    binding: {
+      tool_name: 'scheduler_water_reminder_tool',
+      args_schema_hash: 'catalog-schema-hash'
+    },
+    arguments: { message: 'Drink water' }
+  }
+})
+```
 
 ## Transport Conformance
 
@@ -756,3 +878,12 @@ The SDK extracts audit/redaction fields from backend-style payloads (`correlatio
 - `unknown`
 
 Use `client.result(() => operation())` when UI code wants a typed success/failure union instead of exceptions.
+## Canonical docs
+
+- [API and contracts](../../docs/API_AND_CONTRACTS.md)
+- [Frontend and UI architecture](../../docs/FRONTEND_AND_UI_ARCHITECTURE.md)
+- [SDK/backend conformance CI](../../docs/SDK_BACKEND_CONFORMANCE_CI.md)
+
+### Tooling management API
+
+The SDK exposes `client.tools` methods for the production `/tools` page: `getPolicySummary()`, `listSources()`, `getSourceDetail(sourceId)`, `listGrants()`, `createGrant()`, `revokeGrant()`, `upsertSourcePolicy()`, `upsertToolOverride()`, `listPendingApprovals()`, `listPolicyAuditEvents()`, `testMcpSource()`, `createMcpSource()`, `testPluginSource()`, and `createPluginSource()`. These methods route through typed Gateway/Tooling contracts and preserve redaction metadata; frontend code should not derive durable trust state from local-only preferences or direct service calls.

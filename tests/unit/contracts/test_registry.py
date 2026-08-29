@@ -1,13 +1,21 @@
 """Unit tests for the contract registry."""
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
+from app.shared.contracts.mesh_surface import (
+    duplicate_feature_keys,
+    feature_contracts_for_topic,
+    validate_callable_method_surface,
+)
+from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import (
+    CallableFeatureContract,
     IOModel,
     MethodContract,
-    ModuleContract,
     all_contracts,
     clear_registry,
     export,
@@ -94,6 +102,8 @@ def test_export_import_roundtrip():
         input_model=TestInput,
         output_model=None,
         exposure="both",
+        required_perms=["TTS.Request"],
+        callable_feature_ids=["speech_playback"],
     )
     async def tts_request(req: TestInput) -> None:
         pass
@@ -124,10 +134,341 @@ def test_export_import_roundtrip():
     method_data = module_data["methods"][0]
     assert method_data["name"] == "Request"
     assert method_data["exposure"] == "both"
+    assert method_data["required_perms"] == ["TTS.Request"]
+    assert method_data["callable_feature_ids"] == ["speech_playback"]
+    assert method_data["callable_features"][0]["feature_id"] == "speech_playback"
 
     # Test import
     imported_data = import_registry(exported)
     assert imported_data["digest"] == data["digest"]
+
+
+def test_registry_preserves_canonical_speech_constraints_in_export() -> None:
+    """Decorator metadata keeps typed speech constraints through registry export."""
+
+    from app.shared.contracts.registry import register_method
+
+    constraints = SpeechMethodConstraints(
+        exact_languages=["en", "de"],
+        ready_voice_ids=["standard:test:voice-a"],
+        resident_model_identity_digest="a" * 64,
+        speech_capability_revision=7,
+    )
+    register_module("TTS", "1.0.0")
+
+    @method_contract(
+        method_id=TTSMethods.SYNTHESIZE,
+        input_model=TestInput,
+        exposure="both",
+        required_perms=[TTSMethods.SYNTHESIZE],
+        callable_feature_ids=["speech_synthesis"],
+        speech_constraints=constraints.model_dump(mode="json"),
+    )
+    async def synthesize(req: TestInput) -> None:
+        pass
+
+    register_method("TTS", "Synthesize", synthesize, synthesize._contract_metadata)
+
+    contract = get_contract(TTSMethods.SYNTHESIZE)
+    exported = json.loads(export())
+    method_data = exported["modules"][0]["methods"][0]
+
+    assert contract is not None
+    assert contract.speech_constraints == constraints
+    assert method_data["speech_constraints"] == constraints.model_dump(mode="json")
+    assert method_data["speech_constraints"]["exact_languages"] == ["de", "en"]
+
+
+def test_registry_rejects_malformed_speech_constraints() -> None:
+    register_module("TTS", "1.0.0")
+
+    with pytest.raises(ValueError):
+        method_contract(
+            method_id=TTSMethods.SYNTHESIZE,
+            input_model=TestInput,
+            exposure="both",
+            required_perms=[TTSMethods.SYNTHESIZE],
+            callable_feature_ids=["speech_synthesis"],
+            speech_constraints={
+                "exact_languages": ["en"],
+                "speech_capability_revision": 1,
+                "unexpected": True,
+            },
+        )(lambda req: None)
+
+
+def test_method_contract_rejects_malformed_direct_speech_constraints() -> None:
+    with pytest.raises(ValueError):
+        MethodContract(
+            module="TTS",
+            module_version="1.0.0",
+            name="Synthesize",
+            bus_topic=TTSMethods.SYNTHESIZE,
+            input_model=TestInput,
+            speech_constraints={
+                "exact_languages": ["en"],
+                "speech_capability_revision": 1,
+                "unexpected": True,
+            },
+        )
+
+
+def test_mesh_callable_method_requires_permissions_and_feature_membership():
+    """Ordinary mesh-callable methods fail closed without both required metadata fields."""
+
+    from app.shared.contracts.registry import register_method
+
+    register_module("TTS", "1.0.0")
+
+    @method_contract(
+        method_id="TTS.Request",
+        input_model=TestInput,
+        exposure="both",
+        required_perms=["TTS.Request"],
+    )
+    async def missing_feature(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="missing callable feature membership"):
+        register_method("TTS", "Request", missing_feature, missing_feature._contract_metadata)
+
+    @method_contract(
+        method_id="TTS.Synthesize",
+        input_model=TestInput,
+        exposure="both",
+        callable_feature_ids=["speech_synthesis"],
+    )
+    async def missing_perms(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="missing required_perms"):
+        register_method("TTS", "Synthesize", missing_perms, missing_perms._contract_metadata)
+
+
+def test_mesh_callable_method_rejects_invalid_feature_membership():
+    """Feature IDs are exact stable IDs, not inferred from topic names."""
+
+    from app.shared.contracts.registry import register_method
+
+    register_module("TTS", "1.0.0")
+
+    @method_contract(
+        method_id="TTS.Request",
+        input_model=TestInput,
+        exposure="both",
+        required_perms=["TTS.Request"],
+        callable_feature_ids=["speech_synthesis"],
+    )
+    async def invalid_feature(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="invalid callable feature IDs"):
+        register_method("TTS", "Request", invalid_feature, invalid_feature._contract_metadata)
+
+
+def test_mesh_callable_method_rejects_internal_feature_membership():
+    """Internal-only methods are not mesh-callable and cannot claim callable groups."""
+
+    from app.shared.contracts.registry import register_method
+
+    register_module("TTS", "1.0.0")
+
+    @method_contract(
+        method_id="TTS.Request",
+        input_model=TestInput,
+        exposure="internal",
+        callable_feature_ids=["speech_playback"],
+    )
+    async def internal_feature(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="internal methods must not declare callable features"):
+        register_method("TTS", "Request", internal_feature, internal_feature._contract_metadata)
+
+
+def test_callable_taxonomy_validation_fails_closed(monkeypatch):
+    """Canonical taxonomy mutations fail closed before registry use."""
+
+    from app.shared.contracts import mesh_surface
+    from app.shared.contracts.registry import validate_canonical_taxonomy
+
+    validate_canonical_taxonomy.cache_clear()
+    baseline_features = mesh_surface.CALLABLE_FEATURES
+    baseline_modules = mesh_surface.MESH_CAPABLE_MODULES
+
+    def assert_invalid(
+        features, modules=baseline_modules, match="Invalid callable feature taxonomy"
+    ):
+        monkeypatch.setattr(mesh_surface, "CALLABLE_FEATURES", features)
+        monkeypatch.setattr(mesh_surface, "MESH_CAPABLE_MODULES", modules)
+        validate_canonical_taxonomy.cache_clear()
+        with pytest.raises(ValueError, match=match):
+            validate_canonical_taxonomy()
+
+    first = baseline_features[0]
+    duplicate_group = first.model_copy(update={"method_ids": ("STTCoordinator.StopListening",)})
+    assert_invalid((first, duplicate_group, *baseline_features[2:]))
+
+    duplicate_topic = baseline_features[1].model_copy(update={"method_ids": first.method_ids})
+    assert_invalid((first, duplicate_topic, *baseline_features[2:]))
+
+    empty_id = first.model_copy(update={"feature_id": ""})
+    assert_invalid((empty_id, *baseline_features[1:]))
+
+    invalid_id = first.model_copy(update={"feature_id": "Bad ID"})
+    assert_invalid((invalid_id, *baseline_features[1:]))
+
+    missing_classification = tuple(
+        feature for feature in baseline_features if feature.module != "WakeWord"
+    )
+    assert_invalid(missing_classification)
+
+    wrong_module_topic = first.model_copy(update={"method_ids": ("TTS.Request",)})
+    assert_invalid((wrong_module_topic, *baseline_features[1:]))
+
+    malformed = (object(), *baseline_features[1:])
+    assert_invalid(malformed)
+
+    monkeypatch.setattr(mesh_surface, "CALLABLE_FEATURES", baseline_features)
+    monkeypatch.setattr(mesh_surface, "MESH_CAPABLE_MODULES", baseline_modules)
+    validate_canonical_taxonomy.cache_clear()
+    validate_canonical_taxonomy()
+
+
+def test_callable_taxonomy_feature_uniqueness_is_module_scoped():
+    """Feature IDs may repeat across modules, but not within the same module."""
+
+    first = CallableFeatureContract(
+        feature_id="shared_id",
+        module="TTS",
+        method_ids=("TTS.Request",),
+    )
+    cross_module = CallableFeatureContract(
+        feature_id="shared_id",
+        module="DB",
+        method_ids=("DB.GetMessages",),
+    )
+    same_module = CallableFeatureContract(
+        feature_id="shared_id",
+        module="TTS",
+        method_ids=("TTS.Synthesize",),
+    )
+
+    assert duplicate_feature_keys((first, cross_module)) == []
+    assert duplicate_feature_keys((first, same_module)) == [("TTS", "shared_id")]
+
+
+def test_only_exact_auth_bootstrap_methods_accept_public_infrastructure_marker():
+    """The public infrastructure marker is a narrow allowlist."""
+
+    from app.shared.contracts.registry import register_method
+
+    register_module("Auth", "1.0.0")
+
+    @method_contract(
+        method_id="Auth.PairingStart",
+        input_model=TestInput,
+        exposure="both",
+    )
+    async def unmarked_pairing_start(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="missing public_infrastructure marker"):
+        register_method(
+            "Auth",
+            "PairingStart",
+            unmarked_pairing_start,
+            unmarked_pairing_start._contract_metadata,
+        )
+
+    @method_contract(
+        method_id="Auth.Login",
+        input_model=TestInput,
+        exposure="both",
+        public_infrastructure=True,
+    )
+    async def login(req: TestInput) -> None:
+        pass
+
+    register_method("Auth", "Login", login, login._contract_metadata)
+    assert get_contract("Auth.Login").public_infrastructure is True
+
+    @method_contract(
+        method_id="Auth.WhoAmI",
+        input_model=TestInput,
+        exposure="both",
+        public_infrastructure=True,
+    )
+    async def whoami(req: TestInput) -> None:
+        pass
+
+    with pytest.raises(ValueError, match="not an allowed public infrastructure method"):
+        register_method("Auth", "WhoAmI", whoami, whoami._contract_metadata)
+
+
+def test_public_infrastructure_wire_surface_rejects_spoofed_auth_topic_and_features():
+    """Wire metadata cannot spoof Auth bootstrap or attach callable feature membership."""
+
+    spoofed_auth_topic = SimpleNamespace(
+        module="TTS",
+        name="Login",
+        bus_topic="Auth.Login",
+        exposure="both",
+        required_perms=[],
+        callable_feature_ids=[],
+        callable_features=[],
+        public_infrastructure=True,
+    )
+    assert validate_callable_method_surface(spoofed_auth_topic) == [
+        "Auth.Login public infrastructure must be in Auth",
+        "Auth.Login public infrastructure module/topic mismatch: module=TTS",
+    ]
+
+    feature_bearing_auth = SimpleNamespace(
+        module="Auth",
+        name="Login",
+        bus_topic="Auth.Login",
+        exposure="both",
+        required_perms=[],
+        callable_feature_ids=["speech_playback"],
+        callable_features=list(feature_contracts_for_topic("TTS.Request")),
+        public_infrastructure=True,
+    )
+    assert validate_callable_method_surface(feature_bearing_auth) == [
+        "Auth.Login public infrastructure must not declare callable features"
+    ]
+
+
+def test_internal_wire_surface_rejects_id_or_object_callable_membership():
+    """Internal methods cannot bypass validation with object-only callable metadata."""
+
+    id_membership = SimpleNamespace(
+        module="TTS",
+        name="Request",
+        bus_topic="TTS.Request",
+        exposure="internal",
+        required_perms=[],
+        callable_feature_ids=["speech_playback"],
+        callable_features=[],
+        public_infrastructure=False,
+    )
+    object_membership = SimpleNamespace(
+        module="TTS",
+        name="Request",
+        bus_topic="TTS.Request",
+        exposure="internal",
+        required_perms=[],
+        callable_feature_ids=[],
+        callable_features=list(feature_contracts_for_topic("TTS.Request")),
+        public_infrastructure=False,
+    )
+
+    assert "TTS.Request internal methods must not declare callable features" in (
+        validate_callable_method_surface(id_membership)
+    )
+    assert validate_callable_method_surface(object_membership) == [
+        "TTS.Request internal methods must not declare callable features"
+    ]
 
 
 def test_digest_changes_on_modification():

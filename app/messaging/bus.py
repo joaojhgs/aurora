@@ -15,6 +15,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from app.shared.contracts.models.speech import SpeechRouteBinding
+
 
 class Envelope(BaseModel):
     """Transport envelope for all messages.
@@ -45,6 +47,18 @@ class Envelope(BaseModel):
     attempts: int = 0
     max_attempts: int = 3
     principal_id: str | None = None
+    effective_perms: list[str] | None = None
+    identity_source: str | None = None
+    method_type: str | None = None
+    caller_peer_id: str | None = None
+    transport_source_id: str | None = None
+    auth_grant_revision: int | None = Field(default=None, ge=0)
+    manifest_revision: int | None = Field(default=None, ge=0)
+    projected_service_id: str | None = None
+    projected_method_id: str | None = None
+    projected_method_topics: list[str] | None = None
+    projected_method_set_digest: str | None = None
+    speech_route_binding: SpeechRouteBinding | None = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -82,6 +96,31 @@ class QueryResult(BaseModel):
     error: str | None = None
 
 
+def query_result_from_reply_payload(result_data: Any) -> QueryResult:
+    """Coerce a service reply payload into QueryResult without losing fields.
+
+    Some contract response models expose their own ``ok`` flag but do not have
+    a ``data`` field (for example Tooling approval responses). Treating every
+    ``{"ok": ...}`` dict as a QueryResult drops contract-specific fields like
+    ``approval_request_id`` and ``approval_token``. Preserve those full payloads
+    under ``data`` while keeping the top-level ok/error convenience fields.
+    """
+
+    if isinstance(result_data, dict) and "ok" in result_data:
+        extra_keys = set(result_data) - {"ok", "data", "error"}
+        if "data" not in result_data and extra_keys:
+            return QueryResult(
+                ok=bool(result_data.get("ok")),
+                data=result_data,
+                error=result_data.get("error"),
+            )
+        return QueryResult(**result_data)
+    if isinstance(result_data, dict) and "error" in result_data and result_data["error"]:
+        error_msg = result_data.get("error", "Unknown service error")
+        return QueryResult(ok=False, error=error_msg, data=result_data)
+    return QueryResult(ok=True, data=result_data)
+
+
 # Type alias for message handlers
 Handler = Callable[[Envelope], Awaitable[None]]
 
@@ -117,6 +156,17 @@ class MessageBus(Protocol):
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -150,6 +200,18 @@ class MessageBus(Protocol):
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        transport_source_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -163,18 +225,30 @@ class MessageBus(Protocol):
             ttl_ms: Time-to-live in milliseconds
             max_attempts: Maximum retry attempts
             correlation_id: Optional caller-supplied trace correlation ID
+            transport_source_id: Opaque trusted transport source bucket. This
+                internal value must never be accepted from a request payload.
 
         Returns:
             QueryResult containing the response data or error
         """
         ...
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic pattern (supports wildcards, e.g., "TTS.*")
             handler: Async function to handle messages
+            event: True when subscribing to broadcast events; False for commands/replies.
+        """
+        ...
+
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to a broadcast event and wait for transport readiness.
+
+        This is the readiness-aware event subscription API. Existing
+        ``subscribe(..., event=True)`` remains a synchronous compatibility path
+        for callers that do not need startup ordering guarantees.
         """
         ...
 

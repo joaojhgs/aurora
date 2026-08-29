@@ -165,7 +165,7 @@ End-to-end tests for full process mode deployment:
 
 ## CI/CD Integration
 
-Process mode tests run automatically in CI via `.github/workflows/test-process-mode.yml`.
+Process mode tests run automatically in CI in the `process-mode` job of `.github/workflows/python-tests.yml`.
 
 The CI workflow:
 1. Starts a Redis container

@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mesh-security-surface-inventory.schema.json",
+  "title": "Aurora mesh security surface inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "inventory_status",
+    "mesh_capable_modules",
+    "methods",
+    "mesh_publishers",
+    "tooling_rule_selectors",
+    "stable_identity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "inventory_status": {
+      "enum": ["scaffold", "complete"]
+    },
+    "mesh_capable_modules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "methods": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/method"
+      }
+    },
+    "mesh_publishers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mesh_publisher"
+      }
+    },
+    "tooling_rule_selectors": {
+      "$ref": "#/$defs/tooling_rule_selectors"
+    },
+    "stable_identity": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stable_identity"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "inventory_status": {
+            "const": "complete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mesh_capable_modules": {
+            "minItems": 1
+          },
+          "methods": {
+            "minItems": 1
+          },
+          "stable_identity": {
+            "minItems": 1
+          },
+          "tooling_rule_selectors": {
+            "properties": {
+              "matching_semantics": {
+                "const": "non_null_conjunctive_exact_match"
+              },
+              "precedence": {
+                "const": "first_match_wins"
+              },
+              "selectors": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "bus_topic",
+        "handler",
+        "source",
+        "exposure",
+        "method_type",
+        "required_perms",
+        "module_capabilities",
+        "proposed_feature_id",
+        "permission_status"
+      ],
+      "properties": {
+        "module": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bus_topic": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+\\.[A-Za-z0-9_.-]+$"
+        },
+        "handler": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "exposure": {
+          "enum": ["external", "both"]
+        },
+        "method_type": {
+          "enum": ["use", "manage"]
+        },
+        "required_perms": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "module_capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "proposed_feature_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permission_status": {
+          "enum": ["protected", "ordinary_permissionless"]
+        }
+      }
+    },
+    "mesh_publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "source",
+        "payload_type",
+        "payload_fields_or_shape",
+        "sensitivity",
+        "current_forwarding",
+        "safe_for_service_wide_broadcast",
+        "remediation_goal",
+        "blocker_reason"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "payload_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload_fields_or_shape": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "sensitivity": {
+          "enum": ["low", "moderate", "high", "critical"]
+        },
+        "current_forwarding": {
+          "enum": ["active_if_module_shared", "dormant_no_mesh_module_config"]
+        },
+        "safe_for_service_wide_broadcast": {
+          "type": "boolean"
+        },
+        "remediation_goal": {
+          "type": ["string", "null"],
+          "enum": ["G007", "G013", null]
+        },
+        "blocker_reason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "tooling_rule_selectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matching_semantics", "precedence", "selectors"],
+      "properties": {
+        "matching_semantics": {
+          "type": "string"
+        },
+        "precedence": {
+          "type": "string"
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "value_type", "null_semantics", "match_semantics"],
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value_type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "null_semantics": {
+                "type": "string",
+                "minLength": 1
+              },
+              "match_semantics": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "stable_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "scope",
+        "stable",
+        "derivation",
+        "persistence",
+        "gaps",
+        "source"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stable": {
+          "type": "boolean"
+        },
+        "derivation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "persistence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  }
+}

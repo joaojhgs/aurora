@@ -1,6 +1,6 @@
 {
   "name": "@aurora/client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Transport-independent TypeScript client SDK for Aurora Gateway and native adapters.",
   "license": "MIT",
   "type": "module",
@@ -18,6 +18,41 @@
       "types": "./dist/test-utils.d.ts",
       "import": "./dist/test-utils.js",
       "default": "./dist/test-utils.js"
+    },
+    "./webrtc-protocol-contract": {
+      "types": "./dist/webrtc-protocol-contract.d.ts",
+      "import": "./dist/webrtc-protocol-contract.js",
+      "default": "./dist/webrtc-protocol-contract.js"
+    },
+    "./webrtc": {
+      "types": "./dist/webrtc/index.d.ts",
+      "import": "./dist/webrtc/index.js",
+      "default": "./dist/webrtc/index.js"
+    },
+    "./local-data": {
+      "types": "./dist/local-data/index.d.ts",
+      "import": "./dist/local-data/index.js",
+      "default": "./dist/local-data/index.js"
+    },
+    "./local-tools": {
+      "types": "./dist/local-tools/index.d.ts",
+      "import": "./dist/local-tools/index.js",
+      "default": "./dist/local-tools/index.js"
+    },
+    "./lightweight-orchestrator": {
+      "types": "./dist/lightweight-orchestrator/index.d.ts",
+      "import": "./dist/lightweight-orchestrator/index.js",
+      "default": "./dist/lightweight-orchestrator/index.js"
+    },
+    "./generated": {
+      "types": "./dist/generated/index.d.ts",
+      "import": "./dist/generated/index.js",
+      "default": "./dist/generated/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js",
+      "default": "./dist/validation/index.js"
     }
   },
   "files": [
@@ -27,10 +62,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "vitest run --environment node"
+    "test": "vitest run --environment node",
+    "test:resilience": "vitest run --environment node tests/performance-offline-resilience.test.ts",
+    "test:coverage": "vitest run --environment node --coverage"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "4.1.9",
     "typescript": "5.7.3",
     "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.2.0",
+    "mqtt": "5.15.2",
+    "zod": "4.4.3"
   }
 }

@@ -659,13 +659,12 @@ class CombinedSQLiteVecStore(BaseStore):
 
     def _get_store(self, namespace: tuple[str, ...]) -> SQLiteVecStore:
         """Route to the appropriate store based on namespace."""
-        if len(namespace) >= 2 and namespace[1] == "memories":
-            return self.memories_store
-        elif len(namespace) >= 1 and namespace[0] == "tools":
+        if namespace in (("tools",), ("main", "tools")):
             return self.tools_store
-        else:
-            # Default to memories store for backward compatibility
+        if namespace == ("main", "memories"):
             return self.memories_store
+        # Default to memories store for backward compatibility.
+        return self.memories_store
 
     def put(
         self,

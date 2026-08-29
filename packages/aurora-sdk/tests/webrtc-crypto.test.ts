@@ -1,0 +1,276 @@
+import { scrypt } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+
+import type { AuroraScryptDeriver } from '../src/webrtc/crypto-worker-client.js'
+import { deriveScryptInWorker } from '../src/webrtc/crypto-worker-client.js'
+import {
+  base64UrlDecode,
+  base64UrlEncode,
+  buildMeshReconnectProofMessage,
+  bytesToHex,
+  computeReconnectProofHex,
+  constantTimeEqual,
+  decodeJsonPayload,
+  deriveRoomKeys,
+  deriveRoomSalt,
+  encodeJsonPayload,
+  hexToBytes,
+  openJson,
+  sealJson,
+  verifyReconnectProofHex
+} from '../src/webrtc/crypto.js'
+
+type Fixture = {
+  room_crypto: {
+    inputs: { password: string; app_id: string; room: string }
+    salt_sha256_hex: string
+    k0_hex: string
+    k_sig_hex: string
+    k_data_hex: string
+    aead: {
+      nonce_hex: string
+      plaintext: Record<string, unknown>
+      plaintext_compact_json: string
+      payload_hex: string
+      payload_base64url: string
+    }
+  }
+  reconnect: {
+    inputs: {
+      token_id: string
+      challenge: string
+      channel_binding: string
+      claimant_peer_id: string
+      verifier_peer_id: string
+      room_name: string
+      raw_token_sha256_hex: string
+    }
+    message_hex: string
+    hmac_sha256_hex: string
+  }
+}
+
+function fixture(): Fixture {
+  return JSON.parse(readFileSync(resolve(process.cwd(), '../../tests/fixtures/webrtc_web_thin_protocol_vectors.json'), 'utf8'))
+}
+
+const nodeScryptDeriver: AuroraScryptDeriver = async (password, salt, params) =>
+  await new Promise<Uint8Array>((resolvePromise, rejectPromise) => {
+    scrypt(
+      password,
+      salt,
+      params.dkLen,
+      {
+        N: params.N,
+        r: params.r,
+        p: params.p,
+        maxmem: 256 * 1024 * 1024
+      },
+      (error, value) => {
+        if (error) {
+          rejectPromise(error)
+          return
+        }
+        resolvePromise(new Uint8Array(value))
+      }
+    )
+  })
+
+describe('Aurora WebRTC crypto', () => {
+  it('matches the Python room key and AES-GCM fixture vectors', async () => {
+    const vector = fixture().room_crypto
+    const salt = await deriveRoomSalt(vector.inputs.app_id, vector.inputs.room)
+    expect(bytesToHex(salt)).toBe(vector.salt_sha256_hex)
+
+    const keys = await deriveRoomKeys(vector.inputs.password, vector.inputs.app_id, vector.inputs.room, {
+      scryptDeriver: nodeScryptDeriver
+    })
+    expect(bytesToHex(keys.k0)).toBe(vector.k0_hex)
+    expect(bytesToHex(keys.kSig)).toBe(vector.k_sig_hex)
+    expect(bytesToHex(keys.kData)).toBe(vector.k_data_hex)
+
+    const orderedPlaintext = { type: 'presence', app_id: 'aurora-fixture', room: 'lab-room', peer_id: 'peer-offer', node_name: 'Fixture Offerer' }
+    expect(JSON.stringify(orderedPlaintext)).toBe(vector.aead.plaintext_compact_json)
+    const payload = await sealJson(keys.kSig, orderedPlaintext, { nonce: hexToBytes(vector.aead.nonce_hex) })
+    expect(bytesToHex(payload)).toBe(vector.aead.payload_hex)
+    expect(base64UrlEncode(payload)).toBe(vector.aead.payload_base64url)
+    expect(base64UrlDecode(vector.aead.payload_base64url)).toEqual(payload)
+    await expect(openJson(keys.kSig, payload)).resolves.toEqual(vector.aead.plaintext)
+  }, 20_000)
+
+  it('matches the Python reconnect proof transcript and HMAC vector', async () => {
+    const reconnect = fixture().reconnect
+    const input = {
+      tokenId: reconnect.inputs.token_id,
+      challenge: reconnect.inputs.challenge,
+      channelBinding: reconnect.inputs.channel_binding,
+      claimantPeerId: reconnect.inputs.claimant_peer_id,
+      verifierPeerId: reconnect.inputs.verifier_peer_id,
+      roomName: reconnect.inputs.room_name
+    }
+    expect(bytesToHex(buildMeshReconnectProofMessage(input))).toBe(reconnect.message_hex)
+    expect(await computeReconnectProofHex('synthetic-reconnect-token', input)).toBe(reconnect.hmac_sha256_hex)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, reconnect.hmac_sha256_hex, input)).resolves.toBe(true)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, '0'.repeat(64), input)).resolves.toBe(false)
+    await expect(verifyReconnectProofHex(reconnect.inputs.raw_token_sha256_hex, 'not-hex', input)).resolves.toBe(false)
+  })
+
+  it('matches Python ensure_ascii reconnect canonicalization for Unicode identities', async () => {
+    const input = {
+      tokenId: 'token-é',
+      challenge: 'a'.repeat(64),
+      channelBinding: 'b'.repeat(64),
+      claimantPeerId: 'peer-😀',
+      verifierPeerId: 'peer-β',
+      roomName: 'café/</room'
+    }
+    expect(new TextDecoder().decode(buildMeshReconnectProofMessage(input))).toBe(
+      'aurora.mesh.reconnect-proof.v1\u0000{"challenge":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","channel_binding":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","claimant_peer_id":"peer-\\ud83d\\ude00","room_name":"caf\\u00e9/</room","token_id":"token-\\u00e9","verifier_peer_id":"peer-\\u03b2","version":1}'
+    )
+    await expect(computeReconnectProofHex('tökén😀', input)).resolves.toBe(
+      '23192dbc7bc20cbecad7683032bc064b9cb6c4bca37a6ef2572a2f737c014f22'
+    )
+  })
+
+  it('supports E2EE on/off JSON payload codec behavior', async () => {
+    const vector = fixture().room_crypto
+    const keys = await deriveRoomKeys(vector.inputs.password, vector.inputs.app_id, vector.inputs.room, {
+      scryptDeriver: nodeScryptDeriver
+    })
+    const orderedPlaintext = { type: 'presence', app_id: 'aurora-fixture', room: 'lab-room', peer_id: 'peer-offer', node_name: 'Fixture Offerer' }
+    const clear = await encodeJsonPayload(orderedPlaintext)
+    expect(clear.encrypted).toBe(false)
+    await expect(decodeJsonPayload(clear.payload)).resolves.toEqual(vector.aead.plaintext)
+
+    const encrypted = await encodeJsonPayload(orderedPlaintext, {
+      key: keys.kSig,
+      nonce: hexToBytes(vector.aead.nonce_hex)
+    })
+    expect(encrypted.encrypted).toBe(true)
+    expect(bytesToHex(encrypted.payload)).toBe(vector.aead.payload_hex)
+    await expect(decodeJsonPayload(encrypted.payload, { key: keys.kSig })).resolves.toEqual(vector.aead.plaintext)
+  }, 20_000)
+
+  it('matches the native Rust background codec wire vector', async () => {
+    const key = new Uint8Array(Array.from({ length: 32 }, (_value, index) => index))
+    const nonce = new Uint8Array(Array.from({ length: 12 }, (_value, index) => 32 + index))
+    const frame = {
+      type: 'call',
+      id: 'call-1',
+      method: 'Tooling.ExecuteTool',
+      params: { tool_id: 'device.status', arguments: {} }
+    }
+    const encoded = await encodeJsonPayload(frame, { key, nonce })
+
+    expect(bytesToHex(encoded.payload)).toBe(
+      '202122232425262728292a2ba918d2091cfd3834381f23a2ad3ad8dbb92dcea6a5e3028200db5d3065a8336c01e68a60ac1f178e7b9202fb366e318d9a4f8ffbee59790ea10e5d316ec26bafb94bbe29acecc7e2e4058578d2391b5bf7f35672de98e330bc3ba35e6f6fbcf020355c31bd29fb9dbdef863dd88bb06e1e42b4ad63df34068a77292a40fec674'
+    )
+    await expect(decodeJsonPayload(encoded.payload, { key, encrypted: true }))
+      .resolves.toEqual(frame)
+
+    const rustSerdeOrderPayload = hexToBytes(
+      '202122232425262728292a2ba918cf144ea2386d7b102ee3f03ad8dbbd2c98f4e8e441d44ea2037d25e3306e5bcb9d61ed5041bf409201fe7a253db883588de3e91e171aec030d7a39df6fb3ac55ef31edeac9b4ff05864be4345d43efb55761c192e57be13cb64b6e69edfe7f780c22b134fbd1f3bec766cf9aef6e9b1df1b0bf325d3772938e9c8fc0d761'
+    )
+    await expect(decodeJsonPayload(rustSerdeOrderPayload, { key, encrypted: true }))
+      .resolves.toEqual(frame)
+  })
+
+  it('rejects padded base64url and compares bytes without early length success', () => {
+    expect(() => base64UrlDecode('abc=')).toThrow(/base64url/u)
+    expect(constantTimeEqual(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 3]))).toBe(true)
+    expect(constantTimeEqual(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2]))).toBe(false)
+  })
+
+  it('is SSR-import safe and refuses default scrypt without a Worker', async () => {
+    await expect(import('../src/webrtc/encoding.js')).resolves.toBeTruthy()
+    await expect(import('../src/webrtc/crypto.js')).resolves.toBeTruthy()
+    await expect(deriveRoomKeys('password', 'app', 'room')).rejects.toThrow(/Worker|deriver/u)
+  })
+
+  it('runs the production pure-JS scrypt worker against the Python fixture', async () => {
+    const vector = fixture().room_crypto
+    const password = new TextEncoder().encode(vector.inputs.password)
+    const salt = hexToBytes(vector.salt_sha256_hex)
+    let messageListener: ((event: MessageEvent) => void) | undefined
+    let resolveResponse: ((value: { type: string; key?: Uint8Array; error?: string }) => void) | undefined
+    const response = new Promise<{ type: string; key?: Uint8Array; error?: string }>((resolvePromise) => {
+      resolveResponse = resolvePromise
+    })
+    const workerScope = {
+      addEventListener: vi.fn((type: string, listener: (event: MessageEvent) => void) => {
+        if (type === 'message') messageListener = listener
+      }),
+      postMessage: vi.fn((message: { type: string; key?: Uint8Array; error?: string }) => {
+        resolveResponse?.(message)
+      })
+    }
+    const hadSelf = Reflect.has(globalThis, 'self')
+    const oldSelf = Reflect.get(globalThis, 'self')
+    Reflect.set(globalThis, 'self', workerScope)
+    try {
+      await import('../src/webrtc/crypto-worker.js')
+      expect(messageListener).toBeTypeOf('function')
+      messageListener?.({
+        data: {
+          id: 1,
+          type: 'scrypt',
+          password,
+          salt,
+          params: { N: 65_536, r: 8, p: 1, dkLen: 32 }
+        }
+      } as MessageEvent)
+      const result = await response
+      expect(result.type).toBe('scrypt:result')
+      expect(bytesToHex(result.key ?? new Uint8Array())).toBe(vector.k0_hex)
+      expect(password).toEqual(new Uint8Array(password.length))
+      expect(salt).toEqual(new Uint8Array(salt.length))
+    } finally {
+      if (hadSelf) Reflect.set(globalThis, 'self', oldSelf)
+      else Reflect.deleteProperty(globalThis, 'self')
+    }
+  }, 20_000)
+
+  it('cleans up a successful injected scrypt worker', async () => {
+    const terminate = vi.fn()
+    let messageListener: ((event: MessageEvent) => void) | undefined
+    const worker = {
+      postMessage: vi.fn((message: unknown, transfer?: Transferable[]) => {
+        const delivered = structuredClone(message, {
+          transfer: transfer ?? [],
+        }) as { id: number }
+        const id = delivered.id
+        queueMicrotask(() => messageListener?.({ data: { id, type: 'scrypt:result', key: new Uint8Array([7, 8, 9]) } } as MessageEvent))
+      }),
+      terminate,
+      addEventListener: vi.fn((type: 'message' | 'error', listener: (event: Event) => void) => {
+        if (type === 'message') {
+          messageListener = listener as (event: MessageEvent) => void
+        }
+      }),
+      removeEventListener: vi.fn()
+    }
+    const key = await deriveScryptInWorker(new Uint8Array([1]), new Uint8Array([2]), { workerFactory: () => worker })
+    expect(key).toEqual(new Uint8Array([7, 8, 9]))
+    expect(terminate).toHaveBeenCalledTimes(1)
+  })
+
+  it('terminates the scrypt worker on abort', async () => {
+    const controller = new AbortController()
+    const terminate = vi.fn()
+    const worker = {
+      postMessage: vi.fn(),
+      terminate,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    }
+    const promise = deriveScryptInWorker(new Uint8Array([1]), new Uint8Array([2]), {
+      signal: controller.signal,
+      workerFactory: () => worker
+    })
+    controller.abort()
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(terminate).toHaveBeenCalledTimes(1)
+  })
+})

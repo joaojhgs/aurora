@@ -11,6 +11,14 @@ from collections.abc import Callable
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import MessageBus
+from app.messaging.priority_helpers import get_system_priority
+from app.services.tooling.identity import (
+    LoadedToolIdentity,
+    ToolIdentityCollisionError,
+    core_tool_identity,
+    source_tool_identity,
+    stamp_tool,
+)
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Mcp, Tooling
@@ -34,9 +42,80 @@ class ToolsManager:
         self.bus = bus
         self.tools: list[Callable] = []
         self.tool_lookup: dict[str, Callable] = {}
+        self.tool_identity_lookup: dict[str, Callable] = {}
+        self.ambiguous_tool_names: set[str] = set()
+        self._lookup_signature: tuple[tuple[int, str | None, str | None], ...] = ()
         self.always_active_tools: list[Callable] = []
+        self._plugin_tools: list[Callable] = []
         self._mcp_tools_loaded = False
         self._initialized = False
+
+    def _rebuild_tool_lookup(self) -> None:
+        """Rebuild the name-to-tool lookup from the currently loaded tools."""
+
+        by_name: dict[str, list[Callable]] = {}
+        by_identity: dict[str, Callable] = {}
+        for tool in self.tools:
+            name = getattr(tool, "name", None)
+            if name:
+                by_name.setdefault(name, []).append(tool)
+            identity = getattr(tool, "_aurora_tool_identity", None)
+            if isinstance(identity, LoadedToolIdentity):
+                existing = by_identity.get(identity.tool_contract_id)
+                if existing is not None and existing is not tool:
+                    raise ToolIdentityCollisionError(
+                        f"duplicate tool contract identity: {identity.tool_contract_id}"
+                    )
+                by_identity[identity.tool_contract_id] = tool
+
+        self.ambiguous_tool_names = {
+            name for name, candidates in by_name.items() if len(candidates) > 1
+        }
+        self.tool_lookup = {
+            name: candidates[0] for name, candidates in by_name.items() if len(candidates) == 1
+        }
+        self.tool_identity_lookup = by_identity
+        self._lookup_signature = tuple(
+            (
+                id(tool),
+                getattr(tool, "name", None),
+                getattr(getattr(tool, "_aurora_tool_identity", None), "tool_contract_id", None),
+            )
+            for tool in self.tools
+        )
+        for name in self.tool_lookup:
+            log_debug(f"Registered tool: {name}")
+        for name in self.ambiguous_tool_names:
+            log_warning(f"Ambiguous tool name retained but excluded from name lookup: {name}")
+
+    def _tool_lookup_stale(self) -> bool:
+        """Return True when the lookup no longer mirrors ``self.tools`` names."""
+
+        return self._lookup_signature != tuple(
+            (
+                id(tool),
+                getattr(tool, "name", None),
+                getattr(getattr(tool, "_aurora_tool_identity", None), "tool_contract_id", None),
+            )
+            for tool in self.tools
+        )
+
+    async def _request_rag_mutation(self, method: str, payload: object, *, action: str) -> None:
+        """Send a bounded RAG mutation request and warn on failures."""
+
+        try:
+            result = await self.bus.request(
+                method,
+                payload,
+                timeout=2.0,
+                priority=get_system_priority(),
+            )
+        except Exception as exc:
+            log_warning(f"Failed to {action}: {exc}")
+            return
+
+        if not result.ok:
+            log_warning(f"Failed to {action}: {result.error}")
 
     async def initialize(self) -> None:
         """Initialize all tools in the correct order.
@@ -57,7 +136,7 @@ class ToolsManager:
         await self._load_core_tools()
 
         # Step 2: Load plugin tools
-        await self._load_plugin_tools()
+        await self._load_tracked_plugin_tools()
 
         # Step 3: Load MCP tools
         await self._load_mcp_tools()
@@ -68,6 +147,54 @@ class ToolsManager:
         self._initialized = True
         log_info(f"ToolsManager initialized with {len(self.tools)} tools")
 
+    async def _load_tracked_plugin_tools(self) -> None:
+        """Load and retain the tools owned by the plugin-config phase.
+
+        The plugin phase also selects the built-in Brave/DuckDuckGo search
+        tool. Tracking object identity rather than trust/source metadata lets
+        runtime plugin config changes replace that selection without treating
+        the built-in search tool as untrusted.
+        """
+        first_plugin_index = len(self.tools)
+        try:
+            await self._load_plugin_tools()
+        finally:
+            self._plugin_tools = self.tools[first_plugin_index:]
+
+    @staticmethod
+    def _mark_loader_source(tools: list, source: str, plugin_id: str | None = None) -> None:
+        """Stamp loader-authoritative source classification onto loaded tools.
+
+        LangChain tool wrappers report ``langchain_core`` as their module, so
+        module-based classification cannot see where a tool was loaded from.
+        The loader is the trust boundary, so it records the classification
+        itself (mirroring the ``_is_mcp_tool`` marker used by the MCP loader).
+        """
+        for tool in tools:
+            try:
+                object.__setattr__(tool, "_aurora_loader_source", source)
+                if plugin_id:
+                    object.__setattr__(tool, "_aurora_plugin_id", plugin_id)
+                name = str(getattr(tool, "name", ""))
+                if source == "core":
+                    stamp_tool(tool, core_tool_identity(name))
+                elif source == "plugin" and plugin_id:
+                    provider_tool_id = vars(tool).get("_aurora_provider_tool_id")
+                    if isinstance(provider_tool_id, str) and provider_tool_id.strip():
+                        stamp_tool(
+                            tool,
+                            source_tool_identity(
+                                source_kind="plugin",
+                                stable_source_id=plugin_id,
+                                provider_tool_id=provider_tool_id,
+                                share_group_id=f"plugin:{plugin_id}",
+                                share_group_label=plugin_id,
+                            ),
+                        )
+            except Exception as e:
+                log_error(f"Could not stamp loader identity on {getattr(tool, 'name', tool)}: {e}")
+                raise
+
     async def _load_core_tools(self) -> None:
         """Load core Aurora tools."""
         log_info("Loading core Aurora tools...")
@@ -76,6 +203,7 @@ class ToolsManager:
             # Import core tools
             from app.services.tooling.tools.pomodoro_tool import (
                 pomodoro_status_tool,
+                pomodoro_transition_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
             )
@@ -84,6 +212,11 @@ class ToolsManager:
                 cancel_scheduled_task_tool,
                 list_scheduled_tasks_tool,
                 schedule_task_tool,
+                scheduler_break_reminder_tool,
+                scheduler_daily_greeting_tool,
+                scheduler_hourly_time_announcement_tool,
+                scheduler_motivational_message_tool,
+                scheduler_water_reminder_tool,
             )
             from app.services.tooling.tools.stop_tts import stop_tts_tool
             from app.services.tooling.tools.upsert_memory import upsert_memory_tool
@@ -98,11 +231,19 @@ class ToolsManager:
                 schedule_task_tool,
                 list_scheduled_tasks_tool,
                 cancel_scheduled_task_tool,
+                scheduler_daily_greeting_tool,
+                scheduler_break_reminder_tool,
+                scheduler_water_reminder_tool,
+                scheduler_motivational_message_tool,
+                scheduler_hourly_time_announcement_tool,
                 start_pomodoro_tool,
                 stop_pomodoro_tool,
                 pomodoro_status_tool,
+                pomodoro_transition_tool,
             ]
 
+            self._mark_loader_source(self.always_active_tools, "core")
+            self._mark_loader_source(core_tools, "core")
             self.tools.extend(core_tools)
             log_info(f"Loaded {len(core_tools)} core tools")
 
@@ -122,6 +263,7 @@ class ToolsManager:
             try:
                 from app.services.tooling.tools.current_screen import current_screen_tool
 
+                self._mark_loader_source([current_screen_tool], "plugin", plugin_id="openrecall")
                 self.tools.append(current_screen_tool)
                 log_info("Loaded OpenRecall plugin tools")
             except Exception as e:
@@ -133,6 +275,7 @@ class ToolsManager:
             try:
                 from app.services.tooling.tools.jira_toolkit import jira_tools
 
+                self._mark_loader_source(jira_tools, "plugin", plugin_id="jira")
                 self.tools.extend(jira_tools)
                 log_info(f"Loaded {len(jira_tools)} Jira plugin tools")
             except Exception as e:
@@ -144,6 +287,7 @@ class ToolsManager:
             try:
                 from app.services.tooling.tools.slack_toolkit import slack_tools
 
+                self._mark_loader_source(slack_tools, "plugin", plugin_id="slack")
                 self.tools.extend(slack_tools)
                 log_info(f"Loaded {len(slack_tools)} Slack plugin tools")
             except Exception as e:
@@ -157,6 +301,7 @@ class ToolsManager:
             try:
                 from app.services.tooling.tools.github_toolkit import github_tools
 
+                self._mark_loader_source(github_tools, "plugin", plugin_id="github")
                 self.tools.extend(github_tools)
                 log_info(f"Loaded {len(github_tools)} GitHub plugin tools")
             except Exception as e:
@@ -172,6 +317,9 @@ class ToolsManager:
 
                 brave_tool = await async_get_brave_search_tool()
                 if brave_tool:
+                    # Built-in search ships as core so trusted-core web search
+                    # keeps auto-approving; it is not a user-configured plugin tool.
+                    self._mark_loader_source([brave_tool], "core")
                     self.tools.append(brave_tool)
                     log_info("Loaded Brave Search tool")
                 else:
@@ -185,6 +333,7 @@ class ToolsManager:
             try:
                 from app.services.tooling.tools.duckduckgo_search import duckduckgo_search_tool
 
+                self._mark_loader_source([duckduckgo_search_tool], "core")
                 self.tools.append(duckduckgo_search_tool)
                 log_info("Loaded DuckDuckGo Search tool")
             except Exception as e:
@@ -199,6 +348,7 @@ class ToolsManager:
                 await async_get_google_credentials()
                 from app.services.tooling.tools.gmail_toolkit import gmail_tools
 
+                self._mark_loader_source(gmail_tools, "plugin", plugin_id="gmail")
                 self.tools.extend(gmail_tools)
                 log_info(f"Loaded {len(gmail_tools)} Gmail plugin tools")
             except Exception as e:
@@ -215,6 +365,7 @@ class ToolsManager:
                 await async_get_google_credentials()
                 from app.services.tooling.tools.gcalendar_toolkit import gcalendar_tools
 
+                self._mark_loader_source(gcalendar_tools, "plugin", plugin_id="gcalendar")
                 self.tools.extend(gcalendar_tools)
                 log_info(f"Loaded {len(gcalendar_tools)} GCalendar plugin tools")
             except Exception as e:
@@ -250,10 +401,9 @@ class ToolsManager:
             mcp_tools = await get_mcp_tools()
 
             if mcp_tools:
-                # Add MCP tools that aren't already loaded
-                for tool in mcp_tools:
-                    if tool.name not in self.tool_lookup:
-                        self.tools.append(tool)
+                # Identity, not display name, is authoritative. Same-named tools
+                # from distinct MCP servers must both remain in inventory.
+                self.tools.extend(mcp_tools)
 
                 self._mcp_tools_loaded = True
                 log_info(f"Loaded {len(mcp_tools)} MCP tools")
@@ -276,11 +426,8 @@ class ToolsManager:
             return
 
         try:
-            # Build tool lookup
-            self.tool_lookup.clear()
-            for tool in self.tools:
-                self.tool_lookup[tool.name] = tool
-                log_debug(f"Registered tool: {tool.name}")
+            # Build tool lookup before syncing so active tools and lookup agree.
+            self._rebuild_tool_lookup()
 
             # Get currently active tools (both core/plugin and MCP tools)
             active_tools = {}
@@ -303,6 +450,7 @@ class ToolsManager:
                 DBMethods.RAG_LIST,
                 DBRAGListRequest(namespace="main.tools", limit=4000),
                 timeout=5.0,
+                priority=get_system_priority(),
             )
 
             if result.ok and result.data and "items" in result.data:
@@ -312,9 +460,11 @@ class ToolsManager:
                 for name in existing_tools:
                     log_debug(f"  - '{name}'")
             else:
-                existing_tools = {}
                 if not result.ok:
-                    log_error(f"Error getting existing tools from database: {result.error}")
+                    log_warning(f"Error getting existing tools from database: {result.error}")
+                else:
+                    log_warning("Invalid RAG_LIST response while syncing tools; skipping mutation")
+                return
 
             # Find tools to add (active but not in database)
             tools_to_add = []
@@ -324,12 +474,12 @@ class ToolsManager:
                 elif existing_tools[name].get("description") != tool_data["description"]:
                     # Tool exists but description changed - update it
                     log_info(f"Updating tool '{name}' with new description")
-                    await self.bus.publish(
+                    await self._request_rag_mutation(
                         DBMethods.RAG_STORE,
                         DBRAGStoreRequest(
                             namespace="main.tools", key=name, value=tool_data, index=True
                         ),
-                        event=False,
+                        action=f"update tool '{name}' in database",
                     )
 
             # Find tools to remove (in database but not active)
@@ -342,21 +492,21 @@ class ToolsManager:
             # Add new tools via bus
             for name, tool_data in tools_to_add:
                 log_info(f"Adding new tool to database: {name}")
-                await self.bus.publish(
+                await self._request_rag_mutation(
                     DBMethods.RAG_STORE,
                     DBRAGStoreRequest(
                         namespace="main.tools", key=name, value=tool_data, index=True
                     ),
-                    event=False,
+                    action=f"add tool '{name}' to database",
                 )
 
             # Remove inactive tools via bus
             for name in tools_to_remove:
                 log_info(f"Removing inactive tool from database: {name}")
-                await self.bus.publish(
+                await self._request_rag_mutation(
                     DBMethods.RAG_DELETE,
                     DBRAGDeleteRequest(namespace="main.tools", key=name),
-                    event=False,
+                    action=f"remove inactive tool '{name}' from database",
                 )
 
             log_info(
@@ -401,6 +551,8 @@ class ToolsManager:
         Returns:
             Tool callable or None
         """
+        if not self.tool_lookup or self._tool_lookup_stale():
+            self._rebuild_tool_lookup()
         return self.tool_lookup.get(name)
 
     def get_all_tool_names(self) -> list[str]:
@@ -409,6 +561,8 @@ class ToolsManager:
         Returns:
             List of tool names
         """
+        if not self.tool_lookup or self._tool_lookup_stale():
+            self._rebuild_tool_lookup()
         return list(self.tool_lookup.keys())
 
     def get_stats(self) -> dict:
@@ -434,12 +588,12 @@ class ToolsManager:
 
             if mcp_client_manager.is_initialized:
                 current_mcp_tools = mcp_client_manager.get_tools()
-                mcp_tool_names = [tool.name for tool in current_mcp_tools]
+                mcp_tool_ids = {id(tool) for tool in current_mcp_tools}
 
-                # Remove from tools list and lookup
-                self.tools = [t for t in self.tools if t.name not in mcp_tool_names]
-                for name in mcp_tool_names:
-                    self.tool_lookup.pop(name, None)
+                # Object/source ownership, never a colliding display name,
+                # decides which tools belong to this MCP client generation.
+                self.tools = [tool for tool in self.tools if id(tool) not in mcp_tool_ids]
+                self._rebuild_tool_lookup()
 
                 # Close MCP client
                 await mcp_client_manager.close()
@@ -454,6 +608,25 @@ class ToolsManager:
         await self._sync_tools_with_database()
 
         log_info("MCP tools reloaded")
+
+    async def reload_plugin_tools(self) -> None:
+        """Reload tools selected by plugin configuration."""
+        log_info("Reloading plugin tools...")
+
+        plugin_tool_ids = {id(tool) for tool in self._plugin_tools}
+        if plugin_tool_ids:
+            self.tools = [tool for tool in self.tools if id(tool) not in plugin_tool_ids]
+            self.tool_lookup = {
+                name: tool
+                for name, tool in self.tool_lookup.items()
+                if id(tool) not in plugin_tool_ids
+            }
+
+        self._plugin_tools = []
+        await self._load_tracked_plugin_tools()
+        await self._sync_tools_with_database()
+
+        log_info("Plugin tools reloaded")
 
     async def get_mcp_status(self) -> dict:
         """Get the current status of MCP integration.

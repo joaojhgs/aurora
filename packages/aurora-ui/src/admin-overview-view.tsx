@@ -1,3 +1,6 @@
+"use client"
+
+import { useEffect, useState } from 'react'
 import type {
   AdminOverviewManifest,
   AdminOverviewServiceSummary,
@@ -7,7 +10,11 @@ import type {
   DeploymentTopologyResponse,
   MethodDescriptor
 } from '@aurora/client'
+import { buttonVariants } from '#components/ui/button'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, productAdminCountCopy, productAdminDeviceFeatureCopy, productAdminPairCountCopy, sanitizeAdminText } from './admin-product-copy'
 
 export interface AdminOverviewViewProps {
   client: AuroraClient
@@ -17,6 +24,7 @@ export interface AdminOverviewContentProps {
   manifest: AdminOverviewManifest | null
   transportKind: string
   error?: unknown
+  loading?: boolean
 }
 
 interface ActivityItem {
@@ -26,32 +34,80 @@ interface ActivityItem {
   detail: string
 }
 
-export async function AdminOverviewView({ client }: AdminOverviewViewProps) {
-  try {
-    const manifest = await client.adminOverview.getManifest()
-    return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} />
-  } catch (error) {
-    return <AdminOverviewContent manifest={null} transportKind={client.transport.kind} error={error} />
-  }
+const emptyPanelClass = 'flex flex-col items-start gap-2 rounded-lg border border-dashed border-border p-4 text-sm'
+const gapListItemClass = 'grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg border border-border p-3'
+const chipLinkClass = buttonVariants({ variant: 'outline', size: 'sm' })
+
+export function AdminOverviewView({ client }: AdminOverviewViewProps) {
+  const [manifest, setManifest] = useState<AdminOverviewManifest | null>(null)
+  const [error, setError] = useState<unknown>(undefined)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setManifest(null)
+    setError(undefined)
+    setLoading(true)
+    void buildAdminOverviewSnapshot(client).then(
+      (next) => {
+        if (!cancelled) {
+          setManifest(next)
+          setError(undefined)
+          setLoading(false)
+        }
+      },
+      (nextError: unknown) => {
+        if (!cancelled) {
+          setManifest(null)
+          setError(nextError)
+          setLoading(false)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminOverviewContent manifest={manifest} transportKind={client.transport.kind} error={error} loading={loading} />
 }
 
-export function AdminOverviewContent({ manifest, transportKind, error }: AdminOverviewContentProps) {
+export async function buildAdminOverviewSnapshot(client: AuroraClient): Promise<AdminOverviewManifest> {
+  return client.adminOverview.getManifest()
+}
+
+export function AdminOverviewContent({ manifest, transportKind, error, loading = false }: AdminOverviewContentProps) {
+  if (!manifest && loading) {
+    return (
+      <div className="flex flex-col gap-6" aria-busy="true" aria-live="polite">
+        <PageHeader
+          id="admin-overview-title"
+          eyebrow="Admin"
+          title="Admin overview"
+          description="Loading service health and availability."
+        />
+        <div className={emptyPanelClass}>
+          <h2 className="text-base font-semibold">Loading service overview</h2>
+          <p className="text-muted-foreground">Aurora is checking this setup.</p>
+        </div>
+      </div>
+    )
+  }
   if (!manifest) {
     return (
-      <section className="aui-admin-overview" aria-labelledby="admin-overview-title">
-        <AdminOverviewHeader
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          id="admin-overview-title"
+          eyebrow="Admin"
           title="Admin overview"
-          description="AuroraClient could not load the admin overview manifest. Controls stay disabled until backend evidence is available."
-          transportKind={transportKind}
-          generatedAt="pending"
-          secretsRedacted
+          description="Aurora could not load the service overview. Controls stay disabled until service status is available."
         />
-        <div className="aui-admin-empty" role="alert">
-          <h2>Service overview unavailable</h2>
-          <p>{errorMessage(error)}</p>
-          <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
+        <div className={emptyPanelClass} role="alert">
+          <h2 className="text-base font-semibold">Service overview unavailable</h2>
+          <p className="text-muted-foreground">{errorMessage(error)}</p>
+          <a className={chipLinkClass} href="/diagnostics">Open diagnostics</a>
         </div>
-      </section>
+      </div>
     )
   }
 
@@ -61,16 +117,22 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
   const manageMethods = manifest.methods.filter((method) => method.methodType === 'manage')
 
   return (
-    <section className="aui-admin-overview" aria-labelledby="admin-overview-title">
-      <AdminOverviewHeader
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        id="admin-overview-title"
+        eyebrow="Admin"
         title="Admin overview"
-        description="Deployment posture, service health, capability gaps, and repair paths are rendered from the SDK admin overview manifest."
-        transportKind={transportKind}
-        generatedAt={manifest.generatedAt}
-        secretsRedacted={manifest.privacy.secretsRedacted}
+        description="Service health, availability gaps, and repair paths for this Aurora setup."
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/diagnostics">Diagnostics export</a>
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/admin/services">Services</a>
+            <a className={buttonVariants({ variant: 'ghost', size: 'sm' })} href="/admin/contracts">Service actions</a>
+          </div>
+        }
       />
 
-      <div className="aui-admin-grid">
+      <div className="flex flex-col gap-3.5">
         <PosturePanel manifest={manifest} posture={posture} />
         <DeploymentTopologyPanel manifest={manifest} transportKind={transportKind} />
         <ServiceHealthPanel services={manifest.services} />
@@ -78,90 +140,63 @@ export function AdminOverviewContent({ manifest, transportKind, error }: AdminOv
         <ActivityPanel items={activity} />
       </div>
 
-      <section className="aui-admin-panel" aria-labelledby="admin-action-title">
-        <div className="aui-admin-panel-header">
-          <div>
-            <p className="aui-kicker">Mutation boundary</p>
-            <h2 id="admin-action-title">AdminAction controller</h2>
-          </div>
-          <EvidenceBadge label={`${manageMethods.length} manage methods`} />
-        </div>
-        <p>
-          Manage/admin-critical operations are visible for audit planning only. They remain disabled here until their
-          downstream task wires the matching AdminAction draft, confirm, submit, rollback, and error flow.
+      <Card
+        description="Protected changes"
+        actions={<EvidenceBadge label={`${manageMethods.length} manage methods`} />}
+        ariaLabel="Protected admin changes"
+      >
+        <h2 id="admin-action-title" className="text-base font-semibold">Protected admin changes</h2>
+        <p className="text-sm text-muted-foreground">
+          Sensitive operations are visible for review only. Use the dedicated confirmation flow to approve, run, undo, or inspect a failed action.
         </p>
         {manageMethods.length > 0 ? (
-          <div className="aui-admin-action-list">
+          <div className="flex flex-wrap gap-1.5">
             {manageMethods.slice(0, 8).map((method) => (
-              <button
+              <Button
                 key={`${method.module}.${method.name}`}
                 type="button"
-                className="aui-action-chip"
+                variant="outline"
                 disabled
-                title="AdminAction draft/confirm/audit is required before this mutation can run."
+                disabledReason="Admin confirmation is required before this action can run."
               >
-                {method.module}.{method.name}
-              </button>
+                {adminActionLabel(method)}
+              </Button>
             ))}
           </div>
         ) : (
-          <p>No manage methods were reported by the registry.</p>
+          <p className="text-sm text-muted-foreground">No protected actions were reported.</p>
         )}
-      </section>
-    </section>
-  )
-}
-
-function AdminOverviewHeader({
-  title,
-  description,
-  transportKind,
-  generatedAt,
-  secretsRedacted
-}: {
-  title: string
-  description: string
-  transportKind: string
-  generatedAt: string
-  secretsRedacted: boolean
-}) {
-  return (
-    <header className="aui-admin-header">
-      <div>
-        <p className="aui-kicker">Operator surface</p>
-        <h1 id="admin-overview-title">{title}</h1>
-        <p>{description}</p>
-      </div>
-      <div className="aui-admin-badges" aria-label="Admin overview evidence">
-        <EvidenceBadge label={transportKind} />
-        <EvidenceBadge label={secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
-        <EvidenceBadge label={generatedAt} />
-      </div>
-    </header>
+      </Card>
+    </div>
   )
 }
 
 function PosturePanel({ manifest, posture }: { manifest: AdminOverviewManifest; posture: AvailabilityState }) {
   const topology = manifest.deploymentTopology
   return (
-    <section className="aui-admin-panel" aria-labelledby="deployment-posture-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Deployment</p>
-          <h2 id="deployment-posture-title">Posture</h2>
-        </div>
-        <StatusBadge state={posture} />
-      </div>
-      <dl className="aui-admin-facts">
-        <div><dt>Service mode</dt><dd>{manifest.serviceMode}</dd></div>
-        <div><dt>Runtime</dt><dd>{topology ? deploymentModeLabel(topology) : 'BE-016 topology unavailable'}</dd></div>
-        <div><dt>Registry digest</dt><dd>{manifest.registryDigest || 'not reported'}</dd></div>
-        <div><dt>Services</dt><dd>{manifest.totals.services}</dd></div>
-        <div><dt>Methods</dt><dd>{manifest.totals.externalMethods} external / {manifest.totals.internalMethods} internal</dd></div>
-        <div><dt>Peers</dt><dd>{manifest.totals.peers}</dd></div>
-        <div><dt>Native</dt><dd>{manifest.native.availability} via {manifest.native.evidenceSource}</dd></div>
-      </dl>
-    </section>
+    <Card
+      description="Current availability for this Aurora setup."
+      actions={<StatusBadge state={posture} />}
+      ariaLabel="Deployment posture"
+    >
+      <h2 className="text-base font-semibold">Posture</h2>
+      <MetaGrid
+        ariaLabel="Deployment posture facts"
+        items={[
+          { label: 'Service mode', value: manifest.serviceMode },
+          { label: 'Connection', value: topology ? deploymentModeLabel(topology) : 'Service layout unavailable' },
+          {
+            label: 'Refresh ID',
+            value: manifest.registryDigest ? sanitizeAdminText(manifest.registryDigest, 'Available') : 'not reported',
+            mono: Boolean(manifest.registryDigest)
+          },
+          { label: 'Services', value: String(manifest.totals.services) },
+          { label: 'Actions', value: `${manifest.totals.externalMethods} available / ${manifest.totals.internalMethods} Aurora-only` },
+          { label: 'Peers', value: String(manifest.totals.peers) },
+          { label: 'Device features', value: deviceFeatureLabel(manifest.native.availability) }
+        ]}
+      />
+    </Card>
   )
 }
 
@@ -181,146 +216,120 @@ function DeploymentTopologyPanel({
     ...(topology?.bullmq_queue_health.degraded_reasons ?? [])
   ])
   const controlsSupported = supportsProcessControls(manifest)
+  const topologyColumns: Array<DataColumn<(typeof visibleServices)[number]>> = [
+    { key: 'service', header: 'Service', render: (service) => adminModuleLabel(service.module) },
+    { key: 'topology', header: 'Placement', render: (service) => servicePlacementLabel(service.topology) },
+    { key: 'status', header: 'Status', render: (service) => (service.stale ? 'stale' : service.status) },
+    { key: 'hint', header: 'Location', render: (service) => serviceLocationLabel(service.container_hint ?? service.process_hint), hideAt: 'md' }
+  ]
 
   return (
-    <section className="aui-admin-panel" aria-labelledby="deployment-topology-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Runtime topology</p>
-          <h2 id="deployment-topology-title">Deployment topology</h2>
-        </div>
-        <StatusBadge state={topologyState} />
-      </div>
-
+    <Card
+      description="Where Aurora services are running and whether they need attention."
+      actions={<StatusBadge state={topologyState} />}
+      ariaLabel="Service layout"
+      flush={visibleServices.length > 0}
+    >
+      <h2 className="text-base font-semibold">Service layout</h2>
       {topology ? (
         <>
-          <dl className="aui-admin-facts">
-            <div><dt>Client boundary</dt><dd>{clientBoundaryLabel(transportKind, topology)}</dd></div>
-            <div><dt>Architecture</dt><dd>{topology.architecture_mode} / {topology.runtime_mode}</dd></div>
-            <div><dt>Bus backend</dt><dd>{topology.bus_backend}</dd></div>
-            <div><dt>Redis</dt><dd>{redisHealthLabel(topology)}</dd></div>
-            <div><dt>BullMQ</dt><dd>{busHealthLabel(topology)}</dd></div>
-            <div><dt>Registry freshness</dt><dd>{staleServices.length > 0 ? `${staleServices.length} stale services` : 'fresh topology evidence'}</dd></div>
-            <div><dt>Container hints</dt><dd>{containerHintLabel(topology)}</dd></div>
-            <div><dt>Redaction</dt><dd>{topology.secrets_redacted ? 'secrets redacted by backend' : 'redaction not confirmed'}</dd></div>
-          </dl>
+          <MetaGrid
+            ariaLabel="Deployment topology facts"
+            items={[
+              { label: 'This screen', value: clientBoundaryLabel(transportKind, topology) },
+              { label: 'Service layout', value: deploymentModeLabel(topology) },
+              { label: 'Work queue', value: queueHealthLabel(topology) },
+              { label: 'Connection health', value: connectionHealthLabel(topology) },
+              { label: 'Service freshness', value: staleServices.length > 0 ? `${staleServices.length} service(s) need attention` : 'Current' },
+              { label: 'Service locations', value: containerHintLabel(topology) },
+              { label: 'Sensitive data', value: topology.secrets_redacted ? 'Protected' : 'Needs review' }
+            ]}
+          />
 
           {degradedReasons.length > 0 ? (
-            <ul className="aui-admin-gap-list" aria-label="Deployment degraded reasons">
+            <ul className="grid list-none gap-2 p-0" aria-label="Deployment degraded reasons">
               {degradedReasons.map((reason) => (
-                <li key={reason}>
-                  <div>
-                    <strong>{reason}</strong>
-                    <small>{degradedReasonCopy(reason)}</small>
+                <li key={reason} className={gapListItemClass}>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <strong className="text-sm font-medium">{adminReasonText(reason)}</strong>
+                    <small className="text-xs text-muted-foreground">{degradedReasonCopy(reason)}</small>
                   </div>
                   <StatusBadge state="degraded" />
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="aui-admin-empty">
-              <h3>No topology degradation reported</h3>
-              <p>BE-016 did not report Redis, BullMQ, process registry, or mesh topology degradation in this snapshot.</p>
+            <div className={emptyPanelClass}>
+              <h3 className="font-medium">No service layout issues reported</h3>
+              <p className="text-muted-foreground">Aurora did not report service placement or queue issues in the current view.</p>
             </div>
           )}
 
           {visibleServices.length > 0 ? (
-            <div className="aui-table-wrap">
-              <table className="aui-admin-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Service</th>
-                    <th scope="col">Topology</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Hint</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleServices.map((service) => (
-                    <tr key={`${service.module}:${service.instance_id ?? service.topology}`}>
-                      <th scope="row">{service.module}</th>
-                      <td>{service.topology}</td>
-                      <td>{service.stale ? 'stale' : service.status}</td>
-                      <td>{service.container_hint ?? service.process_hint ?? 'not reported'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={topologyColumns}
+              rows={visibleServices}
+              getRowKey={(service) => `${service.module}:${service.instance_id ?? service.topology}`}
+              caption="Service placement"
+            />
           ) : null}
         </>
       ) : (
-        <div className="aui-admin-empty" role="status">
-          <h3>Deployment topology unavailable</h3>
-          <p>{manifest.deploymentTopologyError ?? 'Gateway.GetDeploymentTopology did not return BE-016 evidence.'}</p>
-          <a className="aui-action-chip" href="/diagnostics">Open diagnostics</a>
+        <div className={emptyPanelClass} role="status">
+          <h3 className="font-medium">Service layout unavailable</h3>
+          <p className="text-muted-foreground">{manifest.deploymentTopologyError ? 'Aurora could not read service layout. Open diagnostics for details.' : 'Aurora did not return service layout.'}</p>
+          <a className={chipLinkClass} href="/diagnostics">Open diagnostics</a>
         </div>
       )}
 
-      <div className="aui-admin-action-list" aria-label="Deployment topology links and controls">
-        <a className="aui-action-chip" href="/diagnostics">Diagnostics export</a>
-        <a className="aui-action-chip" href="/admin/services">Services and contracts</a>
-        <a className="aui-action-chip" href="/admin/config">Config reload impact</a>
-        <a className="aui-action-chip" href="https://github.com/joaojhgs/aurora/blob/main/README.process-mode.md">Process runbook</a>
-        <button
+      <div className="flex flex-wrap gap-1.5" aria-label="Deployment topology links and controls">
+        <a className={chipLinkClass} href="/diagnostics">Diagnostics export</a>
+        <a className={chipLinkClass} href="/admin/services">Services</a>
+        <a className={chipLinkClass} href="/admin/contracts">Service actions</a>
+        <a className={chipLinkClass} href="/admin/config">Config reload impact</a>
+        <a className={chipLinkClass} href="https://github.com/joaojhgs/aurora/blob/main/README.process-mode.md">Process runbook</a>
+        <Button
           type="button"
-          className="aui-action-chip"
+          variant="outline"
           disabled={!controlsSupported}
-          title={
+          disabledReason={
             controlsSupported
-              ? 'BE-015 process controls are present, but this overview remains read-only.'
-              : 'Process restart/control requires BE-015 capability and AdminAction wiring.'
+              ? 'Service controls are present, but this overview remains read-only.'
+              : 'Service controls are not ready for this view.'
           }
         >
-          Process controls {controlsSupported ? 'read-only here' : 'unsupported'}
-        </button>
+          Service controls {controlsSupported ? 'read-only here' : 'not ready'}
+        </Button>
       </div>
-    </section>
+    </Card>
   )
 }
 
 function ServiceHealthPanel({ services }: { services: AdminOverviewServiceSummary[] }) {
   const visible = services.slice(0, 10)
+  const columns: Array<DataColumn<AdminOverviewServiceSummary>> = [
+    { key: 'service', header: 'Service', render: (service) => adminModuleLabel(service.module) },
+    { key: 'status', header: 'Status', render: (service) => sanitizeAdminText(service.status) },
+    { key: 'methods', header: 'Actions', render: (service) => `${service.externalMethodCount} available / ${service.internalMethodCount} Aurora-only` },
+    { key: 'permissions', header: 'Permissions', render: (service) => service.requiredPermissions.length > 0 ? `${service.requiredPermissions.length} needed` : 'none' }
+  ]
   return (
-    <section className="aui-admin-panel" aria-labelledby="service-health-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Services</p>
-          <h2 id="service-health-title">Health</h2>
-        </div>
-        <EvidenceBadge label={`${services.length} reported`} />
-      </div>
+    <Card
+      description="Services"
+      actions={<EvidenceBadge label={`${services.length} reported`} />}
+      ariaLabel="Service health"
+    >
+      <h2 className="text-base font-semibold">Health</h2>
       {visible.length > 0 ? (
-        <div className="aui-table-wrap">
-          <table className="aui-admin-table">
-            <thead>
-              <tr>
-                <th scope="col">Service</th>
-                <th scope="col">Status</th>
-                <th scope="col">Methods</th>
-                <th scope="col">Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((service) => (
-                <tr key={service.module}>
-                  <th scope="row">{service.module}</th>
-                  <td>{service.status}</td>
-                  <td>{service.externalMethodCount} external / {service.internalMethodCount} internal</td>
-                  <td>{service.requiredPermissions.join(', ') || 'none'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable columns={columns} rows={visible} getRowKey={(service) => service.module} caption="Service health" />
       ) : (
-        <div className="aui-admin-empty">
-          <h3>No services reported</h3>
-          <p>The registry loaded, but no service summaries were returned by the SDK.</p>
-          <a className="aui-action-chip" href="/diagnostics">Inspect registry</a>
+        <div className={emptyPanelClass}>
+          <h3 className="font-medium">No services reported</h3>
+          <p className="text-muted-foreground">Aurora loaded successfully, but no service summaries were returned.</p>
+          <a className={chipLinkClass} href="/diagnostics">Open diagnostics</a>
         </div>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -332,22 +341,20 @@ function CapabilityGapPanel({
   internalOnly: MethodDescriptor[]
 }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="capability-gaps-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Capabilities</p>
-          <h2 id="capability-gaps-title">Gaps</h2>
-        </div>
-        <EvidenceBadge label={`${gaps.length} gaps`} />
-      </div>
+    <Card
+      description="Capabilities"
+      actions={<EvidenceBadge label={`${gaps.length} gaps`} />}
+      ariaLabel="Capability gaps"
+    >
+      <h2 className="text-base font-semibold">Gaps</h2>
       {gaps.length > 0 ? (
-        <ul className="aui-admin-gap-list">
+        <ul className="grid list-none gap-2 p-0">
           {gaps.slice(0, 8).map((gap) => (
-            <li key={gap.id}>
-              <div>
-                <strong>{gap.module}.{gap.method}</strong>
-                <small>{gap.providerId} / {gap.serviceInstanceId}</small>
-                <span>{gap.routeBlockers.join(', ') || 'backend reported unavailable'}</span>
+            <li key={gap.id} className={gapListItemClass}>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <strong className="text-sm font-medium">{adminCapabilityLabel(gap)}</strong>
+                <small className="text-xs text-muted-foreground">{serviceTargetLabel(gap)}</small>
+                <span className="text-xs text-muted-foreground">{availabilityReason(gap)}</span>
               </div>
               <StatusBadge state={gap.availability} />
               <PrivacyBadge privacy={gap.privacyClass} />
@@ -355,48 +362,53 @@ function CapabilityGapPanel({
           ))}
         </ul>
       ) : (
-        <div className="aui-admin-empty">
-          <h3>No capability gaps reported</h3>
-          <p>The capability catalog did not report denied, stale, privacy-blocked, or unsupported actions.</p>
+        <div className={emptyPanelClass}>
+          <h3 className="font-medium">No availability gaps reported</h3>
+          <p className="text-muted-foreground">Aurora did not report denied, stale, consent-blocked, or unavailable actions.</p>
         </div>
       )}
       {internalOnly.length > 0 ? (
-        <details className="aui-admin-details">
-          <summary>Internal-only methods</summary>
-          <ul>
+        <details className="border-t border-border pt-3">
+          <summary className="cursor-pointer text-sm font-medium text-primary">Actions only Aurora can use</summary>
+          <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-muted-foreground">
             {internalOnly.slice(0, 10).map((method) => (
-              <li key={`${method.module}.${method.name}`}>{method.module}.{method.name}</li>
+              <li key={`${method.module}.${method.name}`}>{adminActionLabel(method)}</li>
             ))}
           </ul>
         </details>
       ) : null}
-    </section>
+    </Card>
   )
 }
 
 function ActivityPanel({ items }: { items: ActivityItem[] }) {
   return (
-    <section className="aui-admin-panel" aria-labelledby="activity-rail-title">
-      <div className="aui-admin-panel-header">
-        <div>
-          <p className="aui-kicker">Activity</p>
-          <h2 id="activity-rail-title">Rail</h2>
-        </div>
-        <EvidenceBadge label="SDK snapshot" />
-      </div>
-      <ol className="aui-admin-activity">
+    <Card
+      description="Activity"
+      actions={<EvidenceBadge label="Current view" />}
+      ariaLabel="Activity rail"
+    >
+      <h2 className="text-base font-semibold">Rail</h2>
+      <ol className="grid list-none gap-2 p-0">
         {items.map((item) => (
-          <li key={item.id}>
-            <span className={`aui-admin-activity-dot aui-dot-${item.state}`} aria-hidden />
-            <div>
-              <strong>{item.label}</strong>
-              <small>{item.detail}</small>
+          <li key={item.id} className="flex items-start gap-2.5 rounded-lg border border-border p-3">
+            <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${activityDotClass(item.state)}`} aria-hidden />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <strong className="text-sm font-medium">{item.label}</strong>
+              <small className="text-xs text-muted-foreground">{item.detail}</small>
             </div>
           </li>
         ))}
       </ol>
-    </section>
+    </Card>
   )
+}
+
+function activityDotClass(state: ActivityItem['state']): string {
+  if (state === 'available-local' || state === 'available-remote') return 'bg-success'
+  if (state === 'pending' || state === 'degraded' || state === 'offline') return 'bg-warning'
+  if (state === 'denied' || state === 'privacy-blocked') return 'bg-destructive'
+  return 'bg-muted-foreground/40'
 }
 
 function deploymentPosture(manifest: AdminOverviewManifest): AvailabilityState {
@@ -407,6 +419,7 @@ function deploymentPosture(manifest: AdminOverviewManifest): AvailabilityState {
   if (manifest.unavailable.some((capability) => capability.availability === 'denied')) return 'denied'
   if (manifest.unavailable.some((capability) => capability.availability === 'stale')) return 'stale'
   if (manifest.unavailable.length > 0 || manifest.internalOnly.length > 0) return 'degraded'
+  if (manifest.deploymentTopology?.runtime_mode.toLowerCase().includes('thin')) return 'available-remote'
   return 'available-local'
 }
 
@@ -428,41 +441,41 @@ function deploymentTopologyState(
   if (topology.runtime_mode.includes('mesh') || topology.architecture_mode.includes('mesh')) {
     return topology.mesh_peer_topology_trusted ? 'available-remote' : 'privacy-blocked'
   }
-  if (topology.runtime_mode.includes('thin')) return 'unsupported'
+  if (topology.runtime_mode.includes('thin')) return 'available-remote'
   return 'available-local'
 }
 
 function deploymentModeLabel(topology: DeploymentTopologyResponse): string {
   const mode = topology.architecture_mode.toLowerCase()
   const runtime = topology.runtime_mode.toLowerCase()
-  if (runtime.includes('desktop-local') || runtime.includes('sidecar')) return 'desktop local sidecar'
-  if (runtime.includes('desktop-thin') || runtime.includes('server-thin')) return 'server thin client'
-  if (runtime.includes('mesh') || mode.includes('mesh')) return 'mesh peer-only shell'
-  if (mode.includes('process')) return 'server process-mode deployment'
-  if (mode.includes('thread')) return 'local thread-mode app'
-  return `${topology.architecture_mode} / ${topology.runtime_mode}`
+  if (runtime.includes('desktop-local') || runtime.includes('sidecar')) return 'Aurora running on this computer'
+  if (runtime.includes('desktop-thin') || runtime.includes('server-thin')) return 'Connected to another Aurora device'
+  if (runtime.includes('mesh') || mode.includes('mesh')) return 'Connected through approved devices'
+  if (mode.includes('process')) return 'Aurora services running separately'
+  if (mode.includes('thread')) return 'Aurora running together'
+  return 'Aurora service layout reported'
 }
 
 function clientBoundaryLabel(transportKind: string, topology: DeploymentTopologyResponse): string {
-  if (transportKind === 'tauri') return `Desktop local through SDK; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'mesh') return `Mesh transport through SDK; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'http') return `Server web/thin client through Gateway; ${deploymentModeLabel(topology)}`
-  if (transportKind === 'mock') return `Fixture transport; ${deploymentModeLabel(topology)}`
-  return `${transportKind} transport; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'tauri') return `This computer; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'mesh') return `Approved devices; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'http') return `Connected; ${deploymentModeLabel(topology)}`
+  if (transportKind === 'mock') return `Local preview; ${deploymentModeLabel(topology)}`
+  return deploymentModeLabel(topology)
 }
 
-function redisHealthLabel(topology: DeploymentTopologyResponse): string {
-  if (topology.redis_reachable === true) return `${topology.redis_url_redacted ?? 'redacted Redis URL'} reachable`
-  if (topology.redis_reachable === false) return 'unreachable; check Redis service and REDIS_URL redaction'
-  return topology.architecture_mode === 'threads' ? 'not required for thread mode' : 'not reported'
-}
-
-function busHealthLabel(topology: DeploymentTopologyResponse): string {
+function queueHealthLabel(topology: DeploymentTopologyResponse): string {
   const health = topology.bullmq_queue_health
-  const parts = [health.backend, health.status]
-  if (health.queue_depth !== null) parts.push(`queue depth ${health.queue_depth}`)
-  if (!health.queue_lag_known) parts.push('queue lag unknown')
-  return parts.join(' / ')
+  if (health.status === 'degraded') return 'Needs attention'
+  if (health.queue_depth !== null) return `${health.queue_depth} waiting`
+  if (!health.queue_lag_known) return 'Status incomplete'
+  return 'Ready'
+}
+
+function connectionHealthLabel(topology: DeploymentTopologyResponse): string {
+  if (topology.redis_reachable === false) return 'Connection needed for service queue'
+  if (topology.redis_reachable === true) return 'Connected'
+  return topology.architecture_mode === 'threads' ? 'Not needed' : 'Not reported'
 }
 
 function containerHintLabel(topology: DeploymentTopologyResponse): string {
@@ -474,17 +487,17 @@ function containerHintLabel(topology: DeploymentTopologyResponse): string {
     hints.gateway_service,
     hints.config_service
   ].filter(Boolean)
-  return services.join(' / ') || 'not reported'
+  return services.length > 0 ? productAdminCountCopy(services.length, 'location hint') : 'not reported'
 }
 
 function degradedReasonCopy(reason: string): string {
   const normalized = reason.toLowerCase()
-  if (normalized.includes('redis_unreachable')) return 'Open diagnostics, verify Redis is running, and confirm the redacted REDIS_URL target.'
-  if (normalized.includes('bullmq_queue_lag_unknown')) return 'BullMQ queue lag is unavailable; use diagnostics before trusting process-mode throughput.'
-  if (normalized.includes('process_registry_stale')) return 'Service registry heartbeat is stale; inspect services/contracts before taking action.'
-  if (normalized.includes('thread_mode_no_process_controls')) return 'Thread mode runs in one Python process; process restart controls are intentionally disabled.'
-  if (normalized.includes('mesh_peer_topology_untrusted')) return 'Remote peer topology is not trusted; require authenticated peer evidence before displaying details.'
-  return 'Inspect diagnostics and the process-mode runbook before taking operator action.'
+  if (normalized.includes('redis_unreachable')) return 'Aurora cannot reach the service queue. Open diagnostics and check the service host.'
+  if (normalized.includes('bullmq_queue_lag_unknown')) return 'Aurora cannot confirm queue freshness. Open diagnostics before taking operator action.'
+  if (normalized.includes('process_registry_stale')) return 'Service heartbeats are stale. Check Services before taking action.'
+  if (normalized.includes('thread_mode_no_process_controls')) return 'This Aurora layout does not support separate service controls.'
+  if (normalized.includes('mesh_peer_topology_untrusted')) return 'Connected device status is not trusted yet. Confirm the device before showing details.'
+  return 'Open diagnostics and the runbook before taking operator action.'
 }
 
 function supportsProcessControls(manifest: AdminOverviewManifest): boolean {
@@ -512,30 +525,80 @@ function activityItems(manifest: AdminOverviewManifest, gaps: CapabilitySummary[
     {
       id: 'registry',
       state: manifest.totals.methods > 0 ? 'available-local' : 'unsupported',
-      label: 'Registry loaded',
-      detail: `${manifest.totals.methods} methods across ${manifest.totals.services} services`
+      label: 'Service list loaded',
+      detail: productAdminPairCountCopy(manifest.totals.methods, 'action', manifest.totals.services, 'service')
     },
     {
       id: 'catalog',
       state: manifest.totals.capabilityActions > 0 ? 'available-local' : 'unsupported',
-      label: 'Capability catalog',
-      detail: `${manifest.totals.capabilityActions} executable actions reported`
+      label: 'Available actions',
+      detail: `${manifest.totals.capabilityActions} action(s) reported`
     },
     {
       id: 'gap',
       state: newestGap?.availability ?? 'available-local',
-      label: newestGap ? `${newestGap.module}.${newestGap.method}` : 'No active gap',
-      detail: newestGap?.routeBlockers.join(', ') || 'No blocked capability in the current SDK snapshot'
+      label: newestGap ? adminCapabilityLabel(newestGap) : 'No active gap',
+      detail: newestGap ? availabilityReason(newestGap) : 'No blocked action in the current view'
     },
     {
       id: 'native',
       state: manifest.native.availability,
-      label: 'Native manifest',
-      detail: `${manifest.native.platform}; ${manifest.native.capabilityKeys.length} capabilities`
+      label: 'Device features',
+      detail: productAdminDeviceFeatureCopy(devicePlatformLabel(manifest.native.platform), manifest.native.capabilityKeys.length)
     }
   ]
 }
 
+function adminCapabilityLabel(capability: CapabilitySummary): string {
+  return adminActionLabel({
+    module: capability.module,
+    name: capability.method,
+    busTopic: capability.busTopic ?? capability.method,
+  })
+}
+
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown SDK error'
+  return adminErrorTitle(error)
+}
+
+function deviceFeatureLabel(state: AvailabilityState): string {
+  if (state === 'available-local' || state === 'available-remote') return 'Available'
+  if (state === 'pending') return 'Checking'
+  if (state === 'denied' || state === 'privacy-blocked') return 'Needs permission'
+  if (state === 'offline') return 'This device is offline'
+  return 'Not ready'
+}
+
+function devicePlatformLabel(platform: string): string {
+  if (/android/i.test(platform)) return 'Android'
+  if (/ios|iphone|ipad/i.test(platform)) return 'iOS'
+  if (/darwin|mac/i.test(platform)) return 'macOS'
+  if (/windows/i.test(platform)) return 'Windows'
+  if (/linux/i.test(platform)) return 'Linux'
+  return 'Device'
+}
+
+function servicePlacementLabel(value: string): string {
+  if (/process|container/i.test(value)) return 'Separate service'
+  if (/thread/i.test(value)) return 'Runs with Aurora'
+  if (/remote|mesh/i.test(value)) return 'Connected device'
+  return 'Reported'
+}
+
+function serviceLocationLabel(value: string | null | undefined): string {
+  if (!value) return 'not reported'
+  return 'Configured'
+}
+
+function serviceTargetLabel(gap: CapabilitySummary): string {
+  if (gap.peerId && gap.peerId !== 'local-peer') return 'Connected device'
+  return 'This device'
+}
+
+function availabilityReason(capability: CapabilitySummary): string {
+  if (capability.availability === 'offline' || capability.availability === 'stale') return 'This device is offline'
+  if (capability.availability === 'denied' || capability.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
+  if (capability.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
+  if (capability.routeBlockers.length > 0) return 'This action is not ready yet'
+  return 'Ready'
 }

@@ -1,6 +1,7 @@
 """Unit tests for SupervisorService."""
 
 import contextlib
+import json
 import sys
 import types
 from unittest.mock import AsyncMock, Mock, patch
@@ -8,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.messaging import MessageBus
+from app.services.config.mesh_policy_migration import create_tooling_downgrade_receipt
 from app.services.supervisor import Supervisor
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.supervisor import ServiceControlCommand, SupervisorMethods
@@ -146,6 +148,96 @@ class TestSupervisorInitialization:
                 assert supervisor._bus is not None
                 mock_bus.start.assert_called_once()
 
+    @staticmethod
+    def _legacy_start_files(tmp_path):
+        config = {
+            "services": {
+                "tooling": {
+                    "mesh_sharing": {"share": False},
+                    "approval_policy": {"default_share": False},
+                }
+            }
+        }
+        snapshot = {
+            "secrets_redacted": True,
+            "policy": {"initialized": True},
+            "rules": [],
+            "stale_tool_ids": [],
+            "stale_group_ids": [],
+            "normalized_projection_present": True,
+            "mesh_switches": {
+                "provider_mesh_tooling_enabled": False,
+                "consumer_mesh_tooling_enabled": False,
+            },
+        }
+        config_path = tmp_path / "legacy-config.json"
+        snapshot_path = tmp_path / "tooling-export.json"
+        config_path.write_text(json.dumps(config))
+        snapshot_path.write_text(json.dumps(snapshot))
+        return config, snapshot, config_path, snapshot_path
+
+    @pytest.mark.asyncio
+    async def test_legacy_target_startup_accepts_verified_downgrade_receipt(
+        self, supervisor, tmp_path
+    ):
+        config, snapshot, config_path, snapshot_path = self._legacy_start_files(tmp_path)
+        create_tooling_downgrade_receipt(
+            output_config=config,
+            output_file=str(config_path),
+            tooling_export_snapshot=snapshot,
+        )
+        with (
+            patch.object(supervisor, "_initialize_local_bus", new=AsyncMock()) as initialize_bus,
+            patch("app.services.supervisor.set_bus"),
+            patch.dict(
+                "os.environ",
+                {
+                    "AURORA_TOOLING_TARGET_MODE": "legacy",
+                    "AURORA_CONFIG_FILE": str(config_path),
+                    "AURORA_TOOLING_EXPORT_SNAPSHOT": str(snapshot_path),
+                    "AURORA_ARCHITECTURE_MODE": "threads",
+                },
+                clear=False,
+            ),
+        ):
+            await supervisor.initialize()
+        initialize_bus.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tamper_receipt", [False, True])
+    async def test_legacy_target_startup_blocks_missing_or_tampered_receipt(
+        self, supervisor, tmp_path, tamper_receipt
+    ):
+        config, snapshot, config_path, snapshot_path = self._legacy_start_files(tmp_path)
+        if tamper_receipt:
+            receipt = create_tooling_downgrade_receipt(
+                output_config=config,
+                output_file=str(config_path),
+                tooling_export_snapshot=snapshot,
+            )
+            data = json.loads(receipt.read_text())
+            data["snapshot_sha256"] = "0" * 64
+            receipt.write_text(json.dumps(data))
+            receipt.chmod(0o600)
+        initialize_bus = AsyncMock()
+        with (
+            patch.object(supervisor, "_initialize_local_bus", new=initialize_bus),
+            patch("app.services.supervisor.set_bus"),
+            patch.dict(
+                "os.environ",
+                {
+                    "AURORA_TOOLING_TARGET_MODE": "legacy",
+                    "AURORA_CONFIG_FILE": str(config_path),
+                    "AURORA_TOOLING_EXPORT_SNAPSHOT": str(snapshot_path),
+                    "AURORA_ARCHITECTURE_MODE": "threads",
+                },
+                clear=False,
+            ),
+            pytest.raises(RuntimeError, match="unsafe_downgrade_blocked"),
+        ):
+            await supervisor.initialize()
+        initialize_bus.assert_not_awaited()
+
 
 class TestSupervisorServiceLifecycle:
     """Test supervisor service lifecycle."""
@@ -184,6 +276,32 @@ class TestSupervisorServiceLifecycle:
 
             # Verify services were started
             assert len(supervisor.services) > 0
+
+    @pytest.mark.asyncio
+    async def test_thread_start_uses_voice_on_defaults_when_config_read_fails(
+        self, supervisor, mock_bus
+    ):
+        """Voice services stay production-on if config reads fall back to code defaults."""
+        supervisor._bus = mock_bus
+
+        async def return_gate_default(_key_path, default):
+            return default
+
+        with (
+            _inject_supervisor_thread_service_classes() as svc_mocks,
+            patch.object(supervisor, "_get_config_bool", side_effect=return_gate_default),
+        ):
+            for mock_cls in svc_mocks.values():
+                inst = Mock()
+                inst.start = AsyncMock()
+                mock_cls.return_value = inst
+
+            await supervisor.start_services()
+
+        assert svc_mocks["tts"].called
+        assert svc_mocks["wakeword"].called
+        assert svc_mocks["transcription"].called
+        assert svc_mocks["coordinator"].called
 
     @pytest.mark.asyncio
     async def test_shutdown(self, supervisor, mock_bus):

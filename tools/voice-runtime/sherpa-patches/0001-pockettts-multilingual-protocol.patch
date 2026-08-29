@@ -1,0 +1,428 @@
+--- a/sherpa-onnx/csrc/offline-tts-pocket-model.h
++++ b/sherpa-onnx/csrc/offline-tts-pocket-model.h
+@@ -5,7 +5,9 @@
+ #ifndef SHERPA_ONNX_CSRC_OFFLINE_TTS_POCKET_MODEL_H_
+ #define SHERPA_ONNX_CSRC_OFFLINE_TTS_POCKET_MODEL_H_
+ 
++#include <cstdint>
+ #include <memory>
++#include <string>
+ #include <tuple>
+ #include <utility>
+ #include <vector>
+@@ -15,6 +17,18 @@
+ 
+ namespace sherpa_onnx {
+ 
++struct PocketTtsProtocol {
++  bool insert_bos_before_voice = false;
++  int32_t frames_after_eos = 3;
++  float eos_threshold = -4.0f;
++  int64_t empty_kv_seq_len = 1;
++  int64_t latent_dim = 32;
++  bool pad_with_spaces_for_short_inputs = false;
++  bool remove_semicolons = false;
++  std::vector<float> bos_before_voice;
++  std::vector<int64_t> bos_shape;
++};
++
+ struct PocketLmMainState {
+   std::vector<Ort::Value> values;
+ };
+@@ -60,6 +74,10 @@
+ 
+   OrtAllocator *Allocator() const;
+ 
++  const PocketTtsProtocol &Protocol() const;
++
++  Ort::Value MaybeConcatBosBeforeVoice(Ort::Value encoder_out) const;
++
+  private:
+   class Impl;
+   std::unique_ptr<Impl> impl_;
+--- a/sherpa-onnx/csrc/offline-tts-pocket-model.cc
++++ b/sherpa-onnx/csrc/offline-tts-pocket-model.cc
+@@ -4,6 +4,10 @@
+ 
+ #include "sherpa-onnx/csrc/offline-tts-pocket-model.h"
+ 
++#include <cstdint>
++#include <cstring>
++#include <fstream>
++#include <iterator>
+ #include <memory>
+ #include <string>
+ #include <tuple>
+@@ -19,6 +23,7 @@
+ #include "rawfile/raw_file_manager.h"
+ #endif
+ 
++#include "nlohmann/json.hpp"
+ #include "sherpa-onnx/csrc/macros.h"
+ #include "sherpa-onnx/csrc/onnx-utils.h"
+ #include "sherpa-onnx/csrc/session.h"
+@@ -27,50 +32,166 @@
+ 
+ namespace sherpa_onnx {
+ 
++static std::string PocketParentDir(const std::string &path) {
++  auto pos = path.find_last_of("/\\");
++  if (pos == std::string::npos) {
++    return ".";
++  }
++  if (pos == 0) {
++    return "/";
++  }
++  return path.substr(0, pos);
++}
++
++static size_t PocketElementSize(ONNXTensorElementDataType type) {
++  switch (type) {
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
++      return sizeof(float);
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
++      return sizeof(uint16_t);
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
++      return sizeof(int64_t);
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32:
++      return sizeof(int32_t);
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
++    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
++      return 1;
++    default:
++      SHERPA_ONNX_LOGE("Unsupported tensor element type: %d",
++                       static_cast<int>(type));
++      SHERPA_ONNX_EXIT(-1);
++  }
++}
++
++static void ZeroRawTensor(Ort::Value *v) {
++  auto info = v->GetTensorTypeAndShapeInfo();
++  auto n = info.GetElementCount();
++  auto type = info.GetElementType();
++  std::memset(v->GetTensorMutableRawData(), 0, n * PocketElementSize(type));
++}
++
+ static Ort::Value CreateZeroTensorLike(Ort::Session &sess, int32_t input_index,
+-                                       OrtAllocator *allocator) {
++                                       OrtAllocator *allocator,
++                                       int64_t empty_kv_seq_len) {
+   auto type_info = sess.GetInputTypeInfo(input_index);
+   auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+   ONNXTensorElementDataType elem_type = tensor_info.GetElementType();
+   std::vector<int64_t> shape = tensor_info.GetShape();
+ 
+-  // 3. Replace dynamic dims (-1) with 1
++  // First dynamic dim is batch (1). Remaining dynamic dims are empty KV
++  // sequence length: 1 for legacy English 2026-01 packs, 0 for current
++  // multilingual Kyutai packs.
++  bool first_dynamic = true;
+   for (auto &d : shape) {
+     if (d < 0) {
+-      d = 1;
++      if (first_dynamic) {
++        d = 1;
++        first_dynamic = false;
++      } else {
++        d = empty_kv_seq_len;
++      }
+     }
+   }
+ 
+-  Ort::Value v{nullptr};
+-  switch (elem_type) {
+-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+-      v = Ort::Value::CreateTensor<float>(allocator, shape.data(),
+-                                          shape.size());
+-      Fill<float>(&v, 0);
+-      break;
+-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
+-      v = Ort::Value::CreateTensor<bool>(allocator, shape.data(), shape.size());
+-      Fill<bool>(&v, 0);
+-      break;
+-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64:
+-      v = Ort::Value::CreateTensor<int64_t>(allocator, shape.data(),
+-                                            shape.size());
+-      Fill<int64_t>(&v, 0);
+-      break;
+-    default:
+-      SHERPA_ONNX_LOGE("Unsupported tensor element type: %d", elem_type);
+-      SHERPA_ONNX_EXIT(-1);
+-  }
+-
++  Ort::Value v = Ort::Value::CreateTensor(allocator, shape.data(), shape.size(),
++                                          elem_type);
++  ZeroRawTensor(&v);
+   return v;
+ }
+ 
++static PocketTtsProtocol LoadPocketProtocolFromDir(const std::string &dir) {
++  PocketTtsProtocol protocol;
++  std::string proto_path = dir + "/pocket_protocol.json";
++  if (!FileExists(proto_path)) {
++    return protocol;
++  }
++
++  std::ifstream ifs(proto_path);
++  if (!ifs) {
++    return protocol;
++  }
++  nlohmann::json j = nlohmann::json::parse(ifs, nullptr, false);
++  if (j.is_discarded() || !j.is_object()) {
++    SHERPA_ONNX_LOGE("Failed to parse PocketTTS protocol sidecar: %s",
++                     proto_path.c_str());
++    return protocol;
++  }
++
++  protocol.insert_bos_before_voice =
++      j.value("insert_bos_before_voice", protocol.insert_bos_before_voice);
++  protocol.frames_after_eos =
++      j.value("frames_after_eos", protocol.frames_after_eos);
++  protocol.eos_threshold = j.value("eos_threshold", protocol.eos_threshold);
++  protocol.empty_kv_seq_len =
++      j.value("empty_kv_seq_len", protocol.empty_kv_seq_len);
++  protocol.latent_dim = j.value("latent_dim", protocol.latent_dim);
++  protocol.pad_with_spaces_for_short_inputs = j.value(
++      "pad_with_spaces_for_short_inputs",
++      protocol.pad_with_spaces_for_short_inputs);
++  protocol.remove_semicolons =
++      j.value("remove_semicolons", protocol.remove_semicolons);
++
++  std::string bos_file = j.value("bos_before_voice", std::string());
++  if (bos_file.empty() && j.contains("bos_before_voice") &&
++      j["bos_before_voice"].is_object()) {
++    bos_file = j["bos_before_voice"].value("file", std::string());
++    if (j["bos_before_voice"].contains("shape") &&
++        j["bos_before_voice"]["shape"].is_array()) {
++      protocol.bos_shape.clear();
++      for (const auto &dim : j["bos_before_voice"]["shape"]) {
++        protocol.bos_shape.push_back(dim.get<int64_t>());
++      }
++    }
++  }
++  if (bos_file.empty()) {
++    return protocol;
++  }
++  if (bos_file.find('/') != std::string::npos ||
++      bos_file.find('\\') != std::string::npos) {
++    SHERPA_ONNX_LOGE("Rejecting PocketTTS bos sidecar path: %s",
++                     bos_file.c_str());
++    return protocol;
++  }
++  std::string bos_path = dir + "/" + bos_file;
++  std::ifstream bos(bos_path, std::ios::binary);
++  if (!bos) {
++    SHERPA_ONNX_LOGE("Missing PocketTTS bos sidecar: %s", bos_path.c_str());
++    return protocol;
++  }
++  std::vector<char> raw((std::istreambuf_iterator<char>(bos)),
++                        std::istreambuf_iterator<char>());
++  if (raw.size() % sizeof(float) != 0 || raw.empty()) {
++    SHERPA_ONNX_LOGE("Invalid PocketTTS bos sidecar size: %s", bos_path.c_str());
++    return protocol;
++  }
++  protocol.bos_before_voice.resize(raw.size() / sizeof(float));
++  std::memcpy(protocol.bos_before_voice.data(), raw.data(), raw.size());
++  if (protocol.bos_shape.empty()) {
++    protocol.bos_shape = {1, 1, 1024};
++  }
++  int64_t expected = 1;
++  for (auto d : protocol.bos_shape) {
++    expected *= d;
++  }
++  if (expected != static_cast<int64_t>(protocol.bos_before_voice.size())) {
++    SHERPA_ONNX_LOGE("PocketTTS bos sidecar shape mismatch: %s",
++                     bos_path.c_str());
++    protocol.bos_before_voice.clear();
++    protocol.bos_shape.clear();
++  }
++  return protocol;
++}
++
+ class OfflineTtsPocketModel::Impl {
+  public:
+   explicit Impl(const OfflineTtsModelConfig &config)
+       : config_(config),
+         env_(ORT_LOGGING_LEVEL_ERROR),
+         sess_opts_(GetSessionOptions(config)) {
++    protocol_ = LoadPocketProtocolFromDir(
++        PocketParentDir(config_.pocket.vocab_json));
+     lm_flow_sess_ = std::make_unique<Ort::Session>(
+         env_, SHERPA_ONNX_TO_ORT_PATH(config.pocket.lm_flow), sess_opts_);
+     InitLmFlow(nullptr, 0);
+@@ -98,6 +219,8 @@
+       : config_(config),
+         env_(ORT_LOGGING_LEVEL_ERROR),
+         sess_opts_(GetSessionOptions(config)) {
++    protocol_ = LoadPocketProtocolFromDir(
++        PocketParentDir(config_.pocket.vocab_json));
+     {
+       auto buf = ReadFile(mgr, config.pocket.lm_flow);
+       InitLmFlow(buf.data(), buf.size());
+@@ -235,6 +358,40 @@
+ 
+   OrtAllocator *Allocator() { return allocator_; }
+ 
++  const PocketTtsProtocol &Protocol() const { return protocol_; }
++
++  Ort::Value MaybeConcatBosBeforeVoice(Ort::Value encoder_out) const {
++    if (!protocol_.insert_bos_before_voice) {
++      return encoder_out;
++    }
++    if (protocol_.bos_before_voice.empty() || protocol_.bos_shape.size() != 3) {
++      SHERPA_ONNX_LOGE(
++          "insert_bos_before_voice is set but bos_before_voice sidecar is "
++          "missing");
++      return Ort::Value{nullptr};
++    }
++    auto info = encoder_out.GetTensorTypeAndShapeInfo();
++    auto shape = info.GetShape();
++    if (shape.size() != 3 || shape[0] != 1 ||
++        shape[2] != protocol_.bos_shape[2]) {
++      SHERPA_ONNX_LOGE("encoder output shape is incompatible with bos sidecar");
++      return Ort::Value{nullptr};
++    }
++    int64_t bos_frames = protocol_.bos_shape[1];
++    int64_t enc_frames = shape[1];
++    int64_t dim = shape[2];
++    std::vector<int64_t> out_shape = {1, bos_frames + enc_frames, dim};
++    Ort::Value out = Ort::Value::CreateTensor<float>(
++        const_cast<Impl *>(this)->Allocator(), out_shape.data(),
++        out_shape.size());
++    float *dst = out.GetTensorMutableData<float>();
++    std::memcpy(dst, protocol_.bos_before_voice.data(),
++                static_cast<size_t>(bos_frames * dim) * sizeof(float));
++    std::memcpy(dst + bos_frames * dim, encoder_out.GetTensorData<float>(),
++                static_cast<size_t>(enc_frames * dim) * sizeof(float));
++    return out;
++  }
++
+  private:
+   void InitLmFlow(void *model_data, size_t model_data_length) {
+     if (model_data) {
+@@ -274,7 +431,8 @@
+     lm_main_init_states_.values.reserve(lm_main_input_names_.size() - 2);
+     for (size_t i = 2; i < lm_main_input_names_.size(); ++i) {
+       lm_main_init_states_.values.push_back(
+-          CreateZeroTensorLike(*lm_main_sess_, i, allocator_));
++          CreateZeroTensorLike(*lm_main_sess_, i, allocator_,
++                               protocol_.empty_kv_seq_len));
+     }
+   }
+ 
+@@ -318,7 +476,8 @@
+                                              1);
+     for (size_t i = 1; i < mimi_decoder_input_names_.size(); ++i) {
+       mimi_decoder_init_states_.values.push_back(
+-          CreateZeroTensorLike(*mimi_decoder_sess_, i, allocator_));
++          CreateZeroTensorLike(*mimi_decoder_sess_, i, allocator_,
++                               protocol_.empty_kv_seq_len));
+     }
+   }
+ 
+@@ -386,6 +545,7 @@
+ 
+   PocketLmMainState lm_main_init_states_;
+   PocketMimiDecoderState mimi_decoder_init_states_;
++  PocketTtsProtocol protocol_;
+ };
+ 
+ OfflineTtsPocketModel::OfflineTtsPocketModel(
+@@ -439,6 +599,15 @@
+   return impl_->Allocator();
+ }
+ 
++const PocketTtsProtocol &OfflineTtsPocketModel::Protocol() const {
++  return impl_->Protocol();
++}
++
++Ort::Value OfflineTtsPocketModel::MaybeConcatBosBeforeVoice(
++    Ort::Value encoder_out) const {
++  return impl_->MaybeConcatBosBeforeVoice(std::move(encoder_out));
++}
++
+ #if __ANDROID_API__ >= 9
+ template OfflineTtsPocketModel::OfflineTtsPocketModel(
+     AAssetManager *mgr, const OfflineTtsModelConfig &config);
+--- a/sherpa-onnx/csrc/offline-tts-pocket-impl.h
++++ b/sherpa-onnx/csrc/offline-tts-pocket-impl.h
+@@ -173,6 +173,17 @@
+     }
+ 
+     std::string text = _text;
++    const auto &protocol = model_->Protocol();
++    if (protocol.remove_semicolons) {
++      for (char &ch : text) {
++        if (ch == ';') {
++          ch = ' ';
++        }
++      }
++    }
++    if (protocol.pad_with_spaces_for_short_inputs && text.size() < 8) {
++      text.append(8 - text.size(), ' ');
++    }
+     if (config_.model.debug) {
+ #if __OHOS__
+       SHERPA_ONNX_LOGE("Raw text: %{public}s", text.c_str());
+@@ -313,7 +324,8 @@
+         Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeDefault);
+ 
+     {
+-      std::array<int64_t, 3> empty_seq_shape = {1, 0, 32};
++      int64_t latent_dim = model_->Protocol().latent_dim;
++      std::array<int64_t, 3> empty_seq_shape = {1, 0, latent_dim};
+ 
+       Ort::Value empty_seq_tensor = Ort::Value::CreateTensor<float>(
+           memory_info, nullptr, 0, empty_seq_shape.data(),
+@@ -330,19 +342,24 @@
+                 lm_main_state);
+     }
+ 
+-    std::vector<float> cur(1 * 1 * 32, std::numeric_limits<float>::quiet_NaN());
+-    std::array<int64_t, 3> cur_shape = {1, 1, 32};
++    int64_t latent_dim = model_->Protocol().latent_dim;
++    std::vector<float> cur(static_cast<size_t>(1 * 1 * latent_dim),
++                           std::numeric_limits<float>::quiet_NaN());
++    std::array<int64_t, 3> cur_shape = {1, 1, latent_dim};
+ 
+     int32_t num_steps = gen_config.num_steps;
+     int32_t max_frames = gen_config.GetExtraInt("max_frames", 500);
+-    int32_t frames_after_eos = gen_config.GetExtraInt("frames_after_eos", 3);
++    int32_t frames_after_eos = gen_config.GetExtraInt(
++        "frames_after_eos", model_->Protocol().frames_after_eos);
++    float eos_threshold = gen_config.GetExtraFloat(
++        "eos_threshold", model_->Protocol().eos_threshold);
+     float temperature = gen_config.GetExtraFloat("temperature", 0.7f);
+     float stddev = std::sqrt(temperature);
+     int32_t seed = gen_config.GetExtraInt("seed", -1);
+ 
+     NormalDataGenerator normal_gen(0, stddev, seed);
+-    std::vector<float> noise(32, 0);
+-    std::array<int64_t, 2> noise_shape = {1, 32};
++    std::vector<float> noise(static_cast<size_t>(latent_dim), 0);
++    std::array<int64_t, 2> noise_shape = {1, latent_dim};
+ 
+     Ort::Value noise_tensor =
+         Ort::Value::CreateTensor(memory_info, noise.data(), noise.size(),
+@@ -369,7 +386,7 @@
+           std::move(cur_tensor), View(&empty_text_tensor), lm_main_state);
+       const float *p_logit = eos_logit.GetTensorData<float>();
+ 
+-      if (eos_step < 0 && p_logit[0] > -4) {
++      if (eos_step < 0 && p_logit[0] > eos_threshold) {
+         eos_step = step;
+       }
+ 
+@@ -550,6 +567,10 @@
+                                  num_samples, shape.data(), shape.size());
+ 
+     Ort::Value result = model_->RunMimiEncoder(std::move(x));
++    result = model_->MaybeConcatBosBeforeVoice(std::move(result));
++    if (!result) {
++      return Ort::Value{nullptr};
++    }
+ 
+     auto info = result.GetTensorTypeAndShapeInfo();
+     auto result_shape = info.GetShape();

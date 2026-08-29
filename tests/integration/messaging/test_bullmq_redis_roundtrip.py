@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from pydantic import BaseModel
@@ -30,18 +31,33 @@ def _redis_url() -> str:
     return os.environ.get("REDIS_URL", "redis://127.0.0.1:6379")
 
 
+def _redis_db_url(base_url: str, db: int) -> str:
+    parsed = urlsplit(base_url)
+    return urlunsplit((parsed.scheme, parsed.netloc, f"/{db}", parsed.query, parsed.fragment))
+
+
 @pytest.fixture
-def redis_live():
-    """Skip if Redis is not reachable (no redis-py or connection error)."""
+def isolated_redis_url():
+    """Use this suite's overridable Redis database and clean only that database."""
     if redis_sync is None:
         pytest.skip("redis package missing")
-    client = redis_sync.Redis.from_url(_redis_url(), decode_responses=True)
+    url = os.environ.get(
+        "AURORA_BULLMQ_ROUNDTRIP_TEST_REDIS_URL",
+        _redis_db_url(_redis_url(), 13),
+    )
+    client = redis_sync.Redis.from_url(url, decode_responses=True)
     try:
         client.ping()
     except redis_sync.ConnectionError:
-        pytest.skip("Redis not reachable — start Redis or set REDIS_URL")
-    yield client
-    client.close()
+        pytest.skip(
+            "Redis not reachable — start Redis or set AURORA_BULLMQ_ROUNDTRIP_TEST_REDIS_URL"
+        )
+    client.flushdb()
+    try:
+        yield url
+    finally:
+        client.flushdb()
+        client.close()
 
 
 class _PingPayload(BaseModel):
@@ -59,11 +75,11 @@ class TestBullMQRedisRoundtrip:
     """End-to-end BullMQBus against a real Redis."""
 
     @pytest.mark.asyncio
-    async def test_command_publish_delivered_to_handler(self, redis_live) -> None:
+    async def test_command_publish_delivered_to_handler(self, isolated_redis_url) -> None:
         """A command job is consumed by a Worker and passed to the handler."""
         ns = uuid.uuid4().hex[:12]
         topic = f"AuroraTest.Bullmq.{ns}.Ping"
-        bus = BullMQBus(redis_url=_redis_url(), validate_topics=False)
+        bus = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
         await bus.start()
         received: dict[str, object] = {}
 
@@ -89,13 +105,13 @@ class TestBullMQRedisRoundtrip:
             await bus.stop()
 
     @pytest.mark.asyncio
-    async def test_request_response_two_bus_instances(self, redis_live) -> None:
+    async def test_request_response_two_bus_instances(self, isolated_redis_url) -> None:
         """Client request() completes when a peer bus handles the job and replies."""
         ns = uuid.uuid4().hex[:12]
         cmd_topic = f"AuroraTest.Bullmq.{ns}.Rpc"
 
-        server = BullMQBus(redis_url=_redis_url(), validate_topics=False)
-        client = BullMQBus(redis_url=_redis_url(), validate_topics=False)
+        server = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        client = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
         await server.start()
         await client.start()
 
@@ -126,3 +142,166 @@ class TestBullMQRedisRoundtrip:
         finally:
             await client.stop()
             await server.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_fans_out_to_two_explicit_subscribers(
+        self, isolated_redis_url
+    ) -> None:
+        """One event=True publish reaches two independent validate_topics=False subscribers."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Event"
+
+        first = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        second = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await first.start()
+        await second.start()
+        received: dict[str, list[dict[str, object]]] = {"first": [], "second": []}
+
+        async def first_handler(env: Envelope) -> None:
+            received["first"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        async def second_handler(env: Envelope) -> None:
+            received["second"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        await first.subscribe_event(topic, first_handler)
+        await second.subscribe_event(topic, second_handler)
+
+        try:
+            await first.publish(topic, _PingPayload(x=11), event=True, origin="integration-test")
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if len(received["first"]) == 1 and len(received["second"]) == 1:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == {
+                "first": [{"x": 11}],
+                "second": [{"x": 11}],
+            }
+        finally:
+            await second.stop()
+            await first.stop()
+
+    @pytest.mark.asyncio
+    async def test_pre_start_event_subscription_is_ready_after_start(
+        self, isolated_redis_url
+    ) -> None:
+        """Event subscriptions added before start are ready when awaited start returns."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.PreStart.Event"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        received: list[dict[str, object]] = []
+
+        async def handler(env: Envelope) -> None:
+            received.append(env.payload if isinstance(env.payload, dict) else {})
+
+        await subscriber.subscribe_event(topic, handler)
+        await subscriber.start()
+        await publisher.start()
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=17),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if received:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == [{"x": 17}]
+        finally:
+            await publisher.stop()
+            await subscriber.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_reaches_wildcard_subscriber_from_separate_publisher(
+        self, isolated_redis_url
+    ) -> None:
+        """Wildcard event subscribers receive broadcasts from publisher-only processes."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Gateway.Event"
+        pattern = f"AuroraTest.Bullmq.{ns}.*"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await subscriber.start()
+        await publisher.start()
+        received: list[dict[str, object]] = []
+
+        async def wildcard_handler(env: Envelope) -> None:
+            received.append(env.payload if isinstance(env.payload, dict) else {})
+
+        await subscriber.subscribe_event(pattern, wildcard_handler)
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=23),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if received:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == [{"x": 23}]
+        finally:
+            await publisher.stop()
+            await subscriber.stop()
+
+    @pytest.mark.asyncio
+    async def test_event_publish_delivers_exact_and_wildcard_once_on_same_subscriber(
+        self, isolated_redis_url
+    ) -> None:
+        """Mixed exact and wildcard event handlers do not duplicate delivery."""
+        ns = uuid.uuid4().hex[:12]
+        topic = f"AuroraTest.Bullmq.{ns}.Gateway.Event"
+        pattern = f"AuroraTest.Bullmq.{ns}.*"
+
+        subscriber = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        publisher = BullMQBus(redis_url=isolated_redis_url, validate_topics=False)
+        await subscriber.start()
+        await publisher.start()
+        received: dict[str, list[dict[str, object]]] = {"exact": [], "wildcard": []}
+
+        async def exact_handler(env: Envelope) -> None:
+            received["exact"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        async def wildcard_handler(env: Envelope) -> None:
+            received["wildcard"].append(env.payload if isinstance(env.payload, dict) else {})
+
+        await subscriber.subscribe_event(topic, exact_handler)
+        await subscriber.subscribe_event(pattern, wildcard_handler)
+
+        try:
+            await publisher.publish(
+                topic,
+                _PingPayload(x=31),
+                event=True,
+                origin="integration-test",
+            )
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 15.0
+            while loop.time() < deadline:
+                if len(received["exact"]) == 1 and len(received["wildcard"]) == 1:
+                    break
+                await asyncio.sleep(0.05)
+
+            assert received == {
+                "exact": [{"x": 31}],
+                "wildcard": [{"x": 31}],
+            }
+        finally:
+            await publisher.stop()
+            await subscriber.stop()

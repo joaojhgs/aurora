@@ -14,17 +14,26 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.helpers.aurora_logger import log_error, log_info
+from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.services.gateway.auth import check_auth_enabled, create_scoped_auth_check
 from app.services.gateway.dependencies import get_rtc_client
-from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
+from app.shared.contracts.models.aurora import (
+    EVENT_STREAM_ID_PATTERN,
+    EVENT_STREAM_KIND_PATTERN,
+    AuroraEventStreamEvent,
+    AuroraMethods,
+)
+from app.shared.contracts.models.gateway import GatewayListEventsRequest, GatewayMethods
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
@@ -235,10 +244,7 @@ def create_gateway_app(
 
         return GetServicesResponse(services=services, mode=mode)
 
-    stream_events_auth = Security(
-        create_scoped_auth_check(method_type="manage"),
-        scopes=["Gateway.manage"],
-    )
+    stream_events_auth = Security(create_scoped_auth_check(method_type="use"), scopes=[])
 
     @app.get(
         "/api/events/stream",
@@ -253,15 +259,43 @@ def create_gateway_app(
         },
     )
     async def stream_events(
+        topic: Annotated[list[str] | None, Query()] = None,
+        kind: Annotated[list[str] | None, Query()] = None,
+        last_event_id: str | None = None,
+        replay_from: str | None = None,
+        backfill: bool = False,
+        correlation_id: str | None = None,
         _auth: Any = stream_events_auth,
     ) -> StreamingResponse:
         """Stream normalized event envelopes as Server-Sent Events."""
+        topics = topic or []
+        categories, kinds = _event_stream_filters(kind or [])
+        _authorize_event_stream_request(
+            _auth,
+            topics=topics,
+            categories=categories,
+            kinds=kinds,
+            correlation_id=correlation_id,
+        )
         queue: asyncio.Queue[AuroraEventStreamEvent] = asyncio.Queue(maxsize=100)
 
         async def on_event(envelope: Any) -> None:
             payload = envelope.payload
             if not isinstance(payload, AuroraEventStreamEvent):
                 payload = AuroraEventStreamEvent.model_validate(payload)
+            if not _event_matches_stream_request(
+                payload,
+                topics=topics,
+                categories=categories,
+                kinds=kinds,
+                correlation_id=correlation_id,
+            ):
+                return
+            if auth_enabled and not _event_visible_to_principal(
+                payload,
+                getattr(_auth, "principal_id", None),
+            ):
+                return
             try:
                 queue.put_nowait(payload)
             except asyncio.QueueFull:
@@ -270,13 +304,27 @@ def create_gateway_app(
                 queue.put_nowait(payload)
 
         async def event_generator():
-            bus.subscribe(AuroraMethods.EVENT_STREAM, on_event)
+            await bus.subscribe_event(AuroraMethods.EVENT_STREAM, on_event)
             try:
+                if backfill or last_event_id or replay_from:
+                    async for event in _stream_backfill_events(
+                        bus,
+                        topics=topics,
+                        categories=categories,
+                        kinds=kinds,
+                        correlation_id=correlation_id,
+                        last_event_id=last_event_id,
+                        replay_from=replay_from,
+                        principal_id=(
+                            getattr(_auth, "principal_id", None)
+                            if auth_enabled
+                            else _UNSCOPED_PRINCIPAL
+                        ),
+                    ):
+                        yield _sse_payload(event)
                 while True:
                     event = await queue.get()
-                    payload = event.model_dump(mode="json")
-                    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-                    yield f"event: {event.category}\ndata: {data}\n\n"
+                    yield _sse_payload(event)
                     queue.task_done()
             finally:
                 bus.unsubscribe(AuroraMethods.EVENT_STREAM, on_event)
@@ -444,3 +492,178 @@ def create_gateway_app(
         return {"success": True}
 
     return app
+
+
+_SAFE_ASSISTANT_KINDS = {
+    "assistant",
+    "assistant.delta",
+    "assistant.completed",
+    "assistant.failed",
+    "tool.requested",
+    "tool.running",
+    "tool.completed",
+    "tool.failed",
+    "tool.requires_action",
+    "tts.audio_chunk",
+    "tts.audio.chunk",
+    "tts.chunk",
+}
+
+
+class _UnscopedPrincipal:
+    """Sentinel for helper callers that intentionally do not apply principal filtering."""
+
+
+_UNSCOPED_PRINCIPAL = _UnscopedPrincipal()
+_BACKFILL_UNAVAILABLE_MESSAGE = "Recent events are temporarily unavailable."
+_BACKFILL_UNAVAILABLE_CODE = "bounded_replay_unavailable"
+_SSE_ID_RE = re.compile(EVENT_STREAM_ID_PATTERN)
+_SSE_KIND_RE = re.compile(EVENT_STREAM_KIND_PATTERN)
+
+
+def _event_stream_filters(kind: list[str]) -> tuple[set[str], set[str]]:
+    categories: set[str] = set()
+    kinds: set[str] = set()
+    for item in kind:
+        normalized = item.strip()
+        if not normalized:
+            continue
+        if "." in normalized:
+            kinds.add(normalized)
+        else:
+            categories.add(normalized)
+    return categories, kinds
+
+
+def _authorize_event_stream_request(
+    identity: Any,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+) -> None:
+    if identity.can("Gateway.manage", method_type="manage"):
+        return
+    topic_set = set(topics)
+    assistant_scoped = (
+        bool(topic_set)
+        and topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}
+        and (not categories or categories <= {"assistant"})
+        and (not kinds or kinds <= _SAFE_ASSISTANT_KINDS)
+        and correlation_id is not None
+    )
+    if assistant_scoped and identity.can("Orchestrator.use", method_type="use"):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "Gateway.manage is required for broad event streams; "
+            "Orchestrator.use may only subscribe to correlated assistant events"
+        ),
+    )
+
+
+def _event_matches_stream_request(
+    event: AuroraEventStreamEvent,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+) -> bool:
+    if topics and event.topic not in set(topics):
+        return False
+    if categories and event.category not in categories:
+        return False
+    if kinds and event.kind not in kinds and event.category not in kinds:
+        return False
+    return not (correlation_id and event.correlation_id != correlation_id)
+
+
+def _event_visible_to_principal(
+    event: AuroraEventStreamEvent,
+    principal_id: str | None,
+) -> bool:
+    """Prevent principal-tagged assistant output from crossing user streams."""
+
+    if event.category != "assistant":
+        return True
+    return bool(principal_id) and bool(event.principal_id) and event.principal_id == principal_id
+
+
+async def _stream_backfill_events(
+    bus: Any,
+    *,
+    topics: list[str],
+    categories: set[str],
+    kinds: set[str],
+    correlation_id: str | None,
+    last_event_id: str | None,
+    replay_from: str | None,
+    principal_id: str | None | _UnscopedPrincipal = _UNSCOPED_PRINCIPAL,
+):
+    request = GatewayListEventsRequest(
+        topics=topics or None,
+        categories=list(categories) or None,
+        kinds=list(kinds) or None,
+        correlation_id=correlation_id,
+        last_event_id=last_event_id,
+        replay_from=replay_from,
+        limit=500,
+    )
+    try:
+        result = await bus.request(
+            GatewayMethods.LIST_EVENTS,
+            request,
+            timeout=2.0,
+            origin="internal",
+        )
+    except Exception as exc:
+        log_warning(f"Gateway event stream backfill unavailable (error_type={type(exc).__name__})")
+        yield _degraded_event()
+        return
+    if not getattr(result, "ok", False):
+        log_warning("Gateway event stream backfill request returned an unavailable result")
+        yield _degraded_event()
+        return
+    events = list(getattr(result.data, "events", []) or [])
+    for event in reversed(events):
+        if principal_id is _UNSCOPED_PRINCIPAL or _event_visible_to_principal(
+            event,
+            principal_id if isinstance(principal_id, str) else None,
+        ):
+            yield event
+    if (last_event_id or replay_from) and not events:
+        yield _degraded_event()
+
+
+def _degraded_event() -> AuroraEventStreamEvent:
+    return AuroraEventStreamEvent(
+        event_id="stream-degraded",
+        topic=AuroraMethods.EVENT_STREAM,
+        kind="stream.degraded",
+        category="unknown",
+        action="backfill",
+        status="degraded",
+        severity="warning",
+        redacted_payload={
+            "code": _BACKFILL_UNAVAILABLE_CODE,
+            "message": _BACKFILL_UNAVAILABLE_MESSAGE,
+            "durable_replay": False,
+        },
+    )
+
+
+def _sse_line_value(value: str, *, field: str, pattern: re.Pattern[str]) -> str:
+    if "\r" in value or "\n" in value or not pattern.fullmatch(value):
+        raise ValueError(f"unsafe SSE {field}")
+    return value
+
+
+def _sse_payload(event: AuroraEventStreamEvent) -> str:
+    payload = event.model_dump(mode="json", exclude_none=True)
+    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    event_id = _sse_line_value(event.event_id, field="id", pattern=_SSE_ID_RE)
+    event_name = _sse_line_value(event.kind or event.category, field="event", pattern=_SSE_KIND_RE)
+    return f"id: {event_id}\nevent: {event_name}\ndata: {data}\n\n"

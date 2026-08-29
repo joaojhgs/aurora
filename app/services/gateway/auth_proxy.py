@@ -20,8 +20,11 @@ from app.shared.contracts.models.auth import (
     AuthMethods,
     MeshCredentialLoadRequest,
     MeshCredentialSaveRequest,
+    MeshPairingTokenValidationRequest,
+    MeshReconnectProofRequest,
     PrincipalGetRequest,
     StoreAuditEventRequest,
+    TokenListRequest,
     ValidateTokenRequest,
 )
 from app.shared.contracts.models.mesh import (
@@ -33,6 +36,15 @@ from app.shared.contracts.models.mesh import (
 
 if TYPE_CHECKING:
     from app.messaging.bus import MessageBus
+
+
+AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS = 40.0
+
+
+def _safe_exception_category(exc: Exception) -> str:
+    """Return a non-identifying exception category for credential diagnostics."""
+
+    return type(exc).__name__
 
 
 @dataclass
@@ -91,7 +103,7 @@ class _AuditDBProxy:
         that interface, forwarding to the Auth service via the bus.
         """
         try:
-            await self._bus.request(
+            response = await self._bus.request(
                 AuthMethods.STORE_AUDIT_EVENT,
                 StoreAuditEventRequest(
                     event=event or "unknown",
@@ -99,24 +111,38 @@ class _AuditDBProxy:
                     details=details,
                     ip_address=ip_address,
                 ),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
+            self._require_audit_success(response)
         except Exception as exc:
-            log_warning(f"_AuditDBProxy.store_audit_event failed: {exc}")
+            log_warning(f"_AuditDBProxy.store_audit_event failed: {_safe_exception_category(exc)}")
 
     async def log_audit_event(self, **kwargs: Any) -> None:
         """Forward audit event to the Auth service via the bus."""
         try:
-            await self._bus.request(
+            response = await self._bus.request(
                 AuthMethods.STORE_AUDIT_EVENT,
                 StoreAuditEventRequest(
                     event=kwargs.get("event_type", "unknown"),
                     principal_id=kwargs.get("actor_id"),
                 ),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
+            self._require_audit_success(response)
         except Exception as exc:
-            log_warning(f"_AuditDBProxy.log_audit_event failed: {exc}")
+            log_warning(f"_AuditDBProxy.log_audit_event failed: {_safe_exception_category(exc)}")
+
+    @staticmethod
+    def _require_audit_success(response: Any) -> None:
+        """Reject failed command envelopes instead of masking audit loss."""
+
+        if response is None:
+            raise RuntimeError("Audit storage returned no response")
+        if hasattr(response, "ok") and response.ok is False:
+            raise RuntimeError("Audit storage command failed")
+        data = getattr(response, "data", response)
+        if isinstance(data, dict) and data.get("ok") is False:
+            raise RuntimeError("Audit storage rejected the event")
 
     async def get_audit_log(self, **kwargs: Any) -> list[dict]:
         """Retrieve audit log entries via the Auth.AuditLog contract."""
@@ -185,6 +211,26 @@ class BusAuthProxy:
 
     # ── Token validation ─────────────────────────────────────────────
 
+    @staticmethod
+    def _validated_token_proxy(data: dict[str, Any]) -> _TokenProxy | None:
+        if not data.get("valid", False):
+            return None
+        return _TokenProxy(
+            id=str(data.get("token_id") or "bus-validated"),
+            device_id=data.get("device_id"),
+            user_id=data.get("principal_id"),
+            scopes=list(data.get("effective_perms", [])),
+            _identity_data={
+                "principal_id": data.get("principal_id"),
+                "principal_name": data.get("principal_name"),
+                "device_id": data.get("device_id"),
+                "is_admin": data.get("is_admin", False),
+                "permissions": list(data.get("permissions", [])),
+                "effective_perms": list(data.get("effective_perms", [])),
+                "source": data.get("source", "bus"),
+            },
+        )
+
     async def authenticate_token(self, token_str: str) -> _TokenProxy | None:
         """Validate a token via Auth.ValidateToken bus call.
 
@@ -196,31 +242,80 @@ class BusAuthProxy:
             resp = await self._bus.request(
                 AuthMethods.VALIDATE_TOKEN,
                 ValidateTokenRequest(token=token_str),
-                timeout=5.0,
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
             )
 
             data = self._unwrap(resp)
-            if not data or not data.get("valid", False):
-                return None
-
-            return _TokenProxy(
-                id="bus-validated",
-                device_id=data.get("device_id"),
-                user_id=data.get("principal_id"),
-                scopes=list(data.get("effective_perms", [])),
-                _identity_data={
-                    "principal_id": data.get("principal_id"),
-                    "principal_name": data.get("principal_name"),
-                    "device_id": data.get("device_id"),
-                    "is_admin": data.get("is_admin", False),
-                    "permissions": list(data.get("permissions", [])),
-                    "effective_perms": list(data.get("effective_perms", [])),
-                    "source": data.get("source", "bus"),
-                },
-            )
+            return self._validated_token_proxy(data) if data else None
         except Exception as e:
             log_warning(f"BusAuthProxy.authenticate_token failed: {e}")
             return None
+
+    async def verify_mesh_reconnect_proof(
+        self,
+        *,
+        token_id: str,
+        challenge: str,
+        proof: str,
+        channel_binding: str,
+        claimant_peer_id: str,
+        verifier_peer_id: str,
+        room_name: str,
+    ) -> _TokenProxy | None:
+        """Validate a returning peer without receiving its bearer token."""
+        try:
+            resp = await self._bus.request(
+                AuthMethods.VERIFY_MESH_RECONNECT_PROOF,
+                MeshReconnectProofRequest(
+                    token_id=token_id,
+                    challenge=challenge,
+                    proof=proof,
+                    channel_binding=channel_binding,
+                    claimant_peer_id=claimant_peer_id,
+                    verifier_peer_id=verifier_peer_id,
+                    room_name=room_name,
+                ),
+                timeout=AUTH_SERVICE_REQUEST_TIMEOUT_SECONDS,
+            )
+            if resp is None or (hasattr(resp, "ok") and not resp.ok):
+                raise RuntimeError("Auth reconnect proof request was unavailable")
+            data = self._unwrap(resp)
+            return self._validated_token_proxy(data) if data else None
+        except Exception as exc:
+            # An Auth outage is not evidence that a credential is invalid.  Let
+            # RTC keep the normal bounded timeout/reconnect path instead of
+            # silently replacing trust with a new pairing request.
+            log_warning(
+                "BusAuthProxy.verify_mesh_reconnect_proof result=retry "
+                f"reason={_safe_exception_category(exc)}"
+            )
+            raise
+
+    async def validate_mesh_pairing_token(
+        self,
+        *,
+        token_str: str,
+        pairing_session_id: str,
+        claimant_peer_id: str,
+        room_name: str,
+    ) -> _TokenProxy | None:
+        """Validate only the bearer minted for one approved SAS session."""
+        try:
+            resp = await self._bus.request(
+                AuthMethods.VALIDATE_MESH_PAIRING_TOKEN,
+                MeshPairingTokenValidationRequest(
+                    token=token_str,
+                    pairing_session_id=pairing_session_id,
+                    claimant_peer_id=claimant_peer_id,
+                    room_name=room_name,
+                ),
+                timeout=5.0,
+            )
+            data = self._unwrap(resp)
+            return self._validated_token_proxy(data) if data else None
+        except Exception as exc:
+            log_warning(f"BusAuthProxy.validate_mesh_pairing_token failed: {exc}")
+            raise
 
     async def build_identity_from_token(
         self, token: _TokenProxy, source: str = "webrtc_token"
@@ -288,6 +383,35 @@ class BusAuthProxy:
             log_warning(f"BusAuthProxy.get_principal failed: {e}")
             return None
 
+    async def get_token_scopes(
+        self,
+        token_id: str,
+        principal_id: str | None = None,
+    ) -> list[str] | None:
+        """Reload one token's authoritative scopes after mesh ACL changes."""
+
+        try:
+            resp = await self._bus.request(
+                AuthMethods.LIST_TOKENS,
+                TokenListRequest(principal_id=principal_id),
+                timeout=5.0,
+            )
+            data = self._unwrap(resp)
+            tokens = data.get("tokens", []) if data else []
+            for token in tokens:
+                if hasattr(token, "model_dump"):
+                    token = token.model_dump(mode="json")
+                if not isinstance(token, dict) or str(token.get("id") or "") != token_id:
+                    continue
+                scopes = token.get("scopes")
+                if not isinstance(scopes, (list, tuple, set)):
+                    return []
+                return [str(scope) for scope in scopes]
+            return None
+        except Exception as exc:
+            log_warning(f"BusAuthProxy.get_token_scopes failed: {exc}")
+            return None
+
     # ── Permission defaults (no-op in proxy mode) ────────────────────
 
     def update_permission_defaults(self, defaults: list[str]) -> None:
@@ -305,7 +429,11 @@ class BusAuthProxy:
             )
             data = self._unwrap(resp)
             return bool(data and data.get("success", False))
-        except Exception:
+        except Exception as exc:
+            log_warning(
+                "BusAuthProxy.save_mesh_credential unavailable; "
+                f"result=fail_closed reason={_safe_exception_category(exc)}"
+            )
             return False
 
     async def load_mesh_credential(self, room_name: str) -> str | None:
@@ -317,7 +445,11 @@ class BusAuthProxy:
             )
             data = self._unwrap(resp)
             return data.get("token") if data else None
-        except Exception:
+        except Exception as exc:
+            log_warning(
+                "BusAuthProxy.load_mesh_credential unavailable; "
+                f"result=fail_closed reason={_safe_exception_category(exc)}"
+            )
             return None
 
     # ── Per-peer mesh credential methods (Fix 3) ─────────────────────
@@ -354,6 +486,7 @@ class BusAuthProxy:
         remote_peer_id: str,
         room_name: str,
         token: str,
+        token_id: str = "",
         permissions: list[str] | None = None,
         remote_device_id: str | None = None,
         remote_user_id: str | None = None,
@@ -367,6 +500,7 @@ class BusAuthProxy:
                     remote_peer_id=remote_peer_id,
                     room_name=room_name,
                     token=token,
+                    token_id=token_id,
                     permissions=permissions or [],
                     remote_device_id=remote_device_id,
                     remote_user_id=remote_user_id,
@@ -377,10 +511,13 @@ class BusAuthProxy:
             data = self._unwrap(resp)
             return bool(data and data.get("success", False))
         except Exception as exc:
-            log_warning(f"BusAuthProxy.save_inbound_credential failed: {exc}")
+            log_warning(
+                "BusAuthProxy.save_inbound_credential unavailable; "
+                f"result=fail_closed reason={_safe_exception_category(exc)}"
+            )
             return False
 
-    async def load_inbound_credentials(self, room_name: str) -> dict[str, str]:
+    async def load_inbound_credentials(self, room_name: str) -> dict[str, Any]:
         """Load all inbound credentials for a room, keyed by remote peer_id."""
         try:
             resp = await self._bus.request(
@@ -391,7 +528,10 @@ class BusAuthProxy:
             data = self._unwrap(resp)
             return data.get("credentials", {}) if data else {}
         except Exception as exc:
-            log_warning(f"BusAuthProxy.load_inbound_credentials failed: {exc}")
+            log_warning(
+                "BusAuthProxy.load_inbound_credentials unavailable; "
+                f"result=fail_closed reason={_safe_exception_category(exc)}"
+            )
             return {}
 
     async def update_peer_connection_status(

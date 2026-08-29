@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock, Play, RotateCw, Square } from 'lucide-react'
+import { Activity, FileCode2, Lock } from 'lucide-react'
 import {
   AuroraError,
   summarizeCapabilities,
   type AuroraClient,
   type AvailabilityState,
-  type CapabilityCatalogResponse,
   type CapabilitySummary,
   type ContractExposure,
   type ContractMethodType,
@@ -16,7 +15,21 @@ import {
   type PrivacyClass,
   type ServiceInfo
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { Card as ShadCard } from '#components/ui/card'
+import { Badge } from '#components/ui/badge'
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '#components/ui/table'
+import { HealthBadge, ToneBadge, type BadgeTone } from './status-badges'
+import { ConfirmDialog } from './shared-components'
+import { Button, Card, StatStrip, FilterBar } from './primitives'
+import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
 
 export type AdminServicesLoadState =
   | 'loading'
@@ -38,7 +51,7 @@ export interface AdminServiceControlAction {
 }
 
 export interface AdminServiceControlPreview {
-  verb: 'restart' | 'stop'
+  verb: 'restart' | 'stop' | 'reload'
   methodId: string
   state: AvailabilityState
   available: boolean
@@ -71,6 +84,13 @@ export interface AdminContractRow extends MethodDescriptor {
   backendCoverage: 'http' | 'internal-only' | 'missing-capability' | 'gateway-builtin'
   privacyClass: PrivacyClass
   routeReason: string
+  liveRegistryStatus: 'live-registry' | 'registry-only' | 'capability-only'
+  conformanceStatus: 'conformant' | 'internal-only' | 'missing-capability' | 'gateway-builtin'
+  generatedRoutePath: string | null
+  openApiState: string
+  exportState: string
+  schemaState: string
+  capabilityPermissions: string[]
 }
 
 export interface AdminServicesSnapshot {
@@ -104,7 +124,7 @@ const loadingSnapshot: AdminServicesSnapshot = {
   contracts: [],
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'Checking Aurora'
 }
 
 export function AdminServicesResource({ client, onPreviewAdminAction }: AdminServicesResourceProps) {
@@ -136,7 +156,7 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
   const catalog = valueOrNull(catalogResult)
   const failures = [
     failureMessage('services', servicesResult),
-    failureMessage('contracts', methodsResult),
+    failureMessage('actions', methodsResult),
     failureMessage('capability catalog', catalogResult)
   ].filter((message): message is string => Boolean(message))
   const denied = [servicesResult, methodsResult, catalogResult].some(isDeniedFailure)
@@ -146,9 +166,9 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
-      error: failures.join(' ') || 'Aurora services and contract evidence are unavailable.',
+      error: failures.join(' ') || 'Aurora service actions are unavailable.',
       warnings: failures,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora needs attention'
     }
   }
 
@@ -171,286 +191,469 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
     contracts,
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
 export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServicesViewProps) {
+  const [pendingAction, setPendingAction] = useState<AdminServiceControlAction | null>(null)
+
+  return (
+    <div className="flex h-full flex-col" aria-labelledby="admin-services-title">
+      <div className="border-b border-border px-6 py-5">
+        <h1 id="admin-services-title" className="text-xl font-semibold tracking-tight">Services</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Service health and restart controls. Admins only.</p>
+      </div>
+      <div className="flex flex-col gap-4 px-6 py-5">
+        <StatusPanel snapshot={snapshot} />
+        <ServiceCardGrid services={snapshot.services} onPreviewControl={setPendingAction} />
+      </div>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        title={pendingAction?.title ?? ''}
+        description={pendingAction?.description ?? ''}
+        confirmLabel="Restart"
+        destructive={pendingAction?.severity === 'critical'}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction) onPreviewAdminAction?.(pendingAction)
+          setPendingAction(null)
+        }}
+      />
+    </div>
+  )
+}
+
+export function AdminContractsResource({ client }: { client: AuroraClient }) {
+  const [snapshot, setSnapshot] = useState<AdminServicesSnapshot>(loadingSnapshot)
+
+  useEffect(() => {
+    let cancelled = false
+    setSnapshot(loadingSnapshot)
+    void buildAdminServicesSnapshot(client).then((next) => {
+      if (!cancelled) setSnapshot(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [client])
+
+  return <AdminContractsView snapshot={snapshot} />
+}
+
+export function AdminContractsView({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   const totals = useMemo(() => serviceTotals(snapshot.services), [snapshot.services])
   const state = snapshot.loadState
 
   return (
-    <section className="aui-admin-services" aria-labelledby="admin-services-title">
-      <header className="aui-admin-header">
+    <div className="flex flex-col gap-4" aria-labelledby="admin-contracts-title">
+      <div className="flex items-start justify-between gap-3 border-b border-border px-6 py-5">
         <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-services-title">Services and contracts</h1>
-          <p>
-            Service registry, method exposure, route evidence, and control previews are rendered from AuroraClient SDK
-            responses.
+          <h1 id="admin-contracts-title" className="text-xl font-semibold tracking-tight">Service actions</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Review which Aurora actions are available, which require admin approval, and which need attention. Service controls stay on /admin/services.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Admin services backend evidence">
-          {isAvailabilityState(state) ? <StatusBadge state={state} /> : <span className={`aui-badge aui-badge-${state}`}>{state}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={`mode ${snapshot.servicesMode}`} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+        <div aria-label="Service action status">
+          <AvailabilityBadge state={state} />
         </div>
-      </header>
-
-      <StatusPanel snapshot={snapshot} />
-
-      <div className="aui-admin-metrics" aria-label="Service coverage summary">
-        <Metric label="Services" value={String(snapshot.services.length)} detail={`${totals.selectable} selectable`} />
-        <Metric label="Methods" value={String(snapshot.contracts.length)} detail={`${totals.manageMethods} manage/admin`} />
-        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, blocked, or unsupported" />
-        <Metric label="Generated" value={snapshot.generatedAt ?? 'pending'} detail="capability catalog timestamp" />
       </div>
 
-      <div className="aui-admin-grid">
-        <ServicesTable services={snapshot.services} onPreviewAdminAction={onPreviewAdminAction} />
+      <div className="flex flex-col gap-4 px-6 pb-6">
+        <StatusPanel snapshot={snapshot} />
+
+        <StatStrip
+          ariaLabel="Service action summary"
+          items={[
+            { label: 'Actions', value: String(snapshot.contracts.length), caption: `${totals.manageMethods} protected` },
+            { label: 'Services', value: String(snapshot.services.length), caption: 'service groups' },
+            { label: 'Needs attention', value: String(totals.unavailable), caption: 'denied, stale, blocked, or awaiting support' },
+            { label: 'Updated', value: snapshot.generatedAt ?? 'pending', caption: 'last refresh' }
+          ]}
+        />
+
         <ContractsPanel contracts={snapshot.contracts} />
       </div>
-    </section>
+    </div>
   )
+}
+
+/** Availability-state tone mapper for this screen's badges (route/health/contract state). */
+function availabilityTone(state: AvailabilityState): BadgeTone {
+  if (state === 'available-local' || state === 'available-remote') return 'success'
+  if (state === 'degraded' || state === 'stale' || state === 'pending') return 'warning'
+  if (state === 'denied' || state === 'privacy-blocked') return 'danger'
+  return 'neutral'
+}
+
+function AvailabilityBadge({ state }: { state: AvailabilityState | AdminServicesLoadState }) {
+  const normalized: AvailabilityState = isAvailabilityState(state) ? state : 'pending'
+  return <ToneBadge tone={availabilityTone(normalized)}>{availabilityLabel(state)}</ToneBadge>
+}
+
+function isAvailabilityState(value: string): value is AvailabilityState {
+  return [
+    'available-local',
+    'available-remote',
+    'pending',
+    'offline',
+    'denied',
+    'degraded',
+    'stale',
+    'privacy-blocked',
+    'unsupported'
+  ].includes(value)
 }
 
 function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="aui-admin-notice" aria-live="polite">
-        <Activity size={18} aria-hidden />
-        <span>Loading services, contracts, and capability catalog through AuroraClient.</span>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
+        <Activity size={16} aria-hidden />
+        <span>Loading services and available actions through Aurora.</span>
       </div>
     )
   }
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="aui-admin-notice" role="status">
-        <FileCode2 size={18} aria-hidden />
-        <span>No service registry or method contracts were returned by the SDK.</span>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" role="status">
+        <FileCode2 size={16} aria-hidden />
+        <span>No services or actions were returned by Aurora.</span>
       </div>
     )
   }
   return (
-    <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
-      <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'Some backend evidence is unavailable. Unsupported controls remain disabled.'}</span>
+    <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
+      <Lock size={16} aria-hidden />
+      <span>{snapshot.error ?? 'Some service status needs attention. Controls remain disabled until Aurora marks them ready.'}</span>
     </div>
   )
 }
 
-function ServicesTable({
+function ServiceCardGrid({
   services,
-  onPreviewAdminAction
+  onPreviewControl
 }: {
   services: AdminServiceRow[]
-  onPreviewAdminAction?: ((action: AdminServiceControlAction) => void) | undefined
+  onPreviewControl: (action: AdminServiceControlAction) => void
 }) {
+  if (services.length === 0) return <p className="text-sm text-muted-foreground">No services to show.</p>
   return (
-    <section className="aui-admin-panel" aria-labelledby="services-table-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Registry</p>
-          <h2 id="services-table-title">Services</h2>
-        </div>
-      </div>
-      {services.length === 0 ? (
-        <p className="aui-muted">No services were returned by Gateway.GetServices.</p>
-      ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Module</th>
-                <th>Health</th>
-                <th>Route</th>
-                <th>Capabilities</th>
-                <th>Instance</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((service) => (
-                <ServiceTableRow
-                  key={service.module}
-                  service={service}
-                  onPreviewAdminAction={onPreviewAdminAction}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function ServiceTableRow({
-  service,
-  onPreviewAdminAction
-}: {
-  service: AdminServiceRow
-  onPreviewAdminAction?: ((action: AdminServiceControlAction) => void) | undefined
-}) {
-  return (
-    <tr>
-      <td>
-        <details className="aui-service-details">
-          <summary>
-            <strong>{service.module}</strong>
-            <small>{service.summary || `${service.module} service`}</small>
-          </summary>
-          <div className="aui-service-drawer">
-            <dl>
-              <div><dt>Version</dt><dd>{service.version}</dd></div>
-              <div><dt>Last seen</dt><dd>{service.lastSeen}</dd></div>
-              <div><dt>Provider</dt><dd>{service.providerLabel}</dd></div>
-              <div><dt>Route evidence</dt><dd>{service.routeReason}</dd></div>
-            </dl>
-            <MethodList methods={service.methods} />
-          </div>
-        </details>
-      </td>
-      <td><StatusBadge state={service.healthState} /></td>
-      <td>
-        <div className="aui-state-line">
-          <StatusBadge state={service.routeState} />
-          <span>{service.providerLabel}</span>
-        </div>
-      </td>
-      <td>
-        <div className="aui-chip-list">
-          {service.capabilities.slice(0, 4).map((capability) => (
-            <span className="aui-chip" key={capability}>{capability}</span>
-          ))}
-          {service.capabilities.length === 0 ? <span className="aui-muted">none reported</span> : null}
-        </div>
-      </td>
-      <td><code>{service.instanceId ?? 'not reported'}</code></td>
-      <td>
-        <div className="aui-icon-actions">
-          {service.controls.map((control) => (
-            <button
-              key={control.verb}
-              type="button"
-              aria-label={`${control.verb} ${service.module}`}
-              title={control.reason}
-              disabled={!control.available || !control.action}
-              onClick={() => {
-                if (control.action) onPreviewAdminAction?.(control.action)
-              }}
-            >
-              {control.verb === 'restart'
-                ? <RotateCw size={16} aria-hidden />
-                : control.available
-                  ? <Square size={16} aria-hidden />
-                  : <Lock size={16} aria-hidden />}
-            </button>
-          ))}
-        </div>
-      </td>
-    </tr>
-  )
-}
-
-function MethodList({ methods }: { methods: MethodDescriptor[] }) {
-  if (methods.length === 0) return <p className="aui-muted">No registry methods were reported for this service.</p>
-  return (
-    <ul className="aui-method-list" aria-label="Service methods">
-      {methods.map((method) => (
-        <li key={method.busTopic}>
-          <code>{method.busTopic}</code>
-          <span>{method.exposure}</span>
-          <span>{method.methodType}</span>
-          <small>{method.summary || 'No summary provided.'}</small>
-        </li>
-      ))}
-    </ul>
+    <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+      {services.map((service) => {
+        const restart = service.controls.find((control) => control.verb === 'restart') ?? null
+        return (
+          <ShadCard key={service.module} className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[13.5px] font-semibold">{adminModuleLabel(service.module)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">{service.version ?? 'Current service'}</p>
+              </div>
+              <HealthBadge health={service.status} />
+            </div>
+            <p className="my-2.5 text-xs leading-relaxed text-muted-foreground">{service.summary ? sanitizeAdminText(service.summary) : `${adminModuleLabel(service.module)} service`}</p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-muted-foreground">{service.methodCount} methods · {service.lastSeen}</span>
+              <Button
+                variant="outline"
+                disabled={!restart?.available || !restart.action}
+                disabledReason={restart?.reason ?? 'Restart control is not available for this service.'}
+                onClick={() => { if (restart?.action) onPreviewControl(restart.action) }}
+              >
+                Restart
+              </Button>
+            </div>
+          </ShadCard>
+        )
+      })}
+    </div>
   )
 }
 
 function ContractsPanel({ contracts }: { contracts: AdminContractRow[] }) {
+  const modules = useMemo(() => Array.from(new Set(contracts.map((contract) => contract.module))).sort(), [contracts])
+  const [query, setQuery] = useState('')
+  const [moduleFilter, setModuleFilter] = useState('all')
+  const [exposureFilter, setExposureFilter] = useState<ContractExposure | 'all'>('all')
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(contracts[0]?.busTopic ?? null)
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredContracts = useMemo(
+    () => contracts.filter((contract) => {
+      const matchesQuery = normalizedQuery.length === 0 || [
+        contract.busTopic,
+        contract.summary,
+        contract.module,
+        contract.name,
+        contract.routePath ?? '',
+        contract.inputModel ?? '',
+        contract.outputModel ?? '',
+        contract.requiredPermissions.join(' ')
+      ].some((value) => value.toLowerCase().includes(normalizedQuery))
+      const matchesModule = moduleFilter === 'all' || contract.module === moduleFilter
+      const matchesExposure = exposureFilter === 'all' || contract.exposure === exposureFilter
+      return matchesQuery && matchesModule && matchesExposure
+    }),
+    [contracts, exposureFilter, moduleFilter, normalizedQuery]
+  )
+  const selectedContract = contracts.find((contract) => contract.busTopic === selectedTopic) ?? filteredContracts[0] ?? contracts[0]
+  const groupedContracts = groupContractsByModule(filteredContracts)
+
   return (
-    <section className="aui-admin-panel" aria-labelledby="contracts-table-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Explorer</p>
-          <h2 id="contracts-table-title">Contracts</h2>
-        </div>
-      </div>
+    <Card title="Actions" flush>
       {contracts.length === 0 ? (
-        <p className="aui-muted">No method descriptors were returned by Gateway.GetRegistry.</p>
+        <p className="text-sm text-muted-foreground">No service actions were returned by Aurora.</p>
       ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Method</th>
-                <th>Type</th>
-                <th>Exposure</th>
-                <th>Backend</th>
-                <th>Route</th>
-                <th>Privacy</th>
-                <th>Permissions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.map((contract) => (
-                <tr key={contract.busTopic}>
-                  <td>
-                    <strong>{contract.busTopic}</strong>
-                    <small>{contract.summary || 'No summary provided.'}</small>
-                  </td>
-                  <td><MethodTypeBadge type={contract.methodType} /></td>
-                  <td><ExposureBadge exposure={contract.exposure} /></td>
-                  <td><BackendCoverageBadge coverage={contract.backendCoverage} /></td>
-                  <td>
-                    <div className="aui-state-line">
-                      <StatusBadge state={contract.availability} />
-                      <span>{contract.routePath ?? 'not HTTP-exposed'}</span>
-                    </div>
-                  </td>
-                  <td><PrivacyBadge privacy={contract.privacyClass} /></td>
-                  <td>
-                    <div className="aui-chip-list">
-                      {contract.requiredPermissions.map((permission) => (
-                        <code className="aui-chip" key={permission}>{permission}</code>
-                      ))}
-                      {contract.requiredPermissions.length === 0 ? <span className="aui-muted">none</span> : null}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-4">
+          <FilterBar
+            search={{
+              value: query,
+              onChange: setQuery,
+              placeholder: 'Action, service, permission',
+              label: 'Search actions'
+            }}
+            controls={
+              <>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <span>Service</span>
+                  <select
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    value={moduleFilter}
+                    onChange={(event) => setModuleFilter(event.currentTarget.value)}
+                  >
+                    <option value="all">All modules</option>
+                    {modules.map((module) => <option key={module} value={module}>{module}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <span>Availability</span>
+                  <select
+                    className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+                    value={exposureFilter}
+                    onChange={(event) => setExposureFilter(event.currentTarget.value as ContractExposure | 'all')}
+                  >
+                    <option value="all">All locations</option>
+                    <option value="external">This screen</option>
+                    <option value="internal">Inside Aurora</option>
+                    <option value="both">Both places</option>
+                    <option value="gateway_builtin">Built in</option>
+                  </select>
+                </label>
+                <label className="sr-only">
+                  <span>Action detail</span>
+                  <select
+                    value={selectedContract?.busTopic ?? ''}
+                    onChange={(event) => setSelectedTopic(event.currentTarget.value)}
+                    aria-label="Select action detail"
+                  >
+                    {filteredContracts.map((contract) => (
+                      <option key={contract.busTopic} value={contract.busTopic}>{actionDisplayName(contract)}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            }
+          />
+
+          <StatStrip
+            ariaLabel="Action browser summary"
+            items={[
+              { label: 'Filtered actions', value: String(filteredContracts.length), caption: `${modules.length} service groups` },
+              { label: 'Ready actions', value: String(filteredContracts.filter((contract) => contract.availableOverHttp).length), caption: 'available from this screen' },
+              { label: 'Confirmed by Aurora', value: String(filteredContracts.filter((contract) => contract.liveRegistryStatus === 'live-registry').length), caption: 'currently available' },
+              { label: 'Payload details', value: String(filteredContracts.filter((contract) => contract.inputSchema || contract.outputSchema).length), caption: 'request or response shape' }
+            ]}
+          />
+
+          {filteredContracts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No actions match the current search and filters.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-border">
+              <Table>
+                <TableCaption className="sr-only">
+                  Service action browser grouped by service with detail controls
+                </TableCaption>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Service</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Type</TableHead>
+          <TableHead>Location</TableHead>
+                    <TableHead>Access</TableHead>
+                    <TableHead>Availability</TableHead>
+                    <TableHead>Readiness</TableHead>
+                    <TableHead>Permissions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupedContracts.map((group) => (
+                    <ContractModuleGroup
+                      key={group.module}
+                      module={group.module}
+                      contracts={group.contracts}
+                      selectedTopic={selectedContract?.busTopic ?? null}
+                      onSelect={setSelectedTopic}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {selectedContract ? <ContractDetail contract={selectedContract} /> : null}
         </div>
       )}
-    </section>
+    </Card>
   )
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function ContractModuleGroup({
+  module,
+  contracts,
+  selectedTopic,
+  onSelect
+}: {
+  module: string
+  contracts: AdminContractRow[]
+  selectedTopic: string | null
+  onSelect: (topic: string) => void
+}) {
   return (
-    <article className="aui-admin-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
+    <>
+      <TableRow className="hover:bg-transparent">
+        <TableHead colSpan={8} scope="rowgroup" className="bg-muted/40 text-xs font-semibold text-foreground">
+          {moduleDisplayName(module)} service / {contracts.length} action(s)
+        </TableHead>
+      </TableRow>
+      {contracts.map((contract) => (
+        <TableRow key={contract.busTopic} aria-selected={contract.busTopic === selectedTopic}>
+          <TableCell className="font-medium">{moduleDisplayName(contract.module)}</TableCell>
+          <TableCell>
+            <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => onSelect(contract.busTopic)}>
+              {actionDisplayName(contract)}
+            </button>
+            <p className="text-xs text-muted-foreground">{contract.summary ? sanitizeAdminText(contract.summary) : 'No summary provided.'}</p>
+          </TableCell>
+          <TableCell><MethodTypeBadge type={contract.methodType} /></TableCell>
+          <TableCell><ExposureBadge exposure={contract.exposure} /></TableCell>
+          <TableCell><BackendCoverageBadge coverage={contract.backendCoverage} /></TableCell>
+          <TableCell>
+            <div className="flex items-center gap-1.5">
+              <AvailabilityBadge state={contract.availability} />
+              <span className="text-xs text-muted-foreground">{actionAccessLabel(contract)}</span>
+            </div>
+          </TableCell>
+          <TableCell>
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="secondary" className="text-[10.5px]">{readinessLabel(contract.liveRegistryStatus)}</Badge>
+              <Badge variant="secondary" className="text-[10.5px]">{fitLabel(contract.conformanceStatus)}</Badge>
+            </div>
+          </TableCell>
+          <TableCell><PermissionChips permissions={contract.requiredPermissions} /></TableCell>
+        </TableRow>
+      ))}
+    </>
   )
 }
 
 function MethodTypeBadge({ type }: { type: ContractMethodType }) {
-  return <span className={`aui-badge aui-method-${type}`}>{type}</span>
+  return <Badge variant="outline">{methodTypeLabel(type)}</Badge>
 }
 
 function ExposureBadge({ exposure }: { exposure: ContractExposure }) {
-  return <span className={`aui-badge aui-exposure-${exposure}`}>{exposure}</span>
+  return <Badge variant="outline">{exposureLabel(exposure)}</Badge>
 }
 
 function BackendCoverageBadge({ coverage }: { coverage: AdminContractRow['backendCoverage'] }) {
-  return <span className={`aui-badge aui-backend-${coverage}`}>{coverage}</span>
+  return <Badge variant="outline">{coverageLabel(coverage)}</Badge>
+}
+
+function coverageLabel(coverage: AdminContractRow['backendCoverage']): string {
+  if (coverage === 'http') return 'Screen'
+  if (coverage === 'internal-only') return 'Inside Aurora'
+  if (coverage === 'gateway-builtin') return 'Built in'
+  return 'Needs attention'
+}
+
+function availabilityLabel(state: AvailabilityState | AdminServicesLoadState): string {
+  if (state === 'available-local' || state === 'available-remote' || state === 'ready') return 'Ready'
+  if (state === 'pending' || state === 'loading') return 'Checking'
+  if (state === 'offline' || state === 'stale') return 'Offline'
+  if (state === 'denied' || state === 'privacy-blocked') return 'Needs permission'
+  if (state === 'degraded') return 'Needs attention'
+  if (state === 'service-unavailable' || state === 'unsupported') return 'Not ready'
+  return 'Needs attention'
+}
+
+function methodTypeLabel(type: ContractMethodType): string {
+  if (type === 'manage' || type === 'admin-critical') return 'Protected'
+  if (type === 'query') return 'Read'
+  if (type === 'command') return 'Action'
+  if (type === 'event') return 'Event'
+  return 'Action'
+}
+
+function exposureLabel(exposure: ContractExposure): string {
+  if (exposure === 'external') return 'This screen'
+  if (exposure === 'gateway_builtin') return 'Built in'
+  if (exposure === 'internal') return 'Inside Aurora'
+  return 'This screen'
+}
+
+function ContractDetail({ contract }: { contract: AdminContractRow }) {
+  return (
+    <aside className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4" aria-labelledby="contract-detail-title">
+      <div>
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Action detail</p>
+        <h3 id="contract-detail-title" className="text-sm font-semibold">{actionDisplayName(contract)}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{contract.summary ? sanitizeAdminText(contract.summary) : 'No summary provided by Aurora.'}</p>
+      </div>
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Service</dt><dd className="font-medium">{moduleDisplayName(contract.module)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action</dt><dd className="font-medium">{humanizeToken(contract.name)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Request</dt><dd className="font-medium">{contract.inputModel ? 'Has details' : 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Response</dt><dd className="font-medium">{contract.outputModel ? 'Has details' : 'none'}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Location</dt><dd><ExposureBadge exposure={contract.exposure} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Permissions</dt><dd><PermissionChips permissions={contract.requiredPermissions} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Action permissions</dt><dd><PermissionChips permissions={contract.capabilityPermissions} /></dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Access</dt><dd className="font-medium">{actionAccessLabel(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Availability</dt><dd className="font-medium">{actionAccessDetail(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Status</dt><dd className="font-medium">{readinessLabel(contract.liveRegistryStatus)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Fit</dt><dd className="font-medium">{fitLabel(contract.conformanceStatus)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Readiness</dt><dd className="font-medium">{actionReasonLabel(contract)}</dd></div>
+        <div className="flex items-baseline justify-between gap-3 border-b border-border/60 py-1"><dt className="text-muted-foreground">Payload details</dt><dd className="font-medium">{contract.schemaState}</dd></div>
+      </dl>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Request and response detail">
+        <SchemaBlock title="Request details" schema={contract.inputSchema} />
+        <SchemaBlock title="Response details" schema={contract.outputSchema} />
+      </div>
+    </aside>
+  )
+}
+
+function PermissionChips({ permissions }: { permissions: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {permissions.map((permission) => (
+        <span key={permission} className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10.5px]">{permissionDisplayName(permission)}</span>
+      ))}
+      {permissions.length === 0 ? <span className="text-xs text-muted-foreground">none</span> : null}
+    </div>
+  )
+}
+
+function SchemaBlock({ title, schema }: { title: string; schema: MethodDescriptor['inputSchema'] }) {
+  return (
+    <section className="flex flex-col gap-1.5">
+      <h4 className="text-xs font-semibold text-foreground">{title}</h4>
+      {schema ? (
+        <p className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">Payload details are available for this action.</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">No payload details were returned by Aurora.</p>
+      )}
+    </section>
+  )
 }
 
 function buildServiceRows(
@@ -471,13 +674,13 @@ function buildServiceRows(
       status: service.status,
       healthState: healthState(service),
       instanceId: service.instance_id,
-      providerLabel: primary ? providerLabel(primary) : `${service.module} provider pending`,
+      providerLabel: primary ? providerLabel(primary) : `${adminModuleLabel(service.module)} target pending`,
       routeState: primary?.availability ?? 'unsupported',
-      routeReason: primary ? routeReason(primary) : 'Capability catalog does not advertise this service as executable.',
+      routeReason: primary ? routeReason(primary) : 'This service is not available for actions.',
       privacyClass: primary?.privacyClass ?? 'public',
       methods: serviceMethods,
-      controls: ['restart', 'stop'].map((verb) =>
-        serviceControl(service, verb as 'restart' | 'stop', serviceMethods, capabilities)
+      controls: ['restart', 'reload', 'stop'].map((verb) =>
+        serviceControl(service, verb as 'restart' | 'reload' | 'stop', serviceMethods, capabilities)
       )
     }
   })
@@ -493,22 +696,67 @@ function buildContractRows(
       return {
         ...method,
         availability: capability?.availability ?? methodAvailability(method),
-        providerLabel: capability ? providerLabel(capability) : `${method.module} provider pending`,
+        providerLabel: capability ? providerLabel(capability) : `${adminModuleLabel(method.module)} target pending`,
         backendCoverage: backendCoverage(method, capability),
         privacyClass: capability?.privacyClass ?? privacyForMethod(method),
-        routeReason: capability ? routeReason(capability) : 'No capability catalog action exists for this method.'
+        routeReason: capability ? routeReason(capability) : 'This action is not available for this service.',
+        liveRegistryStatus: (capability ? 'live-registry' : 'registry-only') as AdminContractRow['liveRegistryStatus'],
+        conformanceStatus: contractConformance(method, capability),
+        generatedRoutePath: method.routePath,
+        openApiState: openApiEvidence(method),
+        exportState: exportEvidence(method, capability),
+        schemaState: schemaEvidence(method, capability),
+        capabilityPermissions: capability?.requiredPermissions ?? []
       }
     })
     .sort((a, b) => a.busTopic.localeCompare(b.busTopic))
 }
 
+function groupContractsByModule(contracts: AdminContractRow[]): Array<{ module: string; contracts: AdminContractRow[] }> {
+  const groups = new Map<string, AdminContractRow[]>()
+  for (const contract of contracts) {
+    const group = groups.get(contract.module) ?? []
+    group.push(contract)
+    groups.set(contract.module, group)
+  }
+  return [...groups.entries()]
+    .map(([module, grouped]) => ({ module, contracts: grouped }))
+    .sort((a, b) => a.module.localeCompare(b.module))
+}
+
+function contractConformance(method: MethodDescriptor, capability: CapabilitySummary | undefined): AdminContractRow['conformanceStatus'] {
+  if (method.exposure === 'gateway_builtin') return 'gateway-builtin'
+  if (!method.availableOverHttp) return 'internal-only'
+  return capability ? 'conformant' : 'missing-capability'
+}
+
+function openApiEvidence(method: MethodDescriptor): string {
+  if (!method.availableOverHttp || !method.routePath) return 'Only available inside Aurora.'
+  return 'Available from this screen.'
+}
+
+function exportEvidence(_method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
+  return capability ? 'Aurora lists this action as ready.' : 'Aurora has not marked this action ready yet.'
+}
+
+function schemaEvidence(method: MethodDescriptor, capability: CapabilitySummary | undefined): string {
+  const registrySchemas = [method.inputSchema ? 'request details' : null, method.outputSchema ? 'response details' : null]
+    .filter((value): value is string => Boolean(value))
+  const capabilitySchemas = capability
+    ? [capability.raw.input_schema ? 'action request details' : null, capability.raw.output_schema ? 'action response details' : null]
+      .filter((value): value is string => Boolean(value))
+    : []
+  const evidence = [...registrySchemas, ...capabilitySchemas]
+  return evidence.length > 0 ? evidence.join(', ') : 'No payload details returned.'
+}
+
 function serviceControl(
   service: ServiceInfo,
-  verb: 'restart' | 'stop',
+  verb: 'restart' | 'reload' | 'stop',
   methods: MethodDescriptor[],
   capabilities: CapabilitySummary[]
 ): AdminServiceControlPreview {
-  const methodId = `Supervisor.${verb === 'restart' ? 'RestartService' : 'StopService'}`
+  const methodId = serviceControlMethodId(verb)
   const descriptor = methods.find((method) => method.busTopic === methodId)
   const capability = capabilities.find((candidate) => candidate.busTopic === methodId)
   const state = capability?.availability ?? (descriptor ? methodAvailability(descriptor) : 'unsupported')
@@ -529,8 +777,8 @@ function serviceControl(
     reason,
     action: available
       ? {
-          title: `${verb === 'restart' ? 'Restart' : 'Stop'} ${service.module}`,
-          description: `Aurora will ${verb} ${service.module} only through the AdminAction draft/confirm/audit controller.`,
+          title: `${serviceControlLabel(verb)} ${adminModuleLabel(service.module)}`,
+          description: `Aurora will ${serviceControlLabel(verb).toLowerCase()} ${adminModuleLabel(service.module)} only after admin confirmation and audit logging.`,
           methodId,
           severity: verb === 'stop' ? 'critical' : 'high',
           serviceModule: service.module,
@@ -539,6 +787,19 @@ function serviceControl(
         }
       : null
   }
+}
+
+
+function serviceControlMethodId(verb: AdminServiceControlPreview['verb']): string {
+  if (verb === 'restart') return 'Supervisor.RestartService'
+  if (verb === 'reload') return 'Config.ReloadService'
+  return 'Supervisor.StopService'
+}
+
+function serviceControlLabel(verb: AdminServiceControlPreview['verb']): string {
+  if (verb === 'restart') return 'Restart'
+  if (verb === 'reload') return 'Reload'
+  return 'Stop'
 }
 
 function serviceTotals(services: AdminServiceRow[]) {
@@ -564,10 +825,11 @@ function availabilityRank(state: AvailabilityState): number {
     'available-remote': 1,
     degraded: 2,
     pending: 3,
-    'privacy-blocked': 4,
-    denied: 5,
-    stale: 6,
-    unsupported: 7
+    offline: 4,
+    'privacy-blocked': 5,
+    denied: 6,
+    stale: 7,
+    unsupported: 8
   }
   return ranks[state]
 }
@@ -577,7 +839,6 @@ function methodAvailability(method: MethodDescriptor): AvailabilityState {
   if (!method.availableOverHttp) return 'unsupported'
   return method.methodType === 'manage' ? 'privacy-blocked' : 'degraded'
 }
-
 function backendCoverage(method: MethodDescriptor, capability: CapabilitySummary | undefined): AdminContractRow['backendCoverage'] {
   if (method.exposure === 'gateway_builtin') return 'gateway-builtin'
   if (!method.availableOverHttp) return 'internal-only'
@@ -603,13 +864,12 @@ function healthState(service: ServiceInfo): AvailabilityState {
 }
 
 function providerLabel(capability: CapabilitySummary): string {
-  const location = capability.peerId && capability.peerId !== 'local-peer' ? `remote:${capability.peerId}` : capability.providerId
-  return `${location} / ${capability.serviceInstanceId}`
+  return capability.peerId && capability.peerId !== 'local-peer' ? 'Connected device' : 'This device'
 }
 
 function routeReason(capability: CapabilitySummary): string {
-  if (capability.routeBlockers.length > 0) return capability.routeBlockers.join(', ')
-  return `${capability.module}.${capability.method} is ${capability.availability}`
+  if (capability.routeBlockers.length > 0) return adminReasonText(capability.routeBlockers.join(', '))
+  return adminReasonText(capability.availability, 'Ready')
 }
 
 function controlReason(
@@ -617,14 +877,14 @@ function controlReason(
   capability: CapabilitySummary | undefined,
   requiresAdminAction: boolean
 ): string {
-  if (!descriptor) return 'Supervisor control contract is not present in the service registry.'
-  if (!descriptor.availableOverHttp) return 'Supervisor control is internal-only and not available to this SDK transport.'
-  if (!requiresAdminAction) return 'Supervisor control is not marked manage/admin-critical; UI will not execute it.'
-  if (!capability) return 'Capability catalog does not advertise this control as executable.'
+  if (!descriptor) return 'This control is not available yet.'
+  if (!descriptor.availableOverHttp) return 'This control is only available inside Aurora.'
+  if (!requiresAdminAction) return 'This control is not ready for this screen.'
+  if (!capability) return 'Aurora does not list this control as ready.'
   if (!['available-local', 'available-remote', 'degraded'].includes(capability.availability)) {
     return routeReason(capability)
   }
-  return 'Preview requires AdminAction draft/confirm/audit before any mutation request.'
+  return 'Admin confirmation is required before this action can run.'
 }
 
 function valueOrNull<T>(settled: PromiseSettledResult<T>): T | null {
@@ -643,19 +903,59 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+  return adminErrorTitle(error)
 }
 
-function isAvailabilityState(value: string): value is AvailabilityState {
-  return [
-    'available-local',
-    'available-remote',
-    'pending',
-    'denied',
-    'degraded',
-    'stale',
-    'privacy-blocked',
-    'unsupported'
-  ].includes(value)
+function actionAccessLabel(contract: AdminContractRow): string {
+  return contract.availableOverHttp ? 'Available from this screen' : 'Only available inside Aurora'
+}
+
+function actionAccessDetail(contract: AdminContractRow): string {
+  return contract.openApiState
+}
+
+function actionReasonLabel(contract: AdminContractRow): string {
+  if (contract.availability === 'available-local' || contract.availability === 'available-remote') return 'Ready'
+  if (contract.availability === 'offline' || contract.availability === 'stale') return 'This device is offline'
+  if (contract.availability === 'denied' || contract.availability === 'privacy-blocked') return 'Permission is needed to use this feature'
+  if (contract.availability === 'unsupported') return 'This Aurora version cannot use that feature yet'
+  return 'Needs attention'
+}
+
+function readinessLabel(status: AdminContractRow['liveRegistryStatus']): string {
+  if (status === 'live-registry') return 'Ready'
+  if (status === 'capability-only') return 'Needs refresh'
+  return 'Listed'
+}
+
+function fitLabel(status: AdminContractRow['conformanceStatus']): string {
+  if (status === 'conformant') return 'Ready'
+  if (status === 'internal-only') return 'Inside Aurora only'
+  if (status === 'gateway-builtin') return 'Built in'
+  return 'Needs attention'
+}
+
+function actionDisplayName(contract: Pick<AdminContractRow, 'module' | 'name' | 'busTopic'>): string {
+  return adminActionLabel(contract)
+}
+
+function moduleDisplayName(module: string): string {
+  return adminModuleLabel(module)
+}
+
+function humanizeToken(value: string): string {
+  return sanitizeAdminText(value)
+    .replace(/([a-z0-9])([A-Z])/gu, '$1 $2')
+    .replace(/[._:-]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function permissionDisplayName(permission: string): string {
+  if (permission === '*') return 'All access'
+  const [module, action] = permission.split('.')
+  if (!module || !action) return sanitizeAdminText(permission)
+  if (action === 'manage') return `${adminModuleLabel(module)} management`
+  if (action === 'use') return `${adminModuleLabel(module)} use`
+  return `${adminModuleLabel(module)} ${sanitizeAdminText(action)}`
 }

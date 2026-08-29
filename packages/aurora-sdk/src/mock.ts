@@ -5,8 +5,8 @@ import {
   type AuroraEventSubscription,
   type AuroraStreamRequest
 } from './events.js'
-import { cloneFixture, defaultMockAuroraFixtures, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
-import type { DBRAGSearchRemoteRequest } from './memory.js'
+import { cloneFixture, defaultMockAuroraFixtures, memoryLocalSearchFixture, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
+import type { DBRAGSearchRemoteRequest, DBRAGSearchRequest } from './memory.js'
 import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
 import type {
   AttachmentContextIngestRequest,
@@ -54,6 +54,7 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Gateway.GetDeploymentTopology', () => cloneFixture(fixtures.deploymentTopology))
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
       .register('Gateway.GetMeshStatus', () => cloneFixture(fixtures.meshStatus))
+      .register('Gateway.GetMeshInviteConfig', () => cloneFixture(fixtures.meshInviteConfig))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
       .register('Backup.List', () => cloneFixture(fixtures.backups))
@@ -98,6 +99,91 @@ export class MockAuroraTransport implements AuroraTransport {
       }))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Tooling.GetStats', () => ({
+        total_tools: fixtures.toolCatalog.tools.length,
+        mcp_tools_loaded: fixtures.toolingMcpStatus.servers.reduce((count, server) => count + (typeof server.tool_count === 'number' ? server.tool_count : 0), 0),
+        core_tools: fixtures.toolCatalog.tools.filter((tool) => (tool as { provider_kind?: string }).provider_kind === 'local' || tool.provider_id === 'local:Tooling').length,
+        plugin_tools: fixtures.toolCatalog.tools.filter((tool) => (tool as { provider_kind?: string }).provider_kind === 'plugin').length
+      }))
+      .register('Tooling.GetMCPStatus', () => cloneFixture(fixtures.toolingMcpStatus))
+      .register('Tooling.ReloadMCPTools', () => ({}))
+      .register('Tooling.GetSharingPolicy', () => ({ policy: cloneFixture(fixtures.toolingSharingPolicy) }))
+      .register('Tooling.GetPolicySummary', () => ({
+        policy: cloneFixture(fixtures.toolingSharingPolicy),
+        policy_mode: fixtures.toolingSharingPolicy.policy_mode,
+        default_approval_mode: fixtures.toolingSharingPolicy.default_approval_mode,
+        default_share: fixtures.toolingSharingPolicy.default_share,
+        active_grant_count: fixtures.toolingApprovalGrants.grants.filter((grant) => grant.active).length,
+        pending_approval_count: 1,
+        blocked_source_count: 1,
+        blocked_tool_count: (fixtures.toolCatalog as { blocked_count?: number }).blocked_count ?? 0,
+        source_count: 4,
+        tool_count: fixtures.toolCatalog.tools.length,
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListToolSources', () => ({
+        sources: [
+          { source_id: 'local:core', source: 'core', display_name: 'Core tools', provider_peer_id: 'local', provider_service_instance_id: 'local:Tooling', provider_kind: 'local', trust_tier: 'trusted', status: 'active', tool_count: 2, blocked_tool_count: 0, pending_approval_count: 0, active_grant_count: 1, stale_grant_count: 0, unreviewed_tool_count: 0, cache_status: 'local', include_future_tools_grants: 0, secrets_redacted: true },
+          { source_id: 'local:mcp:mail', source: 'mcp', display_name: 'Mail MCP', provider_peer_id: 'local', provider_service_instance_id: 'mcp-mail', provider_kind: 'local', trust_tier: 'untrusted', status: 'active', tool_count: 1, blocked_tool_count: 1, pending_approval_count: 1, active_grant_count: 0, stale_grant_count: 1, unreviewed_tool_count: 1, cache_status: 'hit', catalog_epoch: 3, catalog_hash: 'hash-mcp-mail', secrets_redacted: true },
+          { source_id: 'mesh:peer-garage:tooling-garage', source: 'mesh_peer', display_name: 'Mesh peer garage', provider_peer_id: 'peer-garage', provider_service_instance_id: 'tooling-garage', provider_kind: 'mesh_peer', trust_tier: 'untrusted', status: 'needs-review', tool_count: 1, blocked_tool_count: 0, pending_approval_count: 0, active_grant_count: 1, stale_grant_count: 1, unreviewed_tool_count: 1, cache_status: 'hit', catalog_epoch: 7, catalog_hash: 'hash-peer-garage', secrets_redacted: true },
+          { source_id: 'blocked:mcp-mail', source: 'blocked', display_name: 'Blocked MCP tools', provider_peer_id: 'local', provider_service_instance_id: 'mcp-mail', provider_kind: 'local', trust_tier: 'blocked', status: 'blocked', tool_count: 0, blocked_tool_count: 1, pending_approval_count: 0, active_grant_count: 0, stale_grant_count: 0, unreviewed_tool_count: 0, cache_status: 'blocked', secrets_redacted: true }
+        ],
+        count: 4,
+        generated_at: fixtures.toolCatalog.generated_at,
+        secrets_redacted: true
+      }))
+      .register('Tooling.GetToolSourceDetail', (request) => ({
+        source: { source_id: ((request.payload as { source_id?: string })?.source_id ?? 'local:core'), source: 'core', display_name: 'Core tools', provider_peer_id: 'local', provider_service_instance_id: 'local:Tooling', provider_kind: 'local', trust_tier: 'trusted', status: 'active', tool_count: fixtures.toolCatalog.tools.length, cache_status: 'local', secrets_redacted: true },
+        tools: cloneFixture(fixtures.toolCatalog.tools),
+        blocked_tools: cloneFixture((fixtures.toolCatalog as { blocked_tools?: unknown[] }).blocked_tools ?? []),
+        grants: cloneFixture(fixtures.toolingApprovalGrants.grants),
+        pending_approvals: [],
+        policy_rules: cloneFixture(fixtures.toolingSharingPolicy.rules),
+        found: true,
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListPendingApprovals', () => ({ approvals: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.ListPolicyAuditEvents', () => ({ events: [{ event: 'tooling.policy.set', correlation_id: 'corr-policy', details: { secrets_redacted: true }, secrets_redacted: true }], total: 1, secrets_redacted: true }))
+      .register('Tooling.GetOnboardingStatus', () => ({ capabilities: [], secrets_redacted: true }))
+      .register('Tooling.SetPolicyMode', (request) => ({ ok: true, policy: cloneFixture(fixtures.toolingSharingPolicy), correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.UpsertSourcePolicy', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearSourcePolicy', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.UpsertToolPolicyOverride', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearToolPolicyOverride', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.TestMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.CreateMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', created: false, error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.TestPluginSource', () => ({ ok: false, source_id: 'local:plugin:default', error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.CreatePluginSource', () => ({ ok: false, source_id: 'local:plugin:default', created: false, error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.SetSharingPolicy', (request) => ({ ok: true, policy: cloneFixture((request.payload as { policy?: unknown })?.policy ?? fixtures.toolingSharingPolicy), correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.TestSharingPolicy', (request) => ({
+        ok: true,
+        policy_decision: { allowed: true, share: true, approval_required: true, approval_mode: 'ask_each_time', decision_id: 'policy-test-fixture', token_ttl_seconds: 300 },
+        args_hash: 'sha256:mock-test-args',
+        resource_selector_hash: 'sha256:mock-resource',
+        route_decision_id: 'route-mock-tooling',
+        correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? 'corr-mock-test-policy',
+        provider_peer_id: 'local-peer',
+        provider_service_instance_id: 'tooling-local',
+        global_tool_id: (request.payload as { tool_name?: string })?.tool_name ?? 'tool:mock',
+        local_tool_name: (request.payload as { tool_name?: string })?.tool_name ?? 'mock.tool',
+        display_args_preview: {},
+        argument_visibility: {},
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListApprovalGrants', () => cloneFixture(fixtures.toolingApprovalGrants))
+      .register('Tooling.CreateApprovalGrant', (request) => ({
+        ok: true,
+        grant: {
+          ...(request.payload as Record<string, unknown>),
+          grant_id: 'grant-mock-created',
+          active: true,
+          created_at: 1781840700,
+          revoked_at: null
+        },
+        correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null
+      }))
+      .register('Tooling.RevokeApprovalGrant', (request) => ({ ok: true, grant_id: (request.payload as { grant_id?: string })?.grant_id ?? 'grant-mock', correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.EvaluateApprovalGrant', () => ({ ok: true, grant: cloneFixture(fixtures.toolingApprovalGrants.grants[0]), reason: null, correlation_id: 'corr-mock-grant-eval' }))
       .register('Config.Get', () => cloneFixture(fixtures.configGet))
       .register('Config.Validate', () => cloneFixture(fixtures.configValidate))
       .register('Config.GetSchemaMetadata', () => cloneFixture(fixtures.configSchemaMetadata))
@@ -105,6 +191,15 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Config.GetVersionHistory', () => cloneFixture(fixtures.configVersionHistory))
       .register('Config.PreviewReloadImpact', () => cloneFixture(fixtures.configReloadImpact))
       .register('Config.Set', () => cloneFixture(fixtures.configSet))
+      .register('Config.CommitChangeSet', () => ({
+        success: true,
+        revision: 8,
+        version_id: 'cfgv-change-set-001',
+        changed_paths: ['services.gateway.api.port'],
+        transaction_id: 'cfgtx-change-set-001',
+        error: null,
+        error_code: null
+      }))
       .register('Config.Rollback', () => cloneFixture(fixtures.configRollback))
       .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
       .register('Orchestrator.GetModelRuntime', () => ({
@@ -119,8 +214,10 @@ export class MockAuroraTransport implements AuroraTransport {
       }))
       .register('Orchestrator.IngestContext', (request) => mockIngestContext(request.payload))
       .register('DB.GetMessages', () => cloneFixture(fixtures.memoryMessages))
+      .register('DB.GetMessagesForDate', () => cloneFixture(fixtures.memoryMessages))
       .register('DB.RAGListNamespaces', () => cloneFixture(fixtures.memoryNamespaces))
       .register('DB.RAGSearchRemote', (request) => memorySearchFixture(request.payload as DBRAGSearchRemoteRequest))
+      .register('DB.RAGSearch', (request) => memoryLocalSearchFixture(request.payload as DBRAGSearchRequest))
       .register('DB.RAGExportNamespace', () => cloneFixture(fixtures.memoryExport))
       .register('DB.RAGImportNamespace', () => cloneFixture(fixtures.memoryImport))
       .register('DB.RAGDelete', () => ({ success: true }))
@@ -143,12 +240,20 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.MeshDenyPeer', () => ({ success: true, message: 'peer denied' }))
       .register('Auth.MeshUpdatePeerPermissions', () => ({ success: true, message: 'permissions updated' }))
       .register('Auth.MeshRemovePeer', () => ({ success: true, message: 'peer removed' }))
+      .register('Orchestrator.ListPendingToolApprovals', () => cloneFixture(fixtures.pendingToolApprovals))
+      .register('Transcription.Transcribe', () => ({
+        text: 'hello Aurora',
+        confidence: null,
+        language: 'en',
+        duration_ms: 500,
+        model_used: 'demo-focused'
+      }))
       .register('Orchestrator.ExternalUserInput', (request) => ({
-        text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
+        text: `Sample reply: I heard “${mockPromptText(request.payload)}”.`,
         session_id: mockSessionId(request.payload),
         metadata: {
-          model: 'mock-local',
-          provider: 'mock-orchestrator'
+          model: 'Aurora',
+          provider: 'sample-data'
         }
       }))
   }
@@ -186,6 +291,10 @@ export class MockAuroraTransport implements AuroraTransport {
   stream<TPayload = unknown>(stream: string, registration: MockEventRegistration<TPayload>): this {
     this.eventHandlers.set(stream, registration as MockEventRegistration)
     return this
+  }
+
+  hasStream(stream: string): boolean {
+    return this.eventHandlers.has(stream) || this.eventHandlers.has('*')
   }
 
   failStream(stream: string, code: AuroraErrorCode, message: string): this {

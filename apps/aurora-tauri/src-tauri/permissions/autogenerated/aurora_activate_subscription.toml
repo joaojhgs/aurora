@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-activate-subscription"
+description = "Enables the aurora_activate_subscription command without any pre-configured scope."
+commands.allow = ["aurora_activate_subscription"]
+
+[[permission]]
+identifier = "deny-aurora-activate-subscription"
+description = "Denies the aurora_activate_subscription command without any pre-configured scope."
+commands.deny = ["aurora_activate_subscription"]

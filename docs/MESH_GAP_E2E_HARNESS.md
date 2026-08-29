@@ -1,7 +1,6 @@
-# Mesh Production E2E Harness
+# Mesh Transport E2E Harness
 
-PER-163 / MESH-GAP-011 adds an executable two-peer harness for the mesh
-capability fabric. The default CI profile creates isolated consumer/provider
+The mesh transport E2E harness proves Aurora cross-peer capability fabric behavior with two executable peers. The default CI profile creates isolated consumer/provider
 peers in-process, drives provider calls through `LocalBus.request`, generated
 Gateway FastAPI routes, and an `aiortc` WebRTC DataChannel wired to the
 production `app.services.gateway.webrtc.rpc.RPCHandler` for the final
@@ -18,9 +17,9 @@ uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py -q
 
 The runner writes:
 
-- `.omx/reports/mesh-gap-e2e/latest/report.json`
-- `.omx/reports/mesh-gap-e2e/latest/events.ndjson`
-- `.omx/reports/mesh-gap-e2e/latest/support_bundle.json`
+- `.artifacts/e2e/mesh-transport/latest/report.json`
+- `.artifacts/e2e/mesh-transport/latest/events.ndjson`
+- `.artifacts/e2e/mesh-transport/latest/support_bundle.json`
 
 Run one transport row with:
 
@@ -47,7 +46,7 @@ final acceptance proof.
 
 ## Covered Scenarios
 
-The report asserts all required PER-163 scenarios:
+The report asserts these durable mesh transport scenarios:
 
 1. Pair peers and approve permissions.
 2. Share Tooling service with selected tools only.
@@ -67,7 +66,7 @@ The report asserts all required PER-163 scenarios:
 
 ## CI Profile
 
-Use the pytest gate for CI/dev:
+Use the pytest suite for CI/dev:
 
 ```bash
 uv run pytest tests/e2e/test_mesh_gap_e2e_harness.py -q

@@ -80,12 +80,62 @@ export interface OrchestratorProcessRequest {
   text: string
   source?: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
+  stream?: boolean
+  client_tts_playback?: boolean | null
+  dispatch_selector?: JsonObject
+  mesh_selector?: JsonObject
+  selector?: JsonObject
+  inference_selector?: JsonObject
+  inference_provider_id?: string
+  inference_model_id?: string
 }
 
 export interface OrchestratorResponse {
   text: string
   session_id?: string | null
+  request_id?: string | null
+  correlation_id?: string | null
   metadata?: JsonObject
+}
+
+export interface OrchestratorChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  name?: string | null
+  tool_call_id?: string | null
+  tool_calls?: JsonObject[]
+  metadata?: JsonObject
+}
+
+export interface OrchestratorInferChatRequest {
+  messages: OrchestratorChatMessage[]
+  stream?: boolean
+  model_id?: string | null
+  provider_id?: string | null
+  tools?: JsonObject[]
+  tool_choice?: JsonObject | string | boolean | null
+  params?: JsonObject
+  correlation_id?: string | null
+  session_id?: string | null
+  request_id?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+  metadata?: JsonObject
+}
+
+export interface OrchestratorInferChatResponse {
+  text: string
+  message?: OrchestratorChatMessage | null
+  model_id?: string | null
+  provider_id?: string | null
+  finish_reason?: string | null
+  correlation_id?: string | null
+  session_id?: string | null
+  request_id?: string | null
+  metadata?: JsonObject
+  secrets_redacted: boolean
 }
 
 export interface AssistantRoutePolicy {
@@ -103,13 +153,53 @@ export interface AssistantSendMessageRequest {
   text: string
   sessionId?: string | null
   routePolicy?: AssistantRoutePolicy | null
+  inferencePolicy?: AssistantInferencePolicy | null
   timeoutMs?: number
+}
+
+export interface AssistantInferencePolicy extends AssistantRoutePolicy {
+  runtimeProviderId?: string | null
+  modelId?: string | null
+  dataLeavesDevice?: boolean | null
 }
 
 export interface AssistantStreamMessageRequest extends AssistantSendMessageRequest {
   signal?: AbortSignal
   lastEventId?: string | null
   replayFrom?: string | null
+  requestId?: string | null
+  clientTtsPlayback?: boolean | null
+}
+
+
+export interface TTSPlaybackRequest {
+  text: string
+  voice?: string | null
+  speed?: number
+  interrupt?: boolean
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TTSSynthesisRequest {
+  text: string
+  voice?: string | null
+  speed?: number
+  format?: 'wav' | 'raw' | string
+  sample_rate?: number | null
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TTSSynthesisResponse {
+  audio_data: string
+  format: string
+  sample_rate: number
+  channels: number
+  duration_ms: number
+  text: string
 }
 
 export interface AssistantMessage {
@@ -128,18 +218,61 @@ export interface AssistantSendMessageResult {
   metadata: JsonObject
 }
 
-export type AssistantStreamUpdateKind = 'delta' | 'completed' | 'failed' | 'tool' | 'transport_lost' | 'fallback'
+export type AssistantStreamUpdateKind =
+  | 'delta'
+  | 'completed'
+  | 'failed'
+  | 'tool'
+  | 'tts_audio_chunk'
+  | 'transport_lost'
+  | 'fallback'
+
+export type AssistantToolStreamStatus = 'requested' | 'running' | 'completed' | 'failed' | 'requires_action' | string
+
+export interface AssistantToolStreamEvent {
+  id: string
+  name: string
+  status: AssistantToolStreamStatus
+  riskClass: string | null
+  target: string | null
+  dataLeavesDevice: boolean | null
+  summary: string | null
+  payloadPreview: JsonObject | null
+  resultPreview: JsonObject | string | null
+  error?: string | null
+  errorDetails?: JsonObject | string | null
+  pendingId?: string | null
+  approvalRequestId?: string | null
+  approvalExpiresAt?: number | null
+  policyDecisionId?: string | null
+}
+
+export interface AssistantTtsAudioChunkEvent {
+  chunkId: string | null
+  sequence: number | null
+  audioData: string | null
+  encoding: string | null
+  mimeType: string | null
+  sampleRate: number | null
+  channels: number | null
+  durationMs: number | null
+  final: boolean
+}
 
 export interface AssistantStreamUpdate {
   kind: AssistantStreamUpdateKind
   eventId: string | null
+  messageId: string | null
   sessionId: string | null
   text: string
   textDelta: string
   modelLabel: string | null
+  requestId?: string | null
   error: AuroraError | null
   audit: AuditReceipt
   metadata: JsonObject
+  tool: AssistantToolStreamEvent | null
+  ttsAudio: AssistantTtsAudioChunkEvent | null
 }
 
 export type OrchestratorInterruptScope = 'generation' | 'tool_call' | 'tts_playback' | 'session'
@@ -177,6 +310,728 @@ export interface AssistantCancelRequest {
   requestId?: string | null
   scopes?: OrchestratorInterruptScope[]
   reason?: string
+}
+
+export type OrchestratorToolApprovalStatus =
+  | 'pending'
+  | 'approved'
+  | 'denied'
+  | 'executed'
+  | 'failed'
+  | 'expired'
+
+export type ToolingApprovalGrantScope =
+  | 'once'
+  | 'session'
+  | 'until_expiry'
+  | 'always'
+  | 'scheduled_execution'
+  | 'deny_once'
+  | 'deny_always'
+  | string
+
+export interface OrchestratorPendingToolApproval {
+  pending_id: string
+  approval_request_id?: string | null
+  status: OrchestratorToolApprovalStatus
+  run_id: string
+  thread_id: string
+  session_id?: string | null
+  owner_principal_id?: string | null
+  owner_peer_id?: string | null
+  message_id: string
+  tool_call_id: string
+  tool_name: string
+  display_name?: string | null
+  arguments_preview?: JsonObject
+  policy_decision_id?: string | null
+  correlation_id?: string | null
+  created_at: number
+  expires_at?: number | null
+  metadata?: JsonObject
+}
+
+export interface OrchestratorListPendingToolApprovalsRequest {
+  session_id?: string | null
+  run_id?: string | null
+  status?: OrchestratorToolApprovalStatus | null
+}
+
+export interface OrchestratorListPendingToolApprovalsResponse {
+  approvals: OrchestratorPendingToolApproval[]
+  count: number
+}
+
+export interface OrchestratorResumeToolApprovalRequest {
+  pending_id?: string | null
+  approval_request_id?: string | null
+  session_id?: string | null
+  approve?: boolean
+  grant_scope?: ToolingApprovalGrantScope
+  approver_principal_id?: string | null
+  expires_at?: number | null
+  include_future_tools?: boolean
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface OrchestratorResumeToolApprovalResponse {
+  ok: boolean
+  status: OrchestratorToolApprovalStatus
+  pending?: OrchestratorPendingToolApproval | null
+  tool_result?: JsonObject | null
+  assistant_text?: string | null
+  error?: string | null
+  correlation_id?: string | null
+}
+
+
+export type ToolingApprovalMode =
+  | 'deny_all'
+  | 'ask_each_time'
+  | 'allow_once'
+  | 'allow_until_expiry'
+  | 'approve_all_for_session'
+  | 'approve_all_for_peer'
+  | 'approve_all_local_safe'
+  | 'dry_run_only'
+  | string
+
+export type ToolingPolicyMode = 'enforce' | 'dry_run_only' | 'deny_all' | 'unrestricted_except_blocked' | string
+export type ToolingTrustTier = 'trusted' | 'untrusted' | 'blocked' | string
+export type ToolingCapabilityClass = 'read' | 'write' | 'execute' | 'network' | 'secrets' | 'device' | 'admin' | string
+export type ToolingSourceClass = 'core' | 'plugin' | 'mcp' | 'toolkit' | 'mesh_peer' | 'unknown' | string
+
+export interface ToolingSharingPolicyRule {
+  rule_id: string
+  share?: boolean
+  approval_mode?: ToolingApprovalMode
+  tool_name?: string | null
+  global_tool_id?: string | null
+  execution_location?: 'local' | 'remote' | string | null
+  source_type?: ToolingSourceClass | null
+  toolkit_name?: string | null
+  safety_class?: string | null
+  operation_class?: string | null
+  resource_namespace?: string | null
+  hardware_target?: string | null
+  data_scope?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+  caller_device_id?: string | null
+  caller_permissions?: string[] | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  route_privacy_class?: string | null
+  token_ttl_seconds?: number
+  [key: string]: JsonValue | undefined
+}
+
+export interface ToolingSharingPolicy {
+  default_share: boolean
+  default_approval_mode: ToolingApprovalMode
+  policy_mode: ToolingPolicyMode
+  default_token_ttl_seconds: number
+  rules: ToolingSharingPolicyRule[]
+}
+
+export interface ToolingGetSharingPolicyResponse {
+  policy: ToolingSharingPolicy
+}
+
+export interface ToolingSetSharingPolicyRequest {
+  policy: ToolingSharingPolicy
+  actor_principal_id?: string | null
+  confirmation_text?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingSetSharingPolicyResponse {
+  ok: boolean
+  policy: ToolingSharingPolicy
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export type ToolingExportState = 'shared' | 'unshared'
+export type ToolingExportScopeType = 'group' | 'tool'
+export type ToolingExportDecisionSource =
+  | 'peer_tool'
+  | 'global_tool'
+  | 'peer_group'
+  | 'global_group'
+  | 'global_default'
+export type ToolingExportProtocolTier = 'legacy_unsupported' | 'projection_v1' | 'projection_v1_delta'
+export type ToolingRemoteAvailability =
+  | 'active'
+  | 'unshared'
+  | 'permission_blocked'
+  | 'provider_unavailable'
+  | 'removed'
+  | 'stale'
+  | 'schema_changed'
+  | 'protocol_unsupported'
+
+/** Every authority dimension bound into a recipient-specific Tooling projection. */
+export interface ToolingProjectionAuthorityRevision {
+  catalog_revision: number
+  export_policy_revision: number
+  auth_grant_revision: number
+  manifest_revision: number
+  switch_revision: number
+  protocol_revision: number
+}
+
+/**
+ * Request one page of the authenticated caller's Tooling projection.
+ *
+ * Deliberately has no peer/provider selector: the authenticated RPC envelope
+ * is the only recipient authority.
+ */
+export interface ToolingGetExportCatalogRequest {
+  protocol_tier?: 'projection_v1'
+  page_size?: number
+  cursor?: string | null
+  last_projection_revision?: string | null
+  last_projection_digest?: string | null
+}
+
+export interface ToolingProjectionRetirement {
+  global_tool_id: string
+  availability: Extract<ToolingRemoteAvailability, 'unshared' | 'permission_blocked' | 'removed' | 'stale'>
+  reason_code: string
+  last_schema_hash?: string | null
+}
+
+export interface ToolingProjectionBlockedTool {
+  tool: ToolingProjectionToolInfo
+  reason_code: 'recipient_missing_tool_permissions'
+  missing_permissions: string[]
+}
+
+/** Wire metadata for an authorized projection member. */
+export interface ToolingProjectionToolInfo {
+  name: string
+  local_name: string
+  global_tool_id: string
+  tool_id_scheme: 'aurora-tool' | 'legacy'
+  tool_id_version: 0 | 1
+  tool_contract_id: string
+  share_group_id: string
+  share_group_label: string
+  legacy_global_tool_ids: string[]
+  exportable: boolean
+  provider_peer_id: string
+  provider_service_instance_id: string
+  provider_label?: string | null
+  provider_granted_permissions?: string[] | null
+  provider_available?: boolean | null
+  namespace: string
+  display_name: string
+  aliases: string[]
+  description: string
+  args_schema: JsonObject
+  schema: JsonObject
+  argument_visibility: JsonObject
+  source_type: 'local' | 'mesh_peer'
+  source: 'core' | 'plugin' | 'mcp' | 'mesh_peer' | 'unknown'
+  source_id?: string | null
+  trust_tier: ToolingTrustTier
+  capability_class: ToolingCapabilityClass
+  resource_scope: string[]
+  execution_location: 'local' | 'remote'
+  safety_class: string
+  risk_class: string
+  data_egress: boolean
+  mutating: boolean
+  external: boolean
+  admin: boolean
+  privacy_hints: string[]
+  required_permissions: string[]
+  confirmation_required: boolean
+  rate_limit_hints?: JsonObject | null
+  provenance: ToolingToolProvenance
+}
+
+export interface ToolingExportCatalogPageBase {
+  ok: boolean
+  reason_code?: string | null
+  provider_peer_id: string
+  service_instance_id: string
+  selected_protocol_tier: 'projection_v1'
+  authority_revision: ToolingProjectionAuthorityRevision
+  projection_revision: string
+  projection_digest: string
+  page_index: number
+  page_size: number
+  page_hash: string
+  tools: ToolingProjectionToolInfo[]
+  blocked_tools?: ToolingProjectionBlockedTool[]
+  retirements: ToolingProjectionRetirement[]
+}
+
+export interface ToolingExportCatalogPartialPage extends ToolingExportCatalogPageBase {
+  complete: false
+  next_cursor: string
+  total_count?: never
+  final_checksum?: never
+}
+
+export interface ToolingExportCatalogCompletePage extends ToolingExportCatalogPageBase {
+  complete: true
+  next_cursor?: null
+  total_count: number
+  final_checksum: string
+}
+
+/** A page is non-bindable until a complete snapshot checksum is committed. */
+export type ToolingGetExportCatalogResponse =
+  | ToolingExportCatalogPartialPage
+  | ToolingExportCatalogCompletePage
+
+/** Metadata-only, targeted invalidation. Tool membership must never be added. */
+export interface ToolingProjectionInvalidated {
+  provider_peer_id: string
+  service_instance_id: string
+  authority_revision: ToolingProjectionAuthorityRevision
+  reason_code: string
+  correlation_id: string
+}
+
+/** Local refresh status keyed by the provider's stable peer and service IDs. */
+export interface ToolingProjectionSyncRequested {
+  provider_peer_id: string
+  service_instance_id: string
+  reason_code: string
+  force_full_snapshot: boolean
+}
+
+export type ToolingRemoteCatalogSyncState = 'idle' | 'syncing' | 'committed' | 'failed' | 'legacy_stale'
+export type ToolingRemoteProviderAvailability = 'active' | 'provider_unavailable' | 'stale' | 'protocol_unsupported'
+
+export interface ToolingRemoteCatalogHeader {
+  peer_id: string
+  provider_id: string
+  service_instance_id: string
+  protocol_tier: Exclude<ToolingExportProtocolTier, 'projection_v1_delta'>
+  projection_revision?: string | null
+  projection_digest?: string | null
+  authority_revision: ToolingProjectionAuthorityRevision
+  current_generation: number
+  sync_state: ToolingRemoteCatalogSyncState
+  availability: ToolingRemoteProviderAvailability
+  last_error_reason?: string | null
+  committed_at?: number | null
+  updated_at: number
+}
+
+export interface ToolingRemoteCatalogToolStatus {
+  peer_id: string
+  provider_id: string
+  tool: ToolingProjectionToolInfo
+  schema_hash: string
+  availability: ToolingRemoteAvailability
+  reason_code: string
+  missing_permissions: string[]
+  active_generation?: number | null
+  projection_revision?: string | null
+  authority_revision: ToolingProjectionAuthorityRevision
+  review_required: boolean
+  first_seen_at: number
+  last_seen_at: number
+  updated_at: number
+}
+
+export interface ToolingRemoteCatalogStatus {
+  headers: ToolingRemoteCatalogHeader[]
+  tools: ToolingRemoteCatalogToolStatus[]
+  mesh_switches: ToolingMeshKillSwitches
+  refresh_required: boolean
+  refresh_reason_code?: string | null
+  secrets_redacted: boolean
+}
+
+export interface ToolingExportPolicy {
+  default_state: ToolingExportState
+  revision: number
+  initialized: boolean
+  migrated_from_legacy: boolean
+  updated_at?: number | null
+}
+
+export interface ToolingExportRule {
+  rule_id: string
+  peer_id?: string | null
+  scope_type: ToolingExportScopeType
+  scope_id: string
+  state: ToolingExportState
+  actor_principal_id: string
+  reason: string
+  created_at: number
+  updated_at: number
+}
+
+export interface ToolingMeshKillSwitches {
+  provider_mesh_tooling_enabled: boolean
+  consumer_mesh_tooling_enabled: boolean
+  revision: number
+  updated_at?: number | null
+  enforcement_active: boolean
+}
+
+export interface ToolingExportPrerequisites {
+  local_exportable: boolean
+  provider_mesh_tooling_enabled?: boolean | null
+  consumer_mesh_tooling_enabled?: boolean | null
+  service_shared?: boolean | null
+  catalog_method_shared?: boolean | null
+  prepare_method_shared?: boolean | null
+  discovery_method_shared?: boolean | null
+  execute_method_shared?: boolean | null
+  peer_catalog_rbac?: boolean | null
+  peer_prepare_rbac?: boolean | null
+  peer_discovery_rbac?: boolean | null
+  peer_execute_rbac?: boolean | null
+  tool_required_permissions_granted?: boolean | null
+  enforcement_active: boolean
+  evidence?: ToolingExportPrerequisiteEvidence[]
+}
+
+export interface ToolingExportPrerequisiteEvidence {
+  key: string
+  state: 'satisfied' | 'blocked' | 'unknown' | 'not_applicable'
+  source: 'tool_identity' | 'mesh_policy' | 'mesh_switch' | 'peer_authority' | 'runtime' | string
+  reason_code: string
+  required_permissions?: string[]
+  observed_permissions?: string[]
+}
+
+export interface ToolingExportDecision {
+  effective_state: ToolingExportState
+  inherited_from: ToolingExportDecisionSource
+  matched_rule_id?: string | null
+  peer_id?: string | null
+  global_tool_id: string
+  share_group_id: string
+  exportable: boolean
+  stale_tool_id: boolean
+  stale_group_id: boolean
+  prerequisites: ToolingExportPrerequisites
+  policy_revision: number
+  reason_code: string
+}
+
+export interface ToolingGetToolExportPolicyRequest {
+  peer_id?: string | null
+  include_rules?: boolean
+  include_stale?: boolean
+}
+
+export interface ToolingGetToolExportPolicyResponse {
+  policy: ToolingExportPolicy
+  rules: ToolingExportRule[]
+  stale_tool_ids: string[]
+  stale_group_ids: string[]
+  recipient_scopes?: ToolingExportRecipientScope[]
+  protocol_tier: ToolingExportProtocolTier
+  mesh_switches: ToolingMeshKillSwitches
+  secrets_redacted: boolean
+}
+
+export interface ToolingExportRecipientScope {
+  peer_id: string
+  display_name: string
+  stale: boolean
+  rule_count: number
+  last_rule_updated_at: number
+}
+
+export interface ToolingExportMutationRequest {
+  state: ToolingExportState
+  expected_revision: number
+  actor_principal_id: string
+  reason: string
+  confirmation_text: string
+  correlation_id?: string | null
+}
+
+export type ToolingSetToolExportDefaultRequest = ToolingExportMutationRequest
+
+export interface ToolingUpsertToolGroupExportPolicyRequest extends ToolingExportMutationRequest {
+  share_group_id: string
+  peer_id?: string | null
+}
+
+export interface ToolingUpsertToolExportOverrideRequest extends ToolingExportMutationRequest {
+  global_tool_id: string
+  peer_id?: string | null
+}
+
+export interface ToolingClearToolExportOverrideRequest {
+  scope_type: ToolingExportScopeType
+  scope_id: string
+  peer_id?: string | null
+  expected_revision: number
+  actor_principal_id: string
+  reason: string
+  confirmation_text: string
+  correlation_id?: string | null
+}
+
+export interface ToolingExportMutationResponse {
+  ok: boolean
+  policy?: ToolingExportPolicy | null
+  rule?: ToolingExportRule | null
+  cleared: boolean
+  changed: boolean
+  audit_id?: string | null
+  previous_revision: number
+  revision: number
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export type ToolingSetToolExportDefaultResponse = ToolingExportMutationResponse
+export type ToolingUpsertToolGroupExportPolicyResponse = ToolingExportMutationResponse
+export type ToolingUpsertToolExportOverrideResponse = ToolingExportMutationResponse
+export type ToolingClearToolExportOverrideResponse = ToolingExportMutationResponse
+
+export interface ToolingPreviewToolExportDecisionRequest {
+  global_tool_id: string
+  share_group_id?: string | null
+  peer_id?: string | null
+}
+
+export interface ToolingPreviewToolExportDecisionResponse {
+  decision: ToolingExportDecision
+}
+
+export interface ToolingPolicyDecisionResponse {
+  allowed: boolean
+  share: boolean
+  approval_required: boolean
+  approval_mode: ToolingApprovalMode
+  decision_id: string
+  policy_rule_id?: string | null
+  reason?: string | null
+  auto_approved_reason?: string | null
+  effective_default?: ToolingApprovalMode | null
+  grant_id?: string | null
+  grant_scope?: ToolingApprovalGrantScope | null
+  token_ttl_seconds?: number
+}
+
+export interface ToolingPrepareExecutionRequest {
+  tool_name: string
+  arguments: JsonObject
+  expected_args_schema_hash?: string | null
+  mesh_selector?: JsonObject | null
+  resource_selector?: JsonObject | null
+  confirmed?: boolean
+  approval_token?: string | null
+  dry_run?: boolean
+  correlation_id?: string | null
+  caller_peer_id?: string | null
+  caller_principal_id?: string | null
+  caller_device_id?: string | null
+  caller_permissions?: string[] | null
+  schedule_id?: string | null
+  scheduled_action_hash?: string | null
+}
+
+export interface ToolingPrepareExecutionResponse {
+  ok: boolean
+  policy_decision: ToolingPolicyDecisionResponse
+  args_hash: string
+  resource_selector_hash: string
+  route_decision_id: string
+  correlation_id: string
+  provider_peer_id: string
+  provider_service_instance_id: string
+  global_tool_id: string
+  local_tool_name: string
+  args_schema_hash?: string | null
+  source?: ToolingSourceClass
+  source_id?: string | null
+  trust_tier?: ToolingTrustTier
+  capability_class?: ToolingCapabilityClass
+  resource_scope?: string[]
+  display_args_preview?: JsonObject
+  argument_visibility?: Record<string, string>
+  secrets_redacted?: boolean
+}
+
+export interface ToolingApprovalGrant {
+  grant_id: string
+  grant_scope: ToolingApprovalGrantScope
+  grant_type: 'approval' | 'trust' | 'capability' | 'scheduled_execution' | string
+  active: boolean
+  principal_id?: string | null
+  caller_device_id?: string | null
+  caller_peer_id?: string | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  global_tool_id?: string | null
+  local_tool_name?: string | null
+  args_hash?: string | null
+  resource_selector_hash?: string | null
+  route_decision_id?: string | null
+  schedule_id?: string | null
+  trust_tier?: ToolingTrustTier | null
+  capability_class?: ToolingCapabilityClass | null
+  resource_scope: string[]
+  include_future_tools: boolean
+  created_by?: string | null
+  created_at: number
+  expires_at?: number | null
+  revoked_at?: number | null
+  reason?: string | null
+  metadata?: JsonObject
+}
+
+export interface ToolingListApprovalGrantsRequest {
+  principal_id?: string | null
+  provider_peer_id?: string | null
+  global_tool_id?: string | null
+  include_revoked?: boolean
+}
+
+/** Provider-supplied immutable identity provenance for a Tooling catalog entry. */
+export interface ToolingToolProvenance {
+  provider_peer_id: string
+  provider_service_instance_id: string
+  provider_kind?: 'local' | 'mesh_peer' | string
+  source?: 'core' | 'plugin' | 'mcp' | 'unknown' | string
+  advertised_name: string
+  stable_source_id?: string | null
+  provider_tool_id?: string | null
+  [key: string]: unknown
+}
+
+export interface ToolingListApprovalGrantsResponse {
+  grants: ToolingApprovalGrant[]
+  count: number
+}
+
+export interface ToolingCreateApprovalGrantRequest extends Omit<ToolingApprovalGrant, 'grant_id' | 'active' | 'created_at' | 'revoked_at'> {
+  active?: boolean
+  correlation_id?: string | null
+}
+
+export interface ToolingCreateApprovalGrantResponse {
+  ok: boolean
+  grant?: ToolingApprovalGrant | null
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingRevokeApprovalGrantRequest {
+  grant_id: string
+  revoked_by?: string | null
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingRevokeApprovalGrantResponse {
+  ok: boolean
+  grant_id: string
+  error?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingEvaluateApprovalGrantRequest extends ToolingPrepareExecutionRequest {
+  schedule_id?: string | null
+  scheduled_action_hash?: string | null
+  grant_scope?: ToolingApprovalGrantScope | null
+}
+
+export interface ToolingEvaluateApprovalGrantResponse {
+  ok: boolean
+  grant?: ToolingApprovalGrant | null
+  policy_decision?: ToolingPolicyDecisionResponse | null
+  reason?: string | null
+  correlation_id?: string | null
+}
+
+export interface ToolingMcpServerStatus {
+  name?: string
+  id?: string
+  command?: string
+  url?: string
+  status?: string
+  active?: boolean
+  tool_count?: number
+  error?: string | null
+  last_error?: string | null
+  secrets_redacted?: boolean
+  [key: string]: JsonValue | undefined
+}
+
+export interface ToolingGetMcpStatusResponse {
+  servers: ToolingMcpServerStatus[]
+  total_servers: number
+  active_servers: number
+}
+
+export interface ToolingStatsResponse {
+  total_tools: number
+  mcp_tools_loaded: number
+  core_tools?: number | null
+  plugin_tools?: number | null
+}
+
+export interface AssistantVoiceListenRequest {
+  sessionId?: string | null
+  reason?: string | null
+  timeoutMs?: number
+  routePolicy?: AssistantRoutePolicy | null
+}
+
+export interface AssistantVoiceListenResult {
+  sessionId: string
+  status: 'listening' | 'stopped' | 'unavailable'
+  source: 'wakeword' | 'push_to_talk' | 'sdk'
+}
+
+export interface STTListenRequest {
+  session_id?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface STTListenResponse {
+  success?: boolean
+  status?: string | null
+  session_id?: string | null
+  current_state?: string | null
+  source?: 'wakeword' | 'push_to_talk' | 'sdk' | string | null
+  message?: string | null
+}
+
+export interface STTStopListeningRequest {
+  reason?: string | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TranscribeAudioRequest {
+  audio_data: string
+  format?: 'wav' | 'raw' | 'mp3' | string
+  sample_rate?: number
+  channels?: number
+  language?: string | null
+  model?: 'realtime' | 'accurate' | string
+  routePolicy?: AssistantRoutePolicy | null
+  mesh_selector?: JsonObject | null
+  selector?: JsonObject | null
+}
+
+export interface TranscribeAudioResponse {
+  text: string
+  confidence?: number | null
+  language?: string | null
+  duration_ms: number
+  model_used: string
 }
 
 export type AttachmentContextKind = 'text' | 'url' | 'file' | 'image'
@@ -280,9 +1135,21 @@ export interface MethodInfo {
   input_model: string | null
   output_model: string | null
   required_perms: string[]
+  callable_feature_ids?: string[]
+  callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
+  public_infrastructure?: boolean
   method_type: ContractMethodType
   input_schema?: JsonObject | null
   output_schema?: JsonObject | null
+}
+
+export interface CallableFeatureContract {
+  feature_id: string
+  module: string
+  label: string
+  summary: string
+  method_ids: string[]
 }
 
 export interface ModuleRegistryInfo {
@@ -290,6 +1157,7 @@ export interface ModuleRegistryInfo {
   version: string
   summary: string
   capabilities: string[]
+  callable_features?: CallableFeatureContract[]
   methods: MethodInfo[]
 }
 
@@ -323,25 +1191,33 @@ export interface AuthPairingStartRequest {
   client_ip?: string
   remote_peer_id?: string
   remote_node_name?: string
+  pairing_session_id?: string
+  verification_code?: string
 }
 
 export interface AuthPairingStartResponse {
   code: string
   expires_in_seconds: number
+  pairing_session_id?: string
+  verification_code?: string
 }
 
 export interface AuthPairingConnectRequest {
   code: string
+  pairing_session_id?: string
 }
 
 export interface AuthPairingConnectResponse {
   request_id: string
   device_name: string
   status: string
+  pairing_session_id?: string
+  verification_code?: string
 }
 
 export interface AuthPairingExchangeRequest {
   code: string
+  pairing_session_id?: string
 }
 
 export interface AuthPairingExchangeResponse extends PairingExchangeLikeResponse {
@@ -383,6 +1259,8 @@ export interface PendingPairingEntry {
   denied_reason: string
   granted_permissions: string[]
   granted_is_admin: boolean
+  pairing_session_id?: string
+  verification_code?: string
 }
 
 export interface ListPendingPairingsRequest {
@@ -548,6 +1426,7 @@ export interface ServiceInfo {
   version: string
   summary: string
   capabilities: string[]
+  callable_features?: CallableFeatureContract[]
   method_count: number
   last_seen: string
   status: string
@@ -639,6 +1518,8 @@ export interface WebRTCPeerDiagnostic {
   pairing_active: boolean
   auth_timeout_pending: boolean
   pending_pairing_task: boolean
+  pairing_session_id?: string
+  verification_code?: string
 }
 
 export interface WebRTCDiagnosticError {
@@ -681,6 +1562,12 @@ export interface MeshLocalStatus {
   routed_modules: string[]
 }
 
+export interface MeshInviteConfigResponse {
+  app_id: string
+  room: string
+  room_password: string
+}
+
 export interface MeshPeerServiceDiagnostic {
   module: string
   version: string
@@ -692,6 +1579,74 @@ export interface MeshPeerServiceDiagnostic {
   digest: string
 }
 
+/** Stable, payload-free compatibility reasons exposed by mesh diagnostics. */
+export type MeshCompatibilityReasonCode =
+  | 'provider_not_allowed'
+  | 'service_not_shared'
+  | 'method_not_shared'
+  | 'service_not_advertised'
+  | 'method_not_advertised'
+  | 'permissions_unknown'
+  | 'permission_denied'
+  | 'missing_required_features'
+  | 'missing_required_capability_tags'
+  | 'manifest_projection_stale'
+  | 'incompatible_version'
+  | 'provider_at_capacity'
+  | 'legacy_unverifiable'
+
+/** Stable route-ineligibility reasons, including transient provider availability. */
+export type MeshRoutingReasonCode =
+  | MeshCompatibilityReasonCode
+  | 'provider_unavailable'
+
+export type MeshServiceCompatibilityStatus = 'compatible' | 'incompatible' | 'unused'
+
+export interface ManifestServiceCompatibility {
+  service_id: string
+  /** Wire ACKs never carry presentation labels. */
+  service_label: ''
+  status: MeshServiceCompatibilityStatus
+  reason_codes: MeshCompatibilityReasonCode[]
+  /** Wire ACKs carry stable codes only; public status adds bounded local copy. */
+  reason: ''
+}
+
+/** Additive manifest ACK contract. Legacy service arrays remain authoritative for old peers. */
+export interface ManifestAck {
+  compatible_services: string[]
+  incompatible_services: string[]
+  unused_services: string[]
+  active_protocol?: string | null
+  active_version?: string | null
+  active_tier?: string | null
+  protocol_revision?: string | null
+  registry_revision?: string | null
+  export_policy_revision?: string | null
+  auth_grant_revision?: number | null
+  projection_digest?: string | null
+  services?: ManifestServiceCompatibility[]
+}
+
+export interface MeshRevisionDiagnostic {
+  active_protocol: string
+  active_version: string
+  active_tier: string
+  protocol_revision: string | null
+  registry_revision: string
+  export_policy_revision: string
+  auth_grant_revision: number | null
+  projection_digest: string
+}
+
+export interface MeshServiceCompatibilityDiagnostic {
+  service_id: string
+  service_label: string
+  status: MeshServiceCompatibilityStatus
+  reason_codes: MeshCompatibilityReasonCode[]
+  reason: string
+}
+
 export interface MeshPeerCompatibilityDiagnostic {
   local_compatible: string[]
   local_incompatible: string[]
@@ -699,6 +1654,11 @@ export interface MeshPeerCompatibilityDiagnostic {
   remote_compatible: string[]
   remote_incompatible: string[]
   remote_unused: string[]
+  /** Present on G009+ gateways; omitted by legacy gateways. */
+  local_revision?: MeshRevisionDiagnostic
+  remote_revision?: MeshRevisionDiagnostic
+  local_services?: MeshServiceCompatibilityDiagnostic[]
+  remote_services?: MeshServiceCompatibilityDiagnostic[]
 }
 
 export interface MeshPeerDiagnostic {
@@ -746,7 +1706,31 @@ export interface MeshCompatibilityFailure {
   peer_id: string
   module: string
   direction: string
+  /** Present on G009+ gateways; absent on legacy gateways. */
+  reason_code?: MeshCompatibilityReasonCode | ''
   reason: string
+}
+
+export interface MeshServiceExportSummary {
+  service_id: string
+  service_label: string
+  shared: boolean
+  policy_revision: number
+  reason_codes: MeshCompatibilityReasonCode[]
+  excluded_method_count: number
+  excluded_feature_count: number
+}
+
+export interface MeshServiceRoutingSummary {
+  service_id: string
+  service_label: string
+  configured: boolean
+  prefer: string
+  fallback: string
+  policy_revision: number
+  eligible_provider_ids: string[]
+  ineligible_provider_ids: string[]
+  reason_codes: MeshRoutingReasonCode[]
 }
 
 export interface MeshStatusResponse {
@@ -754,6 +1738,10 @@ export interface MeshStatusResponse {
   peers: MeshPeerDiagnostic[]
   routes: MeshRouteDiagnostic[]
   compatibility_failures: MeshCompatibilityFailure[]
+  /** Independent provider/export view; absent on legacy gateways. */
+  export_summaries?: MeshServiceExportSummary[]
+  /** Independent consumer/routing view; absent on legacy gateways. */
+  routing_summaries?: MeshServiceRoutingSummary[]
   secrets_redacted: boolean
 }
 
@@ -850,6 +1838,31 @@ export interface SupportBundleDiagnosticItem {
   redacted: boolean
 }
 
+export interface MeshRolloutPeerMetrics {
+  peer_id: string
+  manifest_revision: number
+  catalog_revision: number
+  export_policy_revision: number
+  auth_grant_revision: number
+  switch_revision: number
+  projection_size: number
+  last_sync_duration_ms?: number | null
+  protocol_status: string
+  last_reason_code?: string | null
+  counters: Record<string, number>
+}
+
+export interface MeshRolloutMetricsSnapshot {
+  counters: Record<string, number>
+  denied_by_reason: Record<string, number>
+  peers: MeshRolloutPeerMetrics[]
+  provider_mesh_tooling_enabled?: boolean | null
+  consumer_mesh_tooling_enabled?: boolean | null
+  rbac_preflight_release_blocking?: boolean | null
+  downgrade_status: string
+  secrets_redacted: boolean
+}
+
 export interface GatewaySupportBundleRequest {
   correlation_id?: string | null
   event_limit?: number
@@ -884,6 +1897,7 @@ export interface GatewaySupportBundleResponse {
   recent_audit_events: JsonObject[]
   native_capabilities: SupportBundleDiagnosticItem[]
   sidecar_logs: SupportBundleDiagnosticItem[]
+  mesh_rollout: MeshRolloutMetricsSnapshot
   config_shape: JsonObject
   correlation_ids: string[]
   audit_receipt: string | null
@@ -897,6 +1911,7 @@ export interface ServiceAnnouncement {
   version: string
   summary: string
   capabilities: string[]
+  callable_features?: CallableFeatureContract[]
   methods: MethodInfo[]
   timestamp: string
   instance_id: string | null
@@ -913,6 +1928,10 @@ export interface MethodDescriptor {
   inputModel: string | null
   outputModel: string | null
   requiredPermissions: string[]
+  callableFeatureIds: string[]
+  callableFeatures: CallableFeatureContract[]
+  speechConstraints: JsonObject | null
+  publicInfrastructure: boolean
   inputSchema: JsonObject | null
   outputSchema: JsonObject | null
   availableOverHttp: boolean
@@ -942,6 +1961,10 @@ export interface BackendInventoryMethod {
   exposure: ContractExposure
   method_type: ContractMethodType
   required_perms: string[]
+  callable_feature_ids?: string[]
+  callable_features?: CallableFeatureContract[]
+  speech_constraints?: JsonObject | null
+  public_infrastructure?: boolean
   input_model?: string | null
   output_model?: string | null
   input_schema?: JsonObject | null
@@ -968,6 +1991,8 @@ export interface BackendInventory {
   gateway_builtin_count?: number
   methods: BackendInventoryMethod[]
   gateway_builtins?: GatewayBuiltinInventoryRoute[]
+  gateway_openapi?: JsonObject
+  gateway_openapi_paths?: string[]
   import_errors?: Array<Record<string, JsonValue>>
   ui_fixture_validation?: Record<string, JsonValue>
 }
@@ -1000,6 +2025,7 @@ export type AvailabilityState =
   | 'available-local'
   | 'available-remote'
   | 'pending'
+  | 'offline'
   | 'denied'
   | 'degraded'
   | 'stale'
@@ -1017,6 +2043,7 @@ export type PrivacyClass =
 
 export interface CapabilityPolicyDecisionInfo {
   required_permissions: string[]
+  required_callable_feature_ids?: string[]
   trust_tier: string
   safety_class: string
   explicit_selector_required: boolean
@@ -1027,7 +2054,7 @@ export interface CapabilityPolicyDecisionInfo {
   selector_required: boolean
   mesh_visible: boolean
   local_only: boolean
-  allowed_peers: string[] | null
+  allowed_provider_peer_ids: string[] | null
   operation_class: string | null
   resource_scope: string | null
   denial_reasons: string[]
@@ -1044,7 +2071,7 @@ export interface CapabilityFreshnessInfo {
 
 export interface CapabilityProviderInfo {
   provider_id: string
-  peer_id: string
+  peer_id: string | null
   provider_kind: string
   node_name: string
   status: string
@@ -1067,10 +2094,12 @@ export interface CapabilityActionInfo {
   module: string
   method: string
   topic: string | null
+  callable_feature_ids?: string[]
+  callable_features?: CallableFeatureContract[]
   tool_id: string | null
   resource_id: string | null
   provider_id: string
-  peer_id: string
+  peer_id: string | null
   provider_kind: string
   service_instance_id: string
   selector: unknown
@@ -1109,6 +2138,8 @@ export interface CapabilityCatalogResponse {
   generated_at: string
   local_peer_id: string | null
   local_node_name: string
+  /** Unified monorepo version reported by the connected server, when provided. */
+  aurora_version?: string
   providers: CapabilityProviderInfo[]
   actions: CapabilityActionInfo[]
   resources: CapabilityCatalogResourceInfo[]
@@ -1123,7 +2154,7 @@ export interface CapabilitySummary {
   method: string
   busTopic: string | null
   providerId: string
-  peerId: string
+  peerId: string | null
   serviceInstanceId: string
   availability: AvailabilityState
   privacyClass: PrivacyClass
@@ -1149,6 +2180,7 @@ export interface CapabilityProviderCandidate {
   providerId: string
   providerKind: string
   peerId: string | null
+  nodeName?: string | null
   serviceInstanceId: string | null
   module: string
   method: string
@@ -1218,10 +2250,13 @@ export interface CapabilityGraph {
   generatedAt: string
   localPeerId: string | null
   localNodeName: string
+  /** Aurora version reported by the connected server; null when not provided. */
+  serverVersion?: string | null
   secretsRedacted: boolean
   nodes: CapabilityGraphNode[]
   byFeatureId: Record<string, CapabilityGraphNode>
   providerIndex: Record<string, string[]>
+  callableFeatureIndex: Record<string, string[]>
   candidateProviderIndex: Record<string, string[]>
   explain(featureId: string): CapabilityExplanation
 }
@@ -1279,6 +2314,29 @@ export interface ModelRuntimeProviderInfo {
   import_progress: ModelRuntimeProgressInfo
   download_progress: ModelRuntimeProgressInfo
   secrets_redacted: boolean
+  provider_kind?: string | null
+  upstream_provider_type?: string | null
+  provider_peer_id?: string | null
+  provider_service_instance_id?: string | null
+  default_model_id?: string | null
+  models?: ModelRuntimeModelInfo[]
+  model_catalog?: JsonObject | null
+}
+
+export interface ModelRuntimeModelInfo {
+  model_id: string
+  display_name: string
+  provider_id: string
+  provider_kind?: string | null
+  upstream_provider_type?: string | null
+  source?: string | null
+  context_window?: number | null
+  generation_limit?: number | null
+  capabilities?: string[]
+  default?: boolean
+  available?: boolean
+  metadata?: JsonObject
+  secrets_redacted: boolean
 }
 
 export interface ModelRuntimeRequest {
@@ -1289,6 +2347,14 @@ export interface ModelRuntimeRequest {
 export interface ModelRuntimeCatalogRequest {
   include_unavailable?: boolean
   include_operations?: boolean
+  includeRemote?: boolean
+  includeCloudModels?: boolean
+  meshSelector?: {
+    peerId?: string | null
+    providerId?: string | null
+    serviceInstanceId?: string | null
+    dataScope?: string | null
+  } | null
 }
 
 export interface ModelRuntimeCatalogResponse {
@@ -1411,11 +2477,21 @@ export interface AdminOverviewManifest {
   }
 }
 
+export interface RouteExplainSelector {
+  peer_id?: string | null
+  provider_id?: string | null
+  service_instance_id?: string | null
+  resource_namespace?: string | null
+  tool_id?: string | null
+  hardware_target?: string | null
+  data_scope?: string | null
+}
+
 export interface RouteExplainRequest {
   topic?: string | null
   module?: string | null
   method?: string | null
-  selector?: unknown
+  selector?: RouteExplainSelector | null
   include_candidates?: boolean
 }
 
@@ -1561,11 +2637,97 @@ export interface NativeCapabilityManifest {
   platform: 'tauri-desktop' | 'android' | 'ios' | string
   permissions: Record<string, boolean>
   capabilities: Record<string, boolean>
+  permissionStates?: Record<string, NativeCapabilityManifestState>
+  capabilityStates?: Record<string, NativeCapabilityManifestState>
   mobileIntegrations?: NativeMobileIntegration[]
   platformLimitations?: NativePlatformLimitation[]
+  iosInvocation?: IOSInvocationStatus | null
+  assistantRole?: AndroidAssistantRoleStatus | null
+  localLightInference?: AndroidLocalLightInferenceStatus | null
+  voiceForegroundService?: AndroidVoiceForegroundServiceStatus | null
+  adminUnlock?: AndroidAdminUnlockStatus | null
+  secureStorage?: AndroidSecureStorageStatus | null
+  fallbackEntrypoints?: AndroidFallbackEntrypoint[]
+  release?: AndroidNativeReleaseStatus | null
+  entrypoints?: NativeEntrypoint[]
+  lastEntrypointPayload?: NativeEntrypointPayload | null
+  evidenceSource?: string
+  secretsRedacted?: boolean
+  platformIntegrations?: NativePlatformIntegration[]
+  releaseGates?: NativeReleaseGate[]
+  policyNotes?: string[]
+  deviceMatrix?: NativeDeviceMatrixRow[]
 }
 
-export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'unsupported' | 'blocked'
+export interface AndroidNativePermissionRequestResult {
+  started: boolean
+  permission: string
+  requestCode?: number
+  requestedPermissions?: string[]
+  reason?: string
+  manifest?: JsonObject
+}
+
+export interface AndroidVoiceForegroundServiceStatus {
+  platform: 'android' | string
+  running: boolean
+  startable: boolean
+  microphoneGranted: boolean
+  notificationsGranted: boolean
+  foregroundServiceReady: boolean
+  manifestReady: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  backendAudioEvidenceRequired: boolean
+  /** Native AudioRecord -> Rust ingress is actively accepting bounded PCM chunks. */
+  captureActive?: boolean
+  /** Redacted native capture backend identifier, when the platform reports one. */
+  captureBackend?: string
+  sampleRateHz?: number
+  acceptedChunks?: number
+  acceptedSamples?: number
+  droppedChunks?: number
+  discontinuities?: number
+  queuedChunks?: number
+  captureError?: string | null
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidVoiceForegroundServiceRequestResult {
+  started?: boolean
+  stopped?: boolean
+  status: AndroidVoiceForegroundServiceStatus
+  reason: string
+}
+
+export interface AndroidAdminUnlockStatus {
+  platform: 'android' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: AndroidNativeState
+  reason: string
+  privacyClass: PrivacyClass | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidSecureStorageStatus {
+  platform: 'android' | string
+  available: boolean
+  backend: string
+  persisted: boolean
+  privacyClass: PrivacyClass | string
+  allowedKeyPrefixes: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type NativeIntegrationSupport = 'supported' | 'supported-path' | 'planned' | 'pending' | 'unsupported' | 'blocked'
 
 export interface NativeMobileIntegration {
   platform: 'android' | 'ios' | string
@@ -1574,10 +2736,16 @@ export interface NativeMobileIntegration {
   support: NativeIntegrationSupport
   capability: string
   permission: string | null
+  invocation?: 'app-intent' | 'shortcut' | 'widget' | 'share-extension' | 'deep-link' | 'tauri-command' | string
+  backendMethod?: string | null
   privacyClass: PrivacyClass
+  requiresConfirmation?: boolean
+  siriReplacement?: false
   evidenceSource: string
+  reason?: string
   userCopy: string
   verifier: string
+  publicActionId?: string
 }
 
 export interface NativePlatformLimitation {
@@ -1587,4 +2755,232 @@ export interface NativePlatformLimitation {
   reason: string
   userCopy: string
   evidenceSource: string
+}
+
+export type NativeCapabilityManifestState =
+  | 'available'
+  | 'needs_native_permission'
+  | 'unsupported_platform'
+  | 'degraded'
+  | 'pending_native_target'
+  | 'fallback'
+
+export type AndroidNativeState = NativeCapabilityManifestState
+
+export interface AndroidAssistantRoleStatus {
+  platform: 'android' | string
+  roleName: string
+  sdkSupportsRole?: boolean
+  handlesAssistActivity?: boolean
+  declaresVoiceInteractionService?: boolean
+  roleAvailable: boolean
+  packageQualified: boolean
+  roleHeld: boolean
+  requestable: boolean
+  denied: boolean
+  oemUnavailable: boolean
+  fallbackAvailable: boolean
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidAssistantRoleRequestResult {
+  started: boolean
+  requestCode?: number
+  status: AndroidAssistantRoleStatus
+  reason?: string
+}
+
+export interface AndroidLocalLightInferenceStatus {
+  platform: 'android' | string
+  providerId: string
+  available: boolean
+  requestable: boolean
+  modelRuntimeProvider: boolean
+  backendModelCatalogRequired: boolean
+  hardwareAcceleration: 'npu' | 'gpu' | 'cpu' | 'unknown' | string
+  modelId: string | null
+  modelPresent: boolean
+  permissionGranted: boolean
+  state: AndroidNativeState
+  fallbackAvailable: boolean
+  fallbackProviderId: string | null
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface AndroidFallbackEntrypoint {
+  id: string
+  state: AndroidNativeState
+  available: boolean
+  reason: string
+  capability?: string
+  permission?: string | null
+  intentAction?: string | null
+  manifestDeclared?: boolean
+  backendRequired?: boolean
+}
+
+export interface AndroidNativeEntrypoint {
+  id: string
+  platform: 'android' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intentAction: string
+  intakeType: string
+  manifestDeclared: boolean
+  backendRequired: boolean
+  payloadCommand: string
+  reason: string
+}
+
+export interface IOSNativeEntrypoint {
+  id: string
+  platform: 'ios' | string
+  label: string
+  state: AndroidNativeState
+  available: boolean
+  capability: string
+  permission: string | null
+  intakeType: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | string
+  urlScheme?: string | null
+  universalLinkHost?: string | null
+  fileExtensions?: string[]
+  xcodeTarget: string
+  backendRequired: boolean
+  payloadCommand: string
+  privacyClass: PrivacyClass
+  reason: string
+}
+
+export type NativeEntrypoint = AndroidNativeEntrypoint | IOSNativeEntrypoint
+
+export interface AndroidEntrypointPayload {
+  source: string
+  action: string | null
+  type: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  categories: string[]
+  extras: string[]
+  secretsRedacted: boolean
+}
+
+export type AndroidReleaseGateStatus = 'passed' | 'blocked' | 'manual' | 'not-run'
+
+export interface AndroidReleaseMatrixRow {
+  id: string
+  label: string
+  mode: 'thin' | 'mesh' | 'assistant-role' | 'fallback'
+  apiLevel: number | null
+  architecture: string
+  expectedState: AndroidNativeState
+  status: AndroidReleaseGateStatus
+  requiredEvidence: string[]
+  actualEvidence: string[]
+  notes: string
+}
+
+export interface AndroidReleaseSigningStatus {
+  aabCommand: string
+  apkCommand: string
+  signingConfigured: boolean
+  signingEvidence: string[]
+  playUploadManual: boolean
+  notes: string
+}
+
+export interface AndroidNativeReleaseStatus {
+  signing: AndroidReleaseSigningStatus
+  deviceMatrix: AndroidReleaseMatrixRow[]
+  smokePayloadRecorded: boolean
+  generatedAt: string
+}
+
+export interface IOSEntrypointPayload {
+  source: string
+  invocation: 'share_extension' | 'deep_link' | 'widget' | 'file_association' | 'app_intent' | 'none' | string
+  url: string | null
+  scheme: string | null
+  host: string | null
+  path: string | null
+  fileExtension: string | null
+  uniformTypeIdentifier: string | null
+  originatingBundleId: string | null
+  sharedItemCount: number
+  privacyLabels: PrivacyClass[]
+  backendHandoffRequired: boolean
+  correlationId: string | null
+  secretsRedacted: boolean
+}
+
+export type NativeEntrypointPayload = AndroidEntrypointPayload | IOSEntrypointPayload
+
+export interface IOSInvocationStatus {
+  platform: 'ios' | string
+  appIntentsAvailable: boolean
+  shortcutsAvailable: boolean
+  shareExtensionAvailable: boolean
+  deepLinksAvailable: boolean
+  widgetsAvailable: boolean
+  fileAssociationsAvailable: boolean
+  siriReplacement: false
+  backendHandoffRequired: boolean
+  privacyLabels: PrivacyClass[]
+  state: AndroidNativeState
+  reason: string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type NativeIntegrationStatus = 'supported' | 'partial' | 'unsupported' | 'deferred' | 'requires-native-target'
+export type NativeReleaseGateStatus =
+  | 'passed'
+  | 'pending'
+  | 'blocked'
+  | 'requires-macos'
+  | 'requires-xcode'
+  | 'requires-credentials'
+  | 'not-applicable'
+
+export interface NativePlatformIntegration {
+  id: string
+  label: string
+  status: NativeIntegrationStatus
+  detail: string
+  evidence: string[]
+  privacyClass: PrivacyClass
+  actions?: Array<{
+    id: string
+    label: string
+    privacyClass: PrivacyClass
+    backendMethod: string
+    policy: string
+  }>
+}
+
+export interface NativeReleaseGate {
+  id: string
+  label: string
+  status: NativeReleaseGateStatus
+  requiredEvidence: string
+  detail: string
+  command?: string
+  artifact?: string
+  privacyClass?: PrivacyClass
+}
+
+export interface NativeDeviceMatrixRow {
+  id: string
+  platform: string
+  target: string
+  minimumOs: string
+  evidence: string
+  status: NativeReleaseGateStatus
 }

@@ -1,0 +1,22 @@
+[package]
+name = "aurora-voice-sherpa-sys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Safe containment for pinned sherpa-onnx speech C ABI"
+
+[features]
+default = []
+native-kws = []
+native-vad = []
+native-stt = []
+native-tts = []
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"
+
+[lints]
+workspace = true

@@ -1,0 +1,231 @@
+{
+  "candidates": [
+    {
+      "adapter": "manifest-smoke",
+      "candidate_id": "fixture-smoke",
+      "display_name": "Fixture smoke adapter",
+      "model_artifacts": [],
+      "notes": [
+        "Deterministic offline adapter for schema, redaction, and scoring smoke tests only.",
+        "Not a production candidate and excluded from engine decisions."
+      ],
+      "required_browser_features": [],
+      "revision": "aurora-harness-v0.1",
+      "role": "harness-smoke",
+      "source_url": "local:benchmarks/local-speech/stt",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "transformersjs-whisper-webgpu-wasm",
+      "display_name": "Transformers.js Whisper tiny.en",
+      "model_artifacts": [
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:config.json",
+          "sha256": "37a1073be00d19118c06557896c7c148598f4d8277edc0f5bc07c9f5554839f1",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:generation_config.json",
+          "sha256": "132c95ba9db45f4498f2eab3fea7c1d6a174005010f8f6b7d20cfd5e9795996b",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:onnx/decoder_model_merged_quantized.onnx",
+          "sha256": "dbb2e063b7fbc41d9803b9698f93ecb035c50cbb3fb87b56cb131e4a5eb99059",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:onnx/encoder_model_quantized.onnx",
+          "sha256": "8cc3c6f8563d1b3fbd2c5af9f64c2bed8b020bc593c402d1ef53b9f08fbf1b90",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:preprocessor_config.json",
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:tokenizer.json",
+          "sha256": "c6ee8f089220a5b1188f6426456772572671c6141ae007eecb83c6a8349f5deb",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        },
+        {
+          "artifact_id": "Xenova/whisper-tiny.en:tokenizer_config.json",
+          "sha256": "e082c1ad251541bf277967a703252cddd4bb37a71a43737e03d050c22ec08238",
+          "revision": "79fb389fc764e7c395bd330e9531d9d32ada7049",
+          "source": "https://huggingface.co/Xenova/whisper-tiny.en"
+        }
+      ],
+      "notes": [
+        "Measured English-only comparison variant from the approved plan.",
+        "Benchmark both WebGPU and WASM execution providers where available.",
+        "The pinned Xenova/whisper-tiny.en artifact is English-only and does not prove Portuguese or multilingual auto-detection coverage.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
+      ],
+      "required_browser_features": [
+        "webgpu-or-wasm",
+        "web-worker"
+      ],
+      "revision": "transformers.js@2.17.2; onnxruntime-node@1.14.0; Xenova/whisper-tiny.en@79fb389fc764e7c395bd330e9531d9d32ada7049 quantized ONNX artifact set",
+      "role": "comparison-baseline",
+      "source_url": "https://huggingface.co/Xenova/whisper-tiny.en",
+      "supported_languages": [
+        "en"
+      ],
+      "supports_auto_language": false
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "transformersjs-moonshine-onnx",
+      "display_name": "Moonshine ONNX through Transformers.js",
+      "model_artifacts": [
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:config.json",
+          "sha256": "558e1e02069137c796ace1e50c48d8fe451f04a295929138e6bea885517f0edb",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:generation_config.json",
+          "sha256": "f9b3f711b57be7def2e50a8942f64f36ee0a55fad5b84ff93a687b6c5bcc1d44",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:onnx/decoder_model_merged_quantized.onnx",
+          "sha256": "eed87831c3a6103534aae7d47a5d485025c659a1323901513961c39fe8a1a367",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:onnx/encoder_model_quantized.onnx",
+          "sha256": "c6fc4b7bc5af75c0591fd157a1f3829b533d18e9769a888fd95a62e470dd4f4a",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:preprocessor_config.json",
+          "sha256": "fa43a7017ef85cd1d0fba0d9aae77c8adb16990ae6f11115631f41ec5d8aa679",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:tokenizer.json",
+          "sha256": "7b913404bdd039af4756783218af4440bc07fb7d6d8258d677e34f95b3ec416f",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        },
+        {
+          "artifact_id": "onnx-community/moonshine-tiny-ONNX:tokenizer_config.json",
+          "sha256": "edaee394565d428ea98a663ae7209cdcfeefc5585c42d7a570ff7c986df2cd15",
+          "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+          "source": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX"
+        }
+      ],
+      "notes": [
+        "Short-form and mobile latency comparison candidate.",
+        "Language coverage must be proven per selected model before any release claim.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
+      ],
+      "required_browser_features": [
+        "webgpu-or-wasm",
+        "web-worker"
+      ],
+      "revision": "@huggingface/transformers@4.2.0; onnxruntime-node@1.24.3; onnx-community/moonshine-tiny-ONNX@a6da1241cd305dcd64eab1edbd615f2bb9aabb95 q8 artifact set",
+      "role": "comparison-latency",
+      "source_url": "https://huggingface.co/onnx-community/moonshine-tiny-ONNX",
+      "supported_languages": [
+        "en"
+      ],
+      "supports_auto_language": false
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "sherpa-onnx-wasm-offline-vad-asr-moonshine-v2",
+      "display_name": "sherpa-onnx offline VAD+ASR Moonshine v2 English",
+      "model_artifacts": [
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27.tar.bz2",
+          "revision": "2026-02-27",
+          "sha256": "9ec31b342d8fa3240c3b81b8f82e1cf7e3ac467c93ca5a999b741d5887164f8d",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:encoder_model.ort",
+          "revision": "2026-02-27",
+          "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:decoder_model_merged.ort",
+          "revision": "2026-02-27",
+          "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        },
+        {
+          "artifact_id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27:tokens.txt",
+          "revision": "2026-02-27",
+          "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+          "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models"
+        }
+      ],
+      "notes": [
+        "Selected Phase 4 offline VAD+ASR candidate for the Rust/sherpa local voice runtime.",
+        "Browser build target is sherpa's combined offline VAD+ASR module, not the upstream streaming ASR demo.",
+        "English-only Moonshine v2 pack; Portuguese and multilingual auto-detection remain blocked until separate model evidence exists.",
+        "Native and WASM parity, browser worker behavior, and mobile device measurements remain release blockers."
+      ],
+      "required_browser_features": [
+        "wasm",
+        "web-worker"
+      ],
+      "revision": "sherpa-onnx@v1.13.5; onnxruntime@1.27.1; offline-vad-asr-moonshine-v2-en-quantized@2026-02-27",
+      "role": "phase4-production-candidate-offline-vad-asr",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models",
+      "supported_languages": [
+        "en"
+      ],
+      "supports_auto_language": false
+    },
+    {
+      "adapter": "external-json",
+      "candidate_id": "whisper-cpp-wasm",
+      "display_name": "whisper.cpp WASM tiny/base",
+      "model_artifacts": [
+        {
+          "artifact_id": "ggml-whisper-tiny-or-base",
+          "sha256": "TBD-after-download",
+          "source": "https://github.com/ggml-org/whisper.cpp"
+        }
+      ],
+      "notes": [
+        "Broad portability and diagnostic comparison candidate.",
+        "Memory and model size are material mobile decision inputs.",
+        "Comparison candidate only for Phase 4; not the production runtime owner."
+      ],
+      "required_browser_features": [
+        "wasm",
+        "web-worker"
+      ],
+      "revision": "TBD-exact-git-commit-and-model-hash",
+      "role": "comparison-portability",
+      "source_url": "https://github.com/ggml-org/whisper.cpp",
+      "supported_languages": [
+        "en",
+        "pt"
+      ],
+      "supports_auto_language": true
+    }
+  ]
+}

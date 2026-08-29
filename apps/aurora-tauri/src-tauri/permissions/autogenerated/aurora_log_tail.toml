@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-log-tail"
+description = "Enables the aurora_log_tail command without any pre-configured scope."
+commands.allow = ["aurora_log_tail"]
+
+[[permission]]
+identifier = "deny-aurora-log-tail"
+description = "Denies the aurora_log_tail command without any pre-configured scope."
+commands.deny = ["aurora_log_tail"]

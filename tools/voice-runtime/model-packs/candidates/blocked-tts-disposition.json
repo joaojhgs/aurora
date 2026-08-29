@@ -1,0 +1,54 @@
+{
+  "automatic_download": false,
+  "bundled_model_weights": false,
+  "dispositions": [
+    {
+      "aurora_redistribution": "prohibited",
+      "catalog_selectable": true,
+      "download_initiated_by_user": true,
+      "id": "pockettts-standard-voice-packs",
+      "license_boundary": "restricted non-commercial upstream model assets",
+      "reason": "Aurora lists pinned PocketTTS metadata and terms but does not bundle or redistribute the model. The user may explicitly download the selected upstream archive into private cache and use it within the upstream terms.",
+      "status": "user_download_only"
+    },
+    {
+      "aurora_redistribution": "not_bundled",
+      "catalog_selectable": true,
+      "download_initiated_by_user": true,
+      "id": "piper-espeak-sherpa-tts-chain",
+      "license_boundary": "upstream voice and phonemizer terms apply",
+      "reason": "Aurora lists pinned upstream Piper voice metadata and terms. A selected archive is downloaded directly by explicit user action, verified, cached privately, and never bundled into Aurora packages.",
+      "status": "user_download_only"
+    },
+    {
+      "archive_sha256": "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
+      "aurora_redistribution": "prohibited",
+      "catalog_selectable": false,
+      "code_license_sha256": "0dfe0d0ba84416fe3879d9a34f4909d8d0137c78d1e95834177b0414ac096fa2",
+      "constraints": [
+        "authoritative model-card license is OpenRAIL-M while the exact sherpa pack contains MIT software text",
+        "the current production adapter supports Piper and PocketTTS model families, not Supertonic",
+        "the upstream project announced archival and no further official model support"
+      ],
+      "download_initiated_by_user": false,
+      "id": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+      "license_boundary": "OpenRAIL-M model weights with MIT software text in the pack",
+      "model_card_url": "https://huggingface.co/Supertone/supertonic-3",
+      "reason": "This archive is not in Aurora's current runtime catalog because there is no compatible production adapter. It is not treated as a legal blocker for the supported Piper and PocketTTS catalog.",
+      "release_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+      "status": "unsupported_model_family",
+      "supported_languages": [
+        "en",
+        "fr",
+        "de",
+        "pt",
+        "it",
+        "es"
+      ]
+    }
+  ],
+  "schema_version": 2,
+  "selectable_model_pack": true,
+  "status": "user_download_enabled",
+  "subject": "Phase 6 TTS distribution and on-demand selection disposition"
+}

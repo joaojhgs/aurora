@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.registry import all_contracts
 
-from .bus import Envelope, Handler, QueryResult
+from .bus import Envelope, Handler, QueryResult, query_result_from_reply_payload
 
 
 class LocalBus:
@@ -48,6 +51,7 @@ class LocalBus:
         """
         # Subscribers by topic
         self._subs: dict[str, list[Handler]] = defaultdict(list)
+        self._stream_handlers: dict[str, Callable[[Envelope], Awaitable[Any]]] = {}
 
         # Command queues (priority-based)
         self._cmd_queues: dict[str, asyncio.PriorityQueue] = defaultdict(
@@ -62,6 +66,8 @@ class LocalBus:
         # Worker tracking
         self._cmd_workers_started: dict[str, bool] = defaultdict(bool)
         self._evt_workers_started: dict[str, bool] = defaultdict(bool)
+        self._cmd_worker_tasks: dict[str, asyncio.Task[None]] = {}
+        self._evt_worker_tasks: dict[str, asyncio.Task[None]] = {}
 
         # Shutdown signal
         self._shutdown = asyncio.Event()
@@ -85,21 +91,35 @@ class LocalBus:
 
     async def start(self) -> None:
         """Start the message bus."""
+        self._shutdown.clear()
         log_info("LocalBus started")
 
     async def stop(self) -> None:
         """Stop the message bus and cleanup resources."""
         log_info("Stopping LocalBus...")
         self._shutdown.set()
-        await asyncio.sleep(0.1)  # Give workers time to finish
+        worker_tasks = [
+            task
+            for task in (*self._cmd_worker_tasks.values(), *self._evt_worker_tasks.values())
+            if not task.done()
+        ]
+        for task in worker_tasks:
+            task.cancel()
+        if worker_tasks:
+            await asyncio.gather(*worker_tasks, return_exceptions=True)
+        self._cmd_worker_tasks.clear()
+        self._evt_worker_tasks.clear()
+        self._cmd_workers_started.clear()
+        self._evt_workers_started.clear()
         log_info("LocalBus stopped")
 
-    def subscribe(self, topic: str, handler: Handler) -> None:
+    def subscribe(self, topic: str, handler: Handler, *, event: bool = False) -> None:
         """Subscribe to a topic with a handler.
 
         Args:
             topic: Topic name (supports wildcards like "TTS.*")
             handler: Async function to handle messages
+            event: True when the handler consumes broadcast events
 
         Raises:
             ValueError: If topic validation is enabled and topic is invalid
@@ -115,13 +135,22 @@ class LocalBus:
 
         # Wildcard patterns (e.g. TTS.*) match concrete topics; events are queued per
         # concrete topic only — do not start an idle worker for the pattern key.
-        if "*" in topic:
+        # Request reply topics are unique and one-shot, so publish() delivers them
+        # directly instead of creating a permanent worker for every request.
+        if "*" in topic or topic.startswith("reply.") or not event:
             return
 
         # Start event worker for this topic if not already started
         if not self._evt_workers_started[topic]:
             self._evt_workers_started[topic] = True
-            asyncio.create_task(self._event_worker(topic))
+            self._evt_worker_tasks[topic] = asyncio.create_task(
+                self._event_worker(topic),
+                name=f"local-bus-event-worker:{topic}",
+            )
+
+    async def subscribe_event(self, topic: str, handler: Handler) -> None:
+        """Subscribe to an event topic and return when the local worker is ready."""
+        self.subscribe(topic, handler, event=True)
 
     def unsubscribe(self, topic: str, handler: Handler) -> None:
         """Remove a handler previously registered with ``subscribe``."""
@@ -133,6 +162,45 @@ class LocalBus:
             log_debug(f"Unsubscribed handler from topic: {topic}")
         except ValueError:
             pass
+        if not handlers:
+            self._subs.pop(topic, None)
+
+    def has_subscribers(self, topic: str) -> bool:
+        """Return whether a concrete topic currently has a local handler.
+
+        This readiness probe is intentionally local-only. It lets services in
+        thread mode avoid issuing startup requests before the destination
+        service has registered its contracts, while distributed buses remain
+        free to use transport-level retries instead.
+        """
+
+        return any(
+            handlers and self._topic_matches(topic, pattern)
+            for pattern, handlers in self._subs.items()
+        )
+
+    def register_stream_handler(
+        self,
+        topic: str,
+        handler: Callable[[Envelope], Awaitable[Any]],
+    ) -> None:
+        """Register a direct streaming handler for a request/response topic.
+
+        Normal ``request()`` replies are serialized through reply topics. That
+        path cannot carry an async generator, so services with first-class
+        streaming contracts register a local direct handler used only by
+        ``stream_request()``.
+        """
+
+        self._stream_handlers[topic] = handler
+
+    def unregister_stream_handler(
+        self,
+        topic: str,
+        handler: Callable[[Envelope], Awaitable[Any]],
+    ) -> None:
+        if self._stream_handlers.get(topic) is handler:
+            self._stream_handlers.pop(topic, None)
 
     async def _deliver(self, topic: str, env: Envelope, raise_errors: bool = False) -> None:
         """Deliver a message to all matching subscribers concurrently.
@@ -284,6 +352,18 @@ class LocalBus:
         max_attempts: int = 3,
         reply_to: str | None = None,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        transport_source_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> None:
         """Publish a message to a topic.
@@ -322,19 +402,45 @@ class LocalBus:
             max_attempts=max_attempts if reliable else 1,
             reply_to=reply_to,
             principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
+            transport_source_id=transport_source_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
+            projected_service_id=projected_service_id,
+            projected_method_id=projected_method_id,
+            projected_method_topics=projected_method_topics,
+            projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
             correlation_id=correlation_id,
         )
 
         self._stats["published"] += 1
 
+        # Reply topics are unique to one request. Queue workers are intentionally
+        # long-lived for normal topics, but using that lifecycle here would retain
+        # two idle workers plus queue state for every completed request. Deliver the
+        # one-shot response inline; the requester removes its handler in finally.
+        if topic.startswith("reply."):
+            await self._deliver(topic, env)
+            return
+
         if event:
             # Event: broadcast to all subscribers
             if not self._evt_workers_started[topic]:
                 self._evt_workers_started[topic] = True
-                asyncio.create_task(self._event_worker(topic))
+                self._evt_worker_tasks[topic] = asyncio.create_task(
+                    self._event_worker(topic),
+                    name=f"local-bus-event-worker:{topic}",
+                )
 
             try:
-                await self._evt_queues[topic].put(env)
+                # Events are explicitly best-effort. Never let a slow event
+                # consumer block command workers or request handlers that emit
+                # observability events while completing their own work.
+                self._evt_queues[topic].put_nowait(env)
                 log_debug(f"Published event to {topic}")
             except asyncio.QueueFull:
                 log_warning(f"Event queue full for {topic}, dropping message")
@@ -342,7 +448,10 @@ class LocalBus:
             # Command: point-to-point with priority
             if not self._cmd_workers_started[topic]:
                 self._cmd_workers_started[topic] = True
-                asyncio.create_task(self._command_worker(topic))
+                self._cmd_worker_tasks[topic] = asyncio.create_task(
+                    self._command_worker(topic),
+                    name=f"local-bus-command-worker:{topic}",
+                )
 
             try:
                 # Use counter as tiebreaker to ensure FIFO for same priority
@@ -364,6 +473,18 @@ class LocalBus:
         ttl_ms: int | None = None,
         max_attempts: int = 3,
         principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        transport_source_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
         correlation_id: str | None = None,
     ) -> QueryResult:
         """Send a request and wait for a response.
@@ -412,23 +533,7 @@ class LocalBus:
                     log_warning(f"Reply handler: unexpected payload type {type(env.payload)}")
                     result_data = {"data": str(env.payload)}
 
-                # If result_data has 'ok' field, it's already a QueryResult-like structure
-                if isinstance(result_data, dict) and "ok" in result_data:
-                    log_debug("Reply handler: Creating QueryResult from dict with ok field")
-                    fut.set_result(QueryResult(**result_data))
-                elif (
-                    isinstance(result_data, dict)
-                    and "error" in result_data
-                    and result_data["error"]
-                ):
-                    # ErrorOutput response - service returned an error
-                    error_msg = result_data.get("error", "Unknown service error")
-                    log_debug(f"Reply handler: ErrorOutput received: {error_msg}")
-                    fut.set_result(QueryResult(ok=False, error=error_msg, data=result_data))
-                else:
-                    # Wrap the data in a successful QueryResult
-                    log_debug("Reply handler: Wrapping data in QueryResult")
-                    fut.set_result(QueryResult(ok=True, data=result_data))
+                fut.set_result(query_result_from_reply_payload(result_data))
 
         # Reply topics are not validated on publish when topic starts with "reply."
         self.subscribe(reply_topic, _on_reply)
@@ -444,6 +549,18 @@ class LocalBus:
                 max_attempts=max_attempts,
                 reply_to=reply_topic,
                 principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                transport_source_id=transport_source_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
                 correlation_id=request_correlation_id,
             )
 
@@ -457,6 +574,86 @@ class LocalBus:
         finally:
             self.unsubscribe(reply_topic, _on_reply)
 
+    async def stream_request(
+        self,
+        topic: str,
+        message: BaseModel,
+        *,
+        priority: int = 50,
+        origin: str = "internal",
+        timeout: float = 30.0,
+        ttl_ms: int | None = None,
+        max_attempts: int = 3,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        projected_service_id: str | None = None,
+        projected_method_id: str | None = None,
+        projected_method_topics: list[str] | None = None,
+        projected_method_set_digest: str | None = None,
+        speech_route_binding: SpeechRouteBinding | None = None,
+        correlation_id: str | None = None,
+    ) -> AsyncIterator[Any]:
+        """Stream a local service response without reply-topic serialization."""
+
+        handler = self._stream_handlers.get(topic)
+        if handler is None:
+            result = await self.request(
+                topic,
+                message,
+                priority=priority,
+                origin=origin,
+                timeout=timeout,
+                ttl_ms=ttl_ms,
+                max_attempts=max_attempts,
+                principal_id=principal_id,
+                effective_perms=effective_perms,
+                identity_source=identity_source,
+                method_type=method_type,
+                caller_peer_id=caller_peer_id,
+                auth_grant_revision=auth_grant_revision,
+                manifest_revision=manifest_revision,
+                projected_service_id=projected_service_id,
+                projected_method_id=projected_method_id,
+                projected_method_topics=projected_method_topics,
+                projected_method_set_digest=projected_method_set_digest,
+                speech_route_binding=speech_route_binding,
+                correlation_id=correlation_id,
+            )
+            if not result.ok:
+                raise RuntimeError(result.error or f"Stream request failed for {topic}")
+            async for item in _iterate_stream_data(result.data):
+                yield item
+            return
+
+        env = Envelope(
+            type=topic,
+            payload=message,
+            origin=origin,
+            priority=priority,
+            max_attempts=max_attempts,
+            principal_id=principal_id,
+            effective_perms=effective_perms,
+            identity_source=identity_source,
+            method_type=method_type,
+            caller_peer_id=caller_peer_id,
+            auth_grant_revision=auth_grant_revision,
+            manifest_revision=manifest_revision,
+            projected_service_id=projected_service_id,
+            projected_method_id=projected_method_id,
+            projected_method_topics=projected_method_topics,
+            projected_method_set_digest=projected_method_set_digest,
+            speech_route_binding=speech_route_binding,
+            correlation_id=correlation_id,
+        )
+        result = await handler(env)
+        async for item in _iterate_stream_data(result):
+            yield item
+
     def get_stats(self) -> dict:
         """Get bus statistics.
 
@@ -464,3 +661,13 @@ class LocalBus:
             Dictionary containing bus metrics
         """
         return dict(self._stats)
+
+
+async def _iterate_stream_data(data: Any) -> AsyncIterator[Any]:
+    if data is None:
+        return
+    if hasattr(data, "__aiter__"):
+        async for item in data:
+            yield item
+        return
+    yield data

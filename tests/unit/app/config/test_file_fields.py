@@ -27,6 +27,9 @@ class TestFileFieldMetadata:
             "services.tts.model_file_path",
             "services.tts.model_config_file_path",
             "services.tts.piper_path",
+            "services.tts.providers.piper.executable_path",
+            "services.tts.providers.piper.model_config_file_path",
+            "services.tts.providers.piper.model_file_path",
             "services.orchestrator.llm.local.llama_cpp.options.model_path",
             "services.tooling.plugins.google.credentials_file",
         ]

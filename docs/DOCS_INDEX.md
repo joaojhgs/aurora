@@ -1,0 +1,95 @@
+# Aurora documentation index
+
+**Status:** Current source of truth
+**Audience:** contributors, operators, and agents working in this repository
+
+This index separates current documentation from historical/provenance material. If a document is not listed here, treat it as implementation-local, package-local, or archived context rather than canonical guidance.
+
+## Start here
+
+| Need | Read |
+| --- | --- |
+| What Aurora is and how the repo is organized | [`../readme.md`](../readme.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md) |
+| Install or run locally | [`INSTALL.md`](INSTALL.md), [`UV_USAGE.md`](UV_USAGE.md) |
+| Run services in process mode or Docker | [`../README.process-mode.md`](../README.process-mode.md), [`TILT.md`](TILT.md), [`docker/DB-SERVICE-EMBEDDINGS.md`](docker/DB-SERVICE-EMBEDDINGS.md), [`docker/ORCHESTRATOR-SERVICE-LLM-MODES.md`](docker/ORCHESTRATOR-SERVICE-LLM-MODES.md) |
+| Understand CI and tests | [`CI_CD.md`](CI_CD.md), [`TEST_HARNESS_INVENTORY.md`](TEST_HARNESS_INVENTORY.md), [`../tests/README.md`](../tests/README.md), [`TESTING_PROCESS_MODE.md`](TESTING_PROCESS_MODE.md) |
+| Work on configuration | [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md) |
+| Work on messaging/contracts/API | [`MESSAGING_ARCHITECTURE.md`](MESSAGING_ARCHITECTURE.md), [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md), [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md) |
+| Work on Gateway, auth, permissions, or mesh | [`GATEWAY.md`](GATEWAY.md), [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md), [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md), [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md), [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md), [`security/README.md`](security/README.md) |
+| Work on frontend, SDK, web, Tauri, mobile, or PyQt fallback | [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md), [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md), [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md), [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md), [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md), [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md), [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) |
+| Work on backup/restore | [`BACKUP_SERVICE.md`](BACKUP_SERVICE.md) |
+| Work on MCP/tools | [`MCP_INTEGRATION.md`](MCP_INTEGRATION.md) |
+| Work on dependencies and optional install profiles | [`DEPENDENCIES.md`](DEPENDENCIES.md) |
+| Maintain documentation | [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md) |
+
+## Current core docs
+
+| Document | Status | Purpose |
+| --- | --- | --- |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Current | System architecture, services, modes, and frontend boundaries. |
+| [`FEATURE_MATRIX.md`](FEATURE_MATRIX.md) | Current | Feature readiness and production-boundary matrix. |
+| [`TECHSTACK.md`](TECHSTACK.md) | Current | Major languages, frameworks, and runtime dependencies. |
+| [`INSTALL.md`](INSTALL.md) | Current | Local install and setup guidance. |
+| [`UV_USAGE.md`](UV_USAGE.md) | Current | `uv` and optional dependency usage. |
+| [`DEPENDENCIES.md`](DEPENDENCIES.md) | Current | Service extras, local model profiles, sidecar profiles, and generated dependency-artifact policy. |
+| [`CI_CD.md`](CI_CD.md) | Current | GitHub Actions lanes and local equivalents. |
+| [`TEST_HARNESS_INVENTORY.md`](TEST_HARNESS_INVENTORY.md) | Current | Ownership and conversion decisions for executable build, migration, browser, mesh, and WebRTC harness scripts. |
+| [`CONTRIBUTE.md`](CONTRIBUTE.md) | Current | Contributor workflow and links to current checks. |
+
+## Runtime and backend docs
+
+| Document | Status | Purpose |
+| --- | --- | --- |
+| [`CONFIG_SERVICE_PATTERN.md`](CONFIG_SERVICE_PATTERN.md) | Current | Required config access pattern for services. |
+| [`MESSAGING_ARCHITECTURE.md`](MESSAGING_ARCHITECTURE.md) | Current | LocalBus/BullMQBus behavior, priorities, and process mode. |
+| [`API_AND_CONTRACTS.md`](API_AND_CONTRACTS.md) | Current | Contract registry, generated Gateway routes, SDK conformance, and service method docs. |
+| [`GATEWAY.md`](GATEWAY.md) | Current | HTTP Gateway, dynamic routes, event stream, WebRTC, and mesh endpoints. |
+| [`AUTH_AND_PERMISSIONS.md`](AUTH_AND_PERMISSIONS.md) | Current | Principals, tokens, topic permissions, pairing, audit, and admin boundaries. |
+| [`PEER_PAIRING_FLOW.md`](PEER_PAIRING_FLOW.md) | Current | Pairing and mesh resource-access flow. |
+| [`DATA_SHARING_POLICY.md`](DATA_SHARING_POLICY.md) | Current | Mesh data-sharing modes and ownership policy. |
+| [`BACKUP_SERVICE.md`](BACKUP_SERVICE.md) | Current | Backup/restore contract, dry-run limits, and storage. |
+| [`SERVICE_METHODS_REFERENCE.md`](SERVICE_METHODS_REFERENCE.md) | Current but manually maintained | Human-readable service method overview. Keep it aligned with `app/shared/contracts/models/` and `@method_contract` decorators. |
+| [`security/README.md`](security/README.md) | Current | Ownership and validation guide for checked security reference artifacts. |
+| [`security/mesh-security-surface-inventory.json`](security/mesh-security-surface-inventory.json) | Current machine-readable reference | Exhaustive mesh-callable security surface inventory validated by `tests/unit/gateway/test_mesh_security_surface_inventory.py`. |
+| [`security/mesh-security-surface-inventory.schema.json`](security/mesh-security-surface-inventory.schema.json) | Current machine-readable reference | JSON Schema for the checked security surface inventory. |
+
+## Frontend and platform docs
+
+| Document | Status | Purpose |
+| --- | --- | --- |
+| [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md) | Current | SDK-first UI architecture across React, web, Tauri, and PyQt fallback. |
+| [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md) | Current | Target client catalog, cross-surface feature contract, and delivery sequence for desktop, web, Android, iOS, and fallback clients. |
+| [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md) | Current bounded check | Evidence-based implementation snapshot that separates implemented, build-proven, live-proven, planned, and limited client paths. |
+| [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) | Current | Implemented TypeScript WebView/Python WebRTC protocol contract, security posture, dependencies, and conformance commands. |
+| [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md) | Current bounded check | Chromium/Firefox/Playwright-WebKit direct, configured-STUN, and forced-TURN browser ↔ Python Gateway harness and report schema. |
+| [`NATIVE_VOICE_RUNTIME_PHASE4.md`](NATIVE_VOICE_RUNTIME_PHASE4.md) | Current bounded check — Phase 4 frozen | Phase 4 native voice runtime dependency/model decisions, portability evidence, platform boundaries, and withheld capabilities. Live Sherpa PocketTTS pin is [`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md). |
+| [`SHERPA_POCKETTTS.md`](SHERPA_POCKETTTS.md) | Current | Live sherpa-onnx v1.13.5 PocketTTS pin, patch queue, language packs, and native/WASM proof commands. |
+| [`TAURI_DESKTOP_BUILD.md`](TAURI_DESKTOP_BUILD.md) | Current | Desktop sidecar profiles and unsigned bundle build flow. |
+| [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md) | Current | UI source-boundary rules and regression gates. |
+| [`UI_INTEGRATION.md`](UI_INTEGRATION.md) | Legacy/current bridge reference | PyQt UIBridge reference and migration notes. Prefer `FRONTEND_AND_UI_ARCHITECTURE.md` for new UI work. |
+| [`ACCESSIBILITY_RESPONSIVE_VISUAL_TESTS.md`](ACCESSIBILITY_RESPONSIVE_VISUAL_TESTS.md) | Current | UI package accessibility/responsive/visual checks. |
+| [`PERFORMANCE_OFFLINE_RESILIENCE_TESTS.md`](PERFORMANCE_OFFLINE_RESILIENCE_TESTS.md) | Current | SDK resilience/offline/performance checks. |
+
+## Partial or bounded feature docs
+
+| Document | Status | Boundary |
+| --- | --- | --- |
+| [`AMBIENT_TRANSCRIPTION.md`](AMBIENT_TRANSCRIPTION.md) | Partial | Config and coordinator behavior exist; durable ambient logging service is not implemented. |
+| [`MESH_GAP_E2E_HARNESS.md`](MESH_GAP_E2E_HARNESS.md) | Current bounded harness | Transport E2E harness, not a full physical-device proof. |
+| [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md) | Current | Mesh v2 migration, RBAC review, fail-closed reverse migration, rollback, and rollout diagnostics. |
+| [`mesh/THIN-CLIENT-MESH-PARITY-PLAN.md`](mesh/THIN-CLIENT-MESH-PARITY-PLAN.md) | Current bounded check | Completed mesh parity workstreams, local acceptance evidence, and the remaining physical-device release gate. |
+| [`mesh/NATIVE-TYPESCRIPT-BOUNDARY.md`](mesh/NATIVE-TYPESCRIPT-BOUNDARY.md) | Current | Ownership boundary for TypeScript session/roster state, Rust authority, and native background serving. |
+| [`mesh/BACKGROUND-MEASUREMENT.md`](mesh/BACKGROUND-MEASUREMENT.md) | Current bounded check | Android adb background measurement report format, Waydroid limits, and physical-device evidence requirements. |
+| [`mesh/INVARIANT-TEST-COVERAGE.md`](mesh/INVARIANT-TEST-COVERAGE.md) | Current bounded check | Mesh security invariant coverage ledger and mutation-confirmed/read-and-run boundaries. |
+| [`mesh/W7-ORPHANED-PEER-ROW-PRUNING.md`](mesh/W7-ORPHANED-PEER-ROW-PRUNING.md) | Current | Safe orphaned peer row pruning rule and rejected unsafe approaches. |
+| [`mesh/W8-PYTHON-SDK-PARITY-AUDIT.md`](mesh/W8-PYTHON-SDK-PARITY-AUDIT.md) | Current bounded check | Python RTCClient per-peer state versus SDK thin-runtime parity audit. |
+| [`SDK_BACKEND_CONFORMANCE_CI.md`](SDK_BACKEND_CONFORMANCE_CI.md) | Current bounded check | Prevents SDK/backend fixture drift, not a live production certification. |
+
+## Archive and provenance
+
+Historical plans, handoffs, task reports, and generated investigation artifacts are not part of the working tree. Git history remains the provenance record.
+
+- [`docs/archive/`](archive/) contains the limited human-readable history that is still useful to maintainers.
+- Local `.omx/` state may retain active agent plans and task context, but it is ignored and is not a release source of truth.
+
+Do not add generated reports, publishing receipts, one-off task checklists, or agent handoffs to tracked documentation. See [`DOC_MAINTENANCE.md`](DOC_MAINTENANCE.md).

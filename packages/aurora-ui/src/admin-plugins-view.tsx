@@ -1,94 +1,66 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Boxes, Download, FlaskConical, Plug, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Plug, RefreshCw } from 'lucide-react'
 import type {
   AuroraClient,
-  AvailabilityState,
-  MethodDescriptor,
+  McpSourceWizardDraft,
+  PluginSourceWizardDraft,
   ToolApprovalCardModel,
-  ToolApprovalScope
+  ToolCatalogResponse,
+  ToolOnboardingValidationResult,
+  ToolSourceDetailModel,
+  ToolSourceSummaryModel,
+  ToolingPageViewModel
 } from '@aurora/client'
+import { getToolSourceDetailFromView, normalizeToolCatalog, validateMcpSourceDraft, validatePluginSourceDraft } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { ToneBadge, presentableSignal, riskTone, stateTone, trustTone } from './status-badges'
+import { PageTabs } from './shared-components'
+import { Button, Card, DataTable, FormField, Switch, useToast, type DataColumn } from './primitives'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
+import { Input } from '#components/ui/input'
+import { Badge } from '#components/ui/badge'
+import { cn } from '#lib/utils'
+import { adminErrorTitle, adminReasonText, adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
+import {
+  buildToolingPolicySummaryFromBackend,
+  buildToolingSourcesFromBackend,
+  sourceSectionLabel,
+  type ToolingPolicySummaryModel,
+  type ToolingSourceModel,
+  type ToolingSourceType
+} from './tooling/source-model'
 
-export type AdminPluginsLoadState =
-  | 'loading'
-  | 'ready'
-  | 'empty'
-  | 'denied'
-  | 'degraded'
-  | 'service-unavailable'
-  | 'error'
+export type AdminPluginsLoadState = 'loading' | 'ready' | 'empty' | 'denied' | 'degraded' | 'service-unavailable' | 'error'
 
-export type ToolProviderGroup =
-  | 'local-built-in'
-  | 'local-plugin'
-  | 'local-mcp'
-  | 'remote-peer-built-in'
-  | 'remote-peer-plugin-mcp'
-  | 'unavailable-stale'
-
-export type ToolPolicyMode =
-  | 'share-none'
-  | 'share-service'
-  | 'share-selected'
-  | 'deny-selected'
-  | 'require-confirmation'
-  | 'dry-run-only'
-  | 'allowed-peers'
-
-export interface AdminPluginActionPreview {
-  id: string
-  label: string
-  methodId: string
-  available: boolean
-  requiresAdminAction: boolean
-  state: AvailabilityState
-  reason: string
-  affectedResources: string[]
-}
-
-export interface AdminToolPolicyControl {
-  mode: ToolPolicyMode
-  label: string
-  methodId: string
-  available: boolean
-  readOnly: boolean
-  requiresAdminAction: boolean
-  reason: string
-}
-
-export interface AdminToolInventoryRow {
+export interface AvailablePluginTemplate {
   id: string
   name: string
   description: string
-  providerGroup: ToolProviderGroup
-  providerLabel: string
-  providerPeerId: string
-  serviceInstanceId: string
-  installedState: 'installed-local' | 'discoverable-peer' | 'shared-to-peers' | 'unavailable'
-  routeState: AvailabilityState
-  routeReason: string
-  riskClass: string
-  dataClasses: string[]
-  admin: boolean
-  mutating: boolean
-  external: boolean
-  approvalMode: string
-  defaultTtl: string
-  lastAuditOutcome: string
-  policyControls: AdminToolPolicyControl[]
-  secretsRedacted: boolean
 }
+
+/**
+ * Known installable plugin templates. There is no backend registry of
+ * "plugins not yet configured" (confirmed: Tooling only exposes sources that
+ * already exist via Tooling.ListToolSources/GetToolCatalog) - this mirrors the
+ * prototype's `AVAILABLE_PLUGINS_INITIAL` fixture as a client-side onboarding
+ * convenience list, matching precedent set for RBAC's `ROLE_TEMPLATES`.
+ */
+export const AVAILABLE_PLUGIN_TEMPLATES: AvailablePluginTemplate[] = [
+  { id: 'plugin:notion', name: 'notion-plugin', description: 'Read and write Notion pages and databases.' },
+  { id: 'plugin:home-assistant', name: 'home-assistant-plugin', description: 'Control smart-home devices via Home Assistant.' }
+]
+
+const TOOL_SOURCE_SECTION_ORDER: Array<Exclude<ToolingSourceType, 'blocked' | 'plugin'> | 'blocked'> = ['core', 'mcp', 'mesh', 'unknown', 'blocked']
+const PLUGIN_WIZARD_ERROR_REMEDY = 'Check the source details and try again.'
 
 export interface AdminPluginsSnapshot {
   loadState: AdminPluginsLoadState
-  generatedAt: string | null
-  secretsRedacted: boolean
-  tools: AdminToolInventoryRow[]
-  providerGroups: Array<{ group: ToolProviderGroup; label: string; count: number }>
-  actions: AdminPluginActionPreview[]
+  policy: ToolingPolicySummaryModel
+  sourceSummaries: ToolSourceSummaryModel[]
+  sourceDetails: Record<string, ToolSourceDetailModel | null>
+  fallbackTools: ToolApprovalCardModel[]
   warnings: string[]
   error: string | null
   evidenceSource: string
@@ -98,76 +70,91 @@ export interface AdminPluginsViewProps {
   client: AuroraClient
   route: RouteAvailability
   initialSnapshot?: AdminPluginsSnapshot | undefined
+  initialTab?: 'tools' | 'plugins' | undefined
 }
 
-export async function buildAdminPluginsSnapshot(
-  client: AuroraClient,
-  route?: RouteAvailability
-): Promise<AdminPluginsSnapshot> {
+const emptyPolicy: ToolingPolicySummaryModel = {
+  mode: 'enforce',
+  defaultBehavior: 'Loading Tooling policy through Aurora.',
+  activeGrantCount: 0,
+  pendingApprovalCount: 0,
+  blockedCount: 0,
+  sourceCount: 0,
+  bypassEnabled: false,
+  dryRunOnly: false,
+  denyAll: false,
+  lastChanged: 'not reported',
+  actor: 'not reported',
+    evidence: 'Checking Aurora'
+}
+
+const loadingPluginsSnapshot: AdminPluginsSnapshot = {
+  loadState: 'loading',
+  policy: emptyPolicy,
+  sourceSummaries: [],
+  sourceDetails: {},
+  fallbackTools: [],
+  warnings: [],
+  error: null,
+  evidenceSource: 'pending Aurora service calls'
+}
+
+export async function buildAdminPluginsSnapshot(client: AuroraClient, route?: RouteAvailability): Promise<AdminPluginsSnapshot> {
   if (route?.disabled) {
     return {
       ...loadingPluginsSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
-      warnings: route.blockers,
-      error: route.blockers.join(', ') || route.explanation,
+      warnings: route.blockers.map((blocker) => adminReasonText(blocker)),
+      error: adminRouteCopy(route),
       evidenceSource: route.providerLabel
     }
   }
 
-  const [toolsResult, methodsResult] = await Promise.allSettled([
-    client.tools.loadApprovalCards(),
-    client.registry.listMethods()
-  ])
-  const toolsResponse = valueOrNull(toolsResult)
-  const methods = valueOrNull(methodsResult) ?? []
-  const warnings = [
-    failureMessage('tool catalog', toolsResult),
-    failureMessage('registry methods', methodsResult)
-  ].filter((message): message is string => Boolean(message))
-  const denied = [toolsResult, methodsResult].some(isDeniedFailure) || (toolsResponse?.ok === false && isPermissionError(toolsResponse.error))
-
-  if ((!toolsResponse || !toolsResponse.ok) && methods.length === 0) {
+  let catalog: ToolCatalogResponse
+  try {
+    catalog = await client.tools.listCatalog<ToolCatalogResponse>()
+  } catch (error) {
     return {
       ...loadingPluginsSnapshot,
-      loadState: denied ? 'denied' : 'service-unavailable',
-      warnings,
-      error: toolsResponse && !toolsResponse.ok
-        ? toolsResponse.error.message
-        : warnings.join(' ') || 'Tooling catalog and registry methods are unavailable.',
-      evidenceSource: 'AuroraClient SDK error'
+      loadState: isPermissionError(error) ? 'denied' : 'service-unavailable',
+      warnings: [errorMessage(error)],
+      error: errorMessage(error),
+      evidenceSource: 'Aurora request error'
     }
   }
 
-  const toolFailure = toolsResponse && !toolsResponse.ok ? toolsResponse.error.message : null
-  const toolCards = toolsResponse?.ok ? toolsResponse.data : []
-  const rows = toolCards.map((tool) => buildToolInventoryRow(tool, methods))
-  const actionPreviews = buildActionPreviews(methods, rows)
-  const allWarnings = toolFailure ? [...warnings, toolFailure] : warnings
-  const loadState: AdminPluginsLoadState = denied
-    ? 'denied'
-    : allWarnings.length > 0
-      ? 'degraded'
-      : rows.length === 0
-        ? 'empty'
-        : 'ready'
+  const view: ToolingPageViewModel = await client.tools.getPageView(catalog)
+  const fallbackTools = normalizeToolCatalog(catalog, { transportKind: client.transport.kind })
+  const sourceDetails = Object.fromEntries(
+    view.sources.map((source) => [source.id, getToolSourceDetailFromView(view, source.id, catalog)] as const)
+  )
+  const loadState: AdminPluginsLoadState = view.sources.length === 0 && fallbackTools.length === 0 ? 'empty' : 'ready'
 
   return {
     loadState,
-    generatedAt: null,
-    secretsRedacted: rows.every((row) => row.secretsRedacted),
-    tools: rows,
-    providerGroups: groupCounts(rows),
-    actions: actionPreviews,
-    warnings: allWarnings,
-    error: allWarnings[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    policy: buildToolingPolicySummaryFromBackend(view.policy),
+    sourceSummaries: view.sources,
+    sourceDetails,
+    fallbackTools,
+    warnings: [],
+    error: null,
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
-export function AdminPluginsView({ client, route, initialSnapshot }: AdminPluginsViewProps) {
+export function AdminPluginsView({ client, route, initialSnapshot, initialTab }: AdminPluginsViewProps) {
   const [snapshot, setSnapshot] = useState<AdminPluginsSnapshot>(initialSnapshot ?? loadingPluginsSnapshot)
-  const [message, setMessage] = useState<string | null>(null)
-  const totals = useMemo(() => adminPluginTotals(snapshot.tools), [snapshot.tools])
+  const [activeTab, setActiveTab] = useState<'tools' | 'plugins'>(initialTab ?? 'tools')
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const [mcpWizardOpen, setMcpWizardOpen] = useState(false)
+  const [pluginConfigTarget, setPluginConfigTarget] = useState<AvailablePluginTemplate | null>(null)
+  const { toast } = useToast()
+
+  const refresh = async () => {
+    const next = await buildAdminPluginsSnapshot(client, route)
+    setSnapshot(next)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -181,433 +168,553 @@ export function AdminPluginsView({ client, route, initialSnapshot }: AdminPlugin
     }
   }, [client, route, initialSnapshot])
 
-  async function previewAction(action: AdminPluginActionPreview) {
-    if (!action.available) {
-      setMessage(action.reason)
-      return
+  const sources = useMemo(
+    () => buildToolingSourcesFromBackend(snapshot.sourceSummaries, snapshot.sourceDetails, snapshot.fallbackTools),
+    [snapshot.sourceSummaries, snapshot.sourceDetails, snapshot.fallbackTools]
+  )
+  const toolSources = useMemo(() => sources.filter((source) => source.type !== 'plugin'), [sources])
+  const pluginSources = useMemo(() => sources.filter((source) => source.type === 'plugin'), [sources])
+  const selectedSource = toolSources.find((source) => source.id === selectedSourceId) ?? toolSources[0] ?? null
+  const availablePlugins = useMemo(
+    () => AVAILABLE_PLUGIN_TEMPLATES.filter((template) => !pluginSources.some((source) => source.name === template.name)),
+    [pluginSources]
+  )
+
+  async function toggleSourceActive(source: ToolingSourceModel) {
+    const nextActive = !sourceIsActive(source)
+    setMutationError(null)
+    try {
+      await client.tools.upsertSourcePolicy({
+        sourceId: source.id,
+        providerPeerId: source.peerId,
+        providerServiceInstanceId: source.serviceInstanceId,
+        trustTier: nextActive ? 'trusted' : 'blocked',
+        reason: `${nextActive ? 'Enable' : 'Disable'} ${source.name} from Tools & Plugins`
+      })
+      await refresh()
+      toast({ tone: 'success', title: `${source.name} ${nextActive ? 'enabled' : 'disabled'}` })
+    } catch (error) {
+      const sourceLabel = productAdminReasonCopy(source.name, 'tool source')
+      const detail = productAdminErrorCopy(error, 'Tool source could not be updated. Try again.')
+      setMutationError(detail)
+      toast(productPluginUpdateErrorCopy(sourceLabel, detail))
     }
-    setMessage(`AdminAction preview required for ${action.methodId}; backend confirmation is not auto-submitted from this summary.`)
+  }
+
+  async function createMcpSource(draft: McpSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
+    const testResult = await client.tools.testMcpSource(draft)
+    if (testResult.status === 'invalid') return testResult
+    return client.tools.createMcpSource(draft)
+  }
+
+  async function createPluginSource(draft: PluginSourceWizardDraft): Promise<ToolOnboardingValidationResult> {
+    const testResult = await client.tools.testPluginSource(draft)
+    if (testResult.status === 'invalid') return testResult
+    return client.tools.createPluginSource(draft)
   }
 
   return (
-    <section className="aui-admin-services" aria-labelledby="admin-plugins-title">
-      <header className="aui-admin-header">
+    <div className="flex flex-col gap-4" aria-labelledby="tools-plugins-title">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
         <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-plugins-title"><Plug size={24} aria-hidden /> Plugins, MCP, and tools</h1>
-          <p>
-            Plugin, MCP, and aggregate tool inventory is rendered from AuroraClient. Reload, install, and sharing
-            mutations stay AdminAction-gated and disabled when the backend contract is not advertised.
+          <h1 id="tools-plugins-title" className="text-xl font-semibold tracking-tight">
+            Tools &amp; Plugins
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Core tools, connected tool sources, plugins, and tools from approved devices, grouped with review settings and approvals.
           </p>
         </div>
-        <div className="aui-admin-badges" aria-label="Plugin admin backend evidence">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <StatusBadge state={route.state} />
-          <PrivacyBadge privacy={route.item.privacyClass} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="font-normal">
+            Review: <strong className="ml-1 font-semibold">{policyModeLabel(snapshot.policy.mode)}</strong>
+          </Badge>
+          <ToneBadge tone="warning">{snapshot.policy.pendingApprovalCount} pending</ToneBadge>
+          <Button variant="primary" icon={<Plug size={14} aria-hidden />} onClick={() => setMcpWizardOpen(true)}>
+            Add tool source
+          </Button>
         </div>
-      </header>
-
-      <PluginsStatusPanel snapshot={snapshot} route={route} message={message} />
-
-      <div className="aui-admin-metrics" aria-label="Plugin and tool summary">
-        <Metric label="Tools" value={String(snapshot.tools.length)} detail={`${totals.local} local / ${totals.remote} remote`} />
-        <Metric label="Plugin/MCP" value={String(totals.pluginLike)} detail="provider classified" />
-        <Metric label="Policy gated" value={String(totals.policyGated)} detail="approval or AdminAction" />
-        <Metric label="Unavailable" value={String(totals.unavailable)} detail="denied, stale, or service unavailable" />
       </div>
 
-      <div className="aui-admin-grid">
-        <section className="aui-admin-panel" aria-labelledby="provider-groups-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">Providers</p>
-              <h2 id="provider-groups-title">Provider grouping</h2>
-            </div>
-            <Boxes size={18} aria-hidden />
-          </div>
-          <div className="aui-config-history">
-            {snapshot.providerGroups.map((group) => (
-              <article key={group.group}>
-                <div>
-                  <strong>{group.label}</strong>
-                  <span>{group.count} catalog item(s)</span>
-                </div>
-                <StatusBadge state={group.group === 'unavailable-stale' ? 'stale' : 'available-local'} />
-              </article>
-            ))}
-          </div>
-        </section>
+      <RouteNotice snapshot={snapshot} route={route} mutationError={mutationError} />
 
-        <section className="aui-admin-panel" aria-labelledby="plugin-actions-title">
-          <div className="aui-panel-heading">
-            <div>
-              <p className="aui-kicker">AdminAction</p>
-              <h2 id="plugin-actions-title">Reload and install controls</h2>
-            </div>
-            <ShieldCheck size={18} aria-hidden />
-          </div>
-          <div className="aui-config-history">
-            {snapshot.actions.map((action) => (
-              <article key={action.id}>
-                <div>
-                  <strong>{action.label}</strong>
-                  <code>{action.methodId}</code>
-                  <span>{action.reason}</span>
-                </div>
-                <button type="button" className="aui-action-chip" disabled={!action.available} onClick={() => void previewAction(action)}>
-                  {action.id.includes('install') ? <Download size={14} aria-hidden /> : <RefreshCw size={14} aria-hidden />}
-                  AdminAction
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
+      <PageTabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as 'tools' | 'plugins')}
+        items={[
+          {
+            value: 'tools',
+            label: 'Tools',
+            content: (
+              <ToolsTab
+                sources={toolSources}
+                selectedSource={selectedSource}
+                onSelectSource={setSelectedSourceId}
+                onToggleActive={toggleSourceActive}
+              />
+            )
+          },
+          {
+            value: 'plugins',
+            label: 'Plugins',
+            content: (
+              <PluginsTab
+                configured={pluginSources}
+                available={availablePlugins}
+                onToggleActive={toggleSourceActive}
+                onConfigure={setPluginConfigTarget}
+              />
+            )
+          }
+        ]}
+      />
 
-      <section className="aui-admin-panel" aria-labelledby="tool-inventory-title">
-        <div className="aui-panel-heading">
-          <div>
-            <p className="aui-kicker">Inventory</p>
-            <h2 id="tool-inventory-title">Tool risk and sharing policy</h2>
-          </div>
-          <FlaskConical size={18} aria-hidden />
-        </div>
-        {snapshot.tools.length === 0 ? <p className="aui-muted">No plugin, MCP, or tool catalog entries were returned by the SDK.</p> : null}
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Tool</th>
-                <th>Provider</th>
-                <th>Risk</th>
-                <th>Policy</th>
-                <th>Audit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshot.tools.map((tool) => <ToolInventoryRow key={tool.id} tool={tool} />)}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </section>
+      <AddMcpSourceDialog
+        open={mcpWizardOpen}
+        onClose={() => setMcpWizardOpen(false)}
+        onSubmit={async (draft) => {
+          const result = await createMcpSource(draft)
+          if (result.errors.length === 0) {
+            setMcpWizardOpen(false)
+            await refresh()
+            toast({ tone: 'success', title: `${draft.name} registered`, detail: 'It starts quarantined until reviewed and approved.' })
+          }
+          return result
+        }}
+      />
+
+      <PluginConfigDialog
+        template={pluginConfigTarget}
+        onClose={() => setPluginConfigTarget(null)}
+        onSubmit={async (draft) => {
+          const result = await createPluginSource(draft)
+          if (result.errors.length === 0) {
+            setPluginConfigTarget(null)
+            await refresh()
+            toast({ tone: 'success', title: `${draft.packageName} configured` })
+          }
+          return result
+        }}
+      />
+    </div>
   )
 }
 
-function PluginsStatusPanel({
-  snapshot,
-  route,
-  message
-}: {
-  snapshot: AdminPluginsSnapshot
-  route: RouteAvailability
-  message: string | null
-}) {
+function RouteNotice({ snapshot, route, mutationError }: { snapshot: AdminPluginsSnapshot; route: RouteAvailability; mutationError: string | null }) {
   if (snapshot.loadState === 'loading') {
-    return <div className="aui-admin-notice" aria-live="polite"><RefreshCw size={18} aria-hidden />Loading Tooling catalog through AuroraClient.</div>
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+        <RefreshCw size={14} aria-hidden /> Loading Tooling catalog through Aurora.
+      </p>
+    )
   }
-  if (route.disabled) {
-    return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{route.blockers.join(', ') || route.explanation}</div>
+  if (route.disabled || snapshot.error) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
+        <AlertTriangle size={14} aria-hidden /> {productAdminReasonCopy(snapshot.error, adminRouteCopy(route))}
+      </p>
+    )
+  }
+  if (mutationError) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
+        <AlertTriangle size={14} aria-hidden /> {mutationError}
+      </p>
+    )
   }
   if (snapshot.loadState === 'empty') {
-    return <div className="aui-admin-notice" role="status"><Plug size={18} aria-hidden />No Tooling catalog entries were returned.</div>
-  }
-  if (snapshot.error) {
-    return <div className="aui-admin-notice aui-admin-notice-warning" role="alert"><AlertTriangle size={18} aria-hidden />{snapshot.error}</div>
-  }
-  if (message) {
-    return <div className="aui-admin-notice" role="status"><ShieldCheck size={18} aria-hidden />{message}</div>
+    return <p className="text-sm text-muted-foreground">No tools are available from Aurora yet.</p>
   }
   return null
 }
 
-function ToolInventoryRow({ tool }: { tool: AdminToolInventoryRow }) {
-  return (
-    <tr>
-      <td>
-        <details className="aui-service-details">
-          <summary>
-            <strong>{tool.name}</strong>
-            <small>{tool.description}</small>
-          </summary>
-          <div className="aui-service-drawer">
-            <dl>
-              <div><dt>Tool ID</dt><dd>{tool.id}</dd></div>
-              <div><dt>Install state</dt><dd>{tool.installedState}</dd></div>
-              <div><dt>Data classes</dt><dd>{tool.dataClasses.join(', ') || 'none reported'}</dd></div>
-              <div><dt>Flags</dt><dd>{tool.admin ? 'admin ' : ''}{tool.mutating ? 'mutating ' : ''}{tool.external ? 'external' : 'local-only'}</dd></div>
-              <div><dt>Default TTL</dt><dd>{tool.defaultTtl}</dd></div>
-            </dl>
-          </div>
-        </details>
-      </td>
-      <td>
-        <div className="aui-state-line">
-          <StatusBadge state={tool.routeState} />
-          <span>{providerGroupLabel(tool.providerGroup)}</span>
-        </div>
-        <small>{tool.providerLabel}; peer {tool.providerPeerId}; service {tool.serviceInstanceId}</small>
-      </td>
-      <td>
-        <span className={`aui-risk-pill aui-risk-${riskClassName(tool.riskClass)}`}>{tool.riskClass}</span>
-        <small>{tool.approvalMode}</small>
-      </td>
-      <td>
-        <div className="aui-method-list">
-          {tool.policyControls.map((control) => (
-            <span key={control.mode} className={`aui-method-chip ${control.available ? '' : 'aui-method-chip-disabled'}`} title={control.reason}>
-              {control.label}: {control.readOnly ? 'read-only' : control.available ? 'AdminAction' : 'disabled'}
+function ToolsTab({
+  sources,
+  selectedSource,
+  onSelectSource,
+  onToggleActive
+}: {
+  sources: ToolingSourceModel[]
+  selectedSource: ToolingSourceModel | null
+  onSelectSource: (id: string) => void
+  onToggleActive: (source: ToolingSourceModel) => void
+}) {
+  const columns: DataColumn<ToolApprovalCardModel>[] = [
+    {
+      key: 'tool',
+      header: 'Tool',
+      render: (tool) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-xs">{tool.name}</span>
+          <span className="text-xs text-muted-foreground">{tool.description}</span>
+          {tool.disabledReason ? (
+            <span className="text-xs text-destructive" role="status">
+              {tool.disabledReason} Not callable from this peer.
             </span>
-          ))}
+          ) : null}
         </div>
-      </td>
-      <td>
-        <code>{tool.lastAuditOutcome}</code>
-        <small>{tool.routeReason}</small>
-      </td>
-    </tr>
+      )
+    },
+    {
+      key: 'risk',
+      header: 'Risk',
+      render: (tool) => <ToneBadge tone={riskTone(tool.riskClass)}>{tool.riskClass}</ToneBadge>
+    },
+    {
+      key: 'calls',
+      header: 'Calls',
+      render: () => <span className="text-muted-foreground">not reported</span>
+    },
+    {
+      key: 'state',
+      header: 'State',
+      align: 'end',
+      render: (tool) => {
+        const state = toolStateLabel(tool)
+        return <ToneBadge tone={stateTone(state)}>{state}</ToneBadge>
+      }
+    }
+  ]
+
+  return (
+    <div className="flex min-h-0 flex-1 gap-4 pt-4">
+      <div className="w-[280px] shrink-0 overflow-y-auto rounded-xl border border-border bg-muted/10 p-3" aria-label="Tool sources">
+        {TOOL_SOURCE_SECTION_ORDER.map((type) => {
+          const sectionSources = sources.filter((source) => source.type === type)
+          if (sectionSources.length === 0) return null
+          return (
+            <div key={type} className="mb-3 last:mb-0">
+              <p className="mb-1 px-1 text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">{sourceSectionLabel(type)}</p>
+              {sectionSources.map((source) => (
+                <button
+                  key={source.id}
+                  type="button"
+                  onClick={() => onSelectSource(source.id)}
+                  className={cn(
+                    'mb-1 w-full rounded-lg px-3 py-2 text-left transition-colors',
+                    selectedSource?.id === source.id ? 'bg-muted' : 'hover:bg-muted/60'
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium">{source.name}</span>
+                    <ToneBadge tone={trustTone(source.effectiveTrust)} className="shrink-0">
+                      {toolSourceTrustLabel(source.effectiveTrust)}
+                    </ToneBadge>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {sourceSectionLabel(source.type)} · {source.toolCount} tools
+                  </p>
+                </button>
+              ))}
+            </div>
+          )
+        })}
+        {sources.length === 0 ? <p className="px-1 text-xs text-muted-foreground">No tool sources reported.</p> : null}
+      </div>
+
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        {selectedSource ? (
+          <>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-mono text-base font-semibold">{selectedSource.name}</h2>
+                  <ToneBadge tone={trustTone(selectedSource.effectiveTrust)}>{toolSourceTrustLabel(selectedSource.effectiveTrust)}</ToneBadge>
+                </div>
+                <p className="mt-1 max-w-xl text-sm text-muted-foreground">{sourceDescription(selectedSource)}</p>
+              </div>
+              {selectedSource.type === 'plugin' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{sourceIsActive(selectedSource) ? 'Active' : 'Inactive'}</span>
+                  <Switch
+                    checked={sourceIsActive(selectedSource)}
+                    onChange={() => onToggleActive(selectedSource)}
+                    label={`Toggle ${selectedSource.name} active`}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4">
+              <DataTable columns={columns} rows={selectedSource.tools} getRowKey={(tool) => tool.id} empty="No tools reported for this source." />
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">No tool source is selected.</p>
+        )}
+      </div>
+    </div>
   )
 }
 
-function buildToolInventoryRow(tool: ToolApprovalCardModel, methods: MethodDescriptor[]): AdminToolInventoryRow {
-  const providerGroup = classifyProvider(tool)
-  const remote = providerGroup === 'remote-peer-built-in' || providerGroup === 'remote-peer-plugin-mcp'
-  const unavailable = tool.state === 'unavailable' || tool.state === 'denied' || tool.providerLabel.toLowerCase().includes('stale')
-  return {
-    id: tool.id,
-    name: tool.name,
-    description: tool.description,
-    providerGroup: unavailable ? 'unavailable-stale' : providerGroup,
-    providerLabel: tool.providerLabel,
-    providerPeerId: tool.providerPeerId ?? 'local',
-    serviceInstanceId: tool.serviceInstanceId ?? 'not reported',
-    installedState: unavailable
-      ? 'unavailable'
-      : remote
-        ? 'discoverable-peer'
-        : tool.approvalRequired || tool.requiresAdminAction
-          ? 'shared-to-peers'
-          : 'installed-local',
-    routeState: stateForTool(tool),
-    routeReason: tool.disabledReason ?? tool.denialReason ?? (tool.providers.map((provider) => provider.reason).join('; ') || 'catalog provider'),
-    riskClass: tool.riskClass,
-    dataClasses: dataClassesForTool(tool),
-    admin: tool.requiresAdminAction,
-    mutating: tool.mutating,
-    external: tool.dataEgress || tool.providerKind === 'cloud' || tool.transport === 'mcp',
-    approvalMode: approvalMode(tool),
-    defaultTtl: tool.tokenTtlSeconds ? `${tool.tokenTtlSeconds}s` : 'backend default',
-    lastAuditOutcome: tool.result?.auditReceipt ?? tool.auditDestination ?? tool.correlationId ?? 'audit pending',
-    policyControls: buildPolicyControls(tool, methods, remote),
-    secretsRedacted: tool.secretsRedacted
+function PluginsTab({
+  configured,
+  available,
+  onToggleActive,
+  onConfigure
+}: {
+  configured: ToolingSourceModel[]
+  available: AvailablePluginTemplate[]
+  onToggleActive: (source: ToolingSourceModel) => void
+  onConfigure: (template: AvailablePluginTemplate) => void
+}) {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3.5 pt-4">
+      {configured.map((source) => {
+        const active = sourceIsActive(source)
+        return (
+          <Card key={source.id}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-medium">{source.name}</p>
+              <ToneBadge tone={active ? 'success' : 'neutral'}>{active ? 'active' : 'inactive'}</ToneBadge>
+            </div>
+            <p className="mt-1.5 mb-3 text-xs text-muted-foreground">{sourceDescription(source)}</p>
+            <Button variant="outline" className="w-full" onClick={() => onToggleActive(source)}>
+              {active ? 'Disable' : 'Enable'}
+            </Button>
+          </Card>
+        )
+      })}
+      {available.map((template) => (
+        <Card key={template.id}>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-medium">{template.name}</p>
+          </div>
+          <p className="mt-1.5 mb-3 text-xs text-muted-foreground">{template.description}</p>
+          <Button variant="primary" className="w-full" onClick={() => onConfigure(template)}>
+            Configure
+          </Button>
+        </Card>
+      ))}
+      {configured.length === 0 && available.length === 0 ? <p className="text-sm text-muted-foreground">No plugins reported.</p> : null}
+    </div>
+  )
+}
+
+export function sourceIsActive(source: Pick<ToolingSourceModel, 'effectiveTrust'>): boolean {
+  return source.effectiveTrust === 'trusted'
+}
+
+function AddMcpSourceDialog({
+  open,
+  onClose,
+  onSubmit
+}: {
+  open: boolean
+  onClose: () => void
+  onSubmit: (draft: McpSourceWizardDraft) => Promise<ToolOnboardingValidationResult>
+}) {
+  const [name, setName] = useState('')
+  const [transport, setTransport] = useState('')
+  const [commandOrUrl, setCommandOrUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [errors, setErrors] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!open) {
+      setName('')
+      setTransport('')
+      setCommandOrUrl('')
+      setErrors([])
+    }
+  }, [open])
+
+  function draftFromForm(): McpSourceWizardDraft {
+    const trimmed = commandOrUrl.trim()
+    const looksLikeUrl = /^(https?|wss?):\/\//i.test(trimmed)
+    return {
+      name: name.trim(),
+      transport: transport.trim() || null,
+      url: looksLikeUrl ? trimmed : null,
+      command: looksLikeUrl ? null : trimmed || null,
+      trustTier: 'untrusted',
+      reason: 'Registered from Tools & Plugins wizard'
+    }
   }
+
+  const draft = draftFromForm()
+  const localValidation = validateMcpSourceDraft(draft)
+  const canSubmit = localValidation.errors.length === 0 && !busy
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add tool source</DialogTitle>
+          <DialogDescription>Register a new connected tool source. It starts quarantined until reviewed and approved.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <FormField label="Name" htmlFor="mcp-source-name">
+            <Input id="mcp-source-name" value={name} placeholder="e.g. notion-mcp" onChange={(event) => setName(event.target.value)} />
+          </FormField>
+          <FormField label="Connection method" htmlFor="mcp-source-transport">
+            <Input id="mcp-source-transport" value={transport} placeholder="Local command or server address" onChange={(event) => setTransport(event.target.value)} />
+          </FormField>
+          <FormField label="Command or URL" htmlFor="mcp-source-command">
+            <Input id="mcp-source-command" value={commandOrUrl} placeholder="npx @scope/mcp-server" onChange={(event) => setCommandOrUrl(event.target.value)} />
+          </FormField>
+          {errors.length > 0 ? (
+            <p className="text-sm text-destructive" role="alert">
+              {errors.join(', ')}
+            </p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            busy={busy}
+            disabled={!canSubmit}
+            onClick={async () => {
+              setBusy(true)
+              setErrors([])
+              try {
+                const result = await onSubmit(draft)
+                if (result.errors.length > 0) setErrors(productPluginWizardErrorsCopy(result.errors))
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Test &amp; add source
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
-function buildActionPreviews(methods: MethodDescriptor[], rows: AdminToolInventoryRow[]): AdminPluginActionPreview[] {
-  return [
-    actionPreview({
-      id: 'reload-plugins',
-      label: 'Reload plugin and MCP catalog',
-      methodId: 'Tooling.ReloadPlugins',
-      methods,
-      affectedResources: ['tooling:plugins', 'tooling:mcp']
-    }),
-    actionPreview({
-      id: 'install-plugin',
-      label: 'Install plugin package',
-      methodId: 'Tooling.InstallPlugin',
-      methods,
-      affectedResources: ['tooling:plugins']
-    }),
-    actionPreview({
-      id: 'update-tool-policy',
-      label: 'Update local tool sharing policy',
-      methodId: 'Tooling.UpdateToolSharingPolicy',
-      methods,
-      affectedResources: rows.filter((row) => !row.providerGroup.startsWith('remote')).map((row) => `tool:${row.id}`)
-    })
-  ]
-}
+function PluginConfigDialog({
+  template,
+  onClose,
+  onSubmit
+}: {
+  template: AvailablePluginTemplate | null
+  onClose: () => void
+  onSubmit: (draft: PluginSourceWizardDraft) => Promise<ToolOnboardingValidationResult>
+}) {
+  const [apiKey, setApiKey] = useState('')
+  const [workspace, setWorkspace] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [errors, setErrors] = useState<string[]>([])
 
-function actionPreview(input: {
-  id: string
-  label: string
-  methodId: string
-  methods: MethodDescriptor[]
-  affectedResources: string[]
-}): AdminPluginActionPreview {
-  const method = input.methods.find((candidate) => candidate.busTopic === input.methodId)
-  const external = method?.availableOverHttp === true
-  const manage = method?.methodType === 'manage' || method?.methodType === 'admin-critical'
-  return {
-    id: input.id,
-    label: input.label,
-    methodId: input.methodId,
-    available: Boolean(method && external && manage),
-    requiresAdminAction: manage,
-    state: !method ? 'unsupported' : external && manage ? 'available-local' : 'privacy-blocked',
-    reason: !method
-      ? `${input.methodId} is not advertised by Gateway registry.`
-      : !external
-        ? `${input.methodId} is internal-only and cannot be invoked from this UI.`
-        : manage
-          ? 'Available through AdminAction draft/confirm/audit.'
-          : `${input.methodId} is not marked manage/admin-critical.`,
-    affectedResources: input.affectedResources
+  useEffect(() => {
+    setApiKey('')
+    setWorkspace('')
+    setErrors([])
+  }, [template?.id])
+
+  if (!template) return null
+
+  const draft: PluginSourceWizardDraft = {
+    packageName: template.name,
+    pluginId: template.id,
+    trustTier: 'untrusted',
+    reason: `Configured ${template.name} from Tools & Plugins`,
+    metadata: { api_key: apiKey || null, workspace: workspace || null }
   }
+  const localValidation = validatePluginSourceDraft(draft)
+  const canSubmit = localValidation.errors.length === 0 && !busy
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Configure {template.name}</DialogTitle>
+          <DialogDescription>
+            {template.description} Configuration is read from Config on save; the plugin then appears as an active source above.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <FormField label="API key / credential" htmlFor="plugin-config-key">
+            <Input
+              id="plugin-config-key"
+              type="password"
+              value={apiKey}
+              placeholder="Stored via ConfigService, never shown again"
+              onChange={(event) => setApiKey(event.target.value)}
+            />
+          </FormField>
+          <FormField label="Scope / workspace (optional)" htmlFor="plugin-config-scope">
+            <Input id="plugin-config-scope" value={workspace} placeholder="e.g. default workspace" onChange={(event) => setWorkspace(event.target.value)} />
+          </FormField>
+          {errors.length > 0 ? (
+            <p className="text-sm text-destructive" role="alert">
+              {errors.join(', ')}
+            </p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            busy={busy}
+            disabled={!canSubmit}
+            onClick={async () => {
+              setBusy(true)
+              setErrors([])
+              try {
+                const result = await onSubmit(draft)
+                if (result.errors.length > 0) setErrors(productPluginWizardErrorsCopy(result.errors))
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Save &amp; activate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
-function buildPolicyControls(tool: ToolApprovalCardModel, methods: MethodDescriptor[], remote: boolean): AdminToolPolicyControl[] {
-  const methodId = 'Tooling.UpdateToolSharingPolicy'
-  const advertised = methods.some((method) => method.busTopic === methodId && method.availableOverHttp && method.methodType === 'manage')
-  const readOnly = remote
-  const unsupportedReason = advertised
-    ? 'Policy changes require AdminAction draft/confirm/audit.'
-    : `${methodId} is not advertised; policy is read-only in this checkout.`
-  return [
-    policyControl('share-none', 'Share none', methodId, advertised, readOnly, unsupportedReason),
-    policyControl('share-service', 'Share service/toolkit', methodId, advertised, readOnly, unsupportedReason),
-    policyControl('share-selected', 'Share selected', methodId, advertised, readOnly, unsupportedReason),
-    policyControl('deny-selected', 'Deny selected', methodId, advertised, readOnly, unsupportedReason),
-    policyControl('require-confirmation', 'Require confirmation', methodId, advertised || tool.approvalRequired, readOnly, tool.approvalRequired ? 'Current backend policy requires approval.' : unsupportedReason),
-    policyControl('dry-run-only', 'Dry-run only', methodId, advertised || tool.dryRunRequired, readOnly, tool.dryRunRequired ? 'Current backend policy requires dry-run only.' : unsupportedReason),
-    policyControl('allowed-peers', 'Allowed peers/providers', methodId, advertised, readOnly, unsupportedReason)
-  ]
+function sourceDescription(source: ToolingSourceModel): string {
+  if (source.type === 'core') return 'Built-in tools shipped with Aurora services, always present, no install step.'
+  if (source.type === 'mcp') return `Connected tool source with ${source.toolCount} tool(s).`
+  if (source.type === 'mesh') return `Tools announced by connected device ${source.name}.`
+  if (source.type === 'unknown') return 'Announced tools from an unverified source. Quarantined until reviewed.'
+  if (source.type === 'plugin') return `Plugin source exposing ${source.toolCount} tool(s).`
+  return sanitizeAdminText(source.catalogEvidence)
 }
 
-function policyControl(
-  mode: ToolPolicyMode,
-  label: string,
-  methodId: string,
-  available: boolean,
-  readOnly: boolean,
-  reason: string
-): AdminToolPolicyControl {
-  return {
-    mode,
-    label,
-    methodId,
-    available: available && !readOnly,
-    readOnly,
-    requiresAdminAction: true,
-    reason: readOnly ? 'Remote peer tool policy is read-only unless this node owns the policy.' : reason
-  }
+function policyModeLabel(mode: string): string {
+  if (mode === 'deny_all') return 'Paused'
+  if (mode === 'dry_run_only') return 'Review only'
+  if (mode === 'unrestricted_except_blocked') return 'Wide access'
+  return 'Review required'
 }
 
-function classifyProvider(tool: ToolApprovalCardModel): ToolProviderGroup {
-  const id = `${tool.id} ${tool.providerKind} ${tool.providerLabel} ${tool.transport}`.toLowerCase()
-  const remote = Boolean(tool.providerPeerId && tool.providerPeerId !== 'local-peer') || tool.providerKind === 'mesh'
-  const pluginOrMcp = id.includes('plugin') || id.includes('mcp') || tool.transport === 'mcp' || tool.providerKind === 'cloud'
-  if (remote && pluginOrMcp) return 'remote-peer-plugin-mcp'
-  if (remote) return 'remote-peer-built-in'
-  if (pluginOrMcp && tool.transport === 'mcp') return 'local-mcp'
-  if (pluginOrMcp) return 'local-plugin'
-  return 'local-built-in'
+function toolSourceTrustLabel(trust: string): string {
+  if (trust === 'trusted') return 'trusted'
+  if (trust === 'approval-required' || trust === 'quarantined' || trust === 'mixed') return 'review needed'
+  if (trust === 'blocked') return 'blocked'
+  return 'unknown'
 }
 
-function stateForTool(tool: ToolApprovalCardModel): AvailabilityState {
-  if (tool.state === 'denied') return 'denied'
-  if (tool.state === 'unavailable') return 'stale'
-  if (tool.providerSelectorRequired || tool.selectorRequired) return 'privacy-blocked'
-  if (tool.dryRunRequired || tool.state === 'expired' || tool.state === 'replay-rejected' || tool.state === 'failed') return 'degraded'
-  if (tool.providerPeerId && tool.providerPeerId !== 'local-peer') return 'available-remote'
-  return 'available-local'
+function productPluginUpdateErrorCopy(sourceLabel: string, detail: string): { tone: 'error'; title: string; detail: string } {
+  return { tone: 'error', title: `Could not update ${sourceLabel}`, detail }
 }
 
-function approvalMode(tool: ToolApprovalCardModel): string {
-  if (tool.dryRunRequired) return 'dry-run-only'
-  if (tool.providerSelectorRequired) return 'provider selector required'
-  if (tool.approvalRequired) return tool.requestedApprovalScope ?? tool.approvalScopes[0] ?? 'approval required'
-  return 'no approval required'
+function productPluginWizardErrorsCopy(errors: readonly string[]): string[] {
+  return errors.map((error) => productAdminReasonCopy(error, PLUGIN_WIZARD_ERROR_REMEDY))
 }
 
-function dataClassesForTool(tool: ToolApprovalCardModel): string[] {
-  const classes = new Set<string>()
-  if (tool.dataEgress) classes.add('external-egress')
-  if (tool.riskClass.includes('admin')) classes.add('admin-critical')
-  if (tool.riskClass.includes('sensitive')) classes.add('sensitive')
-  if (tool.mutating) classes.add('mutating')
-  if (classes.size === 0) classes.add('public')
-  return [...classes]
-}
-
-function groupCounts(rows: AdminToolInventoryRow[]) {
-  const counts = new Map<ToolProviderGroup, number>()
-  for (const row of rows) counts.set(row.providerGroup, (counts.get(row.providerGroup) ?? 0) + 1)
-  return [...counts.entries()].map(([group, count]) => ({ group, label: providerGroupLabel(group), count }))
-}
-
-function adminPluginTotals(rows: AdminToolInventoryRow[]) {
-  return {
-    local: rows.filter((row) => row.providerGroup.startsWith('local')).length,
-    remote: rows.filter((row) => row.providerGroup.startsWith('remote')).length,
-    pluginLike: rows.filter((row) => row.providerGroup.includes('plugin') || row.providerGroup.includes('mcp')).length,
-    policyGated: rows.filter((row) => row.admin || row.approvalMode !== 'no approval required').length,
-    unavailable: rows.filter((row) => row.routeState === 'denied' || row.routeState === 'stale' || row.routeState === 'unsupported').length
-  }
-}
-
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="aui-admin-metric"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
-}
-
-function providerGroupLabel(group: ToolProviderGroup): string {
-  if (group === 'local-built-in') return 'Local built-in'
-  if (group === 'local-plugin') return 'Local plugin'
-  if (group === 'local-mcp') return 'Local MCP'
-  if (group === 'remote-peer-built-in') return 'Remote peer built-in'
-  if (group === 'remote-peer-plugin-mcp') return 'Remote peer plugin/MCP'
-  return 'Unavailable or stale provider'
-}
-
-function valueOrNull<T>(result: PromiseSettledResult<T>): T | null {
-  return result.status === 'fulfilled' ? result.value : null
-}
-
-function failureMessage(label: string, result: PromiseSettledResult<unknown>): string | null {
-  if (result.status === 'fulfilled') return null
-  return `${label}: ${errorMessage(result.reason)}`
-}
-
-function isDeniedFailure(result: PromiseSettledResult<unknown>): boolean {
-  return result.status === 'rejected' && isPermissionError(result.reason)
+function toolStateLabel(tool: ToolApprovalCardModel): string {
+  if (tool.blockReasonCode === 'permission_denied') return 'missing permission'
+  if (tool.state === 'approved' || tool.state === 'executed') return 'approved'
+  if (tool.state === 'denied' || tool.state === 'replay-rejected' || tool.state === 'unavailable' || tool.state === 'failed' || tool.state === 'expired') return 'denied'
+  if (tool.approvalRequired) return 'pending'
+  return tool.state
 }
 
 function isPermissionError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'permission'
 }
 
-function isAvailabilityState(value: string): value is AvailabilityState {
-  return [
-    'available-local',
-    'available-remote',
-    'pending',
-    'denied',
-    'degraded',
-    'stale',
-    'privacy-blocked',
-    'unsupported'
-  ].includes(value)
-}
-
-function riskClassName(risk: string): string {
-  return risk.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
-}
-
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-const loadingPluginsSnapshot: AdminPluginsSnapshot = {
-  loadState: 'loading',
-  generatedAt: null,
-  secretsRedacted: true,
-  tools: [],
-  providerGroups: [],
-  actions: [],
-  warnings: [],
-  error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  return adminErrorTitle(error)
 }

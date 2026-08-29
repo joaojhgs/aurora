@@ -4,8 +4,14 @@ import type { AuroraResponse } from './transport.js'
 import type { JsonValue, PrivacyClass } from './types.js'
 
 export const DB_METHODS = {
+  createSession: 'DB.CreateSession',
+  listSessions: 'DB.ListSessions',
+  getSession: 'DB.GetSession',
+  setActiveSession: 'DB.SetActiveSession',
   getMessages: 'DB.GetMessages',
+  getMessagesForDate: 'DB.GetMessagesForDate',
   ragDelete: 'DB.RAGDelete',
+  ragSearch: 'DB.RAGSearch',
   ragListNamespaces: 'DB.RAGListNamespaces',
   ragSearchRemote: 'DB.RAGSearchRemote',
   ragGetProvenance: 'DB.RAGGetProvenance',
@@ -38,6 +44,56 @@ export interface DBGetMessagesResponse {
   messages: Array<Record<string, JsonValue>>
   total: number
   has_more: boolean
+}
+
+export interface DBGetMessagesForDateRequest {
+  date?: string | null
+}
+
+export interface DBSessionRecord {
+  id: string
+  principal_id: string
+  type: string
+  title: string | null
+  created_at: string
+  updated_at: string
+  last_active_at: string
+  message_count: number
+}
+
+export interface DBCreateSessionRequest {
+  type: string
+  title?: string | null
+}
+
+export interface DBSessionResponse {
+  session: DBSessionRecord
+}
+
+export interface DBListSessionsRequest {
+  type?: string | null
+  limit?: number
+  offset?: number
+}
+
+export interface DBListSessionsResponse {
+  sessions: DBSessionRecord[]
+  active_session_id: string | null
+  total: number
+}
+
+export interface DBGetSessionRequest {
+  session_id: string
+  activate?: boolean
+}
+
+export interface DBGetSessionResponse {
+  session: DBSessionRecord
+  messages: Array<Record<string, JsonValue>>
+}
+
+export interface DBSetActiveSessionRequest {
+  session_id: string
 }
 
 export interface DBRAGNamespacePolicy {
@@ -95,14 +151,29 @@ export interface DBRAGProvenance {
   delete_reason: string | null
 }
 
-export interface DBRAGProvenanceItem {
+export interface DBRAGItem {
   key: string
   value: JsonValue
   namespace: string
   search_score: number | null
+}
+
+export interface DBRAGListResponse {
+  items: DBRAGItem[]
+}
+
+export interface DBRAGProvenanceItem extends DBRAGItem {
   provenance: DBRAGProvenance
   redacted: boolean
   redaction_reasons: string[]
+}
+
+export interface DBRAGSearchRequest {
+  namespace: string
+  query: string
+  limit?: number
+  offset?: number
+  mesh_selector?: MeshAddressSelectorLike | null
 }
 
 export interface DBRAGSearchRemoteRequest {
@@ -230,11 +301,51 @@ export function normalizeRagPrivacyClass(value: RAGPrivacyClass): PrivacyClass {
 export class MemoryClient {
   constructor(private readonly client: AuroraClient) {}
 
+  createSession(request: DBCreateSessionRequest): Promise<AuroraResponse<DBSessionResponse>> {
+    return this.client.requestResult<DBSessionResponse, DBCreateSessionRequest>(
+      DB_METHODS.createSession,
+      request,
+      { path: routePath('DB', 'CreateSession') }
+    )
+  }
+
+  listSessions(request: DBListSessionsRequest = {}): Promise<AuroraResponse<DBListSessionsResponse>> {
+    return this.client.requestResult<DBListSessionsResponse, DBListSessionsRequest>(
+      DB_METHODS.listSessions,
+      request,
+      { path: routePath('DB', 'ListSessions') }
+    )
+  }
+
+  getSession(request: DBGetSessionRequest): Promise<AuroraResponse<DBGetSessionResponse>> {
+    return this.client.requestResult<DBGetSessionResponse, DBGetSessionRequest>(
+      DB_METHODS.getSession,
+      request,
+      { path: routePath('DB', 'GetSession') }
+    )
+  }
+
+  setActiveSession(request: DBSetActiveSessionRequest): Promise<AuroraResponse<DBSessionResponse>> {
+    return this.client.requestResult<DBSessionResponse, DBSetActiveSessionRequest>(
+      DB_METHODS.setActiveSession,
+      request,
+      { path: routePath('DB', 'SetActiveSession') }
+    )
+  }
+
   listMessages(request: DBGetMessagesRequest = {}): Promise<AuroraResponse<DBGetMessagesResponse>> {
     return this.client.requestResult<DBGetMessagesResponse, DBGetMessagesRequest>(
       DB_METHODS.getMessages,
       request,
       { path: routePath('DB', 'GetMessages') }
+    )
+  }
+
+  listMessagesForDate(request: DBGetMessagesForDateRequest = {}): Promise<AuroraResponse<DBGetMessagesResponse>> {
+    return this.client.requestResult<DBGetMessagesResponse, DBGetMessagesForDateRequest>(
+      DB_METHODS.getMessagesForDate,
+      request,
+      { path: routePath('DB', 'GetMessagesForDate') }
     )
   }
 
@@ -251,6 +362,14 @@ export class MemoryClient {
       DB_METHODS.ragSearchRemote,
       request,
       { path: routePath('DB', 'RAGSearchRemote') }
+    )
+  }
+
+  searchLocal(request: DBRAGSearchRequest): Promise<AuroraResponse<DBRAGListResponse>> {
+    return this.client.requestResult<DBRAGListResponse, DBRAGSearchRequest>(
+      DB_METHODS.ragSearch,
+      request,
+      { path: routePath('DB', 'RAGSearch') }
     )
   }
 

@@ -66,7 +66,7 @@ async def test_send_to_peer_plaintext_when_e2ee_disabled(mock_deps):
     mock_pc.createDataChannel.return_value = mock_channel
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1", is_offer_initiator=True)
 
     assert client.send_to_peer("peer1", json.dumps({"type": "ping"})) is True
     assert mock_channel.sent_messages == ['{"type": "ping"}']
@@ -83,7 +83,7 @@ async def test_send_to_peer_seals_binary_when_e2ee_enabled(mock_deps):
     mock_pc.createDataChannel.return_value = mock_channel
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1", is_offer_initiator=True)
 
     assert client.send_to_peer("peer1", json.dumps({"type": "ping", "id": "abc"})) is True
     sent = mock_channel.sent_messages[0]
@@ -104,7 +104,7 @@ async def test_inbound_encrypted_message_processed_when_e2ee_enabled(mock_deps):
     auth_service.authenticate_token.return_value = None
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1", is_offer_initiator=True)
 
     encrypted = aead_seal(client._keys.k_data, {"type": "auth", "token": "valid-token"})
     task = mock_channel.emit("message", encrypted)
@@ -126,7 +126,7 @@ async def test_inbound_plaintext_dropped_when_e2ee_enabled(mock_deps):
     mock_pc.createDataChannel.return_value = mock_channel
 
     with patch("app.services.gateway.webrtc.rtc_client.RTCPeerConnection", return_value=mock_pc):
-        await client._ensure_pc("peer1")
+        await client._ensure_pc("peer1", is_offer_initiator=True)
 
     task = mock_channel.emit("message", json.dumps({"type": "auth", "token": "valid-token"}))
     if task is not None:

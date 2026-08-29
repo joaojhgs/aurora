@@ -710,7 +710,7 @@ export const capabilityFeatures: CapabilityFeature[] = [
     requiredMethods: ['WakeWord.Detect', 'WakeWord.ProcessAudio'],
     requiredPermissions: ['WakeWord.use', 'Transcription.use', 'Orchestrator.use'],
     backendCoverage: 'partial',
-    transportNotes: ['Always-on wake is native/platform-gated; iOS does not allow Siri replacement.'],
+    transportNotes: ['Always-on wake is native/platform-gated. iOS does not provide background wake or system-assistant replacement; Shortcuts, widgets, sharing, and links only open the app.'],
     missing: ['Microphone permission', 'Autostart permission'],
     userActions: ['request_microphone', 'open_settings'],
   },

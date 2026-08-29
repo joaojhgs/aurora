@@ -1,11 +1,21 @@
 """STT (Speech-to-Text) and audio session contract models."""
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import (
+    MAX_JS_SAFE_INTEGER,
+    SpeechLanguageTag,
+    normalize_speech_language,
+    normalize_speech_language_candidates,
+)
 from app.shared.contracts.registry import IOModel
+
+MAX_AUDIO_SAMPLE_RATE = 192_000
+MAX_AUDIO_CHANNELS = 8
+MAX_AUDIO_SAMPLE_WIDTH = 8
 
 
 # Module identifiers
@@ -42,6 +52,10 @@ class STTMethods:
     USER_SPEECH_CAPTURED = f"{STTModule.NAME}.UserSpeechCaptured"
     LISTEN = f"{STTModule.NAME}.Listen"
     STOP_LISTENING = f"{STTModule.NAME}.StopListening"
+    CAPTURE_PREPARE = f"{STTModule.NAME}.CapturePrepare"
+    CAPTURE_RELEASE = f"{STTModule.NAME}.CaptureRelease"
+    CAPTURE_STATUS = f"{STTModule.NAME}.CaptureStatus"
+    AUDIO_LEVEL = f"{STTModule.NAME}.AudioLevel"
     AUDIO = f"{STTModule.NAME}.Audio"
     CONTROL = f"{STTModule.NAME}.Control"
     # Additional methods/events
@@ -134,20 +148,123 @@ class STTListenRequest(IOModel):
     session_id: str | None = None
 
 
+class STTListenResponse(IOModel):
+    """Response for listen requests.
+
+    Listen is idempotent: if a wakeword or another client already has the
+    coordinator in a non-idle session, the active session is returned instead
+    of attempting to start a duplicate session.
+    """
+
+    success: bool = True
+    status: str = "listening"
+    session_id: str | None = None
+    current_state: str = "idle"
+    source: str = "push_to_talk"
+    message: str | None = None
+
+
+class STTAudioLevel(IOModel):
+    """Redacted microphone level telemetry for UI visualizers.
+
+    This intentionally contains only derived amplitude values, never raw audio
+    samples or encoded audio bytes.
+    """
+
+    session_id: str | None = None
+    stream_id: str | None = None
+    sequence: int
+    level: float = Field(ge=0.0, le=100.0)
+    peak: float = Field(ge=0.0, le=100.0)
+    bars: list[float] = Field(default_factory=list)
+    privacy_class: str = "raw-audio"
+    redacted: bool = True
+
+
 class STTStopListeningRequest(IOModel):
     """Request to stop listening."""
 
     reason: str | None = None
 
 
+class STTCapturePrepareRequest(IOModel):
+    """Request exclusive native ownership of the local microphone."""
+
+    owner: Literal["native"] = "native"
+    owner_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    lease_id: str | None = Field(default=None, min_length=1, max_length=128)
+    reason: str = Field(default="native_voice_runtime", max_length=80)
+    requested_ttl_s: int = Field(default=300, gt=0, le=3600)
+    correlation_id: str | None = Field(default=None, max_length=128)
+
+
+class STTCapturePrepareResponse(IOModel):
+    """Redacted capture-owner grant response."""
+
+    granted: bool
+    status: Literal["granted", "already_owned", "unavailable"]
+    lease_id: str | None = Field(default=None, min_length=1, max_length=128)
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
+    owner: Literal["none", "python", "native"]
+    python_capture_active: bool
+    stopped_python_capture: bool = False
+    message: str | None = Field(default=None, max_length=80)
+    redacted: bool = True
+
+
+class STTCaptureReleaseRequest(IOModel):
+    """Release a native microphone ownership lease."""
+
+    owner: Literal["native"] = "native"
+    owner_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    lease_id: str = Field(min_length=1, max_length=128)
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
+    reason: str = Field(default="native_release", max_length=80)
+    restart_python_capture: bool = True
+    correlation_id: str | None = Field(default=None, max_length=128)
+
+
+class STTCaptureReleaseResponse(IOModel):
+    """Redacted native capture release response."""
+
+    released: bool
+    status: Literal["released", "already_released", "rejected", "python_unavailable"]
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
+    owner: Literal["none", "python", "native"]
+    python_capture_active: bool
+    restarted_python_capture: bool = False
+    message: str | None = Field(default=None, max_length=80)
+    redacted: bool = True
+
+
+class STTCaptureStatusRequest(IOModel):
+    """Request redacted capture-owner status."""
+
+    include_inactive: bool = True
+
+
+class STTCaptureStatusResponse(IOModel):
+    """Redacted microphone ownership status."""
+
+    owner: Literal["none", "python", "native"]
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
+    native_lease_active: bool = False
+    lease_expires_at: str | None = Field(default=None, max_length=64)
+    python_capture_active: bool
+    service_running: bool
+    audio_input_available: bool
+    can_restart_python_capture: bool
+    redacted: bool = True
+
+
 class STTAudioChunk(IOModel):
     """Audio chunk for processing."""
 
     data: bytes
-    sample_rate: int
-    channels: int
+    sample_rate: int = Field(gt=0, le=MAX_AUDIO_SAMPLE_RATE)
+    channels: int = Field(ge=1, le=MAX_AUDIO_CHANNELS)
     format: str = "pcm_s16le"
-    sample_width: int | None = None  # Bytes per sample (derived from format if not provided)
+    sample_width: int | None = Field(default=None, ge=1, le=MAX_AUDIO_SAMPLE_WIDTH)
     mesh_selector: MeshAddressSelector | None = None
     session_id: str | None = None
     consent_token: str | None = None
@@ -304,11 +421,34 @@ class TranscribeAudioRequest(IOModel):
 
     audio_data: str  # Base64-encoded audio
     format: str = "wav"  # "wav" | "raw" | "mp3"
-    sample_rate: int = Field(default=16000, gt=0, description="Sample rate in Hz (must be > 0)")
-    channels: int = 1
-    language: str | None = None  # ISO language code or None for auto-detect
+    sample_rate: int = Field(
+        default=16000,
+        gt=0,
+        le=MAX_AUDIO_SAMPLE_RATE,
+        description="Sample rate in Hz (must be > 0)",
+    )
+    channels: int = Field(default=1, ge=1, le=MAX_AUDIO_CHANNELS)
+    language: SpeechLanguageTag | None = None  # Exact product language or None for auto-detect
+    auto_language_candidates: list[SpeechLanguageTag] = Field(default_factory=list, max_length=8)
     model: str = "realtime"  # "realtime" | "accurate"
     mesh_selector: MeshAddressSelector | None = None
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_language(cls, value: str | None) -> str | None:
+        normalized = normalize_speech_language(value, allow_auto=True)
+        return None if normalized == "auto" else normalized
+
+    @field_validator("auto_language_candidates", mode="before")
+    @classmethod
+    def _normalize_candidates(cls, value: list[str]) -> list[SpeechLanguageTag]:
+        return normalize_speech_language_candidates(value)
+
+    @model_validator(mode="after")
+    def _validate_language_shape(self) -> "TranscribeAudioRequest":
+        if self.language is not None and self.auto_language_candidates:
+            raise ValueError("exact STT language cannot include auto candidates")
+        return self
 
 
 class TranscribeAudioResponse(IOModel):
@@ -328,8 +468,8 @@ class WakeWordDetectRequest(IOModel):
     """
 
     audio_data: str  # Base64-encoded audio chunk
-    sample_rate: int = 16000
-    channels: int = 1
+    sample_rate: int = Field(default=16000, gt=0, le=MAX_AUDIO_SAMPLE_RATE)
+    channels: int = Field(default=1, ge=1, le=MAX_AUDIO_CHANNELS)
     format: str = "raw"  # "raw" (PCM 16-bit) | "wav"
     mesh_selector: MeshAddressSelector | None = None
 

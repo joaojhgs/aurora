@@ -9,12 +9,18 @@ Defines data structures for:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.shared.contracts.mesh_compatibility import (
+    MeshCompatibilityReasonCode,
+    MeshServiceCompatibilityStatus,
+)
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import SpeechRouteBinding
+from app.shared.contracts.registry import CallableFeatureContract
 
 
 class PeerServiceInfo(BaseModel):
@@ -32,9 +38,46 @@ class PeerServiceInfo(BaseModel):
     module: str
     version: str = "0.0.0"
     capabilities: list[str] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
+    available_feature_ids: list[str] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
     max_concurrent: int = 10
     digest: str = ""
+
+
+class ManifestGrantEvidence(BaseModel):
+    """Strict canonical grant evidence carried only by future projection frames."""
+
+    permission: str
+    source: str = "effective"
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class RecipientProjectionEvidence(BaseModel):
+    """Strict recipient-bound projection-v1 evidence.
+
+    This object is not emitted by G006 Phase-2 effective manifests. It exists so
+    receivers can classify future projection frames without silently accepting
+    partial, downgraded, or recipient-smuggled authority evidence.
+    """
+
+    provider_peer_id: str
+    recipient_peer_id: str
+    registry_revision: str
+    registry_digest: str
+    policy_revision: str
+    policy_digest: str
+    auth_grant_revision: int = Field(ge=0)
+    auth_grant_state: Literal["unknown", "pending", "active", "revoked"]
+    auth_grant_digest: str
+    grants_digest: str
+    protocol_tier: Literal["projection-v1"]
+    projection_digest: str
+    evidence_digest: str
+    grants: list[ManifestGrantEvidence] | None = None
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class PeerManifest(BaseModel):
@@ -55,7 +98,35 @@ class PeerManifest(BaseModel):
     node_name: str = ""
     aurora_version: str = ""
     shared_services: list[PeerServiceInfo] = Field(default_factory=list)
+    granted_permissions: list[str] | None = None
+    active_protocol: str | None = None
+    active_version: str | None = None
+    active_tier: str | None = None
+    supported_protocols: list[str] | None = None
+    projection_supported: bool | None = None
+    projection_active: bool | None = None
+    recipient_projection_evidence: RecipientProjectionEvidence | None = None
     timestamp: str = ""
+
+
+class ManifestServiceCompatibility(BaseModel):
+    """Safe structured compatibility result for one stable service identifier."""
+
+    service_id: str
+    service_label: Literal[""] = ""
+    status: MeshServiceCompatibilityStatus
+    reason_codes: list[MeshCompatibilityReasonCode] = Field(default_factory=list)
+    reason: Literal[""] = ""
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validate_reason_codes(self) -> ManifestServiceCompatibility:
+        if self.reason_codes != sorted(set(self.reason_codes)):
+            raise ValueError("manifest service reason_codes must be sorted and unique")
+        if self.status == "compatible" and self.reason_codes:
+            raise ValueError("compatible manifest services cannot carry denial reason codes")
+        return self
 
 
 class ManifestAck(BaseModel):
@@ -73,6 +144,35 @@ class ManifestAck(BaseModel):
     compatible_services: list[str] = Field(default_factory=list)
     incompatible_services: list[str] = Field(default_factory=list)
     unused_services: list[str] = Field(default_factory=list)
+    active_protocol: str | None = None
+    active_version: str | None = None
+    active_tier: str | None = None
+    protocol_revision: str | None = None
+    registry_revision: str | None = None
+    export_policy_revision: str | None = None
+    auth_grant_revision: int | None = Field(default=None, ge=0)
+    projection_digest: str | None = None
+    services: list[ManifestServiceCompatibility] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validate_structured_partition(self) -> ManifestAck:
+        if not self.services:
+            return self
+        service_ids = [service.service_id for service in self.services]
+        if service_ids != sorted(set(service_ids)):
+            raise ValueError("manifest ACK services must use sorted unique service IDs")
+        partitions = {
+            "compatible": self.compatible_services,
+            "incompatible": self.incompatible_services,
+            "unused": self.unused_services,
+        }
+        for status, legacy_ids in partitions.items():
+            expected = [service.service_id for service in self.services if service.status == status]
+            if legacy_ids != expected:
+                raise ValueError(f"manifest ACK {status} partition contradicts structured services")
+        return self
 
 
 class PeerState(BaseModel):
@@ -99,13 +199,44 @@ class PeerState(BaseModel):
     last_ping: float = 0.0
     last_manifest: float = 0.0
     active_calls: int = 0
-    status: str = "connected"  # "connected" | "authenticated" | "negotiated" | "stale"
+    active_calls_by_module: dict[str, int] = Field(default_factory=dict)
+    # "connected" | "authenticated" | "negotiated" | "stale" | "standby" |
+    # "provider_unavailable".
+    #
+    # "standby" is R6's deliberate absence, and it is not "stale".  A peer shed
+    # to stay inside a connection budget announces itself with
+    # mesh_peer_standby_v1, keeps its credential, and is expected back; a stale
+    # peer stopped answering and may be gone.  Collapsing the two would make a
+    # shed indistinguishable from a loss, which is exactly what the signal
+    # exists to prevent.
+    status: str = "connected"
     # Compatibility report from manifest ACK (what the remote peer thinks of OUR services)
     remote_compatible: list[str] = Field(default_factory=list)
     remote_incompatible: list[str] = Field(default_factory=list)
     remote_unused: list[str] = Field(default_factory=list)
+    remote_manifest_ack: ManifestAck | None = None
+    # Added fields rather than meanings loaded onto existing ones: both default
+    # to "no standby announced", so every caller that predates R6 reads a peer
+    # exactly as it did before.
+    standby_reason_code: str = ""
+    standby_since: float = 0.0
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class ProviderLeaseState(BaseModel):
+    """Runtime-only provider availability lease tracked outside manifests."""
+
+    peer_id: str
+    connection_epoch: str
+    availability_revision: int = Field(ge=0)
+    issued_at_ms: int = Field(ge=0)
+    expires_at_ms: int = Field(ge=0)
+    available: bool = True
+    reason_code: str = ""
+    lease_required: bool = True
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
 class ProviderCandidate(BaseModel):
@@ -116,10 +247,11 @@ class ProviderCandidate(BaseModel):
     """
 
     peer: PeerState
-    service: PeerServiceInfo
+    service: PeerServiceInfo | None = None
     eligible: bool = False
     reason_code: str = ""
     reason: str = ""
+    decision: Any | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -148,6 +280,8 @@ class RouteDecision(BaseModel):
     selector: MeshAddressSelector | None = None
     error_code: str | None = None
     error_message: str | None = None
+    speech_route_binding: SpeechRouteBinding | None = None
+    method_type: str | None = None
 
 
 class CapacityUpdate(BaseModel):

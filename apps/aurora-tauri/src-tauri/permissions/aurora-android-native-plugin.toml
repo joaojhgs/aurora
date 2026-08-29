@@ -1,0 +1,22 @@
+[[permission]]
+identifier = "aurora-android-native-plugin"
+description = "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately."
+commands.allow = [
+  "aurora_android_baseline_status",
+  "aurora_android_native_plugin_payload",
+  "aurora_android_lifecycle_status",
+  "aurora_android_webview_microphone_permission_decision",
+  "aurora_android_voice_foreground_service_status",
+  "aurora_android_voice_foreground_service_start",
+  "aurora_android_voice_foreground_service_finish",
+  "aurora_android_voice_foreground_service_cancel",
+  "aurora_android_voice_pack_catalog_status",
+  "aurora_android_voice_pack_catalog_set",
+  "aurora_android_voice_pack_download",
+  "aurora_android_voice_pack_download_status",
+  "aurora_android_voice_pack_activate",
+  "aurora_android_voice_pack_remove",
+  "aurora_inbound_verifier_get",
+  "aurora_inbound_verifier_set",
+  "aurora_inbound_verifier_delete"
+]

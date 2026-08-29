@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-secure-file-handle-open"
+description = "Enables the aurora_secure_file_handle_open command without any pre-configured scope."
+commands.allow = ["aurora_secure_file_handle_open"]
+
+[[permission]]
+identifier = "deny-aurora-secure-file-handle-open"
+description = "Denies the aurora_secure_file_handle_open command without any pre-configured scope."
+commands.deny = ["aurora_secure_file_handle_open"]

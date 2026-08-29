@@ -9,9 +9,24 @@ using pre-built wheels with fallback to source compilation.
 
 import os
 import platform
+import re
+import shutil
 import subprocess
 import sys
-from typing import Optional
+from importlib import metadata
+
+CPU_TORCH_INDEX_ARGS = [
+    "--extra-index-url=https://download.pytorch.org/whl/cpu",
+]
+CPU_TORCH_PACKAGES = [
+    "torch==2.6.0+cpu",
+    "torchaudio==2.6.0+cpu",
+    "torchvision==0.21.0+cpu",
+    *CPU_TORCH_INDEX_ARGS,
+]
+PYTORCH_TRIPLET = ("torch", "torchaudio", "torchvision")
+PINNED_CPU_ONNXRUNTIME = "onnxruntime==1.20.1"
+PINNED_NUMPY_ABI = "numpy==2.2.6"
 
 
 class WheelInstaller:
@@ -25,7 +40,7 @@ class WheelInstaller:
         # Pre-built wheel configurations
         self.wheel_configs = {
             "pytorch": {
-                "cpu": {"primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]},
+                "cpu": {"primary": CPU_TORCH_PACKAGES},
                 "cuda": {
                     "primary": [
                         "torch==2.6.0+cu124",
@@ -42,26 +57,27 @@ class WheelInstaller:
                 },
                 "rocm": {
                     "primary": [
-                        "torch==2.6.0+rocm6.0",
-                        "torchaudio==2.6.0+rocm6.0",
-                        "--extra-index-url=https://download.pytorch.org/whl/rocm6.0",
+                        "torch==2.6.0+rocm6.2.4",
+                        "torchaudio==2.6.0+rocm6.2.4",
+                        "torchvision==0.21.0+rocm6.2.4",
+                        "--extra-index-url=https://download.pytorch.org/whl/rocm6.2.4",
                     ]
                 },
                 "metal": {
                     # Metal uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "vulkan": {
                     # Vulkan uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "sycl": {
                     # SYCL uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
                 "rpc": {
                     # RPC uses CPU torch packages - acceleration happens at framework level
-                    "primary": ["torch==2.6.0", "torchaudio==2.6.0", "torchvision==0.21.0"]
+                    "primary": CPU_TORCH_PACKAGES,
                 },
             },
             "llama-cpp-python": {
@@ -216,10 +232,16 @@ class WheelInstaller:
         return True
 
     def _pip_install(self, args: list[str], env: dict[str, str] | None = None) -> bool:
-        """Execute pip install with given arguments"""
+        """Install packages into this interpreter, preferring uv over pip."""
+        command = self._install_command(args)
         try:
-            cmd = [sys.executable, "-m", "pip", "install"] + args
-            subprocess.run(cmd, check=True, capture_output=True, text=True, env=env or os.environ)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env or os.environ,
+            )
             return True
         except subprocess.CalledProcessError as e:
             print(f"📋 Installation failed: {e.stderr.strip()}")
@@ -227,6 +249,30 @@ class WheelInstaller:
         except Exception as e:
             print(f"📋 Installation error: {str(e)}")
             return False
+
+    def _install_command(self, args: list[str]) -> list[str]:
+        """Build a package-install command for the active Python interpreter."""
+
+        uv = shutil.which("uv")
+        if uv:
+            uv_args = [arg for arg in args if arg != "--prefer-binary"]
+            return [uv, "pip", "install", "--python", sys.executable, *uv_args]
+        if self._pip_available():
+            return [sys.executable, "-m", "pip", "install", *args]
+        raise RuntimeError(
+            f"Neither uv nor pip is available for installing wheel packages into {sys.executable}."
+        )
+
+    def _pip_available(self) -> bool:
+        """Return whether pip can be imported by the active interpreter."""
+
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "--version"],
+            capture_output=True,
+            text=True,
+            env=os.environ,
+        )
+        return result.returncode == 0
 
     def install_llama_cpp_python(self, hardware: str = "cpu", advanced: bool = False) -> bool:
         """
@@ -283,6 +329,13 @@ class WheelInstaller:
         else:
             config = self.wheel_configs["pytorch"][hardware]["primary"]
 
+        cleanup_success, install_needed = self._prepare_pytorch_backend(hardware, config)
+        if not cleanup_success:
+            return False
+        if not install_needed:
+            print(f"✅ PyTorch for {hardware.upper()} is already installed")
+            return True
+
         # Install PyTorch packages
         if self._pip_install(config):
             print(f"✅ Successfully installed PyTorch for {hardware.upper()}")
@@ -290,6 +343,146 @@ class WheelInstaller:
         else:
             print(f"❌ Failed to install PyTorch for {hardware.upper()}")
             return False
+
+    def _prepare_pytorch_backend(
+        self, hardware: str, target_config: list[str]
+    ) -> tuple[bool, bool]:
+        """Clean incompatible backend wheels before installing the requested target."""
+
+        installed = self._installed_distributions()
+        target_specs = self._pytorch_target_specs(target_config)
+        triplet_matches = self._target_specs_installed(installed, target_specs)
+        incompatible = self._incompatible_backend_distributions(installed, hardware)
+        cleanup_targets: set[str] = set()
+        install_needed = not triplet_matches
+
+        if not triplet_matches or incompatible:
+            cleanup_targets.update(package for package in PYTORCH_TRIPLET if package in installed)
+            cleanup_targets.update(incompatible)
+            if not triplet_matches:
+                cleanup_targets.update(
+                    package
+                    for package in installed
+                    if package.startswith("nvidia-") or package in {"triton", "pytorch-triton-rocm"}
+                )
+            install_needed = True
+
+        if cleanup_targets:
+            print(
+                "🧹 Removing incompatible PyTorch backend packages: "
+                + ", ".join(sorted(cleanup_targets))
+            )
+            if not self._pip_uninstall(sorted(cleanup_targets)):
+                return False, install_needed
+
+        if hardware != "cuda":
+            ort_repair_needed = (
+                "onnxruntime-gpu" in installed or installed.get("onnxruntime") != "1.20.1"
+            )
+            if ort_repair_needed:
+                if "onnxruntime-gpu" in installed:
+                    print("🧹 Removing GPU ONNX Runtime for non-CUDA backend")
+                    if not self._pip_uninstall(["onnxruntime-gpu"]):
+                        return False, install_needed
+                print("🔧 Reinstalling pinned CPU ONNX Runtime for non-CUDA backend")
+                if not self._pip_install(
+                    ["--force-reinstall", "--no-deps", PINNED_CPU_ONNXRUNTIME, PINNED_NUMPY_ABI]
+                ):
+                    return False, install_needed
+
+        return True, install_needed
+
+    def _installed_distributions(self) -> dict[str, str]:
+        """Return installed distributions keyed by normalized package name."""
+
+        installed: dict[str, str] = {}
+        for dist in metadata.distributions():
+            name = dist.metadata.get("Name")
+            if name:
+                installed[self._normalize_distribution_name(name)] = dist.version
+        return installed
+
+    def _pytorch_target_specs(self, target_config: list[str]) -> dict[str, str]:
+        """Extract target PyTorch triplet versions from installer arguments."""
+
+        specs: dict[str, str] = {}
+        for arg in target_config:
+            if "==" not in arg:
+                continue
+            package, _, version = arg.partition("==")
+            normalized = self._normalize_distribution_name(package)
+            if normalized in PYTORCH_TRIPLET:
+                specs[normalized] = version
+        return specs
+
+    def _target_specs_installed(
+        self, installed: dict[str, str], target_specs: dict[str, str]
+    ) -> bool:
+        """Return whether all requested PyTorch packages match exactly."""
+
+        return bool(target_specs) and all(
+            installed.get(package) == version for package, version in target_specs.items()
+        )
+
+    def _incompatible_backend_distributions(
+        self, installed: dict[str, str], hardware: str
+    ) -> set[str]:
+        """Return installed backend distributions that conflict with the target."""
+
+        incompatible = set()
+        if hardware != "cuda":
+            incompatible.update(package for package in installed if package.startswith("nvidia-"))
+        if hardware == "rocm":
+            if "triton" in installed:
+                incompatible.update(
+                    package for package in ("triton", "pytorch-triton-rocm") if package in installed
+                )
+        elif hardware != "cuda":
+            incompatible.update(
+                package for package in ("triton", "pytorch-triton-rocm") if package in installed
+            )
+        elif "pytorch-triton-rocm" in installed:
+            incompatible.add("pytorch-triton-rocm")
+        return incompatible
+
+    def _pip_uninstall(self, packages: list[str]) -> bool:
+        """Uninstall packages from this interpreter, preferring uv over pip."""
+
+        if not packages:
+            return True
+        try:
+            command = self._uninstall_command(packages)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=os.environ,
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"📋 Uninstall failed: {e.stderr.strip()}")
+            return False
+        except Exception as e:
+            print(f"📋 Uninstall error: {str(e)}")
+            return False
+
+    def _uninstall_command(self, packages: list[str]) -> list[str]:
+        """Build a package-uninstall command for the active Python interpreter."""
+
+        uv = shutil.which("uv")
+        if uv:
+            return [uv, "pip", "uninstall", "--python", sys.executable, *packages]
+        if self._pip_available():
+            return [sys.executable, "-m", "pip", "uninstall", "-y", *packages]
+        raise RuntimeError(
+            f"Neither uv nor pip is available for uninstalling wheel packages from {sys.executable}."
+        )
+
+    def _normalize_distribution_name(self, name: str) -> str:
+        """Normalize package names using the distribution name comparison rules."""
+
+        return re.sub(r"[-_.]+", "-", name).lower()
 
     def install_both(
         self, hardware: str = "cpu", advanced: bool = False, legacy_torch: bool = False

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Redacted native capture release response.",
+  "properties": {
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message"
+    },
+    "owner": {
+      "enum": [
+        "native",
+        "none",
+        "python"
+      ],
+      "title": "Owner",
+      "type": "string"
+    },
+    "python_capture_active": {
+      "title": "Python Capture Active",
+      "type": "boolean"
+    },
+    "redacted": {
+      "default": true,
+      "title": "Redacted",
+      "type": "boolean"
+    },
+    "released": {
+      "title": "Released",
+      "type": "boolean"
+    },
+    "restarted_python_capture": {
+      "default": false,
+      "title": "Restarted Python Capture",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "already_released",
+        "python_unavailable",
+        "rejected",
+        "released"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "generation",
+    "owner",
+    "python_capture_active",
+    "released",
+    "status"
+  ],
+  "title": "STTCaptureReleaseResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

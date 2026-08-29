@@ -1,9 +1,31 @@
 export { AuroraClient, ModelRuntimeClient } from './client.js'
+export {
+  GeneratedContractClient,
+  generatedBackendContract,
+  generatedBackendEventContract
+} from './generated-contracts.js'
+export type {
+  GeneratedBackendContract,
+  GeneratedBackendEventContract,
+  GeneratedBackendEventDescriptor,
+  GeneratedBackendEventInput,
+  GeneratedBackendEventOutput,
+  GeneratedBackendEventSchema,
+  GeneratedBackendEventTopic,
+  GeneratedBackendMethodDescriptor,
+  GeneratedBackendMethodId,
+  GeneratedBackendMethodInput,
+  GeneratedBackendMethodOutput,
+  GeneratedBackendMethodParsedInput
+} from './generated-contracts.js'
+export { SpeechClient, SttClient, TranscriptionClient, TtsClient, WakeWordClient } from './speech.js'
 export { AdminActionClient, ApprovalClient, adminActionAudit } from './admin.js'
 export { BACKUP_METHODS, BackupClient } from './backup.js'
 export { ConfigClient } from './config.js'
 export type {
   ConfigChange,
+  ConfigCommitChangeSetRequest,
+  ConfigCommitChangeSetResponse,
   ConfigDiffEntry,
   ConfigDiffPreviewRequest,
   ConfigDiffPreviewResponse,
@@ -39,16 +61,35 @@ export {
 } from './scheduler.js'
 export {
   loadToolApprovalCards,
+  buildToolingPageView,
+  getToolSourceDetailFromView,
+  mergeToolManagementInventory,
+  normalizeBlockedToolCatalog,
+  normalizePolicyAuditEvents,
+  normalizePendingApprovals,
+  normalizePolicyOverrides,
   normalizeToolCatalog,
+  normalizeToolGrants,
+  normalizeRetainedRemoteTools,
+  normalizeToolExportDecision,
+  normalizeToolExportPolicy,
+  exportDecisionSourceLabel,
+  exportPrerequisiteRows,
+  normalizeToolingExportProtocolTier,
+  normalizeToolingMeshKillSwitches,
+  normalizeToolingRemoteCatalogStatus,
+  parseToolingExportCatalogPage,
+  validateMcpSourceDraft,
+  validatePluginSourceDraft,
   submitToolDenialDecision,
   submitToolApprovalDecision
 } from './tools.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export { MockAuroraTransport } from './mock.js'
-export { TauriLocalTransport } from './tauri.js'
+export { TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from './tauri.js'
 export { AuthSession } from './session.js'
-export { AuroraError, classifyHttpError } from './errors.js'
+export { AuroraError, classifyHttpError, normalizeAuroraErrorForUi } from './errors.js'
 export {
   EventStreamClient,
   createEventSubscription,
@@ -60,9 +101,13 @@ export {
 } from './events.js'
 export {
   AUTH_METHODS,
+  AUDIO_SESSION_METHODS,
   GATEWAY_METHODS,
   ORCHESTRATOR_METHODS,
   ORCHESTRATOR_MODEL_METHODS,
+  STT_METHODS,
+  TRANSCRIPTION_METHODS,
+  TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT,
   TOOLING_METHODS,
   buildBackendMethodTypes,
   describeBackendInventory,
@@ -113,18 +158,31 @@ export {
   emptyRegistryFixture,
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
+  mockShareableRegistryFixture,
+  iosNativeCapabilityManifestFixture,
+  meshInviteConfigFixture,
   meshPeerListFixture,
   meshStatusFixture,
   modelRuntimeCatalogFixture,
   webrtcDiagnosticsFixture,
   gatewayServicesFixture,
+  androidNativeCapabilityManifestFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
   schedulerJobsFixture,
   supportBundleFixture,
+  pendingToolApprovalsFixture,
   toolCatalogFixture,
+  toolingApprovalGrantsFixture,
+  toolingMcpStatusFixture,
+  toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary
 } from './fixtures.js'
+export {
+  normalizeVoiceRuntimeEvent,
+  VOICE_EVENT_KINDS,
+  VOICE_EVENT_TOPICS
+} from './voice.js'
 export type * from './types.js'
 export type * from './admin.js'
 export type * from './backup.js'
@@ -132,6 +190,8 @@ export type * from './memory.js'
 export type * from './scheduler.js'
 export type * from './tools.js'
 export type * from './transport.js'
+export type * from './voice.js'
+export type * from './generated-contracts.js'
 export type {
   AuroraEventStreamKind,
   AuroraEventStreamTransport,
@@ -149,7 +209,7 @@ export type {
   PermissionCatalogInput,
   PermissionRequirementSource
 } from './permissions.js'
-export type { AuroraErrorCode, AuroraErrorOptions } from './errors.js'
+export type { AuroraErrorCode, AuroraErrorOptions, AuroraUiErrorShape, AuroraUiErrorState } from './errors.js'
 export type {
   EventSourceFactory,
   EventSourceLike,
@@ -177,10 +237,29 @@ export type {
   LocalFileReadResult,
   LocalFileWriteOptions,
   LocalFileWriteResult,
+  IosAdminUnlockRequest,
   SecureFileHandleOpenOptions,
   SecureStorageGetResult,
   SecureStorageWriteResult,
+  AndroidVoicePackCatalogStatus,
+  AndroidVoicePackDownloadResult,
+  AndroidVoicePackDownloadStatus,
+  TauriAndroidAssistantRoleStatus,
+  TauriAndroidBaselineStatus,
   TauriCommandNames,
+  NativeMobileSpeechPackActivateRequest,
+  NativeMobileSpeechPackDownloadRequest,
+  NativeSpeechPackActivateRequest,
+  NativeSpeechPackCatalogEntry,
+  NativeSpeechPackCatalogRequest,
+  NativeSpeechPackCatalogResponse,
+  NativeSpeechPackIdRequest,
+  NativeSpeechPackStatusResponse,
+  NativeSpeechPackTask,
+  IosAuroraActionId,
+  TauriIosInvocationStatus,
+  TauriIosInvokeActionRequest,
+  TauriIosInvokeActionResult,
   TauriInvoke,
   TauriLogTailRequest,
   TauriLogTailResult,
@@ -206,3 +285,6 @@ export type {
   ValidateTokenLikeResponse,
   WhoAmILikeResponse
 } from './session.js'
+export * as generatedContracts from './generated/index.js'
+export * as localData from './local-data/index.js'
+export * as validation from './validation/index.js'

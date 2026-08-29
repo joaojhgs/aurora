@@ -12,9 +12,13 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
+from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.shared.contracts.io_model import IOModel
+from app.shared.contracts.models.speech import SpeechMethodConstraints
 
 # Optional imports for version detection
 try:
@@ -28,10 +32,16 @@ except ImportError:
     toml = None
 
 
-class IOModel(BaseModel):
-    """Base class for input/output models in method contracts."""
+class CallableFeatureContract(BaseModel):
+    """Stable callable feature metadata for mesh-exposed service methods."""
 
-    pass
+    feature_id: str
+    module: str
+    label: str = ""
+    summary: str = ""
+    method_ids: tuple[str, ...] = Field(default_factory=tuple)
+
+    model_config = ConfigDict(frozen=True)
 
 
 class MethodContract(BaseModel):
@@ -50,6 +60,10 @@ class MethodContract(BaseModel):
         input_model: Pydantic model for input validation
         output_model: Pydantic model for output (optional)
         exposure: Visibility level ("internal" | "external" | "both")
+        always_available: Keep this method subscribed on the bus even while the
+            service is lifecycle-disabled by config. Reserved for infrastructure
+            sinks (e.g. audit storage) that other services depend on regardless
+            of whether this service's feature surface is enabled.
     """
 
     module: str
@@ -60,10 +74,15 @@ class MethodContract(BaseModel):
     default_priority: int = 50
     allow_origins: list[str] = ["internal"]
     required_perms: list[str] = []
+    callable_feature_ids: list[str] = []
+    callable_features: list[CallableFeatureContract] = []
+    public_infrastructure: bool = False
     method_type: str = "use"
     input_model: type[BaseModel]
     output_model: type[BaseModel] | None = None
+    speech_constraints: SpeechMethodConstraints | None = None
     exposure: str = "internal"
+    always_available: bool = False
 
     class Config:
         arbitrary_types_allowed = True
@@ -87,6 +106,7 @@ class ModuleContract(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     depends_on: dict[str, str] = Field(default_factory=dict)
     methods: list[MethodContract] = Field(default_factory=list)
+    callable_features: list[CallableFeatureContract] = Field(default_factory=list)
 
     class Config:
         arbitrary_types_allowed = True
@@ -141,6 +161,7 @@ def register_module(
         existing.summary = summary
         existing.capabilities = capabilities or []
         existing.depends_on = depends_on or {}
+        existing.callable_features = _callable_features_for_module(module)
         return existing
 
     contract = ModuleContract(
@@ -149,28 +170,53 @@ def register_module(
         summary=summary,
         capabilities=capabilities or [],
         depends_on=depends_on or {},
+        callable_features=_callable_features_for_module(module),
         methods=[],
     )
     _modules[module] = contract
     return contract
 
 
+@lru_cache(maxsize=1)
+def validate_canonical_taxonomy() -> None:
+    """Fail closed unless the canonical callable taxonomy is internally valid."""
+
+    from app.shared.contracts.mesh_surface import validate_taxonomy
+
+    violations = validate_taxonomy()
+    if violations:
+        raise ValueError(f"Invalid callable feature taxonomy: {'; '.join(violations)}")
+
+
 def _get_package_version() -> str:
-    """Get package version from pyproject.toml or __init__.py.
+    """Get the unified monorepo version.
+
+    Resolution order: repo-root VERSION file (single source of truth shared
+    with the JS/Tauri builds), then installed package metadata, then
+    pyproject.toml for legacy checkouts.
 
     Returns:
         Package version string (e.g., "1.0.0")
     """
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
     try:
-        # Try to get version from package metadata (works after installation)
+        version_path = os.path.join(project_root, "VERSION")
+        if os.path.exists(version_path):
+            with open(version_path) as f:
+                version = f.read().strip()
+                if version:
+                    return version
+    except Exception:
+        pass
+
+    try:
         if get_package_version_from_metadata:
             return get_package_version_from_metadata("aurora")
     except Exception:
         pass
 
     try:
-        # Fallback: Read from pyproject.toml
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
         pyproject_path = os.path.join(project_root, "pyproject.toml")
         if os.path.exists(pyproject_path):
             with open(pyproject_path) as f:
@@ -179,7 +225,6 @@ def _get_package_version() -> str:
     except Exception:
         pass
 
-    # Final fallback
     return "0.0.0"
 
 
@@ -191,6 +236,10 @@ def method_contract(
     exposure: str = "internal",
     default_priority: int = 50,
     method_type: str = "use",
+    always_available: bool = False,
+    callable_feature_ids: list[str] | tuple[str, ...] | None = None,
+    public_infrastructure: bool = False,
+    speech_constraints: Any | None = None,
     **kwargs,
 ):
     """Register a method contract.
@@ -226,6 +275,10 @@ def method_contract(
             "exposure": exposure,
             "default_priority": default_priority,
             "method_type": method_type,
+            "always_available": always_available,
+            "callable_feature_ids": list(callable_feature_ids or []),
+            "public_infrastructure": public_infrastructure,
+            "speech_constraints": _normalize_speech_constraints(speech_constraints),
             **kwargs,
         }
         return fn
@@ -261,9 +314,24 @@ def register_method(
     if "bus_topic" not in metadata or not metadata["bus_topic"]:
         metadata["bus_topic"] = metadata.get("method_id") or f"{module_name}.{method_name}"
 
+    metadata["callable_feature_ids"] = list(metadata.get("callable_feature_ids") or [])
+    metadata["callable_features"] = _callable_features_for_method(
+        module_name,
+        metadata["bus_topic"],
+        metadata["callable_feature_ids"],
+    )
+    metadata["speech_constraints"] = _normalize_speech_constraints(
+        metadata.get("speech_constraints")
+    )
+
     # Create and register contract — key by full bus_topic to avoid
     # cross-module collisions (e.g. "DB.CreateToken" vs "Auth.CreateToken").
     mc = MethodContract(**metadata)
+    violations = validate_method_contract(mc)
+    if violations:
+        raise ValueError(
+            f"Invalid callable surface contract for {mc.bus_topic}: {'; '.join(violations)}"
+        )
     registry_key = mc.bus_topic or f"{mc.module}.{mc.name}"
     _registry[registry_key] = mc
     _impls[registry_key] = fn
@@ -363,6 +431,9 @@ def export() -> str:
             "summary": module.summary,
             "capabilities": module.capabilities,
             "depends_on": module.depends_on,
+            "callable_features": [
+                feature.model_dump(mode="json") for feature in module.callable_features
+            ],
             "methods": [
                 {
                     "module": m.module,
@@ -373,9 +444,18 @@ def export() -> str:
                     "default_priority": m.default_priority,
                     "allow_origins": m.allow_origins,
                     "required_perms": m.required_perms,
+                    "callable_feature_ids": m.callable_feature_ids,
+                    "callable_features": [
+                        feature.model_dump(mode="json") for feature in m.callable_features
+                    ],
+                    "public_infrastructure": m.public_infrastructure,
+                    "method_type": m.method_type,
                     "exposure": m.exposure,
                     "input_model": m.input_model.__name__ if m.input_model else None,
                     "output_model": m.output_model.__name__ if m.output_model else None,
+                    "speech_constraints": m.speech_constraints.model_dump(mode="json")
+                    if m.speech_constraints is not None
+                    else None,
                 }
                 for m in module.methods
             ],
@@ -409,3 +489,57 @@ def clear_registry() -> None:
     _registry.clear()
     _impls.clear()
     _modules.clear()
+
+
+def _callable_features_for_module(module_name: str) -> list[CallableFeatureContract]:
+    validate_canonical_taxonomy()
+    from app.shared.contracts.mesh_surface import feature_contracts_for_module
+
+    return list(feature_contracts_for_module(module_name))
+
+
+def _callable_features_for_method(
+    module_name: str,
+    bus_topic: str,
+    feature_ids: list[str],
+) -> list[CallableFeatureContract]:
+    validate_canonical_taxonomy()
+    if not feature_ids:
+        return []
+    from app.shared.contracts.mesh_surface import feature_contracts_for_topic
+
+    features = feature_contracts_for_topic(bus_topic)
+    feature_by_id = {feature.feature_id: feature for feature in features}
+    missing = [feature_id for feature_id in feature_ids if feature_id not in feature_by_id]
+    if missing:
+        raise ValueError(f"{bus_topic} declares invalid callable feature IDs: {missing}")
+    return [feature_by_id[feature_id] for feature_id in feature_ids]
+
+
+def validate_method_contract(contract: MethodContract) -> list[str]:
+    """Return deterministic callable surface violations for one method contract."""
+
+    validate_canonical_taxonomy()
+    from app.shared.contracts.mesh_surface import validate_callable_method_surface
+
+    return validate_callable_method_surface(contract)
+
+
+def method_contract_advertisable(contract: MethodContract) -> bool:
+    """Whether a contract may be advertised outside its service process."""
+
+    return not validate_method_contract(contract)
+
+
+def _normalize_speech_constraints(
+    value: Any | None,
+) -> SpeechMethodConstraints | None:
+    """Validate and canonicalize optional speech route constraints."""
+
+    if value is None:
+        return None
+    if isinstance(value, SpeechMethodConstraints):
+        return SpeechMethodConstraints.model_validate(value.model_dump(mode="json"))
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="json")
+    return SpeechMethodConstraints.model_validate(value)

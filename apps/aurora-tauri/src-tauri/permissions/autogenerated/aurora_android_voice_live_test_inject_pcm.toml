@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-voice-live-test-inject-pcm"
+description = "Enables the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+commands.allow = ["aurora_android_voice_live_test_inject_pcm"]
+
+[[permission]]
+identifier = "deny-aurora-android-voice-live-test-inject-pcm"
+description = "Denies the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+commands.deny = ["aurora_android_voice_live_test_inject_pcm"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-local-data-export-v1"
+description = "Enables the aurora_local_data_export_v1 command without any pre-configured scope."
+commands.allow = ["aurora_local_data_export_v1"]
+
+[[permission]]
+identifier = "deny-aurora-local-data-export-v1"
+description = "Denies the aurora_local_data_export_v1 command without any pre-configured scope."
+commands.deny = ["aurora_local_data_export_v1"]

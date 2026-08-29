@@ -155,6 +155,7 @@ Paths on the left are relative to the **Compose project directory** (repo root w
 - `…/logs` → `/app/logs`: Service logs
 - `…/` (repo root) → `/app/host`: Optional full checkout (read/write) for dev sync
 - `…/models` → `/app/models`: LLM/voice/wakeword assets (services that need models)
+- `aurora_voice_models` → `/app/voice_models`: Persistent TTS model cache, PocketTTS cache, and local voice-state artifacts
 
 **Configuration**: Only **`config-service`** bakes **`config.json`** at image build (`docker/services/Dockerfile.config` copies the repo-root **`config.json`**). That file **must exist** when you build (create one from **`app/services/config/config_defaults.json`** if you do not keep `config.json` in the tree). All other services use **ConfigAPI** over the bus to **ConfigService**—they do not ship a local `config.json`. Change settings at runtime via **ConfigService** / API; to change the image’s starting config, edit **`config.json`** and **rebuild `config-service`** only.
 
@@ -163,6 +164,25 @@ Build-time image variants are also derived from **`config.json`** by the support
 ```bash
 python scripts/config_to_docker_env.py --format env
 ```
+
+### TTS models and voice state
+
+Piper remains the default TTS provider and the immediate rollback path. The TTS
+image can include optional PocketTTS code through `service-tts` and
+`pocket-tts[audio]==2.1.0`, but model data is not the same as package code:
+PocketTTS base weights, standard voice packs, and cloned voice states must live
+in persistent mounted storage, not in a rebuilt image layer.
+
+PocketTTS defaults to `voice_models/pockettts` for its cache and
+`voice_models/pockettts/voices` for voice-state artifacts. In process mode these
+paths resolve under the `/app/voice_models` volume. Keep that volume across
+container restarts and rebuilds. Removing it forces the service to reacquire
+managed model data and loses local cloned voice-state artifacts.
+
+Standard PocketTTS voice packs require separately approved manifests. Aurora
+does not bundle or auto-download a licensed starter PocketTTS model or voice
+asset. If a PocketTTS custom config path is supplied today, TTS fails closed;
+switch `services.tts.provider` back to `piper` to restore the default provider.
 
 ### Audio Devices (Linux only)
 
@@ -288,6 +308,6 @@ docker-compose -f docker-compose.process.yml exec orchestrator-service /bin/bash
 
 ## Additional Resources
 
-- [Aurora Documentation](../docs/)
-- [Process Mode Architecture](../docs/MESSAGING_ARCHITECTURE.md)
+- [Aurora Documentation](docs/DOCS_INDEX.md)
+- [Messaging Architecture](docs/MESSAGING_ARCHITECTURE.md)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)

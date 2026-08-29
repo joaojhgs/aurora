@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/aurora_widget_description"
+    android:initialLayout="@layout/aurora_widget"
+    android:minHeight="72dp"
+    android:minWidth="180dp"
+    android:previewLayout="@layout/aurora_widget"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

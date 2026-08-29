@@ -6,8 +6,18 @@ import uuid
 from datetime import datetime, timedelta
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from app.services.scheduler.models import CronJob, JobStatus, ScheduleType
+from app.shared.contracts.models.scheduler import (
+    SchedulerActionSpec,
+    SchedulerToolBinding,
+    SchedulerToolExecuteAction,
+)
+from app.shared.models.db import (
+    CronJob as SharedCronJob,
+    ScheduleType as SharedScheduleType,
+)
 
 
 @pytest.mark.unit
@@ -119,3 +129,46 @@ class TestSchedulerModels:
         assert cron_job.retry_count == 1
         assert cron_job.max_retries == 3
         assert cron_job.metadata == {"test": True}
+
+    def test_scheduler_action_spec_rejects_unknown_kind(self):
+        """Typed scheduler actions reject unsupported discriminators."""
+        with pytest.raises(ValidationError):
+            TypeAdapter(SchedulerActionSpec).validate_python(
+                {"kind": "python.import", "callback": "app.bad.run"}
+            )
+
+    def test_cron_job_typed_action_round_trips_without_executable_callback(self):
+        """Typed jobs preserve action JSON while using only the sentinel legacy callback."""
+        now = datetime.now()
+        action = SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(
+                tool_name="switch_on",
+                local_tool_name="switch_on",
+                global_tool_id="local:local_Tooling:tool:switch_on",
+            ),
+            arguments={"target": "lamp"},
+        ).model_dump(mode="json")
+        cron_job = SharedCronJob(
+            id=str(uuid.uuid4()),
+            name="typed tool",
+            schedule_type=SharedScheduleType.CRON,
+            schedule_value="*/5 * * * *",
+            next_run_time=now + timedelta(minutes=5),
+            callback_module="__typed_action__",
+            callback_function="execute_action_spec",
+            action_kind="tooling.execute",
+            action_spec=action,
+            prepared_binding=action["binding"],
+            created_at=now,
+            updated_at=now,
+        )
+
+        data = cron_job.to_dict()
+        round_tripped = SharedCronJob.from_dict(data)
+
+        assert data["callback_module"] == "__typed_action__"
+        assert data["callback_function"] == "execute_action_spec"
+        assert not data["callback_module"].startswith("app.")
+        assert round_tripped.action_kind == "tooling.execute"
+        assert round_tripped.action_spec == action
+        assert round_tripped.prepared_binding == action["binding"]

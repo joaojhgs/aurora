@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import os
 import signal
+from pathlib import Path
 from typing import Any, Literal
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
@@ -109,10 +112,24 @@ class Supervisor(BaseService):
         """Initialize the supervisor and message bus."""
         log_info("Initializing Aurora Supervisor...")
 
-        log_info("Initializing Aurora Supervisor...")
+        if os.getenv("AURORA_TOOLING_TARGET_MODE", "projection").lower() == "legacy":
+            from app.services.config.mesh_policy_migration import (
+                preflight_tooling_downgrade_start,
+            )
 
-        # Get architecture mode from environment variable (default: threads)
-        import os
+            config_file = os.getenv("AURORA_CONFIG_FILE", "config.json")
+            snapshot_file = os.getenv("AURORA_TOOLING_EXPORT_SNAPSHOT")
+            if not snapshot_file:
+                raise RuntimeError("unsafe_downgrade_blocked")
+            config = json.loads(Path(config_file).read_text())
+            snapshot = json.loads(Path(snapshot_file).read_text())
+            preflight = preflight_tooling_downgrade_start(
+                output_config=config,
+                output_file=config_file,
+                tooling_export_snapshot=snapshot,
+            )
+            if not preflight.ok:
+                raise RuntimeError(preflight.reason)
 
         self._mode = os.getenv("AURORA_ARCHITECTURE_MODE", "threads").lower()
 
@@ -281,7 +298,7 @@ class Supervisor(BaseService):
             services_to_start = [orchestrator_service, gateway_service]
             from app.shared.config.keys import ConfigKeys
 
-            if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=False):
+            if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=True):
                 from app.services.tts import TTSService
 
                 services_to_start.insert(0, TTSService())
@@ -319,18 +336,16 @@ class Supervisor(BaseService):
             ("GatewayService", "app.services.gateway"),
         ]
 
-        if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=False):
+        if await self._get_config_bool(ConfigKeys.services.tts.enabled, default=True):
             services.append(("TTSService", "app.services.tts"))
         else:
             log_info("TTS service disabled; skipping optional TTS process")
 
-        if await self._get_config_bool(ConfigKeys.services.stt.wakeword.enabled, default=False):
+        if await self._get_config_bool(ConfigKeys.services.stt.wakeword.enabled, default=True):
             services.append(("WakeWordService", "app.services.stt_wakeword"))
-        if await self._get_config_bool(
-            ConfigKeys.services.stt.transcription.enabled, default=False
-        ):
+        if await self._get_config_bool(ConfigKeys.services.stt.transcription.enabled, default=True):
             services.append(("TranscriptionService", "app.services.stt_transcription"))
-        if await self._get_config_bool(ConfigKeys.services.stt.coordinator.enabled, default=False):
+        if await self._get_config_bool(ConfigKeys.services.stt.coordinator.enabled, default=True):
             services.append(("STTCoordinatorService", "app.services.stt_coordinator"))
 
         # Start services in order
@@ -355,13 +370,13 @@ class Supervisor(BaseService):
         from app.shared.config.keys import ConfigKeys
 
         wake_enabled = await self._get_config_bool(
-            ConfigKeys.services.stt.wakeword.enabled, default=False
+            ConfigKeys.services.stt.wakeword.enabled, default=True
         )
         transcription_enabled = await self._get_config_bool(
-            ConfigKeys.services.stt.transcription.enabled, default=False
+            ConfigKeys.services.stt.transcription.enabled, default=True
         )
         coordinator_enabled = await self._get_config_bool(
-            ConfigKeys.services.stt.coordinator.enabled, default=False
+            ConfigKeys.services.stt.coordinator.enabled, default=True
         )
 
         if not (wake_enabled or transcription_enabled or coordinator_enabled):

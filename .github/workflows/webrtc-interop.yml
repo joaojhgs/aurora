@@ -1,0 +1,193 @@
+name: WebRTC live interop
+
+on:
+  pull_request:
+    paths:
+      - "app/services/auth/**"
+      - "app/services/config/config_defaults.json"
+      - "app/messaging/mesh_bus.py"
+      - "app/services/db/**"
+      - "app/services/gateway/service.py"
+      - "app/services/gateway/mesh/**"
+      - "app/services/gateway/webrtc/**"
+      - "app/services/tooling/**"
+      - "app/shared/auth/**"
+      - "app/shared/contracts/**"
+      - "packages/aurora-sdk/src/**"
+      - "packages/aurora-mesh-authority-web/**"
+      - "packages/aurora-ui/src/**"
+      - "packages/aurora-voice-web/**"
+      - "apps/aurora-web/app/**"
+      - "apps/aurora-web/package.json"
+      - "apps/aurora-tauri/src/legacy-webview-polyfills.ts"
+      - "apps/aurora-tauri/src-tauri/android/**"
+      - "rust/crates/aurora-voice-native/**"
+      - "tests/e2e/webrtc_interop/**"
+      - "tests/e2e/hosted_peer/**"
+      - "tests/e2e/hosted_mesh_node/**"
+      - "scripts/hosted_mesh_node_e2e.sh"
+      - "scripts/hosted_peer_e2e.sh"
+      - "scripts/hosted_thin_shell_e2e.sh"
+      - "scripts/webrtc_interop*"
+      - "scripts/webrtc_native_interop.sh"
+      - "scripts/webrtc_native_android_interop.sh"
+      - "tests/e2e/webrtc_native_interop/**"
+      - "apps/aurora-tauri/src-tauri/src/native_webrtc.rs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "docker-compose.webrtc-interop.yml"
+      - "tests/fixtures/webrtc_interop/**"
+      - ".github/workflows/webrtc-interop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  live-interop:
+    name: Hosted peer and cross-engine network paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - run: uv sync --extra sidecar-thin
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Build browser mesh authority
+        run: pnpm --filter @aurora/mesh-authority-web build
+
+      - name: Run the hosted peer UI against the full Python service
+        run: pnpm test:hosted-peer:live
+
+      - name: Run the hosted browser as a persistent mesh node
+        run: scripts/hosted_mesh_node_e2e.sh
+
+      - name: Run strict direct, STUN, and TURN interoperability matrix
+        env:
+          WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
+        run: pnpm test:webrtc:browsers
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webrtc-interop-e2e
+          path: |
+            reports/webrtc-interop/
+            reports/hosted-mesh-node/
+            reports/hosted-peer/
+          if-no-files-found: warn
+
+  native-transport-interop:
+    name: Native webrtc-rs transport interop
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Python peer dependencies
+        run: uv sync --frozen --extra gateway
+
+      # All three lanes gate. The DTLS named-curve fix that used to keep the
+      # browser lanes informational ships vendored in
+      # apps/aurora-tauri/src-tauri/vendor/webrtc-dtls.
+      - name: Run native transport interop lanes
+        env:
+          AURORA_NATIVE_INTEROP_REQUIRE_BROWSER: 1
+        run: scripts/webrtc_native_interop.sh
+
+  android-native-transport-interop:
+    name: Android native webrtc-rs transport interop
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "ndk;27.0.12077973" \
+            "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Export Android NDK path
+        run: echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-linux-android
+
+      - name: Run native WebRTC transport interop on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 1200
+          script: scripts/webrtc_native_android_interop.sh
+
+      - name: Upload Android native interop report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webrtc-native-android-interop
+          path: reports/webrtc-native-android/
+          if-no-files-found: warn

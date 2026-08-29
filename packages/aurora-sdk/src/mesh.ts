@@ -63,6 +63,7 @@ export interface MeshRpcRequest<TPayload = unknown> {
   candidates: MeshRouteCandidate[]
   correlationId?: string | undefined
   audit?: Partial<AuditReceipt> | undefined
+  signal?: AbortSignal | undefined
 }
 
 export interface MeshRpcResponse<TData = unknown> {
@@ -85,10 +86,23 @@ export interface MeshPeerBridge {
   call<TPayload = unknown>(
     request: MeshRpcRequest<TPayload>
   ): Promise<MeshRpcResponse<unknown> | AuroraTransportEnvelope<unknown> | unknown>
+  streamCall?<TChunk = unknown, TPayload = unknown>(
+    request: MeshRpcRequest<TPayload>
+  ): AsyncIterable<TChunk>
   subscribe?<TEventPayload = unknown>(
     request: MeshStreamRpcRequest
-  ): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+  ): MeshEventSource<TEventPayload>
   getManifest?(peerId: string): Promise<MeshPeerManifest | null>
+}
+
+export type MeshEventSource<TEventPayload = unknown> = (
+  AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+  | Iterable<AuroraEvent<TEventPayload> | Record<string, unknown>>
+) & { readonly ready?: Promise<void> }
+
+export interface AsyncMeshEventSource<TEventPayload = unknown>
+  extends AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
+  readonly ready?: Promise<void>
 }
 
 export interface MeshStreamRpcRequest extends AuroraStreamRequest {
@@ -160,16 +174,18 @@ export class MeshP2PTransport implements AuroraTransport {
       busTopic: topic,
       payload: request.payload,
       timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
       candidates
     }
     if (resolution.selector) callRequest.selector = resolution.selector
-    if (request.audit?.correlationId) callRequest.correlationId = request.audit.correlationId
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
     if (request.audit) callRequest.audit = request.audit
 
     try {
       const response = await this.bridge.call<TPayload>(callRequest)
       const envelope = toMeshEnvelope<TData>(response, request, resolution.peerId, candidates)
-      if (envelope.error !== undefined) throw meshError(classifyMeshError(envelope.error), readMeshErrorMessage(envelope.error), request, envelope.error)
+      if (envelope.error !== undefined) throw meshError(classifyRemoteMeshError(envelope.error, envelope.status), readMeshErrorMessage(envelope.error), request, envelope.error)
       return {
         data: envelope.data as TData,
         status: envelope.status,
@@ -190,6 +206,54 @@ export class MeshP2PTransport implements AuroraTransport {
     }
   }
 
+  async requestPeer<TData = unknown, TPayload = unknown>(
+    peerId: string,
+    request: AuroraTransportRequest<TPayload>
+  ): Promise<AuroraTransportResponse<TData>> {
+    const topic = request.busTopic ?? request.method
+    const normalizedPeerId = normalizePeerId(peerId)
+    const resolution: MeshRouteResolution = {
+      peerId: normalizedPeerId,
+      candidates: [{ peerId: normalizedPeerId }]
+    }
+    const candidates = normalizeCandidates(resolution, this.fallbackPeerIds)
+    const callRequest: MeshRpcRequest<TPayload> = {
+      peerId: normalizedPeerId,
+      method: request.method,
+      busTopic: topic,
+      payload: request.payload,
+      timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
+      candidates
+    }
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
+    if (request.audit) callRequest.audit = request.audit
+
+    try {
+      const response = await this.bridge.call<TPayload>(callRequest)
+      const envelope = toMeshEnvelope<TData>(response, request, normalizedPeerId, candidates)
+      if (envelope.error !== undefined) throw meshError(classifyRemoteMeshError(envelope.error, envelope.status), readMeshErrorMessage(envelope.error), request, envelope.error)
+      return {
+        data: envelope.data as TData,
+        status: envelope.status,
+        headers: envelope.headers,
+        audit: {
+          ...envelope.audit,
+          method: envelope.audit?.method ?? request.method,
+          busTopic: envelope.audit?.busTopic ?? topic,
+          targetPeerId: envelope.audit?.targetPeerId ?? envelope.targetPeerId ?? normalizedPeerId,
+          peerId: envelope.audit?.peerId ?? envelope.peerId ?? null,
+          transport: this.kind,
+          status: envelope.audit?.status ?? readStatus(envelope.status)
+        }
+      }
+    } catch (error) {
+      if (error instanceof AuroraError) throw error
+      throw normalizeMeshTransportError(error, request)
+    }
+  }
+
   getManifest(peerId: string): Promise<MeshPeerManifest | null> {
     if (!this.bridge.getManifest) {
       throw new AuroraError({
@@ -198,6 +262,59 @@ export class MeshP2PTransport implements AuroraTransport {
       })
     }
     return this.bridge.getManifest(peerId)
+  }
+
+  async *streamRequest<TChunk = unknown, TPayload = unknown>(
+    request: AuroraTransportRequest<TPayload>
+  ): AsyncIterable<TChunk> {
+    if (!this.bridge.streamCall) {
+      throw new AuroraError({
+        code: 'unsupported_feature',
+        message: 'Mesh peer streaming RPC is not supported by this bridge.',
+        method: request.method,
+        busTopic: request.busTopic
+      })
+    }
+    const topic = request.busTopic ?? request.method
+    const resolution = await this.resolveRoute(request)
+    if (resolution.privacyBlockedReason) {
+      throw meshError('privacy_blocked', resolution.privacyBlockedReason, request, {
+        reason_code: 'privacy_blocked',
+        selector: resolution.selector ?? null
+      })
+    }
+    if (!resolution.peerId) {
+      throw meshError(
+        'unavailable_service',
+        resolution.unavailableReason ?? `No mesh provider for ${topic}`,
+        request,
+        { reason_code: resolution.unavailableReason ?? 'no_route', candidates: resolution.candidates ?? [] }
+      )
+    }
+
+    const candidates = normalizeCandidates(resolution, this.fallbackPeerIds)
+    const callRequest: MeshRpcRequest<TPayload> = {
+      peerId: resolution.peerId,
+      method: request.method,
+      busTopic: topic,
+      payload: request.payload,
+      timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      signal: request.signal,
+      candidates
+    }
+    if (resolution.selector) callRequest.selector = resolution.selector
+    const correlationId = request.audit?.correlationId ?? readString(request.payload, 'correlation_id', 'correlationId', 'request_id', 'requestId')
+    if (correlationId) callRequest.correlationId = correlationId
+    if (request.audit) callRequest.audit = request.audit
+
+    try {
+      for await (const chunk of this.bridge.streamCall<TChunk, TPayload>(callRequest)) {
+        yield chunk
+      }
+    } catch (error) {
+      if (error instanceof AuroraError) throw error
+      throw normalizeMeshTransportError(error, request)
+    }
   }
 
   async subscribe<TEventPayload = unknown>(
@@ -240,7 +357,11 @@ export class MeshP2PTransport implements AuroraTransport {
     }
     if (resolution.selector) streamRequest.selector = resolution.selector
     const source = this.bridge.subscribe<TEventPayload>(streamRequest)
-    return createEventSubscription(normalizeMeshEvents<TEventPayload>(source, request, resolution.peerId))
+    return createEventSubscription(
+      normalizeMeshEvents<TEventPayload>(source, request, resolution.peerId),
+      undefined,
+      source.ready
+    )
   }
 
   private async resolveRoute(request: AuroraTransportRequest): Promise<MeshRouteResolution> {
@@ -255,6 +376,17 @@ export class MeshP2PTransport implements AuroraTransport {
       candidates
     }
   }
+}
+
+function normalizePeerId(peerId: string): string {
+  if (typeof peerId !== 'string' || peerId.length === 0) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'Mesh peer id is required for exact-peer dispatch.',
+      detail: { reason_code: 'missing_peer_id' }
+    })
+  }
+  return peerId
 }
 
 async function* normalizeMeshEvents<TPayload>(
@@ -357,16 +489,25 @@ function normalizeMeshTransportError(error: unknown, request: AuroraTransportReq
   if (error instanceof DOMException && error.name === 'AbortError') {
     return meshError('timeout', 'Mesh RPC request timed out', request, error)
   }
-  if (error instanceof TypeError) {
-    return meshError('transport_loss', error.message, request, error)
-  }
   if (error instanceof Error && error.name === 'TimeoutError') {
     return meshError('timeout', error.message, request, error)
   }
-  if (error instanceof Error) {
-    return meshError('transport_loss', error.message, request, error)
+  if (isExplicitMeshTransportLoss(error)) {
+    return meshError('transport_loss', readMeshErrorMessage(error), request, error)
   }
   return meshError(classifyMeshError(error), readMeshErrorMessage(error), request, error)
+}
+
+function isExplicitMeshTransportLoss(error: unknown): boolean {
+  const code = readDetailCode(error)?.toLowerCase()
+  const text = readMeshErrorMessage(error).toLowerCase()
+  if (code?.includes('transport') || code?.includes('datachannel') || code?.includes('channel_closed')) return true
+  if (error instanceof Error) {
+    const name = error.name.toLowerCase()
+    if (name === 'transportclosederror' || name === 'datachannelclosederror' || name === 'channelclosederror') return true
+  }
+  return /\b(datachannel|data channel|transport|mesh channel|rtcdatachannel)\b/u.test(text)
+    && /\b(closed|closing|lost|disconnected|not connected|failed|unavailable|aborted)\b/u.test(text)
 }
 
 function meshError(
@@ -398,7 +539,90 @@ function classifyMeshError(error: unknown): AuroraErrorCode {
   if (code?.includes('unavailable') || code?.includes('no_route') || text.includes('unavailable') || text.includes('no route')) {
     return 'unavailable_service'
   }
-  if (code?.includes('transport') || text.includes('datachannel') || text.includes('not connected')) return 'transport_loss'
+  if (isExplicitMeshTransportLoss(error)) return 'transport_loss'
+  return 'unknown'
+}
+
+function classifyRemoteMeshError(error: unknown, status: unknown): AuroraErrorCode {
+  const code = readRemoteMeshCode(error)?.toLowerCase()
+  const byCode = code ? classifyStructuredMeshCode(code) : null
+  if (byCode) return byCode
+  const numericStatus = readNumericStatus(status) ?? (isObject(error) ? readNumericStatus(error.status) : null)
+  if (numericStatus !== null) return classifyMeshStatus(numericStatus)
+  return 'unknown'
+}
+
+function readRemoteMeshCode(error: unknown): string | null {
+  if (!isObject(error)) return null
+  for (const key of ['code', 'error_code', 'reason_code', 'reason'] as const) {
+    const value = error[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return null
+}
+
+const REMOTE_MESH_CODE_CLASSIFICATIONS: Readonly<Record<string, AuroraErrorCode>> = {
+  auth: 'auth',
+  unauthenticated: 'auth',
+  authentication_required: 'auth',
+  peer_not_authenticated: 'auth',
+  reauth_required: 'auth',
+  token_invalid: 'auth',
+  token_expired: 'auth',
+  permission: 'permission',
+  permission_denied: 'permission',
+  forbidden: 'permission',
+  method_not_granted: 'permission',
+  method_not_admitted: 'permission',
+  service_not_admitted: 'permission',
+  recipient_missing_tool_permissions: 'permission',
+  selector_mismatch: 'permission',
+  grant_not_found: 'permission',
+  grant_expired: 'permission',
+  grant_revoked: 'permission',
+  peer_authority_revoked: 'permission',
+  privacy_blocked: 'privacy_blocked',
+  privacy_denied: 'privacy_blocked',
+  privacy_class_blocked: 'privacy_blocked',
+  native_permission_missing: 'native_permission_missing',
+  native_permission_denied: 'native_permission_missing',
+  native_permission_unavailable: 'native_permission_missing',
+  validation: 'validation',
+  validation_error: 'validation',
+  schema_validation_failed: 'validation',
+  contract_validation_failed: 'validation',
+  invalid_request: 'validation',
+  invalid_params: 'validation',
+  request_invalid: 'validation',
+  timeout: 'timeout',
+  timed_out: 'timeout',
+  request_timeout: 'timeout',
+  transport_loss: 'transport_loss',
+  channel_closed: 'transport_loss',
+  datachannel_closed: 'transport_loss',
+  data_channel_closed: 'transport_loss',
+  connection_closed: 'transport_loss',
+  unsupported: 'unsupported_feature',
+  unsupported_feature: 'unsupported_feature',
+  operation_not_supported: 'unsupported_feature',
+  method_not_supported: 'unsupported_feature',
+  unavailable_service: 'unavailable_service',
+  service_unavailable: 'unavailable_service',
+  provider_unavailable: 'unavailable_service',
+  provider_not_ready: 'unavailable_service',
+  no_route: 'unavailable_service'
+}
+
+function classifyStructuredMeshCode(code: string): AuroraErrorCode | null {
+  return REMOTE_MESH_CODE_CLASSIFICATIONS[code] ?? null
+}
+
+function classifyMeshStatus(status: number): AuroraErrorCode {
+  if (status === 401) return 'auth'
+  if (status === 403 || status === 428) return 'permission'
+  if (status === 408 || status === 504) return 'timeout'
+  if (status === 400 || status === 422) return 'validation'
+  if (status === 503) return 'unavailable_service'
   return 'unknown'
 }
 
@@ -415,6 +639,12 @@ function readMeshErrorMessage(error: unknown): string {
 function readStatus(status: unknown): string | null {
   if (typeof status === 'string') return status
   if (typeof status === 'number') return String(status)
+  return null
+}
+
+function readNumericStatus(status: unknown): number | null {
+  if (typeof status === 'number' && Number.isInteger(status)) return status
+  if (typeof status === 'string' && /^[1-5][0-9]{2}$/u.test(status)) return Number(status)
   return null
 }
 

@@ -104,6 +104,7 @@ The gateway is configured in `config.json`:
 - **webrtc.password**: Room password (auto-generated if empty; required when auth is enabled)
 - **webrtc.encrypt_signaling**: Encrypt MQTT presence with AEAD (default: `false`)
 - **webrtc.enable_app_layer_e2ee**: Encrypt WebRTC DataChannel JSON messages with AEAD in addition to WebRTC DTLS (default: `false`). When enabled, both peers must enable it and share the same room password-derived data key; plaintext DataChannel messages are dropped instead of downgraded.
+- **webrtc.legacy_event_broadcast**: Temporary compatibility switch for non-sensitive events sent to authenticated peers that do not advertise `scoped_event_subscriptions_v1` (default: `true`). Setting it to `false` suppresses that legacy unscoped path. Sensitive and scoped-only topics remain blocked regardless.
 
 ### Dynamic Configuration
 
@@ -218,6 +219,30 @@ Key fields:
 - `peers`: peer status, negotiated services, service capacity, active calls, latency, and compatibility reports.
 - `routes`: configured route preference/fallback plus the current decision and provider eligibility reasons.
 - `compatibility_failures`: flattened local/remote compatibility failures for quick scanning.
+
+#### Route Explanation for Speech
+
+```text
+POST /api/Gateway/ExplainRoute
+```
+
+`Gateway.ExplainRoute` returns the selected target plus redacted local/remote candidate decisions without executing the request. Speech callers may provide only typed routing requirements, never text, audio, messages, or arbitrary request payload fields:
+
+```json
+{
+  "topic": "TTS.Synthesize",
+  "selector": { "peer_id": "peer-studio", "module": "TTS" },
+  "speech": {
+    "language_requirement": { "mode": "exact", "language": "en" },
+    "voice_id": "standard:starter_en:alba"
+  },
+  "include_candidates": true
+}
+```
+
+The response includes `selected_peer_id`, `selected_service_instance_id`, fallback behavior, per-candidate revision/digest evidence, capacity, policy/freshness state, blockers, and `secrets_redacted=true`. Relevant speech reason codes include `eligible`, `language_incompatible`, `language_capability_unknown`, `voice_unavailable`, `speech_route_binding_unavailable`, and `provider_unavailable`.
+
+An incompatible or legacy provider can appear in the candidate list so the UI can explain why it was skipped, but it is not dispatched. An explicit selector to such a provider returns a sanitized route failure and performs no local or remote service call.
 
 #### Deployment Topology and Bus Health
 ```
@@ -569,6 +594,37 @@ The following endpoints bypass authentication:
 - `POST /api/Auth/PairingConnect`
 - `POST /api/Auth/PairingExchange`
 
+## WebView WebRTC client interoperability
+
+The Gateway WebRTC stack interoperates with the shared browser/WebView runtime
+used by hosted web, desktop Tauri, and Android. The runtime supports
+`http-only`, `webrtc-only`, and `webrtc-preferred`; WebRTC modes use MQTT
+signaling and the `aurora-rpc` DataChannel for Aurora RPC/events. Mesh-node
+profiles keep one session and bridge per stable peer; Connect profiles remain
+single-home-peer. Grant/permission decisions use the Rust mesh authority on
+native and the same core through WebAssembly on web.
+
+The required browser matrix covers direct, configured-STUN, and forced-TURN Chromium, Firefox, and Playwright-WebKit browser ↔ Python Gateway sessions:
+
+| Lane | Required proof boundary |
+| --- | --- |
+| Direct ICE | Selected `host`, or raw `prflx`/`host` with no gathered STUN or relay evidence, from browser `RTCPeerConnection.getStats()`; Python HTTP API disabled; RPC/events over DataChannel. |
+| STUN server-reflexive ICE | Raw selected category preserved as `srflx` or `prflx`; selected `prflx` accepted only when candidate stats prove a configured STUN server gathered a true `srflx` candidate. |
+| Forced TURN relay | `selectedCandidatePair.category=relay` under relay-only policy. |
+| Firefox and WebKit variants | The same HTTP-disabled, auth, reconnect, mutation, event-scope, and redaction assertions, with engine-specific candidate-stat handling kept explicit. |
+
+Each passing run asserts bilateral SAS pairing, reconnect proof without another SAS prompt, credential revocation fail-closed, scoped event/correlation isolation, redacted secret scanning, and the uncertain-loss mutation boundary. Scoped authorization uses public production Auth/Gateway/DataChannel boundaries, not private service calls. Per-run reports are ignored locally; the latest CI artifacts are the fresh evidence.
+
+Run:
+
+```bash
+pnpm test:webrtc:interop
+pnpm test:webrtc:turn
+pnpm test:webrtc:browsers
+```
+
+`pnpm test:webrtc:browsers` is a best-effort local matrix. Any skip produced on a host without an optional Playwright runtime is unproven; required CI fails when a browser lane is unavailable. See [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) and [`WEBRTC_LIVE_INTEROP_HARNESS.md`](WEBRTC_LIVE_INTEROP_HARNESS.md).
+
 ## WebRTC Authentication & Pairing
 
 The Gateway exposes four **pairing and login RPC methods** that are accessible both via the HTTP API and over the WebRTC DataChannel. These methods allow devices to pair and authenticate without needing a separate HTTP connection.
@@ -592,6 +648,13 @@ These methods are the **only** RPC calls that anonymous (unauthenticated) WebRTC
 - `device_name` — Human-readable device name for the admin approval screen
 - `remote_peer_id` — (Optional) The initiator's stable `mesh_identity.peer_id`; used by the responder to auto-trigger **bilateral pairing** (Phase 2)
 - `remote_node_name` — (Optional) The initiator's node name for logging
+- `pairing_session_id` — Required for a trusted mesh-originated flow; the SHA-256 session identifier bound to the bilateral SAS transcript/channel context
+
+Every mesh pairing step preserves the same `pairing_session_id` and
+`remote_peer_id`. Conflicting duplicate sessions, mismatched
+verifier/claimant identities, or stale channel bindings fail closed. Non-admin
+pairing approval cannot grant the global `"*"` wildcard; only an admin pairing
+normalizes the resulting grant to `["*"]`.
 
 **`PairingExchangeResponse`** includes:
 - `access_token` — JWT/token for subsequent authenticated API calls
@@ -606,6 +669,7 @@ When `api.auth_enabled` is `true`, the RTCClient enforces a strict auth gate:
 3. **RPC allowlist**: Anonymous peers may call `PairingStart`, `PairingConnect`, `PairingExchange`, and `Login`. Other RPC calls return 401.
 4. **Event blocking**: Events from anonymous peers are silently dropped.
 5. **Smart auth timeout (heartbeat loop)**: Instead of a single fire-and-forget timer, the auth gate runs a periodic heartbeat check (every 5 seconds) that monitors whether the peer has authenticated. When a peer starts pairing via `PairingStart`, the deadline is extended to `webrtc_pairing_timeout_seconds` (default 300s). If the peer authenticates before the deadline, the loop exits. If the deadline passes without authentication, the peer is disconnected with `"auth_timeout"`.
+6. **Partial-pairing recovery**: A credential direction completed before transport loss is resumed only after its holder proves that credential against the new SDP/channel binding. The verifier answers subsequent pairing calls for that direction with `status="already_trusted"`; the peer skips duplicate exchange and continues only the still-missing bilateral direction.
 
 When `api.auth_enabled` is `false`:
 - Peers receive the `OPEN_PEER` identity immediately (full permissions).
@@ -619,6 +683,16 @@ WebRTC DataChannels are protected in transit by WebRTC DTLS. Aurora can also add
 - `webrtc.enable_app_layer_e2ee=true`: those same JSON messages are sealed with AES-GCM using the room password-derived DataChannel key and sent as binary frames.
 
 The mode is strict. A peer with app-layer E2EE enabled drops plaintext DataChannel messages, and a peer with it disabled cannot decode encrypted binary frames. This avoids silent downgrade behavior; paired peers must use matching `enable_app_layer_e2ee`, `webrtc.app_id`, `webrtc.room`, and `webrtc.password` values.
+
+### Scoped-event compatibility rollout
+
+`services.gateway.webrtc.legacy_event_broadcast` is the temporary migration
+window for authenticated peers that predate
+`scoped_event_subscriptions_v1`. ConfigService applies changes to the live
+`PeerBridge` without a Gateway restart. When disabled, non-sensitive events
+are no longer broadcast to an unscoped legacy peer. Peers that negotiated
+scoped subscriptions continue to receive only exact authorized subscriptions,
+and sensitive/scoped-only topics remain fail-closed in both modes.
 
 ### Bilateral Mesh Pairing
 
@@ -833,8 +907,8 @@ Gateway components are tested in `tests/unit/app/test_gateway.py`:
 
 ## Related Documentation
 
-- [Architecture Overview](../docs/ARCHITECTURE.md)
-- [Messaging Architecture](../docs/MESSAGING_ARCHITECTURE.md)
-- [Peer Pairing Flow](../docs/PEER_PAIRING_FLOW.md)
-- [Mesh Pairing Fix Plan](../docs/MESH_PAIRING_FIX_PLAN.md)
-- [Service Contracts](../app/shared/contracts/README.md)
+- [Architecture Overview](ARCHITECTURE.md)
+- [Messaging Architecture](MESSAGING_ARCHITECTURE.md)
+- [Peer Pairing Flow](PEER_PAIRING_FLOW.md)
+- [Auth and Permissions](AUTH_AND_PERMISSIONS.md)
+- [API and Contracts](API_AND_CONTRACTS.md)

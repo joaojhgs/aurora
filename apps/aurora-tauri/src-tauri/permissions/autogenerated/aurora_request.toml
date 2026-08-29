@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-request"
+description = "Enables the aurora_request command without any pre-configured scope."
+commands.allow = ["aurora_request"]
+
+[[permission]]
+identifier = "deny-aurora-request"
+description = "Denies the aurora_request command without any pre-configured scope."
+commands.deny = ["aurora_request"]

@@ -17,6 +17,7 @@ export interface AuroraSubscribeOptions<TPayload = unknown> {
   signal?: AbortSignal | undefined
   lastEventId?: string | null | undefined
   replayFrom?: string | null | undefined
+  correlationId?: string | null | undefined
   backfill?: boolean | undefined
   reconnect?: boolean | AuroraReconnectOptions | undefined
   audit?: Partial<AuditReceipt> | undefined
@@ -41,6 +42,7 @@ export interface AuroraStreamRequest<TPayload = unknown> extends AuroraSubscribe
 }
 
 export interface AuroraEventSubscription<TPayload = unknown> extends AsyncIterable<AuroraEvent<TPayload>> {
+  readonly ready?: Promise<void>
   readonly closed: Promise<void>
   close(reason?: unknown): void
 }
@@ -52,54 +54,127 @@ export interface AuroraEventStreamTransport extends AuroraTransport {
 }
 
 export class EventStreamClient {
-  constructor(private readonly transport: AuroraTransport) {}
+  constructor(
+    private readonly transport: AuroraTransport,
+    private readonly onStreamError?: ((error: AuroraError) => void) | undefined
+  ) {}
 
   subscribe<TEventPayload = unknown, TPayload = unknown>(
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, TPayload>(this.transport, normalizeStreamRequest('generic', options))
+    return this.withStreamErrorHandling(
+      subscribeWithReconnect<TEventPayload, TPayload>(this.transport, normalizeStreamRequest('generic', options))
+    )
   }
 
   streamAssistant<TEventPayload = unknown, TPayload = unknown>(
     payload?: TPayload,
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, TPayload>(
+    const subscription = subscribeWithReconnect<TEventPayload, TPayload>(
       this.transport,
       normalizeStreamRequest('assistant', {
-        topics: ['Orchestrator.Response'],
-        kinds: ['assistant.delta', 'assistant.completed', 'assistant.failed', 'tool.requested', 'tool.completed'],
+        topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+        kinds: [
+          'assistant.delta',
+          'assistant.completed',
+          'assistant.failed',
+          'tool.requested',
+          'tool.running',
+          'tool.completed',
+          'tool.failed',
+          'tool.requires_action',
+          'tts.audio_chunk',
+          'tts.audio.chunk',
+          'tts.chunk'
+        ],
         ...options,
         payload: payload ?? options.payload
       })
     )
+    return this.withStreamErrorHandling(sanitizeAssistantSubscription(subscription))
   }
 
   watchHealth<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, unknown>(
+    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
       this.transport,
       normalizeStreamRequest('health', {
         topics: ['Gateway.Health', 'Service.Announcement'],
         kinds: ['health.updated', 'service.announced', 'service.stale'],
         ...options
       })
-    )
+    ))
   }
 
   watchConfig<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
-    return subscribeWithReconnect<TEventPayload, unknown>(
+    return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
       this.transport,
       normalizeStreamRequest('config', {
         topics: ['Config.Updated'],
         kinds: ['config.updated', 'config.reload', 'config.validation_failed'],
         ...options
       })
-    )
+    ))
   }
+
+  private withStreamErrorHandling<TPayload>(subscription: AuroraEventSubscription<TPayload>): AuroraEventSubscription<TPayload> {
+    if (!this.onStreamError) return subscription
+    const onStreamError = this.onStreamError
+    const source = async function* (): AsyncIterable<AuroraEvent<TPayload>> {
+      try {
+        for await (const event of subscription) yield event
+      } catch (error) {
+        onStreamError(normalizeError(error))
+        throw error
+      }
+    }
+    return createEventSubscription(source(), (reason) => subscription.close(reason), subscription.ready)
+  }
+}
+
+function sanitizeAssistantSubscription<TEventPayload>(
+  subscription: AuroraEventSubscription<TEventPayload>
+): AuroraEventSubscription<TEventPayload> {
+  const source = async function* (): AsyncIterable<AuroraEvent<TEventPayload>> {
+    for await (const event of subscription) yield sanitizeAssistantEvent(event)
+  }
+  return createEventSubscription(source(), (reason) => subscription.close(reason), subscription.ready)
+}
+
+function sanitizeAssistantEvent<TEventPayload>(event: AuroraEvent<TEventPayload>): AuroraEvent<TEventPayload> {
+  if (!event.kind.startsWith('tool.')) return event
+  const payload = sanitizeToolValue(event.payload) as TEventPayload
+  if (payload === event.payload) return event
+  return { ...event, payload }
+}
+
+function sanitizeToolValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    let changed = false
+    const cleaned = value.map((item) => {
+      const next = sanitizeToolValue(item)
+      changed ||= next !== item
+      return next
+    })
+    return changed ? cleaned : value
+  }
+  if (!isObject(value)) return value
+  let changed = false
+  const cleaned: JsonObject = {}
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (key === 'args' || key === 'arguments') {
+      changed = true
+      continue
+    }
+    const nested = sanitizeToolValue(nestedValue)
+    cleaned[key] = nested as JsonObject[string]
+    changed ||= nested !== nestedValue
+  }
+  return changed ? cleaned : value
 }
 
 export function normalizeStreamRequest<TPayload = unknown>(
@@ -120,7 +195,8 @@ export function isEventStreamTransport(transport: AuroraTransport): transport is
 
 export function createEventSubscription<TPayload = unknown>(
   source: AsyncIterable<AuroraEvent<TPayload>>,
-  onClose?: (reason?: unknown) => void
+  onClose?: (reason?: unknown) => void,
+  ready?: Promise<void>
 ): AuroraEventSubscription<TPayload> {
   let closed = false
   let resolveClosed: () => void = () => undefined
@@ -139,7 +215,7 @@ export function createEventSubscription<TPayload = unknown>(
     }
   }
 
-  return {
+  const subscription: AuroraEventSubscription<TPayload> = {
     get closed() {
       return closedPromise
     },
@@ -189,6 +265,13 @@ export function createEventSubscription<TPayload = unknown>(
       }
     }
   }
+  if (ready) {
+    Object.defineProperty(subscription, 'ready', {
+      value: ready,
+      enumerable: true
+    })
+  }
+  return subscription
 }
 
 export function eventFromUnknown<TPayload = unknown>(
@@ -254,21 +337,61 @@ function subscribeWithReconnect<TEventPayload, TPayload>(
   } else {
     request.signal?.addEventListener('abort', abortFromCaller, { once: true })
   }
+  const readiness = createReadinessGate()
   const source = reconnect.maxAttempts === 0
-    ? singleStream<TEventPayload, TPayload>(transport, request, controller.signal)
-    : reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal)
+    ? singleStream<TEventPayload, TPayload>(transport, request, controller.signal, readiness)
+    : reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal, readiness)
   return createEventSubscription(source, () => {
     request.signal?.removeEventListener('abort', abortFromCaller)
     controller.abort()
+  }, readiness.promise)
+}
+
+interface ReadinessGate {
+  promise: Promise<void>
+  resolve(): void
+  reject(error: unknown): void
+}
+
+function createReadinessGate(): ReadinessGate {
+  let settled = false
+  let resolvePromise: () => void = () => undefined
+  let rejectPromise: (error: unknown) => void = () => undefined
+  const promise = new Promise<void>((resolve, reject) => {
+    resolvePromise = resolve
+    rejectPromise = reject
   })
+  void promise.catch(() => undefined)
+  return {
+    promise,
+    resolve() {
+      if (settled) return
+      settled = true
+      resolvePromise()
+    },
+    reject(error: unknown) {
+      if (settled) return
+      settled = true
+      rejectPromise(error)
+    }
+  }
 }
 
 async function* singleStream<TEventPayload, TPayload>(
   transport: AuroraEventStreamTransport,
   request: AuroraStreamRequest<TPayload>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  readiness: ReadinessGate
 ): AsyncIterable<AuroraEvent<TEventPayload>> {
-  const subscription = await transport.subscribe<TEventPayload, TPayload>(request)
+  let subscription: AuroraEventSubscription<TEventPayload>
+  try {
+    subscription = await transport.subscribe<TEventPayload, TPayload>(request)
+    if (subscription.ready) await subscription.ready
+    readiness.resolve()
+  } catch (error) {
+    readiness.reject(error)
+    throw error
+  }
   const iterator = subscription[Symbol.asyncIterator]()
   try {
     while (!signal.aborted) {
@@ -285,24 +408,43 @@ async function* reconnectingStream<TEventPayload, TPayload>(
   transport: AuroraEventStreamTransport,
   request: AuroraStreamRequest<TPayload>,
   reconnect: NormalizedReconnectOptions,
-  signal: AbortSignal
+  signal: AbortSignal,
+  readiness: ReadinessGate
 ): AsyncIterable<AuroraEvent<TEventPayload>> {
   let attempt = 0
   let lastEventId = request.lastEventId ?? null
   while (!signal.aborted) {
     const currentRequest = { ...request, lastEventId }
-    const subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
+    let subscription: AuroraEventSubscription<TEventPayload>
+    try {
+      subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
+      if (subscription.ready) await subscription.ready
+      readiness.resolve()
+    } catch (error) {
+      attempt += 1
+      if (attempt > reconnect.maxAttempts || signal.aborted) {
+        const normalized = normalizeError(error)
+        readiness.reject(normalized)
+        throw normalized
+      }
+      await delay(backoff(attempt, reconnect), signal)
+      continue
+    }
     const iterator = subscription[Symbol.asyncIterator]()
+    let endedCleanly = false
     try {
       while (!signal.aborted) {
         const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
-        if (result.done || signal.aborted) return
+        if (signal.aborted) return
+        if (result.done) {
+          endedCleanly = true
+          break
+        }
         const event = result.value
         attempt = 0
         lastEventId = event.id ?? lastEventId
         yield event
       }
-      return
     } catch (error) {
       subscription.close(error)
       attempt += 1
@@ -310,6 +452,16 @@ async function* reconnectingStream<TEventPayload, TPayload>(
       await delay(backoff(attempt, reconnect), signal)
     } finally {
       subscription.close()
+    }
+    if (endedCleanly && !signal.aborted) {
+      attempt += 1
+      if (attempt > reconnect.maxAttempts) {
+        throw new AuroraError({
+          code: 'transport_loss',
+          message: 'Event stream ended before it was closed'
+        })
+      }
+      await delay(backoff(attempt, reconnect), signal)
     }
   }
 }
@@ -340,7 +492,8 @@ function normalizeReconnect(value: AuroraSubscribeOptions['reconnect']): Normali
 }
 
 function backoff(attempt: number, reconnect: NormalizedReconnectOptions): number {
-  return Math.min(reconnect.initialDelayMs * 2 ** Math.max(0, attempt - 1), reconnect.maxDelayMs)
+  const ceiling = Math.min(reconnect.initialDelayMs * 2 ** Math.max(0, attempt - 1), reconnect.maxDelayMs)
+  return Math.floor(Math.random() * (ceiling + 1))
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
@@ -362,6 +515,7 @@ function readPayload(raw: unknown): unknown {
   if (!isObject(raw)) return raw
   if ('payload' in raw) return raw.payload
   if ('data' in raw) return raw.data
+  if ('redacted_payload' in raw) return raw.redacted_payload
   return raw
 }
 

@@ -5,9 +5,47 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import AnyUrl, Field, SecretStr, constr
+from pydantic import AnyUrl, Field, RootModel, SecretStr, constr
 
 from app.shared.config.models_base import BaseConfigModel
+
+
+class Assistant(BaseConfigModel):
+    automatic_tts_readback: bool | None = False
+    """
+    Automatically play TTS for assistant replies initiated from typed UI prompts. Voice-origin prompts always keep voice-to-voice readback.
+    """
+
+
+class DesktopOverlay(BaseConfigModel):
+    enabled: bool | None = True
+    """
+    Enable the desktop overlay window for quick access to Aurora.
+    """
+    voice_overlay_enabled: bool | None = True
+    """
+    Show voice activity and listening state in the desktop overlay when voice features are active.
+    """
+    text_hotkey: str | None = "CommandOrControl+K"
+    """
+    Global keyboard shortcut that opens the desktop overlay text input.
+    """
+    close_behavior: Literal["hide_to_tray"] | None = "hide_to_tray"
+    """
+    Behavior when the desktop overlay window is closed.
+    """
+    auto_close_delay_ms: int | None = Field(1200, ge=0)
+    """
+    Delay in milliseconds before the desktop overlay auto-closes after transient interactions; set to 0 to close immediately.
+    """
+    visible_on_all_workspaces: bool | None = True
+    """
+    Keep the desktop overlay visible across all virtual desktops or workspaces when supported by the OS.
+    """
+    persist_positions: bool | None = True
+    """
+    Remember desktop overlay window positions between app launches.
+    """
 
 
 class Ui(BaseConfigModel):
@@ -23,12 +61,40 @@ class Ui(BaseConfigModel):
     """
     Enable debug mode for verbose logging
     """
+    assistant: Assistant | None = None
+    """
+    Assistant UI behavior settings
+    """
+    desktop_overlay: DesktopOverlay | None = None
+    """
+    Desktop assistant overlay window behavior and persistence settings.
+    """
 
 
 class System(BaseConfigModel):
     models_dir: str | None = "voice_models/"
     """
     Base directory for voice/model files
+    """
+    primary_language: str | None = Field(
+        "en",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Primary language",
+    )
+    """
+    BCP 47 language tag Aurora uses whenever one device language is required. Available choices come from the installed speech-pack catalog.
+    """
+    voice_language: str | None = Field(
+        "auto",
+        max_length=255,
+        min_length=2,
+        pattern="^(?:[Aa][Uu][Tt][Oo]|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+        title="Voice language",
+    )
+    """
+    Automatic detection or a BCP 47 speech language tag from the installed speech-pack catalog.
     """
 
 
@@ -130,6 +196,10 @@ class Webrtc(BaseConfigModel):
     """
     When true, all WebRTC DataChannel JSON messages are sealed as binary AEAD payloads with the room data key. Peers with mismatched settings do not fall back to plaintext.
     """
+    legacy_event_broadcast: bool | None = True
+    """
+    Temporary compatibility switch for non-sensitive events sent to peers that do not advertise scoped_event_subscriptions_v1. Sensitive and scoped-only topics remain blocked regardless of this value.
+    """
     stun_servers: list[str] | None = ["stun:stun.l.google.com:19302"]
     """
     STUN server URLs for NAT traversal
@@ -206,6 +276,18 @@ class Auth(BaseConfigModel):
     """
     Default permissions assigned to new devices during pairing
     """
+    mesh_peer_orphan_pruning_enabled: bool | None = True
+    """
+    Enable a bounded startup maintenance pass that removes old never-approved credentialless mesh peer rows
+    """
+    mesh_peer_orphan_retention_seconds: int | None = Field(2592000, ge=3600, le=31536000)
+    """
+    Minimum age in seconds before never-approved credentialless mesh peer rows can be pruned
+    """
+    mesh_peer_orphan_prune_max_rows: int | None = Field(256, ge=1, le=4096)
+    """
+    Maximum orphaned mesh peer rows removed in one Auth startup maintenance pass
+    """
     webrtc_auth_timeout_seconds: float | None = Field(10.0, ge=1.0)
     """
     Timeout in seconds for WebRTC peer authentication
@@ -222,6 +304,88 @@ class Auth(BaseConfigModel):
     """
     Audit log retention period in days
     """
+
+
+class Piper(BaseConfigModel):
+    model_file_path: str | None = None
+    """
+    Path to the Piper model file
+    """
+    model_config_file_path: str | None = None
+    """
+    Path to the Piper model configuration file
+    """
+    model_sample_rate: int | None = Field(22050, ge=8000, le=48000)
+    """
+    Sample rate for Piper output
+    """
+    executable_path: str | None = ""
+    """
+    Path to Piper executable
+    """
+    cache_dir: str | None = "voice_models/piper"
+    """
+    Directory for selected Piper voice downloads and installed models
+    """
+
+
+class Pockettts(BaseConfigModel):
+    quality_tier: Literal["compact", "quality"] | None = "compact"
+    custom_config_path: str | None = None
+    cache_dir: str | None = "voice_models/pockettts"
+    voice_state_dir: str | None = "voice_models/pockettts/voices"
+    device: Literal["cpu"] | None = "cpu"
+    initialization_timeout_s: float | None = Field(120.0, ge=1.0)
+    request_timeout_s: float | None = Field(120.0, ge=1.0)
+    max_concurrent_requests: int | None = Field(1, ge=1, le=1)
+    preload_model: bool | None = False
+    preload_voice_ids: list[str] | None = []
+    temperature: float | None = None
+    lsd_decode_steps: int | None = Field(1, ge=1)
+    noise_clamp: float | None = None
+    eos_threshold: float | None = -4.0
+    quantize: bool | None = False
+
+
+class Providers(BaseConfigModel):
+    piper: Piper | None = Field({}, validate_default=True)
+    """
+    Piper provider settings
+    """
+    pockettts: Pockettts | None = Field({}, validate_default=True)
+    """
+    PocketTTS provider settings
+    """
+
+
+class TrustedManifestPublicKey(RootModel[str]):
+    root: str = Field(..., max_length=128, min_length=32)
+
+
+class VoiceRegistry(BaseConfigModel):
+    manifest_path: str | None = "voice_models/voices.manifest.json"
+    asset_base_url: str | None = None
+    trusted_manifest_sha256: str | None = Field(None, pattern="^[0-9a-f]{64}$")
+    trusted_manifest_public_keys: list[TrustedManifestPublicKey] | None = Field(
+        [], validate_default=True
+    )
+    trusted_manifest_signature: str | None = Field(None, max_length=256, min_length=64)
+    cache_dir: str | None = "voice_models/voice-pack"
+    verify_sha256: bool | None = True
+    standard_pack_enabled: bool | None = True
+    cloning_enabled: bool | None = True
+    retain_clone_source: bool | None = False
+    clone_min_duration_s: float | None = Field(6.0, ge=0.1)
+    clone_max_duration_s: float | None = Field(15.0, ge=0.1)
+    clone_max_source_bytes: int | None = Field(20971520, ge=1)
+    clone_max_wire_bytes: int | None = Field(2097152, ge=1)
+    accepted_import_formats: list[Literal["wav", "mp3", "mp4", "m4a", "webm"]] | None = [
+        "wav",
+        "mp3",
+        "mp4",
+        "m4a",
+        "webm",
+    ]
 
 
 class AmbientTranscription(BaseConfigModel):
@@ -275,9 +439,13 @@ class RealtimeModel(BaseConfigModel):
     """
     Enable realtime transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "tiny"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for realtime transcription
+    """
+    model_size_or_path: str | None = None
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for realtime transcription
     """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """
@@ -294,9 +462,13 @@ class AccurateModel(BaseConfigModel):
     """
     Enable accurate transcription model
     """
-    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = "base"
+    model_size: Literal["tiny", "base", "small", "medium", "large"] | None = None
     """
     Whisper model size for accurate transcription
+    """
+    model_size_or_path: str | None = None
+    """
+    Faster Whisper preset, Hugging Face model ID, or local model path for accurate transcription
     """
     device: Literal["cpu", "cuda", "auto"] | None = "cpu"
     """
@@ -456,9 +628,42 @@ class Local(BaseConfigModel):
     llama_cpp: LlamaCpp | None = None
 
 
+class RemotePeer(BaseConfigModel):
+    peer_id: str | None = None
+    """
+    Stable mesh peer id to route inference to
+    """
+    provider_id: str | None = None
+    """
+    Provider alias or peer id to route inference to
+    """
+    service_instance_id: str | None = None
+    """
+    Remote service instance id such as remote:<peer>:Orchestrator
+    """
+    resource_namespace: str | None = "inference"
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
+class MeshPeer(BaseConfigModel):
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = "inference"
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
 class Llm(BaseConfigModel):
     provider: (
-        Literal["openai", "huggingface_endpoint", "huggingface_pipeline", "llama_cpp"] | None
+        Literal[
+            "openai",
+            "huggingface_endpoint",
+            "huggingface_pipeline",
+            "llama_cpp",
+            "remote_peer",
+            "mesh_peer",
+        ]
+        | None
     ) = "openai"
     """
     LLM provider to use
@@ -470,6 +675,44 @@ class Llm(BaseConfigModel):
     local: Local | None = None
     """
     Local LLM provider options
+    """
+    remote_peer: RemotePeer | None = None
+    """
+    Remote mesh peer LLM routing options. Tools and graph execution remain local; only chat inference is delegated.
+    """
+    mesh_peer: MeshPeer | None = None
+    """
+    Alias for remote_peer LLM routing options
+    """
+
+
+class DispatchDefault(BaseConfigModel):
+    enabled: bool | None = False
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = None
+    timeout_s: float | None = Field(None, ge=1.0)
+
+
+class InferenceDefault(BaseConfigModel):
+    provider: Literal["local", "configured", "remote_peer", "mesh_peer"] | None = "configured"
+    peer_id: str | None = None
+    provider_id: str | None = None
+    service_instance_id: str | None = None
+    resource_namespace: str | None = "inference"
+    model_id: str | None = None
+    timeout_s: float | None = Field(60, ge=1.0)
+
+
+class Routing(BaseConfigModel):
+    dispatch_default: DispatchDefault | None = None
+    """
+    Default mesh dispatch route for external orchestrator requests when no runtime dispatch selector is supplied
+    """
+    inference_default: InferenceDefault | None = None
+    """
+    Default chat inference provider for local orchestration; does not affect dispatch routing
     """
 
 
@@ -682,6 +925,45 @@ class MeshSharing(BaseConfigModel):
     """
     Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
     """
+    unshared_feature_ids: list[str] | None = []
+    """
+    Subtractive stable feature IDs excluded from sharing; empty means no exclusions so all external-or-both features remain shared. Unknown or stale IDs are retained.
+    """
+    unshared_method_ids: list[str] | None = []
+    """
+    Subtractive canonical full bus topics excluded from sharing; empty means no exclusions so all external-or-both methods remain shared. Unknown or stale IDs are retained.
+    """
+
+
+class MeshRouting(BaseConfigModel):
+    prefer: Literal["local", "network", "network_only", "local_only"] | None = "local"
+    """
+    Routing preference for selecting local or network providers.
+    """
+    fallback: Literal["local", "network", "error", "none"] | None = "local"
+    """
+    Fallback strategy when the preferred provider path is unavailable.
+    """
+    allowed_provider_peer_ids: list[str] | None = None
+    """
+    Stable provider peer IDs eligible for outbound routing. Null means any otherwise-eligible provider, an empty array denies network providers, and populated arrays allow only listed stable IDs. Never grants inbound authority.
+    """
+    min_version: str | None = None
+    """
+    Minimum compatible provider service version required for outbound routing.
+    """
+    required_provider_feature_ids: list[str] | None = []
+    """
+    All-of stable feature IDs that a recipient-visible callable provider must expose before it is eligible for outbound routing.
+    """
+    required_provider_capability_tags: list[str] | None = []
+    """
+    All-of provider metadata capability tags required for outbound routing. These tags are separate from feature IDs and never grant authority.
+    """
+    require_explicit_selector: bool | None = False
+    """
+    Require callers to provide an explicit mesh peer/provider/resource selector before this service may route remotely.
+    """
 
 
 class ToolingApprovalPolicyRule(BaseConfigModel):
@@ -731,20 +1013,41 @@ class ToolingApprovalPolicyRule(BaseConfigModel):
 
 
 class Tts(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable TTS service
     """
+    provider: Literal["piper", "pockettts"] | None = "piper"
+    """
+    Text-to-speech provider
+    """
+    fallback_provider: Literal["piper", "pockettts"] | None = None
+    """
+    Explicit fallback provider used only when configured
+    """
+    default_voice_id: str | None = None
+    """
+    Default logical voice for this device
+    """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     hardware_acceleration: bool | None = False
     """
     Enable hardware acceleration for TTS
     """
-    model_file_path: str | None = "voice_models/en_US-lessac-medium.onnx"
+    providers: Providers | None = Field({}, validate_default=True)
+    """
+    Provider-specific text-to-speech settings
+    """
+    voice_registry: VoiceRegistry | None = Field({}, validate_default=True)
+    """
+    Logical voice registry settings
+    """
+    model_file_path: str | None = None
     """
     Path to the TTS model file
     """
-    model_config_file_path: str | None = "voice_models/en_US-lessac-medium.onnx.txt"
+    model_config_file_path: str | None = None
     """
     Path to the TTS model configuration file
     """
@@ -759,12 +1062,13 @@ class Tts(BaseConfigModel):
 
 
 class Coordinator(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable STT coordinator
     """
     mesh_sharing: MeshSharing | None = None
-    session_timeout_s: float | None = Field(10.0, ge=1.0, le=300.0)
+    mesh_routing: MeshRouting | None = None
+    session_timeout_s: float | None = Field(30.0, ge=1.0, le=300.0)
     """
     Session timeout in seconds
     """
@@ -787,11 +1091,12 @@ class Coordinator(BaseConfigModel):
 
 
 class Wakeword(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable wake word detection
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     backend: Literal["oww", "pvp"] | None = "oww"
     """
     Wake word backend: 'oww' (OpenWakeWord) or 'pvp' (Porcupine)
@@ -811,11 +1116,12 @@ class Wakeword(BaseConfigModel):
 
 
 class Transcription(BaseConfigModel):
-    enabled: bool | None = False
+    enabled: bool | None = True
     """
     Enable transcription service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     vad_enabled: bool | None = True
     """
     Enable voice activity detection
@@ -843,9 +1149,13 @@ class Transcription(BaseConfigModel):
 
 
 class Stt(BaseConfigModel):
-    language: Literal["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"] | None = "en"
+    language: str | None = Field(
+        "",
+        max_length=255,
+        pattern="^(?:|[A-Za-z]{2,8}(?:[-_][A-Za-z0-9]{1,8})*|[IiXx](?:[-_][A-Za-z0-9]{1,8})+)$",
+    )
     """
-    Language for speech recognition (empty for auto-detect)
+    BCP 47 language tag for speech recognition (empty for auto-detect)
     """
     coordinator: Coordinator | None = None
     """
@@ -871,6 +1181,7 @@ class Orchestrator(BaseConfigModel):
     Enable orchestrator service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     hardware_acceleration: bool | None = False
     """
     Enable hardware acceleration for LLM
@@ -878,6 +1189,10 @@ class Orchestrator(BaseConfigModel):
     llm: Llm | None = None
     """
     LLM provider configuration
+    """
+    routing: Routing | None = None
+    """
+    Separate dispatch and inference routing defaults for orchestrator requests
     """
 
 
@@ -887,6 +1202,7 @@ class Db(BaseConfigModel):
     Enable database service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     embeddings: Embeddings | None = None
     """
     Embeddings configuration
@@ -899,6 +1215,7 @@ class Scheduler(BaseConfigModel):
     Enable scheduler service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
 
 
 class ToolingApprovalPolicy(BaseConfigModel):
@@ -922,6 +1239,12 @@ class ToolingApprovalPolicy(BaseConfigModel):
     """
     Default approval behavior when no scoped rule matches
     """
+    policy_mode: (
+        Literal["enforce", "dry_run_only", "deny_all", "unrestricted_except_blocked"] | None
+    ) = "enforce"
+    """
+    Global Tooling policy mode. unrestricted_except_blocked bypasses approval prompts only for non-blocked tools and remains admin/operator controlled.
+    """
     default_token_ttl_seconds: int | None = Field(300, ge=1)
     """
     Default lifetime for approval tokens issued by matching rules
@@ -938,6 +1261,7 @@ class Tooling(BaseConfigModel):
     Enable tooling service
     """
     mesh_sharing: MeshSharing | None = None
+    mesh_routing: MeshRouting | None = None
     approval_policy: ToolingApprovalPolicy | None = None
     hardware_acceleration: HardwareAcceleration | None = None
     """

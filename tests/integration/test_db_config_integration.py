@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import uuid
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+from unittest.mock import AsyncMock, MagicMock, call, mock_open, patch
 
 import pytest
 import pytest_asyncio
@@ -257,6 +257,8 @@ class TestConfigIntegration:
                 patch("tempfile.mkstemp", return_value=(123, tmp_path)) as mock_mkstemp,
                 patch("os.fdopen", save_mock) as mock_fdopen,
                 patch("os.fsync") as mock_fsync,
+                patch("os.open", return_value=456) as mock_os_open,
+                patch("os.close") as mock_os_close,
                 patch("os.replace") as mock_replace,
             ):
                 config_manager.save_config()
@@ -264,8 +266,13 @@ class TestConfigIntegration:
                 # Verify config was written via temp file and atomically replaced.
                 mock_mkstemp.assert_called_once()
                 mock_fdopen.assert_called_once_with(123, "w")
-                mock_fsync.assert_called_once_with(123)
+                mock_fsync.assert_has_calls([call(123), call(456)])
                 mock_replace.assert_called_once_with(tmp_path, os.path.abspath(temp_config_file))
+                mock_os_open.assert_called_once_with(
+                    os.path.dirname(os.path.abspath(temp_config_file)),
+                    os.O_RDONLY,
+                )
+                mock_os_close.assert_called_once_with(456)
                 handle = save_mock()
 
                 # Check that json.dump was called

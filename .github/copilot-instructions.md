@@ -2,6 +2,13 @@
 
 **ALWAYS FOLLOW THESE INSTRUCTIONS FIRST**. Only search for additional context or run extra commands if the information here is incomplete or found to be incorrect.
 
+## Commit discipline
+
+- Treat the root `AGENTS.md` as canonical.
+- Commit coherent, verified slices throughout substantial work; do not accumulate unrelated backend, SDK, UI, packaging, and documentation changes into one final commit.
+- Inspect the staged diff and preserve pre-existing work before committing.
+- Push only when requested and only after the full intended commit set is verified and the working tree is clean.
+
 Aurora is a Python-based intelligent voice assistant for local automation and productivity. It uses real-time speech-to-text, LLMs, and various productivity tools in a modular, privacy-focused architecture.
 
 ## Bootstrap and Environment Setup

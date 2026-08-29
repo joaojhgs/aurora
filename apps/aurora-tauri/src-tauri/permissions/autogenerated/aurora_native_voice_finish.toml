@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-voice-finish"
+description = "Enables the aurora_native_voice_finish command without any pre-configured scope."
+commands.allow = ["aurora_native_voice_finish"]
+
+[[permission]]
+identifier = "deny-aurora-native-voice-finish"
+description = "Denies the aurora_native_voice_finish command without any pre-configured scope."
+commands.deny = ["aurora_native_voice_finish"]

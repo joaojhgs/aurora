@@ -48,7 +48,8 @@ dependencies = [
     # Basic utilities (always needed)
     "psutil>=5.0.0",
     "tenacity>=8.2.3,<10.0",
-    
+    "tomli>=2.0.0; python_version < '3.11'",
+
     # Core data handling
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
@@ -63,7 +64,6 @@ dependencies = [
 runtime = [
     # Audio Processing & Speech Recognition
     "faster-whisper==1.1.1",
-    "RealtimeSTT==0.3.94",
     "PyAudio==0.2.14",
     "openwakeword==0.6.0",
     "webrtcvad-wheels==2.0.14",
@@ -73,9 +73,10 @@ runtime = [
     "piper-tts==1.2.0",
     "piper-phonemize==1.1.0",
     "realtimetts==0.4.47",
+    "pocket-tts[audio]==2.1.0",
     
-    # Machine Learning & AI Core (NO TORCH - added separately)
-    "numpy==1.26.4",
+    # Machine Learning & AI Core (hardware-specific Torch wheels are selected separately)
+    "numpy==2.2.6",
     "scipy==1.15.1",
     "onnxruntime==1.20.1",
     
@@ -200,17 +201,16 @@ service-tooling = [
 service-stt-wakeword = [
     "openwakeword==0.6.0",
     "pvporcupine==1.9.5",
-    "numpy==1.26.4",
+    "numpy==2.2.6",
     "scipy==1.15.1",
     "onnxruntime==1.20.1",
 ]
 
 service-stt-transcription = [
     "faster-whisper==1.1.1",
-    "RealtimeSTT==0.3.94",
     "webrtcvad-wheels==2.0.14",
     "ctranslate2>=4.7.1,<5",
-    "numpy==1.26.4",
+    "numpy==2.2.6",
 ]
 
 service-stt-coordinator = [
@@ -221,6 +221,7 @@ service-tts = [
     "realtimetts==0.4.47",
     "piper-tts==1.2.0",
     "piper-phonemize==1.1.0",
+    "pocket-tts[audio]==2.1.0",
     "PyAudio==0.2.14",
     "torch==2.6.0",
     "torchaudio==2.6.0",
@@ -318,6 +319,26 @@ build = [
 # Executable runtime (lighter than full runtime)
 exe-runtime = [
     "aurora[runtime]",  # Include all runtime dependencies
+]
+
+# Tauri desktop sidecar profiles. These are intentionally narrower than
+# ``runtime`` so desktop packaging can choose the local capability tier instead
+# of always bundling every STT/TTS/local-model dependency.
+sidecar-thin = [
+    "aurora[service-config,service-auth,service-db,service-scheduler,service-tooling,service-orchestrator,gateway,mode-threads]",
+    "numpy==2.2.6",
+]
+
+sidecar-local-audio = [
+    "aurora[sidecar-thin,service-stt-wakeword,service-stt-transcription,service-stt-coordinator]",
+    # TTS runtime without pinning a hardware backend; the selected sidecar
+    # profile adds torch-cpu/cuda/metal/etc. separately.
+    "realtimetts==0.4.47",
+    "piper-tts==1.2.0",
+    "piper-phonemize==1.1.0",
+    "pocket-tts[audio]==2.1.0",
+    "PyAudio==0.2.14",
+    "onnxruntime==1.20.1",
 ]
 
 # ============================================================================
@@ -439,25 +460,6 @@ brave-search = [
     # "brave-search<0.2.0; python_version < '3.12'",
 ]
 
-# OpenRecall integration dependencies (from modules/openrecall)
-openrecall = [
-    "Flask==3.0.3",
-    "mss==9.0.1",
-    "shapely==2.0.4",
-    "h5py==3.11.0", 
-    "rapidfuzz==3.9.3",
-    "python-doctr @ git+https://github.com/koenvaneijk/doctr.git@af711bc04eb8876a7189923fb51ec44481ee18cd",
-]
-
-# Platform-specific dependencies for OpenRecall
-openrecall-windows = [
-    "pywin32",
-]
-
-openrecall-macos = [
-    "pyobjc==10.3",
-]
-
 # ============================================================================
 # DEVELOPMENT DEPENDENCIES
 # ============================================================================
@@ -478,7 +480,7 @@ dev = [
     "coverage[toml]",     # For comprehensive test coverage reporting
     
     # Release management
-    "python-semantic-release>=10.4.1",  # Automated versioning and changelog
+    "python-semantic-release==10.4.1",  # Keep local version/build behavior identical to the release action
     "commitizen>=3.0.0",               # Enforce conventional commits
     "toml>=0.10.2",                    # For version file parsing
     "requests>=2.32.0",                # For GitHub API calls
@@ -497,7 +499,7 @@ test = [
     # Root tests/conftest.py imports DB helpers during collection.
     "aiosqlite>=0.19.0",
     # STT unit tests mock hardware backends but import NumPy-backed audio helpers.
-    "numpy==1.26.4",
+    "numpy==2.2.6",
 ]
 
 # Dependencies for unit tests
@@ -562,7 +564,7 @@ third-party = [
 # Third-party providers with additional features
 # Note: brave-search excluded due to dependency conflicts - install manually if needed
 third-party-full = [
-    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,openrecall]",
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack]",
 ]
 
 # ============================================================================
@@ -597,29 +599,29 @@ local-llama-gpu = [
 # ============================================================================
 # All features with third-party providers (easiest setup)
 full-third-party = [
-    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
+    "aurora[runtime,torch-cpu,openai,embeddings-local,ui,google,jira,github,slack,brave-search,gateway]",
 ]
 
 # All features with local HuggingFace models
 full-local-huggingface = [
-    "aurora[runtime,torch-cpu,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
+    "aurora[runtime,torch-cpu,embeddings-local,ui,google,jira,github,slack,brave-search,gateway]",
 ]
 
 # All features with local HuggingFace models + GPU acceleration
 # Note: PyTorch GPU packages installed separately by setup script
 full-local-huggingface-gpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",  # No torch - PyTorch installed separately
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,gateway]",  # No torch - PyTorch installed separately
 ]
 
 # All features with optimized llama-cpp backend (CPU)
 full-local-llama-cpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,gateway]",
     # Note: llama-cpp-python[cpu] installed separately by setup script
 ]
 
 # All features with optimized llama-cpp backend + GPU acceleration
 full-local-llama-gpu = [
-    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall,gateway]",
+    "aurora[runtime,embeddings-local,ui,google,jira,github,slack,brave-search,gateway]",
     # Note: llama-cpp-python with specific GPU backend installed by setup script
 ]
 
@@ -679,6 +681,7 @@ packages = ["app", "modules"]
 [tool.setuptools.package-data]
 app = [
     "database/migrations/*.sql",
+    "services/tts/resources/*.json",
 ]
 # Model files are now stored at root level and excluded from package builds
 # voice_models/ and chat_models/ directories contain large model files
@@ -689,7 +692,7 @@ app = [
 [tool.ruff]
 # Line length matches black's default
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 # Exclude common directories
 exclude = [
@@ -762,7 +765,6 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "faster_whisper.*",
-    "RealtimeSTT.*",
     "realtimetts.*",
     "openwakeword.*",
     "pvporcupine.*",
@@ -776,7 +778,6 @@ module = [
     "ctranslate2.*",
     "sklearn.*",
     "tensorrt.*",
-    "mss.*",
     "PyQt6.*",
 ]
 ignore_missing_imports = true
@@ -789,6 +790,24 @@ ignore_missing_imports = true
 version_toml = ["pyproject.toml:project.version"]
 version_variables = [
     "app/__init__.py:__version__",
+]
+build_command = "node scripts/set_release_version.mjs \"$NEW_VERSION\""
+assets = [
+    "VERSION",
+    "package.json",
+    "apps/aurora-tauri/package.json",
+    "apps/aurora-web/package.json",
+    "apps/aurora-tauri/src-tauri/Cargo.toml",
+    "apps/aurora-tauri/src-tauri/Cargo.lock",
+    "apps/aurora-tauri/src-tauri/tauri.conf.json",
+    "packages/aurora-mesh-authority-web/package.json",
+    "packages/aurora-sdk/package.json",
+    "packages/aurora-ui/package.json",
+    "packages/aurora-ui/src/version.ts",
+    "packages/aurora-voice-web/package.json",
+    "packages/aurora-sdk/src/generated/backend-contracts.schema.json",
+    "packages/aurora-sdk/src/generated/backend-contracts.zod.ts",
+    "packages/aurora-sdk/src/generated/backend-contracts.manifest.json",
 ]
 version_pattern = [
     "readme.md:Aurora Voice Assistant v{version}",

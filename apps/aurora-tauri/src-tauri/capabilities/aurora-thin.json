@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-thin",
+  "description": "Python-free desktop thin shell capability. Grants native shell status/storage helpers only; no sidecar lifecycle, local SDK request bridge, Python resources, or local service bootstrap permissions.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "deep-link:default",
+    "aurora-native-capability-manifest",
+    "aurora-native-permissions",
+    "aurora-thin-profile",
+    "aurora-thin-peer-credentials",
+    "aurora-inbound-verifier-storage",
+    "aurora-local-data-storage",
+    "aurora-mesh-authority",
+    "aurora-mesh-session",
+    "aurora-local-data-envelope-crypto",
+    "aurora-assistant-provider",
+    "aurora-native-webrtc",
+    "aurora-native-voice",
+    "aurora-tray",
+    "aurora-notifications",
+    "aurora-dialogs",
+    "aurora-shutdown"
+  ]
+}

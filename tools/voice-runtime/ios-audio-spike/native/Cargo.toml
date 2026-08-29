@@ -1,0 +1,13 @@
+[package]
+name = "aurora-ios-audio-spike"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from app.shared.contracts.registry import IOModel
 
@@ -30,6 +30,7 @@ class ConfigMethods:
     PREVIEW_DIFF = f"{ConfigModule.NAME}.PreviewDiff"
     GET_VERSION_HISTORY = f"{ConfigModule.NAME}.GetVersionHistory"
     ROLLBACK = f"{ConfigModule.NAME}.Rollback"
+    COMMIT_CHANGE_SET = f"{ConfigModule.NAME}.CommitChangeSet"
     PREVIEW_RELOAD_IMPACT = f"{ConfigModule.NAME}.PreviewReloadImpact"
     RELOAD_SERVICE = f"{ConfigModule.NAME}.ReloadService"
     HEALTH_CHECK = f"{ConfigModule.NAME}.HealthCheck"
@@ -101,11 +102,23 @@ class ConfigChange(IOModel):
     key_path: str
     value: Any
 
+    @field_validator("key_path")
+    @classmethod
+    def validate_key_path(cls, value: str) -> str:
+        if not value or not value.strip() or any(part == "" for part in value.split(".")):
+            raise ValueError("key_path must not be blank")
+        return value
+
 
 class ConfigDiffPreviewRequest(IOModel):
     """Request a dry-run diff preview for configuration changes."""
 
     changes: list[ConfigChange]
+
+    @model_validator(mode="after")
+    def validate_changes(self) -> "ConfigDiffPreviewRequest":
+        _validate_distinct_changes(self.changes)
+        return self
 
 
 class ConfigDiffEntry(IOModel):
@@ -129,6 +142,35 @@ class ConfigDiffPreviewResponse(IOModel):
     diffs: list[ConfigDiffEntry] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     secrets_redacted: bool = True
+    base_revision: int | None = None
+    preview_token: str | None = None
+    changed_paths: list[str] = Field(default_factory=list)
+
+
+class ConfigCommitChangeSetRequest(IOModel):
+    """Commit a previously previewed config change set."""
+
+    changes: list[ConfigChange]
+    base_revision: int
+    preview_token: str
+
+    @model_validator(mode="after")
+    def validate_changes(self) -> "ConfigCommitChangeSetRequest":
+        _validate_distinct_changes(self.changes)
+        return self
+
+
+class ConfigCommitChangeSetResponse(IOModel):
+    """Response after committing a config change set."""
+
+    success: bool
+    revision: int | None = None
+    version_id: str | None = None
+    changed_paths: list[str] = Field(default_factory=list)
+    transaction_id: str | None = None
+    error: str | None = None
+    error_code: str | None = None
+    diff: ConfigDiffPreviewResponse | None = None
 
 
 class ConfigVersionHistoryRequest(IOModel):
@@ -148,6 +190,9 @@ class ConfigVersionEntry(IOModel):
     new_value: Any = None
     affected_sections: list[str] = Field(default_factory=list)
     secret: bool = False
+    changed_paths: list[str] = Field(default_factory=list)
+    transaction_kind: str | None = None
+    actor: str | None = None
 
 
 class ConfigVersionHistoryResponse(IOModel):
@@ -181,6 +226,27 @@ class ConfigReloadImpactRequest(IOModel):
     key_paths: list[str] = Field(default_factory=list)
     changes: list[ConfigChange] = Field(default_factory=list)
 
+    @field_validator("key_paths")
+    @classmethod
+    def validate_key_paths(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        for key_path in value:
+            if (
+                not key_path
+                or not key_path.strip()
+                or any(part == "" for part in key_path.split("."))
+            ):
+                raise ValueError("key_paths must not contain blank paths")
+            if key_path in seen:
+                raise ValueError(f"duplicate key_path: {key_path}")
+            seen.add(key_path)
+        return value
+
+    @model_validator(mode="after")
+    def validate_changes(self) -> "ConfigReloadImpactRequest":
+        _validate_distinct_changes(self.changes, allow_empty=True)
+        return self
+
 
 class ConfigReloadImpactEntry(IOModel):
     """Reload/restart impact for one configuration path."""
@@ -196,3 +262,13 @@ class ConfigReloadImpactResponse(IOModel):
     """Response containing reload/restart impact entries."""
 
     impacts: list[ConfigReloadImpactEntry] = Field(default_factory=list)
+
+
+def _validate_distinct_changes(changes: list[ConfigChange], *, allow_empty: bool = False) -> None:
+    if not allow_empty and not changes:
+        raise ValueError("changes must not be empty")
+    seen: set[str] = set()
+    for change in changes:
+        if change.key_path in seen:
+            raise ValueError(f"duplicate change path: {change.key_path}")
+        seen.add(change.key_path)

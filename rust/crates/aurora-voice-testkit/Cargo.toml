@@ -1,0 +1,18 @@
+[package]
+name = "aurora-voice-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic clocks, audio, engines, transports, and fixtures for Aurora voice"
+
+[dependencies]
+async-trait.workspace = true
+aurora-contracts = { path = "../aurora-contracts" }
+aurora-voice-core = { path = "../aurora-voice-core" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
+serde_json.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

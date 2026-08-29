@@ -1,13 +1,16 @@
 """Unit tests for chatbot agent."""
 
+import asyncio
 import contextlib
 import sys
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from app.messaging import MessageBus
-from app.services.orchestrator.agents.chatbot import chatbot
+from app.messaging import MessageBus, QueryResult
+from app.services.orchestrator.agents.chatbot import _protocol_safe_prompt_suffix, chatbot
 from app.services.orchestrator.state import State
 
 # Mock LLM
@@ -54,6 +57,52 @@ def mock_state():
             HumanMessage(content="What is the capital of France?"),
         ]
     )
+
+
+class TestProtocolSafePromptSuffix:
+    """Keep recent prompts within the chat-provider tool message protocol."""
+
+    def test_keeps_the_configured_recent_window_without_tool_results(self):
+        """Ordinary conversation history remains capped at the requested window."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        messages = [
+            HumanMessage(content="oldest"),
+            AIMessage(content="older"),
+            HumanMessage(content="recent"),
+            AIMessage(content="newer"),
+            HumanMessage(content="newest"),
+        ]
+
+        assert _protocol_safe_prompt_suffix(messages, recent_window=4) == messages[-4:]
+
+    def test_expands_to_include_the_ai_message_owning_leading_tool_results(self):
+        """A large tool transaction never starts the provider prompt with orphan results."""
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+        tool_calls = [
+            {
+                "name": "lookup_schedule",
+                "args": {"index": index},
+                "id": f"call-{index}",
+                "type": "tool_call",
+            }
+            for index in range(5)
+        ]
+        owner = AIMessage(content="", tool_calls=tool_calls)
+        results = [
+            ToolMessage(content=f"result-{index}", tool_call_id=f"call-{index}")
+            for index in range(5)
+        ]
+        messages = [HumanMessage(content="list every schedule"), owner, *results]
+
+        suffix = _protocol_safe_prompt_suffix(messages, recent_window=4)
+
+        assert suffix == [owner, *results]
+        assert isinstance(suffix[0], AIMessage)
+        assert [message.tool_call_id for message in suffix[1:]] == [
+            f"call-{index}" for index in range(5)
+        ]
 
 
 class TestChatbotMemorySearch:
@@ -112,6 +161,61 @@ class TestChatbotMemorySearch:
 
             # Verify memories were included in result
             assert "messages" in result
+
+    @pytest.mark.asyncio
+    async def test_chatbot_sync_invoke_fallback_does_not_block_event_loop(
+        self, mock_bus, mock_state
+    ):
+        """Sync-only LLM adapters are invoked from a worker thread."""
+
+        from langchain_core.messages import AIMessage
+
+        import app.services.orchestrator.agents.chatbot as chatbot_module
+
+        class SyncOnlyLLM:
+            invoke_thread_id: int | None = None
+
+            def bind_tools(self, tools, tool_choice=None):
+                return self
+
+            def astream(self, messages):
+                async def _stream():
+                    raise NotImplementedError
+                    yield
+
+                return _stream()
+
+            def invoke(self, messages):
+                self.invoke_thread_id = threading.get_ident()
+                time.sleep(0.2)
+                return AIMessage(content="Response")
+
+        sync_llm = SyncOnlyLLM()
+        mock_bus.request.side_effect = [
+            QueryResult(ok=True, data={"items": []}),
+            QueryResult(ok=True, data={"tools": []}),
+        ]
+        tick_delay = None
+
+        async def _tick():
+            nonlocal tick_delay
+            started_at = time.perf_counter()
+            await asyncio.sleep(0.05)
+            tick_delay = time.perf_counter() - started_at
+
+        event_loop_thread_id = threading.get_ident()
+        with (
+            patch.object(chatbot_module, "_initialize_llm", new_callable=AsyncMock),
+            patch.object(chatbot_module, "llm", sync_llm),
+            patch.object(chatbot_module, "_llm_initialized", True),
+        ):
+            result, _ = await asyncio.gather(chatbot(mock_state, bus=mock_bus), _tick())
+
+        assert result["messages"][0].content == "Response"
+        assert sync_llm.invoke_thread_id is not None
+        assert sync_llm.invoke_thread_id != event_loop_thread_id
+        assert tick_delay is not None
+        assert tick_delay < 0.15
 
     @pytest.mark.asyncio
     async def test_chatbot_memory_search_failure(self, mock_bus, mock_state):
@@ -197,30 +301,31 @@ class TestChatbotToolRetrieval:
             ),  # Tool retrieval
         ]
 
-        with (
-            _patch_llm_for_chatbot(),
-            patch("app.services.orchestrator.agents.chatbot.ToolingGetToolCatalogRequest"),
-        ):
+        with _patch_llm_for_chatbot():
             result = await chatbot(mock_state, bus=mock_bus)
 
             # Verify tools were requested via bus
             assert mock_bus.request.call_count >= 2
-            assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
+            catalog_call = mock_bus.request.call_args_list[1]
+            assert catalog_call[0][0] == ToolingMethods.GET_TOOL_CATALOG
+            catalog_payload = catalog_call[0][1]
+            assert catalog_payload.query == mock_state["messages"][-1].content
+            assert catalog_payload.top_k == 10
+            assert catalog_payload.caller_permissions == ["*"]
 
             # LLM was called to produce a response
             assert "messages" in result
             assert result["approval_candidates"]["delete_file"]["approval_required"] is True
 
     @pytest.mark.asyncio
-    async def test_chatbot_falls_back_to_legacy_get_tools(self, mock_bus, mock_state):
-        """Chatbot falls back when aggregate catalog is unavailable."""
+    async def test_chatbot_fails_closed_when_catalog_unavailable(self, mock_bus, mock_state):
+        """Chatbot binds no tools when the policy-aware catalog is unavailable."""
         from app.messaging import QueryResult
         from app.shared.contracts.models.tooling import ToolingMethods
 
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),
             QueryResult(ok=False, error="unknown method"),
-            QueryResult(ok=True, data={"tools": []}),
         ]
 
         with _patch_llm_for_chatbot():
@@ -228,7 +333,59 @@ class TestChatbotToolRetrieval:
 
         assert "messages" in result
         assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
-        assert mock_bus.request.call_args_list[2][0][0] == ToolingMethods.GET_TOOLS
+        assert len(mock_bus.request.call_args_list) == 2
+
+    @pytest.mark.asyncio
+    async def test_chatbot_binds_search_tool_for_search_tool_request(self, mock_bus):
+        """A search-tool user request gets the catalog's DDG search tool bound to the LLM."""
+        from langchain_core.messages import HumanMessage
+
+        from app.messaging import QueryResult
+        from app.services.orchestrator.state import State
+        from app.shared.contracts.models.tooling import ToolingMethods
+
+        state = State(messages=[HumanMessage(content="use the search tool")])
+        mock_bus.request.side_effect = [
+            QueryResult(ok=True, data={"items": []}),
+            QueryResult(
+                ok=True,
+                data={
+                    "tools": [
+                        {
+                            "name": "duckduckgo_results_json",
+                            "local_name": "duckduckgo_results_json",
+                            "global_tool_id": "local:local_Tooling:tool:duckduckgo_results_json",
+                            "provider_peer_id": "local",
+                            "provider_service_instance_id": "local:Tooling",
+                            "display_name": "duckduckgo_results_json",
+                            "description": "Duck Duck Go search for current events.",
+                            "args_schema": {
+                                "type": "object",
+                                "properties": {"query": {"type": "string"}},
+                                "required": ["query"],
+                            },
+                            "execution_location": "local",
+                            "source_type": "local",
+                            "safety_class": "standard",
+                            "confirmation_required": False,
+                        }
+                    ],
+                    "blocked_tools": [],
+                },
+            ),
+        ]
+
+        with _patch_llm_for_chatbot():
+            import app.services.orchestrator.agents.chatbot as chatbot_module
+
+            result = await chatbot(state, bus=mock_bus)
+
+            assert "messages" in result
+            assert mock_bus.request.call_args_list[1][0][0] == ToolingMethods.GET_TOOL_CATALOG
+            catalog_request = mock_bus.request.call_args_list[1][0][1]
+            assert catalog_request.query == "use the search tool"
+            bound_tools = chatbot_module.llm.bind_tools.call_args[0][0]
+            assert [tool.name for tool in bound_tools] == ["duckduckgo_results_json"]
 
     @pytest.mark.asyncio
     async def test_chatbot_get_tools_failure(self, mock_bus, mock_state):
@@ -239,7 +396,6 @@ class TestChatbotToolRetrieval:
         mock_bus.request.side_effect = [
             QueryResult(ok=True, data={"items": []}),  # Memory search
             QueryResult(ok=False, error="Tool catalog failed"),  # Catalog retrieval
-            QueryResult(ok=False, error="Tool retrieval failed"),  # Legacy tool retrieval
         ]
 
         with (
@@ -259,11 +415,12 @@ class TestChatbotLLMIntegration:
     @pytest.mark.asyncio
     async def test_chatbot_llm_not_initialized(self, mock_bus, mock_state):
         """Test chatbot with uninitialized LLM."""
+        import app.services.orchestrator.agents.chatbot as chatbot_module
+
         with (
-            patch(
-                "app.services.orchestrator.agents.chatbot._initialize_llm", new_callable=AsyncMock
-            ),
-            patch("app.services.orchestrator.agents.chatbot.llm", None),
+            patch.object(chatbot_module, "_initialize_llm", new_callable=AsyncMock),
+            patch.object(chatbot_module, "_llm_initialized", False),
+            patch.object(chatbot_module, "llm", None),
             contextlib.suppress(ValueError, ModuleNotFoundError),
         ):
             # Should raise or handle gracefully; accept either

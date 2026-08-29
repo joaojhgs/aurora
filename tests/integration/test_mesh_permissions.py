@@ -5,14 +5,37 @@ remote calls based on mesh sharing configuration.
 """
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.messaging.bus import QueryResult
 from app.services.gateway.acl.identity import Identity
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.webrtc.rpc import RPCHandler
+from app.shared.contracts.models.gateway import MethodInfo, ServiceAnnouncement
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+
+
+def _active_projection(*, services: list, recipient: str = "peer-limited"):
+    return SimpleNamespace(
+        cache_key=SimpleNamespace(recipient_peer_id=recipient, provider_peer_id="provider-a"),
+        readiness="ready",
+        routable=True,
+        services=services,
+    )
+
+
+def _projected_service(module: str, *topics: str, capacity: int = 0):
+    return SimpleNamespace(
+        service_id=module,
+        capacity={"max_concurrent": capacity},
+        methods=[
+            SimpleNamespace(topic=topic, required_permissions=("TTS.*",), method_type="use")
+            for topic in topics
+        ],
+    )
 
 
 @pytest.fixture
@@ -25,11 +48,16 @@ def mock_bus():
 @pytest.fixture
 def mock_registry():
     registry = AsyncMock()
-    # Simulate a registered method
-    registry.find_method.return_value = MagicMock(
+    method = MethodInfo(
+        name="Synthesize",
         bus_topic="TTS.Synthesize",
         required_perms=["TTS.*"],
+        method_type="use",
     )
+    registry.get_service = AsyncMock(
+        return_value=ServiceAnnouncement(module="TTS", version="test", methods=[method])
+    )
+    registry.get_external_methods = AsyncMock(return_value=[])
     return registry
 
 
@@ -72,7 +100,7 @@ class TestSharingGate:
         mesh_config = MeshConfig(
             enabled=True,
             services={
-                "TTS": MeshServiceConfig(share=True, max_concurrent=5),
+                "TTS": mesh_policy(share=True, max_concurrent=5),
             },
         )
         handler = RPCHandler(
@@ -81,6 +109,25 @@ class TestSharingGate:
             mock_send_fn,
             lambda: admin_identity,
             mesh_config=mesh_config,
+            stable_peer_id_provider=lambda: "admin-peer",
+            active_projection_provider=lambda: _active_projection(
+                recipient="admin-peer",
+                services=[_projected_service("TTS", "TTS.Synthesize", capacity=1)],
+            ),
+        )
+        mock_registry.get_service = AsyncMock(
+            return_value=ServiceAnnouncement(
+                module="TTS",
+                version="test",
+                methods=[
+                    MethodInfo(
+                        name="Synthesize",
+                        bus_topic="TTS.Synthesize",
+                        exposure="external",
+                        required_perms=["TTS.*"],
+                    )
+                ],
+            )
         )
 
         call_msg = json.dumps(
@@ -102,6 +149,48 @@ class TestSharingGate:
             assert sent_data.get("type") in ("result", "error")
 
     @pytest.mark.asyncio
+    async def test_shared_internal_method_is_not_exposure_bypassed(
+        self, mock_bus, mock_registry, mock_send_fn, limited_identity
+    ):
+        """Shared services do not make internal-only methods callable over RPC."""
+        mesh_config = MeshConfig(
+            enabled=True,
+            services={
+                "TTS": mesh_policy(share=True, max_concurrent=5),
+            },
+        )
+        handler = RPCHandler(
+            mock_bus,
+            mock_registry,
+            mock_send_fn,
+            lambda: limited_identity,
+            mesh_config=mesh_config,
+            peer_id="peer-limited",
+            stable_peer_id_provider=lambda: "peer-limited",
+            active_projection_provider=lambda: _active_projection(
+                services=[_projected_service("TTS", "TTS.Synthesize")]
+            ),
+        )
+
+        await handler.on_message(
+            json.dumps(
+                {
+                    "type": "call",
+                    "id": "req-auth-meta",
+                    "method": "TTS.Synthesize",
+                    "params": {"text": "Hello"},
+                    "correlation_id": "corr-auth-meta",
+                }
+            )
+        )
+
+        mock_bus.request.assert_not_called()
+        response = json.loads(mock_send_fn.call_args.args[0])
+        assert response["type"] == "error"
+        assert response["error"]["code"] == 403
+        assert response["error"]["message"] == "Method is not exposed for WebRTC RPC"
+
+    @pytest.mark.asyncio
     async def test_non_shared_service_blocks_call(
         self, mock_bus, mock_registry, mock_send_fn, admin_identity
     ):
@@ -109,7 +198,7 @@ class TestSharingGate:
         mesh_config = MeshConfig(
             enabled=True,
             services={
-                "TTS": MeshServiceConfig(share=False),
+                "TTS": mesh_policy(share=False),
             },
         )
         handler = RPCHandler(
@@ -118,6 +207,25 @@ class TestSharingGate:
             mock_send_fn,
             lambda: admin_identity,
             mesh_config=mesh_config,
+            stable_peer_id_provider=lambda: "admin-peer",
+            active_projection_provider=lambda: _active_projection(
+                recipient="admin-peer",
+                services=[_projected_service("TTS", "TTS.Synthesize", capacity=1)],
+            ),
+        )
+        mock_registry.get_service = AsyncMock(
+            return_value=ServiceAnnouncement(
+                module="TTS",
+                version="test",
+                methods=[
+                    MethodInfo(
+                        name="Synthesize",
+                        bus_topic="TTS.Synthesize",
+                        exposure="external",
+                        required_perms=["TTS.*"],
+                    )
+                ],
+            )
         )
 
         call_msg = json.dumps(
@@ -145,7 +253,7 @@ class TestSharingGate:
         mesh_config = MeshConfig(
             enabled=True,
             services={
-                "TTS": MeshServiceConfig(share=True, max_concurrent=1),
+                "TTS": mesh_policy(share=True, max_concurrent=1),
             },
         )
         handler = RPCHandler(
@@ -154,6 +262,25 @@ class TestSharingGate:
             mock_send_fn,
             lambda: admin_identity,
             mesh_config=mesh_config,
+            stable_peer_id_provider=lambda: "admin-peer",
+            active_projection_provider=lambda: _active_projection(
+                recipient="admin-peer",
+                services=[_projected_service("TTS", "TTS.Synthesize", capacity=1)],
+            ),
+        )
+        mock_registry.get_service = AsyncMock(
+            return_value=ServiceAnnouncement(
+                module="TTS",
+                version="test",
+                methods=[
+                    MethodInfo(
+                        name="Synthesize",
+                        bus_topic="TTS.Synthesize",
+                        exposure="external",
+                        required_perms=["TTS.*"],
+                    )
+                ],
+            )
         )
         # Simulate one active call
         handler._active_remote_calls["TTS"] = 1

@@ -1,0 +1,49 @@
+name: Required Check Aliases
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+  actions: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  process-mode-alias:
+    name: 🧪 Test Process Mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical Python Tests job succeeded
+        uses: ./.github/actions/wait-for-canonical-check
+        with:
+          check-name: Unit, integration, and E2E tests
+
+  lint-alias:
+    name: lint (3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical Python quality job succeeded
+        uses: ./.github/actions/wait-for-canonical-check
+        with:
+          check-name: Python lint, format, and generated config
+
+  unit-integration-alias:
+    name: unit_integration_test (ubuntu-latest, 3.11.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify canonical Python Tests job succeeded
+        uses: ./.github/actions/wait-for-canonical-check
+        with:
+          check-name: Unit, integration, and E2E tests

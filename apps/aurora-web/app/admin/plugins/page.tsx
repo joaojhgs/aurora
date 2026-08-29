@@ -13,7 +13,7 @@ export default async function Page() {
         <AuroraRoutePage
           routeId="plugins"
           title="Plugins"
-          description="Plugin, MCP, and tool sharing controls stay disabled until aggregate tool catalog and approval policy wiring is complete."
+          description="Plugin and tool-sharing controls are unavailable until Aurora finishes setting up access and approvals."
         />
       ) : null}
     </>

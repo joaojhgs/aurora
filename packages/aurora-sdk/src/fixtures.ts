@@ -11,6 +11,7 @@ import type {
   GetRegistryResponse,
   GetServicesResponse,
   ListPendingPairingsResponse,
+  MeshInviteConfigResponse,
   MeshPeerListResponse,
   MeshStatusResponse,
   AuditLogResponse,
@@ -21,7 +22,14 @@ import type {
   PrincipalResponse,
   RouteExplainResponse,
   TokenListResponse,
-  WebRTCDiagnosticsResponse
+  ToolingGetMcpStatusResponse,
+  ToolingListApprovalGrantsResponse,
+  ToolingSharingPolicy,
+  OrchestratorListPendingToolApprovalsResponse,
+  WebRTCDiagnosticsResponse,
+  JsonValue,
+  ModuleRegistryInfo,
+  ServiceInfo
 } from './types.js'
 import type { BackupListResponse } from './backup.js'
 import type { SchedulerListJobsResponse } from './scheduler.js'
@@ -33,10 +41,13 @@ import type {
   DBRAGListNamespacesResponse,
   DBRAGProvenance,
   DBRAGSearchRemoteResponse,
-  DBRAGSearchRemoteRequest
+  DBRAGSearchRemoteRequest,
+  DBRAGSearchRequest,
+  DBRAGListResponse
 } from './memory.js'
 import type {
   ConfigDiffPreviewResponse,
+  ConfigFieldMetadata,
   ConfigGetResponse,
   ConfigReloadImpactResponse,
   ConfigRollbackResponse,
@@ -54,6 +65,134 @@ export const emptyRegistryFixture: GetRegistryResponse = {
   method_count: 0
 }
 
+const shareableServiceRegistryModules: ModuleRegistryInfo[] = [
+  shareableRegistryModule('TTS', 'Speech playback', ['speech'], {
+    featureId: 'speech',
+    label: 'Speech playback',
+    summary: 'Speak responses on this device.',
+    methodId: 'TTS.Speak',
+    methodName: 'Speak',
+    methodSummary: 'Play spoken replies.',
+    permission: 'TTS.use'
+  }),
+  shareableRegistryModule('DB', 'Memory and saved knowledge', ['memory'], {
+    featureId: 'memory_search',
+    label: 'Saved knowledge',
+    summary: 'Search and recall saved knowledge.',
+    methodId: 'DB.RAGSearch',
+    methodName: 'Search',
+    methodSummary: 'Search saved knowledge.',
+    permission: 'DB.use'
+  }),
+  shareableRegistryModule('Tooling', 'Tools', ['tools'], {
+    featureId: 'tool_catalog',
+    label: 'Tools',
+    summary: 'Use approved tools from this device.',
+    methodId: 'Tooling.GetToolCatalog',
+    methodName: 'List tools',
+    methodSummary: 'List tools available on this device.',
+    permission: 'Tooling.use'
+  }),
+  shareableRegistryModule('STTCoordinator', 'Listening coordinator', ['listening'], {
+    featureId: 'listening',
+    label: 'Listening',
+    summary: 'Coordinate listening on this device.',
+    methodId: 'STT.GetStatus',
+    methodName: 'Status',
+    methodSummary: 'Report listening status.',
+    permission: 'STT.use'
+  }),
+  shareableRegistryModule('WakeWord', 'Wake listening', ['wake'], {
+    featureId: 'wake_listening',
+    label: 'Wake listening',
+    summary: 'Listen for the wake phrase on this device.',
+    methodId: 'WakeWord.GetStatus',
+    methodName: 'Status',
+    methodSummary: 'Report wake listening status.',
+    permission: 'STT.use'
+  }),
+  shareableRegistryModule('Transcription', 'Speech to text', ['transcription'], {
+    featureId: 'transcription',
+    label: 'Speech to text',
+    summary: 'Turn speech into text on this device.',
+    methodId: 'Transcription.Transcribe',
+    methodName: 'Transcribe',
+    methodSummary: 'Turn speech into text.',
+    permission: 'STT.use'
+  })
+]
+
+function shareableRegistryModule(
+  module: string,
+  summary: string,
+  capabilities: string[],
+  feature: {
+    featureId: string
+    label: string
+    summary: string
+    methodId: string
+    methodName: string
+    methodSummary: string
+    permission: string
+  }
+): ModuleRegistryInfo {
+  return {
+    module,
+    version: '0.1.0',
+    summary,
+    capabilities,
+    callable_features: [{
+      feature_id: feature.featureId,
+      module,
+      label: feature.label,
+      summary: feature.summary,
+      method_ids: [feature.methodId]
+    }],
+    methods: [{
+      name: feature.methodName,
+      summary: feature.methodSummary,
+      bus_topic: feature.methodId,
+      exposure: 'external',
+      input_model: null,
+      output_model: null,
+      required_perms: [feature.permission],
+      method_type: 'use',
+      input_schema: null,
+      output_schema: null
+    }]
+  }
+}
+
+function healthyShareableService(
+  module: string,
+  summary: string,
+  capabilities: string[],
+  methodCount: number,
+  instanceId: string
+): ServiceInfo {
+  return {
+    module,
+    version: '0.1.0',
+    summary,
+    capabilities,
+    method_count: methodCount,
+    last_seen: '2026-06-19T00:00:00Z',
+    status: 'healthy',
+    instance_id: instanceId
+  }
+}
+
+const shareableServiceStatusEntries: ServiceInfo[] = [
+  healthyShareableService('Orchestrator', 'Assistant orchestration and model runtime', ['assistant', 'models'], 5, 'orchestrator-local'),
+  ...shareableServiceRegistryModules.map((module) => healthyShareableService(
+    module.module,
+    module.summary,
+    module.capabilities,
+    module.methods.length,
+    `${module.module.toLowerCase()}-local`
+  ))
+]
+
 export const gatewayRegistryFixture: GetRegistryResponse = {
   modules: [
     {
@@ -69,7 +208,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'ModelRuntimeCatalogRequest',
           output_model: 'ModelRuntimeCatalogResponse',
-          required_perms: ['Orchestrator.use'],
+          required_perms: ['Orchestrator.RemoteInference'],
           method_type: 'use',
           input_schema: null,
           output_schema: null
@@ -81,7 +220,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'ModelRuntimeRequest',
           output_model: 'ModelRuntimeResponse',
-          required_perms: ['Orchestrator.use'],
+          required_perms: ['Orchestrator.RemoteInference'],
           method_type: 'use',
           input_schema: null,
           output_schema: null
@@ -161,8 +300,8 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'EmptyInput',
           output_model: 'DeploymentTopologyResponse',
-          required_perms: ['Gateway.manage'],
-          method_type: 'manage',
+          required_perms: ['Gateway.use'],
+          method_type: 'use',
           input_schema: null,
           output_schema: null
         },
@@ -173,8 +312,8 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'external',
           input_model: 'EmptyInput',
           output_model: 'WebRTCDiagnosticsResponse',
-          required_perms: ['Gateway.manage'],
-          method_type: 'manage',
+          required_perms: ['Gateway.use'],
+          method_type: 'use',
           input_schema: null,
           output_schema: null
         },
@@ -447,6 +586,18 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'ScheduleAction',
+          summary: 'Schedule a typed local or delegated automation action',
+          bus_topic: 'Scheduler.ScheduleAction',
+          exposure: 'both',
+          input_model: 'SchedulerScheduleActionRequest',
+          output_model: 'SchedulerScheduleActionResponse',
+          required_perms: ['Scheduler.manage'],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'Cancel',
           summary: 'Cancel a scheduler job in an authorized owner namespace',
           bus_topic: 'Scheduler.Cancel',
@@ -487,7 +638,17 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
   ],
   digest: 'fixture',
   service_count: 4,
-  method_count: 25
+  method_count: 34
+}
+
+export const mockShareableRegistryFixture: GetRegistryResponse = {
+  ...gatewayRegistryFixture,
+  modules: [
+    ...gatewayRegistryFixture.modules,
+    ...shareableServiceRegistryModules
+  ],
+  service_count: gatewayRegistryFixture.service_count + shareableServiceRegistryModules.length,
+  method_count: gatewayRegistryFixture.method_count + shareableServiceRegistryModules.reduce((count, module) => count + module.methods.length, 0)
 }
 
 const localFreshness: CapabilityFreshnessInfo = {
@@ -517,7 +678,7 @@ const standardPolicy: CapabilityPolicyDecisionInfo = {
   selector_required: false,
   mesh_visible: false,
   local_only: false,
-  allowed_peers: null,
+  allowed_provider_peer_ids: null,
   operation_class: null,
   resource_scope: null,
   denial_reasons: []
@@ -720,7 +881,7 @@ const basePolicy: CapabilityPolicyDecisionInfo = {
   selector_required: false,
   mesh_visible: false,
   local_only: false,
-  allowed_peers: null,
+  allowed_provider_peer_ids: null,
   operation_class: null,
   resource_scope: null,
   denial_reasons: []
@@ -941,6 +1102,22 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       service_instance_id: 'auth-local',
       reason: 'Local Auth service exposes RBAC management contracts.',
       policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'admin' }
+    }),
+    provider({
+      provider_id: 'remote:demo-home:Transcription',
+      peer_id: 'demo-home',
+      provider_kind: 'remote',
+      node_name: 'Sample Aurora',
+      module: 'Transcription',
+      service_instance_id: 'transcription-demo',
+      reason: 'Bounded sample transcription is available through the explicit demo transport.',
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Transcription.Transcribe'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        resource_scope: 'raw-audio'
+      }
     })
   ],
   actions: [
@@ -1156,6 +1333,17 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       summary: 'Create scheduler jobs through AdminAction.'
     }),
     action({
+      action_id: 'scheduler-schedule-action-local',
+      module: 'Scheduler',
+      method: 'ScheduleAction',
+      topic: 'Scheduler.ScheduleAction',
+      provider_id: 'local:Scheduler',
+      service_instance_id: 'scheduler-local',
+      selector: { peer_id: 'local-peer', module: 'Scheduler' },
+      policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], operation_class: 'admin-critical', safety_class: 'admin', approval_required: true },
+      summary: 'Create typed scheduler actions through AdminAction.'
+    }),
+    action({
       action_id: 'scheduler-cancel-local',
       module: 'Scheduler',
       method: 'Cancel',
@@ -1189,6 +1377,18 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       selector: { peer_id: 'peer-studio-gpu', module: 'Scheduler', provider_id: 'mesh:studio-gpu:Scheduler' },
       policy: { ...basePolicy, required_permissions: ['Scheduler.manage'], trust_tier: 'paired', mesh_visible: true, operation_class: 'admin', safety_class: 'admin', approval_required: true },
       summary: 'Resume delegated remote scheduler jobs with visible peer/provider context.'
+    }),
+    action({
+      action_id: 'assistant-local-external-user-input',
+      module: 'Orchestrator',
+      method: 'ExternalUserInput',
+      topic: 'Orchestrator.ExternalUserInput',
+      provider_id: 'local:Orchestrator:llama-cpp',
+      provider_kind: 'local',
+      service_instance_id: 'orchestrator-local',
+      selector: { peer_id: 'local-peer', module: 'Orchestrator', provider_id: 'local:Orchestrator:llama-cpp' },
+      policy: modelRuntimePolicy,
+      summary: 'Local assistant chat route for the UI mock transport.'
     }),
     action({
       action_id: 'model-runtime-local-catalog',
@@ -1378,6 +1578,30 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       selector: { peer_id: 'local-peer', module: 'Auth' },
       policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin', safety_class: 'read-only' },
       summary: 'Read RBAC audit events from Auth.'
+    }),
+    action({
+      action_id: 'transcription-demo-focused',
+      module: 'Transcription',
+      method: 'Transcribe',
+      topic: 'Transcription.Transcribe',
+      provider_id: 'remote:demo-home:Transcription',
+      peer_id: 'demo-home',
+      provider_kind: 'remote',
+      service_instance_id: 'transcription-demo',
+      selector: {
+        peer_id: 'demo-home',
+        module: 'Transcription',
+        provider_id: 'remote:demo-home:Transcription'
+      },
+      callable_feature_ids: ['audio_transcription'],
+      policy: {
+        ...basePolicy,
+        required_permissions: ['Transcription.Transcribe'],
+        trust_tier: 'paired',
+        mesh_visible: true,
+        resource_scope: 'raw-audio'
+      },
+      summary: 'Bounded sample transcription for focused push-to-talk in explicit demo mode.'
     })
   ],
   resources: [],
@@ -1393,7 +1617,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     ],
     Auth: ['local:Auth'],
     Backup: ['local:Backup'],
-    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler']
+    Scheduler: ['local:Scheduler', 'mesh:studio-gpu:Scheduler'],
+    Transcription: ['remote:demo-home:Transcription']
   },
   action_index: {
     'Gateway.GetMeshStatus': ['gateway-mesh-status-local'],
@@ -1405,6 +1630,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       'tool-remote-door',
       'tool-stale-camera'
     ],
+    'Orchestrator.ExternalUserInput': ['assistant-local-external-user-input'],
+    'Transcription.Transcribe': ['transcription-demo-focused'],
     'Orchestrator.GetModelCatalog': [
       'model-runtime-local-catalog',
       'model-runtime-mesh-catalog',
@@ -1431,6 +1658,7 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Backup.List': ['backup-list-local'],
     'Scheduler.ListJobs': ['scheduler-list-local'],
     'Scheduler.Schedule': ['scheduler-schedule-local'],
+    'Scheduler.ScheduleAction': ['scheduler-schedule-action-local'],
     'Scheduler.Cancel': ['scheduler-cancel-local'],
     'Scheduler.Pause': ['scheduler-pause-local'],
     'Scheduler.Resume': ['scheduler-resume-remote']
@@ -1466,11 +1694,35 @@ export const gatewayServicesFixture: GetServicesResponse = {
       version: '0.1.0',
       summary: 'Scheduler jobs and delegated automation management',
       capabilities: ['jobs', 'delegation', 'automation'],
+      callable_features: [
+        {
+          feature_id: 'job_scheduling',
+          module: 'Scheduler',
+          label: 'Job Scheduling',
+          summary: 'Schedule legacy and typed jobs.',
+          method_ids: ['Scheduler.ScheduleAction', 'Scheduler.Schedule']
+        },
+        {
+          feature_id: 'job_lifecycle',
+          module: 'Scheduler',
+          label: 'Job Lifecycle',
+          summary: 'Cancel, pause, and resume scheduled jobs.',
+          method_ids: ['Scheduler.Cancel', 'Scheduler.Pause', 'Scheduler.Resume']
+        },
+        {
+          feature_id: 'job_discovery',
+          module: 'Scheduler',
+          label: 'Job Discovery',
+          summary: 'List scheduled jobs.',
+          method_ids: ['Scheduler.ListJobs']
+        }
+      ],
       method_count: 5,
       last_seen: '2026-06-19T00:00:00Z',
       status: 'healthy',
       instance_id: 'scheduler-local'
-    }
+    },
+    ...shareableServiceStatusEntries
   ]
 }
 
@@ -1620,7 +1872,52 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: ['DB'],
         remote_compatible: ['Gateway'],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-kitchen-7',
+          export_policy_revision: 'export-kitchen-4',
+          auth_grant_revision: 9,
+          projection_digest: 'projection-kitchen-safe-digest'
+        },
+        remote_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-local-12',
+          export_policy_revision: 'export-local-8',
+          auth_grant_revision: 14,
+          projection_digest: 'projection-local-safe-digest'
+        },
+        local_services: [
+          {
+            service_id: 'TTS',
+            service_label: '',
+            status: 'compatible',
+            reason_codes: [],
+            reason: 'compatible'
+          },
+          {
+            service_id: 'DB',
+            service_label: '',
+            status: 'unused',
+            reason_codes: [],
+            reason: 'not configured for remote routing'
+          }
+        ],
+        remote_services: [
+          {
+            service_id: 'Gateway',
+            service_label: '',
+            status: 'compatible',
+            reason_codes: [],
+            reason: 'compatible'
+          }
+        ]
       }
     },
     {
@@ -1659,7 +1956,29 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: [],
         remote_compatible: ['Gateway', 'Auth'],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-studio-3',
+          export_policy_revision: 'export-studio-2',
+          auth_grant_revision: 5,
+          projection_digest: 'projection-studio-safe-digest'
+        },
+        remote_revision: {
+          active_protocol: 'projection-v1',
+          active_version: 'v1',
+          active_tier: 'projection',
+          protocol_revision: 'v1',
+          registry_revision: 'registry-local-12',
+          export_policy_revision: 'export-local-8',
+          auth_grant_revision: 14,
+          projection_digest: 'projection-local-safe-digest'
+        },
+        local_services: [],
+        remote_services: []
       }
     },
     {
@@ -1677,7 +1996,37 @@ export const meshStatusFixture: MeshStatusResponse = {
         local_unused: [],
         remote_compatible: [],
         remote_incompatible: [],
-        remote_unused: []
+        remote_unused: [],
+        local_revision: {
+          active_protocol: 'legacy-unfiltered-v0',
+          active_version: 'v0',
+          active_tier: 'legacy',
+          protocol_revision: null,
+          registry_revision: '',
+          export_policy_revision: '',
+          auth_grant_revision: null,
+          projection_digest: ''
+        },
+        remote_revision: {
+          active_protocol: '',
+          active_version: '',
+          active_tier: '',
+          protocol_revision: null,
+          registry_revision: '',
+          export_policy_revision: '',
+          auth_grant_revision: null,
+          projection_digest: ''
+        },
+        local_services: [
+          {
+            service_id: 'Tooling',
+            service_label: '',
+            status: 'incompatible',
+            reason_codes: ['legacy_unverifiable'],
+            reason: 'legacy manifest cannot prove recipient-specific authority'
+          }
+        ],
+        remote_services: []
       }
     }
   ],
@@ -1756,7 +2105,67 @@ export const meshStatusFixture: MeshStatusResponse = {
       peer_id: 'peer-den',
       module: 'Tooling',
       direction: 'local',
+      reason_code: 'manifest_projection_stale',
       reason: 'remote manifest stale'
+    }
+  ],
+  export_summaries: [
+    {
+      service_id: 'TTS',
+      service_label: '',
+      shared: true,
+      policy_revision: 8,
+      reason_codes: ['method_not_shared'],
+      excluded_method_count: 1,
+      excluded_feature_count: 0
+    },
+    {
+      service_id: 'Scheduler',
+      service_label: '',
+      shared: false,
+      policy_revision: 8,
+      reason_codes: ['service_not_shared'],
+      excluded_method_count: 0,
+      excluded_feature_count: 0
+    }
+  ],
+  routing_summaries: [
+    {
+      service_id: 'TTS',
+      service_label: '',
+      configured: true,
+      prefer: 'remote',
+      fallback: 'local',
+      policy_revision: 8,
+      eligible_provider_ids: ['peer-kitchen'],
+      ineligible_provider_ids: ['peer-den'],
+      reason_codes: [
+        'provider_not_allowed',
+        'service_not_shared',
+        'method_not_shared',
+        'service_not_advertised',
+        'method_not_advertised',
+        'permissions_unknown',
+        'permission_denied',
+        'missing_required_features',
+        'missing_required_capability_tags',
+        'manifest_projection_stale',
+        'incompatible_version',
+        'provider_at_capacity',
+        'provider_unavailable',
+        'legacy_unverifiable'
+      ]
+    },
+    {
+      service_id: 'Scheduler',
+      service_label: '',
+      configured: true,
+      prefer: 'local',
+      fallback: 'none',
+      policy_revision: 8,
+      eligible_provider_ids: [],
+      ineligible_provider_ids: [],
+      reason_codes: []
     }
   ],
   secrets_redacted: true
@@ -1933,7 +2342,7 @@ export const tokenListFixture: TokenListResponse = {
       user_id: 'principal-owner',
       scopes: ['*'],
       created_at: '2026-06-19T00:35:00Z',
-      expires_at: '2026-07-19T00:35:00Z'
+      expires_at: '2099-07-19T00:35:00Z'
     },
     {
       id: 'token-ops-tablet-active',
@@ -1942,7 +2351,7 @@ export const tokenListFixture: TokenListResponse = {
       user_id: 'principal-ops',
       scopes: ['Auth.manage', 'Gateway.manage'],
       created_at: '2026-06-19T00:45:00Z',
-      expires_at: '2026-07-19T00:45:00Z'
+      expires_at: '2099-07-19T00:45:00Z'
     },
     {
       id: 'token-assistant-phone-expired',
@@ -2087,7 +2496,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'external',
       method_type: 'use',
-      required_perms: ['Orchestrator.use'],
+      required_perms: ['Orchestrator.RemoteInference'],
       input_model: 'ModelRuntimeCatalogRequest',
       output_model: 'ModelRuntimeCatalogResponse',
       input_schema: {
@@ -2110,7 +2519,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'external',
       method_type: 'use',
-      required_perms: ['Orchestrator.use'],
+      required_perms: ['Orchestrator.RemoteInference'],
       input_model: 'ModelRuntimeRequest',
       output_model: 'ModelRuntimeResponse',
       input_schema: {
@@ -2655,6 +3064,29 @@ export const backendInventoryFixture: BackendInventory = {
     },
     {
       module: 'Scheduler',
+      name: 'ScheduleAction',
+      summary: 'Schedule a typed local or delegated automation action through AdminAction',
+      bus_topic: 'Scheduler.ScheduleAction',
+      routePath: '/api/Scheduler/ScheduleAction',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: ['Scheduler.manage'],
+      input_model: 'SchedulerScheduleActionRequest',
+      output_model: 'SchedulerScheduleActionResponse',
+      input_schema: {
+        title: 'SchedulerScheduleActionRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'SchedulerScheduleActionResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/scheduler/service.py:120'
+    },
+    {
+      module: 'Scheduler',
       name: 'Cancel',
       summary: 'Cancel a scheduler job through AdminAction with namespace authorization',
       bus_topic: 'Scheduler.Cancel',
@@ -2750,8 +3182,8 @@ export const backendInventoryFixture: BackendInventory = {
       routePath: '/api/Gateway/GetDeploymentTopology',
       route_kind: 'dynamic',
       exposure: 'external',
-      method_type: 'manage',
-      required_perms: ['Gateway.manage'],
+      method_type: 'use',
+      required_perms: ['Gateway.use'],
       input_model: 'EmptyInput',
       output_model: 'DeploymentTopologyResponse',
       input_schema: null,
@@ -2770,8 +3202,8 @@ export const backendInventoryFixture: BackendInventory = {
       routePath: '/api/Gateway/GetWebRTCDiagnostics',
       route_kind: 'dynamic',
       exposure: 'external',
-      method_type: 'manage',
-      required_perms: ['Gateway.manage'],
+      method_type: 'use',
+      required_perms: ['Gateway.use'],
       input_model: 'EmptyInput',
       output_model: 'WebRTCDiagnosticsResponse',
       input_schema: null,
@@ -2887,7 +3319,7 @@ export const routeExplainFixture: RouteExplainResponse = {
   candidates: [
     {
       provider_id: remoteTtsProvider.provider_id,
-      peer_id: remoteTtsProvider.peer_id,
+      peer_id: remoteTtsProvider.peer_id ?? 'peer-studio-gpu',
       provider_kind: remoteTtsProvider.provider_kind,
       service_instance_id: remoteTtsProvider.service_instance_id,
       module: remoteTtsProvider.module,
@@ -2948,7 +3380,10 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.sidecarStop': true,
     'aurora.shutdown': true,
     'aurora.logTail': true,
+    'aurora.updater': true,
     'aurora.secureStorage': true,
+    'aurora.iosKeychain': false,
+    'aurora.iosBiometricUnlock': false,
     'aurora.nativePermissionStatus': true,
     'aurora.trayStatus': true,
     'aurora.notificationsStatus': true,
@@ -2961,8 +3396,25 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'aurora.audioBridgeStatus': true,
     'aurora.audioCapture': false,
     'aurora.audioPlayback': false,
+    'aurora.iosVoiceStatus': true,
+    'aurora.iosBackgroundStatus': true,
+    'aurora.iosMicrophoneCapture': false,
+    'aurora.iosBackgroundAudio': false,
+    'aurora.iosAppIntents': false,
+    'aurora.iosShortcuts': false,
+    'aurora.iosShareExtension': false,
+    'aurora.iosWidgets': false,
+    'aurora.iosDeepLinks': false,
+    'aurora.iosSiriReplacement': false,
     'aurora.shell': false,
-    'aurora.processSpawn': false
+    'aurora.processSpawn': false,
+    'aurora.ios.appIntents': false,
+    'aurora.ios.shortcuts': false,
+    'aurora.ios.shareExtension': false,
+    'aurora.ios.deepLinks': false,
+    'aurora.ios.widgets': false,
+    'aurora.ios.fileAssociations': false,
+    'aurora.ios.entrypointPayload': false
   },
   capabilities: {
     'desktop.thinGateway': true,
@@ -2973,6 +3425,8 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'desktop.localSidecarSupervision': true,
     'desktop.tray': true,
     'native.secureCredentialStorage': true,
+    'ios.keychain.secureCredentialStorage': false,
+    'ios.biometric.adminUnlock': false,
     'native.permissionsManifest': true,
     'native.notifications': false,
     'native.dialogs': false,
@@ -2980,7 +3434,44 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     'native.filesystem': false,
     'native.audio': false,
     'native.audioCapture': false,
-    'native.audioPlayback': false
+    'native.audioPlayback': false,
+    'ios.voiceForegroundCapture': false,
+    'ios.notifications': false,
+    'ios.backgroundVoice': false,
+    'ios.appOwnedInvocation': false,
+    'ios.appIntents': false,
+    'ios.shortcuts': false,
+    'ios.shareExtension': false,
+    'ios.deepLinks': false,
+    'ios.widgets': false,
+    'ios.fileAssociations': false,
+    'ios.entrypointPayload': false,
+    'ios.siriReplacement': false
+  },
+  permissionStates: {
+    'aurora.iosMicrophoneCapture': 'needs_native_permission',
+    'aurora.iosBackgroundAudio': 'unsupported_platform',
+    'aurora.ios.appIntents': 'needs_native_permission',
+    'aurora.ios.shortcuts': 'needs_native_permission',
+    'aurora.ios.shareExtension': 'needs_native_permission',
+    'aurora.ios.deepLinks': 'needs_native_permission',
+    'aurora.ios.widgets': 'needs_native_permission',
+    'aurora.ios.fileAssociations': 'needs_native_permission',
+    'aurora.ios.entrypointPayload': 'needs_native_permission'
+  },
+  capabilityStates: {
+    'ios.voiceForegroundCapture': 'needs_native_permission',
+    'ios.notifications': 'needs_native_permission',
+    'ios.backgroundVoice': 'unsupported_platform',
+    'ios.appOwnedInvocation': 'needs_native_permission',
+    'ios.appIntents': 'needs_native_permission',
+    'ios.shortcuts': 'needs_native_permission',
+    'ios.shareExtension': 'needs_native_permission',
+    'ios.deepLinks': 'needs_native_permission',
+    'ios.widgets': 'needs_native_permission',
+    'ios.fileAssociations': 'needs_native_permission',
+    'ios.entrypointPayload': 'needs_native_permission',
+    'ios.siriReplacement': 'unsupported_platform'
   },
   mobileIntegrations: [
     {
@@ -3009,26 +3500,62 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     },
     {
       platform: 'ios',
-      id: 'shareWidgetDeepLinks',
-      label: 'Share, widgets, and deep links',
+      id: 'shareExtension',
+      label: 'iOS share extension intake',
       support: 'planned',
-      capability: 'ios.shareWidgetDeepLinks',
-      permission: 'aurora.ios.shareWidgetDeepLinks',
+      capability: 'ios.shareExtension',
+      permission: 'aurora.ios.shareExtension',
       privacyClass: 'personal',
-      evidenceSource: 'IOS-001-baseline',
-      userCopy: 'Share extensions, widgets, and deep links stay scoped to app-owned intake surfaces.',
-      verifier: 'Xcode extension target smoke and Tauri mobile file-association check'
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'The share extension accepts user-selected text, URLs, and files, then hands redacted metadata to Aurora backend context ingestion.',
+      verifier: 'Xcode share-extension target smoke plus simulator/device share sheet invocation'
+    },
+    {
+      platform: 'ios',
+      id: 'deepLinks',
+      label: 'iOS deep links',
+      support: 'planned',
+      capability: 'ios.deepLinks',
+      permission: 'aurora.ios.deepLinks',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'aurora:// app links launch app-owned Aurora flows; backend state still proves any session or context handoff.',
+      verifier: 'simulator/device aurora:// URL open smoke through the iOS Tauri target'
+    },
+    {
+      platform: 'ios',
+      id: 'widgets',
+      label: 'iOS widgets',
+      support: 'planned',
+      capability: 'ios.widgets',
+      permission: 'aurora.ios.widgets',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-native-manifest',
+      userCopy: 'Widget actions open Aurora through app-owned entrypoints and do not execute assistant work in the extension process.',
+      verifier: 'Xcode widget extension build plus simulator widget tap smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'fileAssociations',
+      label: 'iOS file associations',
+      support: 'supported-path',
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.ios.fileAssociations',
+      privacyClass: 'personal',
+      evidenceSource: 'IOS-004-tauri-file-associations',
+      userCopy: 'Tauri iOS file associations declare Aurora as a viewer for selected text, markdown, JSON, and Aurora exports.',
+      verifier: 'Tauri mobile file association metadata plus simulator document-open smoke'
     },
     {
       platform: 'ios',
       id: 'siriReplacement',
-      label: 'Siri replacement',
+      label: 'System assistant role',
       support: 'unsupported',
       capability: 'ios.siriReplacement',
       permission: null,
       privacyClass: 'public',
       evidenceSource: 'Apple-platform-policy',
-      userCopy: 'iOS does not allow Aurora to replace Siri as the default assistant.',
+      userCopy: 'iOS does not allow third-party default assistant ownership.',
       verifier: 'copy and capability review; no executable route should be exposed'
     }
   ],
@@ -3036,12 +3563,1007 @@ export const nativeCapabilityManifestFixture: NativeCapabilityManifest = {
     {
       platform: 'ios',
       id: 'noSiriReplacement',
-      label: 'No Siri replacement',
+      label: 'No system assistant role',
       reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not replacing Siri as the system assistant.',
       userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.',
       evidenceSource: 'Apple App Intents and SiriKit extension documentation'
     }
-  ]
+  ],
+  iosInvocation: {
+    platform: 'ios',
+    appIntentsAvailable: false,
+    shortcutsAvailable: false,
+    shareExtensionAvailable: false,
+    deepLinksAvailable: false,
+    widgetsAvailable: false,
+    fileAssociationsAvailable: false,
+    siriReplacement: false,
+    backendHandoffRequired: true,
+    privacyLabels: ['personal', 'sensitive'],
+    state: 'needs_native_permission',
+    reason: 'iOS invocation requires macOS/Xcode-generated targets and simulator/device proof before it can be claimed available.',
+    evidenceSource: 'IOS-004-native-manifest',
+    secretsRedacted: true
+  },
+  entrypoints: [
+    {
+      id: 'ios_share_extension',
+      platform: 'ios',
+      label: 'iOS share extension',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.shareExtension',
+      permission: 'aurora.ios.shareExtension',
+      intakeType: 'share_extension',
+      xcodeTarget: 'AuroraShareExtension',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Share extension target must hand redacted payload metadata to backend attachment/context ingestion.'
+    },
+    {
+      id: 'ios_deep_link',
+      platform: 'ios',
+      label: 'iOS deep link',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.deepLinks',
+      permission: 'aurora.ios.deepLinks',
+      intakeType: 'deep_link',
+      urlScheme: 'aurora',
+      universalLinkHost: 'link.aurora.local',
+      xcodeTarget: 'Aurora',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Deep links launch Aurora-owned flows only; backend evidence decides whether content/session intake succeeded.'
+    },
+    {
+      id: 'ios_widget',
+      platform: 'ios',
+      label: 'iOS widget',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.widgets',
+      permission: 'aurora.ios.widgets',
+      intakeType: 'widget',
+      xcodeTarget: 'AuroraWidgetExtension',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'Widgets can open Aurora entrypoints but must not run orchestrator logic in the extension.'
+    },
+    {
+      id: 'ios_file_association',
+      platform: 'ios',
+      label: 'iOS file association',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.ios.fileAssociations',
+      intakeType: 'file_association',
+      fileExtensions: ['txt', 'md', 'json', 'aurora'],
+      xcodeTarget: 'Aurora',
+      backendRequired: true,
+      payloadCommand: 'iosEntrypointPayload',
+      privacyClass: 'personal',
+      reason: 'File open events pass file URL metadata to the app; backend ingestion owns storage and redaction decisions.'
+    }
+  ],
+  lastEntrypointPayload: {
+    source: 'none',
+    invocation: 'none',
+    url: null,
+    scheme: null,
+    host: null,
+    path: null,
+    fileExtension: null,
+    uniformTypeIdentifier: null,
+    originatingBundleId: null,
+    sharedItemCount: 0,
+    privacyLabels: ['personal'],
+    backendHandoffRequired: true,
+    correlationId: null,
+    secretsRedacted: true
+  },
+  evidenceSource: 'tauri-ios-native-manifest',
+  secretsRedacted: true
+}
+
+export const androidNativeCapabilityManifestFixture: NativeCapabilityManifest = {
+  platform: 'android',
+  permissions: {
+    'aurora.android.assistantRoleStatus': true,
+    'aurora.android.assistantRoleRequest': true,
+    'aurora.android.microphone': false,
+    'aurora.android.microphoneRequest': true,
+    'aurora.android.notifications': false,
+    'aurora.android.notificationsRequest': true,
+    'aurora.android.biometric': false,
+    'aurora.android.secureStorage': true,
+    'aurora.android.adminUnlock': false,
+    'aurora.android.localNetwork': true,
+    'aurora.android.foregroundServiceMicrophone': false,
+    'aurora.android.voiceForegroundService': false,
+    'aurora.android.voiceForegroundStart': false,
+    'aurora.android.localFileRead': false,
+    'aurora.android.localFileWrite': false,
+    'aurora.android.filePick': false,
+    'aurora.android.shareIntent': true,
+    'aurora.android.deepLink': true,
+    'aurora.android.appWidget': true,
+    'aurora.android.appShortcut': true,
+    'aurora.android.quickTile': true,
+    'aurora.android.entrypointPayload': true,
+    'aurora.android.localLightInference': false
+  },
+  capabilities: {
+    'android.assistantRole.status': true,
+    'android.assistantRole.available': true,
+    'android.assistantRole.packageQualified': true,
+    'android.assistantRole.request': true,
+    'android.assistantRole.held': false,
+    'android.assistantRole.denied': false,
+    'android.assistantRole.oemUnavailable': false,
+    'android.microphoneCapture': false,
+    'android.microphonePermissionRequest': true,
+    'android.notifications': false,
+    'android.notificationPermissionRequest': true,
+    'android.biometric': false,
+    'android.secureCredentialStorage': true,
+    'android.adminUnlock': false,
+    'android.localNetwork': true,
+    'android.foregroundService': false,
+    'android.voiceForegroundService': false,
+    'android.voiceForegroundService.running': false,
+    'android.voiceForegroundService.start': false,
+    'android.localFileRead': false,
+    'android.localFileWrite': false,
+    'android.filePick': false,
+    'android.shareIntent': true,
+    'android.deepLink': true,
+    'android.appWidget': true,
+    'android.appShortcut': true,
+    'android.quickTile': true,
+    'android.entrypointPayload': true,
+    'android.fallbackEntrypoints': true,
+    'android.localLightInference.provider': true,
+    'android.localLightInference.modelRuntime': false,
+    'android.localLightInference.fallback': true
+  },
+  permissionStates: {
+    'aurora.android.assistantRoleStatus': 'available',
+    'aurora.android.assistantRoleRequest': 'needs_native_permission',
+    'aurora.android.microphone': 'needs_native_permission',
+    'aurora.android.microphoneRequest': 'needs_native_permission',
+    'aurora.android.notifications': 'needs_native_permission',
+    'aurora.android.notificationsRequest': 'needs_native_permission',
+    'aurora.android.biometric': 'unsupported_platform',
+    'aurora.android.secureStorage': 'available',
+    'aurora.android.adminUnlock': 'needs_native_permission',
+    'aurora.android.localNetwork': 'available',
+    'aurora.android.foregroundServiceMicrophone': 'needs_native_permission',
+    'aurora.android.voiceForegroundService': 'needs_native_permission',
+    'aurora.android.voiceForegroundStart': 'needs_native_permission',
+    'aurora.android.localFileRead': 'degraded',
+    'aurora.android.localFileWrite': 'degraded',
+    'aurora.android.filePick': 'degraded',
+    'aurora.android.shareIntent': 'available',
+    'aurora.android.deepLink': 'available',
+    'aurora.android.appWidget': 'fallback',
+    'aurora.android.appShortcut': 'fallback',
+    'aurora.android.quickTile': 'fallback',
+    'aurora.android.entrypointPayload': 'available',
+    'aurora.android.localLightInference': 'degraded'
+  },
+  capabilityStates: {
+    'android.assistantRole.status': 'available',
+    'android.assistantRole.available': 'available',
+    'android.assistantRole.packageQualified': 'available',
+    'android.assistantRole.request': 'needs_native_permission',
+    'android.assistantRole.held': 'needs_native_permission',
+    'android.assistantRole.denied': 'degraded',
+    'android.assistantRole.oemUnavailable': 'degraded',
+    'android.microphoneCapture': 'needs_native_permission',
+    'android.microphonePermissionRequest': 'needs_native_permission',
+    'android.notifications': 'needs_native_permission',
+    'android.notificationPermissionRequest': 'needs_native_permission',
+    'android.biometric': 'unsupported_platform',
+    'android.secureCredentialStorage': 'available',
+    'android.adminUnlock': 'needs_native_permission',
+    'android.localNetwork': 'available',
+    'android.foregroundService': 'needs_native_permission',
+    'android.voiceForegroundService': 'needs_native_permission',
+    'android.voiceForegroundService.running': 'degraded',
+    'android.voiceForegroundService.start': 'needs_native_permission',
+    'android.localFileRead': 'degraded',
+    'android.localFileWrite': 'degraded',
+    'android.filePick': 'degraded',
+    'android.shareIntent': 'available',
+    'android.deepLink': 'available',
+    'android.appWidget': 'fallback',
+    'android.appShortcut': 'fallback',
+    'android.quickTile': 'fallback',
+    'android.entrypointPayload': 'available',
+    'android.fallbackEntrypoints': 'fallback',
+    'android.localLightInference.provider': 'degraded',
+    'android.localLightInference.modelRuntime': 'needs_native_permission',
+    'android.localLightInference.fallback': 'fallback'
+  },
+  mobileIntegrations: [
+    {
+      platform: 'android',
+      id: 'androidShareSheet',
+      label: 'Android share sheet',
+      support: 'supported',
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Share sheet intent filters are declared; payloads are redacted until backend context ingestion handles them.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidDeepLinks',
+      label: 'Android deep links',
+      support: 'supported',
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Aurora and https deep links are declared through Android intent filters.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidStaticShortcut',
+      label: 'Android launcher shortcut',
+      support: 'supported',
+      capability: 'android.appShortcut',
+      permission: 'aurora.android.appShortcut',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Static shortcut metadata is packaged and opens Aurora through the native entrypoint activity.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidWidget',
+      label: 'Android home-screen widget',
+      support: 'supported-path',
+      capability: 'android.appWidget',
+      permission: 'aurora.android.appWidget',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Widget provider is packaged; device launcher placement remains user/OEM controlled.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidQuickTile',
+      label: 'Android Quick Settings tile',
+      support: 'supported-path',
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      privacyClass: 'personal',
+      evidenceSource: 'android-manifest-merge-native-plugin',
+      userCopy: 'Quick Settings tile service is packaged; tile placement remains user/OEM controlled.',
+      verifier: 'tauri android build plus emulator/device intent, shortcut, widget, and quick-tile invocation smoke'
+    },
+    {
+      platform: 'android',
+      id: 'androidLocalLightInference',
+      label: 'Android local-light inference provider',
+      support: 'supported-path',
+      capability: 'android.localLightInference.provider',
+      permission: 'aurora.android.localLightInference',
+      privacyClass: 'personal',
+      evidenceSource: 'android-native-local-light-adapter',
+      userCopy: 'Native adapter reports Android local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.',
+      verifier: 'tauri android build plus emulator/device nativeCapabilityManifest payload smoke'
+    }
+  ],
+  assistantRole: {
+    platform: 'android',
+    roleName: 'android.app.role.ASSISTANT',
+    sdkSupportsRole: true,
+    handlesAssistActivity: true,
+    declaresVoiceInteractionService: true,
+    roleAvailable: true,
+    packageQualified: true,
+    roleHeld: false,
+    requestable: true,
+    denied: false,
+    oemUnavailable: false,
+    fallbackAvailable: true,
+    reason: 'requestable',
+    evidenceSource: 'android-rolemanager-package-manager',
+    secretsRedacted: true
+  },
+  localLightInference: {
+    platform: 'android',
+    providerId: 'native:mobile-local-light',
+    available: false,
+    requestable: false,
+    modelRuntimeProvider: false,
+    backendModelCatalogRequired: true,
+    hardwareAcceleration: 'unknown',
+    modelId: null,
+    modelPresent: false,
+    permissionGranted: false,
+    state: 'degraded',
+    fallbackAvailable: true,
+    fallbackProviderId: 'local:Orchestrator:llama-cpp',
+    reason: 'backend_model_catalog_and_device_model_proof_required',
+    evidenceSource: 'android-native-local-light-adapter',
+    secretsRedacted: true
+  },
+  voiceForegroundService: {
+    platform: 'android',
+    running: false,
+    startable: false,
+    microphoneGranted: false,
+    notificationsGranted: false,
+    foregroundServiceReady: false,
+    manifestReady: true,
+    state: 'needs_native_permission',
+    reason: 'microphone_permission_missing',
+    privacyClass: 'raw-audio',
+    backendAudioEvidenceRequired: true,
+    captureActive: false,
+    captureBackend: 'android-audiorecord-rust-queue',
+    sampleRateHz: 16000,
+    acceptedChunks: 0,
+    acceptedSamples: 0,
+    droppedChunks: 0,
+    discontinuities: 0,
+    queuedChunks: 0,
+    captureError: null,
+    evidenceSource: 'android-permission-foreground-service',
+    secretsRedacted: true
+  },
+  adminUnlock: {
+    platform: 'android',
+    available: false,
+    requestable: false,
+    deviceSecure: false,
+    biometricReady: false,
+    lastDenied: false,
+    state: 'needs_native_permission',
+    reason: 'device_credential_not_enrolled',
+    privacyClass: 'admin-critical',
+    evidenceSource: 'android-biometric-keyguard-keystore',
+    secretsRedacted: true
+  },
+  secureStorage: {
+    platform: 'android',
+    available: true,
+    backend: 'android-keystore',
+    persisted: true,
+    privacyClass: 'credential',
+    allowedKeyPrefixes: 'aurora.session,aurora.auth,aurora.gateway,aurora.mesh,aurora.admin,aurora.voice',
+    evidenceSource: 'android-keystore-shared-preferences',
+    secretsRedacted: true
+  },
+  fallbackEntrypoints: [
+    {
+      id: 'app_open',
+      state: 'fallback',
+      available: true,
+      capability: 'android.deepLink',
+      permission: null,
+      reason: 'available without assistant role',
+      intentAction: 'android.intent.action.MAIN',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'push_to_talk',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'android.microphoneCapture',
+      permission: 'aurora.android.microphone',
+      reason: 'requires microphone permission and backend audio evidence',
+      manifestDeclared: false,
+      backendRequired: true
+    },
+    {
+      id: 'foreground_voice_controls',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'android.voiceForegroundService',
+      permission: 'aurora.android.voiceForegroundService',
+      reason: 'requires microphone plus Android foreground-service microphone readiness'
+    },
+    {
+      id: 'notification',
+      state: 'needs_native_permission',
+      available: false,
+      capability: 'android.notifications',
+      permission: 'aurora.android.notifications',
+      reason: 'requires notification permission on Android 13+',
+      manifestDeclared: false,
+      backendRequired: false
+    },
+    {
+      id: 'quick_tile',
+      state: 'fallback',
+      available: true,
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      reason: 'Quick Settings tile opens Aurora without assistant role',
+      intentAction: 'android.service.quicksettings.action.QS_TILE',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'app_widget',
+      state: 'fallback',
+      available: true,
+      capability: 'android.appWidget',
+      permission: 'aurora.android.appWidget',
+      reason: 'home-screen widget opens Aurora without assistant role',
+      intentAction: 'android.appwidget.action.APPWIDGET_UPDATE',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'app_shortcut',
+      state: 'fallback',
+      available: true,
+      capability: 'android.appShortcut',
+      permission: 'aurora.android.appShortcut',
+      reason: 'static launcher shortcut opens Aurora without assistant role',
+      intentAction: 'android.intent.action.VIEW',
+      manifestDeclared: true,
+      backendRequired: false
+    },
+    {
+      id: 'share_intent',
+      state: 'fallback',
+      available: true,
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
+      reason: 'share sheet opens Aurora and records redacted intent metadata',
+      intentAction: 'android.intent.action.SEND',
+      manifestDeclared: true,
+      backendRequired: true
+    },
+    {
+      id: 'deep_link',
+      state: 'fallback',
+      available: true,
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
+      reason: 'deep links open Aurora and record redacted URI metadata',
+      intentAction: 'android.intent.action.VIEW',
+      manifestDeclared: true,
+      backendRequired: true
+    }
+  ],
+  entrypoints: [
+    {
+      id: 'share_sheet',
+      platform: 'android',
+      label: 'Share sheet',
+      state: 'fallback',
+      available: true,
+      capability: 'android.shareIntent',
+      permission: 'aurora.android.shareIntent',
+      intentAction: 'android.intent.action.SEND',
+      intakeType: 'text/*, image/*, application/pdf',
+      manifestDeclared: true,
+      backendRequired: true,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success'
+    },
+    {
+      id: 'deep_link',
+      platform: 'android',
+      label: 'Aurora deep link',
+      state: 'fallback',
+      available: true,
+      capability: 'android.deepLink',
+      permission: 'aurora.android.deepLink',
+      intentAction: 'android.intent.action.VIEW',
+      intakeType: 'aurora://assistant and https://aurora.local/assistant',
+      manifestDeclared: true,
+      backendRequired: true,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native entrypoint is declared; backend intake must process redacted payload before Aurora claims action success'
+    },
+    {
+      id: 'quick_tile',
+      platform: 'android',
+      label: 'Quick Settings tile',
+      state: 'fallback',
+      available: true,
+      capability: 'android.quickTile',
+      permission: 'aurora.android.quickTile',
+      intentAction: 'android.service.quicksettings.action.QS_TILE',
+      intakeType: 'qs_tile',
+      manifestDeclared: true,
+      backendRequired: false,
+      payloadCommand: 'entrypointPayload',
+      reason: 'native fallback opens Aurora without assistant role'
+    }
+  ],
+  lastEntrypointPayload: {
+    source: 'none',
+    action: null,
+    type: null,
+    scheme: null,
+    host: null,
+    path: null,
+    categories: [],
+    extras: [],
+    secretsRedacted: true
+  },
+  release: {
+    signing: {
+      aabCommand: 'pnpm --filter @aurora/tauri-ui android:build:aab',
+      apkCommand: 'pnpm --filter @aurora/tauri-ui android:build:apk:split',
+      signingConfigured: false,
+      signingEvidence: [
+        'CI must provide Android signing material before Play upload.',
+        'No signing secret is stored in repo fixtures.'
+      ],
+      playUploadManual: true,
+      notes: 'Google Play first upload and app signing enrollment remain manual release-manager steps.'
+    },
+    deviceMatrix: [
+      {
+        id: 'thin-api-24',
+        label: 'Thin Android API 24+',
+        mode: 'thin',
+        apiLevel: 24,
+        architecture: 'universal',
+        expectedState: 'available',
+        status: 'manual',
+        requiredEvidence: ['AAB build artifact', 'Gateway HTTP smoke'],
+        actualEvidence: ['fixture only'],
+        notes: 'Tauri minimum Android support is API 24; backend truth still comes from Gateway.'
+      },
+      {
+        id: 'mesh-api-29',
+        label: 'Mesh shell Android API 29+',
+        mode: 'mesh',
+        apiLevel: 29,
+        architecture: 'arm64-v8a',
+        expectedState: 'degraded',
+        status: 'manual',
+        requiredEvidence: ['capability catalog route smoke', 'peer/provider identity visible'],
+        actualEvidence: ['fixture only'],
+        notes: 'Mesh behavior is degraded until a real peer route and policy result are recorded.'
+      },
+      {
+        id: 'assistant-role-qualified',
+        label: 'Assistant role qualified device',
+        mode: 'assistant-role',
+        apiLevel: 29,
+        architecture: 'arm64-v8a',
+        expectedState: 'needs_native_permission',
+        status: 'manual',
+        requiredEvidence: ['RoleManager availability probe', 'package qualification probe', 'grant or denial result'],
+        actualEvidence: ['fixture only'],
+        notes: 'Role request requires user/OEM approval and cannot be inferred from Tauri shell presence.'
+      },
+      {
+        id: 'oem-unavailable',
+        label: 'OEM/profile assistant role unavailable',
+        mode: 'fallback',
+        apiLevel: 29,
+        architecture: 'x86_64',
+        expectedState: 'fallback',
+        status: 'manual',
+        requiredEvidence: ['isRoleAvailable=false probe', 'fallback entrypoint smoke'],
+        actualEvidence: ['fixture only'],
+        notes: 'App, notification, share, deep-link, shortcut, tile, or mesh/server routing must remain available.'
+      }
+    ],
+    smokePayloadRecorded: true,
+    generatedAt: '2026-06-27T00:00:00Z'
+  },
+  evidenceSource: 'android-rolemanager-package-manager',
+  secretsRedacted: true
+}
+
+export const iosNativeCapabilityManifestFixture: NativeCapabilityManifest = {
+  platform: 'ios',
+  permissions: {
+    'aurora.nativeCapabilityManifest': true,
+    'aurora.iosAppIntents': true,
+    'aurora.iosShortcuts': true,
+    'aurora.iosShareExtension': false,
+    'aurora.iosWidgets': false,
+    'aurora.iosDeepLinks': true,
+    'aurora.iosFileAssociations': false,
+    'aurora.iosEntrypointPayload': true,
+    'aurora.ios.shareExtension': false,
+    'aurora.ios.deepLinks': true,
+    'aurora.ios.widgets': false,
+    'aurora.ios.fileAssociations': false,
+    'aurora.ios.entrypointPayload': true,
+    'aurora.iosLocalLightInference': false,
+    'aurora.iosVoiceStatus': true,
+    'aurora.iosBackgroundStatus': true,
+    'aurora.iosMicrophoneCapture': false,
+    'aurora.iosBackgroundAudio': false,
+    'aurora.iosSiriReplacement': false,
+    'aurora.audioCapture': false,
+    'aurora.audioPlayback': false
+  },
+  capabilities: {
+    'ios.appIntents': true,
+    'ios.shortcuts': true,
+    'ios.widgets': false,
+    'ios.shareExtension': false,
+    'ios.deepLinks': true,
+    'ios.fileAssociations': false,
+    'ios.entrypointPayload': true,
+    'ios.localLightInference.provider': true,
+    'ios.localLightInference.modelRuntime': false,
+    'ios.localLightInference.fallback': true,
+    'ios.voiceForegroundCapture': false,
+    'ios.notifications': false,
+    'ios.backgroundVoice': false,
+    'ios.appOwnedInvocation': true,
+    'ios.siriReplacement': false,
+    'native.audioCapture': false,
+    'native.audioPlayback': false
+  },
+  permissionStates: {
+    'aurora.iosAppIntents': 'available',
+    'aurora.iosShortcuts': 'available',
+    'aurora.ios.shareExtension': 'pending_native_target',
+    'aurora.ios.deepLinks': 'available',
+    'aurora.ios.widgets': 'pending_native_target',
+    'aurora.ios.fileAssociations': 'pending_native_target',
+    'aurora.ios.entrypointPayload': 'available',
+    'aurora.iosLocalLightInference': 'degraded',
+    'aurora.iosMicrophoneCapture': 'needs_native_permission',
+    'aurora.iosBackgroundAudio': 'unsupported_platform',
+    'aurora.iosSiriReplacement': 'unsupported_platform'
+  },
+  capabilityStates: {
+    'ios.appIntents': 'available',
+    'ios.shortcuts': 'available',
+    'ios.widgets': 'pending_native_target',
+    'ios.shareExtension': 'pending_native_target',
+    'ios.deepLinks': 'available',
+    'ios.fileAssociations': 'pending_native_target',
+    'ios.entrypointPayload': 'available',
+    'ios.localLightInference.provider': 'degraded',
+    'ios.localLightInference.modelRuntime': 'needs_native_permission',
+    'ios.localLightInference.fallback': 'fallback',
+    'ios.voiceForegroundCapture': 'needs_native_permission',
+    'ios.notifications': 'needs_native_permission',
+    'ios.backgroundVoice': 'unsupported_platform',
+    'ios.appOwnedInvocation': 'available',
+    'ios.siriReplacement': 'unsupported_platform'
+  },
+  mobileIntegrations: [
+    {
+      platform: 'ios',
+      id: 'askAuroraAppIntent',
+      publicActionId: 'app-intent.open-assistant',
+      label: 'Ask Aurora',
+      support: 'supported-path',
+      capability: 'ios.appIntents',
+      permission: 'aurora.iosAppIntents',
+      invocation: 'app-intent',
+      backendMethod: 'Orchestrator.ExternalUserInput',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-003 native plugin manifest',
+      userCopy: 'Runs as an app-owned Siri/Shortcuts/App Intents integration; system assistant ownership is unavailable.',
+      verifier: 'tauri ios build plus simulator/device App Intent invocation on macOS/Xcode'
+    },
+    {
+      platform: 'ios',
+      id: 'askAuroraShortcut',
+      publicActionId: 'shortcut.open-assistant',
+      label: 'Ask Aurora Shortcut',
+      support: 'supported-path',
+      capability: 'ios.shortcuts',
+      permission: 'aurora.iosShortcuts',
+      invocation: 'shortcut',
+      backendMethod: 'Orchestrator.ExternalUserInput',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-003 native plugin manifest',
+      userCopy: 'Shortcut invocation hands off to AuroraClient/backend evidence before executing assistant work.',
+      verifier: 'simulator/device Shortcut invocation through the Xcode-managed iOS target'
+    },
+    {
+      platform: 'ios',
+      id: 'summarizeSharedContentShortcut',
+      publicActionId: 'share.import-context',
+      label: 'Summarize shared content',
+      support: 'supported-path',
+      capability: 'ios.shortcuts',
+      permission: 'aurora.iosShortcuts',
+      invocation: 'shortcut',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'sensitive',
+      requiresConfirmation: true,
+      siriReplacement: false,
+      evidenceSource: 'IOS-003 native plugin manifest',
+      userCopy: 'Requires explicit user invocation and backend route/privacy evidence before sending shared content.',
+      verifier: 'simulator/device Shortcut or share handoff smoke with backend correlation evidence'
+    },
+    {
+      platform: 'ios',
+      id: 'stopAuroraSpeechAppIntent',
+      publicActionId: 'app-intent.stop-speech',
+      label: 'Stop Aurora speech',
+      support: 'supported-path',
+      capability: 'ios.appIntents',
+      permission: 'aurora.iosAppIntents',
+      invocation: 'app-intent',
+      backendMethod: 'TTS.Stop',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-003 native plugin manifest',
+      userCopy: 'Controls Aurora-owned playback only; it cannot control Siri or system assistant audio.',
+      verifier: 'simulator/device App Intent invocation with TTS stop route evidence'
+    },
+    {
+      platform: 'ios',
+      id: 'shareExtension',
+      label: 'iOS share extension intake',
+      support: 'pending',
+      capability: 'ios.shareExtension',
+      permission: 'aurora.ios.shareExtension',
+      invocation: 'share_extension',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'sensitive',
+      requiresConfirmation: true,
+      siriReplacement: false,
+      evidenceSource: 'src-tauri/ios/preflight.json:share-extension-flow',
+      reason: 'This iOS feature is unavailable until mobile app setup is complete.',
+      userCopy: 'Share extension intake will stay unavailable until Aurora verifies the iOS app target.',
+      verifier: 'tauri ios build plus compiled IOS-004 entrypoint payload smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'deepLinks',
+      publicActionId: 'deeplink.open',
+      label: 'iOS deep links',
+      support: 'supported-path',
+      capability: 'ios.deepLinks',
+      permission: 'aurora.ios.deepLinks',
+      invocation: 'deep_link',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'IOS-004 native plugin manifest',
+      userCopy: 'aurora:// app links launch app-owned Aurora flows; backend state still proves any session or context handoff.',
+      verifier: 'tauri ios build plus compiled IOS-004 entrypoint payload smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'widgets',
+      label: 'iOS widgets',
+      support: 'pending',
+      capability: 'ios.widgets',
+      permission: 'aurora.ios.widgets',
+      invocation: 'widget',
+      backendMethod: 'AuroraClient.OpenEntrypoint',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'src-tauri/ios/preflight.json:simulator-plugin-app-intent',
+      reason: 'This iOS feature is unavailable until mobile app setup is complete.',
+      userCopy: 'Widget actions will stay unavailable until Aurora verifies the iOS widget target.',
+      verifier: 'tauri ios build plus compiled IOS-004 entrypoint payload smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'fileAssociations',
+      label: 'iOS file associations',
+      support: 'pending',
+      capability: 'ios.fileAssociations',
+      permission: 'aurora.ios.fileAssociations',
+      invocation: 'file_association',
+      backendMethod: 'Orchestrator.IngestContext',
+      privacyClass: 'sensitive',
+      requiresConfirmation: true,
+      siriReplacement: false,
+      evidenceSource: 'src-tauri/ios/preflight.json:share-extension-flow',
+      reason: 'This iOS feature is unavailable until mobile app setup is complete.',
+      userCopy: 'File-open intake will stay unavailable until Aurora verifies iOS file association handling.',
+      verifier: 'tauri ios build plus Tauri mobile file-association config and compiled IOS-004 payload smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'iosLocalLightInference',
+      label: 'iOS local-light inference provider',
+      support: 'supported-path',
+      capability: 'ios.localLightInference.provider',
+      permission: 'aurora.iosLocalLightInference',
+      invocation: 'tauri-command',
+      backendMethod: 'Orchestrator.GetModelRuntimeCatalog',
+      privacyClass: 'personal',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'ios-native-local-light-adapter',
+      userCopy: 'Native adapter reports iOS Core ML/MLC/ExecuTorch-style local-light inference as a capability-gated provider; backend model catalog and device/model proof are still required before selection.',
+      verifier: 'tauri ios build plus simulator/device nativeCapabilityManifest payload smoke'
+    },
+    {
+      platform: 'ios',
+      id: 'siriReplacement',
+      label: 'System assistant role',
+      support: 'unsupported',
+      capability: 'ios.siriReplacement',
+      permission: null,
+      privacyClass: 'public',
+      requiresConfirmation: false,
+      siriReplacement: false,
+      evidenceSource: 'Apple-platform-policy',
+      userCopy: 'iOS does not allow third-party default assistant ownership.',
+      verifier: 'copy and capability review; no executable route should be exposed'
+    }
+  ],
+  localLightInference: {
+    platform: 'ios',
+    providerId: 'native:mobile-local-light',
+    available: false,
+    requestable: false,
+    modelRuntimeProvider: false,
+    backendModelCatalogRequired: true,
+    hardwareAcceleration: 'unknown',
+    modelId: null,
+    modelPresent: false,
+    permissionGranted: false,
+    state: 'degraded',
+    fallbackAvailable: true,
+    fallbackProviderId: 'local:Orchestrator:llama-cpp',
+    reason: 'backend_model_catalog_and_device_model_proof_required',
+    evidenceSource: 'ios-native-local-light-adapter',
+    secretsRedacted: true
+  },
+  platformLimitations: [
+    {
+      platform: 'ios',
+      id: 'noSiriReplacement',
+      label: 'No system assistant role',
+      reason: 'Apple permits app-owned App Intents, Shortcuts, widgets, share extensions, and deep links, not third-party default assistant ownership.',
+      userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.',
+      evidenceSource: 'Apple App Intents and SiriKit extension documentation'
+    },
+    {
+      platform: 'ios',
+      id: 'foregroundConsentRequired',
+      label: 'Foreground consent required',
+      reason: 'Always-on background assistant capture is unavailable on iOS without explicit app-owned foreground consent.',
+      userCopy: 'Audio and shared-content actions require app-owned user invocation and backend privacy evidence.',
+      evidenceSource: 'Apple App Intents, extensions, and privacy review requirements'
+    }
+  ],
+  iosInvocation: {
+    platform: 'ios',
+    appIntentsAvailable: true,
+    shortcutsAvailable: true,
+    shareExtensionAvailable: false,
+    deepLinksAvailable: true,
+    widgetsAvailable: false,
+    fileAssociationsAvailable: false,
+    siriReplacement: false,
+    backendHandoffRequired: true,
+    privacyLabels: ['personal', 'sensitive'],
+    state: 'degraded',
+    reason: 'Deep links can open Aurora now. Share, widget, and file-open options stay unavailable until mobile app setup is complete.',
+    evidenceSource: 'src-tauri/ios/preflight.json',
+    secretsRedacted: true
+  },
+  platformIntegrations: [
+    {
+      id: 'ios-app-intents',
+      label: 'App Intents',
+      status: 'supported',
+      detail: 'Concrete Aurora prompt, open, and status actions bridge to the SDK/backend from app-owned surfaces.',
+      evidence: ['IOS-003', 'aurora-ios-preflight'],
+      privacyClass: 'personal',
+      actions: [
+        {
+          id: 'ask-aurora',
+          label: 'Ask Aurora',
+          privacyClass: 'personal',
+          backendMethod: 'Orchestrator.ExternalUserInput',
+          policy: 'Requires foreground app/session context and SDK/backend route evidence.'
+        },
+        {
+          id: 'open-aurora',
+          label: 'Open Aurora',
+          privacyClass: 'public',
+          backendMethod: 'Native.OpenApp',
+          policy: 'Opens an app-owned surface without claiming system assistant ownership.'
+        }
+      ]
+    },
+    {
+      id: 'ios-share-extension',
+      label: 'Share extension and deep links',
+      status: 'partial',
+      detail: 'Shared URLs/text/files ingest through attachment contracts with privacy labels and backend validation.',
+      evidence: ['IOS-004', 'BE-008'],
+      privacyClass: 'sensitive'
+    },
+    {
+      id: 'ios-siri-system-assistant',
+      label: 'System assistant role',
+      status: 'unsupported',
+      detail: 'Aurora exposes Siri/Shortcuts/App Intents integration only; iOS does not provide a default system assistant path.',
+      evidence: ['Apple platform policy'],
+      privacyClass: 'public'
+    }
+  ],
+  releaseGates: [
+    {
+      id: 'macos-xcode-tauri-build',
+      label: 'macOS Xcode Tauri build',
+      status: 'requires-macos',
+      requiredEvidence: 'tauri ios build on macOS with Xcode command line tools',
+      detail: 'Linux cannot satisfy this gate; macOS CI or an external runner must produce the build log.',
+      command: 'pnpm --filter @aurora/tauri-ui ios:preflight'
+    },
+    {
+      id: 'simulator-plugin-app-intent',
+      label: 'Simulator native plugin and App Intent',
+      status: 'pending',
+      requiredEvidence: 'Simulator invocation of the native manifest plugin and one App Intent/Shortcut flow',
+      detail: 'Proof must include platform, simulator/device target, action ID, and redacted backend/audit evidence.'
+    },
+    {
+      id: 'share-extension-flow',
+      label: 'Share extension flow',
+      status: 'pending',
+      requiredEvidence: 'Simulator or device share/deep-link invocation with accepted or policy-blocked attachment result',
+      detail: 'Shared payloads must preserve source channel, privacy class, and backend validation outcome.'
+    },
+    {
+      id: 'app-store-connect-signing',
+      label: 'TestFlight/App Store signing dry run',
+      status: 'requires-credentials',
+      requiredEvidence: 'App Store Connect export/upload dry run with API-key auth in CI or external runner',
+      detail: 'Credentials stay in CI secret storage; no key material is rendered in UI, logs, or manifest.',
+      command: 'pnpm --filter @aurora/tauri-ui ios:build:app-store',
+      artifact: 'apps/aurora-tauri/src-tauri/gen/apple/build/arm64/Aurora.ipa',
+      privacyClass: 'credential'
+    }
+  ],
+  deviceMatrix: [
+    {
+      id: 'ios-simulator-current',
+      platform: 'ios',
+      target: 'iPhone simulator, current stable Xcode runtime',
+      minimumOs: '17.0',
+      evidence: 'Native plugin, App Intent, and share/deep-link smoke evidence required.',
+      status: 'pending'
+    },
+    {
+      id: 'ios-device-current',
+      platform: 'ios',
+      target: 'Physical iPhone or iPad on a supported iOS release',
+      minimumOs: '17.0',
+      evidence: 'Signing/provisioning plus TestFlight or App Store Connect dry-run evidence required.',
+      status: 'requires-credentials'
+    }
+  ],
+  policyNotes: [
+    'Siri/Shortcuts/App Intents integration is supported through app-owned surfaces only.',
+    'iOS does not advertise a default system assistant role for Aurora.',
+    'Native iOS code must bridge to AuroraClient/backend truth instead of duplicating orchestrator logic in Swift.'
+  ],
+  evidenceSource: 'IOS-003 native plugin manifest',
+  secretsRedacted: true
 }
 
 const idleModelProgress = (operationType: string) => ({
@@ -3065,7 +4587,7 @@ export const modelRuntimeCatalogFixture: ModelRuntimeCatalogResponse = {
       enabled: true,
       selected: true,
       health: 'healthy',
-      health_reason: 'Local runtime loaded from backend catalog.',
+      health_reason: 'Local runtime loaded from Aurora.',
       model_id: 'llama-3-8b-instruct',
       source: 'local-filesystem',
       license: 'user-provided',
@@ -3214,11 +4736,27 @@ export const toolCatalogFixture = {
   generated_at: '2026-06-19T00:00:00Z',
   tools: [
     {
-      global_tool_id: 'tool:local:diagnostics.serviceHealth',
+      global_tool_id: 'aurora-tool:v1:local-peer:Tooling:core.diagnostics.service-health',
+      tool_id_scheme: 'aurora-tool',
+      tool_id_version: 1,
+      tool_contract_id: 'core.diagnostics.service-health',
+      share_group_id: 'core:diagnostics',
+      share_group_label: 'Diagnostics',
+      legacy_global_tool_ids: ['tool:local:diagnostics.serviceHealth'],
+      exportable: true,
       provider_peer_id: 'local-peer',
       provider_id: 'local:Tooling',
       service_instance_id: 'tool-1a9e',
       display_name: 'diagnostics.serviceHealth',
+      provenance: {
+        provider_peer_id: 'local-peer',
+        provider_service_instance_id: 'tool-1a9e',
+        provider_kind: 'local',
+        source: 'core',
+        advertised_name: 'diagnostics.serviceHealth',
+        stable_source_id: 'core:aurora',
+        provider_tool_id: 'diagnostics.service-health'
+      },
       safety_class: 'standard',
       approval_required: false,
       required_permissions: ['Tooling.use'],
@@ -3267,6 +4805,13 @@ export const toolCatalogFixture = {
     },
     {
       global_tool_id: 'tool:remote:garageDoor.open',
+      tool_id_scheme: 'aurora-tool',
+      tool_id_version: 1,
+      tool_contract_id: 'hardware.garage-door-open',
+      share_group_id: 'core:hardware',
+      share_group_label: 'Hardware controls',
+      legacy_global_tool_ids: ['tool:remote:garageDoor.open'],
+      exportable: true,
       local_name: 'garageDoor.open',
       display_name: 'Open garage door',
       description: 'Controls remote hardware through a mesh peer.',
@@ -3297,6 +4842,15 @@ export const toolCatalogFixture = {
       correlation_id: 'corr-remote-danger',
       policy_decision_id: 'policy-remote-danger',
       approval_request_id: 'approval-remote-danger',
+      provenance: {
+        provider_peer_id: 'peer-garage',
+        provider_service_instance_id: 'tooling-garage',
+        provider_kind: 'mesh_peer',
+        source: 'core',
+        advertised_name: 'garageDoor.open',
+        stable_source_id: 'core:aurora',
+        provider_tool_id: 'garage-door-open'
+      },
       providers: [
         {
           id: 'mesh:garage:Tooling',
@@ -3697,6 +5251,26 @@ export const memoryNamespacesFixture: DBRAGListNamespacesResponse = {
   ]
 }
 
+
+export function memoryLocalSearchFixture(request: DBRAGSearchRequest): DBRAGListResponse {
+  const remoteRequest: DBRAGSearchRemoteRequest = {
+    namespace: request.namespace,
+    query: request.query,
+    mesh_selector: request.mesh_selector ?? null
+  }
+  if (request.limit !== undefined) remoteRequest.limit = request.limit
+  if (request.offset !== undefined) remoteRequest.offset = request.offset
+  const remote = memorySearchFixture(remoteRequest)
+  return {
+    items: remote.items.map((item) => ({
+      key: item.key,
+      value: item.value,
+      namespace: item.namespace,
+      search_score: item.search_score
+    }))
+  }
+}
+
 export function memorySearchFixture(request: DBRAGSearchRemoteRequest): DBRAGSearchRemoteResponse {
   if (request.namespace.includes('denied')) {
     return {
@@ -3772,6 +5346,253 @@ export const memoryImportFixture: DBRAGImportNamespaceResponse = {
   correlation_id: 'corr-memory-import'
 }
 
+
+
+export const toolingSharingPolicyFixture: ToolingSharingPolicy = {
+  default_share: true,
+  default_approval_mode: 'approve_all_local_safe',
+  policy_mode: 'enforce',
+  default_token_ttl_seconds: 300,
+  rules: [
+    {
+      rule_id: 'fixture-block-external-mcp',
+      share: false,
+      approval_mode: 'deny_all',
+      source_type: 'mcp',
+      provider_service_instance_id: 'mcp-mail',
+      token_ttl_seconds: 300
+    },
+    {
+      rule_id: 'fixture-trust-local-diagnostics',
+      share: true,
+      approval_mode: 'approve_all_for_session',
+      global_tool_id: 'tool:local:diagnostics.serviceHealth',
+      provider_peer_id: 'local-peer',
+      provider_service_instance_id: 'tool-1a9e',
+      token_ttl_seconds: 900
+    }
+  ]
+}
+
+export const toolingApprovalGrantsFixture: ToolingListApprovalGrantsResponse = {
+  count: 3,
+  grants: [
+    {
+      grant_id: 'grant-local-diagnostics-session',
+      grant_scope: 'session',
+      grant_type: 'approval',
+      active: true,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: 'local-peer',
+      provider_service_instance_id: 'tooling-local',
+      global_tool_id: 'tool:local:diagnostics.collect',
+      local_tool_name: 'diagnostics.collect',
+      args_hash: 'sha256:diagnostics-collect',
+      resource_selector_hash: null,
+      route_decision_id: 'route-local-diagnostics',
+      schedule_id: null,
+      trust_tier: 'trusted',
+      capability_class: 'read',
+      resource_scope: ['diagnostics'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840400,
+      expires_at: 1781844000,
+      revoked_at: null,
+      reason: 'fixture local approval',
+      metadata: { fixture: true, secrets_redacted: true }
+    },
+    {
+      grant_id: 'grant-mesh-garage-scheduled',
+      grant_scope: 'scheduled_execution',
+      grant_type: 'scheduled_execution',
+      active: true,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: 'peer-garage',
+      provider_service_instance_id: 'tooling-garage',
+      global_tool_id: 'tool:remote:garageDoor.open',
+      local_tool_name: 'garageDoor.open',
+      args_hash: 'sha256:garage-open',
+      resource_selector_hash: 'sha256:garage-door',
+      route_decision_id: 'route-mesh-garage',
+      schedule_id: 'job-nightly-sync',
+      trust_tier: 'trusted',
+      capability_class: 'device',
+      resource_scope: ['garage-main-door'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840500,
+      expires_at: null,
+      revoked_at: null,
+      reason: 'fixture scheduled hardware action',
+      metadata: { fixture: true, secrets_redacted: true }
+    },
+    {
+      grant_id: 'grant-old-plugin-revoked',
+      grant_scope: 'always',
+      grant_type: 'trust',
+      active: false,
+      principal_id: 'principal-owner',
+      caller_device_id: null,
+      caller_peer_id: null,
+      provider_peer_id: null,
+      provider_service_instance_id: 'plugin-weather',
+      global_tool_id: null,
+      local_tool_name: null,
+      args_hash: null,
+      resource_selector_hash: null,
+      route_decision_id: null,
+      schedule_id: null,
+      trust_tier: 'blocked',
+      capability_class: 'network',
+      resource_scope: ['weather'],
+      include_future_tools: false,
+      created_by: 'principal-owner',
+      created_at: 1781840000,
+      expires_at: null,
+      revoked_at: 1781842000,
+      reason: 'fixture revoked stale plugin trust',
+      metadata: { fixture: true, secrets_redacted: true }
+    }
+  ]
+}
+
+export const toolingMcpStatusFixture: ToolingGetMcpStatusResponse = {
+  total_servers: 1,
+  active_servers: 1,
+  servers: [
+    {
+      id: 'mcp-mail',
+      name: 'mail-mcp',
+      command: '[redacted]',
+      status: 'active',
+      active: true,
+      tool_count: 1,
+      secrets_redacted: true
+    }
+  ]
+}
+
+export const pendingToolApprovalsFixture: OrchestratorListPendingToolApprovalsResponse = {
+  count: 1,
+  approvals: [
+    {
+      pending_id: 'pending-tool-email-send',
+      approval_request_id: 'approval-email-send',
+      status: 'pending',
+      run_id: 'run-tools-fixture',
+      thread_id: 'thread-tools-fixture',
+      session_id: 'session-tools-fixture',
+      owner_principal_id: 'principal-owner',
+      owner_peer_id: null,
+      message_id: 'message-tools-fixture',
+      tool_call_id: 'tool-call-email-send',
+      tool_name: 'tool:cloud:email.send',
+      display_name: 'Send email draft',
+      arguments_preview: { to: 'ops@example.com', body: '[redacted]' },
+      policy_decision_id: 'policy-email-send',
+      correlation_id: 'corr-dry-run',
+      created_at: 1781840600,
+      expires_at: 1781840900,
+      metadata: { inline_assistant_only: true, secrets_redacted: true }
+    }
+  ]
+}
+
+function meshRoutingBlock(prefer: string) {
+  return {
+    prefer,
+    fallback: 'local',
+    allowed_provider_peer_ids: null as string[] | null,
+    min_version: null as string | null,
+    required_provider_feature_ids: [] as string[],
+    required_provider_capability_tags: [] as string[],
+    require_explicit_selector: false
+  }
+}
+
+function meshPolicyForService(share: boolean, prefer: string) {
+  return {
+    mesh_sharing: {
+      share,
+      max_concurrent: 10,
+      unshared_feature_ids: [],
+      unshared_method_ids: []
+    },
+    mesh_routing: meshRoutingBlock(prefer)
+  }
+}
+
+function meshPolicyMetadataFields(
+  basePath: string,
+  affected: string,
+  current: { share: boolean; prefer: string }
+): ConfigFieldMetadata[] {
+  const fields: Array<{
+    suffix: string
+    title: string
+    type: string
+    defaultValue: JsonValue
+    currentValue: JsonValue
+    choices: JsonValue[] | null
+  }> = [
+    { suffix: 'mesh_sharing.share', title: 'Share service', type: 'boolean', defaultValue: false, currentValue: current.share, choices: null },
+    { suffix: 'mesh_sharing.max_concurrent', title: 'Maximum simultaneous calls', type: 'integer', defaultValue: 10, currentValue: 10, choices: null },
+    { suffix: 'mesh_sharing.unshared_feature_ids', title: 'Shared features', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_sharing.unshared_method_ids', title: 'Feature exceptions', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.prefer', title: 'Preferred device', type: 'string', defaultValue: 'local', currentValue: current.prefer, choices: ['local', 'network', 'local_only', 'network_only'] },
+    { suffix: 'mesh_routing.fallback', title: 'Unavailable service action', type: 'string', defaultValue: 'local', currentValue: 'local', choices: ['local', 'network', 'error', 'none'] },
+    { suffix: 'mesh_routing.allowed_provider_peer_ids', title: 'Allowed devices', type: 'array', defaultValue: null, currentValue: null, choices: null },
+    { suffix: 'mesh_routing.min_version', title: 'Minimum device version', type: 'string', defaultValue: null, currentValue: null, choices: null },
+    { suffix: 'mesh_routing.required_provider_feature_ids', title: 'Required features', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.required_provider_capability_tags', title: 'Required device capabilities', type: 'array', defaultValue: [], currentValue: [], choices: null },
+    { suffix: 'mesh_routing.require_explicit_selector', title: 'Device selection requirement', type: 'boolean', defaultValue: false, currentValue: false, choices: null }
+  ]
+  return fields.map((field) => ({
+    key_path: `${basePath}.${field.suffix}`,
+    title: field.title,
+    description: field.title,
+    type: field.type,
+    default: field.defaultValue,
+    current_value: field.currentValue,
+    source_layer: 'config.json',
+    secret: false,
+    reload_required: true,
+    restart_required: false,
+    affected_services: [affected],
+    constraints: {},
+    choices: field.choices
+  }))
+}
+
+const meshServicePolicyConfig = {
+  orchestrator: meshPolicyForService(true, 'local'),
+  db: meshPolicyForService(true, 'local'),
+  tooling: meshPolicyForService(true, 'local'),
+  scheduler: meshPolicyForService(true, 'local'),
+  tts: meshPolicyForService(true, 'network'),
+  stt: {
+    coordinator: meshPolicyForService(false, 'local'),
+    wakeword: meshPolicyForService(false, 'local'),
+    transcription: meshPolicyForService(false, 'local')
+  }
+}
+
+const meshServicePolicyMetadataFields: ConfigFieldMetadata[] = [
+  ...meshPolicyMetadataFields('services.orchestrator', 'orchestrator', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.db', 'db', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.tooling', 'tooling', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.scheduler', 'scheduler', { share: true, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.tts', 'tts', { share: true, prefer: 'network' }),
+  ...meshPolicyMetadataFields('services.stt.coordinator', 'stt', { share: false, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.stt.wakeword', 'stt', { share: false, prefer: 'local' }),
+  ...meshPolicyMetadataFields('services.stt.transcription', 'stt', { share: false, prefer: 'local' })
+]
+
 export const configGetFixture: ConfigGetResponse = {
   config: {
     services: {
@@ -3780,10 +5601,47 @@ export const configGetFixture: ConfigGetResponse = {
           host: '127.0.0.1',
           port: 8000,
           token_secret: '[REDACTED]'
+        },
+        mesh_network: {
+          enabled: true,
+          node_name: 'Studio workstation',
+          version_policy: 'compatible',
+          peer_selection: 'latency',
+          ping_interval_s: 10,
+          registry_announce_interval_s: 30,
+          stale_peer_timeout_s: 90,
+          remote_timeout_s: 15
+        },
+        webrtc: {
+          enabled: true,
+          strategy: 'mqtt',
+          app_id: 'aurora-dev',
+          room: 'aurora-studio-room',
+          password: '[REDACTED]',
+          encrypt_signaling: true,
+          enable_app_layer_e2ee: true,
+          stun_servers: ['stun:stun.l.google.com:19302'],
+          turn_servers: []
+        },
+        signaling_mqtt: {
+          brokers: ['wss://test.mosquitto.org:8081/mqtt'],
+          topic_root: 'aurora/mesh'
         }
-      }
+      },
+      auth: {
+        default_pairing_permissions: ['Gateway.use'],
+        webrtc_auth_timeout_seconds: 30,
+        webrtc_pairing_timeout_seconds: 300
+      },
+      ...meshServicePolicyConfig
     }
   }
+}
+
+export const meshInviteConfigFixture: MeshInviteConfigResponse = {
+  app_id: 'aurora-dev',
+  room: 'aurora-studio-room',
+  room_password: 'secret-room-key'
 }
 
 export const configValidateFixture: ConfigValidateResponse = {
@@ -3836,7 +5694,338 @@ export const configSchemaMetadataFixture: ConfigSchemaMetadataResponse = {
       affected_services: ['gateway', 'auth'],
       constraints: {},
       choices: null
-    }
+    },
+    {
+      key_path: 'services.gateway.mesh_network.enabled',
+      title: 'Mesh enabled',
+      description: 'Enable local mesh peer routing.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.node_name',
+      title: 'Node name',
+      description: 'Human-readable name advertised to mesh peers.',
+      type: 'string',
+      default: 'Aurora node',
+      current_value: 'Studio workstation',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.version_policy',
+      title: 'Version policy',
+      description: 'Compatibility policy used when evaluating peer manifests.',
+      type: 'string',
+      default: 'compatible',
+      current_value: 'compatible',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['compatible', 'strict']
+    },
+    {
+      key_path: 'services.gateway.mesh_network.peer_selection',
+      title: 'Peer selection',
+      description: 'Preferred peer routing strategy.',
+      type: 'string',
+      default: 'latency',
+      current_value: 'latency',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['latency', 'round_robin', 'manual']
+    },
+    {
+      key_path: 'services.gateway.mesh_network.ping_interval_s',
+      title: 'Ping interval',
+      description: 'Seconds between peer latency pings.',
+      type: 'integer',
+      default: 10,
+      current_value: 10,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.registry_announce_interval_s',
+      title: 'Announce interval',
+      description: 'Seconds between mesh manifest announcements.',
+      type: 'integer',
+      default: 30,
+      current_value: 30,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.stale_peer_timeout_s',
+      title: 'Stale peer timeout',
+      description: 'Seconds before a peer is treated as stale.',
+      type: 'integer',
+      default: 90,
+      current_value: 90,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.mesh_network.remote_timeout_s',
+      title: 'Remote timeout',
+      description: 'Seconds to wait for remote mesh RPCs.',
+      type: 'integer',
+      default: 15,
+      current_value: 15,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.enabled',
+      title: 'WebRTC enabled',
+      description: 'Enable WebRTC peer transport.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.strategy',
+      title: 'Signaling provider',
+      description: 'Signaling backend used for WebRTC peer discovery.',
+      type: 'string',
+      default: 'mqtt',
+      current_value: 'mqtt',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: ['mqtt']
+    },
+    {
+      key_path: 'services.gateway.webrtc.app_id',
+      title: 'App id',
+      description: 'Application namespace for signaling.',
+      type: 'string',
+      default: 'aurora',
+      current_value: 'aurora-dev',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.room',
+      title: 'Room',
+      description: 'Signaling room shared by peers.',
+      type: 'string',
+      default: 'default',
+      current_value: 'aurora-studio-room',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.password',
+      title: 'Room password',
+      description: 'Optional room password for signaling.',
+      type: 'string',
+      default: null,
+      current_value: '[REDACTED]',
+      source_layer: 'env',
+      secret: true,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.encrypt_signaling',
+      title: 'Encrypt signaling',
+      description: 'Encrypt signaling metadata where supported.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.enable_app_layer_e2ee',
+      title: 'App-layer E2EE',
+      description: 'Enable Aurora application-layer peer encryption.',
+      type: 'boolean',
+      default: true,
+      current_value: true,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.stun_servers',
+      title: 'STUN servers',
+      description: 'ICE STUN server URLs.',
+      type: 'array',
+      default: ['stun:stun.l.google.com:19302'],
+      current_value: ['stun:stun.l.google.com:19302'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.webrtc.turn_servers',
+      title: 'TURN servers',
+      description: 'ICE TURN server URLs.',
+      type: 'array',
+      default: [],
+      current_value: [],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.signaling_mqtt.brokers',
+      title: 'MQTT brokers',
+      description: 'MQTT broker URLs used for signaling.',
+      type: 'array',
+      default: ['wss://test.mosquitto.org:8081/mqtt'],
+      current_value: ['wss://test.mosquitto.org:8081/mqtt'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.gateway.signaling_mqtt.topic_root',
+      title: 'MQTT topic root',
+      description: 'Topic prefix used for WebRTC signaling.',
+      type: 'string',
+      default: 'aurora/mesh',
+      current_value: 'aurora/mesh',
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['gateway'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.auth.default_pairing_permissions',
+      title: 'Default pairing permissions',
+      description: 'Default permissions suggested for new peer pairing approvals.',
+      type: 'array',
+      default: ['Gateway.use'],
+      current_value: ['Gateway.use'],
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: {},
+      choices: null
+    },
+    {
+      key_path: 'services.auth.webrtc_auth_timeout_seconds',
+      title: 'WebRTC auth timeout',
+      description: 'Seconds allowed for WebRTC peers to authenticate.',
+      type: 'integer',
+      default: 30,
+      current_value: 30,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    {
+      key_path: 'services.auth.webrtc_pairing_timeout_seconds',
+      title: 'WebRTC pairing timeout',
+      description: 'Seconds allowed for admin pairing approval.',
+      type: 'integer',
+      default: 300,
+      current_value: 300,
+      source_layer: 'config.json',
+      secret: false,
+      reload_required: true,
+      restart_required: false,
+      affected_services: ['auth'],
+      constraints: { minimum: 1 },
+      choices: null
+    },
+    ...meshServicePolicyMetadataFields
   ],
   secrets_redacted: true
 }
@@ -3857,7 +6046,10 @@ export const configDiffPreviewFixture: ConfigDiffPreviewResponse = {
     }
   ],
   errors: [],
-  secrets_redacted: true
+  secrets_redacted: true,
+  base_revision: 7,
+  preview_token: 'cfgprev-fixture-token',
+  changed_paths: ['services.gateway.api.port']
 }
 
 export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
@@ -3869,7 +6061,10 @@ export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
       old_value: 7000,
       new_value: 8000,
       affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
-      secret: false
+      secret: false,
+      changed_paths: ['services.gateway.api.port'],
+      transaction_kind: 'commit_change_set',
+      actor: 'principal_id:admin'
     },
     {
       version_id: 'cfgv-token-secret-001',
@@ -3878,7 +6073,10 @@ export const configVersionHistoryFixture: ConfigVersionHistoryResponse = {
       old_value: null,
       new_value: '[REDACTED]',
       affected_sections: ['services', 'services.gateway', 'services.gateway.api'],
-      secret: true
+      secret: true,
+      changed_paths: ['services.gateway.api.token_secret'],
+      transaction_kind: 'rollback',
+      actor: 'principal_id:admin'
     }
   ],
   secrets_redacted: true
@@ -4012,6 +6210,30 @@ export const supportBundleFixture: GatewaySupportBundleResponse = {
       redacted: true
     }
   ],
+  mesh_rollout: {
+    counters: { manifest_sent: 1, catalog_refetched: 1 },
+    denied_by_reason: { method_not_shared: 1 },
+    peers: [
+      {
+        peer_id: 'stable-peer',
+        manifest_revision: 4,
+        catalog_revision: 8,
+        export_policy_revision: 3,
+        auth_grant_revision: 2,
+        switch_revision: 1,
+        projection_size: 5,
+        last_sync_duration_ms: 12.5,
+        protocol_status: 'projection_v1',
+        last_reason_code: 'method_not_shared',
+        counters: { manifest_sent: 1, catalog_refetched: 1 }
+      }
+    ],
+    provider_mesh_tooling_enabled: true,
+    consumer_mesh_tooling_enabled: true,
+    rbac_preflight_release_blocking: false,
+    downgrade_status: 'not_applicable',
+    secrets_redacted: true
+  },
   config_shape: {
     api: {
       token_secret: '[REDACTED]',
@@ -4280,6 +6502,11 @@ export interface MockAuroraFixtureSet {
   schedulerJobs: SchedulerListJobsResponse
   modelRuntimeCatalog: ModelRuntimeCatalogResponse
   toolCatalog: typeof toolCatalogFixture
+  toolingSharingPolicy: ToolingSharingPolicy
+  toolingApprovalGrants: ToolingListApprovalGrantsResponse
+  toolingMcpStatus: ToolingGetMcpStatusResponse
+  pendingToolApprovals: OrchestratorListPendingToolApprovalsResponse
+  meshInviteConfig: MeshInviteConfigResponse
   configGet: ConfigGetResponse
   configValidate: ConfigValidateResponse
   configSchemaMetadata: ConfigSchemaMetadataResponse
@@ -4316,6 +6543,11 @@ export const defaultMockAuroraFixtures: MockAuroraFixtureSet = {
   schedulerJobs: schedulerJobsFixture,
   modelRuntimeCatalog: modelRuntimeCatalogFixture,
   toolCatalog: toolCatalogFixture,
+  toolingSharingPolicy: toolingSharingPolicyFixture,
+  toolingApprovalGrants: toolingApprovalGrantsFixture,
+  toolingMcpStatus: toolingMcpStatusFixture,
+  pendingToolApprovals: pendingToolApprovalsFixture,
+  meshInviteConfig: meshInviteConfigFixture,
   configGet: configGetFixture,
   configValidate: configValidateFixture,
   configSchemaMetadata: configSchemaMetadataFixture,

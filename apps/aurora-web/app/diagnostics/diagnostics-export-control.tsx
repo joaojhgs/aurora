@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { GatewaySupportBundleResponse } from '@aurora/client'
 import { createAuroraBrowserClient } from '../aurora-client'
+import { countText, productActionErrorText, productBundleItemAvailable, yesNo } from '../product-copy'
 
 interface DiagnosticsExportControlProps {
   correlationId: string | null
@@ -20,11 +21,11 @@ export function DiagnosticsExportControl({
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [pending, setPending] = useState(false)
   const [bundle, setBundle] = useState<GatewaySupportBundleResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [exportMessage, setExportMessage] = useState<string | null>(null)
 
   async function exportBundle() {
     setPending(true)
-    setError(null)
+    setExportMessage(null)
     try {
       const result = await client.diagnostics.exportSupportBundle({
         request: {
@@ -38,7 +39,7 @@ export function DiagnosticsExportControl({
       })
       setBundle(result.data)
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : 'Diagnostics export failed')
+      setExportMessage(productActionErrorText(exportError))
     } finally {
       setPending(false)
     }
@@ -51,9 +52,9 @@ export function DiagnosticsExportControl({
       <div className="adx-section-heading">
         <div>
           <h2 id="diagnostics-export-title">Support Bundle Export</h2>
-          <p>AdminAction draft, confirmation, and audit receipt are required before bundle generation.</p>
+          <p>Review and confirm before Aurora prepares a support bundle.</p>
         </div>
-        <span className="adx-badge adx-badge-critical">admin-critical</span>
+        <span className="adx-badge adx-badge-critical">confirmation required</span>
       </div>
       <label className="adx-field">
         <span>Reason</span>
@@ -71,14 +72,14 @@ export function DiagnosticsExportControl({
           onChange={(event) => setReauthConfirmed(event.target.checked)}
           disabled={pending || disabled}
         />
-        <span>Re-authentication was confirmed for this admin action.</span>
+        <span>I confirmed this support request.</span>
       </label>
       <p id="diagnostics-export-help" className="adx-muted">
-        Bundle redaction omits tokens, peer secrets, Redis URLs, host paths, model paths, tool args,
-        RAG content, and audio/session metadata when the backend reports them.
+        Aurora removes credentials, device secrets, addresses, file locations, tool inputs,
+        memory content, and audio details before sharing.
       </p>
       {disabled ? <p className="adx-state adx-state-warn">{disabledReason}</p> : null}
-      {error ? <p className="adx-state adx-state-error" role="alert">{error}</p> : null}
+      {exportMessage ? <p className="adx-state adx-state-error" role="alert">{exportMessage}</p> : null}
       <button className="adx-button" type="button" onClick={exportBundle} disabled={blocked}>
         {pending ? 'Exporting...' : 'Export Redacted Bundle'}
       </button>
@@ -86,8 +87,8 @@ export function DiagnosticsExportControl({
         <div className="adx-receipt" aria-live="polite">
           <dl className="aw-facts">
             <div>
-              <dt>Audit receipt</dt>
-              <dd>{bundle.audit_receipt ?? bundle.audit_error ?? 'receipt unavailable'}</dd>
+              <dt>Support Record</dt>
+              <dd>{bundle.audit_receipt || bundle.audit_error ? 'Recorded' : 'Record unavailable'}</dd>
             </div>
             <div>
               <dt>Generated</dt>
@@ -95,23 +96,23 @@ export function DiagnosticsExportControl({
             </div>
             <div>
               <dt>Correlations</dt>
-              <dd>{bundle.correlation_ids.length ? bundle.correlation_ids.join(', ') : 'none returned'}</dd>
+              <dd>{bundle.correlation_ids.length ? countText(bundle.correlation_ids.length, 'related item') : 'None returned'}</dd>
             </div>
             <div>
               <dt>Redaction</dt>
-              <dd>{bundle.secrets_redacted ? 'backend asserted secrets redacted' : 'redaction assertion missing'}</dd>
+              <dd>{bundle.secrets_redacted ? 'Sensitive details removed' : 'Sensitive-detail status unavailable'}</dd>
             </div>
             <div>
-              <dt>Native capabilities</dt>
-              <dd>{bundle.native_capabilities.length ? summarizeItems(bundle.native_capabilities) : 'none returned'}</dd>
+              <dt>Device Features</dt>
+              <dd>{bundle.native_capabilities.length ? summarizeItems(bundle.native_capabilities) : 'None returned'}</dd>
             </div>
             <div>
-              <dt>Sidecar/gateway logs</dt>
-              <dd>{bundle.sidecar_logs.length ? summarizeItems(bundle.sidecar_logs) : 'none returned'}</dd>
+              <dt>Device Notes</dt>
+              <dd>{bundle.sidecar_logs.length ? summarizeItems(bundle.sidecar_logs) : 'None returned'}</dd>
             </div>
             <div>
-              <dt>Recent events and audit</dt>
-              <dd>{`${bundle.recent_events.length} events, ${bundle.recent_audit_events.length} audit records`}</dd>
+              <dt>Recent Activity</dt>
+              <dd>{`${countText(bundle.recent_events.length, 'event')}, ${countText(bundle.recent_audit_events.length, 'support record')}`}</dd>
             </div>
           </dl>
         </div>
@@ -121,5 +122,6 @@ export function DiagnosticsExportControl({
 }
 
 function summarizeItems(items: Array<{ name: string; status: string }>): string {
-  return items.map((item) => `${item.name}: ${item.status}`).join(', ')
+  const available = items.filter((item) => productBundleItemAvailable(item.status)).length
+  return `${countText(items.length, 'item')} checked; available: ${yesNo(available > 0)}`
 }

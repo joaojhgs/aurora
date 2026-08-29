@@ -87,6 +87,11 @@ def test_scheduler_admin_method_contracts_are_explicit():
     assert resume_contract["required_perms"] == [SchedulerMethods.RESUME]
     assert resume_contract["output_model"] is SchedulerActionResponse
 
+    schedule_action_contract = SchedulerService.schedule_action._contract_metadata
+    assert schedule_action_contract["exposure"] == "both"
+    assert schedule_action_contract["method_type"] == "manage"
+    assert schedule_action_contract["required_perms"] == ["Scheduler.manage"]
+
 
 @pytest.mark.asyncio
 async def test_list_jobs_includes_admin_metadata_and_degraded_action_support():

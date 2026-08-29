@@ -148,6 +148,11 @@ type BackupAdminPayload =
   | BackupRestoreRequest
   | BackupRollbackRequest
 
+export interface BackupAdminConfirmation {
+  reauthConfirmed: boolean
+  phrase?: string
+}
+
 export class BackupClient {
   constructor(private readonly client: AuroraClient) {}
 
@@ -159,33 +164,35 @@ export class BackupClient {
     )
   }
 
-  create(request: BackupCreateRequest): Promise<AuroraResponse<BackupCreateResponse>> {
-    return this.adminExecute<BackupCreateResponse>(BACKUP_METHODS.create, request, request.reason)
+  create(request: BackupCreateRequest, confirmation: BackupAdminConfirmation): Promise<AuroraResponse<BackupCreateResponse>> {
+    return this.adminExecute<BackupCreateResponse>(BACKUP_METHODS.create, request, request.reason, confirmation)
   }
 
-  verify(request: BackupVerifyRequest, reason: string): Promise<AuroraResponse<BackupVerifyResponse>> {
-    return this.adminExecute<BackupVerifyResponse>(BACKUP_METHODS.verify, request, reason)
+  verify(request: BackupVerifyRequest, reason: string, confirmation: BackupAdminConfirmation): Promise<AuroraResponse<BackupVerifyResponse>> {
+    return this.adminExecute<BackupVerifyResponse>(BACKUP_METHODS.verify, request, reason, confirmation)
   }
 
-  restore(request: BackupRestoreRequest): Promise<AuroraResponse<BackupRestoreResponse>> {
-    return this.adminExecute<BackupRestoreResponse>(BACKUP_METHODS.restore, request, request.reason)
+  restore(request: BackupRestoreRequest, confirmation: BackupAdminConfirmation): Promise<AuroraResponse<BackupRestoreResponse>> {
+    return this.adminExecute<BackupRestoreResponse>(BACKUP_METHODS.restore, request, request.reason, confirmation)
   }
 
-  rollback(request: BackupRollbackRequest): Promise<AuroraResponse<BackupRollbackResponse>> {
-    return this.adminExecute<BackupRollbackResponse>(BACKUP_METHODS.rollback, request, request.reason)
+  rollback(request: BackupRollbackRequest, confirmation: BackupAdminConfirmation): Promise<AuroraResponse<BackupRollbackResponse>> {
+    return this.adminExecute<BackupRollbackResponse>(BACKUP_METHODS.rollback, request, request.reason, confirmation)
   }
 
   private adminExecute<TData>(
     methodId: string,
     payload: BackupAdminPayload,
-    reason: string
+    reason: string,
+    confirmation: BackupAdminConfirmation
   ): Promise<AuroraResponse<TData>> {
     return this.client.result(async () => {
       const result = await this.client.admin.execute<TData>({
         methodId,
         payload: payload as unknown as JsonObject,
         reason,
-        reauthConfirmed: true,
+        reauthConfirmed: confirmation.reauthConfirmed,
+        ...(confirmation.phrase ? { phrase: confirmation.phrase } : {}),
         affectedResources: ['admin.backups'],
         path: pathForBackupMethod(methodId)
       })

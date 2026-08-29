@@ -1,5 +1,6 @@
 import { describeRegistry } from './descriptors.js'
 import type {
+  AndroidNativeState,
   AdminOverviewManifest,
   AdminOverviewManifestInput,
   AdminOverviewServiceSummary,
@@ -17,8 +18,8 @@ import type {
   GetServicesResponse,
   MethodDescriptor,
   NativeCapabilityManifest,
-  NativeIntegrationSupport,
   NativeCapabilityState,
+  NativeIntegrationSupport,
   PrivacyClass,
   ServiceInfo
 } from './types.js'
@@ -44,6 +45,7 @@ export function summarizeCapabilities(catalog: CapabilityCatalogResponse): Capab
 export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGraph {
   const candidatesByFeature = new Map<string, CapabilityProviderCandidate[]>()
   const rawActionsByFeature = new Map<string, CapabilityActionInfo[]>()
+  const callableFeatureMembers = new Map<string, Set<string>>()
   const providersById = new Map(input.catalog.providers.map((provider) => [provider.provider_id, provider]))
   const registryMethods = input.registry ? describeRegistry(input.registry) : []
   const catalogFeatureIds = new Set<string>()
@@ -51,12 +53,19 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
   for (const action of input.catalog.actions) {
     const featureId = featureIdForAction(action)
     catalogFeatureIds.add(featureId)
+    addCallableFeatureMembership(
+      callableFeatureMembers,
+      featureId,
+      callableFeatureIdsForAction(action),
+      action.module
+    )
     addCandidate(candidatesByFeature, candidateFromAction(action, featureId, providersById.get(action.provider_id)))
     addRawAction(rawActionsByFeature, featureId, action)
   }
 
   for (const method of registryMethods) {
     const featureId = featureIdForMethod(method)
+    addCallableFeatureMembership(callableFeatureMembers, featureId, method.callableFeatureIds, method.module)
     if (catalogFeatureIds.has(featureId)) continue
     if (method.exposure === 'internal' && !transportSupportsInternalBus(input.transportKind ?? null)) {
       addCandidate(candidatesByFeature, candidateFromMethod(method, featureId, 'internal-only over this transport'))
@@ -74,21 +83,40 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
     .sort((a, b) => a.featureId.localeCompare(b.featureId))
   const byFeatureId = Object.fromEntries(nodes.map((node) => [node.featureId, node]))
   const providerIndex = normalizeIndex(input.catalog.provider_index)
+  const callableFeatureIndex = normalizeSetIndex(callableFeatureMembers)
+  const callableCandidateProviderIndex = Object.fromEntries(
+    Object.entries(callableFeatureIndex).map(([groupKey, memberFeatureIds]) => [
+      groupKey,
+      sortedUnique(
+        memberFeatureIds.flatMap((featureId) =>
+          (byFeatureId[featureId]?.providers ?? []).map((provider) => provider.id)
+        )
+      )
+    ])
+  )
   const candidateProviderIndex = {
     ...providerIndex,
     ...Object.fromEntries(
       nodes.map((node) => [node.featureId, node.providers.map((provider) => provider.id)])
-    )
+    ),
+    ...callableCandidateProviderIndex
   }
+
+  const serverVersion =
+    typeof input.catalog.aurora_version === 'string' && input.catalog.aurora_version.trim()
+      ? input.catalog.aurora_version.trim()
+      : null
 
   return {
     generatedAt: input.catalog.generated_at,
     localPeerId: input.catalog.local_peer_id,
     localNodeName: input.catalog.local_node_name,
+    serverVersion,
     secretsRedacted: input.catalog.secrets_redacted,
     nodes,
     byFeatureId,
     providerIndex,
+    callableFeatureIndex,
     candidateProviderIndex,
     explain(featureId: string): CapabilityExplanation {
       const node = byFeatureId[featureId]
@@ -103,12 +131,7 @@ export function buildCapabilityGraph(input: CapabilityGraphInput): CapabilityGra
 export function availabilityForAction(action: CapabilityActionInfo): AvailabilityState {
   if (action.freshness.stale) return 'stale'
   if (action.bindability === 'pending') return 'pending'
-  if (
-    action.policy.consent_required ||
-    action.policy.privacy_indicator_required ||
-    action.policy.explicit_selector_required ||
-    action.policy.selector_required
-  ) {
+  if (hardPrivacyBlockForAction(action)) {
     return 'privacy-blocked'
   }
   if (action.policy.denial_reasons.length > 0 || action.bindability === 'denied') return 'denied'
@@ -217,7 +240,7 @@ function nativeCapabilityState(manifest: NativeCapabilityManifest | null | undef
     availability: 'available-local',
     permissions: { ...manifest.permissions },
     capabilityKeys: Object.keys(manifest.capabilities).sort(),
-    evidenceSource: 'native-manifest'
+    evidenceSource: manifest.evidenceSource ?? 'native-manifest'
   }
 }
 
@@ -231,8 +254,27 @@ function featureIdForMethod(method: MethodDescriptor): string {
   return methodFeatureId(method.module, method.name, method.busTopic)
 }
 
+function callableFeatureId(module: string, featureId: string): string {
+  return `callable:${module}:${featureId}`
+}
+
+function callableFeatureIdsForAction(action: CapabilityActionInfo): string[] {
+  const callableFeatureIds = action.callable_feature_ids ?? []
+  return callableFeatureIds.length
+    ? callableFeatureIds
+    : action.policy.required_callable_feature_ids ?? []
+}
+
 function methodFeatureId(module: string, method: string, busTopic: string | null): string {
   return `method:${busTopic ?? `${module}.${method}`}`
+}
+
+function actionInvocationId(action: CapabilityActionInfo): string {
+  return action.action_id || action.topic || `${action.module}.${action.method}`
+}
+
+function methodInvocationId(method: MethodDescriptor): string {
+  return method.busTopic ?? `${method.module}.${method.name}`
 }
 
 function candidateFromAction(
@@ -247,15 +289,15 @@ function candidateFromAction(
     ...(provider && !provider.eligible ? [provider.reason_code || provider.reason].filter(Boolean) : [])
   ])
   const selectorRequired = action.policy.explicit_selector_required || action.policy.selector_required
-  const privacyBlocked =
-    selectorRequired || action.policy.consent_required || action.policy.privacy_indicator_required
+  const privacyBlocked = hardPrivacyBlockForAction(action)
   return {
-    id: `${featureId}@${action.provider_id}`,
+    id: `${featureId}:${actionInvocationId(action)}@${action.provider_id}`,
     featureId,
     providerIdentity: providerIdentityFor(action.provider_kind, action.peer_id, action.provider_id),
     providerId: action.provider_id,
     providerKind: action.provider_kind,
     peerId: action.peer_id,
+    nodeName: provider?.node_name || null,
     serviceInstanceId: action.service_instance_id,
     module: action.module,
     method: action.method,
@@ -284,7 +326,7 @@ function candidateFromMethod(
   reason: string
 ): CapabilityProviderCandidate {
   return {
-    id: `${featureId}@unavailable:http`,
+    id: `${featureId}:${methodInvocationId(method)}@unavailable:http`,
     featureId,
     providerIdentity: 'unavailable',
     providerId: 'unavailable:http',
@@ -312,6 +354,20 @@ function candidateFromMethod(
   }
 }
 
+function addCallableFeatureMembership(
+  index: Map<string, Set<string>>,
+  memberFeatureId: string,
+  callableFeatureIds: string[],
+  module: string
+): void {
+  for (const featureId of callableFeatureIds) {
+    const groupKey = callableFeatureId(module, featureId)
+    const members = index.get(groupKey) ?? new Set<string>()
+    members.add(memberFeatureId)
+    index.set(groupKey, members)
+  }
+}
+
 function candidatesFromNativeManifest(
   manifest: NativeCapabilityManifest | null | undefined
 ): CapabilityProviderCandidate[] {
@@ -319,14 +375,11 @@ function candidatesFromNativeManifest(
   return [
     ...Object.entries(manifest.capabilities).map(([capability, enabled]) => {
       const featureId = `native:${manifest.platform}:${capability}`
-      const missingPermissions = Object.entries(manifest.permissions)
-        .filter(([, granted]) => !granted)
-        .map(([permission]) => permission)
-      const availability: AvailabilityState = enabled
-        ? missingPermissions.length > 0
-          ? 'privacy-blocked'
-          : 'available-local'
-        : 'unsupported'
+      const nativeState = manifest.capabilityStates?.[capability]
+      const missingPermissions = nativeRequiredPermissions(capability, manifest.permissions)
+        .filter((permission) => manifest.permissions[permission] === false)
+      const availability = availabilityForNativeState(nativeState, enabled, missingPermissions)
+      const disabledReasons = disabledReasonsForNativeState(nativeState, enabled, missingPermissions)
       return {
         id: `${featureId}@native:${manifest.platform}`,
         featureId,
@@ -344,17 +397,12 @@ function candidatesFromNativeManifest(
         selectable: availability === 'available-local',
         selected: false,
         trustTier: 'device',
-        routeability: enabled ? 'native-manifest' : 'disabled',
-        freshness: emptyFreshness('native-manifest'),
+        routeability: nativeState ?? (enabled ? 'native-manifest' : 'disabled'),
+        freshness: emptyFreshness(manifest.evidenceSource ?? 'native-manifest'),
         requiredPermissions: missingPermissions,
-        privacyClass: capability.toLowerCase().includes('microphone') ? 'raw-audio' : 'personal',
-        disabledReasons: enabled ? missingPermissions.map((permission) => `native permission missing: ${permission}`) : ['native capability disabled'],
-        requiredAction:
-          availability === 'privacy-blocked'
-            ? 'grant required native permission'
-            : availability === 'unsupported'
-              ? 'enable native capability in manifest'
-              : null,
+        privacyClass: nativePrivacyClass(capability),
+        disabledReasons,
+        requiredAction: requiredActionForNativeState(nativeState, availability),
         selector: { platform: manifest.platform, capability },
         source: 'native-manifest',
         raw: null
@@ -390,7 +438,16 @@ function candidatesFromNativeManifest(
         privacyClass: integration.privacyClass,
         disabledReasons,
         requiredAction: requiredActionForNativeIntegration(integration.support),
-        selector: { platform: integration.platform, capability: integration.capability },
+        selector: {
+          platform: integration.platform,
+          capability: integration.capability,
+          integrationId: integration.id,
+          invocation: integration.invocation ?? null,
+          backendMethod: integration.backendMethod ?? null,
+          privacyClass: integration.privacyClass,
+          requiresConfirmation: integration.requiresConfirmation ?? false,
+          siriReplacement: integration.siriReplacement ?? false
+        },
         source: 'native-manifest',
         raw: null
       } satisfies CapabilityProviderCandidate
@@ -399,10 +456,62 @@ function candidatesFromNativeManifest(
     .sort((a, b) => a.featureId.localeCompare(b.featureId))
 }
 
+function availabilityForNativeState(
+  state: AndroidNativeState | undefined,
+  enabled: boolean,
+  missingPermissions: string[]
+): AvailabilityState {
+  if (state === 'available') return missingPermissions.length > 0 ? 'privacy-blocked' : 'available-local'
+  if (state === 'needs_native_permission') return 'privacy-blocked'
+  if (state === 'pending_native_target') return 'pending'
+  if (state === 'degraded' || state === 'fallback') return 'degraded'
+  if (state === 'unsupported_platform') return 'unsupported'
+  return enabled
+    ? missingPermissions.length > 0
+      ? 'privacy-blocked'
+      : 'available-local'
+    : 'unsupported'
+}
+
+function disabledReasonsForNativeState(
+  state: AndroidNativeState | undefined,
+  enabled: boolean,
+  missingPermissions: string[]
+): string[] {
+  if (state === 'needs_native_permission') {
+    return missingPermissions.length > 0
+      ? missingPermissions.map((permission) => `native permission missing: ${permission}`)
+      : ['native permission missing']
+  }
+  if (state === 'pending_native_target') return ['native target pending']
+  if (state === 'degraded') return ['native capability degraded']
+  if (state === 'fallback') return ['native fallback path only']
+  if (state === 'unsupported_platform') return ['native platform unsupported']
+  return enabled
+    ? missingPermissions.map((permission) => `native permission missing: ${permission}`)
+    : ['native capability disabled']
+}
+
+function requiredActionForNativeState(
+  state: AndroidNativeState | undefined,
+  availability: AvailabilityState
+): string | null {
+  if (state === 'needs_native_permission' || availability === 'privacy-blocked') {
+    return 'grant required native permission'
+  }
+  if (state === 'pending_native_target') return 'complete native app target setup'
+  if (state === 'degraded') return 'use the supported subset or complete native integration'
+  if (state === 'fallback') return 'use fallback entrypoint until primary native role is available'
+  if (state === 'unsupported_platform' || availability === 'unsupported') {
+    return 'do not claim this platform capability'
+  }
+  return null
+}
+
 function availabilityForNativeIntegration(support: NativeIntegrationSupport): AvailabilityState {
   if (support === 'supported') return 'available-local'
   if (support === 'supported-path') return 'degraded'
-  if (support === 'planned') return 'pending'
+  if (support === 'planned' || support === 'pending') return 'pending'
   if (support === 'blocked') return 'privacy-blocked'
   return 'unsupported'
 }
@@ -411,8 +520,68 @@ function requiredActionForNativeIntegration(support: NativeIntegrationSupport): 
   if (support === 'supported') return null
   if (support === 'supported-path') return 'verify platform path in macOS/Xcode simulator or device'
   if (support === 'planned') return 'implement scoped iOS plugin, App Intent, or extension task'
+  if (support === 'pending') return 'complete native app target setup'
   if (support === 'blocked') return 'satisfy platform entitlement, consent, or permission requirement'
   return 'do not claim this platform capability'
+}
+
+function nativeRequiredPermissions(capability: string, permissions: Record<string, boolean>): string[] {
+  const normalized = capability.toLowerCase()
+  const requestedTokens: string[] = []
+  if (normalized.includes('assistantrole.status')) requestedTokens.push('assistantrolestatus')
+  if (normalized.includes('assistantrole.request')) requestedTokens.push('assistantrolerequest')
+  if (normalized.includes('microphone') || normalized.includes('audiocapture')) requestedTokens.push('microphone', 'audiocapture')
+  if (normalized.includes('notification')) requestedTokens.push('notification')
+  if (normalized.includes('foregroundservice')) requestedTokens.push('foregroundservice')
+  if (normalized.includes('appintent')) requestedTokens.push('appintent')
+  if (normalized.includes('shortcut')) requestedTokens.push('shortcut')
+  if (normalized.includes('shareextension')) requestedTokens.push('shareextension', 'share')
+  if (normalized.includes('shareintent')) requestedTokens.push('shareintent')
+  if (normalized.includes('deeplink')) requestedTokens.push('deeplink')
+  if (normalized.includes('appwidget')) requestedTokens.push('appwidget', 'widget')
+  if (normalized.includes('appshortcut')) requestedTokens.push('appshortcut', 'shortcut')
+  if (normalized.includes('fileassociation')) requestedTokens.push('fileassociation')
+  if (normalized.includes('quicktile')) requestedTokens.push('quicktile', 'tile')
+  if (normalized.includes('entrypointpayload')) requestedTokens.push('entrypointpayload')
+  if (normalized.includes('locallight') || normalized.includes('inference') || normalized.includes('modelruntime')) {
+    requestedTokens.push('locallight', 'inference', 'modelruntime')
+  }
+  if (normalized.includes('biometric')) requestedTokens.push('biometric')
+  if (normalized.includes('adminunlock')) requestedTokens.push('adminunlock', 'biometric')
+  if (normalized.includes('localnetwork')) requestedTokens.push('localnetwork')
+  if (normalized.includes('securecredentialstorage')) requestedTokens.push('securestorage', 'credentialstorage')
+  if (normalized.includes('securefilehandles')) requestedTokens.push('securefile')
+  if (normalized.includes('filepick')) requestedTokens.push('filepick', 'securefile')
+  if (normalized.includes('localfileread')) requestedTokens.push('localfileread')
+  if (normalized.includes('localfilewrite')) requestedTokens.push('localfilewrite')
+  if (normalized.includes('dialog')) requestedTokens.push('dialog')
+  if (normalized.includes('tray')) requestedTokens.push('tray')
+  if (normalized.includes('logtail')) requestedTokens.push('logtail')
+  if (normalized.includes('sidecar')) requestedTokens.push('sidecar')
+  if (normalized.includes('fallbackentrypoints')) requestedTokens.push('fallback', 'shareintent', 'deeplink')
+  if (normalized.includes('appintents')) requestedTokens.push('appintents')
+  if (normalized.includes('shortcuts')) requestedTokens.push('shortcut')
+  if (normalized.includes('shareextension')) requestedTokens.push('shareextension')
+  if (normalized.includes('widgets')) requestedTokens.push('widget')
+  if (normalized.includes('deeplinks')) requestedTokens.push('deeplink')
+  if (normalized.includes('sirireplacement')) requestedTokens.push('sirireplacement')
+
+  const matches = Object.keys(permissions).filter((permission) => {
+    const permissionKey = permission.toLowerCase().replace(/[^a-z0-9]/g, '')
+    return requestedTokens.some((token) => permissionKey.includes(token))
+  })
+  return sortedUnique(matches)
+}
+
+function nativePrivacyClass(capability: string): PrivacyClass {
+  const normalized = capability.toLowerCase()
+  if (normalized.includes('microphone') || normalized.includes('audio')) return 'raw-audio'
+  if (normalized.includes('locallight') || normalized.includes('inference') || normalized.includes('modelruntime')) {
+    return 'personal'
+  }
+  if (normalized.includes('adminunlock')) return 'admin-critical'
+  if (normalized.includes('credential') || normalized.includes('storage')) return 'credential'
+  return 'personal'
 }
 
 function nodeFromCandidates(
@@ -552,14 +721,35 @@ function requiredActionForAction(
   disabledReasons: string[]
 ): string | null {
   if (action.freshness.stale) return 'refresh peer manifest or reconnect provider'
-  if (action.policy.explicit_selector_required || action.policy.selector_required) return 'choose a peer/provider'
-  if (action.policy.approval_required) return 'request approval before execution'
+  if (
+    action.provider_kind !== 'local' &&
+    (action.policy.explicit_selector_required || action.policy.selector_required)
+  ) {
+    return 'choose a peer/provider'
+  }
   if (action.policy.consent_required) return 'collect user consent'
   if (action.policy.privacy_indicator_required) return 'show required privacy indicator'
+  if (action.policy.approval_required || action.bindability === 'approval-required') {
+    return 'request approval before execution'
+  }
+  if (action.policy.explicit_selector_required || action.policy.selector_required) {
+    return action.provider_kind === 'local'
+      ? 'confirm the local provider selection before execution'
+      : 'choose a peer/provider'
+  }
   if (action.policy.denial_reasons.length > 0) return 'change policy, permission, or selected provider'
   if (provider && !provider.eligible) return 'select an eligible provider'
   if (disabledReasons.length > 0) return 'inspect capability blockers'
   return null
+}
+
+function hardPrivacyBlockForAction(action: CapabilityActionInfo): boolean {
+  return (
+    action.policy.consent_required ||
+    action.policy.privacy_indicator_required ||
+    (action.provider_kind !== 'local' &&
+      (action.policy.explicit_selector_required || action.policy.selector_required))
+  )
 }
 
 function availabilityForNode(
@@ -600,12 +790,14 @@ function availabilityRank(availability: AvailabilityState): number {
       return 3
     case 'pending':
       return 4
-    case 'stale':
+    case 'offline':
       return 5
-    case 'denied':
+    case 'stale':
       return 6
-    case 'unsupported':
+    case 'denied':
       return 7
+    case 'unsupported':
+      return 8
   }
 }
 
@@ -659,6 +851,8 @@ function repairActionForState(availability: AvailabilityState): string | null {
       return 'refresh provider state'
     case 'pending':
       return 'wait for backend approval or completion'
+    case 'offline':
+      return 'connect to Gateway or use clearly labeled offline demo mode'
     case 'degraded':
       return 'inspect fallback and capacity warnings'
     case 'unsupported':
@@ -683,11 +877,20 @@ function normalizeIndex(index: Record<string, string[]>): Record<string, string[
   return Object.fromEntries(Object.entries(index).map(([key, value]) => [key, [...value].sort()]))
 }
 
+function normalizeSetIndex(index: Map<string, Set<string>>): Record<string, string[]> {
+  return Object.fromEntries(
+    [...index.entries()]
+      .map(([key, values]) => [key, [...values].sort()] as const)
+      .sort(([a], [b]) => a.localeCompare(b))
+  )
+}
+
 function addCandidate(
   map: Map<string, CapabilityProviderCandidate[]>,
   candidate: CapabilityProviderCandidate
 ): void {
   const existing = map.get(candidate.featureId) ?? []
+  if (existing.some((item) => item.id === candidate.id)) return
   existing.push(candidate)
   map.set(candidate.featureId, existing)
 }

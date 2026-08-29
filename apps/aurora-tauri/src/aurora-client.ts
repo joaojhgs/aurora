@@ -3,82 +3,2695 @@ import {
   HttpGatewayTransport,
   MockAuroraTransport,
   TauriLocalTransport,
+  type AndroidAssistantRoleRequestResult,
+  type NativeSpeechPackTask,
+  type AndroidNativePermissionRequestResult,
+  type TauriAndroidBaselineStatus,
+  type AndroidLocalLightInferenceStatus,
+  type NativeCapabilityManifest,
+  type TauriIosInvocationStatus,
   type TauriNativeFeatureStatus,
   type TauriNativePermissionStatus,
-  type TauriSidecarStatus
-} from '@aurora/client'
-import { invoke } from '@tauri-apps/api/core'
+  type TauriSidecarStatus,
+  type ToolingProjectionToolInfo,
+} from "@aurora/client";
+import { addPluginListener, invoke } from "@tauri-apps/api/core";
+import { emit, listen } from "@tauri-apps/api/event";
+import {
+  AURORA_RELEASE_FOCUSED_MEDIA_EVENT,
+  activeRuntimeProfile,
+  activeThinConnectionProfile,
+  BrowserPersistentPeerCredentialStore,
+  createBrowserWebThinRuntime,
+  emptyThinProfileDocument,
+  emptyRuntimeProfileDocument,
+  explainBrowserThinRuntime,
+  getAuroraSurfaceProfile,
+  isRuntimeProfileConfigured,
+  isThinConnectionProfileConfigured,
+  localSpeechSelectionHasAssetPatch,
+  mergeLocalNodeDesktopOverlay,
+  mergeLocalNodeSpeechPreferences,
+  migrateThinProfileDocumentToRuntime,
+  migrateThinProfileToRuntimeProfile,
+  parseRuntimeProfileDocument,
+  parseThinProfileDocument as parseSharedThinProfileDocument,
+  parseWebRtcInvite,
+  runtimeProfileToThinConnectionProfile,
+  sanitizeThinConnectionProfile,
+  resolveDesktopOverlayPreferences,
+  sanitizeRuntimeProfile,
+  sanitizeRuntimeProfileDocument,
+  serializeRuntimeProfileDocument,
+  serializeThinProfileDocument as serializeSharedThinProfileDocument,
+  surfaceSupportsRuntimeTier,
+  type AuroraNodeMode,
+  type AuroraDesktopOverlayPreferences,
+  type AuroraLocalSpeechLanguagePrefs,
+  type AuroraLocalSpeechSelectionProfile,
+  type AuroraRuntimeProfileDocumentV2,
+  type AuroraRuntimeProfileV2,
+  type AuroraRuntimeTier,
+  type AuroraSurfaceProfile,
+  type ParsedWebRtcInvite,
+  type ThinConnectionProfile,
+  type ThinProfileDocument,
+  type AuroraWebRtcRolloutFlags,
+  type AuroraThinConnectionMode,
+  type BrowserPeerPersistenceStatus,
+  type BrowserWebThinRuntime,
+  type NativeDesktopVoicePort,
+  type NativeMobileVoicePort,
+  type AuroraBrowserSpeechPackCatalogSelection,
+} from "@aurora/ui";
+import {
+  NativePeerCredentialStore,
+  type MeshPeerCredentialRecord,
+  type MeshReconnectChallengeMessage,
+  type MeshReconnectProofMessage,
+  type PeerCredentialStatus,
+  type StoredPeerCredentialMetadata,
+  type WebRtcPeerCredentialStore,
+  type WebRtcPeerConnectionProfile,
+} from "@aurora/client/webrtc";
+import type { EnvelopeCryptoPort, LocalDataSession } from "@aurora/client/local-data";
+import {
+  createAuroraInferenceProvider,
+  loadLightweightRemoteProjectionCatalog,
+  subscribeLightweightRemoteProjectionInvalidations,
+  type LightweightAssistantProvider,
+  type LightweightProjectionInvalidationSubscription,
+  type LightweightRemoteProjectionCatalogSnapshot,
+} from "@aurora/client/lightweight-orchestrator";
+import type {
+  LocalFeatureSharingPort,
+  ProviderLocalApprovalControllerPort,
+} from "@aurora/client/local-tools";
+import { providerServiceInstanceId } from "@aurora/client/local-tools";
+import {
+  createTauriNativePeerConnection,
+  deliverNativeTransportFrame,
+  nativeTransportHandleForRemoteSignalingId,
+  subscribeNativeTransportHandles,
+} from "./native-webrtc";
+import {
+  installMeshSessionRuntimeLink,
+  type MeshSessionCleanupFailure,
+  type MeshSurfaceLifecycleFailure,
+} from "./mesh-session-link";
+import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
+import {
+  createTauriMeshNodeServices,
+  type EnabledTauriMeshNodeServices,
+  type TauriMeshNodeServices,
+  type TauriMeshNodeServicesOptions,
+} from "./tauri-mesh-node-services";
+import { createTauriNativeDesktopVoicePort } from "./native-voice";
+import { createTauriNativeAndroidVoicePort } from "./native-android-voice";
+import { createTauriNativeIosVoicePort } from "./native-ios-voice";
+import {
+  createTauriNativeSpeechCatalogPort,
+  type TauriNativeSpeechCatalogPort,
+} from "./native-speech-catalog";
 
-export interface AuroraTauriRuntime {
-  client: AuroraClient
-  mode: 'desktop-local' | 'desktop-thin' | 'mock'
-  sidecarStatus: () => Promise<TauriSidecarStatus | null>
-  startSidecar: () => Promise<TauriSidecarStatus | null>
-  stopSidecar: () => Promise<TauriSidecarStatus | null>
-  nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>
-  trayStatus: () => Promise<TauriNativeFeatureStatus | null>
-  notificationStatus: () => Promise<TauriNativeFeatureStatus | null>
-  dialogStatus: () => Promise<TauriNativeFeatureStatus | null>
-  audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>
-  shutdown: () => Promise<void>
+export const AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT = "aurora://desktop-overlay-settings";
+export const TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS = 90_000;
+
+/**
+ * Whether this shell should carry WebRTC over Aurora's own Rust transport
+ * instead of the WebView's RTCPeerConnection.
+ *
+ * `supportsNativeWebRtcBridge` says the transport is compiled in for this
+ * surface. Mobile native shells select it even when their WebView also exposes
+ * RTCPeerConnection, because the Rust session owns background liveness and
+ * bounded tool serving. Desktop shells retain the browser primitive when it is
+ * available and use Rust as the WebKitGTK fallback.
+ * `native_webrtc_transport_v1` sits above both as the kill switch — off, and
+ * every surface goes back to the WebView primitive, falling through to HTTP
+ * where the WebView has no RTCPeerConnection at all.
+ */
+export function usesNativeWebRtcPrimitive({
+  rolloutFlags,
+  surfaceProfile,
+  hasWebViewPeerConnection = typeof globalThis.RTCPeerConnection === "function",
+}: {
+  rolloutFlags: Pick<AuroraWebRtcRolloutFlags, "native_webrtc_transport_v1">;
+  surfaceProfile: Pick<
+    AuroraSurfaceProfile,
+    "isMobile" | "supportsNativeWebRtcBridge"
+  >;
+  hasWebViewPeerConnection?: boolean;
+}): boolean {
+  if (!rolloutFlags.native_webrtc_transport_v1) return false;
+  return (
+    surfaceProfile.supportsNativeWebRtcBridge &&
+    (surfaceProfile.isMobile || !hasWebViewPeerConnection)
+  );
 }
 
-export function createAuroraTauriRuntime(): AuroraTauriRuntime {
-  if (isTauriRuntime()) {
-    const transport = new TauriLocalTransport({ invoke })
-    return {
-      client: new AuroraClient({ transport }),
-      mode: import.meta.env.VITE_AURORA_GATEWAY_URL ? 'desktop-thin' : 'desktop-local',
-      sidecarStatus: () => transport.getSidecarStatus(),
-      startSidecar: () => transport.startSidecar(),
-      stopSidecar: () => transport.stopSidecar(),
-      nativePermissionStatus: () => transport.getNativePermissionStatus(),
-      trayStatus: () => transport.getTrayStatus(),
-      notificationStatus: () => transport.getNotificationStatus(),
-      dialogStatus: () => transport.getDialogStatus(),
-      audioBridgeStatus: () => transport.getAudioBridgeStatus(),
-      shutdown: () => invoke<void>('aurora_shutdown')
+export function reportMeshSessionCleanupFailure(
+  failure: Pick<MeshSessionCleanupFailure, "phase" | "attempt" | "final">,
+): void {
+  console.warn("Aurora native mesh session cleanup failed", {
+    phase: failure.phase,
+    attempt: failure.attempt,
+    final: failure.final,
+  });
+}
+
+export function reportMeshSessionLifecycleFailure(
+  failure: Pick<
+    MeshSurfaceLifecycleFailure,
+    "phase" | "requestedLifecycle"
+  >,
+): void {
+  console.warn("Aurora native mesh lifecycle update failed", {
+    phase: failure.phase,
+    requestedLifecycle: failure.requestedLifecycle,
+  });
+}
+
+const TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const;
+
+export interface AuroraTauriRuntime {
+  client: AuroraClient;
+  mode: "desktop-local" | "desktop-thin" | "mobile-native" | "mock";
+  thinConnectionMode: AuroraThinConnectionMode;
+  thinPeer?: BrowserWebThinRuntime["peer"] | undefined;
+  thinFeatures?: BrowserWebThinRuntime["features"] | undefined;
+  thinDiagnostics: () => string[];
+  thinProfile?: AuroraThinConnectionProfile | undefined;
+  runtimeProfile?: AuroraRuntimeProfileV2 | undefined;
+  nodeMode?: AuroraNodeMode | undefined;
+  runtimeTier?: AuroraRuntimeTier | undefined;
+  localNodeProviderStatus?: AuroraLocalNodeProviderStatus | undefined;
+  localFeatureSharing?: LocalFeatureSharingPort | undefined;
+  localToolProvider?: EnabledTauriMeshNodeServices["localToolProvider"] | undefined;
+  localToolApprovals?: ProviderLocalApprovalControllerPort | undefined;
+  localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
+  localData?: AuroraTauriLocalDataRuntime | undefined;
+  nativeVoice?: NativeDesktopVoicePort | undefined;
+  nativeMobileVoice?: NativeMobileVoicePort | undefined;
+  localSpeechCatalog?: TauriNativeSpeechCatalogPort | undefined;
+  thinProfileConfigured: boolean;
+  requiresOnboarding: boolean;
+  pendingThinInviteText: string | null;
+  thinProfileController?: AuroraThinProfileController | undefined;
+  modePreferenceStore?: AuroraModePreferenceStore;
+  sidecarStatus: () => Promise<TauriSidecarStatus | null>;
+  startSidecar: () => Promise<TauriSidecarStatus | null>;
+  stopSidecar: () => Promise<TauriSidecarStatus | null>;
+  nativePermissionStatus: () => Promise<TauriNativePermissionStatus | null>;
+  nativeCapabilityManifest?: () => Promise<NativeCapabilityManifest>;
+  requestAndroidAssistantRole?: () => Promise<AndroidAssistantRoleRequestResult | null>;
+  requestAndroidPermission?: (permission: string) => Promise<AndroidNativePermissionRequestResult | null>;
+  trayStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  notificationStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  iosVoiceStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  iosInvocationStatus: () => Promise<TauriIosInvocationStatus | null>;
+  iosLocalLightInferenceStatus: () => Promise<AndroidLocalLightInferenceStatus | null>;
+  iosBackgroundStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  dialogStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  audioBridgeStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  iosSecureStorageStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  iosBiometricStatus: () => Promise<TauriNativeFeatureStatus | null>;
+  androidBaselineStatus: () => Promise<TauriAndroidBaselineStatus | null>;
+  androidForegroundStatus: () => Promise<AndroidForegroundRuntimeStatus | null>;
+  androidMediaPolicyStatus: () => Promise<AndroidMediaPolicyStatus | null>;
+  dispose: () => Promise<void>;
+  overlayShow?: (
+    mode: AuroraOverlayRuntimeMode,
+  ) => Promise<AuroraOverlayCommandStatus | null>;
+  overlayHide?: () => Promise<AuroraOverlayCommandStatus | null>;
+  overlayStatus?: () => Promise<AuroraOverlayCommandStatus | null>;
+  overlaySetPassthrough?: (
+    enabled: boolean,
+  ) => Promise<AuroraOverlayCommandStatus | null>;
+  overlayStartDrag?: () => Promise<AuroraOverlayCommandStatus | null>;
+  overlayMoveBy?: (
+    dx: number,
+    dy: number,
+  ) => Promise<AuroraOverlayCommandStatus | null>;
+  overlayRegisterHotkey?: (
+    accelerator: string,
+  ) => Promise<AuroraOverlayCommandStatus | null>;
+  overlayUnregisterHotkey?: () => Promise<AuroraOverlayCommandStatus | null>;
+  listenOverlayMode?: (
+    handler: AuroraOverlayModeListener,
+  ) => Promise<() => void>;
+  listenDesktopOverlaySettings?: (
+    handler: (overlay: AuroraDesktopOverlayPreferences) => void,
+  ) => Promise<() => void>;
+  shutdown: () => Promise<void>;
+}
+
+export interface AuroraLocalNodeProviderStatus {
+  readonly available: boolean;
+  readonly reasonCode: string | null;
+  readonly registeredToolIds: readonly string[];
+}
+
+export interface AuroraTauriLocalDataRuntime {
+  readonly profileId: string;
+  readonly localNodeId: string;
+  readonly session: LocalDataSession;
+  readonly crypto: EnvelopeCryptoPort;
+  readonly ownerAvailable: boolean;
+}
+
+export interface AuroraTauriLightweightAssistantConfig {
+  readonly provider: LightweightAssistantProvider;
+  readonly remoteTools?: readonly ToolingProjectionToolInfo[] | undefined;
+}
+
+export type TauriMeshNodeServicesFactory = (
+  options: TauriMeshNodeServicesOptions,
+) => Promise<TauriMeshNodeServices>;
+
+export interface AndroidForegroundRuntimeStatus {
+  platform: "android";
+  foreground: boolean;
+  visible: boolean;
+  focused: boolean;
+  source: string;
+  reason?: string;
+  phase?: string;
+}
+
+export interface AndroidMediaPolicyStatus {
+  platform: "android";
+  microphoneAllowedInForeground: boolean;
+  backgroundWakewordAllowed: false;
+  source: string;
+  reason?: string;
+}
+
+export type AuroraThinConnectionProfile = ThinConnectionProfile;
+export type AuroraThinProfileDocument = ThinProfileDocument;
+export type AuroraRuntimeProfileDocument = AuroraRuntimeProfileDocumentV2;
+
+export interface AuroraTauriPythonRuntimeProof {
+  source: "native-package" | "test";
+  includesPython: boolean;
+}
+
+export interface AuroraTauriPackageCapabilities {
+  pythonFullRuntime: boolean;
+  pythonFullRuntimeProof?: AuroraTauriPythonRuntimeProof | undefined;
+}
+
+export interface AuroraThinProfileStore {
+  evidence: string;
+  load: () => Promise<AuroraThinProfileDocument>;
+  save: (document: AuroraThinProfileDocument) => Promise<void>;
+}
+
+export interface AuroraRuntimeProfileStore {
+  kind: "runtime-profile";
+  evidence: string;
+  load: () => Promise<AuroraRuntimeProfileDocument>;
+  save: (document: AuroraRuntimeProfileDocument) => Promise<void>;
+}
+
+export interface AuroraThinProfileController {
+  evidence: string;
+  document: AuroraThinProfileDocument;
+  runtimeDocument?: AuroraRuntimeProfileDocument | undefined;
+  saveProfile: (
+    profile: AuroraThinConnectionProfile,
+    roomSecret?: {
+      roomSecretRef: string;
+      roomSecret: string;
+    },
+  ) => Promise<AuroraThinProfileDocument>;
+  selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
+  updateActiveLocalSpeechSelection?: (
+    selection: AuroraLocalSpeechSelectionProfile,
+    languages?: AuroraLocalSpeechLanguagePrefs,
+  ) => Promise<AuroraThinProfileDocument>;
+  updateActiveDesktopOverlay?: (
+    overlay: AuroraDesktopOverlayPreferences,
+  ) => Promise<AuroraThinProfileDocument>;
+  recreateRuntime?: () => Promise<AuroraTauriRuntime>;
+  createRuntime: (
+    document: AuroraThinProfileDocument,
+  ) => Promise<AuroraTauriRuntime>;
+}
+
+type AuroraLocalSpeechPackActivator = (
+  selection: AuroraLocalSpeechSelectionProfile,
+) => Promise<void>;
+
+function createTauriLocalSpeechPackActivator(
+  catalog: TauriNativeSpeechCatalogPort,
+): AuroraLocalSpeechPackActivator {
+  return async (selection) => {
+    const available = await catalog.listCatalog();
+    if (available.state !== "ready") throw new Error("voice_download_unavailable");
+    for (const task of ["vad", "kws", "stt", "tts"] as const) {
+      const selected = selection[task];
+      if (!selected) continue;
+      const catalogSelection = findRuntimeSpeechCatalogSelection(
+        available.items,
+        task,
+        selected,
+      );
+      if (!catalogSelection) throw new Error("voice_download_unavailable");
+      await catalog.select({
+        selection: {
+          ...catalogSelection,
+          ...(selected.referenceProfileId
+            ? {
+                referenceProfileId: selected.referenceProfileId,
+                referenceProfileSelected: true,
+              }
+            : {}),
+        },
+      });
+    }
+  };
+}
+
+function findRuntimeSpeechCatalogSelection(
+  catalog: readonly AuroraBrowserSpeechPackCatalogSelection[],
+  task: NativeSpeechPackTask,
+  selected: NonNullable<AuroraLocalSpeechSelectionProfile[NativeSpeechPackTask]>,
+): AuroraBrowserSpeechPackCatalogSelection | undefined {
+  return catalog.find((item) => {
+    if (item.task !== task) return false;
+    if (task !== "tts") {
+      return item.packId === selected.packId
+        && item.packVersion === selected.packRevision;
+    }
+    return item.voiceId === selected.voiceId
+      && item.voiceRevision === selected.voiceRevision
+      && (item.profilePackId ?? item.packId) === selected.packId
+      && (item.profilePackRevision ?? item.packVersion) === selected.packRevision;
+  });
+}
+
+export function isThinProfileConfigured(
+  profile: AuroraThinConnectionProfile | undefined,
+): boolean {
+  return isThinConnectionProfileConfigured(profile);
+}
+
+export function thinProfileFromParsedWebRtcInvite(
+  parsed: ParsedWebRtcInvite,
+  baseProfile?: AuroraThinConnectionProfile | undefined,
+): {
+  profile: AuroraThinConnectionProfile;
+  roomSecret: { roomSecretRef: string; roomSecret: string };
+} {
+  const surfaceDefaults = thinSurfaceDefaults();
+  const profile = sanitizeThinConnectionProfile({
+    id: baseProfile?.id || "default",
+    label: baseProfile?.label || surfaceDefaults.label,
+    mode: baseProfile?.gatewayUrl ? "webrtc-preferred" : "webrtc-only",
+    gatewayUrl: baseProfile?.gatewayUrl || "",
+    signalingUrl:
+      baseProfile?.signalingUrl ||
+      parsed.profile.signalingBrokers[0] ||
+      "",
+    nodeName:
+      baseProfile?.nodeName ||
+      surfaceDefaults.nodeName,
+    localStablePeerId:
+      baseProfile?.localStablePeerId || surfaceDefaults.localStablePeerId,
+    webrtcProfile: parsed.profile,
+  });
+  return {
+    profile,
+    roomSecret: {
+      roomSecretRef: parsed.profile.roomSecretRef,
+      roomSecret: parsed.roomSecret,
+    },
+  };
+}
+
+export function thinProfileFromWebRtcInvite(
+  inviteText: string,
+  baseProfile?: AuroraThinConnectionProfile | undefined,
+): ReturnType<typeof thinProfileFromParsedWebRtcInvite> | null {
+  const parsed = parseWebRtcInvite(inviteText, {
+    nodeName: baseProfile?.nodeName,
+    signalingUrl: baseProfile?.signalingUrl,
+    allowInsecureLoopbackSignaling: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+  });
+  return parsed ? thinProfileFromParsedWebRtcInvite(parsed, baseProfile) : null;
+}
+
+export interface AuroraModePreferenceStore {
+  evidence: string;
+  readSelectedMode: () => Promise<string | null>;
+  writeSelectedMode: (modeId: string) => Promise<boolean>;
+  readSelectedRuntimeTier?: () => Promise<string | null>;
+  writeSelectedRuntimeTier?: (runtimeTier: string) => Promise<boolean>;
+}
+
+export type AuroraOverlayRuntimeMode = "voice" | "text";
+export type AuroraOverlayModeListener = (payload: unknown) => void;
+
+export interface AuroraOverlayCommandStatus {
+  ok?: boolean;
+  mode?: AuroraOverlayRuntimeMode | "hidden";
+  visible?: boolean;
+  pointerPassthrough?: boolean;
+  accelerator?: string;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+const ONBOARDING_MODE_KEY = "aurora.session.onboarding-mode";
+const ONBOARDING_RUNTIME_TIER_KEY = "aurora.session.runtime-tier";
+const DEFAULT_THIN_CONNECTION_MODE: AuroraThinConnectionMode = "http-only";
+export const ANDROID_NATIVE_PLUGIN_NAME = "aurora-native";
+export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
+
+export async function bootstrapAuroraTauriRuntime(
+  profileStore?: AuroraRuntimeProfileStore | AuroraThinProfileStore,
+  packageCapabilities = resolveTauriPackageCapabilities(),
+  meshNodeServicesFactory: TauriMeshNodeServicesFactory = createTauriMeshNodeServices,
+  localAssistant: AuroraTauriLightweightAssistantConfig | null = null,
+): Promise<AuroraTauriRuntime> {
+  const localAssistantPromise =
+    resolveTauriProductionLocalAssistant(localAssistant);
+  if (!requiresAsyncAuroraTauriBootstrap()) {
+    return createAuroraTauriRuntime({
+      localAssistant: await localAssistantPromise,
+    });
+  }
+  const thinInviteText = consumeFragmentInviteFromRuntime();
+  const preferredStore =
+    profileStore ??
+    secureRuntimeProfileStore(new TauriLocalTransport({ invoke, listen }), packageCapabilities);
+  let store: AuroraRuntimeProfileStore | AuroraThinProfileStore = preferredStore;
+  let document: AuroraRuntimeProfileDocument;
+  try {
+    document = toRuntimeProfileDocument(await preferredStore.load());
+  } catch {
+    store = createMemoryRuntimeProfileStore();
+    document = await store.load();
+  }
+  const runtimeStore = isRuntimeProfileStore(store)
+    ? store
+    : runtimeStoreFromThinStore(store);
+  const configuredRuntimeProfile = activeRuntimeProfile(document);
+  const [meshNodeServices, resolvedLocalAssistant] = await Promise.all([
+    composeTauriMeshNodeServices(
+      configuredRuntimeProfile,
+      meshNodeServicesFactory,
+    ),
+    localAssistantPromise,
+  ]);
+  return createAuroraTauriRuntime({
+    runtimeProfileStore: runtimeStore,
+    runtimeProfileDocument: document,
+    packageCapabilities,
+    meshNodeServices,
+    localAssistant: resolvedLocalAssistant,
+    thinInviteText,
+    consumeThinInvite: false,
+  });
+}
+
+export async function loadTauriRemoteAssistantTools(
+  runtime: AuroraTauriRuntime,
+): Promise<readonly ToolingProjectionToolInfo[]> {
+  for (
+    let attempt = 0;
+    attempt <= TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS.length;
+    attempt += 1
+  ) {
+    try {
+      const snapshot = await loadLightweightRemoteProjectionCatalog(
+        runtime.client.tools,
+        { pageSize: 100, maxPages: 16 },
+      );
+      return snapshot.tools;
+    } catch {
+      const retryDelay = TAURI_REMOTE_TOOL_CATALOG_RETRY_DELAYS_MS[attempt];
+      if (retryDelay === undefined) {
+        console.warn("Aurora connected-tool catalog is not available yet");
+        return [];
+      }
+      if (
+        runtime.thinPeer &&
+        runtime.thinPeer.snapshot().status !== "authorized"
+      ) {
+        return [];
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
     }
   }
+  return [];
+}
 
-  const gatewayUrl = import.meta.env.VITE_AURORA_GATEWAY_URL
-  if (gatewayUrl) {
+export function startTauriRemoteAssistantToolInvalidationRefresh(
+  runtime: AuroraTauriRuntime,
+  options: {
+    readonly onSnapshot: (
+      snapshot: LightweightRemoteProjectionCatalogSnapshot,
+    ) => void | Promise<void>;
+    readonly onError?: (error: unknown) => void;
+    readonly previousSnapshotForPeer?: (
+      peerId: string,
+    ) => LightweightRemoteProjectionCatalogSnapshot | null | undefined;
+  },
+): LightweightProjectionInvalidationSubscription | null {
+  if (!runtime.localAssistant && !runtime.localToolProvider) return null;
+  return subscribeLightweightRemoteProjectionInvalidations({
+    events: {
+      subscribe: (request) => runtime.client.subscribe(request),
+    },
+    pageSize: 100,
+    maxPages: 16,
+    catalogClientForPeer: (peerId) => ({
+      getExportCatalog: (payload) =>
+        runtime.client.tools.getExportCatalogFromPeer(peerId, payload),
+    }),
+    previousSnapshotForPeer: (peerId) =>
+      options.previousSnapshotForPeer?.(peerId) ?? null,
+    onSnapshot: options.onSnapshot,
+    onError: options.onError,
+  });
+}
+
+function connectedAuroraInferenceAssistant(
+  client: AuroraClient,
+): AuroraTauriLightweightAssistantConfig {
+  return {
+    provider: createAuroraInferenceProvider({
+      infer: (request, signal) =>
+        client.assistant.inferChat(request, {
+          signal,
+          timeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS,
+        }),
+    }),
+    remoteTools: [],
+  };
+}
+
+async function resolveTauriProductionLocalAssistant(
+  explicit: AuroraTauriLightweightAssistantConfig | null,
+): Promise<AuroraTauriLightweightAssistantConfig | null> {
+  if (explicit) return explicit;
+  if (!isTauriRuntime()) return null;
+  const client = createTauriAssistantProviderClient({ commandAdapter: invoke });
+  const status = await client.status().catch(() => null);
+  if (!status?.enabled) return null;
+  return {
+    provider: client.provider,
+    remoteTools: [],
+  };
+}
+
+export function createInitialAuroraTauriRuntime(): AuroraTauriRuntime {
+  return createAuroraTauriRuntime({
+    packageCapabilities: resolveTauriPackageCapabilities(),
+    consumeThinInvite: !requiresAsyncAuroraTauriBootstrap(),
+  });
+}
+
+export function requiresAsyncAuroraTauriBootstrap(): boolean {
+  // Every native shell must load the persisted runtime profile before selecting
+  // a local node or remote-console path. The package is role-neutral; profile
+  // state, not a build flag, decides the runtime.
+  return isTauriRuntime();
+}
+
+export function createAuroraTauriRuntime({
+  thinProfileStore,
+  thinProfileDocument,
+  runtimeProfileStore,
+  runtimeProfileDocument,
+  packageCapabilities = resolveTauriPackageCapabilities(),
+  meshNodeServices,
+  localAssistant = null,
+  thinInviteText: explicitThinInviteText,
+  consumeThinInvite = true,
+  localSpeechPackActivator,
+}: {
+  thinProfileStore?: AuroraThinProfileStore;
+  thinProfileDocument?: AuroraThinProfileDocument;
+  runtimeProfileStore?: AuroraRuntimeProfileStore;
+  runtimeProfileDocument?: AuroraRuntimeProfileDocument;
+  packageCapabilities?: AuroraTauriPackageCapabilities;
+  meshNodeServices?: TauriMeshNodeServices | null | undefined;
+  localAssistant?: AuroraTauriLightweightAssistantConfig | null | undefined;
+  thinInviteText?: string | null;
+  consumeThinInvite?: boolean;
+  localSpeechPackActivator?: AuroraLocalSpeechPackActivator;
+} = {}): AuroraTauriRuntime {
+  const runtimeDocument = runtimeProfileDocument
+    ? sanitizeRuntimeProfileDocument(runtimeProfileDocument, {
+      allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+    })
+    : thinProfileDocument
+      ? migrateThinProfileDocumentToRuntime(thinProfileDocument)
+      : emptyRuntimeProfileDocument();
+  const configuredRuntimeProfile = activeRuntimeProfile(runtimeDocument);
+  const configuredProfile = activeThinProfile(thinProfileDocument)
+    ?? thinRuntimeProfileFromRuntimeProfile(configuredRuntimeProfile);
+  const runtimeModePreferenceStore = runtimeProfileStore
+    ? runtimeBackedModePreferenceStore(
+      configuredRuntimeProfile,
+      runtimeBackedModePreferenceEvidence(),
+    )
+    : memoryOnlyModePreferenceStore(runtimeBackedModePreferenceEvidence());
+  const configuredGatewayUrl = configuredProfile?.gatewayUrl || undefined;
+  const thinConnectionMode =
+    configuredProfile?.mode
+    ?? configuredRuntimeProfile?.homeConnection?.mode
+    ?? DEFAULT_THIN_CONNECTION_MODE;
+  const thinInviteText =
+    explicitThinInviteText ??
+    (consumeThinInvite ? consumeFragmentInviteFromRuntime() : null);
+  const nativeTransport = isTauriRuntime()
+    ? new TauriLocalTransport({ invoke, listen })
+    : undefined;
+  const localSpeechCatalog = nativeTransport
+    ? createTauriNativeSpeechCatalogPort({
+        platform: isAndroidTauriRuntime()
+          ? "android"
+          : isIosTauriRuntime()
+            ? "ios"
+            : "desktop",
+        transport: nativeTransport,
+      })
+    : undefined;
+  const resolvedLocalSpeechPackActivator =
+    localSpeechPackActivator ??
+    (localSpeechCatalog
+      ? createTauriLocalSpeechPackActivator(localSpeechCatalog)
+      : undefined);
+  const thinProfileController =
+    runtimeProfileStore
+      ? createRuntimeBackedThinProfileController(
+        runtimeProfileStore,
+        runtimeDocument,
+        packageCapabilities,
+        runtimeModePreferenceStore,
+        resolvedLocalSpeechPackActivator,
+      )
+      : thinProfileStore && thinProfileDocument
+        ? createThinProfileController(thinProfileStore, thinProfileDocument)
+      : undefined;
+  const thinProfileConfigured = isThinProfileConfigured(configuredProfile);
+  const runtimeProfileConfigured = configuredRuntimeProfile
+    ? isRuntimeProfileConfigured(configuredRuntimeProfile)
+    : thinProfileConfigured;
+  const runtimeNodeMode = configuredRuntimeProfile?.nodeMode ?? "remote-console";
+  const runtimeTier = configuredRuntimeProfile?.runtimeTier ?? "none";
+
+  if (isTauriRuntime()) {
+    if (!nativeTransport || !localSpeechCatalog) {
+      throw new Error("Native speech transport is unavailable");
+    }
+    const nativeVoice = isDesktopTauriRuntime()
+      ? createTauriNativeDesktopVoicePort({ invoke, listen })
+      : undefined;
+    const nativeMobileVoice = isAndroidTauriRuntime()
+      ? createTauriNativeAndroidVoicePort(invoke)
+      : isIosTauriRuntime()
+        ? createTauriNativeIosVoicePort(invoke)
+      : undefined;
+    const isMobileNative = isMobileTauriRuntime();
+
+    if (isMobileNative) {
+      if (isAndroidTauriRuntime() || isIosTauriRuntime()) {
+        const mobilePlatform = isAndroidTauriRuntime() ? "android" : "ios";
+        const thinRuntime = createTauriWebThinRuntime({
+          mode: thinConnectionMode,
+          gatewayUrl: configuredGatewayUrl,
+          signalingUrl: configuredProfile?.signalingUrl,
+          webrtcProfile: configuredProfile?.webrtcProfile,
+          inviteText: thinInviteText,
+          runtimeMode: "mobile-native",
+          nodeName:
+            configuredProfile?.nodeName ||
+            `Aurora ${mobilePlatform} thin WebView`,
+          localStablePeerId: configuredProfile?.localStablePeerId,
+          meshNodeServices,
+        });
+        const releaseMobileLifecycle = isAndroidTauriRuntime()
+          ? installAndroidLifecyclePolicy(thinRuntime)
+          : async () => undefined;
+        const closeRuntime = closeOnce(async () => {
+          await releaseMobileLifecycle();
+          await thinRuntime.close();
+          await meshNodeServices?.close();
+        });
+        return {
+          client: thinRuntime.client,
+          mode: "mobile-native",
+          thinConnectionMode,
+          thinPeer: thinRuntime.peer,
+          thinFeatures: thinRuntime.features,
+          thinDiagnostics: () =>
+            explainTauriThinRuntime(
+              thinConnectionMode,
+              configuredGatewayUrl,
+              configuredProfile?.signalingUrl,
+              thinInviteText,
+              "mobile-native",
+              mobilePlatform,
+              configuredProfile?.webrtcProfile,
+          ),
+          thinProfile: configuredProfile,
+          runtimeProfile: configuredRuntimeProfile,
+          nodeMode: runtimeNodeMode,
+          runtimeTier,
+          localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
+          localFeatureSharing: meshNodeServices?.enabled
+            ? meshNodeServices.localFeatureSharing
+            : undefined,
+          localToolProvider: meshNodeServices?.enabled
+            ? meshNodeServices.localToolProvider
+            : undefined,
+          localToolApprovals: meshNodeServices?.enabled
+            ? meshNodeServices.localToolApprovals
+            : undefined,
+          localAssistant: thinRuntime.features.lightweightOrchestratorEnabled
+            && meshNodeServices?.enabled
+            ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
+            : undefined,
+          localData: localDataRuntime(meshNodeServices),
+          nativeMobileVoice,
+          localSpeechCatalog,
+          thinProfileConfigured: runtimeProfileConfigured,
+          requiresOnboarding: !runtimeProfileConfigured,
+          pendingThinInviteText: thinInviteText,
+          thinProfileController,
+          modePreferenceStore: runtimeModePreferenceStore,
+          sidecarStatus: async () => null,
+          startSidecar: async () => null,
+          stopSidecar: async () => null,
+          nativePermissionStatus: () =>
+            nativeTransport.getNativePermissionStatus(),
+          nativeCapabilityManifest: () =>
+            nativeTransport.getNativeCapabilityManifest(),
+          requestAndroidAssistantRole: () =>
+            nativeTransport.requestAndroidAssistantRole(),
+          requestAndroidPermission: (permission) =>
+            nativeTransport.requestAndroidPermission(permission),
+          trayStatus: async () => null,
+          notificationStatus: () => nativeTransport.getNotificationStatus(),
+          iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+          iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+          iosLocalLightInferenceStatus: () =>
+            nativeTransport.getIosLocalLightInferenceStatus(),
+          iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+          dialogStatus: () => nativeTransport.getDialogStatus(),
+          audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+          iosSecureStorageStatus: () =>
+            nativeTransport.getIosSecureStorageStatus(),
+          iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+          androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+          androidForegroundStatus: () => androidForegroundStatus(),
+          androidMediaPolicyStatus: () => androidMediaPolicyStatus(),
+          dispose: closeRuntime,
+          ...noopOverlayControls(`${mobilePlatform}-thin-runtime`),
+          shutdown: closeRuntime,
+        };
+      }
+
+      const mobileClient = configuredGatewayUrl
+        ? createDynamicHttpClient(configuredGatewayUrl)
+        : new AuroraClient({ transport: nativeTransport });
+
+      return {
+        client: mobileClient,
+        mode: "mobile-native",
+        thinConnectionMode: DEFAULT_THIN_CONNECTION_MODE,
+        thinDiagnostics: () => [
+          "mode=http-only",
+          "Unrecognized mobile Tauri surface uses the platform transport; Android and iOS use the shared WebView thin runtime",
+        ],
+        thinProfileConfigured: false,
+        nodeMode: runtimeNodeMode,
+        runtimeTier,
+        requiresOnboarding: false,
+        pendingThinInviteText: null,
+        modePreferenceStore: secureModePreferenceStore(
+          nativeTransport,
+          "Tauri secure storage for mobile native mode preference",
+        ),
+        localSpeechCatalog,
+        sidecarStatus: async () => null,
+        startSidecar: async () => null,
+        stopSidecar: async () => null,
+        nativePermissionStatus: () =>
+          nativeTransport.getNativePermissionStatus(),
+        nativeCapabilityManifest: () =>
+          nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
+        trayStatus: async () => null,
+        notificationStatus: () => nativeTransport.getNotificationStatus(),
+        iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+        iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+        iosLocalLightInferenceStatus: () =>
+          nativeTransport.getIosLocalLightInferenceStatus(),
+        iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+        dialogStatus: () => nativeTransport.getDialogStatus(),
+        audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+        iosSecureStorageStatus: () =>
+          nativeTransport.getIosSecureStorageStatus(),
+        iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+        androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+        androidForegroundStatus: async () => null,
+        androidMediaPolicyStatus: async () => null,
+        dispose: async () => undefined,
+        ...noopOverlayControls("mobile-native-runtime"),
+        shutdown: async () => undefined,
+      };
+    }
+
+    if (
+      runtimeTier !== "python-full" &&
+      (
+        configuredRuntimeProfile ||
+        configuredProfile ||
+        configuredGatewayUrl ||
+        thinConnectionMode !== "http-only" ||
+        thinInviteText
+      )
+    ) {
+      const thinRuntime = createTauriWebThinRuntime({
+        mode: thinConnectionMode,
+        gatewayUrl: configuredGatewayUrl,
+        signalingUrl: configuredProfile?.signalingUrl,
+        webrtcProfile: configuredProfile?.webrtcProfile,
+        inviteText: thinInviteText,
+        runtimeMode: "desktop-thin",
+        nodeName:
+          configuredProfile?.nodeName ||
+          "Aurora Tauri desktop thin shell",
+        localStablePeerId: configuredProfile?.localStablePeerId,
+        meshNodeServices,
+      });
+      const closeRuntime = closeOnce(async () => {
+        await thinRuntime.close();
+        await meshNodeServices?.close();
+      });
+      return {
+        client: thinRuntime.client,
+        mode: "desktop-thin",
+        thinConnectionMode,
+        thinPeer: thinRuntime.peer,
+        thinFeatures: thinRuntime.features,
+        thinDiagnostics: () =>
+          explainTauriThinRuntime(
+            thinConnectionMode,
+            configuredGatewayUrl,
+            configuredProfile?.signalingUrl,
+            thinInviteText,
+            "desktop-thin",
+            tauriNativePlatform(),
+            configuredProfile?.webrtcProfile,
+        ),
+        thinProfile: configuredProfile,
+        runtimeProfile: configuredRuntimeProfile,
+        nodeMode: runtimeNodeMode,
+        runtimeTier,
+        localNodeProviderStatus: localNodeProviderStatus(meshNodeServices),
+        localFeatureSharing: meshNodeServices?.enabled
+          ? meshNodeServices.localFeatureSharing
+          : undefined,
+        localToolProvider: meshNodeServices?.enabled
+          ? meshNodeServices.localToolProvider
+          : undefined,
+        localToolApprovals: meshNodeServices?.enabled
+          ? meshNodeServices.localToolApprovals
+          : undefined,
+        localAssistant: thinRuntime.features.lightweightOrchestratorEnabled
+          && meshNodeServices?.enabled
+          ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
+          : undefined,
+        localData: localDataRuntime(meshNodeServices),
+        nativeVoice,
+        localSpeechCatalog,
+        thinProfileConfigured: runtimeProfileConfigured,
+        requiresOnboarding: !runtimeProfileConfigured,
+        pendingThinInviteText: thinInviteText,
+        thinProfileController,
+        modePreferenceStore: runtimeModePreferenceStore,
+        sidecarStatus: async () => null,
+        startSidecar: async () => null,
+        stopSidecar: async () => null,
+        nativePermissionStatus: () =>
+          nativeTransport.getNativePermissionStatus(),
+        nativeCapabilityManifest: () =>
+          nativeTransport.getNativeCapabilityManifest(),
+        requestAndroidAssistantRole: () =>
+          nativeTransport.requestAndroidAssistantRole(),
+        requestAndroidPermission: (permission) =>
+          nativeTransport.requestAndroidPermission(permission),
+        trayStatus: () => nativeTransport.getTrayStatus(),
+        notificationStatus: () => nativeTransport.getNotificationStatus(),
+        iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+        iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+        iosLocalLightInferenceStatus: () =>
+          nativeTransport.getIosLocalLightInferenceStatus(),
+        iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+        dialogStatus: () => nativeTransport.getDialogStatus(),
+        audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+        iosSecureStorageStatus: () =>
+          nativeTransport.getIosSecureStorageStatus(),
+        iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+        androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+        androidForegroundStatus: async () => null,
+        androidMediaPolicyStatus: async () => null,
+        dispose: closeRuntime,
+        ...tauriOverlayControls(),
+        shutdown: async () => {
+          await closeRuntime();
+          await invoke<void>("aurora_shutdown");
+        },
+      };
+    }
+
     return {
-      client: new AuroraClient({
-        transport: new HttpGatewayTransport({
-          baseUrl: gatewayUrl,
-          bearerToken: import.meta.env.VITE_AURORA_GATEWAY_TOKEN
-        })
-      }),
-      mode: 'desktop-thin',
+      client: new AuroraClient({ transport: nativeTransport }),
+      mode: "desktop-local",
+      thinConnectionMode: DEFAULT_THIN_CONNECTION_MODE,
+      thinDiagnostics: () => [
+        "mode=http-only",
+        "desktop-local preserves Rust-supervised Python sidecar and STTCoordinator wakeword ownership",
+      ],
+      thinProfileConfigured: false,
+      runtimeProfile: configuredRuntimeProfile,
+      nodeMode: runtimeNodeMode,
+      runtimeTier,
+      nativeVoice,
+      localSpeechCatalog,
+      thinProfileController,
+      requiresOnboarding: !runtimeProfileConfigured,
+      pendingThinInviteText: null,
+      modePreferenceStore: secureModePreferenceStore(
+        nativeTransport,
+        "Tauri secure storage for desktop local mode preference",
+      ),
+      sidecarStatus: () => nativeTransport.getSidecarStatus(),
+      startSidecar: () => nativeTransport.startSidecar(),
+      stopSidecar: () => nativeTransport.stopSidecar(),
+      nativePermissionStatus: () => nativeTransport.getNativePermissionStatus(),
+      nativeCapabilityManifest: () =>
+        nativeTransport.getNativeCapabilityManifest(),
+      requestAndroidAssistantRole: () =>
+        nativeTransport.requestAndroidAssistantRole(),
+      requestAndroidPermission: (permission) =>
+        nativeTransport.requestAndroidPermission(permission),
+      trayStatus: () => nativeTransport.getTrayStatus(),
+      notificationStatus: () => nativeTransport.getNotificationStatus(),
+      iosVoiceStatus: () => nativeTransport.getIosVoiceStatus(),
+      iosInvocationStatus: () => nativeTransport.getIosInvocationStatus(),
+      iosLocalLightInferenceStatus: () =>
+        nativeTransport.getIosLocalLightInferenceStatus(),
+      iosBackgroundStatus: () => nativeTransport.getIosBackgroundStatus(),
+      dialogStatus: () => nativeTransport.getDialogStatus(),
+      audioBridgeStatus: () => nativeTransport.getAudioBridgeStatus(),
+      iosSecureStorageStatus: () => nativeTransport.getIosSecureStorageStatus(),
+      iosBiometricStatus: () => nativeTransport.getIosBiometricStatus(),
+      androidBaselineStatus: () => nativeTransport.getAndroidBaselineStatus(),
+      androidForegroundStatus: async () => null,
+      androidMediaPolicyStatus: async () => null,
+      dispose: async () => undefined,
+      ...tauriOverlayControls(),
+      shutdown: () => invoke<void>("aurora_shutdown"),
+    };
+  }
+
+  const gatewayUrl = configuredGatewayUrl;
+  if (gatewayUrl || thinConnectionMode !== "http-only") {
+    const thinRuntime = createTauriWebThinRuntime({
+      mode: thinConnectionMode,
+      gatewayUrl,
+      signalingUrl: configuredProfile?.signalingUrl,
+      webrtcProfile: configuredProfile?.webrtcProfile,
+      inviteText: thinInviteText,
+      runtimeMode: "desktop-thin",
+      nodeName:
+        configuredProfile?.nodeName ||
+        "Aurora Tauri browser preview thin shell",
+      localStablePeerId: configuredProfile?.localStablePeerId,
+    });
+    return {
+      client: thinRuntime.client,
+      mode: "desktop-thin",
+      thinConnectionMode,
+      thinPeer: thinRuntime.peer,
+      thinDiagnostics: () =>
+        explainTauriThinRuntime(
+          thinConnectionMode,
+          gatewayUrl,
+          configuredProfile?.signalingUrl,
+          thinInviteText,
+          "desktop-thin",
+          tauriNativePlatform(),
+          configuredProfile?.webrtcProfile,
+      ),
+      thinProfile: configuredProfile,
+      runtimeProfile: configuredRuntimeProfile,
+      nodeMode: runtimeNodeMode,
+      runtimeTier,
+      thinProfileConfigured: runtimeProfileConfigured,
+      requiresOnboarding: !runtimeProfileConfigured,
+      pendingThinInviteText: thinInviteText,
+      thinProfileController,
+      modePreferenceStore: runtimeModePreferenceStore,
       sidecarStatus: async () => null,
       startSidecar: async () => null,
       stopSidecar: async () => null,
       nativePermissionStatus: async () => null,
       trayStatus: async () => null,
       notificationStatus: async () => null,
+      iosVoiceStatus: async () => null,
+      iosInvocationStatus: async () => null,
+      iosLocalLightInferenceStatus: async () => null,
+      iosBackgroundStatus: async () => null,
       dialogStatus: async () => null,
       audioBridgeStatus: async () => null,
-      shutdown: async () => undefined
-    }
+      iosSecureStorageStatus: async () => null,
+      iosBiometricStatus: async () => null,
+      androidBaselineStatus: async () => null,
+      androidForegroundStatus: async () => null,
+      androidMediaPolicyStatus: async () => null,
+      dispose: () => thinRuntime.close(),
+      ...noopOverlayControls(),
+      shutdown: () => thinRuntime.close(),
+    };
   }
 
   return {
     client: new AuroraClient({ transport: new MockAuroraTransport() }),
-    mode: 'mock',
+    mode: "mock",
+    thinConnectionMode: DEFAULT_THIN_CONNECTION_MODE,
+    thinDiagnostics: () => [
+      "mode=http-only",
+      "mock/offline demo transport; no live Gateway, WebRTC peer, or sidecar",
+    ],
+    thinProfileConfigured: false,
+    nodeMode: "remote-console",
+    runtimeTier: "none",
+    requiresOnboarding: false,
+    pendingThinInviteText: null,
+    modePreferenceStore: memoryOnlyModePreferenceStore(
+      "mock/offline demo mode preference is memory-only fixture state",
+    ),
     sidecarStatus: async () => null,
     startSidecar: async () => null,
     stopSidecar: async () => null,
     nativePermissionStatus: async () => null,
     trayStatus: async () => null,
     notificationStatus: async () => null,
+    iosVoiceStatus: async () => null,
+    iosInvocationStatus: async () => null,
+    iosLocalLightInferenceStatus: async () => null,
+    iosBackgroundStatus: async () => null,
     dialogStatus: async () => null,
     audioBridgeStatus: async () => null,
-    shutdown: async () => undefined
+    iosSecureStorageStatus: async () => null,
+    iosBiometricStatus: async () => null,
+    androidBaselineStatus: async () => null,
+    androidForegroundStatus: async () => null,
+    androidMediaPolicyStatus: async () => null,
+    dispose: async () => undefined,
+    ...noopOverlayControls(),
+    shutdown: async () => undefined,
+  };
+}
+
+function localDataRuntime(
+  services: TauriMeshNodeServices | null | undefined,
+): AuroraTauriLocalDataRuntime | undefined {
+  if (!services?.enabled) return undefined;
+  return {
+    profileId: services.profileId,
+    localNodeId: services.localNodeId,
+    session: services.localDataSession,
+    crypto: services.envelopeCrypto,
+    ownerAvailable: true,
+  };
+}
+
+
+export type TauriInvokeFunction = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+export function createTauriPeerCredentialCommandInvoker(
+  baseInvoke: TauriInvokeFunction = invoke,
+): (command: string, payload?: Record<string, unknown>) => Promise<unknown> {
+  return (command, payload) => baseInvoke(command, { request: payload ?? {} });
+}
+
+export function createTauriNativePeerCredentialStore(
+  baseInvoke: TauriInvokeFunction = invoke,
+): WebRtcPeerCredentialStore & {
+  setRoomSecret(ref: string, value: string): void;
+  getRoomSecret(ref: string): Promise<Uint8Array | null>;
+  saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void;
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null;
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void;
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[];
+  removePeerConnectionProfile(peerId: string): void;
+} {
+  return new TauriRoomSecretNativeCredentialStore(
+    new NativePeerCredentialStore({ invoke: createTauriPeerCredentialCommandInvoker(baseInvoke) }),
+  );
+}
+
+class TauriRoomSecretNativeCredentialStore implements WebRtcPeerCredentialStore {
+  private readonly roomSecrets = new Map<string, Uint8Array>();
+  private readonly profileMetadataStore = new BrowserPersistentPeerCredentialStore({
+    storage: null,
+    crypto: null,
+  });
+  private pendingRoomSecretWrites: Promise<void> = Promise.resolve();
+
+  constructor(private readonly nativeStore: NativePeerCredentialStore) {}
+
+  persistenceStatus(): BrowserPeerPersistenceStatus {
+    return {
+      backend: "platform-keychain",
+      secretsPersisted: true,
+      profilePersisted: true,
+    };
+  }
+
+  setRoomSecret(ref: string, value: string): void {
+    const bytes = new TextEncoder().encode(value);
+    this.roomSecrets.get(ref)?.fill(0);
+    this.roomSecrets.set(ref, bytes);
+    this.pendingRoomSecretWrites = this.pendingRoomSecretWrites
+      .catch(() => undefined)
+      .then(() => persistTauriRoomSecret(ref, value));
+  }
+
+  async getRoomSecret(ref: string): Promise<Uint8Array | null> {
+    const value = this.roomSecrets.get(ref);
+    if (value) return new Uint8Array(value);
+    await this.pendingRoomSecretWrites.catch(() => undefined);
+    const stored = await invoke<{ value?: string | null }>(
+      "aurora_thin_room_secret_get",
+      { request: { ref } },
+    ).catch(() => null);
+    const persisted = stored?.value;
+    if (!persisted) return null;
+    const bytes = new TextEncoder().encode(persisted);
+    this.roomSecrets.set(ref, bytes);
+    return new Uint8Array(bytes);
+  }
+
+  saveConnectionProfile(profile: WebRtcPeerConnectionProfile): void {
+    this.profileMetadataStore.saveConnectionProfile(profile);
+  }
+
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null {
+    return this.profileMetadataStore.loadConnectionProfile();
+  }
+
+  savePeerConnectionProfile(profile: WebRtcPeerConnectionProfile): void {
+    this.profileMetadataStore.savePeerConnectionProfile(profile);
+  }
+
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[] {
+    return this.profileMetadataStore.loadPeerConnectionProfiles();
+  }
+
+  removePeerConnectionProfile(peerId: string): void {
+    this.profileMetadataStore.removePeerConnectionProfile(peerId);
+  }
+
+  get(peerId: string): Promise<StoredPeerCredentialMetadata | undefined> {
+    return this.nativeStore.get(peerId);
+  }
+
+  save(peerId: string, credential: MeshPeerCredentialRecord): Promise<StoredPeerCredentialMetadata> {
+    return this.nativeStore.save(peerId, credential);
+  }
+
+  prove(peerId: string, challenge: MeshReconnectChallengeMessage): Promise<MeshReconnectProofMessage | undefined> {
+    return this.createReconnectProof(peerId, challenge);
+  }
+
+  createReconnectProof(peerId: string, challenge: MeshReconnectChallengeMessage): Promise<MeshReconnectProofMessage | undefined> {
+    return this.nativeStore.createReconnectProof(peerId, challenge);
+  }
+
+  status(peerId: string): Promise<PeerCredentialStatus> {
+    return this.nativeStore.status(peerId);
+  }
+
+  async remove(peerId: string): Promise<void> {
+    await this.pendingRoomSecretWrites;
+    const roomSecretRefs = nativeProfileRoomSecretRefsForPeer(
+      this.profileMetadataStore,
+      peerId,
+    );
+    for (const ref of roomSecretRefs) await deleteTauriRoomSecret(ref);
+    await this.nativeStore.remove(peerId);
+    this.profileMetadataStore.removePeerConnectionProfile(peerId);
+    for (const ref of roomSecretRefs) this.zeroCachedRoomSecret(ref);
+  }
+
+  async clear(): Promise<void> {
+    await this.pendingRoomSecretWrites;
+    const profiles = nativeSnapshotConnectionProfiles(this.profileMetadataStore);
+    const uniqueRoomSecretRefs = [
+      ...new Set([
+        ...profiles.flatMap((profile) => profile.roomSecretRef ? [profile.roomSecretRef] : []),
+        ...this.roomSecrets.keys(),
+      ]),
+    ];
+    const uniquePeerIds = [
+      ...new Set(profiles.flatMap((profile) => profile.expectedStablePeerId ? [profile.expectedStablePeerId] : [])),
+    ];
+    for (const ref of uniqueRoomSecretRefs) await deleteTauriRoomSecret(ref);
+    // Native vaults intentionally expose exact-peer deletion only. Profiles are
+    // therefore the deletion index; credentials orphaned outside that index
+    // cannot be enumerated and must never be reported as successfully cleared.
+    for (const peerId of uniquePeerIds) await this.nativeStore.remove(peerId);
+    await this.profileMetadataStore.clear();
+    for (const value of this.roomSecrets.values()) value.fill(0);
+    this.roomSecrets.clear();
+  }
+
+  async close(): Promise<void> {
+    await this.pendingRoomSecretWrites.catch(() => undefined);
+    for (const value of this.roomSecrets.values()) value.fill(0);
+    this.roomSecrets.clear();
+    await this.profileMetadataStore.close();
+    await this.nativeStore.close();
+  }
+
+  private zeroCachedRoomSecret(ref: string): void {
+    const cached = this.roomSecrets.get(ref);
+    cached?.fill(0);
+    this.roomSecrets.delete(ref);
   }
 }
 
+interface NativeProfileMetadataStore {
+  loadConnectionProfile(): WebRtcPeerConnectionProfile | null;
+  loadPeerConnectionProfiles(): readonly WebRtcPeerConnectionProfile[];
+}
+
+function nativeSnapshotConnectionProfiles(
+  store: NativeProfileMetadataStore,
+): readonly WebRtcPeerConnectionProfile[] {
+  const profiles = [...store.loadPeerConnectionProfiles()];
+  const homeProfile = store.loadConnectionProfile();
+  if (homeProfile) profiles.push(homeProfile);
+  return profiles;
+}
+
+function nativeProfileRoomSecretRefsForPeer(
+  store: NativeProfileMetadataStore,
+  peerId: string,
+): readonly string[] {
+  const profiles = nativeSnapshotConnectionProfiles(store);
+  return [
+    ...new Set(
+      profiles
+        .filter((profile) => profile.expectedStablePeerId === peerId)
+        .filter((profile) => !profiles.some((other) => (
+          other.expectedStablePeerId !== peerId
+          && other.roomSecretRef === profile.roomSecretRef
+        )))
+        .flatMap((profile) => profile.roomSecretRef ? [profile.roomSecretRef] : []),
+    ),
+  ];
+}
+
+async function persistTauriRoomSecret(
+  ref: string,
+  value: string,
+): Promise<void> {
+  const result = await invoke<{ ok?: boolean }>("aurora_thin_room_secret_set", {
+    request: { ref, value },
+  });
+  if (!result.ok) {
+    throw new Error("Thin-client room-secret persistence failed");
+  }
+}
+
+async function deleteTauriRoomSecret(ref: string): Promise<void> {
+  const result = await invoke<{ ok?: boolean }>("aurora_thin_room_secret_delete", {
+    request: { ref },
+  });
+  if (!result.ok) {
+    throw new Error("Thin-client room-secret deletion failed");
+  }
+}
+
+async function composeTauriMeshNodeServices(
+  profile: AuroraRuntimeProfileV2 | undefined,
+  factory: TauriMeshNodeServicesFactory,
+): Promise<TauriMeshNodeServices> {
+  return factory({
+    profile,
+    rolloutFlags: tauriWebRtcRolloutFlags(),
+    nativeTransport: new TauriLocalTransport({ invoke, listen }),
+    invokeCommand: invoke,
+  });
+}
+
+function localNodeProviderStatus(
+  services: TauriMeshNodeServices | null | undefined,
+): AuroraLocalNodeProviderStatus | undefined {
+  if (services === undefined) return undefined;
+  return Object.freeze({
+    available: services?.enabled === true,
+    reasonCode:
+      services === null
+        ? "composition_unavailable"
+        : services.enabled
+          ? null
+          : services.reason,
+    registeredToolIds: Object.freeze([...(services?.registeredToolIds ?? [])]),
+  });
+}
+
+function closeOnce(operation: () => Promise<void>): () => Promise<void> {
+  let pending: Promise<void> | null = null;
+  return () => {
+    pending ??= operation();
+    return pending;
+  };
+}
+
+function createTauriWebThinRuntime({
+  mode,
+  gatewayUrl,
+  signalingUrl,
+  webrtcProfile,
+  inviteText,
+  runtimeMode,
+  nodeName,
+  localStablePeerId,
+  meshNodeServices,
+}: {
+  mode: AuroraThinConnectionMode;
+  gatewayUrl?: string | undefined;
+  signalingUrl?: string | undefined;
+  webrtcProfile?: WebRtcPeerConnectionProfile | undefined;
+  inviteText?: string | null | undefined;
+  runtimeMode: string;
+  nodeName: string;
+  localStablePeerId?: string | undefined;
+  meshNodeServices?: TauriMeshNodeServices | null | undefined;
+}): BrowserWebThinRuntime {
+  let runtime: BrowserWebThinRuntime;
+  const surfaceProfile = resolveTauriSurfaceProfile(runtimeMode);
+  const rolloutFlags = tauriWebRtcRolloutFlags();
+  const usesNativePeerConnection = usesNativeWebRtcPrimitive({
+    rolloutFlags,
+    surfaceProfile,
+  });
+  runtime = createBrowserWebThinRuntime({
+    mode,
+    nodeRole: meshNodeServices?.enabled ? "mesh-node" : "remote-console",
+    gatewayUrl,
+    bearerToken: () => runtime.client.auth.bearerToken(),
+    signalingUrl,
+    profile: webrtcProfile,
+    inviteText,
+    rolloutFlags,
+    credentialStore:
+      isDesktopTauriRuntime() ||
+      isAndroidTauriRuntime() ||
+      isIosTauriRuntime()
+        ? createTauriNativePeerCredentialStore()
+        : undefined,
+    runtimeMode,
+    nativePlatform: tauriNativePlatform(),
+    nodeName,
+    localStablePeerId,
+    ...(meshNodeServices?.enabled
+      ? {
+          peerHost: meshNodeServices.peerHost,
+          peerAuthorityResolver: meshNodeServices.authorityResolver,
+          peerPairingIssuer: meshNodeServices.pairingIssuer,
+        }
+      : {}),
+    ...(usesNativePeerConnection
+      ? { peerConnectionFactory: createTauriNativePeerConnection }
+      : {}),
+    ...(usesNativePeerConnection
+      ? { defaultTimeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS }
+      : {}),
+    allowInsecureLoopback: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+    allowInsecureLoopbackSignaling: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+    visibilityDocument: typeof document === "undefined" ? undefined : document,
+    windowLocation: typeof window === "undefined" ? undefined : window.location,
+    createClient: (transport) =>
+      new AuroraClient({
+        transport,
+        ...(usesNativePeerConnection
+          ? { defaultTimeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS }
+          : {}),
+      }),
+    createDemoClient: () =>
+      new AuroraClient({ transport: new MockAuroraTransport() }),
+  });
+  const nativeLocalPeerId = meshNodeServices?.enabled
+    ? meshNodeServices.localPeerId
+    : localStablePeerId;
+  const meshSessionLink = usesNativePeerConnection
+    ? installMeshSessionRuntimeLink({
+        invoke,
+        peer: runtime.peer,
+        handleForRemoteSignalingId:
+          nativeTransportHandleForRemoteSignalingId,
+        subscribeNativeTransportHandles,
+        deliverFrame: deliverNativeTransportFrame,
+        ...(nativeLocalPeerId !== undefined
+          ? {
+              localPeerId: nativeLocalPeerId,
+              providerServiceInstanceId:
+                providerServiceInstanceId(nativeLocalPeerId),
+            }
+          : {}),
+        ...(typeof document === "undefined"
+          ? {}
+          : { lifecycleTarget: document }),
+        subscribeNativeResume: async (listener) =>
+          await listen("aurora://mesh-surface-resumed", () => listener()),
+        onCleanupFailure: reportMeshSessionCleanupFailure,
+        onLifecycleFailure: reportMeshSessionLifecycleFailure,
+      })
+    : null;
+  if (meshSessionLink) {
+    const closeRuntime = runtime.close.bind(runtime);
+    runtime = {
+      ...runtime,
+      async close(): Promise<void> {
+        await meshSessionLink.close();
+        await closeRuntime();
+      },
+    };
+  }
+  if (webrtcProfile && mode !== "http-only") {
+    queueMicrotask(() => {
+      const connection = meshNodeServices?.enabled
+        ? runtime.peer.connectDevice(webrtcProfile, { reportFailure: false })
+        : runtime.peer.connect(webrtcProfile);
+      void connection.catch(() => undefined);
+    });
+  }
+  return runtime;
+}
+
+function explainTauriThinRuntime(
+  mode: AuroraThinConnectionMode,
+  gatewayUrl: string | undefined,
+  signalingUrl: string | undefined,
+  inviteText: string | null | undefined,
+  runtimeMode = "desktop-thin",
+  nativePlatform = tauriNativePlatform(),
+  profile?: WebRtcPeerConnectionProfile,
+): string[] {
+  return explainBrowserThinRuntime({
+    mode,
+    gatewayUrl,
+    signalingUrl,
+    inviteText,
+    profile,
+    rolloutFlags: tauriWebRtcRolloutFlags(),
+    allowInsecureLoopback: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+    allowInsecureLoopbackSignaling: truthy(
+      import.meta.env.VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK,
+    ),
+    runtimeMode,
+    nativePlatform,
+  });
+}
+
+function createDynamicHttpClient(baseUrl: string): AuroraClient {
+  let client!: AuroraClient;
+  const transport = new HttpGatewayTransport({
+    baseUrl,
+    bearerToken: () => client.auth.bearerToken(),
+  });
+  client = new AuroraClient({ transport });
+  return client;
+}
+
+function tauriOverlayControls(): Pick<
+  AuroraTauriRuntime,
+  | "overlayShow"
+  | "overlayHide"
+  | "overlayStatus"
+  | "overlaySetPassthrough"
+  | "overlayStartDrag"
+  | "overlayMoveBy"
+  | "overlayRegisterHotkey"
+  | "overlayUnregisterHotkey"
+  | "listenOverlayMode"
+  | "listenDesktopOverlaySettings"
+> {
+  return {
+    overlayShow: (mode) =>
+      invokeOverlayCommand("aurora_overlay_show", { mode }),
+    overlayHide: () => invokeOverlayCommand("aurora_overlay_hide"),
+    overlayStatus: () => invokeOverlayCommand("aurora_overlay_status"),
+    overlaySetPassthrough: (enabled) =>
+      invokeOverlayCommand("aurora_overlay_set_passthrough", { enabled }),
+    overlayStartDrag: () => invokeOverlayCommand("aurora_overlay_start_drag"),
+    overlayMoveBy: (dx, dy) =>
+      invokeOverlayCommand("aurora_overlay_move_by", { dx, dy }),
+    overlayRegisterHotkey: (accelerator) =>
+      invokeOverlayCommand("aurora_overlay_register_hotkey", { accelerator }),
+    overlayUnregisterHotkey: () =>
+      invokeOverlayCommand("aurora_overlay_unregister_hotkey"),
+    listenOverlayMode: (handler) =>
+      listen<unknown>("aurora://overlay-mode", (event) =>
+        handler(event.payload),
+      ),
+    listenDesktopOverlaySettings: (handler) =>
+      listen<AuroraDesktopOverlayPreferences>(
+        AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT,
+        (event) => handler(event.payload),
+      ),
+  };
+}
+
+function noopOverlayControls(
+  reason = "not-tauri-runtime",
+): Pick<
+  AuroraTauriRuntime,
+  | "overlayShow"
+  | "overlayHide"
+  | "overlayStatus"
+  | "overlaySetPassthrough"
+  | "overlayStartDrag"
+  | "overlayMoveBy"
+  | "overlayRegisterHotkey"
+  | "overlayUnregisterHotkey"
+  | "listenOverlayMode"
+  | "listenDesktopOverlaySettings"
+> {
+  const unavailable = {
+    ok: false,
+    available: false,
+    disabled: true,
+    visible: false,
+    hotkeyRegistered: false,
+    reason,
+  };
+
+  return {
+    overlayShow: async (mode) => ({ ...unavailable, mode, visible: false }),
+    overlayHide: async () => ({
+      ...unavailable,
+      mode: "hidden",
+      visible: false,
+    }),
+    overlayStatus: async () => ({
+      ...unavailable,
+      mode: "hidden",
+      visible: false,
+    }),
+    overlaySetPassthrough: async (enabled) => ({
+      ...unavailable,
+      pointerPassthrough: enabled,
+    }),
+    overlayStartDrag: async () => ({ ...unavailable }),
+    overlayMoveBy: async () => ({ ...unavailable }),
+    overlayRegisterHotkey: async (accelerator) => ({
+      ...unavailable,
+      accelerator,
+    }),
+    overlayUnregisterHotkey: async () => ({ ...unavailable, mode: "hidden" }),
+    listenOverlayMode: async () => () => undefined,
+    listenDesktopOverlaySettings: async () => () => undefined,
+  };
+}
+
+export async function loadAuroraDesktopOverlayPreferences(): Promise<{
+  config: AuroraDesktopOverlayPreferences
+  loaded: boolean
+}> {
+  try {
+    const result = await invoke<{ value?: string | null }>("aurora_thin_profile_get");
+    const document = parseRuntimeProfileDocument(result.value);
+    const profile = activeRuntimeProfile(document);
+    return {
+      config: resolveDesktopOverlayPreferences(profile?.localNode.desktopOverlay),
+      loaded: true,
+    };
+  } catch {
+    return {
+      config: resolveDesktopOverlayPreferences(undefined),
+      loaded: false,
+    };
+  }
+}
+
+async function emitDesktopOverlaySettings(
+  overlay: AuroraDesktopOverlayPreferences,
+): Promise<void> {
+  try {
+    await emit(AURORA_DESKTOP_OVERLAY_SETTINGS_EVENT, overlay);
+  } catch {
+    // Overlay window refresh is best-effort; the next profile load still applies.
+  }
+}
+
+async function invokeOverlayCommand(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<AuroraOverlayCommandStatus | null> {
+  try {
+    return await invoke<AuroraOverlayCommandStatus | null>(command, args);
+  } catch (error) {
+    if (isUnavailableOverlayCommandError(error)) return null;
+    console.warn(`Aurora overlay command failed: ${command}`, error);
+    return null;
+  }
+}
+
+function isUnavailableOverlayCommandError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /command.+not found|unknown command|not allowed|permission denied|missing/i.test(
+    message,
+  );
+}
+
+function secureModePreferenceStore(
+  transport: TauriLocalTransport,
+  evidence: string,
+): AuroraModePreferenceStore {
+  return {
+    evidence,
+    readSelectedMode: async () => {
+      const result = await transport.secureStorageGet(ONBOARDING_MODE_KEY);
+      return result.value;
+    },
+    readSelectedRuntimeTier: async () => {
+      const result = await transport.secureStorageGet(ONBOARDING_RUNTIME_TIER_KEY);
+      return result.value;
+    },
+    writeSelectedMode: async (modeId: string) => {
+      const result = await transport.secureStorageSet(
+        ONBOARDING_MODE_KEY,
+        modeId,
+      );
+      return result.ok;
+    },
+    writeSelectedRuntimeTier: async (runtimeTier: string) => {
+      const result = await transport.secureStorageSet(
+        ONBOARDING_RUNTIME_TIER_KEY,
+        runtimeTier,
+      );
+      return result.ok;
+    },
+  };
+}
+
+function memoryOnlyModePreferenceStore(
+  evidence: string,
+): AuroraModePreferenceStore {
+  let selectedMode: string | null = null;
+  let selectedRuntimeTier: string | null = null;
+  return {
+    evidence,
+    readSelectedMode: async () => selectedMode,
+    readSelectedRuntimeTier: async () => selectedRuntimeTier,
+    writeSelectedMode: async (modeId: string) => {
+      selectedMode = modeId;
+      return true;
+    },
+    writeSelectedRuntimeTier: async (runtimeTier: string) => {
+      selectedRuntimeTier = runtimeTier;
+      return true;
+    },
+  };
+}
+
+function runtimeBackedModePreferenceStore(
+  profile: AuroraRuntimeProfileV2 | undefined,
+  evidence: string,
+): AuroraModePreferenceStore {
+  let selectedMode: string | null = profile?.nodeMode ?? null;
+  let selectedRuntimeTier: string | null = profile?.runtimeTier ?? null;
+  return {
+    evidence,
+    readSelectedMode: async () => selectedMode,
+    readSelectedRuntimeTier: async () => selectedRuntimeTier,
+    writeSelectedMode: async (modeId: string) => {
+      selectedMode = modeId;
+      return true;
+    },
+    writeSelectedRuntimeTier: async (runtimeTier: string) => {
+      selectedRuntimeTier = runtimeTier;
+      return true;
+    },
+  };
+}
+
+function runtimeBackedModePreferenceEvidence(): string {
+  const surface = currentAuroraSurfaceProfile();
+  if (surface.isAndroid) {
+    return "android thin mode preference is selected by the runtime profile";
+  }
+  if (surface.isIos) {
+    return "ios thin mode preference is selected by the runtime profile";
+  }
+  if (isTauriRuntime()) {
+    return "Desktop-thin mode preference is selected by the runtime profile";
+  }
+  return "browser thin mode preference is memory-only; no web storage persistence";
+}
+
+function secureThinProfileStore(
+  _transport: TauriLocalTransport,
+): AuroraThinProfileStore {
+  const fallback = defaultThinProfileDocument();
+  return {
+    evidence:
+      "Tauri narrow nonsecret thin-client connection profile storage",
+    load: async () => {
+      const result = await invoke<{ value?: string | null }>(
+        "aurora_thin_profile_get",
+      );
+      return parseThinProfileDocument(result.value) ?? fallback;
+    },
+    save: async (document) => {
+      const result = await invoke<{ ok?: boolean }>("aurora_thin_profile_set", {
+        value: serializeThinProfileDocument(document),
+      });
+      if (!result.ok)
+        throw new Error("Thin-client connection profile save failed");
+    },
+  };
+}
+
+function secureRuntimeProfileStore(
+  _transport: TauriLocalTransport,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): AuroraRuntimeProfileStore {
+  const fallback = defaultRuntimeProfileDocument();
+  return {
+    kind: "runtime-profile",
+    evidence:
+      "Tauri narrow nonsecret runtime profile storage",
+    load: async () => {
+      const result = await invoke<{ value?: string | null }>(
+        "aurora_thin_profile_get",
+      );
+      return parseRuntimeProfileDocument(result.value) ?? fallback;
+    },
+    save: async (document) => {
+      const result = await invoke<{ ok?: boolean }>("aurora_thin_profile_set", {
+        value: serializeRuntimeProfileDocument(document, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        }),
+      });
+      if (!result.ok)
+        throw new Error("Runtime profile save failed");
+    },
+  };
+}
+
+function isRuntimeProfileStore(
+  store: AuroraRuntimeProfileStore | AuroraThinProfileStore,
+): store is AuroraRuntimeProfileStore {
+  return (store as Partial<AuroraRuntimeProfileStore>).kind === "runtime-profile";
+}
+
+function toRuntimeProfileDocument(
+  document: AuroraRuntimeProfileDocument | AuroraThinProfileDocument,
+): AuroraRuntimeProfileDocument {
+  return document.version === 2
+    ? document
+    : migrateThinProfileDocumentToRuntime(document);
+}
+
+function runtimeStoreFromThinStore(
+  store: AuroraThinProfileStore,
+): AuroraRuntimeProfileStore {
+  return {
+    kind: "runtime-profile",
+    evidence: `${store.evidence} · v1 compatibility migrated to runtime profile`,
+    load: async () => toRuntimeProfileDocument(await store.load()),
+    save: async (document) => {
+      await store.save(projectRemoteConsoleRuntimeDocumentToThinDocument(document));
+    },
+  };
+}
+
+export function createMemoryThinProfileStore(
+  initial = defaultThinProfileDocument(),
+): AuroraThinProfileStore {
+  let serialized = serializeThinProfileDocument(initial);
+  return {
+    evidence:
+      "browser preview desktop-thin profiles are memory-only; no web storage persistence",
+    load: async () => parseThinProfileDocument(serialized) ?? initial,
+    save: async (document) => {
+      serialized = serializeThinProfileDocument(document);
+    },
+  };
+}
+
+export function createMemoryRuntimeProfileStore(
+  initial = defaultRuntimeProfileDocument(),
+): AuroraRuntimeProfileStore {
+  let serialized = serializeRuntimeProfileDocument(initial, {
+    allowPythonFull: true,
+  });
+  return {
+    kind: "runtime-profile",
+    evidence:
+      "browser preview runtime profiles are memory-only; no web storage persistence",
+    load: async () => parseRuntimeProfileDocument(serialized, {
+      allowPythonFull: true,
+    }) ?? initial,
+    save: async (document) => {
+      serialized = serializeRuntimeProfileDocument(document, {
+        allowPythonFull: true,
+      });
+    },
+  };
+}
+
+function thinDocumentRoomSecretRefs(
+  document: AuroraThinProfileDocument,
+): Set<string> {
+  return new Set(
+    document.profiles.flatMap((profile) =>
+      profile.webrtcProfile?.roomSecretRef
+        ? [profile.webrtcProfile.roomSecretRef]
+        : []
+    ),
+  );
+}
+
+function runtimeDocumentRoomSecretRefs(
+  document: AuroraRuntimeProfileDocument,
+): Set<string> {
+  return new Set(
+    document.profiles.flatMap((profile) => {
+      const refs = [
+        profile.homeConnection?.webrtcProfile?.roomSecretRef,
+        profile.localNode.meshMembership?.webrtcProfile.roomSecretRef,
+      ]
+      return refs.filter((ref): ref is string => Boolean(ref))
+    }),
+  );
+}
+
+function createStaleRoomSecretCleanup(): (
+  previous: ReadonlySet<string>,
+  next: ReadonlySet<string>,
+) => Promise<void> {
+  const pending = new Set<string>();
+  return async (previous, next) => {
+    for (const ref of previous) {
+      if (!next.has(ref)) pending.add(ref);
+    }
+    for (const ref of next) pending.delete(ref);
+    for (const ref of [...pending]) {
+      await deleteTauriRoomSecret(ref);
+      pending.delete(ref);
+    }
+  };
+}
+
+function createThinProfileController(
+  store: AuroraThinProfileStore,
+  document: AuroraThinProfileDocument,
+): AuroraThinProfileController {
+  let currentDocument = document;
+  const cleanupStaleRoomSecrets = createStaleRoomSecretCleanup();
+  const controller: AuroraThinProfileController = {
+    evidence: store.evidence,
+    document: currentDocument,
+    saveProfile: async (profile, roomSecret) => {
+      const sanitized = sanitizeThinConnectionProfile(profile);
+      if (roomSecret) {
+        if (
+          sanitized.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
+        ) {
+          throw new Error(
+            "Saved invite details do not match this connection profile.",
+          );
+        }
+        await persistTauriRoomSecret(
+          roomSecret.roomSecretRef,
+          roomSecret.roomSecret,
+        );
+      }
+      const profiles = currentDocument.profiles.filter(
+        (candidate) => candidate.id !== sanitized.id,
+      );
+      const next: AuroraThinProfileDocument = {
+        version: 1,
+        activeProfileId: sanitized.id,
+        profiles: [...profiles, sanitized],
+      };
+      const previousRoomSecretRefs = thinDocumentRoomSecretRefs(currentDocument);
+      await store.save(next);
+      currentDocument = next;
+      controller.document = currentDocument;
+      await cleanupStaleRoomSecrets(
+        previousRoomSecretRefs,
+        thinDocumentRoomSecretRefs(next),
+      );
+      return currentDocument;
+    },
+    selectProfile: async (profileId) => {
+      if (!currentDocument.profiles.some((profile) => profile.id === profileId))
+        throw new Error("Desktop-thin connection profile does not exist");
+      const next = { ...currentDocument, activeProfileId: profileId };
+      await store.save(next);
+      currentDocument = next;
+      controller.document = currentDocument;
+      return currentDocument;
+    },
+    createRuntime: async (next) =>
+      createAuroraTauriRuntime({
+        thinProfileStore: store,
+        thinProfileDocument: next,
+      }),
+  };
+  return controller;
+}
+
+function createRuntimeBackedThinProfileController(
+  store: AuroraRuntimeProfileStore,
+  runtimeDocument: AuroraRuntimeProfileDocument,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+  modePreferenceStore: AuroraModePreferenceStore | undefined,
+  localSpeechPackActivator: AuroraLocalSpeechPackActivator | undefined,
+): AuroraThinProfileController {
+  let currentRuntimeDocument = runtimeDocument;
+  let currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+  const cleanupStaleRoomSecrets = createStaleRoomSecretCleanup();
+  const controller: AuroraThinProfileController = {
+    evidence: store.evidence,
+    document: currentThinDocument,
+    runtimeDocument: currentRuntimeDocument,
+    saveProfile: async (profile, roomSecret) => {
+      const [selectedMode, selectedRuntimeTier] = await Promise.all([
+        modePreferenceStore?.readSelectedMode() ?? Promise.resolve(null),
+        modePreferenceStore?.readSelectedRuntimeTier?.() ?? Promise.resolve(null),
+      ]);
+      const reusableProfile = selectedMode === "mesh-node"
+        ? findReusableRuntimeProfile(
+            currentRuntimeDocument,
+            profile,
+          )
+        : currentRuntimeDocument.profiles.find(
+            (candidate) => candidate.id === profile.id,
+          );
+      const effectiveProfile = reusableProfile
+        ? reuseRuntimeProfileIdentity(profile, reusableProfile)
+        : profile;
+      const existingProfile = reusableProfile
+        ?? currentRuntimeDocument.profiles.find(
+          (candidate) => candidate.id === effectiveProfile.id,
+        );
+      const runtimeProfile = runtimeProfileFromThinProfile({
+        profile: effectiveProfile,
+        existingProfile,
+        selectedMode,
+        selectedRuntimeTier,
+        packageCapabilities,
+      });
+      if (roomSecret) {
+        if (
+          runtimeProfile.homeConnection?.webrtcProfile?.roomSecretRef !== roomSecret.roomSecretRef
+        ) {
+          throw new Error(
+            "Saved invite details do not match this connection profile.",
+          );
+        }
+        await persistTauriRoomSecret(
+          roomSecret.roomSecretRef,
+          roomSecret.roomSecret,
+        );
+      }
+      const profiles = currentRuntimeDocument.profiles.filter(
+        (candidate) => candidate.id !== runtimeProfile.id,
+      );
+      const next: AuroraRuntimeProfileDocument = {
+        version: 2,
+        activeProfileId: runtimeProfile.id,
+        profiles: [...profiles, runtimeProfile],
+      };
+      const previousRoomSecretRefs = runtimeDocumentRoomSecretRefs(
+        currentRuntimeDocument,
+      );
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      await cleanupStaleRoomSecrets(
+        previousRoomSecretRefs,
+        runtimeDocumentRoomSecretRefs(next),
+      );
+      return currentThinDocument;
+    },
+    selectProfile: async (profileId) => {
+      if (!currentRuntimeDocument.profiles.some((profile) => profile.id === profileId))
+        throw new Error("Runtime profile does not exist");
+      const next = { ...currentRuntimeDocument, activeProfileId: profileId };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    updateActiveLocalSpeechSelection: async (selection, languages) => {
+      if (!currentRuntimeDocument.activeProfileId) {
+        throw new Error("Runtime profile does not exist");
+      }
+      let found = false;
+      let activationSelection: AuroraLocalSpeechSelectionProfile | null = null;
+      const profiles = currentRuntimeDocument.profiles.map((profile) => {
+        if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
+        found = true;
+        const localNode = mergeLocalNodeSpeechPreferences(
+          profile.localNode,
+          selection,
+          languages,
+        );
+        if (
+          profile.nodeMode === "mesh-node"
+          && localSpeechSelectionHasAssetPatch(selection)
+        ) {
+          activationSelection = localNode.localSpeechSelection ?? {};
+        }
+        return sanitizeRuntimeProfile({
+          ...profile,
+          localNode,
+        }, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        });
+      });
+      if (!found) throw new Error("Runtime profile does not exist");
+      if (activationSelection) {
+        await localSpeechPackActivator?.(activationSelection);
+      }
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles,
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    updateActiveDesktopOverlay: async (overlay) => {
+      if (!currentRuntimeDocument.activeProfileId) {
+        throw new Error("Runtime profile does not exist");
+      }
+      let found = false;
+      let nextOverlay: AuroraDesktopOverlayPreferences | null = null;
+      const profiles = currentRuntimeDocument.profiles.map((profile) => {
+        if (profile.id !== currentRuntimeDocument.activeProfileId) return profile;
+        found = true;
+        const localNode = mergeLocalNodeDesktopOverlay(profile.localNode, overlay);
+        nextOverlay = localNode.desktopOverlay ?? resolveDesktopOverlayPreferences(overlay);
+        return sanitizeRuntimeProfile({
+          ...profile,
+          localNode,
+        }, {
+          allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+        });
+      });
+      if (!found) throw new Error("Runtime profile does not exist");
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles,
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      if (nextOverlay) await emitDesktopOverlaySettings(nextOverlay);
+      return currentThinDocument;
+    },
+    recreateRuntime: () =>
+      bootstrapAuroraTauriRuntime(store, packageCapabilities),
+    createRuntime: async () =>
+      requiresAsyncAuroraTauriBootstrap()
+        ? bootstrapAuroraTauriRuntime(store, packageCapabilities)
+        : createAuroraTauriRuntime({
+            runtimeProfileStore: store,
+            runtimeProfileDocument: currentRuntimeDocument,
+            packageCapabilities,
+          }),
+  };
+  return controller;
+}
+
+function findReusableRuntimeProfile(
+  document: AuroraRuntimeProfileDocument,
+  profile: AuroraThinConnectionProfile,
+): AuroraRuntimeProfileV2 | undefined {
+  const incomingHomePeerId = profile.webrtcProfile?.expectedStablePeerId;
+  return document.profiles.find((candidate) => {
+    if (candidate.id === profile.id) return true;
+    if (candidate.nodeMode !== "mesh-node") return false;
+    const candidateWebRtc = candidate.homeConnection?.webrtcProfile
+      ?? candidate.localNode.meshMembership?.webrtcProfile;
+    if (!candidateWebRtc || !profile.webrtcProfile) return false;
+    if (
+      incomingHomePeerId &&
+      candidate.homeConnection?.homePeerId === incomingHomePeerId
+    ) {
+      return true;
+    }
+    return candidateWebRtc.appId === profile.webrtcProfile.appId
+      && candidateWebRtc.room === profile.webrtcProfile.room
+      && candidateWebRtc.roomSecretRef === profile.webrtcProfile.roomSecretRef;
+  });
+}
+
+function reuseRuntimeProfileIdentity(
+  profile: AuroraThinConnectionProfile,
+  reusableProfile: AuroraRuntimeProfileV2,
+): AuroraThinConnectionProfile {
+  if (reusableProfile.id === profile.id) return profile;
+  return {
+    ...profile,
+    id: reusableProfile.id,
+    label: reusableProfile.label,
+    nodeName: reusableProfile.localNode.nodeName,
+    localStablePeerId: reusableProfile.localNode.stablePeerId,
+  };
+}
+
+function runtimeProfileFromThinProfile({
+  profile,
+  existingProfile,
+  selectedMode,
+  selectedRuntimeTier,
+  packageCapabilities,
+}: {
+  profile: AuroraThinConnectionProfile;
+  existingProfile: AuroraRuntimeProfileV2 | undefined;
+  selectedMode: string | null;
+  selectedRuntimeTier: string | null;
+  packageCapabilities: AuroraTauriPackageCapabilities;
+}): AuroraRuntimeProfileV2 {
+  const remoteProfile = migrateThinProfileToRuntimeProfile(profile);
+  const nodeMode = selectedMode === "mesh-node" || selectedMode === "remote-console"
+    ? selectedMode
+    : existingProfile?.nodeMode ?? "remote-console";
+  const localSpeechFields = preservedLocalSpeechFields(
+    existingProfile,
+    packageCapabilities,
+  );
+  if (nodeMode === "remote-console") {
+    return sanitizeRuntimeProfile({
+      ...remoteProfile,
+      localNode: {
+        ...remoteProfile.localNode,
+        enabledCapabilityPacks: [],
+        ...localSpeechFields,
+      },
+    }, {
+      allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+    });
+  }
+
+  const runtimeTier = selectedRuntimeTier === "python-full"
+    || selectedRuntimeTier === "lightweight-ts"
+    ? selectedRuntimeTier
+    : existingProfile?.nodeMode === "mesh-node"
+      ? existingProfile.runtimeTier
+      : "lightweight-ts";
+  const homeConnection = remoteProfile.homeConnection
+    && existingProfile?.homeConnection?.homePeerId
+    && !remoteProfile.homeConnection.homePeerId
+    ? {
+        ...remoteProfile.homeConnection,
+        homePeerId: existingProfile.homeConnection.homePeerId,
+      }
+    : remoteProfile.homeConnection;
+  const webrtcProfile = homeConnection?.webrtcProfile;
+  const signalingUrl = homeConnection?.signalingUrl
+    ?? webrtcProfile?.signalingBrokers[0];
+  if (!homeConnection || !webrtcProfile || !signalingUrl) {
+    throw new Error("This device needs a complete Aurora invite before it can be made available.");
+  }
+
+  return sanitizeRuntimeProfile({
+    ...remoteProfile,
+    nodeMode: "mesh-node",
+    runtimeTier,
+    homeConnection,
+    localNode: {
+      ...remoteProfile.localNode,
+      enabledCapabilityPacks:
+        existingProfile?.nodeMode === "mesh-node"
+          ? existingProfile.localNode.enabledCapabilityPacks
+          : ["native-actions"],
+      ...localSpeechFields,
+      meshMembership: {
+        signalingUrl,
+        webrtcProfile,
+      },
+    },
+  }, {
+    allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+  });
+}
+
+function preservedLocalSpeechFields(
+  existingProfile: AuroraRuntimeProfileV2 | undefined,
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): Pick<
+  AuroraRuntimeProfileV2["localNode"],
+  "localSpeechPackState" | "localSpeechSelection" | "primaryLanguage" | "voiceLanguage" | "desktopOverlay"
+> {
+  if (!existingProfile) return {};
+  const sanitized = sanitizeRuntimeProfile(existingProfile, {
+    allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+  });
+  return {
+    ...(sanitized.localNode.primaryLanguage
+      ? { primaryLanguage: sanitized.localNode.primaryLanguage }
+      : {}),
+    ...(sanitized.localNode.voiceLanguage
+      ? { voiceLanguage: sanitized.localNode.voiceLanguage }
+      : {}),
+    ...(sanitized.localNode.desktopOverlay
+      ? { desktopOverlay: sanitized.localNode.desktopOverlay }
+      : {}),
+    ...(sanitized.localNode.localSpeechPackState
+      ? { localSpeechPackState: sanitized.localNode.localSpeechPackState }
+      : {}),
+    ...(sanitized.localNode.localSpeechSelection
+      ? { localSpeechSelection: sanitized.localNode.localSpeechSelection }
+      : {}),
+  };
+}
+
+export function serializeThinProfileDocument(
+  document: AuroraThinProfileDocument,
+): string {
+  return serializeSharedThinProfileDocument(document);
+}
+
+export function parseThinProfileDocument(
+  value: string | null | undefined,
+): AuroraThinProfileDocument | null {
+  return parseSharedThinProfileDocument(value);
+}
+
+function activeThinProfile(
+  document: AuroraThinProfileDocument | undefined,
+): AuroraThinConnectionProfile | undefined {
+  return activeThinConnectionProfile(document);
+}
+
+function thinProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): AuroraThinConnectionProfile | undefined {
+  if (!profile?.homeConnection) return undefined;
+  try {
+    return runtimeProfileToThinConnectionProfile(profile);
+  } catch {
+    return undefined;
+  }
+}
+
+function thinRuntimeProfileFromRuntimeProfile(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): AuroraThinConnectionProfile | undefined {
+  if (!profile) return undefined;
+  if (profile.nodeMode === "mesh-node" && profile.localNode.meshMembership) {
+    const membership = profile.localNode.meshMembership;
+    const gatewayUrl = profile.homeConnection?.gatewayUrl ?? "";
+    return sanitizeThinConnectionProfile({
+      id: profile.id,
+      label: profile.label,
+      mode: gatewayUrl ? "webrtc-preferred" : "webrtc-only",
+      gatewayUrl,
+      signalingUrl: membership.signalingUrl,
+      nodeName: profile.localNode.nodeName,
+      localStablePeerId: profile.localNode.stablePeerId,
+      webrtcProfile: membership.webrtcProfile,
+    });
+  }
+  return thinProfileFromRuntimeProfile(profile);
+}
+
+function thinDocumentFromRuntimeDocument(
+  document: AuroraRuntimeProfileDocument,
+): AuroraThinProfileDocument {
+  const profiles = document.profiles.flatMap((profile) => {
+    const projected = thinProfileFromRuntimeProfile(profile);
+    return projected ? [projected] : [];
+  });
+  const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)
+    ? document.activeProfileId
+    : null;
+  return { version: 1, activeProfileId, profiles };
+}
+
+function projectRemoteConsoleRuntimeDocumentToThinDocument(
+  document: AuroraRuntimeProfileDocument,
+): AuroraThinProfileDocument {
+  const profiles = document.profiles.map((profile) => {
+    if (profile.nodeMode !== "remote-console" || profile.runtimeTier !== "none") {
+      throw new Error("Runtime profile cannot be saved through a v1 thin-profile store");
+    }
+    const projected = thinProfileFromRuntimeProfile(profile);
+    if (!projected) {
+      throw new Error("Runtime profile cannot be projected to a v1 thin-profile store");
+    }
+    return projected;
+  });
+  const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)
+    ? document.activeProfileId
+    : null;
+  return { version: 1, activeProfileId, profiles };
+}
+
+function resolveTauriPackageCapabilities(): AuroraTauriPackageCapabilities {
+  return { pythonFullRuntime: false };
+}
+
+export function createTauriPackageCapabilities(
+  proof: AuroraTauriPythonRuntimeProof,
+): AuroraTauriPackageCapabilities {
+  return {
+    pythonFullRuntime: proof.includesPython,
+    pythonFullRuntimeProof: proof,
+  };
+}
+
+function hasPythonFullRuntimeCapability(
+  packageCapabilities: AuroraTauriPackageCapabilities,
+): boolean {
+  const proof = packageCapabilities.pythonFullRuntimeProof;
+  return packageCapabilities.pythonFullRuntime === true
+    && !!proof
+    && proof.includesPython === true
+    && (proof.source === "native-package" || proof.source === "test");
+}
+
+function defaultThinProfileDocument(): AuroraThinProfileDocument {
+  return emptyThinProfileDocument();
+}
+
+function defaultRuntimeProfileDocument(): AuroraRuntimeProfileDocument {
+  return emptyRuntimeProfileDocument();
+}
+
+function thinSurfaceDefaults(): {
+  label: string;
+  nodeName: string;
+  localStablePeerId: string;
+} {
+  const surface = currentAuroraSurfaceProfile();
+  if (surface.isAndroid) {
+    return {
+      label: "Android thin",
+      nodeName: "Aurora Android thin",
+      localStablePeerId: "aurora-android-thin",
+    };
+  }
+  if (surface.isIos) {
+    return {
+      label: "iOS thin",
+      nodeName: "Aurora iOS thin",
+      localStablePeerId: "aurora-ios-thin",
+    };
+  }
+  return {
+    label: "Desktop thin",
+    nodeName: "Aurora desktop thin",
+    localStablePeerId: "aurora-desktop-thin",
+  };
+}
+
 function isTauriRuntime(): boolean {
-  if (typeof window === 'undefined') return false
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
+  if (typeof window === "undefined") return false;
+  return "__TAURI_INTERNALS__" in window || "__TAURI__" in window;
+}
+
+function isDesktopTauriRuntime(): boolean {
+  return isTauriRuntime() && !isMobileTauriRuntime();
+}
+
+function isMobileTauriRuntime(): boolean {
+  return currentAuroraSurfaceProfile().isMobile;
+}
+
+function isAndroidTauriRuntime(): boolean {
+  return currentAuroraSurfaceProfile().isAndroid;
+}
+
+function isIosTauriRuntime(): boolean {
+  return currentAuroraSurfaceProfile().isIos;
+}
+
+function tauriNativePlatform(): string {
+  const profile = currentAuroraSurfaceProfile();
+  if (profile.isAndroid) return "android";
+  if (profile.isIos) return "ios";
+  return "desktop";
+}
+
+export function resolveTauriSurfaceProfile(
+  runtimeMode?: string,
+  userAgent = typeof navigator === "undefined" ? undefined : navigator.userAgent,
+) {
+  return getAuroraSurfaceProfile({
+    runtimeMode,
+    transportKind: DEFAULT_THIN_CONNECTION_MODE,
+    userAgent,
+  });
+}
+
+function currentAuroraSurfaceProfile() {
+  return resolveTauriSurfaceProfile();
+}
+
+async function androidForegroundStatus(): Promise<AndroidForegroundRuntimeStatus | null> {
+  if (!isAndroidTauriRuntime()) return null;
+  const native = await optionalInvoke<{
+    platform?: string;
+    foreground?: boolean;
+    focused?: boolean;
+    mustReleaseMicrophone?: boolean;
+    reason?: string;
+    evidenceSource?: string;
+  }>("aurora_android_lifecycle_status", { request: {} });
+  if (native) {
+    const foreground = Boolean(native.foreground);
+    const focused = Boolean(native.focused);
+    return {
+      platform: "android",
+      foreground,
+      visible: foreground,
+      focused,
+      source: typeof native.evidenceSource === "string" ? native.evidenceSource : "androidLifecycleStatus",
+      ...(typeof native.reason === "string" ? { reason: native.reason } : {}),
+    };
+  }
+  return {
+    platform: "android",
+    foreground: typeof document === "undefined" || document.visibilityState !== "hidden",
+    visible: typeof document === "undefined" || document.visibilityState !== "hidden",
+    focused: typeof document === "undefined" || document.hasFocus(),
+    source: "webview-visibility-fallback; expected command aurora_android_lifecycle_status",
+    reason: "Native lifecycle command unavailable; using WebView visibility only.",
+  };
+}
+
+async function androidMediaPolicyStatus(): Promise<AndroidMediaPolicyStatus | null> {
+  if (!isAndroidTauriRuntime()) return null;
+  const foreground = await androidForegroundStatus();
+  const origin = currentWebViewOrigin();
+  const native = await optionalInvoke<{
+    grant?: boolean;
+    reason?: string;
+    foreground?: boolean;
+    focused?: boolean;
+    evidenceSource?: string;
+  }>("aurora_android_webview_microphone_permission_decision", {
+    request: {
+      origin,
+      resources: ["android.webkit.resource.AUDIO_CAPTURE"],
+      configuredHttpsOrigins: configuredHttpsOrigins(),
+      foreground: foreground?.foreground ?? false,
+      focused: foreground?.focused ?? false,
+    },
+  });
+  if (native) {
+    return {
+      platform: "android",
+      microphoneAllowedInForeground: Boolean(native.grant),
+      backgroundWakewordAllowed: false,
+      source: typeof native.evidenceSource === "string" ? native.evidenceSource : "aurora_android_webview_microphone_permission_decision",
+      ...(typeof native.reason === "string" ? { reason: native.reason } : {}),
+    };
+  }
+  const voice = await optionalInvoke<{
+    startable?: boolean;
+    reason?: string;
+    evidenceSource?: string;
+  }>("aurora_android_voice_foreground_service_status", { request: {} });
+  if (voice) {
+    return {
+      platform: "android",
+      microphoneAllowedInForeground: Boolean(voice.startable),
+      backgroundWakewordAllowed: false,
+      source: typeof voice.evidenceSource === "string" ? voice.evidenceSource : "aurora_android_voice_foreground_service_status",
+      ...(typeof voice.reason === "string" ? { reason: voice.reason } : {}),
+    };
+  }
+  return {
+    platform: "android",
+    microphoneAllowedInForeground: false,
+    backgroundWakewordAllowed: false,
+    source: "webview-media-policy-fallback; expected commands aurora_android_webview_microphone_permission_decision/aurora_android_voice_foreground_service_status",
+    reason: "Native media policy commands unavailable; focused microphone is denied until native foreground policy is available.",
+  };
+}
+
+function currentWebViewOrigin(): string {
+  if (typeof window === "undefined") return "https://tauri.localhost";
+  if (window.location.origin && window.location.origin !== "null") return window.location.origin;
+  return "https://tauri.localhost";
+}
+
+function configuredHttpsOrigins(): string[] {
+  return ["https://tauri.localhost"];
+}
+
+async function optionalInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    if (isUnavailableOverlayCommandError(error)) return null;
+    console.warn(`Aurora optional native command failed: ${command}`, error);
+    return null;
+  }
+}
+
+export function installAndroidLifecyclePolicy(
+  _runtime: BrowserWebThinRuntime,
+): () => Promise<void> {
+  if (!isTauriRuntime() || !isAndroidTauriRuntime()) return async () => undefined;
+  let closed = false;
+  const listener = addPluginListener<AndroidLifecyclePluginPayload>(
+    ANDROID_NATIVE_PLUGIN_NAME,
+    ANDROID_LIFECYCLE_EVENT,
+    (payload) => {
+      if (closed) return;
+      const mustRelease = payload.mustReleaseMicrophone === true
+        || (payload.backgroundWakeword !== true && (payload.foreground === false || payload.focused === false));
+      if (mustRelease) {
+        window.dispatchEvent(new Event(AURORA_RELEASE_FOCUSED_MEDIA_EVENT));
+      }
+    },
+  ).catch((error) => {
+    if (!closed && !isUnavailableOverlayCommandError(error)) {
+      console.warn("Android lifecycle plugin listener unavailable; relying on WebView visibility fallback", error);
+    }
+    return null;
+  });
+  return async () => {
+    closed = true;
+    try {
+      await (await listener)?.unregister();
+    } catch {
+      // Native lifecycle listener support is optional in browser/test shells.
+    }
+  };
+}
+
+interface AndroidLifecyclePluginPayload {
+  foreground?: boolean;
+  focused?: boolean;
+  mustReleaseMicrophone?: boolean;
+  backgroundWakeword?: boolean;
+  reason?: string;
+}
+
+function tauriWebRtcRolloutFlags(): AuroraWebRtcRolloutFlags {
+  return {
+    webrtc_thin_client: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_THIN_CLIENT,
+    ),
+    webrtc_scoped_subscriptions: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_SCOPED_SUBSCRIPTIONS,
+    ),
+    webrtc_fragmentation: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_FRAGMENTATION,
+    ),
+    webrtc_app_layer_e2ee: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_WEBRTC_APP_LAYER_E2EE,
+    ),
+    mesh_node_runtime_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_MESH_NODE_RUNTIME_V1,
+    ),
+    local_tool_provider_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_LOCAL_TOOL_PROVIDER_V1,
+    ),
+    lightweight_orchestrator_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_LIGHTWEIGHT_ORCHESTRATOR_V1,
+    ),
+    native_webrtc_transport_v1: enabledUnlessExplicitlyFalse(
+      import.meta.env.VITE_AURORA_NATIVE_WEBRTC_TRANSPORT_V1,
+    ),
+  };
+}
+
+function enabledUnlessExplicitlyFalse(value: string | undefined): boolean {
+  return !["0", "false", "no", "off"].includes(
+    value?.trim().toLowerCase() ?? "",
+  );
+}
+
+function consumeFragmentInviteFromRuntime(): string | null {
+  if (typeof window === "undefined") return null;
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(
+    url.hash.startsWith("#") ? url.hash.slice(1) : url.hash,
+  );
+  const invite = hashParams.get("invite");
+  if (!invite) return null;
+  hashParams.delete("invite");
+  const nextHash = hashParams.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${url.search}${nextHash ? `#${nextHash}` : ""}`,
+  );
+  return invite;
+}
+
+
+function truthy(value: string | undefined): boolean {
+  return (
+    value === "1" ||
+    value?.toLowerCase() === "true" ||
+    value?.toLowerCase() === "yes"
+  );
 }

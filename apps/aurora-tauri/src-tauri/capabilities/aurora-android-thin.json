@@ -1,0 +1,30 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-android-thin",
+  "description": "Android thin WebView capability. Grants only nonsecret thin profile storage, opaque peer reconnect proof commands, narrow Android Keystore inbound verifier storage, native Android status, mobile mesh/deep-link, and core UI primitives; no sidecar, generic secure storage, local files, audio bridge, shell/process, or raw credential getter.",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "android"
+  ],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:window:default",
+    "deep-link:default",
+    "aurora-native-capability-manifest",
+    "aurora-android-native-plugin",
+    "aurora-native-permissions",
+    "aurora-thin-profile",
+    "aurora-thin-peer-credentials",
+    "aurora-local-data-storage",
+    "aurora-mesh-authority",
+    "aurora-mesh-session",
+    "aurora-native-webrtc",
+    "aurora-local-data-envelope-crypto",
+    "aurora-notifications",
+    "aurora-dialogs",
+    "aurora-shutdown"
+  ]
+}

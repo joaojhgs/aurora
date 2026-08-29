@@ -1,24 +1,122 @@
 name: Tauri Desktop Verification
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        description: "SemVer embedded in unsigned release artifacts"
+        required: false
+        default: ""
+        type: string
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
+      - "app/services/auth/**"
+      - "app/services/gateway/**"
       - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "packages/aurora-ui/**"
+      - "packages/aurora-voice-web/**"
+      - "rust/crates/**"
+      - "tools/voice-runtime/**"
+      - "scripts/desktop_live_*.sh"
+      - "scripts/webrtc_interop*"
+      - "tests/e2e/desktop_live/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".github/workflows/tauri-desktop.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
-  linux-tauri:
-    name: Linux Tauri check and smoke launch
-    runs-on: ubuntu-latest
+  sherpa-native-runtimes:
+    name: Patched Sherpa runtime (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: Linux x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: sherpa-native-linux-x64
+          - platform: macOS arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: sherpa-native-macos-arm64
+          - platform: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: sherpa-native-windows-x64
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Restore patched static runtime
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.target }}
+          key: sherpa-native-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('tools/voice-runtime/build_sherpa_native.py', 'tools/voice-runtime/run_sherpa_cmake.py', 'tools/voice-runtime/sherpa-patches/**') }}
+
+      - name: Build patched static runtime
+        if: steps.sherpa-cache.outputs.cache-hit != 'true'
+        run: >-
+          python tools/voice-runtime/build_sherpa_native.py
+          --target ${{ matrix.target }}
+          --jobs 2
+
+      - name: Upload patched static runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.target }}
+          if-no-files-found: error
+
+  linux-tauri:
+    name: Desktop Tauri bundle (${{ matrix.bundle_mode }})
+    runs-on: ubuntu-latest
+    needs: sherpa-native-runtimes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - bundle_mode: desktop-local
+            upload_suffix: local
+            needs_python: true
+            smoke_local: true
+          - bundle_mode: desktop-client
+            upload_suffix: client
+            needs_python: false
+            smoke_local: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-linux-x64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
       - name: Install Tauri Linux prerequisites
         run: |
@@ -34,10 +132,445 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             webkit2gtk-driver \
+            portaudio19-dev \
             xvfb
 
+      - name: Install desktop-local Python prerequisites
+        if: matrix.needs_python
+        run: sudo apt-get install -y python3-dev
+
+      - name: Set up Python
+        if: matrix.needs_python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        if: matrix.needs_python
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Apply release artifact version
+        if: inputs.release_version != ''
+        run: node scripts/set_release_version.mjs "${{ inputs.release_version }}"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri workspace dependencies
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Build Tauri frontend bundle
+        run: pnpm --filter @aurora/tauri-ui build
+
+      - name: Test Tauri frontend runtime wrapper
+        run: pnpm --filter @aurora/tauri-ui test
+
+      - name: Prepare Python-free desktop client overlay
+        if: matrix.bundle_mode == 'desktop-client'
+        run: |
+          pnpm --filter @aurora/tauri-ui prepare:bundle:desktop-client
+          pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client -- --allow-missing-bundle
+
+      - name: Upload desktop client prepare proof
+        if: matrix.bundle_mode == 'desktop-client'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-prepare-proof
+          path: |
+            apps/aurora-tauri/reports/desktop-client-bundle-prepare.json
+            apps/aurora-tauri/reports/desktop-client-bundle-proof.json
+          if-no-files-found: error
+
+      - name: Prepare bundled desktop sidecar automatically
+        if: matrix.bundle_mode == 'desktop-local'
+        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:desktop-local-minimal
+
+      - name: Upload sidecar prepare report
+        if: matrix.bundle_mode == 'desktop-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-prepare-report-desktop-local-minimal
+          path: apps/aurora-tauri/reports/sidecar-prepare.json
+          if-no-files-found: error
+
+      - name: Smoke packaged desktop sidecar runtime
+        if: matrix.bundle_mode == 'desktop-local'
+        run: pnpm --filter @aurora/tauri-ui sidecar:runtime:smoke
+
+      - name: Upload packaged sidecar runtime smoke report
+        if: always() && matrix.bundle_mode == 'desktop-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-runtime-smoke
+          path: apps/aurora-tauri/reports/sidecar-runtime-smoke.json
+          if-no-files-found: error
+
+      - name: Check Tauri Rust package
+        run: cargo check
+        working-directory: apps/aurora-tauri/src-tauri
+
+      - name: Build Linux Tauri bundle
+        run: pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}
+
+      - name: Verify Python-free desktop client artifact contents
+        if: matrix.bundle_mode == 'desktop-client'
+        run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client
+
+      - name: Upload Linux desktop client package
+        if: matrix.bundle_mode == 'desktop-client'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-linux
+          path: apps/aurora-tauri/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+      - name: Upload desktop client artifact proof
+        if: matrix.bundle_mode == 'desktop-client'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-artifact-proof
+          path: apps/aurora-tauri/reports/desktop-client-bundle-proof.json
+          if-no-files-found: error
+
+      - name: Smoke launch Tauri shell
+        if: matrix.smoke_local
+        env:
+          AURORA_TAURI_DEV_SMOKE_TIMEOUT_MS: "360000"
+          # A clean CI profile is intentionally still in onboarding, so no runtime
+          # role may be compiled in merely to force the local Gateway to start.
+          AURORA_TAURI_DEV_SMOKE_REQUIRE_GATEWAY: "0"
+          AURORA_TAURI_DEV_SMOKE_REQUIRE_LOGS: "[tauri],aurora_tauri_shell_ready platform=desktop"
+        run: xvfb-run -a pnpm --filter @aurora/tauri-ui dev:smoke
+
+      - name: Upload Tauri dev smoke report
+        if: always() && matrix.smoke_local
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-dev-smoke-report
+          path: apps/aurora-tauri/reports/tauri-dev-smoke.json
+
+      - name: Smoke Tauri EventStream bridge
+        if: matrix.smoke_local
+        run: xvfb-run -a pnpm --filter @aurora/tauri-ui eventstream:smoke
+
+      - name: Upload EventStream smoke report
+        if: always() && matrix.smoke_local
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-eventstream-smoke-report
+          path: apps/aurora-tauri/reports/eventstream-smoke.json
+          if-no-files-found: warn
+
+  desktop-client-live:
+    name: Desktop client live Python-peer E2E
+    runs-on: ubuntu-latest
+    needs: sherpa-native-runtimes
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-linux-x64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/x86_64-unknown-linux-gnu" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+
+      - name: Install Tauri WebDriver and audio prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            portaudio19-dev \
+            python3-dev \
+            xvfb
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Python and workspace dependencies
+        run: |
+          uv sync --extra sidecar-thin
+          pnpm install --frozen-lockfile
+
+      - name: Build desktop client workspace dependencies
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Install the official Tauri WebDriver bridge
+        run: cargo install tauri-driver --locked
+
+      - name: Run the Python-free desktop client against the real Python peer
+        run: pnpm test:desktop-client:live
+
+      - name: Upload desktop live E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-live-e2e
+          path: reports/desktop-live-e2e/
+          if-no-files-found: warn
+
+  desktop-client-live-macos-stun:
+    name: macOS desktop client live Python-peer STUN E2E
+    runs-on: macos-latest
+    needs: sherpa-native-runtimes
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: sherpa-native-macos-arm64
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-darwin
+
+      - name: Configure patched static Sherpa runtime
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-darwin" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+
+      - name: Install local WebRTC services
+        run: |
+          if ! command -v mosquitto >/dev/null 2>&1; then
+            brew install mosquitto
+          fi
+          if ! command -v turnserver >/dev/null 2>&1; then
+            brew install coturn
+          fi
+          mosquitto -h >/dev/null
+          command -v turnserver >/dev/null
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Python and workspace dependencies
+        run: |
+          uv sync --extra sidecar-thin
+          pnpm install --frozen-lockfile
+
+      - name: Build desktop client workspace dependencies
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Run shared client regressions on macOS
+        run: pnpm test:tauri:shared-regressions
+
+      - name: Run the Python-free desktop client against the real Python peer through STUN
+        env:
+          AURORA_DESKTOP_LIVE_E2E_LANE: stun
+          AURORA_DESKTOP_LIVE_E2E_ARTIFACT_DIR: reports/desktop-live-e2e-macos-stun
+          AURORA_DESKTOP_LIVE_E2E_WEBDRIVER_PROVIDER: embedded
+          AURORA_DESKTOP_LIVE_E2E_FORCE_NATIVE_WEBRTC: "0"
+          WEBRTC_INTEROP_SERVICE_SCRIPT: scripts/webrtc_interop_macos_services.sh
+        run: pnpm test:desktop-client:live
+
+      - name: Upload macOS desktop live STUN E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-live-e2e-macos-stun
+          path: reports/desktop-live-e2e-macos-stun/
+          if-no-files-found: warn
+
+  desktop-client-native-packages:
+    name: Desktop client package (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    needs: sherpa-native-runtimes
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            artifact_suffix: macos
+            sherpa_artifact: sherpa-native-macos-arm64
+            sherpa_target: aarch64-apple-darwin
+          - platform: Windows
+            os: windows-latest
+            artifact_suffix: windows
+            sherpa_artifact: sherpa-native-windows-x64
+            sherpa_target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download patched static Sherpa runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.sherpa_artifact }}
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.sherpa_target }}
+
+      - name: Configure patched static Sherpa runtime
+        if: runner.os != 'Windows'
+        run: |
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.sherpa_target }}" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+
+      - name: Configure patched static Sherpa runtime on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "AURORA_SHERPA_ONNX_LIB_DIR=$env:GITHUB_WORKSPACE\.artifacts\sherpa-onnx\native-runtime-build\runtime\${{ matrix.sherpa_target }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "AURORA_SHERPA_ONNX_LINK_KIND=static" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Apply release artifact version
+        if: inputs.release_version != ''
+        run: node scripts/set_release_version.mjs "${{ inputs.release_version }}"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri workspace dependencies
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/ui build
+
+      - name: Verify native package policy and frontend types
+        run: |
+          pnpm --filter @aurora/tauri-ui test:ci-native-evidence
+          pnpm --filter @aurora/tauri-ui typecheck
+
+      - name: Check platform Rust package
+        run: cargo check
+        working-directory: apps/aurora-tauri/src-tauri
+
+      - name: Build Python-free desktop client package
+        run: pnpm --filter @aurora/tauri-ui build:bundle:desktop-client
+
+      - name: Upload desktop client package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-client-${{ matrix.artifact_suffix }}
+          path: apps/aurora-tauri/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+  sidecar-profile-matrix:
+    name: Sidecar profile staging (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - desktop-local-minimal
+          - local-cpu
+          - local-cuda
+          - local-rocm
+          - local-metal
+          - local-vulkan
+          - local-sycl
+          - local-rpc
+          - full
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -51,28 +584,26 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri workspace dependencies
+      - name: Create fake profile sidecar executable
         run: |
-          pnpm --filter @aurora/client build
-          pnpm --filter @aurora/ui build
+          mkdir -p /tmp/aurora-sidecar-${{ matrix.profile }}
+          printf '#!/bin/sh\necho aurora sidecar profile %s\n' '${{ matrix.profile }}' > /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
+          chmod +x /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
 
-      - name: Build Tauri frontend bundle
-        run: pnpm --filter @aurora/tauri-ui build
+      - name: Stage sidecar profile
+        env:
+          AURORA_TAURI_SIDECAR_BUILD_OUTPUT: /tmp/aurora-sidecar-${{ matrix.profile }}/aurora-sidecar
+        run: pnpm --filter @aurora/tauri-ui prepare:sidecar:${{ matrix.profile }}
 
-      - name: Test Tauri frontend runtime wrapper
-        run: pnpm --filter @aurora/tauri-ui test
-
-      - name: Check Tauri Rust package
-        run: cargo check
-        working-directory: apps/aurora-tauri/src-tauri
-
-      - name: Smoke launch Tauri shell
+      - name: Verify sidecar profile report
         run: |
-          set +e
-          xvfb-run -a timeout 180s pnpm --filter @aurora/tauri-ui tauri dev
-          status=$?
-          if [ "$status" -eq 124 ]; then
-            echo "Tauri shell stayed running until the smoke timeout."
-            exit 0
-          fi
-          exit "$status"
+          jq -e '.sidecarProfile == "${{ matrix.profile }}"' apps/aurora-tauri/reports/sidecar-prepare.json
+          jq -e '.sourceKind == "existing-build-output"' apps/aurora-tauri/reports/sidecar-prepare.json
+          jq -e '.secretsRedacted == true' apps/aurora-tauri/reports/sidecar-prepare.json
+
+      - name: Upload sidecar profile report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-sidecar-prepare-report-${{ matrix.profile }}
+          path: apps/aurora-tauri/reports/sidecar-prepare.json
+          if-no-files-found: error

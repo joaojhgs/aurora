@@ -4,13 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const webStorageTerms = ['local' + 'Storage', 'session' + 'Storage']
+const iosNativePluginPath =
+  'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift'
 
 describe('Tauri secure storage policy', () => {
   it('keeps credential persistence out of browser web storage', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const files = [
       'apps/aurora-tauri/src/aurora-client.ts',
-      'packages/aurora-sdk/src/tauri.ts'
+      'packages/aurora-sdk/src/tauri.ts',
+      iosNativePluginPath
     ]
 
     for (const file of files) {
@@ -19,5 +22,353 @@ describe('Tauri secure storage policy', () => {
         expect(source, `${file} must not reference ${term}`).not.toContain(term)
       }
     }
+  })
+
+  it('persists onboarding mode preference only through the platform secure-storage namespace', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const onboardingSource = readFileSync(resolve(repoRoot, 'packages/aurora-ui/src/onboarding-view.tsx'), 'utf8')
+
+    expect(runtimeSource).toMatch(/ONBOARDING_MODE_KEY = ['\"]aurora\.session\.onboarding-mode['\"]/)
+    expect(runtimeSource).toContain('secureStorageGet(ONBOARDING_MODE_KEY)')
+    expect(runtimeSource).toMatch(/secureStorageSet\(\s*ONBOARDING_MODE_KEY,\s*modeId,?\s*\)/s)
+    expect(runtimeSource).toContain('browser thin mode preference is memory-only; no web storage persistence')
+    expect(onboardingSource).toContain('isSupportedModeId(modeId)')
+    for (const term of webStorageTerms) {
+      expect(`${runtimeSource}\n${onboardingSource}`, `selected mode must not use ${term}`).not.toContain(term)
+    }
+  })
+
+  it('uses native peer credentials only in real desktop/Android Tauri without a raw-token read command', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const sdkSource = readFileSync(resolve(repoRoot, 'packages/aurora-sdk/src/webrtc/credentials.ts'), 'utf8')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+
+    expect(runtimeSource).toContain('isDesktopTauriRuntime()')
+    expect(runtimeSource).toContain('isAndroidTauriRuntime()')
+    expect(runtimeSource).toContain('isIosTauriRuntime()')
+    expect(runtimeSource).toContain('? createTauriNativePeerCredentialStore()')
+    expect(sdkSource).toContain("status: 'aurora_thin_peer_credential_status'")
+    expect(sdkSource).toContain("prove: 'aurora_thin_peer_reconnect_prove'")
+    expect(sdkSource).not.toContain('aurora_thin_peer_credential_get')
+    expect(rustSource).not.toMatch(/fn\s+aurora_thin_peer_credential_get\s*\(/)
+  })
+
+  it('grants generic secure storage only to trusted desktop-local main capability', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const mainCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-main.json'), 'utf8')
+    const thinCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json'), 'utf8')
+    const secureStoragePermission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-secure-storage.toml'), 'utf8')
+
+    expect(mainCapability).toContain('aurora-secure-storage')
+    expect(secureStoragePermission).toContain('aurora_secure_storage_get')
+    expect(secureStoragePermission).toContain('aurora_secure_storage_set')
+    expect(thinCapability).not.toContain('aurora-secure-storage')
+    expect(thinCapability).not.toMatch(/aurora_secure_storage_(get|set|delete)/)
+  })
+
+
+  it('keeps desktop-thin on narrow nonsecret profile and peer permissions only', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const thinCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json'), 'utf8')
+    const profilePermission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-thin-profile.toml'), 'utf8')
+    const peerPermission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-thin-peer-credentials.toml'), 'utf8')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+
+    expect(thinCapability).toContain('aurora-thin-profile')
+    expect(thinCapability).toContain('aurora-thin-peer-credentials')
+    expect(thinCapability).not.toContain('aurora-secure-storage')
+    expect(profilePermission).toContain('aurora_thin_profile_get')
+    expect(profilePermission).toContain('aurora_thin_profile_set')
+    expect(profilePermission).not.toMatch(/aurora_secure_storage_(get|set|delete)/)
+    expect(peerPermission).not.toContain('aurora_thin_peer_credential_get')
+    for (const secretPrefix of ['aurora.auth', 'aurora.admin', 'aurora.gateway']) {
+      expect(profilePermission).not.toContain(secretPrefix)
+      expect(thinCapability).not.toContain(secretPrefix)
+    }
+    expect(runtimeSource).toContain('aurora_thin_profile_get')
+    expect(runtimeSource).toContain('aurora_thin_profile_set')
+  })
+
+  it('grants inbound verifier storage only through a dedicated desktop permission', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const mainCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-main.json'), 'utf8')
+    const thinCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-thin.json'), 'utf8')
+    const androidCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-android-thin.json'), 'utf8')
+    const iosCapability = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-ios-thin.json'), 'utf8')
+    const permission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-inbound-verifier-storage.toml'), 'utf8')
+    const genericPermission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-secure-storage.toml'), 'utf8')
+    const adapterSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/tauri-inbound-verifier-storage.ts'), 'utf8')
+
+    for (const command of [
+      'aurora_inbound_verifier_get',
+      'aurora_inbound_verifier_set',
+      'aurora_inbound_verifier_delete',
+    ]) {
+      expect(permission).toContain(command)
+      expect(adapterSource).toContain(command)
+      expect(genericPermission).not.toContain(command)
+    }
+    expect(mainCapability).toContain('aurora-inbound-verifier-storage')
+    expect(thinCapability).toContain('aurora-inbound-verifier-storage')
+    expect(androidCapability).not.toContain('aurora-inbound-verifier-storage')
+    expect(iosCapability).not.toContain('aurora-inbound-verifier-storage')
+    expect(adapterSource).toContain('InboundVerifierSecretStoragePort')
+    expect(adapterSource).not.toContain('secureStorageGet')
+    expect(adapterSource).not.toContain('secureStorageSet')
+    expect(adapterSource).not.toContain('secureStorageDelete')
+  })
+
+  it('persists WebRTC room secrets in a narrow platform vault before saving reconnect metadata', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const appSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
+    const panelSource = readFileSync(resolve(repoRoot, 'packages/aurora-ui/src/web-thin-connection-panel.tsx'), 'utf8')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const permission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-thin-peer-credentials.toml'), 'utf8')
+    const kotlinSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'), 'utf8')
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+
+    for (const command of [
+      'aurora_thin_room_secret_set',
+      'aurora_thin_room_secret_get',
+      'aurora_thin_room_secret_delete',
+    ]) {
+      expect(runtimeSource).toContain(command)
+      expect(rustSource).toContain(command)
+      expect(permission).toContain(command)
+    }
+    expect(panelSource).toMatch(/onSaveProfile\?\.\(nextProfile,\s*\{\s*roomSecretRef:/s)
+    expect(appSource).toContain('controller.saveProfile(profile, roomSecret)')
+    expect(runtimeSource).toMatch(
+      /await persistTauriRoomSecret\([\s\S]*?await store\.save\(next\)/,
+    )
+    expect(rustSource).toContain('aurora.mesh.room-secret.')
+    expect(rustSource).toContain('sha256_hex(ref_id.as_bytes())')
+    expect(kotlinSource).toContain('encryptSecureValue(args.value)')
+    expect(kotlinSource).toMatch(/thinRoomSecretKey\(args\.ref\)[\s\S]*?\.commit\(\)/)
+    expect(kotlinSource).toMatch(/fun thinRoomSecretDelete[\s\S]*?\.remove\(thinRoomSecretKey\(args\.ref\)\)[\s\S]*?\.commit\(\)/)
+    expect(swiftStorage).toContain('kSecAttrAccessibleWhenUnlockedThisDeviceOnly')
+    expect(swiftStorage).toContain('roomSecretAccount(ref: args.ref)')
+    expect(swiftStorage).toContain('thinRoomSecretDelete')
+    expect(swiftStorage).toContain('"rawGetter": true')
+    expect(permission).toContain('raw bearer tokens')
+  })
+
+  it('wires Android thin lifecycle and foreground microphone policy through native plugin command names', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const kotlinSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'), 'utf8')
+
+    for (const command of ['androidLifecycleStatus', 'webviewMicrophonePermissionDecision', 'voiceForegroundServiceStatus']) {
+      expect(kotlinSource).toContain(`fun ${command}`)
+    }
+    for (const command of ['aurora_android_lifecycle_status', 'aurora_android_webview_microphone_permission_decision', 'aurora_android_voice_foreground_service_status']) {
+      expect(runtimeSource).toContain(`"${command}"`)
+    }
+    expect(runtimeSource).toContain('addPluginListener')
+    expect(runtimeSource).toContain('ANDROID_NATIVE_PLUGIN_NAME = "aurora-native"')
+    expect(runtimeSource).toContain('ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle"')
+    expect(runtimeSource).toContain('android.webkit.resource.AUDIO_CAPTURE')
+    expect(runtimeSource).toContain('backgroundWakewordAllowed: false')
+    expect(runtimeSource).toContain('microphoneAllowedInForeground: false')
+    expect(runtimeSource).toContain('payload.foreground === false || payload.focused === false')
+    expect(runtimeSource).toContain('AURORA_RELEASE_FOCUSED_MEDIA_EVENT')
+    expect(runtimeSource).toContain('backgroundWakeword?: boolean')
+    expect(runtimeSource).toContain('payload.mustReleaseMicrophone === true')
+    expect(runtimeSource).toContain('payload.backgroundWakeword !== true')
+    expect(kotlinSource).toContain('ret.put("mustReleaseMicrophone", (!foreground || !focused) && !backgroundWakeword)')
+    expect(kotlinSource).toContain('ret.put("backgroundWakeword", backgroundWakeword)')
+    expect(kotlinSource).toContain('ret.put("requiresForeground", true)')
+    expect(kotlinSource).toContain('ret.put("requiresFocused", true)')
+    expect(kotlinSource).toContain('canonicalJsonQuote')
+    expect(kotlinSource).toContain("character.code.toString(16).padStart(4, '0')")
+  })
+
+  it('keeps Android and iOS thin preferences out of generic secure storage commands', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const mobileThinBranch = runtimeSource.slice(
+      runtimeSource.indexOf('if (isAndroidTauriRuntime() || isIosTauriRuntime())'),
+      runtimeSource.indexOf('const mobileClient = configuredGatewayUrl'),
+    )
+
+    expect(mobileThinBranch).toContain('modePreferenceStore: runtimeModePreferenceStore')
+    expect(runtimeSource).toContain('runtimeBackedModePreferenceStore')
+    expect(mobileThinBranch).not.toContain('secureModePreferenceStore')
+    expect(mobileThinBranch).not.toContain('secureStorageGet')
+    expect(mobileThinBranch).not.toContain('secureStorageSet')
+  })
+
+  it('represents an empty mobile profile store consistently at the Rust boundary', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const kotlinSource = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+      ),
+      'utf8',
+    )
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+
+    expect(kotlinSource).toContain('ret.put("value", stored ?: JSONObject.NULL)')
+    expect(swiftStorage).toContain('value = NSNull()')
+    expect(rustSource).toContain('Some(Value::Null) | None => None')
+  })
+
+  it('documents iOS biometric credential scope without system assistant ownership claims', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const swift = readFileSync(
+      resolve(repoRoot, iosNativePluginPath),
+      'utf8'
+    )
+    const plist = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/Info.ios.plist'), 'utf8')
+
+    expect(swift).toContain('LocalAuthentication')
+    expect(swift).toContain('secretsRedacted')
+    expect(swift).toContain('confirmationOnly')
+    expect(plist).toContain('NSFaceIDUsageDescription')
+    expect(`${swift}\n${plist}`).toContain('does not allow third-party default assistant ownership')
+    expect(`${swift}\n${plist}`).not.toMatch(/"userCopy":\s*"Aurora replaces Siri/i)
+  })
+
+  it('routes iOS thin WebRTC credentials through an opaque device-only Keychain adapter', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const runtimeSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src/aurora-client.ts'), 'utf8')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const pluginSource = readFileSync(resolve(repoRoot, iosNativePluginPath), 'utf8')
+    const storageSource = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+    const capability = readFileSync(
+      resolve(repoRoot, 'apps/aurora-tauri/src-tauri/capabilities/aurora-ios-thin.json'),
+      'utf8',
+    )
+    const overlay = readFileSync(
+      resolve(repoRoot, 'apps/aurora-tauri/src-tauri/tauri.ios-thin.conf.json'),
+      'utf8',
+    )
+
+    expect(runtimeSource).toContain('isAndroidTauriRuntime() || isIosTauriRuntime()')
+    expect(runtimeSource).toContain('isMobileTauriRuntime()')
+    expect(runtimeSource).toContain('isIosTauriRuntime()')
+    for (const command of [
+      'thinPeerCredentialSet',
+      'thinPeerCredentialStatus',
+      'thinPeerCredentialDelete',
+      'thinPeerReconnectProve',
+      'thinProfileGet',
+      'thinProfileSet',
+      'thinRoomSecretSet',
+      'thinRoomSecretGet',
+      'thinRoomSecretDelete',
+    ]) {
+      expect(pluginSource).toContain(`@objc public func ${command}`)
+      expect(rustSource).toContain(`"${command}"`)
+    }
+    for (const invariant of [
+      'kSecClassGenericPassword',
+      'kSecAttrAccessibleWhenUnlockedThisDeviceOnly',
+      'kSecAttrSynchronizable as String: kCFBooleanFalse',
+      'HMAC<SHA256>.authenticationCode',
+      'aurora.mesh.reconnect-proof.v1\\u{0}',
+      '.sortedKeys',
+      '.withoutEscapingSlashes',
+      'Data(ensureAscii(serialized).utf8)',
+      'for codeUnit in value.utf16',
+      '"rawGetter": false',
+      '"allowedGenericSecureStorage": false',
+      '"redactedFields": ["rawBearerToken"]',
+    ]) {
+      expect(storageSource).toContain(invariant)
+    }
+    expect(storageSource).not.toContain('func thinPeerCredentialGet')
+    expect(capability).toContain('aurora-thin-peer-credentials')
+    expect(capability).toContain('aurora-thin-profile')
+    expect(capability).not.toContain('aurora-secure-storage')
+    expect(capability).not.toContain('aurora-local-file')
+    expect(capability).not.toContain('aurora-audio-bridge')
+    expect(overlay).toContain('"externalBin": []')
+    expect(overlay).toContain('"resources": {}')
+    expect(overlay).not.toContain('aurora-sidecar')
+  })
+
+  it('fails closed on corrupt peer credential records without exposing bearer material', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const rustSource = readFileSync(
+      resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'),
+      'utf8',
+    )
+    const kotlinSource = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt',
+      ),
+      'utf8',
+    )
+    const swiftStorage = readFileSync(
+      resolve(
+        repoRoot,
+        'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraThinPeerStorage.swift',
+      ),
+      'utf8',
+    )
+    const swiftPlugin = readFileSync(resolve(repoRoot, iosNativePluginPath), 'utf8')
+    const rustParseBody = rustSource.slice(
+      rustSource.indexOf('fn parse_thin_peer_credential_record'),
+      rustSource.indexOf('fn resolve_unexpired_thin_peer_credential_record'),
+    )
+
+    expect(rustSource).toContain('parse_thin_peer_credential_record')
+    expect(rustSource).toContain('resolve_unexpired_thin_peer_credential_record')
+    expect(rustSource).toContain('validate_credential_record_fields(')
+    expect(rustSource).toContain('semantically_invalid_stored_peer_credentials_fail_closed_and_are_deleted')
+    expect(rustSource).toMatch(/delete_record\(peer_id\)\?;[\s\S]*Ok\(None\)/)
+    expect(rustParseBody).not.toContain('synthetic-reconnect-token')
+    expect(kotlinSource).toContain('validateThinPeerCredentialRecord(record)')
+    expect(kotlinSource).toContain('validateNonEmpty("rawBearerToken", record.optString("rawBearerToken"), 4096)')
+    expect(kotlinSource).toMatch(
+      /catch \(_:\s*Exception\) \{[\s\S]*securePrefs\(\)\.edit\(\)\.remove\(key\)\.apply\(\)[\s\S]*return null/,
+    )
+    expect(kotlinSource).not.toMatch(/Log\.[a-z]\([^)]*rawBearerToken/u)
+    expect(swiftStorage).toContain('private static func validateCredentialRecord(')
+    expect(swiftStorage).toMatch(
+      /try validateCredentialRecord\(record\)[\s\S]*try\? keychainDelete\(account: account\)[\s\S]*return nil/,
+    )
+    for (const invalidField of [
+      'tokenId: record.tokenId',
+      'claimantPeerId: record.claimantPeerId',
+      'verifierPeerId: record.verifierPeerId',
+      'claimantSignalingPeerId: record.claimantSignalingPeerId',
+      'verifierSignalingPeerId: record.verifierSignalingPeerId',
+      'roomName: record.roomName',
+      'rawBearerToken: record.rawBearerToken',
+    ]) {
+      expect(swiftStorage).toContain(invalidField)
+    }
+    expect(swiftStorage).toMatch(
+      /catch \{[\s\S]*try\? keychainDelete\(account: account\)[\s\S]*throw AuroraThinStorageError\.corruptCredential/,
+    )
+    expect(swiftStorage).toContain('throw AuroraThinStorageError.corruptCredential')
+    expect(swiftPlugin).toContain('AuroraThinStorageError.redactedCode')
+    expect(swiftPlugin).not.toContain('rawBearerToken')
   })
 })

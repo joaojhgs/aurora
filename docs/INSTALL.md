@@ -17,7 +17,7 @@ setup.bat         # Windows
 ```
 
 The setup script will:
-- ✅ Check Python version compatibility (requires Python 3.9-3.11, rejects Python 3.12+)
+- ✅ Check Python version compatibility (requires Python 3.10-3.11, rejects Python 3.12+)
 - ✅ Detect your hardware capabilities
 - ✅ Install required system dependencies (PortAudio)
 - ✅ Guide you through installation options
@@ -28,9 +28,9 @@ The setup script will:
 ## 📋 System Requirements
 
 ### Python Version Requirements
-- **Python 3.9 - 3.11** (Python 3.12+ causes dependency conflicts with `tflite-runtime`, `openwakeword`, and audio/ML libraries)
+- **Python 3.10 - 3.11** (Python 3.12+ causes dependency conflicts with audio/ML libraries)
 - The setup scripts automatically verify your Python version and will reject Python 3.12+ with helpful installation guidance
-- **Important**: Aurora enforces this requirement in `pyproject.toml` with `requires-python = ">=3.9,<3.12"`
+- **Important**: Aurora enforces this requirement in `pyproject.toml` with `requires-python = ">=3.10,<3.12"`
 
 ### Platform Support
 - **Linux** (Ubuntu 18.04+, CentOS 7+, etc.)
@@ -107,39 +107,31 @@ brew link portaudio
 
 **Third-party API providers (easiest setup):**
 ```bash
-# Using UV (recommended - faster dependency resolution)
 uv sync --extra third-party
-
-# Or using pip
-pip install -e .[third-party]
 ```
 
 **Local models with CPU:**
 ```bash
-# Using UV (recommended)
 uv sync --extra local-huggingface
-
-# Or using pip
-pip install -e .[local-huggingface]
 ```
 
 **Local models with GPU:**
 ```bash
-# Using UV (recommended)
 uv sync --extra local-huggingface-gpu
-
-# Or using pip
-pip install -e .[local-huggingface-gpu]
 ```
 
 **Development environment:**
 ```bash
-# Using UV (recommended)
 uv sync --extra dev-local-gpu
-
-# Or using pip
-pip install -e .[dev-local-gpu]
 ```
+
+These profiles transitively include the `runtime` speech stack. Install
+runtime-bearing profiles with the locked `uv sync` workflow or the hardware-first
+frozen TTS sequence in [UV Usage Guide](UV_USAGE.md). Do not use an
+unconstrained editable install for profiles that include `runtime`,
+`service-tts`, `all-services`, `third-party`, `local-huggingface`,
+`local-huggingface-gpu`, or `dev-local-*`; those profiles must select the Torch
+backend before resolving `pocket-tts[audio]==2.1.0`.
 
 **See [UV Usage Guide](UV_USAGE.md) for complete UV documentation.**
 
@@ -392,8 +384,10 @@ Aurora stores model files in dedicated directories at the project root:
 ### Voice Models (`voice_models/`)
 - Text-to-speech (Piper) and wake word models
 - Configure in `config.json`: `"model_file_path": "/voice_models/voice-name.onnx"`
-- Included: English, Portuguese voices + Jarvis wake word
-- Download more from [Piper Voices](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+- Piper remains the default TTS provider and rollback path
+- PocketTTS is optional; its package code can be installed with local TTS profiles, but base model weights, standard voice packs, and cloned voice states are managed data, not bundled application code
+- Standard PocketTTS voice packs require separately approved manifests; Aurora does not bundle or auto-download a licensed starter PocketTTS model or voice asset
+- Cloned voice states are sensitive local data under the voice registry and should not be copied into images, logs, or support bundles
 
 ### Model Directory Features
 - ✅ **Excluded from builds**: Large files don't bloat packages
@@ -401,7 +395,25 @@ Aurora stores model files in dedicated directories at the project root:
 - ✅ **User controlled**: Choose models based on your hardware
 - ✅ **Privacy focused**: All models run locally
 
-*See `chat_models/README.md` and `voice_models/README.md` for detailed model information.*
+*See [`DEPENDENCIES.md`](DEPENDENCIES.md) and [`../voice_models/README.md`](../voice_models/README.md) for model/dependency information.*
+
+### PocketTTS language and config boundary
+
+PocketTTS supports six product-language selections through Aurora's TTS config:
+English, German, Portuguese, Italian, Spanish, and French. Internal config IDs
+are `english_2026-04`, `german`, `german_24l`, `portuguese`,
+`portuguese_24l`, `italian`, `italian_24l`, `spanish`, `spanish_24l`, and
+`french_24l`, plus compatibility-only English IDs `english` and
+`english_2026-01`. Plain `french` is unavailable; set the PocketTTS
+`quality_tier` to `quality` for French.
+
+PocketTTS configuration lives under `services.tts.providers.pockettts` in
+`config.json`. Canonical fields include `quality_tier`, `cache_dir`,
+`voice_state_dir`, `device`, `initialization_timeout_s`, `request_timeout_s`,
+`max_concurrent_requests`, `preload_model`, `preload_voice_ids`, `temperature`,
+`lsd_decode_steps`, `noise_clamp`, `eos_threshold`, and `quantize`.
+`custom_config_path` exists in the schema but is currently unavailable and fails
+closed.
 
 ---
 
@@ -467,7 +479,10 @@ After installation and configuration:
 python main.py
 ```
 
-The assistant will start with your configured settings. The first run may take longer as it downloads and initializes models.
+The assistant will start with your configured settings. The first run may take
+longer as it downloads and initializes enabled user-managed model assets. This
+does not include PocketTTS standard voice packs or cloned voice states unless an
+approved manifest or user-managed asset supplies them.
 
 ---
 
@@ -475,7 +490,7 @@ The assistant will start with your configured settings. The first run may take l
 
 ### Python Version Issues
 
-Aurora requires Python 3.9-3.11. Python 3.12+ causes dependency conflicts with `tflite-runtime`, `openwakeword`, and audio/ML libraries.
+Aurora requires Python 3.10-3.11. Python 3.12+ causes dependency conflicts with audio/ML libraries.
 
 **Our setup scripts automatically check and reject incompatible versions with helpful guidance.**
 
@@ -573,33 +588,22 @@ python scripts/wheel_installer.py --package pytorch --hardware metal
 
 #### Permission Errors
 ```bash
-# Use pip user install (avoid sudo/administrator)
-pip install --user -e .[third-party]
-
-# Or use virtual environment
-python -m venv aurora_env
-source aurora_env/bin/activate  # Linux/macOS
-# or
-aurora_env\Scripts\activate  # Windows
-pip install -e .[third-party]
+# Create a local virtual environment and install without sudo/administrator
+uv venv --python 3.11
+uv sync --extra third-party
 ```
 
 #### Package Conflicts
 ```bash
 # Clean install in new virtual environment
-python -m venv fresh_aurora_env
-source fresh_aurora_env/bin/activate  # Linux/macOS
-# or
-fresh_aurora_env\Scripts\activate  # Windows
-
-# Install Aurora
-pip install -e .[third-party]
+uv venv --clear --python 3.11
+uv sync --extra third-party
 ```
 
 #### Wheel Installation Issues
 ```bash
-# Force reinstall with no cache
-pip install --no-cache-dir --force-reinstall -e .[third-party]
+# Refresh package metadata and wheels during the locked sync
+uv sync --refresh --extra third-party
 
 # Use wheel installer for troubleshooting
 python scripts/wheel_installer.py --hardware cpu --verbose
@@ -635,7 +639,8 @@ nano .env  # or your preferred editor
 - Close other applications to free RAM
 
 #### Slow Startup
-- First run downloads models automatically
+- First run may download enabled user-managed model assets automatically
+- PocketTTS standard voice packs and cloned voice states are not auto-downloaded without an approved manifest or user-managed asset
 - Subsequent runs should be faster
 - Consider using SSD storage for model files
 
@@ -649,9 +654,9 @@ nano .env  # or your preferred editor
 ## 📚 Additional Resources
 
 - **Main Documentation**: [README.md](../readme.md)
-- **Python Version Compatibility**: [PYTHON_VERSION_CHECK_IMPLEMENTATION.md](../PYTHON_VERSION_CHECK_IMPLEMENTATION.md)
+- **Python Version Compatibility**: Python 3.10-3.11 is required; see this install guide and [`DEPENDENCIES.md`](DEPENDENCIES.md).
 - **Model Information**: 
-  - [Chat Models README](../chat_models/README.md)
+  - [Dependency Guide](DEPENDENCIES.md)
   - [Voice Models README](../voice_models/README.md)
 - **Issues & Support**: [GitHub Issues](https://github.com/joaojhgs/aurora/issues)
 
@@ -662,9 +667,9 @@ nano .env  # or your preferred editor
 | User Type | Recommended Method | Command |
 |-----------|-------------------|---------|
 | **First-time User** | Guided Setup | `./setup.sh` (Linux/macOS) or `setup.bat` (Windows) |
-| **Developer** | Development Install | `pip install -e .[dev-local-gpu]` |
-| **API User** | Third-party APIs | `pip install -e .[third-party]` |
-| **Privacy-focused** | Local Models | `pip install -e .[local-huggingface-gpu]` |
+| **Developer** | Development Install | `uv sync --extra dev-local-gpu` |
+| **API User** | Third-party APIs | `uv sync --extra third-party` |
+| **Privacy-focused** | Local Models | `uv sync --extra local-huggingface-gpu` |
 | **Advanced User** | Manual Wheels | `python scripts/wheel_installer.py --hardware cuda` |
 
 Choose the method that best fits your use case and technical expertise!

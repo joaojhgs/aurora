@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-authority-drain-audit"
+description = "Enables the aurora_mesh_authority_drain_audit command without any pre-configured scope."
+commands.allow = ["aurora_mesh_authority_drain_audit"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-authority-drain-audit"
+description = "Denies the aurora_mesh_authority_drain_audit command without any pre-configured scope."
+commands.deny = ["aurora_mesh_authority_drain_audit"]

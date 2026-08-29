@@ -1,0 +1,83 @@
+#!/usr/bin/env node
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const srcTauriRoot = join(packageRoot, 'src-tauri')
+const configPath = resolve(
+  process.env.AURORA_TAURI_ANDROID_CLIENT_CONFIG_PATH
+    ?? process.env.AURORA_TAURI_ANDROID_THIN_CONFIG_PATH
+    ?? join(srcTauriRoot, 'tauri.android-client.conf.json'),
+)
+const reportPath = resolve(
+  process.env.AURORA_TAURI_ANDROID_CLIENT_REPORT_PATH
+    ?? process.env.AURORA_TAURI_ANDROID_THIN_REPORT_PATH
+    ?? join(packageRoot, 'reports', 'android-client-bundle-prepare.json'),
+)
+const reportDir = dirname(reportPath)
+const voiceLiveTest = process.env.AURORA_TAURI_ANDROID_VOICE_LIVE_TEST === '1'
+
+const connectSrc = ["'self'", 'http://ipc.localhost', 'http://127.0.0.1:*', 'http://localhost:*', 'ws://127.0.0.1:*', 'ws://localhost:*', 'https:', 'wss:']
+const capabilities = ['aurora-android-thin', 'aurora-mobile-mesh']
+if (voiceLiveTest) {
+  capabilities.push({
+    identifier: 'aurora-android-voice-live-e2e-capability',
+    description: 'Debug-only capability for the maintained Android native voice live test.',
+    windows: ['main'],
+    platforms: ['android'],
+    permissions: ['aurora-android-voice-live-e2e'],
+  })
+}
+
+const config = {
+  build: {
+    beforeBuildCommand: 'pnpm build:frontend:android-client'
+  },
+  app: {
+    security: {
+      capabilities,
+      csp: `default-src 'self'; connect-src ${connectSrc.join(' ')}; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:`
+    }
+  },
+  bundle: {
+    externalBin: [],
+    resources: {},
+    longDescription:
+      'Aurora Android client packages the shared WebView HTTP/WebRTC app without Python service resources or external binaries. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact.'
+  }
+}
+
+mkdirSync(dirname(configPath), { recursive: true })
+mkdirSync(reportDir, { recursive: true })
+writeAtomicJson(configPath, config)
+writeAtomicJson(reportPath, {
+  generatedAt: new Date().toISOString(),
+  bundleMode: voiceLiveTest ? 'android-client-voice-live-test' : 'android-client',
+  configPath: redact(configPath),
+  connectSrc,
+  connectionMode: 'runtime-configurable',
+  gatewayOrigin: null,
+  signalingOrigin: null,
+  runtimeConfiguredEndpoints: true,
+  expectedCapabilities: capabilities.map((capability) =>
+    typeof capability === 'string' ? capability : capability.identifier),
+  voiceLiveTest,
+  pythonSidecarStaged: false,
+  externalBin: [],
+  resources: {},
+  secretsRedacted: true
+})
+
+console.log(`Prepared Python-free Android client Tauri overlay: ${configPath}`)
+console.log(`Wrote ${reportPath}`)
+
+function writeAtomicJson(path, value) {
+  const tmp = `${path}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`)
+  renameSync(tmp, path)
+}
+
+function redact(path) {
+  return path.replace(packageRoot, '<package-root>')
+}

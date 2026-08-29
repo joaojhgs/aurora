@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { CONFIG_METHODS, TOOLING_METHODS } from '../src/descriptors.js'
 
 import {
   AuroraClient,
@@ -18,6 +19,7 @@ import {
   buildCapabilityGraph,
   capabilityGraphCatalogFixture,
   capabilityCatalogFixture,
+  createEventSubscription,
   cloneFixture,
   compareRegistryFixtureToBackendInventory,
   createAuditReceipt,
@@ -30,18 +32,31 @@ import {
   gatewayBuiltinRoutesFixture,
   gatewayServicesFixture,
   gatewayRegistryFixture,
+  mockShareableRegistryFixture,
   hasPermission,
   modelRuntimeCatalogFixture,
+  normalizeAuroraErrorForUi,
   nativeCapabilityManifestFixture,
+  androidNativeCapabilityManifestFixture,
+  iosNativeCapabilityManifestFixture,
   ORCHESTRATOR_MODEL_METHODS,
   permissionLabel,
+  buildToolingPageView,
   normalizeToolCatalog,
+  normalizeVoiceRuntimeEvent,
   routeExplainFixture,
   resolveEffectivePermissions,
   supportBundleFixture,
   toolCatalogFixture,
+  toolingApprovalGrantsFixture,
+  toolingMcpStatusFixture,
+  toolingSharingPolicyFixture,
   uiMockReferenceFixtureSummary,
-  wildcardIntersection
+  type IosAuroraActionId,
+  type ToolOnboardingValidationResult,
+  wildcardIntersection,
+  type ModelRuntimeCatalogRequest,
+  type ModelRuntimeCatalogResponse
 } from '../src/index.js'
 
 describe('AuroraClient', () => {
@@ -62,13 +77,13 @@ describe('AuroraClient', () => {
         expect.objectContaining({
           busTopic: 'Gateway.GetDeploymentTopology',
           routePath: '/api/Gateway/GetDeploymentTopology',
-          requiredPermissions: ['Gateway.manage'],
+          requiredPermissions: ['Gateway.use'],
           availableOverHttp: true
         }),
         expect.objectContaining({
           busTopic: 'Gateway.GetWebRTCDiagnostics',
           routePath: '/api/Gateway/GetWebRTCDiagnostics',
-          requiredPermissions: ['Gateway.manage'],
+          requiredPermissions: ['Gateway.use'],
           availableOverHttp: true
         }),
         expect.objectContaining({
@@ -79,6 +94,36 @@ describe('AuroraClient', () => {
         })
       ])
     )
+  })
+
+  it('deduplicates concurrent capability catalog reads and short-lived route explain reads', async () => {
+    const calls: string[] = []
+    const transport = MockAuroraTransport.empty()
+      .register('Gateway.GetCapabilityCatalog', (request) => {
+        calls.push(`${request.method}:${JSON.stringify(request.payload)}`)
+        return cloneFixture(capabilityGraphCatalogFixture)
+      })
+      .register('Gateway.ExplainRoute', (request) => {
+        calls.push(`${request.method}:${JSON.stringify(request.payload)}`)
+        return cloneFixture(routeExplainFixture)
+      })
+    const client = new AuroraClient({ transport })
+    const catalogRequest = { include_unavailable: true, include_internal: true }
+    const routeRequest = { topic: 'TTS.Synthesize', include_candidates: true }
+
+    await Promise.all([
+      client.capabilities.listCatalog(catalogRequest),
+      client.capabilities.listCatalog({ include_internal: true, include_unavailable: true })
+    ])
+    await client.capabilities.listCatalog(catalogRequest)
+    await Promise.all([
+      client.routes.explain(routeRequest),
+      client.routes.explain({ include_candidates: true, topic: 'TTS.Synthesize' })
+    ])
+    await client.routes.explain(routeRequest)
+
+    expect(calls.filter((call) => call.startsWith('Gateway.GetCapabilityCatalog'))).toHaveLength(1)
+    expect(calls.filter((call) => call.startsWith('Gateway.ExplainRoute'))).toHaveLength(1)
   })
 
   it('classifies pending pairing queue as an admin backend descriptor', () => {
@@ -199,7 +244,7 @@ describe('AuroraClient', () => {
     await client.mesh.removePeer({ peer_id: 'peer-den', revoke_token: true })
 
     expect(calls).toEqual([
-      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: undefined },
+      { method: 'Gateway.GetMeshStatus', path: '/api/Gateway/GetMeshStatus', payload: {} },
       { method: 'Auth.MeshListPeers', path: '/api/Auth/MeshListPeers', payload: { include_disconnected: true } },
       { method: 'Auth.MeshGetPeer', path: '/api/Auth/MeshGetPeer', payload: { peer_id: 'peer-kitchen' } },
       {
@@ -318,12 +363,49 @@ describe('AuroraClient', () => {
   })
 
   it('loads model runtime catalog and normalizes unsupported operations through AuroraClient', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const unsupportedOperation = (operation_type: 'import' | 'download' | 'benchmark') => (request: { method: string; path?: string | undefined; payload?: unknown }) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return {
+        operation_id: `model-${operation_type}-unsupported`,
+        operation_type,
+        status: 'unsupported',
+        provider_id: (request.payload as { provider_id?: string } | undefined)?.provider_id ?? null,
+        model_id: (request.payload as { model_id?: string } | undefined)?.model_id ?? null,
+        progress_percent: 0,
+        message: `Model ${operation_type} is not implemented by this backend contract slice; UI/SDK must keep the action disabled or degraded until a provider implements it.`,
+        reason_code: 'operation_not_supported',
+        started_at: '2026-06-19T00:00:00Z',
+        updated_at: '2026-06-19T00:00:00Z',
+        completed_at: '2026-06-19T00:00:00Z',
+        audit_event: `model_runtime.${operation_type}.unsupported`,
+        secrets_redacted: true
+      }
+    }
     const transport = new MockAuroraTransport()
-      .fail(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, 'unsupported_feature', 'benchmark backend is not enabled')
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return cloneFixture(modelRuntimeCatalogFixture)
+      })
+      .register(ORCHESTRATOR_MODEL_METHODS.getRuntime, (request) => {
+        calls.push({ method: request.method, path: request.path, payload: request.payload })
+        return {
+          generated_at: modelRuntimeCatalogFixture.generated_at,
+          selected_provider_id: modelRuntimeCatalogFixture.selected_provider_id,
+          provider: cloneFixture(modelRuntimeCatalogFixture.providers[0]),
+          providers: cloneFixture(modelRuntimeCatalogFixture.providers),
+          secrets_redacted: true
+        }
+      })
+      .register(ORCHESTRATOR_MODEL_METHODS.importModel, unsupportedOperation('import'))
+      .register(ORCHESTRATOR_MODEL_METHODS.downloadModel, unsupportedOperation('download'))
+      .register(ORCHESTRATOR_MODEL_METHODS.benchmarkModel, unsupportedOperation('benchmark'))
     const client = new AuroraClient({ transport })
 
     const catalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
     const runtime = await client.models.getRuntime()
+    const imported = await client.models.importModel({ provider_id: 'local:Orchestrator:llama-cpp', model_id: 'private.gguf', dry_run: true })
+    const downloaded = await client.models.downloadModel({ provider_id: 'local:Orchestrator:llama-cpp', model_id: 'private.gguf', dry_run: true })
     const benchmark = await client.models.benchmarkModel({ provider_id: 'native:mobile-local-light', dry_run: true })
 
     expect(catalog).toEqual(modelRuntimeCatalogFixture)
@@ -336,11 +418,108 @@ describe('AuroraClient', () => {
       ])
     )
     expect(runtime.provider?.provider_id).toBe(catalog.selected_provider_id)
-    expect(benchmark.ok).toBe(false)
-    if (!benchmark.ok) {
-      expect(benchmark.error.code).toBe('unsupported_feature')
-      expect(benchmark.audit.busTopic).toBe(ORCHESTRATOR_MODEL_METHODS.benchmarkModel)
+    for (const result of [imported, downloaded, benchmark]) {
+      expect(result.ok).toBe(true)
+      expect(result.ok && result.data.status).toBe('unsupported')
+      expect(result.ok && result.data.reason_code).toBe('operation_not_supported')
+      expect(result.ok && result.data.message).toContain('UI/SDK must keep the action disabled or degraded')
+      expect(result.ok && result.data.secrets_redacted).toBe(true)
     }
+    expect(calls.map((call) => [call.method, call.path])).toEqual([
+      [ORCHESTRATOR_MODEL_METHODS.getCatalog, '/api/Orchestrator/GetModelCatalog'],
+      [ORCHESTRATOR_MODEL_METHODS.getRuntime, '/api/Orchestrator/GetModelRuntime'],
+      [ORCHESTRATOR_MODEL_METHODS.importModel, '/api/Orchestrator/ImportModel'],
+      [ORCHESTRATOR_MODEL_METHODS.downloadModel, '/api/Orchestrator/DownloadModel'],
+      [ORCHESTRATOR_MODEL_METHODS.benchmarkModel, '/api/Orchestrator/BenchmarkModel']
+    ])
+  })
+
+  it('serializes remote model catalog selectors and exposes provider model metadata to typed callers', async () => {
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const provider = {
+      ...cloneFixture(modelRuntimeCatalogFixture.providers[1]!),
+      provider_kind: 'mesh_peer',
+      upstream_provider_type: 'openai-compatible',
+      provider_peer_id: 'peer-studio-gpu',
+      provider_service_instance_id: 'orchestrator-studio-gpu',
+      default_model_id: 'qwen-32b-instruct',
+      models: [
+        {
+          model_id: 'qwen-32b-instruct',
+          display_name: 'Qwen 32B Instruct',
+          provider_id: 'mesh:studio-gpu:Orchestrator',
+          provider_kind: 'mesh_peer',
+          upstream_provider_type: 'openai-compatible',
+          source: 'mesh-peer',
+          context_window: 32768,
+          generation_limit: 4096,
+          capabilities: ['chat', 'large-context'],
+          default: true,
+          available: true,
+          metadata: { quantization: 'Q4_K_M' },
+          secrets_redacted: true
+        }
+      ],
+      model_catalog: {
+        source: 'remote-runtime',
+        count: 1
+      }
+    }
+    const response: ModelRuntimeCatalogResponse = {
+      ...cloneFixture(modelRuntimeCatalogFixture),
+      selected_provider_id: provider.provider_id,
+      providers: [provider],
+      provider_index: { mesh_peer: [provider.provider_id] }
+    }
+    const transport = MockAuroraTransport.empty().register(ORCHESTRATOR_MODEL_METHODS.getCatalog, (request) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return response
+    })
+    const client = new AuroraClient({ transport })
+    const catalogRequest: ModelRuntimeCatalogRequest = {
+      includeRemote: true,
+      includeCloudModels: true,
+      include_unavailable: true,
+      meshSelector: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        dataScope: 'personal'
+      }
+    }
+
+    const catalog = await client.models.listCatalog(catalogRequest)
+
+    expect(calls[0]?.payload).toEqual({
+      include_unavailable: true,
+      include_remote: true,
+      include_cloud_models: true,
+      catalog_selector: {
+        peer_id: 'peer-studio-gpu',
+        provider_id: 'mesh:studio-gpu:Orchestrator',
+        service_instance_id: 'orchestrator-studio-gpu',
+        data_scope: 'personal'
+      }
+    })
+    expect(catalog.providers[0]).toEqual(
+      expect.objectContaining({
+        provider_kind: 'mesh_peer',
+        upstream_provider_type: 'openai-compatible',
+        provider_peer_id: 'peer-studio-gpu',
+        provider_service_instance_id: 'orchestrator-studio-gpu',
+        default_model_id: 'qwen-32b-instruct',
+        model_catalog: expect.objectContaining({ source: 'remote-runtime' })
+      })
+    )
+    expect(catalog.providers[0]?.models?.[0]).toEqual(
+      expect.objectContaining({
+        model_id: 'qwen-32b-instruct',
+        provider_kind: 'mesh_peer',
+        upstream_provider_type: 'openai-compatible',
+        default: true,
+        metadata: expect.objectContaining({ quantization: 'Q4_K_M' })
+      })
+    )
   })
 
   it('summarizes capability catalog responses without inventing state', async () => {
@@ -378,7 +557,7 @@ describe('AuroraClient', () => {
             selector_required: false,
             mesh_visible: false,
             local_only: false,
-            allowed_peers: null,
+            allowed_provider_peer_ids: null,
             operation_class: null,
             resource_scope: null,
             denial_reasons: []
@@ -450,56 +629,184 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('models iOS invocation through App Intents and Shortcuts without a Siri replacement claim', () => {
+  it('models iOS invocation through App Intents and Shortcuts without a system assistant ownership claim', () => {
     const graph = buildCapabilityGraph({
       catalog: capabilityGraphCatalogFixture,
       registry: gatewayRegistryFixture,
-      nativeManifest: nativeCapabilityManifestFixture,
+      nativeManifest: iosNativeCapabilityManifestFixture,
       transportKind: 'tauri-local'
     })
 
-    expect(nativeCapabilityManifestFixture.mobileIntegrations).toEqual(
+    expect(iosNativeCapabilityManifestFixture.mobileIntegrations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           platform: 'ios',
-          id: 'appIntents',
-          label: 'Siri/Shortcuts/App Intents integration',
-          support: 'planned'
+          id: 'askAuroraAppIntent',
+          publicActionId: 'app-intent.open-assistant',
+          invocation: 'app-intent',
+          backendMethod: 'Orchestrator.ExternalUserInput',
+          support: 'supported-path',
+          siriReplacement: false
         }),
         expect.objectContaining({
           platform: 'ios',
-          id: 'shortcuts',
+          id: 'summarizeSharedContentShortcut',
+          publicActionId: 'share.import-context',
+          invocation: 'shortcut',
+          backendMethod: 'Orchestrator.IngestContext',
+          privacyClass: 'sensitive',
+          requiresConfirmation: true,
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'stopAuroraSpeechAppIntent',
+          publicActionId: 'app-intent.stop-speech',
+          invocation: 'app-intent',
+          backendMethod: 'TTS.Stop',
+          support: 'supported-path',
+          siriReplacement: false
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'shareExtension',
+          capability: 'ios.shareExtension',
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.',
+          privacyClass: 'sensitive'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'deepLinks',
+          capability: 'ios.deepLinks',
+          publicActionId: 'deeplink.open',
           support: 'supported-path'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'widgets',
+          capability: 'ios.widgets',
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'fileAssociations',
+          capability: 'ios.fileAssociations',
+          support: 'pending',
+          reason: 'This iOS feature is unavailable until mobile app setup is complete.'
+        }),
+        expect.objectContaining({
+          platform: 'ios',
+          id: 'iosLocalLightInference',
+          capability: 'ios.localLightInference.provider',
+          support: 'supported-path',
+          backendMethod: 'Orchestrator.GetModelRuntimeCatalog',
+          siriReplacement: false
         }),
         expect.objectContaining({
           platform: 'ios',
           id: 'siriReplacement',
           support: 'unsupported',
-          userCopy: expect.stringContaining('does not allow Aurora to replace Siri')
+          userCopy: expect.stringContaining('does not allow third-party default assistant ownership')
         })
       ])
     )
-    expect(nativeCapabilityManifestFixture.platformLimitations).toEqual(
+    expect(iosNativeCapabilityManifestFixture.iosInvocation).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        appIntentsAvailable: true,
+        shortcutsAvailable: true,
+        shareExtensionAvailable: false,
+        deepLinksAvailable: true,
+        widgetsAvailable: false,
+        fileAssociationsAvailable: false,
+        reason: 'Deep links can open Aurora now. Share, widget, and file-open options stay unavailable until mobile app setup is complete.'
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.permissions).toEqual(
+      expect.objectContaining({
+        'aurora.ios.shareExtension': false,
+        'aurora.ios.widgets': false,
+        'aurora.ios.fileAssociations': false,
+        'aurora.ios.deepLinks': true
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.capabilityStates).toEqual(
+      expect.objectContaining({
+        'ios.shareExtension': 'pending_native_target',
+        'ios.widgets': 'pending_native_target',
+        'ios.fileAssociations': 'pending_native_target',
+        'ios.deepLinks': 'available'
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.platformLimitations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'noSiriReplacement',
-          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim Aurora replaces Siri.'
+          userCopy: 'Use Siri/Shortcuts/App Intents integration; do not claim default iOS assistant ownership.'
         })
       ])
     )
 
-    expect(graph.explain('native:ios:appIntents')).toEqual(
-      expect.objectContaining({
-        state: 'pending',
-        routeable: false,
-        nextRepairAction: 'implement scoped iOS plugin, App Intent, or extension task'
-      })
-    )
-    expect(graph.explain('native:ios:shortcuts')).toEqual(
+    expect(graph.explain('native:ios:askAuroraAppIntent')).toEqual(
       expect.objectContaining({
         state: 'degraded',
         routeable: false,
         nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:askAuroraAppIntent').providerCandidates[0]?.selector).toEqual(
+      expect.objectContaining({
+        integrationId: 'askAuroraAppIntent',
+        invocation: 'app-intent',
+        backendMethod: 'Orchestrator.ExternalUserInput',
+        privacyClass: 'personal',
+        requiresConfirmation: false,
+        siriReplacement: false
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.localLightInference.provider']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        privacyClass: 'personal',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerIdentity: 'native:ios',
+            routeability: 'degraded',
+            requiredAction: 'use the supported subset or complete native integration'
+          })
+        ])
+      })
+    )
+    expect(iosNativeCapabilityManifestFixture.localLightInference).toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        backendModelCatalogRequired: true,
+        reason: 'backend_model_catalog_and_device_model_proof_required'
+      })
+    )
+    expect(graph.explain('native:ios:summarizeSharedContentShortcut')).toEqual(
+      expect.objectContaining({
+        state: 'degraded',
+        routeable: false,
+        nextRepairAction: 'verify platform path in macOS/Xcode simulator or device'
+      })
+    )
+    expect(graph.explain('native:ios:shareExtension')).toEqual(
+      expect.objectContaining({
+        state: 'pending',
+        routeable: false,
+        nextRepairAction: 'complete native app target setup'
+      })
+    )
+    expect(graph.explain('native:ios:fileAssociations')).toEqual(
+      expect.objectContaining({
+        state: 'pending',
+        routeable: false,
+        nextRepairAction: 'complete native app target setup'
       })
     )
     expect(graph.explain('native:ios:siriReplacement')).toEqual(
@@ -568,6 +875,402 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('emits deterministic routeable, selectable, disabledReason, and requiredAction outcomes', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'android',
+        permissions: { microphone: false },
+        capabilities: { microphoneCapture: true }
+      },
+      transportKind: 'http'
+    })
+
+    for (const node of graph.nodes) {
+      expect(typeof node.routeable, `${node.featureId} routeable`).toBe('boolean')
+      expect(node.routeable, `${node.featureId} routeable mirrors selectable providers`).toBe(
+        node.providers.some((provider) => provider.selectable)
+      )
+      expect(node.disabledReason === null || typeof node.disabledReason === 'string', `${node.featureId} disabledReason`).toBe(true)
+      expect(node.requiredAction === null || typeof node.requiredAction === 'string', `${node.featureId} requiredAction`).toBe(true)
+      for (const provider of node.providers) {
+        expect(typeof provider.selectable, `${provider.id} selectable`).toBe('boolean')
+        expect(Array.isArray(provider.disabledReasons), `${provider.id} disabledReasons`).toBe(true)
+        expect(provider.requiredAction === null || typeof provider.requiredAction === 'string', `${provider.id} requiredAction`).toBe(true)
+      }
+    }
+
+    expect(graph.explain('method:Auth.ListTokens')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      routeable: true,
+      disabledReason: null,
+      nextRepairAction: null,
+      selectedProvider: expect.objectContaining({
+        selectable: true,
+        requiredAction: null,
+        disabledReasons: []
+      })
+    }))
+    expect(graph.explain('tool:tool:garage-door')).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      routeable: false,
+      disabledReason: 'policy_denied',
+      nextRepairAction: 'choose a peer/provider',
+      selectedProvider: null
+    }))
+    expect(graph.explain('tool:tool:camera-snapshot')).toEqual(expect.objectContaining({
+      state: 'stale',
+      routeable: false,
+      disabledReason: 'stale',
+      nextRepairAction: 'refresh peer manifest or reconnect provider',
+      selectedProvider: null
+    }))
+    expect(graph.explain('method:Gateway.InternalOnly')).toEqual(expect.objectContaining({
+      state: 'unsupported',
+      routeable: false,
+      disabledReason: 'internal-only over this transport',
+      nextRepairAction: 'use a local/Tauri transport with bus access or expose a backend contract',
+      selectedProvider: null
+    }))
+    expect(graph.explain('native:android:microphoneCapture')).toEqual(expect.objectContaining({
+      state: 'privacy-blocked',
+      routeable: false,
+      disabledReason: 'native permission missing: microphone',
+      nextRepairAction: 'grant required native permission',
+      selectedProvider: null
+    }))
+
+    const selectorCatalog = cloneFixture(capabilityCatalogFixture)
+    const selectorProvider = cloneFixture(selectorCatalog.providers[0]!)
+    selectorProvider.provider_id = 'local:Scheduler'
+    selectorProvider.provider_kind = 'local'
+    selectorProvider.peer_id = null
+    selectorProvider.module = 'Scheduler'
+    selectorProvider.service_instance_id = 'scheduler-local'
+    selectorProvider.eligible = true
+    const selectorAction = cloneFixture(selectorCatalog.actions[0]!)
+    selectorAction.action_id = 'scheduler-local-selector-preference'
+    selectorAction.provider_id = selectorProvider.provider_id
+    selectorAction.provider_kind = selectorProvider.provider_kind
+    selectorAction.peer_id = null
+    selectorAction.service_instance_id = selectorProvider.service_instance_id
+    selectorAction.topic = 'Scheduler.ListJobs'
+    selectorAction.module = 'Scheduler'
+    selectorAction.method = 'ListJobs'
+    selectorAction.bindability = 'available'
+    selectorAction.route_blockers = []
+    selectorAction.policy = {
+      ...selectorAction.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'standard',
+      resource_scope: 'public'
+    }
+    selectorCatalog.providers = [selectorProvider]
+    selectorCatalog.actions = [selectorAction]
+
+    expect(buildCapabilityGraph({
+      catalog: selectorCatalog,
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    }).explain('method:Scheduler.ListJobs')).toEqual(expect.objectContaining({
+      state: 'available-local',
+      routeable: true,
+      disabledReason: null,
+      nextRepairAction: 'confirm the local provider selection before execution',
+      selectedProvider: expect.objectContaining({
+        selectable: true,
+        requiredAction: 'confirm the local provider selection before execution',
+        disabledReasons: []
+      })
+    }))
+  })
+
+  it('keeps Android fallback entrypoints selectable independently from assistant-role and microphone blockers', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: androidNativeCapabilityManifestFixture,
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:android:android.assistantRole.status']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.assistantRole.request']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.microphoneCapture']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'raw-audio',
+        requiredPermissions: expect.arrayContaining(['aurora.android.microphone']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.notifications']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.biometric']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.secureCredentialStorage']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        privacyClass: 'credential',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.adminUnlock']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        privacyClass: 'admin-critical',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localFileRead']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'degraded' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.shareIntent']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.deepLink']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.appShortcut']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.quickTile']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.entrypointPayload']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:android'
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.provider']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        privacyClass: 'personal',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            providerIdentity: 'native:android',
+            routeability: 'degraded',
+            requiredAction: 'use the supported subset or complete native integration'
+          })
+        ])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.modelRuntime']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        requiredPermissions: expect.arrayContaining(['aurora.android.localLightInference']),
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:android.localLightInference.fallback']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'fallback' })])
+      })
+    )
+    expect(graph.byFeatureId['native:android:androidWidget']).toEqual(
+      expect.objectContaining({
+        availability: 'degraded',
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            disabledReasons: expect.arrayContaining([
+              expect.stringContaining('Widget provider is packaged')
+            ])
+          })
+        ])
+      })
+    )
+  })
+
+  it('keeps iOS native invocation app-owned without system assistant capability', () => {
+    const graph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        platform: 'ios',
+        permissions: {
+          'aurora.iosAppIntents': true,
+          'aurora.iosShortcuts': true,
+          'aurora.iosSiriReplacement': false
+        },
+        capabilities: {
+          'ios.appIntents': true,
+          'ios.shortcuts': true,
+          'ios.siriReplacement': false
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+
+    expect(graph.byFeatureId['native:ios:ios.appIntents']).toEqual(
+      expect.objectContaining({
+        availability: 'available-local',
+        providerIdentity: 'native:ios',
+        requiredPermissions: []
+      })
+    )
+    expect(graph.byFeatureId['native:ios:ios.siriReplacement']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providerIdentity: 'native:ios',
+        routeable: false
+      })
+    )
+  })
+
+  it('distinguishes Android assistant-role held, denied, and OEM-unavailable native states', () => {
+    const heldGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.request': false,
+          'android.assistantRole.held': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'degraded',
+          'android.assistantRole.held': 'available'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleHeld: true,
+          requestable: false,
+          reason: 'role_held'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(heldGraph.byFeatureId['native:android:android.assistantRole.held']).toEqual(
+      expect.objectContaining({ availability: 'available-local' })
+    )
+
+    const deniedGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.request': 'needs_native_permission',
+          'android.assistantRole.denied': 'needs_native_permission'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          denied: true,
+          requestable: false,
+          reason: 'request_denied'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(deniedGraph.byFeatureId['native:android:android.assistantRole.denied']).toEqual(
+      expect.objectContaining({
+        availability: 'privacy-blocked',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'needs_native_permission' })])
+      })
+    )
+
+    const oemUnavailableGraph = buildCapabilityGraph({
+      catalog: capabilityGraphCatalogFixture,
+      registry: gatewayRegistryFixture,
+      nativeManifest: {
+        ...androidNativeCapabilityManifestFixture,
+        permissions: {
+          ...androidNativeCapabilityManifestFixture.permissions,
+          'aurora.android.assistantRoleRequest': false
+        },
+        capabilities: {
+          ...androidNativeCapabilityManifestFixture.capabilities,
+          'android.assistantRole.available': false,
+          'android.assistantRole.request': false,
+          'android.assistantRole.oemUnavailable': true
+        },
+        capabilityStates: {
+          ...androidNativeCapabilityManifestFixture.capabilityStates,
+          'android.assistantRole.available': 'unsupported_platform',
+          'android.assistantRole.request': 'unsupported_platform',
+          'android.assistantRole.oemUnavailable': 'unsupported_platform'
+        },
+        assistantRole: {
+          ...androidNativeCapabilityManifestFixture.assistantRole!,
+          roleAvailable: false,
+          requestable: false,
+          oemUnavailable: true,
+          reason: 'oem_unavailable'
+        }
+      },
+      transportKind: 'native-mobile'
+    })
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.assistantRole.oemUnavailable']).toEqual(
+      expect.objectContaining({
+        availability: 'unsupported',
+        providers: expect.arrayContaining([expect.objectContaining({ routeability: 'unsupported_platform' })])
+      })
+    )
+    expect(oemUnavailableGraph.byFeatureId['native:android:android.fallbackEntrypoints']).toEqual(
+      expect.objectContaining({ availability: 'degraded' })
+    )
+  })
+
   it('loads capability graph explanations through the client namespace', async () => {
     const transport = new MockAuroraTransport()
       .register('Gateway.GetRegistry', gatewayRegistryFixture)
@@ -611,9 +1314,9 @@ describe('AuroraClient', () => {
           input_schema: null,
           output_schema: null,
           policy: {
-            required_permissions: ['Gateway.manage'],
+            required_permissions: ['Gateway.use'],
             trust_tier: 'local',
-            safety_class: 'admin',
+            safety_class: 'public',
             explicit_selector_required: false,
             consent_required: false,
             privacy_indicator_required: false,
@@ -622,7 +1325,7 @@ describe('AuroraClient', () => {
             selector_required: false,
             mesh_visible: false,
             local_only: false,
-            allowed_peers: null,
+            allowed_provider_peer_ids: null,
             operation_class: 'admin',
             resource_scope: null,
             denial_reasons: []
@@ -654,8 +1357,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 4,
-        methods: 33,
-        externalMethods: 32,
+        methods: 34,
+        externalMethods: 33,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -674,8 +1377,8 @@ describe('AuroraClient', () => {
       'Auth.manage',
       'Gateway.manage',
       'Gateway.use',
+      'Orchestrator.RemoteInference',
       'Orchestrator.manage',
-      'Orchestrator.use',
       'Scheduler.manage',
       'Scheduler.use'
     ])
@@ -786,6 +1489,9 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(services.services[0]?.module).toBe('Gateway')
+    expect(services.services.find((service) => service.module === 'Scheduler')?.callable_features).toEqual(
+      gatewayServicesFixture.services.find((service) => service.module === 'Scheduler')?.callable_features
+    )
     expect(summaries.map((summary) => summary.availability)).toEqual(
       expect.arrayContaining(['available-local', 'privacy-blocked', 'stale'])
     )
@@ -803,7 +1509,7 @@ describe('AuroraClient', () => {
         })
       })
     )
-    expect(toolCatalog.tools[0]?.global_tool_id).toBe('tool:local:diagnostics.serviceHealth')
+    expect(toolCatalog.tools[0]?.global_tool_id).toBe('aurora-tool:v1:local-peer:Tooling:core.diagnostics.service-health')
     expect(uiMockReferenceFixtureSummary.privacyClasses).toContain('admin-critical')
   })
 
@@ -879,6 +1585,100 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('lists and resolves inline assistant tool approvals through orchestrator contracts', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
+    const transport = MockAuroraTransport.empty()
+      .register('Orchestrator.ListPendingToolApprovals', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return {
+          approvals: [
+            {
+              pending_id: 'thread-1:tool-1',
+              approval_request_id: 'approval-1',
+              status: 'pending',
+              run_id: 'run-1',
+              thread_id: 'thread-1',
+              message_id: 'message-1',
+              tool_call_id: 'tool-1',
+              tool_name: 'delete_file',
+              arguments_preview: { path: '/tmp/example' },
+              created_at: 1
+            }
+          ],
+          count: 1
+        }
+      })
+      .register('Orchestrator.ResumeToolApproval', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return {
+          ok: true,
+          status: 'executed',
+          pending: {
+            pending_id: 'thread-1:tool-1',
+            approval_request_id: 'approval-1',
+            status: 'executed',
+            run_id: 'run-1',
+            thread_id: 'thread-1',
+            message_id: 'message-1',
+            tool_call_id: 'tool-1',
+            tool_name: 'delete_file',
+            created_at: 1
+          },
+          tool_result: { ok: true, status: 'success' },
+          correlation_id: 'corr-1'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const pending = await client.assistant.listPendingToolApprovals({ run_id: 'run-1', status: 'pending' })
+    expect(pending).toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          count: 1,
+          approvals: [
+            expect.objectContaining({
+              pending_id: 'thread-1:tool-1',
+              approval_request_id: 'approval-1',
+              tool_call_id: 'tool-1'
+            })
+          ]
+        })
+      })
+    )
+
+    const approved = await client.assistant.approveToolCall({
+      approval_request_id: 'approval-1',
+      grant_scope: 'until_expiry',
+      correlation_id: 'corr-1'
+    })
+    expect(approved).toEqual(
+      expect.objectContaining({
+        ok: true,
+        data: expect.objectContaining({
+          ok: true,
+          status: 'executed',
+          tool_result: expect.objectContaining({ status: 'success' })
+        })
+      })
+    )
+    expect(calls).toEqual([
+      {
+        method: 'Orchestrator.ListPendingToolApprovals',
+        payload: { run_id: 'run-1', status: 'pending' }
+      },
+      {
+        method: 'Orchestrator.ResumeToolApproval',
+        payload: {
+          approval_request_id: 'approval-1',
+          grant_scope: 'until_expiry',
+          correlation_id: 'corr-1',
+          approve: true
+        }
+      }
+    ])
+  })
+
   it('evaluates route policy denials without downgrading privacy blockers to unavailable', () => {
     const evaluation = evaluateRoutePolicy({
       route: routeExplainFixture,
@@ -912,6 +1712,328 @@ describe('AuroraClient', () => {
     expect(evaluation.blockers.map((blocker) => blocker.code)).toEqual(
       expect.arrayContaining(['explicit_selector_required', 'privacy_indicator_required'])
     )
+  })
+
+  it('keeps local selector preference routeable without privacy-blocking read-only local actions', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const localProvider = cloneFixture(catalog.providers[0]!)
+    localProvider.provider_id = 'local:TTS'
+    localProvider.provider_kind = 'local'
+    localProvider.peer_id = null
+    localProvider.service_instance_id = 'tts-local'
+    localProvider.module = 'TTS'
+    localProvider.eligible = true
+    localProvider.reason_code = 'selector_preference_missing'
+    localProvider.reason = 'Local provider selector is a preference, not a privacy blocker.'
+
+    const localAction = cloneFixture(catalog.actions[0]!)
+    localAction.action_id = 'tts-local-selector-preference'
+    localAction.provider_id = localProvider.provider_id
+    localAction.provider_kind = 'local'
+    localAction.peer_id = null
+    localAction.service_instance_id = localProvider.service_instance_id
+    localAction.topic = 'TTS.Synthesize'
+    localAction.module = 'TTS'
+    localAction.method = 'Synthesize'
+    localAction.bindability = 'available'
+    localAction.route_blockers = []
+    localAction.policy = {
+      ...localAction.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: false,
+      privacy_indicator_required: false,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'standard',
+      resource_scope: 'public'
+    }
+
+    catalog.providers = [localProvider]
+    catalog.actions = [localAction]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.selected_target = 'local'
+    route.selected_provider_id = null
+    route.selected_peer_id = null
+    route.selected_service_instance_id = localProvider.service_instance_id
+    route.selector_valid = false
+    route.selector_validation_code = 'explicit_selector_required'
+    route.selector_validation_message = 'Confirm the local provider preference.'
+    route.candidates = []
+    route.blockers = [
+      {
+        code: 'explicit_selector_required',
+        message: 'Confirm the local provider preference.',
+        severity: 'error',
+        provider_id: localProvider.provider_id,
+        peer_id: null,
+        security_privacy: true
+      }
+    ]
+    route.security_privacy_blockers = []
+
+    const graph = buildCapabilityGraph({ catalog, registry: gatewayRegistryFixture, transportKind: 'mock' })
+    const explanation = graph.explain('method:TTS.Synthesize')
+    expect(explanation).toEqual(
+      expect.objectContaining({
+        state: 'available-local',
+        selectorRequired: true,
+        routeable: true,
+        nextRepairAction: 'confirm the local provider selection before execution'
+      })
+    )
+    expect(explanation.providerCandidates[0]).toEqual(
+      expect.objectContaining({
+        selectable: true,
+        requiredAction: 'confirm the local provider selection before execution'
+      })
+    )
+
+    const evaluation = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { text: 'Local read-only synthesis preview.' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(
+      expect.objectContaining({
+        allowed: true,
+        decision: 'allowed',
+        availability: 'available-local',
+        explicitSelectorRequired: true,
+        repairPath: null,
+        privacyClass: 'public'
+      })
+    )
+    expect(evaluation.blockers).toEqual([])
+  })
+
+  it('keeps selector, consent, privacy indicator, native permission, and approval as separate SDK policy blockers', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const provider = cloneFixture(catalog.providers[0]!)
+    provider.provider_id = 'mesh:audio'
+    provider.provider_kind = 'remote'
+    provider.peer_id = 'peer-audio'
+    provider.service_instance_id = 'stt-remote'
+    provider.module = 'STT'
+    provider.eligible = false
+    provider.reason_code = 'explicit_selector_required'
+    provider.reason = 'Remote audio route needs selector, consent, and privacy indicator evidence.'
+
+    const action = cloneFixture(catalog.actions[0]!)
+    action.action_id = 'stt-remote-policy-signals'
+    action.provider_id = provider.provider_id
+    action.provider_kind = provider.provider_kind
+    action.peer_id = provider.peer_id
+    action.service_instance_id = provider.service_instance_id
+    action.topic = 'STT.Transcribe'
+    action.module = 'STT'
+    action.method = 'Transcribe'
+    action.bindability = 'unavailable'
+    action.route_blockers = ['explicit_selector_required']
+    action.policy = {
+      ...action.policy,
+      explicit_selector_required: true,
+      selector_required: true,
+      consent_required: true,
+      privacy_indicator_required: true,
+      approval_required: true,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'sensitive',
+      resource_scope: 'raw-audio'
+    }
+    catalog.providers = [provider]
+    catalog.actions = [action]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.topic = 'STT.Transcribe'
+    route.module = 'STT'
+    route.selected_target = 'remote'
+    route.selected_provider_id = provider.provider_id
+    route.selected_peer_id = provider.peer_id
+    route.selected_service_instance_id = provider.service_instance_id
+    route.selector_valid = false
+    route.selector_validation_code = 'explicit_selector_required'
+    route.selector_validation_message = 'Choose the remote audio peer before streaming.'
+    route.fallback_behavior = 'none'
+    route.blockers = [
+      {
+        code: 'explicit_selector_required',
+        message: 'Choose the remote audio peer before streaming.',
+        severity: 'error',
+        provider_id: provider.provider_id,
+        peer_id: provider.peer_id,
+        security_privacy: true
+      },
+      {
+        code: 'native_permission_required',
+        message: 'Native microphone permission is missing.',
+        severity: 'error',
+        provider_id: null,
+        peer_id: null,
+        security_privacy: true
+      }
+    ]
+    route.security_privacy_blockers = [...route.blockers]
+
+    const evaluation = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { sample_format: 'pcm16' },
+      privacyIndicatorShown: false,
+      consentGranted: false,
+      transportKind: 'mock'
+    })
+
+    expect(evaluation).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      availability: 'privacy-blocked',
+      explicitSelectorRequired: true,
+      privacyClass: 'raw-audio',
+      reasonCode: 'approval_required',
+      repairPath: 'request user approval'
+    }))
+    expect(evaluation.approval).toEqual(expect.objectContaining({ required: true, status: 'required' }))
+    expect(evaluation.blockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining([
+      'explicit_selector_required',
+      'native_permission_required',
+      'consent_required',
+      'privacy_indicator_required'
+    ]))
+  })
+
+  it('keeps remote sensitive routes blocked until consent and privacy action evidence exist', () => {
+    const catalog = cloneFixture(capabilityCatalogFixture)
+    const provider = cloneFixture(catalog.providers[0]!)
+    provider.provider_id = 'mesh:personal-rag'
+    provider.provider_kind = 'remote'
+    provider.peer_id = 'peer-personal'
+    provider.service_instance_id = 'rag-personal-remote'
+    provider.module = 'DB'
+    provider.eligible = true
+    provider.reason_code = 'eligible'
+    provider.reason = 'Remote personal RAG route is eligible after consent and privacy indicator evidence.'
+
+    const action = cloneFixture(catalog.actions[0]!)
+    action.action_id = 'db-remote-personal-rag'
+    action.provider_id = provider.provider_id
+    action.provider_kind = provider.provider_kind
+    action.peer_id = provider.peer_id
+    action.service_instance_id = provider.service_instance_id
+    action.topic = 'DB.RAGSearch'
+    action.module = 'DB'
+    action.method = 'RAGSearch'
+    action.bindability = 'available'
+    action.route_blockers = []
+    action.policy = {
+      ...action.policy,
+      explicit_selector_required: false,
+      selector_required: false,
+      consent_required: true,
+      privacy_indicator_required: true,
+      approval_required: false,
+      denial_reasons: [],
+      operation_class: 'read',
+      safety_class: 'sensitive',
+      resource_scope: 'personal'
+    }
+    catalog.providers = [provider]
+    catalog.actions = [action]
+
+    const route = cloneFixture(routeExplainFixture)
+    route.topic = 'DB.RAGSearch'
+    route.module = 'DB'
+    route.selected_target = 'remote'
+    route.selected_provider_id = provider.provider_id
+    route.selected_peer_id = provider.peer_id
+    route.selected_service_instance_id = provider.service_instance_id
+    route.selector_valid = true
+    route.selector_validation_code = ''
+    route.selector_validation_message = ''
+    route.fallback_behavior = 'none'
+    route.blockers = []
+    route.security_privacy_blockers = []
+    route.candidates = [
+      {
+        provider_id: provider.provider_id,
+        peer_id: provider.peer_id!,
+        provider_kind: 'remote',
+        service_instance_id: provider.service_instance_id,
+        module: provider.module,
+        version: provider.version,
+        included: true,
+        selected: true,
+        reason_code: 'eligible',
+        reason: provider.reason,
+        latency_ms: 24,
+        active_calls: 0,
+        max_concurrent: 2,
+        available_capacity: 2,
+        blockers: []
+      }
+    ]
+
+    const withoutConsent = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: false,
+      privacyIndicatorShown: false,
+      transportKind: 'mock'
+    })
+    expect(withoutConsent).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      availability: 'privacy-blocked',
+      reasonCode: 'consent_required',
+      repairPath: 'satisfy the route privacy policy before execution'
+    }))
+    expect(withoutConsent.blockers.map((blocker) => blocker.code)).toEqual(expect.arrayContaining([
+      'consent_required',
+      'privacy_indicator_required'
+    ]))
+
+    const withoutPrivacyAction = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: true,
+      privacyIndicatorShown: false,
+      transportKind: 'mock'
+    })
+    expect(withoutPrivacyAction).toEqual(expect.objectContaining({
+      allowed: false,
+      decision: 'privacy-blocked',
+      reasonCode: 'privacy_indicator_required'
+    }))
+
+    const withConsentAndPrivacyAction = evaluateRoutePolicy({
+      route,
+      catalog,
+      payload: { query: 'personal deployment notes', namespace: 'home-lab' },
+      privacyClass: 'sensitive',
+      dataClasses: ['personal', 'sensitive'],
+      consentGranted: true,
+      privacyIndicatorShown: true,
+      transportKind: 'mock'
+    })
+    expect(withConsentAndPrivacyAction).toEqual(expect.objectContaining({
+      allowed: true,
+      decision: 'allowed',
+      availability: 'available-remote',
+      reasonCode: 'allowed'
+    }))
   })
 
   it('requires approval for local dangerous tools and accepts matching approval scopes', async () => {
@@ -1419,8 +2541,205 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('selects a model provider by writing orchestrator provider config through Config.Set AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> | undefined }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string> | undefined) => {
+      calls.push({ method, payload, headers })
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual({
+          method_id: CONFIG_METHODS.set,
+          payload: {
+            key_path: 'services.orchestrator.llm.provider',
+            value: 'llama_cpp'
+          },
+          affected_resources: ['services.orchestrator.llm.provider']
+        })
+        return adminDraftFixture(CONFIG_METHODS.set)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual(expect.objectContaining({
+          action_id: `aa-${CONFIG_METHODS.set.replace('.', '-')}`,
+          reason: 'Select local executable provider',
+          reauth_confirmed: true
+        }))
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register(CONFIG_METHODS.set, (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return { success: true, previous_value: 'openai' }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.config.applyChange({
+      change: {
+        key_path: 'services.orchestrator.llm.provider',
+        value: 'llama_cpp'
+      },
+      reason: 'Select local executable provider',
+      reauthConfirmed: true
+    })
+
+    expect(result.data.success).toBe(true)
+    expect(calls.map((call) => call.method)).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      CONFIG_METHODS.set
+    ])
+    expect(calls.at(-1)).toEqual(expect.objectContaining({
+      method: CONFIG_METHODS.set,
+      payload: {
+        key_path: 'services.orchestrator.llm.provider',
+        value: 'llama_cpp'
+      },
+      headers: {
+        'X-Aurora-AdminAction-Id': 'aa-Config-Set',
+        'X-Aurora-AdminAction-Token': 'token-Config-Set',
+        'X-Aurora-AdminAction-Digest': 'digest-Config-Set'
+      }
+    }))
+  })
+
+  it('commits config change sets through Config.CommitChangeSet AdminAction', async () => {
+    const calls: Array<{ method: string; payload: unknown; headers?: Record<string, string> | undefined }> = []
+    const recordCall = (method: string, payload: unknown, headers?: Record<string, string> | undefined) => {
+      calls.push({ method, payload, headers })
+    }
+    const payload = {
+      changes: [
+        { key_path: 'services.tts.mesh_sharing.share', value: true },
+        { key_path: 'services.tts.mesh_routing.prefer', value: 'network' }
+      ],
+      base_revision: 7,
+      preview_token: 'cfgprev-test-token'
+    }
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.AdminActionDraft', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        expect(request.payload).toEqual({
+          method_id: CONFIG_METHODS.commitChangeSet,
+          payload,
+          affected_resources: [
+            'services.tts.mesh_sharing.share',
+            'services.tts.mesh_routing.prefer'
+          ]
+        })
+        return adminDraftFixture(CONFIG_METHODS.commitChangeSet)
+      })
+      .register('Gateway.AdminActionConfirm', (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return adminConfirmFixture((request.payload as { action_id: string }).action_id)
+      })
+      .register(CONFIG_METHODS.commitChangeSet, (request) => {
+        recordCall(request.method, request.payload, request.headers)
+        return {
+          success: true,
+          revision: 8,
+          version_id: 'cfgv-change-set',
+          changed_paths: payload.changes.map((change) => change.key_path),
+          transaction_id: 'cfgtx-change-set'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.config.commitChangeSet({
+      request: payload,
+      reason: 'Update service sharing and routing atomically',
+      reauthConfirmed: true
+    })
+
+    expect(result.data.success).toBe(true)
+    expect(calls.map((call) => call.method)).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      CONFIG_METHODS.commitChangeSet
+    ])
+    expect(calls.at(-1)).toEqual(expect.objectContaining({
+      method: CONFIG_METHODS.commitChangeSet,
+      payload
+    }))
+  })
+
+  it('provides UI-lane helpers for route explanation, AdminAction aliasing, local cancel, and stable error states', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Gateway.ExplainRoute', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return routeExplainFixture
+      })
+      .register('Gateway.AdminActionDraft', (request) => {
+        calls.push({ method: request.method, payload: request.payload })
+        return adminDraftFixture('Config.Set')
+      })
+    const client = new AuroraClient({ transport })
+
+    const route = await client.capabilities.explainRoute('TTS.Synthesize')
+    const draft = await client.adminAction.draft({ method_id: 'Config.Set', payload: { key: 'ui.enabled', value: true } })
+    const cancelled = client.adminAction.cancel(draft, { reason: 'operator closed dialog', now: '2026-07-02T00:00:00.000Z' })
+
+    expect(route.topic).toBe(routeExplainFixture.topic)
+    expect(calls[0]).toEqual({
+      method: 'Gateway.ExplainRoute',
+      payload: { topic: 'TTS.Synthesize', include_candidates: true, module: 'TTS', method: 'Synthesize' }
+    })
+    expect(client.adminAction).toBe(client.admin)
+    expect(cancelled).toEqual({
+      action_id: draft.action_id,
+      method_id: 'Config.Set',
+      cancelled: true,
+      backend_persisted: false,
+      reason: 'operator closed dialog',
+      cancelled_at: '2026-07-02T00:00:00.000Z',
+      secrets_redacted: true
+    })
+    expect(calls.map((call) => call.method)).toEqual(['Gateway.ExplainRoute', 'Gateway.AdminActionDraft'])
+
+    const permission = normalizeAuroraErrorForUi(new AuroraError({
+      code: 'permission',
+      message: 'AdminAction confirmation is required',
+      method: 'Config.Set',
+      busTopic: 'Config.Set',
+      detail: { code: 'admin_action_required' }
+    }))
+    const loss = normalizeAuroraErrorForUi(new TypeError('Failed to fetch'))
+
+    expect(permission).toEqual(
+      expect.objectContaining({
+        state: 'permission-required',
+        code: 'permission',
+        method: 'Config.Set',
+        busTopic: 'Config.Set',
+        requiresAdminAction: true,
+        retryable: false,
+        secretsRedacted: true
+      })
+    )
+    expect(loss).toEqual(
+      expect.objectContaining({
+        state: 'offline',
+        code: 'transport_loss',
+        retryable: true,
+        repairAction: 'Reconnect to Gateway or switch to clearly labeled offline demo mode.',
+        secretsRedacted: true
+      })
+    )
+  })
+
   it('loads config metadata, diff, reload impact, and history through the config namespace', async () => {
-    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
+    const record = <T,>(data: T) => (request: { method: string; path?: string | undefined; payload?: unknown }) => {
+      calls.push({ method: request.method, path: request.path, payload: request.payload })
+      return cloneFixture(data)
+    }
+    const transport = new MockAuroraTransport()
+      .register('Config.GetSchemaMetadata', record(defaultMockAuroraFixtures.configSchemaMetadata))
+      .register('Config.PreviewDiff', record(defaultMockAuroraFixtures.configDiffPreview))
+      .register('Config.PreviewReloadImpact', record(defaultMockAuroraFixtures.configReloadImpact))
+      .register('Config.GetVersionHistory', record(defaultMockAuroraFixtures.configVersionHistory))
+    const client = new AuroraClient({ transport })
 
     const schema = await client.config.getSchemaMetadata({ include_values: true })
     const diff = await client.config.previewDiff({ changes: [{ key_path: 'services.gateway.api.port', value: 8080 }] })
@@ -1430,8 +2749,18 @@ describe('AuroraClient', () => {
     expect(schema.ok).toBe(true)
     expect(schema.ok && schema.data.fields.some((field) => field.key_path === 'services.gateway.api.token_secret' && field.secret)).toBe(true)
     expect(diff.ok && diff.data.diffs[0]?.restart_required).toBe(true)
+    expect(diff.ok && diff.data.changed_paths).toEqual(['services.gateway.api.port'])
     expect(impact.ok && impact.data.impacts[0]?.affected_services).toContain('gateway')
     expect(history.ok && history.data.versions[0]?.version_id).toBe('cfgv-gateway-port-001')
+    expect(history.ok && history.data.versions[0]?.changed_paths).toEqual(['services.gateway.api.port'])
+    expect(history.ok && history.data.versions[0]?.transaction_kind).toBe('commit_change_set')
+    expect(history.ok && history.data.versions[0]?.actor).toBe('principal_id:admin')
+    expect(calls.map((call) => [call.method, call.path])).toEqual([
+      ['Config.GetSchemaMetadata', '/api/Config/GetSchemaMetadata'],
+      ['Config.PreviewDiff', '/api/Config/PreviewDiff'],
+      ['Config.PreviewReloadImpact', '/api/Config/PreviewReloadImpact'],
+      ['Config.GetVersionHistory', '/api/Config/GetVersionHistory']
+    ])
   })
 
   it('applies config changes and rollback through AdminAction headers', async () => {
@@ -1581,6 +2910,14 @@ describe('AuroraClient', () => {
 
     expect(preview.ok).toBe(true)
     if (preview.ok) {
+      expect(preview.data.mesh_rollout).toEqual(
+        expect.objectContaining({
+          secrets_redacted: true,
+          denied_by_reason: { method_not_shared: 1 },
+          provider_mesh_tooling_enabled: true,
+          consumer_mesh_tooling_enabled: true
+        })
+      )
       expect(preview.data.redaction).toEqual(
         expect.objectContaining({
           secrets_redacted: true,
@@ -1670,10 +3007,10 @@ describe('AuroraClient', () => {
       expect(listed.data.secrets_redacted).toBe(true)
     }
 
-    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false })).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore')).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' })).resolves.toMatchObject({ ok: true })
-    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.create({ reason: 'Operator backup', include_personal_data: false }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.verify({ backup_id: 'backup-20260625T120000Z-config-rag' }, 'Verify before restore', { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.restore({ backup_id: 'backup-20260625T120000Z-config-rag', dry_run: true, reason: 'Preview restore' }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
+    await expect(client.backups.rollback({ rollback_backup_id: 'rollback-1', dry_run: true, reason: 'Preview rollback' }, { reauthConfirmed: true })).resolves.toMatchObject({ ok: true })
 
     expect(calls.filter((call) => call.method === 'Gateway.AdminActionDraft')).toHaveLength(4)
     expect(calls.filter((call) => call.method === 'Gateway.AdminActionConfirm')).toHaveLength(4)
@@ -1687,7 +3024,6 @@ describe('AuroraClient', () => {
       )
     }
   })
-
 
   it('keeps AdminAction and tool approval separate but composable for dangerous tools', async () => {
     const transport = new MockAuroraTransport({ fixtures: false })
@@ -1824,6 +3160,7 @@ describe('AuroraClient', () => {
       approval_request_id: 'approval-local-danger',
       approver_principal_id: 'admin-1',
       approve: false,
+      grant_scope: 'deny_once',
       reason: 'Operator denied config mutation',
       correlation_id: 'corr-local-danger'
     })
@@ -1836,6 +3173,55 @@ describe('AuroraClient', () => {
       approved: false,
       audit: null
     })
+  })
+
+  it('passes selected approval scope through Tooling confirmation', async () => {
+    let confirmationPayload: unknown = null
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.RequestApproval', {
+        ok: true,
+        approval_request_id: 'approval-local-danger',
+        policy_decision: {
+          decision_id: 'policy-local-danger',
+          allowed: true,
+          approval_required: true,
+          approval_mode: 'ask_each_time',
+          token_ttl_seconds: 300
+        },
+        expires_at: 1781953500,
+        correlation_id: 'corr-local-danger',
+        error: null
+      })
+      .register('Tooling.ConfirmExecution', (request) => {
+        confirmationPayload = request.payload
+        return {
+          ok: true,
+          approval_token: 'tool-token-session',
+          expires_at: 1781953500,
+          policy_decision_id: 'policy-local-danger',
+          correlation_id: 'corr-local-danger',
+          error: null
+        }
+      })
+    const client = new AuroraClient({ transport })
+    const tool = normalizeToolCatalog(toolCatalogFixture).find((candidate) => candidate.id === 'tool:local:filesystem.writeConfig')
+    if (!tool) throw new Error('missing local dangerous tool fixture')
+
+    await client.tools.submitApprovalDecision({
+      tool,
+      scope: 'session',
+      approverPrincipalId: 'admin-1',
+      reason: 'Operator approved this session'
+    })
+
+    expect(confirmationPayload).toEqual(expect.objectContaining({
+      approval_request_id: 'approval-local-danger',
+      approver_principal_id: 'admin-1',
+      grant_scope: 'session',
+      include_future_tools: false,
+      reason: 'Operator approved this session',
+      correlation_id: 'corr-local-danger'
+    }))
   })
 
   it('classifies approval denial, expiry, replay, changed args, changed provider, and downgraded risk as typed errors', async () => {
@@ -1979,6 +3365,85 @@ describe('AuroraClient', () => {
         })
       )
     }
+  })
+
+  it('resolves bearer tokens dynamically for in-memory browser sessions without persistence', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    let token: string | null = null
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local/',
+      bearerToken: () => token,
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} })
+        return new Response(
+          JSON.stringify({
+            digest: 'fixture',
+            modules: [],
+            service_count: 0,
+            method_count: 0
+          }),
+          { status: 200 }
+        )
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    await client.registry.getRegistry()
+    token = 'session-token-after-login'
+    await client.registry.getRegistry()
+    token = null
+    await client.registry.getRegistry()
+
+    expect(calls[0]?.init.headers).not.toEqual(expect.objectContaining({ Authorization: expect.any(String) }))
+    expect(calls[1]?.init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer session-token-after-login' }))
+    expect(calls[2]?.init.headers).not.toEqual(expect.objectContaining({ Authorization: expect.any(String) }))
+  })
+
+  it('clears stale bearer tokens after expired HTTP auth so following requests are anonymous', async () => {
+    const registryAuthHeaders: Array<string | undefined> = []
+    let client!: AuroraClient
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => client.auth.bearerToken(),
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        if (url.endsWith('/api/Auth/Login')) {
+          return new Response(
+            JSON.stringify({
+              token: 'expired-session-token',
+              user_id: 'user-1',
+              username: 'Ada',
+              permissions: ['Gateway.use'],
+              is_admin: false,
+              expires_at: '2030-01-01T00:00:00Z'
+            }),
+            { status: 200 }
+          )
+        }
+        if (url.endsWith('/api/Gateway/GetRegistry')) {
+          registryAuthHeaders.push((init?.headers as Record<string, string> | undefined)?.Authorization)
+          if (registryAuthHeaders.length === 1) {
+            return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+          }
+          return new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), { status: 200 })
+        }
+        return new Response(JSON.stringify({ detail: 'unexpected route' }), { status: 404 })
+      }
+    })
+    client = new AuroraClient({ transport })
+
+    const login = await client.authApi.login({ username: 'ada', password: 'secret' })
+    expect(login.ok).toBe(true)
+    expect(client.auth.bearerToken()).toBe('expired-session-token')
+
+    const expired = await client.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(expired.ok).toBe(false)
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+
+    const retried = await client.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(retried.ok).toBe(true)
+    expect(registryAuthHeaders).toEqual(['Bearer expired-session-token', undefined])
   })
 
   it('uses Gateway built-in GET routes with auth headers and no request body', async () => {
@@ -2259,7 +3724,8 @@ describe('AuroraClient', () => {
       [{ error: { reason_code: 'no_route', message: 'No route to provider' } }, 'unavailable_service'],
       [{ error: { reason_code: 'privacy_blocked', message: 'Explicit selector required' } }, 'privacy_blocked'],
       [{ error: { code: 'unsupported_feature', message: 'Unsupported method' } }, 'unsupported_feature'],
-      [new TypeError('DataChannel closed'), 'transport_loss']
+      [new TypeError('DataChannel closed'), 'transport_loss'],
+      [new Error('programming invariant violated'), 'unknown']
     ] as const
 
     for (const [bridgeResult, expected] of cases) {
@@ -2399,6 +3865,61 @@ describe('AuroraClient', () => {
           case 'aurora_secure_storage_set':
           case 'aurora_secure_storage_delete':
             return { key: String(args?.key), ok: true }
+          case 'aurora_ios_secure_storage_status':
+            return {
+              available: false,
+              permission: 'aurora.iosKeychain',
+              capability: 'ios.keychain.secureCredentialStorage',
+              source: 'tauri-ios-native-plugin',
+              reason: 'iOS Keychain requires Xcode',
+              details: { backend: 'keychain', secretsRedacted: true, privacyClass: 'credential' }
+            }
+          case 'aurora_ios_biometric_status':
+            return {
+              available: false,
+              permission: 'aurora.iosBiometricUnlock',
+              capability: 'ios.biometric.adminUnlock',
+              source: 'tauri-ios-native-plugin',
+              reason: 'Face ID/Touch ID requires iOS',
+              details: { framework: 'LocalAuthentication', secretsRedacted: true, privacyClass: 'credential' }
+            }
+          case 'aurora_ios_local_light_inference_status':
+            return iosNativeCapabilityManifestFixture.localLightInference
+          case 'aurora_ios_admin_unlock':
+            throw { detail: { code: 'unsupported_feature', message: 'iOS admin unlock requires Face ID/Touch ID' } }
+          case 'aurora_biometric_admin_unlock_status':
+            return {
+              platform: 'android',
+              available: false,
+              requestable: false,
+              deviceSecure: false,
+              biometricReady: false,
+              lastDenied: false,
+              state: 'needs_native_permission',
+              reason: 'device_credential_not_enrolled',
+              privacyClass: 'admin-critical',
+              evidenceSource: 'android-biometric-keyguard-keystore',
+              secretsRedacted: true
+            }
+          case 'aurora_biometric_admin_unlock':
+            return {
+              started: false,
+              reason: 'device_credential_not_enrolled',
+              status: {
+                platform: 'android',
+                available: false,
+                requestable: false,
+                deviceSecure: false,
+                biometricReady: false,
+                lastDenied: false,
+                state: 'needs_native_permission',
+                reason: 'device_credential_not_enrolled',
+                privacyClass: 'admin-critical',
+                evidenceSource: 'android-biometric-keyguard-keystore',
+                secretsRedacted: true
+              },
+              secretsRedacted: true
+            }
           case 'aurora_local_file_read':
             return { path: String(args?.path), data: 'hello', encoding: 'utf-8' }
           case 'aurora_local_file_write':
@@ -2407,6 +3928,13 @@ describe('AuroraClient', () => {
             return { paths: ['/tmp/a.txt'], cancelled: false }
           case 'aurora_secure_file_handle_open':
             return { paths: ['/tmp/a.txt'], cancelled: false }
+          case 'aurora_ios_entrypoint_payload':
+            return {
+              payload: nativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: nativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'tauri-ios-native-manifest',
+              secretsRedacted: true
+            }
           default:
             throw new Error(`Unexpected command ${command}`)
         }
@@ -2453,6 +3981,45 @@ describe('AuroraClient', () => {
     await expect(transport.secureStorageGet('session')).resolves.toEqual({ key: 'session', value: 'token-ref' })
     await expect(transport.secureStorageSet('session', 'token-ref')).resolves.toEqual({ key: 'session', ok: true })
     await expect(transport.secureStorageDelete('session')).resolves.toEqual({ key: 'session', ok: true })
+    await expect(transport.getIosSecureStorageStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        capability: 'ios.keychain.secureCredentialStorage',
+        details: expect.objectContaining({ secretsRedacted: true, privacyClass: 'credential' })
+      })
+    )
+    await expect(transport.getIosBiometricStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: false,
+        capability: 'ios.biometric.adminUnlock',
+        details: expect.objectContaining({ framework: 'LocalAuthentication', secretsRedacted: true })
+      })
+    )
+    await expect(transport.getIosLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        backendModelCatalogRequired: true,
+        secretsRedacted: true
+      })
+    )
+    await expect(
+      transport.iosAdminUnlock({ reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' })
+    ).rejects.toMatchObject({ code: 'unsupported_feature' })
+    await expect(transport.getBiometricAdminUnlockStatus()).resolves.toEqual(
+      expect.objectContaining({
+        privacyClass: 'admin-critical',
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.requestBiometricAdminUnlock()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'device_credential_not_enrolled',
+        secretsRedacted: true
+      })
+    )
     await expect(transport.readLocalFile('/tmp/a.txt')).resolves.toEqual({
       path: '/tmp/a.txt',
       data: 'hello',
@@ -2471,6 +4038,16 @@ describe('AuroraClient', () => {
       paths: ['/tmp/a.txt'],
       cancelled: false
     })
+    await expect(transport.getIOSEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ invocation: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'ios_share_extension', backendRequired: true }),
+          expect.objectContaining({ id: 'ios_file_association', payloadCommand: 'iosEntrypointPayload' })
+        ]),
+        secretsRedacted: true
+      })
+    )
 
     expect(calls.map((call) => call.command)).toEqual([
       'aurora_sidecar_status',
@@ -2488,10 +4065,17 @@ describe('AuroraClient', () => {
       'aurora_secure_storage_get',
       'aurora_secure_storage_set',
       'aurora_secure_storage_delete',
+      'aurora_ios_secure_storage_status',
+      'aurora_ios_biometric_status',
+      'aurora_ios_local_light_inference_status',
+      'aurora_ios_admin_unlock',
+      'aurora_biometric_admin_unlock_status',
+      'aurora_biometric_admin_unlock',
       'aurora_local_file_read',
       'aurora_local_file_write',
       'aurora_local_file_pick',
-      'aurora_secure_file_handle_open'
+      'aurora_secure_file_handle_open',
+      'aurora_ios_entrypoint_payload'
     ])
     expect(calls[2]?.args).toEqual({ commandToken: { token: 'session-token' } })
     expect(calls[3]?.args).toEqual({ commandToken: { token: 'session-token' } })
@@ -2499,9 +4083,357 @@ describe('AuroraClient', () => {
     expect(calls[11]?.args).toEqual({ request: { lines: 10 } })
     expect(calls[12]?.args).toEqual({ key: 'session' })
     expect(calls[13]?.args).toEqual({ key: 'session', value: 'token-ref' })
-    expect(calls[15]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
-    expect(calls[16]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
-    expect(calls[18]?.args).toEqual({ options: { mode: 'read' } })
+    expect(calls[18]?.args).toEqual({
+      request: { reason: 'Confirm admin action', action: 'Auth.DeleteDevice', correlationId: 'corr-ios' }
+    })
+    expect(calls[21]?.args).toEqual({ path: '/tmp/a.txt', options: {} })
+    expect(calls[22]?.args).toEqual({ path: '/tmp/a.txt', data: 'hello', options: {} })
+    expect(calls[24]?.args).toEqual({ options: { mode: 'read' } })
+  })
+
+  it('exposes Android assistant-role status and fallback entrypoints through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_native_capability_manifest':
+            return androidNativeCapabilityManifestFixture
+          case 'assistantRoleStatus':
+            return androidNativeCapabilityManifestFixture.assistantRole
+          case 'requestAssistantRole':
+            return {
+              started: true,
+              requestCode: 4202,
+              status: androidNativeCapabilityManifestFixture.assistantRole,
+              reason: 'requestable'
+            }
+          case 'fallbackEntrypoints':
+            return androidNativeCapabilityManifestFixture.fallbackEntrypoints
+          case 'localLightInferenceStatus':
+            return androidNativeCapabilityManifestFixture.localLightInference
+          case 'requestAndroidPermission':
+            return {
+              started: true,
+              permission: args?.permission,
+              requestCode: 4204,
+              requestedPermissions: ['android.permission.RECORD_AUDIO']
+            }
+          case 'voiceForegroundServiceStatus':
+            return androidNativeCapabilityManifestFixture.voiceForegroundService
+          case 'startVoiceForegroundService':
+            return {
+              started: false,
+              reason: 'microphone_permission_missing',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
+          case 'stopVoiceForegroundService':
+            return {
+              stopped: false,
+              reason: 'foreground_service_not_running',
+              status: androidNativeCapabilityManifestFixture.voiceForegroundService
+            }
+          case 'entrypointPayload':
+            return {
+              payload: androidNativeCapabilityManifestFixture.lastEntrypointPayload,
+              entrypoints: androidNativeCapabilityManifestFixture.entrypoints,
+              evidenceSource: 'android-intent-redacted',
+              secretsRedacted: true
+            }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getNativeCapabilityManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'android',
+        assistantRole: expect.objectContaining({
+          roleAvailable: true,
+          packageQualified: true,
+          roleHeld: false,
+          requestable: true,
+          oemUnavailable: false,
+          reason: 'requestable',
+          handlesAssistActivity: true,
+          declaresVoiceInteractionService: true
+        }),
+        permissionStates: expect.objectContaining({
+          'aurora.android.microphone': 'needs_native_permission',
+          'aurora.android.microphoneRequest': 'needs_native_permission',
+          'aurora.android.notifications': 'needs_native_permission',
+          'aurora.android.notificationsRequest': 'needs_native_permission',
+          'aurora.android.voiceForegroundService': 'needs_native_permission',
+          'aurora.android.biometric': 'unsupported_platform',
+          'aurora.android.secureStorage': 'available',
+          'aurora.android.adminUnlock': 'needs_native_permission',
+          'aurora.android.localNetwork': 'available',
+          'aurora.android.filePick': 'degraded',
+          'aurora.android.shareIntent': 'available',
+          'aurora.android.quickTile': 'fallback',
+          'aurora.android.entrypointPayload': 'available',
+          'aurora.android.localLightInference': 'degraded'
+        }),
+        capabilityStates: expect.objectContaining({
+          'android.assistantRole.packageQualified': 'available',
+          'android.assistantRole.request': 'needs_native_permission',
+          'android.assistantRole.held': 'needs_native_permission',
+          'android.assistantRole.denied': 'degraded',
+          'android.assistantRole.oemUnavailable': 'degraded',
+          'android.foregroundService': 'needs_native_permission',
+          'android.voiceForegroundService': 'needs_native_permission',
+          'android.voiceForegroundService.start': 'needs_native_permission',
+          'android.secureCredentialStorage': 'available',
+          'android.adminUnlock': 'needs_native_permission',
+          'android.localFileRead': 'degraded',
+          'android.appWidget': 'fallback',
+          'android.quickTile': 'fallback',
+          'android.fallbackEntrypoints': 'fallback',
+          'android.localLightInference.provider': 'degraded',
+          'android.localLightInference.modelRuntime': 'needs_native_permission',
+          'android.localLightInference.fallback': 'fallback'
+        }),
+        localLightInference: expect.objectContaining({
+          providerId: 'native:mobile-local-light',
+          state: 'degraded',
+          fallbackAvailable: true,
+          backendModelCatalogRequired: true,
+          reason: 'backend_model_catalog_and_device_model_proof_required'
+        }),
+        voiceForegroundService: expect.objectContaining({
+          state: 'needs_native_permission',
+          reason: 'microphone_permission_missing',
+          backendAudioEvidenceRequired: true
+        }),
+        mobileIntegrations: expect.arrayContaining([
+          expect.objectContaining({ id: 'androidShareSheet', support: 'supported' }),
+          expect.objectContaining({ id: 'androidWidget', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidQuickTile', support: 'supported-path' }),
+          expect.objectContaining({ id: 'androidLocalLightInference', support: 'supported-path' })
+        ]),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', backendRequired: true, payloadCommand: 'entrypointPayload' }),
+          expect.objectContaining({ id: 'deep_link', backendRequired: true }),
+          expect.objectContaining({ id: 'quick_tile', backendRequired: false })
+        ]),
+        lastEntrypointPayload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
+        fallbackEntrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'app_open', state: 'fallback', available: true }),
+          expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
+          expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
+          expect.objectContaining({ id: 'quick_tile', state: 'fallback', available: true, manifestDeclared: true }),
+          expect.objectContaining({ id: 'app_widget', state: 'fallback', available: true, manifestDeclared: true }),
+          expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true })
+        ])
+      })
+    )
+    await expect(transport.getAndroidAssistantRoleStatus()).resolves.toEqual(
+      expect.objectContaining({
+        roleName: 'android.app.role.ASSISTANT',
+        roleAvailable: true,
+        packageQualified: true,
+        roleHeld: false,
+        requestable: true,
+        fallbackAvailable: true,
+        handlesAssistActivity: true,
+        declaresVoiceInteractionService: true
+      })
+    )
+    await expect(transport.requestAndroidAssistantRole()).resolves.toEqual(
+      expect.objectContaining({
+        started: true,
+        requestCode: 4202,
+        reason: 'requestable'
+      })
+    )
+    await expect(transport.getAndroidFallbackEntrypoints()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'push_to_talk', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'foreground_voice_controls', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'notification', state: 'needs_native_permission', available: false }),
+        expect.objectContaining({ id: 'share_intent', state: 'fallback', available: true, backendRequired: true })
+      ])
+    )
+    await expect(transport.getAndroidLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        fallbackAvailable: true,
+        modelRuntimeProvider: false
+      })
+    )
+    await expect(transport.requestAndroidPermission('aurora.android.microphone')).resolves.toEqual(
+      expect.objectContaining({
+        started: true,
+        permission: 'aurora.android.microphone',
+        requestCode: 4204,
+        requestedPermissions: ['android.permission.RECORD_AUDIO']
+      })
+    )
+    await expect(transport.getAndroidVoiceForegroundServiceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        state: 'needs_native_permission',
+        backendAudioEvidenceRequired: true
+      })
+    )
+    await expect(transport.startAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        started: false,
+        reason: 'microphone_permission_missing'
+      })
+    )
+    await expect(transport.stopAndroidVoiceForegroundService()).resolves.toEqual(
+      expect.objectContaining({
+        stopped: false,
+        reason: 'foreground_service_not_running'
+      })
+    )
+    await expect(transport.getAndroidEntrypointPayload()).resolves.toEqual(
+      expect.objectContaining({
+        payload: expect.objectContaining({ source: 'none', secretsRedacted: true }),
+        entrypoints: expect.arrayContaining([
+          expect.objectContaining({ id: 'share_sheet', manifestDeclared: true })
+        ]),
+        evidenceSource: 'android-intent-redacted',
+        secretsRedacted: true
+      })
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_native_capability_manifest',
+      'assistantRoleStatus',
+      'requestAssistantRole',
+      'fallbackEntrypoints',
+      'localLightInferenceStatus',
+      'requestAndroidPermission',
+      'voiceForegroundServiceStatus',
+      'startVoiceForegroundService',
+      'stopVoiceForegroundService',
+      'entrypointPayload'
+    ])
+    expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
+  })
+
+  it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const publicSupportedActions: IosAuroraActionId[] = [
+      'app-intent.open-assistant',
+      'app-intent.stop-speech',
+      'shortcut.open-assistant',
+      'share.import-context',
+      'deeplink.open'
+    ]
+    const iosManifest = {
+      platform: 'ios',
+      permissions: {
+        'aurora.iosAppIntents': true,
+        'aurora.iosShortcuts': true,
+        'aurora.iosShareExtension': false,
+        'aurora.iosWidgets': false,
+        'aurora.iosDeepLinks': false,
+        'aurora.iosSiriReplacement': false
+      },
+      capabilities: {
+        'ios.appIntents': true,
+        'ios.shortcuts': true,
+        'ios.localLightInference.provider': true,
+        'ios.shareExtension': false,
+        'ios.widgets': false,
+        'ios.deepLinks': false,
+        'ios.siriReplacement': false
+      }
+    }
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        switch (command) {
+          case 'aurora_ios_native_plugin_manifest':
+            return iosManifest
+          case 'aurora_ios_invocation_status':
+            return {
+              available: true,
+              state: 'degraded',
+              surface: 'Siri/Shortcuts/App Intents integration',
+              supportedActions: publicSupportedActions,
+              siriReplacement: false,
+              requiresBackendEvidence: true,
+              secretsRedacted: true
+            }
+          case 'aurora_ios_local_light_inference_status':
+            return iosNativeCapabilityManifestFixture.localLightInference
+          case 'aurora_ios_invoke_action':
+            return {
+              accepted: true,
+              action: (args?.request as { action?: string } | undefined)?.action,
+              handoff: 'AuroraClient',
+              correlationId: (args?.request as { correlationId?: string } | undefined)?.correlationId,
+              secretsRedacted: true
+            }
+          default:
+            throw new Error(`Unexpected command ${command}`)
+        }
+      }
+    })
+
+    await expect(transport.getIosNativePluginManifest()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        capabilities: expect.objectContaining({
+          'ios.appIntents': true,
+          'ios.siriReplacement': false
+        }),
+        permissions: expect.objectContaining({
+          'aurora.iosAppIntents': true,
+          'aurora.iosSiriReplacement': false
+        })
+      })
+    )
+    await expect(transport.getIosInvocationStatus()).resolves.toEqual(
+      expect.objectContaining({
+        available: true,
+        state: 'degraded',
+        surface: 'Siri/Shortcuts/App Intents integration',
+        supportedActions: publicSupportedActions,
+        siriReplacement: false,
+        requiresBackendEvidence: true,
+        secretsRedacted: true
+      })
+    )
+    await expect(transport.getIosLocalLightInferenceStatus()).resolves.toEqual(
+      expect.objectContaining({
+        platform: 'ios',
+        providerId: 'native:mobile-local-light',
+        state: 'degraded',
+        fallbackAvailable: true,
+        backendModelCatalogRequired: true
+      })
+    )
+    await expect(
+      transport.invokeIosAuroraAction({
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        accepted: true,
+        action: 'app-intent.open-assistant',
+        handoff: 'AuroraClient',
+        correlationId: 'corr-ios-action',
+        secretsRedacted: true
+      })
+    )
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_ios_native_plugin_manifest',
+      'aurora_ios_invocation_status',
+      'aurora_ios_local_light_inference_status',
+      'aurora_ios_invoke_action'
+    ])
+    expect(calls[3]?.args).toEqual({
+      request: {
+        action: 'app-intent.open-assistant',
+        correlationId: 'corr-ios-action'
+      }
+    })
   })
 
   it('classifies Tauri auth, permission, validation, timeout, unavailable, unsupported, privacy, native permission, and transport-loss failures', async () => {
@@ -2647,7 +4579,7 @@ describe('AuroraClient', () => {
     )
   })
 
-  it('uses 401 and 403 results to update auth session without mutating on transport loss', async () => {
+  it('expires on 401, preserves authenticated identity on scoped 403, and ignores transport loss', async () => {
     const authTransport = new HttpGatewayTransport({
       baseUrl: 'http://aurora.local',
       fetchImpl: async () =>
@@ -2681,6 +4613,19 @@ describe('AuroraClient', () => {
 
     expect(permissionResult.ok).toBe(false)
     expect(permissionClient.auth.snapshot()).toEqual(
+      expect.objectContaining({
+        state: 'user',
+        principalId: 'user-2',
+        effectivePermissions: ['Gateway.use'],
+        isAuthenticated: true,
+        isDenied: false,
+        isTerminal: false
+      })
+    )
+
+    const anonymousPermissionClient = new AuroraClient({ transport: permissionTransport })
+    await anonymousPermissionClient.requestResult('Gateway.GetRegistry', {}, { path: '/api/Gateway/GetRegistry' })
+    expect(anonymousPermissionClient.auth.snapshot()).toEqual(
       expect.objectContaining({
         state: 'forbidden',
         status: 403,
@@ -2760,6 +4705,483 @@ describe('AuroraClient', () => {
     )
   })
 
+  it('normalizes voice runtime events with session correlation and peer provenance', () => {
+    const partial = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.transcription.partial', {
+      id: 'evt-voice-1',
+      topic: 'STTCoordinator.Partial',
+      session_id: 'voice-session-1',
+      correlation_id: 'corr-voice-1',
+      source_peer_id: 'peer-handset',
+      target_peer_id: 'peer-kitchen',
+      target_device_id: 'mic-1',
+      privacy_class: 'raw-audio',
+      text: 'turn on',
+      redacted: true
+    }, {
+      busTopic: 'STTCoordinator.Partial',
+      transport: 'mock'
+    }))
+
+    expect(partial).toEqual(expect.objectContaining({
+      id: 'evt-voice-1',
+      kind: 'transcription_partial',
+      topic: 'STTCoordinator.Partial',
+      sessionId: 'voice-session-1',
+      correlationId: 'corr-voice-1',
+      sourcePeerId: 'peer-handset',
+      targetPeerId: 'peer-kitchen',
+      targetDeviceId: 'mic-1',
+      privacyClass: 'raw-audio',
+      state: 'processing',
+      text: 'turn on',
+      redacted: true
+    }))
+
+    const denied = normalizeVoiceRuntimeEvent(createAuroraEvent('audio.denied', {
+      id: 'evt-voice-2',
+      topic: 'AudioSession.Events',
+      event_type: 'denied',
+      session_id: 'voice-session-2',
+      status: 'denied',
+      reason: 'policy_denied',
+      policy_decision_id: 'policy-7',
+      consent_decision: 'rejected',
+      target_peer_id: 'peer-den'
+    }, {
+      busTopic: 'AudioSession.Events',
+      transport: 'mock'
+    }))
+
+    expect(denied).toEqual(expect.objectContaining({
+      kind: 'audio_denied',
+      state: 'denied',
+      consentDecision: 'rejected',
+      policyDecisionId: 'policy-7',
+      reason: 'policy_denied',
+      targetPeerId: 'peer-den'
+    }))
+
+    const wakeword = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.wakeword.detected', {
+      id: 'evt-voice-3',
+      topic: 'WakeWord.Detected',
+      wake_word: 'jarvis',
+      stream_id: 'mic-stream-1',
+      privacy_class: 'raw-audio'
+    }, {
+      busTopic: 'WakeWord.Detected',
+      transport: 'mock'
+    }))
+
+    expect(wakeword).toEqual(expect.objectContaining({
+      kind: 'wakeword_detected',
+      state: 'listening',
+      text: 'jarvis'
+    }))
+
+    const audioLevel = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.audio.level', {
+      id: 'evt-voice-level',
+      topic: 'STTCoordinator.AudioLevel',
+      session_id: 'voice-session-3',
+      level: 42.5,
+      peak: 76.25,
+      bars: [12, 34, 56],
+      privacy_class: 'raw-audio',
+      redacted: true
+    }, {
+      busTopic: 'STTCoordinator.AudioLevel',
+      transport: 'mock'
+    }))
+
+    expect(audioLevel).toEqual(expect.objectContaining({
+      kind: 'audio_level',
+      state: 'listening',
+      sessionId: 'voice-session-3',
+      level: 42.5,
+      peak: 76.25,
+      bars: [12, 34, 56],
+      redacted: true
+    }))
+
+    const speech = normalizeVoiceRuntimeEvent(createAuroraEvent('voice.transcription.final', {
+      id: 'evt-voice-4',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      session_id: 'voice-session-4',
+      text: 'what can you do',
+      is_final: true,
+      privacy_class: 'raw-audio'
+    }, {
+      busTopic: 'STTCoordinator.UserSpeechCaptured',
+      transport: 'mock'
+    }))
+
+    expect(speech).toEqual(expect.objectContaining({
+      kind: 'transcription_final',
+      state: 'processing',
+      sessionId: 'voice-session-4',
+      text: 'what can you do'
+    }))
+
+    const gatewaySpeech = normalizeVoiceRuntimeEvent(createAuroraEvent('voice', {
+      event_id: 'evt-gateway-voice-1',
+      kind: 'voice.transcription.final',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      category: 'audio',
+      status: 'success',
+      timestamp: '2026-07-04T00:00:00.000Z',
+      correlation_id: 'corr-gateway-voice',
+      redacted_payload: {
+        session_id: 'voice-session-gateway',
+        text: 'what time is it',
+        privacy_class: 'raw-audio'
+      },
+      payload_sha256: 'sha'
+    }, {
+      transport: 'tauri-local'
+    }))
+
+    expect(gatewaySpeech).toEqual(expect.objectContaining({
+      id: 'evt-gateway-voice-1',
+      kind: 'transcription_final',
+      topic: 'STTCoordinator.UserSpeechCaptured',
+      sessionId: 'voice-session-gateway',
+      correlationId: 'corr-gateway-voice',
+      text: 'what time is it',
+      state: 'processing'
+    }))
+  })
+
+  it('starts and stops backend voice listening through typed SDK methods', async () => {
+    const transport = MockAuroraTransport.empty()
+    const calls: string[] = []
+    transport
+      .register('STTCoordinator.Listen', (request) => {
+        calls.push(`${request.method}:${(request.payload as { session_id?: string }).session_id}`)
+        return {}
+      })
+      .register('STTCoordinator.StopListening', (request) => {
+        calls.push(`${request.method}:${(request.payload as { reason?: string }).reason}`)
+        return {}
+      })
+    const client = new AuroraClient({ transport })
+
+    const started = await client.assistant.startVoiceListen({ sessionId: 'voice-manual-1' })
+    const stopped = await client.assistant.stopVoiceListen({ sessionId: 'voice-manual-1', reason: 'user_request' })
+
+    expect(started.ok && started.data).toEqual(expect.objectContaining({
+      sessionId: 'voice-manual-1',
+      status: 'listening',
+      source: 'push_to_talk'
+    }))
+    expect(stopped.ok && stopped.data).toEqual(expect.objectContaining({
+      sessionId: 'voice-manual-1',
+      status: 'stopped'
+    }))
+    expect(calls).toEqual([
+      'STTCoordinator.Listen:voice-manual-1',
+      'STTCoordinator.StopListening:user_request'
+    ])
+  })
+
+  it('adopts backend active voice session when listen joins an existing wakeword session', async () => {
+    const transport = MockAuroraTransport.empty()
+    transport.register('STTCoordinator.Listen', () => ({
+      success: true,
+      status: 'listening',
+      session_id: 'stt-wakeword-active',
+      current_state: 'listening',
+      source: 'sdk',
+      message: 'already_listening'
+    }))
+    const client = new AuroraClient({ transport })
+
+    const started = await client.assistant.startVoiceListen({ sessionId: 'voice-requested' })
+
+    expect(started.ok && started.data).toEqual(expect.objectContaining({
+      sessionId: 'stt-wakeword-active',
+      status: 'listening',
+      source: 'sdk'
+    }))
+  })
+
+  it('sends focused WebView push-to-talk audio through the Transcription route with an explicit selector', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('Transcription.Transcribe', (request) => {
+        capturedPayload = request.payload
+        return {
+          text: 'hello Aurora',
+          confidence: null,
+          language: 'en',
+          duration_ms: 500,
+          model_used: 'accurate'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.transcribeVoiceAudio({
+      audio_data: 'AAAA',
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate',
+      routePolicy: {
+        peerId: 'peer-studio',
+        providerId: 'remote:peer-studio:Transcription',
+        serviceInstanceId: 'remote:peer-studio:Transcription',
+        routeState: 'available-remote',
+      },
+      mesh_selector: { peer_id: 'legacy-peer' },
+      selector: { peer_id: 'legacy-peer' },
+    })
+
+    const selector = {
+      peer_id: 'peer-studio',
+      provider_id: 'remote:peer-studio:Transcription',
+      service_instance_id: 'remote:peer-studio:Transcription',
+    }
+    expect(result).toMatchObject({ ok: true, data: { text: 'hello Aurora' } })
+    expect(capturedPayload).toEqual({
+      audio_data: 'AAAA',
+      format: 'raw',
+      sample_rate: 16_000,
+      channels: 1,
+      model: 'accurate',
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
+  it('synthesizes read-aloud audio for client playback without asking the server to play it', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Synthesize', (request) => {
+        capturedPayload = request.payload
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 240,
+          text: 'hello from Aurora'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    const result = await client.assistant.synthesizeReadAloud({
+      text: 'hello from Aurora',
+      voice: 'default',
+      speed: 1.1
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        audio_data: 'UklGRg==',
+        format: 'wav',
+        sample_rate: 22_050,
+        channels: 1,
+        duration_ms: 240,
+      }
+    })
+    expect(capturedPayload).toEqual({
+      text: 'hello from Aurora',
+      voice: 'default',
+      speed: 1.1,
+      format: 'wav',
+    })
+  })
+
+  it('preserves an explicit downstream audio route on non-mesh transports', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Synthesize', (request) => {
+        capturedPayload = request.payload
+        return {
+          audio_data: 'UklGRg==',
+          format: 'wav',
+          sample_rate: 22_050,
+          channels: 1,
+          duration_ms: 240,
+          text: 'routed audio'
+        }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.assistant.synthesizeReadAloud({
+      text: 'routed audio',
+      routePolicy: {
+        peerId: 'peer-studio',
+        providerId: 'remote:peer-studio:TTS',
+        serviceInstanceId: 'remote:peer-studio:TTS',
+        routeState: 'available-remote',
+      },
+    })
+
+    const selector = {
+      peer_id: 'peer-studio',
+      provider_id: 'remote:peer-studio:TTS',
+      service_instance_id: 'remote:peer-studio:TTS',
+    }
+    expect(capturedPayload).toEqual({
+      text: 'routed audio',
+      voice: null,
+      speed: 1,
+      format: 'wav',
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
+  it('preserves an explicit server playback route on non-mesh transports', async () => {
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty()
+      .register('TTS.Request', (request) => {
+        capturedPayload = request.payload
+        return { status: 'queued' }
+      })
+    const client = new AuroraClient({ transport })
+
+    await client.assistant.requestReadAloud({
+      text: 'play on the selected speaker',
+      voice: 'studio',
+      speed: 0.9,
+      interrupt: false,
+      routePolicy: {
+        peerId: 'peer-kitchen',
+        providerId: 'remote:peer-kitchen:TTS',
+        serviceInstanceId: 'remote:peer-kitchen:TTS',
+        routeState: 'available-remote',
+      },
+    })
+
+    const selector = {
+      peer_id: 'peer-kitchen',
+      provider_id: 'remote:peer-kitchen:TTS',
+      service_instance_id: 'remote:peer-kitchen:TTS',
+    }
+    expect(capturedPayload).toEqual({
+      text: 'play on the selected speaker',
+      voice: 'studio',
+      speed: 0.9,
+      interrupt: false,
+      mesh_selector: selector,
+      selector,
+    })
+  })
+
+  it('streams normalized voice events through the assistant SDK surface', async () => {
+    const transport = new MockAuroraTransport()
+    transport.stream('voice', [
+      {
+        id: 'voice-1',
+        kind: 'voice.transcription.final',
+        topic: 'STTCoordinator.Final',
+        payload: {
+          session_id: 'session-final',
+          text: 'lights on',
+          target_peer_id: 'peer-kitchen',
+          correlation_id: 'corr-final',
+          privacy_class: 'raw-audio'
+        }
+      },
+      {
+        id: 'voice-2',
+        kind: 'tts.started',
+        topic: 'TTS.Started',
+        payload: {
+          session_id: 'session-final',
+          current_text: 'Turning lights on',
+          correlation_id: 'corr-tts',
+          privacy_class: 'personal'
+        }
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamVoiceEvents(), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['transcription_final', 'tts_started'])
+    expect(events[0]).toEqual(expect.objectContaining({
+      sessionId: 'session-final',
+      targetPeerId: 'peer-kitchen',
+      correlationId: 'corr-final',
+      text: 'lights on',
+      state: 'processing'
+    }))
+    expect(events[1]).toEqual(expect.objectContaining({
+      privacyClass: 'personal',
+      state: 'speaking',
+      text: 'Turning lights on'
+    }))
+  })
+
+  it('does not request unauthorized voice topics over a mesh connection', async () => {
+    const requests: Array<{ stream: string; topics: string[] }> = []
+    const transport = new MockAuroraTransport()
+      .stream('voice', function* (request) {
+        requests.push({ stream: request.stream, topics: request.topics })
+      })
+      .stream('assistant', function* (request) {
+        requests.push({ stream: request.stream, topics: request.topics })
+      })
+    Object.defineProperty(transport, 'kind', { value: 'mesh' })
+    const client = new AuroraClient({ transport })
+    client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use'])
+
+    expect(await collectEvents(client.assistant.streamVoiceEvents({ reconnect: false }), 1)).toEqual([])
+    expect(await collectEvents(client.assistant.streamVoiceAssistantResponses({ reconnect: false }), 1)).toEqual([])
+    expect(requests).toEqual([])
+
+    client.auth.setAuthenticated('mobile-peer', ['Orchestrator.use', 'STTCoordinator.use'])
+    expect(await collectEvents(client.assistant.streamVoiceEvents({ reconnect: false }), 1)).toEqual([])
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.stream).toBe('voice')
+    expect(requests[0]?.topics).toEqual(expect.arrayContaining([
+      'STTCoordinator.SessionStarted',
+      'STTCoordinator.Final',
+    ]))
+    expect(requests[0]?.topics).not.toContain('TTS.Started')
+  })
+
+  it('sanitizes nested raw tool arguments from voice assistant response streams', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'voice-tool-raw',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'Running voice tool',
+          metadata: {
+            source: 'stt',
+            tool_name: 'voice.secret',
+            args: { token: 'voice-token-must-not-render' },
+            nested: {
+              arguments: { password: 'voice-password-must-not-render' }
+            }
+          },
+          result: {
+            args: { secret: 'voice-result-secret-must-not-render' }
+          },
+          tool_calls: [
+            { arguments: { api_key: 'voice-array-secret-must-not-render' } }
+          ]
+        },
+        tool_id: 'tool:voice.secret',
+        secrets_redacted: true
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const updates = await collectEvents(client.assistant.streamVoiceAssistantResponses(), 1)
+
+    const serialized = JSON.stringify(updates)
+    expect(serialized).not.toContain('voice-token-must-not-render')
+    expect(serialized).not.toContain('voice-password-must-not-render')
+    expect(serialized).not.toContain('voice-result-secret-must-not-render')
+    expect(serialized).not.toContain('voice-array-secret-must-not-render')
+    expect(updates[0]?.tool?.name).toBe('voice.secret')
+  })
+
   it('subscribes to mock event streams with filtered event envelopes', async () => {
     const transport = new MockAuroraTransport().stream('assistant', [
       { id: '1', kind: 'assistant.delta', payload: { text: 'hel' }, correlation_id: 'corr-assistant-1' },
@@ -2785,6 +5207,132 @@ describe('AuroraClient', () => {
     expect(events[1]?.audit.toolId).toBe('tool:notes')
   })
 
+  it('maps structured assistant delta and tool stream payloads without exposing secrets', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'evt-delta-1',
+        kind: 'assistant.delta',
+        topic: 'Orchestrator.Response',
+        payload: {
+          text_delta: 'Hel',
+          session_id: 'session-structured',
+          request_id: 'request-structured',
+          metadata: { model: 'mock-stream', token: { redacted: true, sha256: 'secret-hash' } }
+        },
+        correlation_id: 'corr-structured',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-running',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'Running notes.write',
+          metadata: {
+            status: 'running',
+            tool_name: 'notes.write',
+            payload_preview: { title: 'safe title' }
+          }
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.write',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-failed',
+        kind: 'tool.failed',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          text: 'notes.write failed',
+          metadata: {
+            status: 'failed',
+            tool_name: 'notes.write',
+            payload_preview: { title: 'safe title' }
+          }
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.write',
+        status: 'failed',
+        secrets_redacted: true
+      },
+      {
+        id: 'evt-tool-raw-args',
+        kind: 'tool.running',
+        topic: 'Tooling.ExecuteTool',
+        payload: {
+          name: 'notes.delete',
+          args: { token: 'sk-raw-secret-must-not-render', path: '/tmp/private' },
+          arguments: { password: 'raw-password-must-not-render' },
+          tool_calls: [
+            {
+              name: 'nested.delete',
+              arguments: { password: 'nested-password-must-not-render' },
+              meta: { args: { token: 'nested-token-must-not-render' } }
+            }
+          ]
+        },
+        correlation_id: 'corr-structured',
+        tool_id: 'tool:notes.delete',
+        secrets_redacted: true
+      }
+    ])
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.events.streamAssistant(undefined, { kinds: ['assistant.delta', 'tool.running', 'tool.failed'] }),
+      4
+    )
+
+    expect(events.map((event) => event.id)).toEqual(['evt-delta-1', 'evt-tool-running', 'evt-tool-failed', 'evt-tool-raw-args'])
+    expect(events.map((event) => event.kind)).toEqual(['assistant.delta', 'tool.running', 'tool.failed', 'tool.running'])
+    expect(events[0]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text_delta: 'Hel',
+        session_id: 'session-structured',
+        request_id: 'request-structured'
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'assistant.delta',
+        busTopic: 'Orchestrator.Response'
+      })
+    }))
+    expect(events[1]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text: 'Running notes.write',
+        metadata: expect.objectContaining({
+          status: 'running',
+          tool_name: 'notes.write',
+          payload_preview: { title: 'safe title' }
+        })
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'tool.running',
+        toolId: 'tool:notes.write'
+      })
+    }))
+    expect(events[2]).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        text: 'notes.write failed',
+        metadata: expect.objectContaining({ status: 'failed' })
+      }),
+      audit: expect.objectContaining({
+        correlationId: 'corr-structured',
+        eventKind: 'tool.failed',
+        status: 'failed',
+        toolId: 'tool:notes.write'
+      })
+    }))
+    expect(JSON.stringify(events)).not.toContain('must-not-leak')
+    expect(JSON.stringify(events)).not.toContain('sk-raw-secret-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('raw-password-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('nested-password-must-not-render')
+    expect(JSON.stringify(events)).not.toContain('nested-token-must-not-render')
+    expect(((events[3]?.payload as { tool?: { payloadPreview?: unknown } }).tool)?.payloadPreview).toBeUndefined()
+    expect(events.every((event) => event.audit.redaction.secretsRedacted)).toBe(true)
+  })
+
   it('reconnects streams with last event backfill hints after transport loss', async () => {
     let attempts = 0
     const seenLastEventIds: Array<string | null | undefined> = []
@@ -2803,6 +5351,34 @@ describe('AuroraClient', () => {
 
     expect(events.map((event) => event.id)).toEqual(['1', '2'])
     expect(seenLastEventIds).toEqual([null, '1'])
+  })
+
+  it('retries initial event subscription failures before giving up', async () => {
+    let attempts = 0
+    const seenLastEventIds: Array<string | null | undefined> = []
+    const transport = {
+      kind: 'mock' as const,
+      async request() {
+        throw new AuroraError({ code: 'unsupported_feature', message: 'request not used' })
+      },
+      subscribe(request: Parameters<MockAuroraTransport['subscribe']>[0]) {
+        attempts += 1
+        seenLastEventIds.push(request.lastEventId)
+        if (attempts === 1) {
+          throw new TypeError('Gateway not ready')
+        }
+        return createEventSubscription(async function* () {
+          yield createAuroraEvent('health.updated', { status: 'healthy' }, { transport: 'mock' })
+        }())
+      }
+    }
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth({ reconnect: { maxAttempts: 1, initialDelayMs: 0 } }), 1)
+
+    expect(attempts).toBe(2)
+    expect(seenLastEventIds).toEqual([null, null])
+    expect(events[0]?.payload).toEqual({ status: 'healthy' })
   })
 
   it('settles a pending event iterator when an idle wrapped stream is closed', async () => {
@@ -2836,12 +5412,100 @@ describe('AuroraClient', () => {
     await expect(collectEvents(failing.events.watchConfig(), 1)).rejects.toMatchObject({ code: 'permission' })
   })
 
+  it('uses fetch SSE for per-subscription headers and applies auth failures to session state', async () => {
+    let client!: AuroraClient
+    const calls: Array<{ url: string; headers: Record<string, string> | undefined }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), headers: init?.headers as Record<string, string> | undefined })
+        return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+      },
+      eventSourceFactory: () => {
+        throw new Error('subscription headers require fetch SSE')
+      }
+    })
+    client = new AuroraClient({ transport })
+    client.auth.setBearerToken('stale-client-token')
+    client.auth.setAuthenticated('user-1', ['Gateway.use'])
+
+    await expect(collectEvents(client.events.watchHealth({ headers: { Authorization: 'Bearer subscription-token' } }), 1)).rejects.toMatchObject({ status: 401 })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer subscription-token' }))
+    expect(calls[0]?.url).not.toContain('subscription-token')
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+  })
+
+  it('clears stale bearer tokens after authenticated SSE returns expired auth', async () => {
+    let client!: AuroraClient
+    const streamAuthHeaders: Array<string | undefined> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => client.auth.bearerToken(),
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        if (url.includes('/api/events/stream')) {
+          streamAuthHeaders.push((init?.headers as Record<string, string> | undefined)?.Authorization)
+          return new Response(JSON.stringify({ detail: { code: 'token_expired', message: 'Token expired' } }), { status: 401 })
+        }
+        return new Response(JSON.stringify({ digest: 'fixture', modules: [], service_count: 0, method_count: 0 }), { status: 200 })
+      }
+    })
+    client = new AuroraClient({ transport })
+    client.auth.setBearerToken('stale-stream-token')
+    client.auth.setAuthenticated('user-1', ['Gateway.use'])
+
+    await expect(collectEvents(client.events.watchHealth(), 1)).rejects.toMatchObject({ status: 401 })
+
+    expect(streamAuthHeaders).toEqual(['Bearer stale-stream-token'])
+    expect(client.auth.snapshot()).toEqual(expect.objectContaining({ state: 'expired', status: 401 }))
+    expect(client.auth.bearerToken()).toBeNull()
+
+    await client.registry.getRegistry()
+    expect(client.auth.bearerToken()).toBeNull()
+  })
+
+  it('authenticates HTTP SSE streams with dynamic bearer headers via fetch', async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> | undefined }> = []
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      bearerToken: () => 'stream-session-token',
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), headers: init?.headers as Record<string, string> | undefined })
+        return new Response(
+          'id: health-1\nevent: health.updated\ndata: {"kind":"health.updated","payload":{"status":"healthy"}}\n\n',
+          { status: 200, headers: { 'content-type': 'text/event-stream' } }
+        )
+      },
+      eventSourceFactory: () => {
+        throw new Error('authenticated SSE must use fetch so Authorization headers are attached')
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.events.watchHealth(), 1)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toContain('/api/events/stream?stream=health')
+    expect(calls[0]?.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer stream-session-token' }))
+    expect(calls[0]?.url).not.toContain('stream-session-token')
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        id: 'health-1',
+        kind: 'health.updated',
+        payload: { status: 'healthy' }
+      })
+    )
+  })
+
   it('adapts HTTP SSE and WebSocket events into AuroraEvent envelopes', async () => {
     let sse: { onmessage: ((event: MessageEvent<string>) => void) | null; onerror: ((event: Event) => void) | null; close: () => void } | null = null
     const sseTransport = new HttpGatewayTransport({
       baseUrl: 'http://aurora.local',
       eventSourceFactory: (url) => {
-        expect(url).toContain('/api/events?stream=health')
+        expect(url).toContain('/api/events/stream?stream=health')
         sse = { onmessage: null, onerror: null, close: () => undefined }
         return sse
       }
@@ -2870,7 +5534,7 @@ describe('AuroraClient', () => {
     const wsTransport = new HttpGatewayTransport({
       baseUrl: 'https://aurora.local',
       webSocketFactory: (url) => {
-        expect(url.startsWith('wss://aurora.local/api/events?stream=assistant')).toBe(true)
+        expect(url.startsWith('wss://aurora.local/api/events/stream?stream=assistant')).toBe(true)
         socket = {
           onmessage: null,
           onerror: null,
@@ -2927,9 +5591,15 @@ describe('AuroraClient', () => {
   it('adapts Tauri and mesh event streams without changing backend evidence', async () => {
     const tauri = new TauriLocalTransport({
       invoke: async (command, args) => {
-        expect(command).toBe('aurora_subscribe')
-        expect(args?.request).toEqual(expect.objectContaining({ stream: 'config' }))
-        return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') {
+          expect(args?.request).toEqual(expect.objectContaining({
+            stream: 'config',
+            headers: { 'x-aurora-sidecar-token': 'session-token' }
+          }))
+          return [{ id: 'config-1', kind: 'config.updated', payload: { key: 'ui.dark_mode' }, correlation_id: 'corr-config' }]
+        }
+        throw new Error(`Unexpected command ${command}`)
       }
     })
     const tauriClient = new AuroraClient({ transport: tauri })
@@ -2943,6 +5613,114 @@ describe('AuroraClient', () => {
         })
       })
     )
+
+    const listeners = new Map<string, (event: { event: string; payload: unknown }) => void>()
+    let resolveIpcReady: () => void = () => undefined
+    const ipcReady = new Promise<void>((resolve) => {
+      resolveIpcReady = resolve
+    })
+    let resolveActivated: () => void = () => undefined
+    const activationReady = new Promise<void>((resolve) => {
+      resolveActivated = resolve
+    })
+    let activated = false
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const ipcTauri = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') {
+          expect(args?.request).toEqual(expect.objectContaining({
+            stream: 'health',
+            headers: { 'x-aurora-sidecar-token': 'session-token' }
+          }))
+          return { subscriptionId: 'sub-1', eventName: 'aurora://events/sub-1' }
+        }
+        if (command === 'aurora_activate_subscription') {
+          expect(listeners.has('aurora://events/sub-1')).toBe(true)
+          expect(listeners.has('aurora://events/sub-1/closed')).toBe(true)
+          activated = true
+          resolveActivated()
+          return { activated: true, subscriptionId: 'sub-1' }
+        }
+        if (command === 'aurora_unsubscribe') return { closed: true, subscriptionId: 'sub-1' }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        listeners.set(event, handler as (event: { event: string; payload: unknown }) => void)
+        if (event === 'aurora://events/sub-1') resolveIpcReady()
+        return () => listeners.delete(event)
+      }
+    })
+    const ipcClient = new AuroraClient({ transport: ipcTauri })
+    const ipcSubscription = ipcClient.events.watchHealth()
+    const ipcEvents = collectEvents(ipcSubscription, 1)
+    await ipcReady
+    await activationReady
+    expect(activated).toBe(true)
+    listeners.get('aurora://events/sub-1')?.({
+      event: 'aurora://events/sub-1',
+      payload: {
+        subscriptionId: 'sub-1',
+        event: { id: 'health-1', kind: 'health.updated', payload: { status: 'healthy' }, correlation_id: 'corr-health' }
+      }
+    })
+    expect(await ipcEvents).toEqual([
+      expect.objectContaining({
+        id: 'health-1',
+        payload: { status: 'healthy' },
+        audit: expect.objectContaining({
+          correlationId: 'corr-health',
+          transport: 'tauri-local'
+        })
+      })
+    ])
+    ipcSubscription.close()
+    await ipcSubscription.closed
+    expect(calls.map((call) => call.command)).toContain('aurora_unsubscribe')
+
+    const closedTauri = new TauriLocalTransport({
+      invoke: async (command) => {
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return { subscriptionId: 'sub-closed', eventName: 'aurora://events/sub-closed' }
+        if (command === 'aurora_activate_subscription') return { activated: true }
+        if (command === 'aurora_unsubscribe') return { closed: true }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        if (event.endsWith('/closed')) {
+          queueMicrotask(() => handler({
+            event,
+            payload: { subscriptionId: 'sub-closed', code: 'closed', reason: 'done', secretsRedacted: true }
+          } as never))
+        }
+        return () => undefined
+      }
+    })
+    const closedEvents = await collectEvents(new AuroraClient({ transport: closedTauri }).events.watchHealth(), 1)
+    expect(closedEvents).toEqual([])
+
+    const lossTauri = new TauriLocalTransport({
+      invoke: async (command) => {
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return { subscriptionId: 'sub-loss', eventName: 'aurora://events/sub-loss' }
+        if (command === 'aurora_activate_subscription') return { activated: true }
+        if (command === 'aurora_unsubscribe') return { closed: true }
+        throw new Error(`Unexpected command ${command}`)
+      },
+      listen: async (event, handler) => {
+        if (event.endsWith('/closed')) {
+          queueMicrotask(() => handler({
+            event,
+            payload: { subscriptionId: 'sub-loss', code: 'transport_loss', reason: 'Gateway event stream failed', secretsRedacted: true }
+          } as never))
+        }
+        return () => undefined
+      }
+    })
+    await expect(collectEvents(new AuroraClient({ transport: lossTauri }).events.watchHealth(), 1)).rejects.toMatchObject({
+      code: 'transport_loss'
+    })
 
     const meshTransport = new MeshP2PTransport({
       defaultPeerId: 'peer-kitchen',
@@ -2972,7 +5750,61 @@ describe('AuroraClient', () => {
 })
 
 describe('AuroraClient assistant namespace', () => {
+  it('routes inference-only chat with caller cancellation and timeout metadata', async () => {
+    const requests: Array<{
+      method: string
+      path?: string | undefined
+      timeoutMs?: number | undefined
+      signal?: AbortSignal | undefined
+      payload?: unknown | undefined
+    }> = []
+    const transport = new MockAuroraTransport().register(
+      ORCHESTRATOR_METHODS.inferChat,
+      (request) => {
+        requests.push(request)
+        return {
+          text: 'AURORA_INFERENCE_OK',
+          model_id: 'remote-default',
+          provider_id: 'remote-provider',
+          finish_reason: 'stop',
+          correlation_id: 'infer-correlation',
+          metadata: {},
+          secrets_redacted: true
+        }
+      }
+    )
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const input = {
+      messages: [{ role: 'user' as const, content: 'Reply exactly.' }],
+      tools: [],
+      tool_choice: 'auto' as const,
+      metadata: { source: 'lightweight-local-orchestrator' }
+    }
+
+    await expect(
+      client.assistant.inferChat(input, {
+        signal: controller.signal,
+        timeoutMs: 90_000
+      })
+    ).resolves.toMatchObject({
+      text: 'AURORA_INFERENCE_OK',
+      secrets_redacted: true
+    })
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: ORCHESTRATOR_METHODS.inferChat,
+        busTopic: ORCHESTRATOR_METHODS.inferChat,
+        path: '/api/Orchestrator/InferChat',
+        timeoutMs: 90_000,
+        signal: controller.signal,
+        payload: input
+      })
+    ])
+  })
+
   it('streams assistant deltas, final event evidence, and model metadata', async () => {
+    const calls: Array<{ method: string; payload: unknown }> = []
     const transport = new MockAuroraTransport().stream('assistant', [
       { id: 's1', kind: 'assistant.delta', payload: { textDelta: 'Hel' }, correlation_id: 'corr-stream' },
       { id: 's2', kind: 'assistant.delta', payload: { delta: 'lo' }, correlation_id: 'corr-stream' },
@@ -2983,10 +5815,33 @@ describe('AuroraClient assistant namespace', () => {
         correlation_id: 'corr-stream'
       }
     ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      calls.push({ method: request.method, payload: request.payload })
+      return {
+        text: 'Hello',
+        session_id: 'session-stream',
+        correlation_id: 'corr-stream',
+        request_id: (request.payload as { request_id?: string }).request_id,
+        metadata: { model: 'mock-stream' }
+      }
+    })
     const client = new AuroraClient({ transport })
 
-    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello' }), 3)
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'hello', requestId: 'corr-stream' }), 3)
 
+    expect(calls).toEqual([
+      {
+        method: ORCHESTRATOR_METHODS.externalUserInput,
+        payload: {
+          text: 'hello',
+          source: 'ui',
+          session_id: 'corr-stream',
+          request_id: 'corr-stream',
+          correlation_id: 'corr-stream',
+          stream: true
+        }
+      }
+    ])
     expect(events.map((event) => event.kind)).toEqual(['delta', 'delta', 'completed'])
     expect(events[0]?.textDelta).toBe('Hel')
     expect(events[1]?.textDelta).toBe('lo')
@@ -3001,6 +5856,461 @@ describe('AuroraClient assistant namespace', () => {
     )
   })
 
+  it('streams an HTTP assistant request through a correlated backend SSE envelope', async () => {
+    const requests: Array<{ url: string; body: unknown }> = []
+    const eventListeners: Record<string, (event: MessageEvent<string>) => void> = {}
+    let sourceClosed = false
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        const url = String(input)
+        const body = JSON.parse(String(init?.body ?? '{}')) as unknown
+        requests.push({ url, body })
+        expect(url).toBe('http://aurora.local/api/Orchestrator/ExternalUserInput')
+        expect(init?.method).toBe('POST')
+        return new Response(
+          JSON.stringify({
+            text: 'Hello from backend',
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            correlation_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-correlation-id': 'corr-http-sdk'
+            }
+          }
+        )
+      },
+      eventSourceFactory: (url) => {
+        expect(url).toBe(
+          'http://aurora.local/api/events/stream?stream=assistant&topic=Orchestrator.Response&topic=TTS.AudioChunk&kind=assistant.delta&kind=assistant.completed&kind=assistant.failed&kind=tool.requested&kind=tool.running&kind=tool.completed&kind=tool.failed&kind=tool.requires_action&kind=tts.audio_chunk&kind=tts.audio.chunk&kind=tts.chunk&correlation_id=corr-http-sdk&backfill=true'
+        )
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          addEventListener(type, listener) {
+            eventListeners[type] = listener
+          },
+          close() {
+            sourceClosed = true
+          }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const eventsPromise = collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-sdk' }),
+      1
+    )
+    await sourceReadyPromise
+    eventListeners['assistant.completed']?.(
+      new MessageEvent('assistant.completed', {
+        data: JSON.stringify({
+          event_id: 'evt-http-sdk-1',
+          topic: 'Orchestrator.Response',
+          kind: 'assistant.completed',
+          category: 'assistant',
+          action: 'Response',
+          status: 'completed',
+          correlation_id: 'corr-http-sdk',
+          redacted_payload: {
+            text: { redacted: true, sha256: 'text-hash' },
+            session_id: 'session-http-sdk',
+            request_id: 'corr-http-sdk',
+            metadata: { model: 'http-mock' }
+          },
+          payload_sha256: 'payload-hash'
+        }),
+        lastEventId: 'evt-http-sdk-1'
+      })
+    )
+
+    const events = await eventsPromise
+
+    expect(requests).toEqual([
+      {
+        url: 'http://aurora.local/api/Orchestrator/ExternalUserInput',
+        body: {
+          text: 'hello',
+          source: 'ui',
+          session_id: 'corr-http-sdk',
+          request_id: 'corr-http-sdk',
+          correlation_id: 'corr-http-sdk',
+          stream: true
+        }
+      }
+    ])
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        kind: 'completed',
+        eventId: 'evt-http-sdk-1',
+        sessionId: 'session-http-sdk',
+        requestId: 'corr-http-sdk',
+        text: 'Hello from backend',
+        textDelta: '',
+        modelLabel: 'http-mock',
+        audit: expect.objectContaining({
+          correlationId: 'corr-http-sdk',
+          eventKind: 'assistant.completed',
+          transport: 'http'
+        })
+      })
+    )
+    expect(events[0]?.audit.redaction?.secretsRedacted).toBe(true)
+    expect(sourceClosed).toBe(true)
+  })
+
+  it('yields correlated assistant SSE deltas before the POST response resolves', async () => {
+    let resolvePost: (response: Response) => void = () => undefined
+    const postResponse = new Promise<Response>((resolve) => {
+      resolvePost = resolve
+    })
+    const eventListeners: Record<string, (event: MessageEvent<string>) => void> = {}
+    let sourceReady: () => void = () => undefined
+    const sourceReadyPromise = new Promise<void>((resolve) => {
+      sourceReady = resolve
+    })
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (input, init) => {
+        expect(String(input)).toBe('http://aurora.local/api/Orchestrator/ExternalUserInput')
+        expect(JSON.parse(String(init?.body ?? '{}'))).toEqual(expect.objectContaining({
+          text: 'hello',
+          correlation_id: 'corr-http-live',
+          stream: true
+        }))
+        return postResponse
+      },
+      eventSourceFactory: () => {
+        sourceReady()
+        return {
+          onmessage: null,
+          onerror: null,
+          addEventListener(type, listener) {
+            eventListeners[type] = listener
+          },
+          close() {}
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+
+    const eventsPromise = collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-live' }),
+      1
+    )
+    await sourceReadyPromise
+    eventListeners['assistant.delta']?.(
+      new MessageEvent('assistant.delta', {
+        data: JSON.stringify({
+          event_id: 'evt-http-live-1',
+          topic: 'Orchestrator.Response',
+          kind: 'assistant.delta',
+          category: 'assistant',
+          correlation_id: 'corr-http-live',
+          payload: { delta: 'Hel', text: 'Hel', request_id: 'corr-http-live', metadata: { model: 'live-model' } }
+        }),
+        lastEventId: 'evt-http-live-1'
+      })
+    )
+
+    const events = await raceWithTimeout(eventsPromise, 500)
+
+    resolvePost(new Response(JSON.stringify({
+      text: 'Hello',
+      request_id: 'corr-http-live',
+      correlation_id: 'corr-http-live',
+      metadata: { model: 'live-model' }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    expect(events).not.toBe('timeout')
+    expect(events !== 'timeout' && events[0]).toEqual(expect.objectContaining({
+      kind: 'delta',
+      textDelta: 'Hel',
+      text: 'Hel',
+      modelLabel: 'live-model'
+    }))
+  })
+
+  it('sends client TTS playback ownership on streaming assistant requests', async () => {
+    let requestBody: unknown = null
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async (_url, init) => {
+        requestBody = JSON.parse(String(init?.body ?? '{}'))
+        return new Response(JSON.stringify({
+          text: 'done',
+          session_id: 'session-client-tts',
+          request_id: 'corr-client-tts',
+          correlation_id: 'corr-client-tts',
+          metadata: { tts_status: 'skipped' }
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      },
+      eventSourceFactory: () => ({
+        onmessage: null,
+        onerror: null,
+        addEventListener() {},
+        close() {}
+      })
+    })
+    const client = new AuroraClient({ transport })
+
+    await collectEvents(client.assistant.streamMessage({
+      text: 'hello',
+      requestId: 'corr-client-tts',
+      clientTtsPlayback: false
+    }), 1)
+
+    expect(requestBody).toEqual(expect.objectContaining({ client_tts_playback: false }))
+  })
+
+  it('returns the successful assistant POST response when the correlated SSE event is missed', async () => {
+    let sourceClosed = false
+    const transport = new HttpGatewayTransport({
+      baseUrl: 'http://aurora.local',
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            text: 'OpenAI final response reached the Gateway.',
+            session_id: 'session-http-fallback',
+            request_id: 'corr-http-missed',
+            correlation_id: 'corr-http-missed',
+            metadata: { provider: 'openai', provider_label: 'OpenAI', model: 'gpt-4o', tts_status: 'unavailable' }
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-correlation-id': 'corr-http-missed'
+            }
+          }
+        ),
+      eventSourceFactory: () => ({
+        onmessage: null,
+        onerror: null,
+        addEventListener() {
+          // Deliberately never emit an event; this reproduces the UI race where
+          // Orchestrator.Response was published before the browser subscribed.
+        },
+        close() {
+          sourceClosed = true
+        }
+      })
+    })
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.assistant.streamMessage({ text: 'hello', requestId: 'corr-http-missed' }),
+      1
+    )
+
+    expect(events[0]).toEqual(expect.objectContaining({
+      kind: 'fallback',
+      sessionId: 'session-http-fallback',
+      text: 'OpenAI final response reached the Gateway.',
+      modelLabel: 'gpt-4o',
+      metadata: expect.objectContaining({
+        provider: 'openai',
+        provider_label: 'OpenAI',
+        tts_status: 'unavailable',
+        assistant_stream_contract: 'single_response_fallback',
+        assistant_stream_transport: 'http',
+        assistant_stream_fallback: true
+      })
+    }))
+    expect(sourceClosed).toBe(true)
+  })
+
+  it('normalizes structured assistant tool events and TTS audio chunks without text deltas', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'tool-1',
+        kind: 'tool.requested',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool_call: {
+            tool_call_id: 'call-weather-1',
+            name: 'aurora-da2c3842004492c887b3ce878c8eb0cb_weather',
+            display_name: 'aurora-2.weather',
+            status: 'requested',
+            risk_class: 'local-read',
+            target: 'local tool registry',
+            data_leaves_device: false,
+            summary: 'Read local forecast cache.',
+            payload_preview: { location: 'kitchen' }
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'tool-2',
+        kind: 'tool.completed',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool: {
+            tool_call_id: 'call-weather-1',
+            name: 'Weather.GetForecast',
+            status: 'completed',
+            result_preview: 'Rain later'
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'tool-approval-1',
+        kind: 'tool.requires_action',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          tool: {
+            tool_call_id: 'call-email-approval',
+            name: 'Gmail.Send',
+            risk_class: 'dangerous',
+            summary: 'Approval required before sending email.',
+            pending_id: 'pending-email-1',
+            approval_request_id: 'approval-email-1',
+            approval_expires_at: 1234567890
+          }
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'audio-1',
+        kind: 'tts.audio_chunk',
+        payload: {
+          session_id: 'session-structured',
+          request_id: 'corr-structured',
+          chunk_id: 'chunk-1',
+          sequence: 7,
+          audio_data: 'UklGRg==',
+          encoding: 'base64',
+          mime_type: 'audio/wav',
+          sample_rate: 24000,
+          channels: 1,
+          duration_ms: 120,
+          final: false
+        },
+        correlation_id: 'corr-structured'
+      },
+      {
+        id: 'done-1',
+        kind: 'assistant.completed',
+        payload: { text: 'Forecast says rain later.', session_id: 'session-structured', request_id: 'corr-structured' },
+        correlation_id: 'corr-structured'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
+      text: 'Forecast says rain later.',
+      session_id: 'session-structured',
+      request_id: (request.payload as { request_id?: string }).request_id,
+      correlation_id: 'corr-structured'
+    }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'weather', requestId: 'corr-structured' }), 5)
+
+    expect(events.map((event) => event.kind)).toEqual(['tool', 'tool', 'tool', 'tts_audio_chunk', 'completed'])
+    expect(events[0]?.tool).toEqual(expect.objectContaining({
+      id: 'call-weather-1',
+      name: 'aurora-2.weather',
+      status: 'requested',
+      riskClass: 'local-read',
+      target: 'local tool registry',
+      dataLeavesDevice: false,
+      payloadPreview: { location: 'kitchen' }
+    }))
+    expect(events[1]?.tool).toEqual(expect.objectContaining({
+      id: 'call-weather-1',
+      status: 'completed',
+      resultPreview: 'Rain later'
+    }))
+    expect(events[2]?.tool).toEqual(expect.objectContaining({
+      id: 'call-email-approval',
+      name: 'Gmail.Send',
+      status: 'requires_action',
+      pendingId: 'pending-email-1',
+      approvalRequestId: 'approval-email-1',
+      approvalExpiresAt: 1234567890
+    }))
+    expect(events[3]).toEqual(expect.objectContaining({
+      textDelta: '',
+      ttsAudio: expect.objectContaining({
+        chunkId: 'chunk-1',
+        sequence: 7,
+        audioData: 'UklGRg==',
+        mimeType: 'audio/wav',
+        sampleRate: 24000,
+        channels: 1,
+        durationMs: 120,
+        final: false
+      })
+    }))
+  })
+
+  it('keeps assistant message streams open until final correlated TTS audio arrives', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'done-before-audio',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Spoken response',
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-tts-drain' }
+        },
+        correlation_id: 'corr-tts-drain'
+      },
+      {
+        id: 'audio-final',
+        kind: 'tts.audio_chunk',
+        payload: {
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          chunk_id: 'tts-corr-tts-drain',
+          sequence: 2,
+          audio_data: '',
+          encoding: 'base64',
+          mime_type: 'audio/wav',
+          sample_rate: 24000,
+          channels: 1,
+          duration_ms: 0,
+          final: true
+        },
+        correlation_id: 'corr-tts-drain'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => ({
+      text: 'Spoken response',
+      session_id: 'session-tts-drain',
+      request_id: (request.payload as { request_id?: string }).request_id,
+      correlation_id: 'corr-tts-drain',
+      metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-tts-drain' }
+    }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(
+      client.assistant.streamMessage({ text: 'speak', requestId: 'corr-tts-drain' }),
+      2
+    )
+
+    expect(events.map((event) => event.kind)).toEqual(['completed', 'tts_audio_chunk'])
+    expect(events[1]?.ttsAudio).toEqual(expect.objectContaining({
+      chunkId: 'tts-corr-tts-drain',
+      final: true
+    }))
+  })
+
   it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
 
@@ -3010,8 +6320,13 @@ describe('AuroraClient assistant namespace', () => {
       expect.objectContaining({
         kind: 'fallback',
         sessionId: 'mock-assistant-session',
-        text: 'Mock Aurora response to "fallback please"',
-        modelLabel: 'mock-local'
+        text: 'Sample reply: I heard “fallback please”.',
+        modelLabel: 'Aurora',
+        metadata: expect.objectContaining({
+          assistant_stream_contract: 'single_response_fallback',
+          assistant_stream_transport: 'mock',
+          assistant_stream_fallback: true
+        })
       })
     )
   })
@@ -3035,15 +6350,15 @@ describe('AuroraClient assistant namespace', () => {
   })
 
   it('closes assistant stream on external abort without falling back to sendMessage', async () => {
-    let sendCalls = 0
+    let triggerCalls = 0
     const transport = new MockAuroraTransport().stream('assistant', async function* () {
       yield { id: 's1', kind: 'assistant.delta', payload: { text: 'partial' } }
       await new Promise(() => undefined)
     })
     transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => {
-      sendCalls += 1
+      triggerCalls += 1
       return {
-        text: 'fallback should not run',
+        text: 'trigger response',
         session_id: 'session-fallback',
         metadata: { model: 'fallback-model' }
       }
@@ -3061,7 +6376,7 @@ describe('AuroraClient assistant namespace', () => {
     controller.abort()
 
     await expect(raceWithTimeout(iterator.next(), 100)).resolves.toEqual({ done: true, value: undefined })
-    expect(sendCalls).toBe(0)
+    expect(triggerCalls).toBe(1)
   })
 
   it('calls the Orchestrator.Interrupt contract for cancellation through the SDK', async () => {
@@ -3135,7 +6450,7 @@ describe('AuroraClient assistant namespace', () => {
 
     expect(capturedPayload).toEqual({
       text: 'hello Aurora',
-      source: 'external',
+      source: 'ui',
       session_id: 'session-123'
     })
     expect(result.ok).toBe(true)
@@ -3145,6 +6460,406 @@ describe('AuroraClient assistant namespace', () => {
     expect(result.data.modelLabel).toBe('llama-local')
     expect(result.data.routePolicy?.providerId).toBe('local:orchestrator')
     expect(result.audit.correlationId).toBe('corr-assistant-123')
+  })
+
+  it('emits assistant mesh selectors only for explicit peer and service instance targets', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    const result = await client.assistant.sendMessage({
+      text: 'remote hello',
+      routePolicy: {
+        providerId: 'local:orchestrator',
+        peerId: 'peer-studio-gpu',
+        serviceInstanceId: 'remote:peer-studio-gpu:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      }
+    })
+
+    const expectedSelector = {
+      peer_id: 'peer-studio-gpu',
+      service_instance_id: 'remote:peer-studio-gpu:Orchestrator'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'remote hello',
+      source: 'ui',
+      dispatch_selector: expectedSelector,
+      mesh_selector: expectedSelector,
+      selector: expectedSelector
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('does not emit assistant mesh selectors for local or default provider labels', async () => {
+    const capturedPayloads: unknown[] = []
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayloads.push(request.payload)
+      return {
+        data: { text: 'Local assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-local' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'local hello',
+      routePolicy: {
+        providerId: 'local:orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-local'
+      }
+    })
+    await client.assistant.sendMessage({
+      text: 'default hello',
+      routePolicy: {
+        providerId: 'default',
+        privacyClass: 'personal',
+        routeState: 'available-local'
+      }
+    })
+
+    expect(capturedPayloads).toEqual([
+      {
+        text: 'local hello',
+        source: 'ui'
+      },
+      {
+        text: 'default hello',
+        source: 'ui'
+      }
+    ])
+  })
+
+  it('emits assistant mesh selectors for remote orchestrator service provider ids', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote provider assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote provider hello',
+      routePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      }
+    })
+
+    const expectedSelector = {
+      provider_id: 'remote:peer-kitchen:Orchestrator',
+      service_instance_id: 'remote:peer-kitchen:Orchestrator',
+      peer_id: 'peer-kitchen'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'remote provider hello',
+      source: 'ui',
+      dispatch_selector: expectedSelector,
+      mesh_selector: expectedSelector,
+      selector: expectedSelector
+    })
+  })
+
+
+  it('emits assistant inference policy without dispatch compatibility selectors', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'inference hello',
+      inferencePolicy: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'inference hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'peer-studio-gpu',
+        service_instance_id: 'orchestrator-studio-gpu'
+      },
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('normalizes mesh inference provider aliases to backend route selector fields', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Mesh inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-mesh-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'mesh provider inference hello',
+      inferencePolicy: {
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'mesh provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'studio-gpu',
+        service_instance_id: 'remote:studio-gpu:Orchestrator'
+      },
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('keeps remote inference route provider identity separate from runtime provider id', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Inference assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-inference-runtime' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'inference runtime hello',
+      inferencePolicy: {
+        peerId: 'peer-studio-gpu',
+        providerId: 'mesh:studio-gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-studio-gpu',
+        runtimeProviderId: 'llama_cpp',
+        modelId: 'qwen-32b-instruct'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'inference runtime hello',
+      source: 'ui',
+      inference_selector: {
+        peer_id: 'peer-studio-gpu',
+        service_instance_id: 'orchestrator-studio-gpu'
+      },
+      inference_provider_id: 'llama_cpp',
+      inference_model_id: 'qwen-32b-instruct'
+    })
+  })
+
+  it('serializes local inference provider and model without a mesh selector', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Local provider inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-local-provider-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'local provider inference hello',
+      inferencePolicy: {
+        providerId: 'openai',
+        modelId: 'gpt-4o'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'local provider inference hello',
+      source: 'ui',
+      inference_provider_id: 'openai',
+      inference_model_id: 'gpt-4o'
+    })
+  })
+
+  it('serializes runtime and model selection while keeping approval policy as SDK hints', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Elevated provider inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-elevated-provider-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'elevated provider inference hello',
+      inferencePolicy: {
+        providerId: 'openai',
+        runtimeProviderId: 'openai-compatible',
+        modelId: 'gpt-4o',
+        privacyClass: 'sensitive',
+        dataLeavesDevice: true,
+        selectorRequired: true,
+        approvalRequired: true
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'elevated provider inference hello',
+      source: 'ui',
+      inference_provider_id: 'openai-compatible',
+      inference_model_id: 'gpt-4o'
+    })
+    expect(JSON.stringify(capturedPayload)).not.toContain('approvalRequired')
+    expect(JSON.stringify(capturedPayload)).not.toContain('dataLeavesDevice')
+    expect(JSON.stringify(capturedPayload)).not.toContain('privacyClass')
+    expect(JSON.stringify(capturedPayload)).not.toContain('selectorRequired')
+  })
+
+  it('serializes remote inference provider ids as mesh selectors', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Remote inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-remote-inference-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote provider inference hello',
+      inferencePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator',
+        modelId: 'remote-model'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'remote provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        provider_id: 'remote:peer-kitchen:Orchestrator',
+        service_instance_id: 'remote:peer-kitchen:Orchestrator',
+        peer_id: 'peer-kitchen'
+      },
+      inference_model_id: 'remote-model'
+    })
+  })
+
+  it('serializes composite remote inference provider ids to service selector plus runtime provider', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Composite remote inference response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-composite-remote-inference-provider' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'remote composite provider inference hello',
+      inferencePolicy: {
+        providerId: 'remote:peer-kitchen:Orchestrator:openai',
+        modelId: 'gpt-4o'
+      }
+    })
+
+    expect(capturedPayload).toEqual({
+      text: 'remote composite provider inference hello',
+      source: 'ui',
+      inference_selector: {
+        provider_id: 'remote:peer-kitchen:Orchestrator:openai',
+        service_instance_id: 'remote:peer-kitchen:Orchestrator',
+        peer_id: 'peer-kitchen'
+      },
+      inference_provider_id: 'openai',
+      inference_model_id: 'gpt-4o'
+    })
+  })
+
+  it('emits dispatch and inference policies independently when both are present', async () => {
+    let capturedPayload: unknown
+    const transport = new MockAuroraTransport()
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, (request) => {
+      capturedPayload = request.payload
+      return {
+        data: { text: 'Routed assistant response' },
+        status: 200,
+        audit: { correlationId: 'corr-assistant-dispatch-inference' }
+      }
+    })
+
+    const client = new AuroraClient({ transport })
+    await client.assistant.sendMessage({
+      text: 'dispatch and inference hello',
+      routePolicy: {
+        peerId: 'peer-router',
+        serviceInstanceId: 'remote:peer-router:Orchestrator',
+        privacyClass: 'personal',
+        routeState: 'available-remote'
+      },
+      inferencePolicy: {
+        peerId: 'peer-gpu',
+        providerId: 'mesh:gpu:Orchestrator',
+        serviceInstanceId: 'orchestrator-gpu',
+        modelId: 'llama-70b'
+      }
+    })
+
+    const dispatchSelector = {
+      peer_id: 'peer-router',
+      service_instance_id: 'remote:peer-router:Orchestrator'
+    }
+    expect(capturedPayload).toEqual({
+      text: 'dispatch and inference hello',
+      source: 'ui',
+      dispatch_selector: dispatchSelector,
+      mesh_selector: dispatchSelector,
+      selector: dispatchSelector,
+      inference_selector: {
+        peer_id: 'peer-gpu',
+        service_instance_id: 'orchestrator-gpu'
+      },
+      inference_model_id: 'llama-70b'
+    })
   })
 
   it('maps assistant timeout, auth denied, and unavailable responses into SDK result failures', async () => {
@@ -3187,6 +6902,11 @@ describe('AuroraClient memory namespace', () => {
     const client = new AuroraClient({ transport: new MockAuroraTransport() })
     const namespaces = await client.memory.listNamespaces({ include_remote: true, include_unavailable: true })
     const messages = await client.memory.listMessages({ limit: 2 })
+    const messagesForDate = await client.memory.listMessagesForDate({ date: '2026-06-19' })
+    const localSearch = await client.memory.searchLocal({
+      namespace: 'main.memories',
+      query: 'mesh pairing'
+    })
     const search = await client.memory.search({
       namespace: 'peer-studio-gpu.memories',
       query: 'mesh pairing'
@@ -3199,6 +6919,10 @@ describe('AuroraClient memory namespace', () => {
     expect(namespaces.ok).toBe(true)
     expect(namespaces.ok && namespaces.data.namespaces.some((namespace) => namespace.namespace === 'peer-studio-gpu.memories')).toBe(true)
     expect(messages.ok && messages.data.messages[0]?.content).toContain('mesh pairing')
+    expect(messagesForDate.ok && messagesForDate.audit.method).toBe(DB_METHODS.getMessagesForDate)
+    expect(messagesForDate.ok && messagesForDate.data.messages[0]?.source).toBe('DB.GetMessages')
+    expect(localSearch.ok && localSearch.audit.method).toBe(DB_METHODS.ragSearch)
+    expect(localSearch.ok && localSearch.data.items[0]?.namespace).toBe('main.memories')
     expect(search.ok && search.audit.method).toBe(DB_METHODS.ragSearchRemote)
     expect(search.ok && search.data.items[0]?.provenance.source_peer_id).toBe('peer-studio-gpu')
     expect(search.ok && search.data.items[0]?.redacted).toBe(true)
@@ -3463,8 +7187,26 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 33,
+      checked: 34,
       issues: []
+    })
+
+    const mockShareableComparison = compareRegistryFixtureToBackendInventory(
+      mockShareableRegistryFixture,
+      backendInventoryFixture
+    )
+
+    expect(mockShareableComparison).toEqual({
+      ok: false,
+      checked: 40,
+      issues: [
+        expect.objectContaining({ busTopic: 'TTS.Speak', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'DB.RAGSearch', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'Tooling.GetToolCatalog', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'STT.GetStatus', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'WakeWord.GetStatus', field: 'missing' }),
+        expect.objectContaining({ busTopic: 'Transcription.Transcribe', field: 'missing' })
+      ]
     })
 
     const gatewayModule = gatewayRegistryFixture.modules.find((moduleInfo) => moduleInfo.module === 'Gateway')!
@@ -3589,3 +7331,135 @@ function backupImpactPlanFixture() {
     warnings: ['Destructive restore remains disabled by backend policy.']
   }
 }
+
+
+describe('Aurora SDK tooling management API', () => {
+  it('exposes backend Tooling management descriptor strings', () => {
+    expect(TOOLING_METHODS).toEqual(expect.objectContaining({
+      getSharingPolicy: 'Tooling.GetSharingPolicy',
+      setSharingPolicy: 'Tooling.SetSharingPolicy',
+      testSharingPolicy: 'Tooling.TestSharingPolicy',
+      listApprovalGrants: 'Tooling.ListApprovalGrants',
+      createApprovalGrant: 'Tooling.CreateApprovalGrant',
+      revokeApprovalGrant: 'Tooling.RevokeApprovalGrant',
+      evaluateApprovalGrant: 'Tooling.EvaluateApprovalGrant',
+      getMcpStatus: 'Tooling.GetMCPStatus',
+      reloadMcpTools: 'Tooling.ReloadMCPTools'
+    }))
+  })
+
+  it('routes Tooling management requests through Gateway-compatible paths', async () => {
+    const calls: Array<{ method: string; path: string | null; payload: unknown }> = []
+    const transport = new MockAuroraTransport({ fixtures: false })
+      .register('Tooling.GetSharingPolicy', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return { policy: cloneFixture(toolingSharingPolicyFixture) }
+      })
+      .register('Tooling.ListApprovalGrants', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return cloneFixture(toolingApprovalGrantsFixture)
+      })
+      .register('Tooling.GetMCPStatus', (request) => {
+        calls.push({ method: request.method, path: request.path ?? null, payload: request.payload })
+        return cloneFixture(toolingMcpStatusFixture)
+      })
+      .register('Orchestrator.ListPendingToolApprovals', () => ({ approvals: [], count: 0 }))
+      .register('Auth.AuditLog', () => ({ events: [], total: 0 }))
+      .register('Tooling.GetToolCatalog', () => cloneFixture(toolCatalogFixture))
+
+    const client = new AuroraClient({ transport })
+    await client.tools.getSharingPolicy()
+    await client.tools.listGrants({ include_revoked: true })
+    await client.tools.getMcpStatus()
+    await client.tools.getPageView()
+
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: 'Tooling.GetSharingPolicy', path: '/api/Tooling/GetSharingPolicy', payload: {} }),
+      expect.objectContaining({ method: 'Tooling.ListApprovalGrants', path: '/api/Tooling/ListApprovalGrants', payload: { include_revoked: true } }),
+      expect.objectContaining({ method: 'Tooling.GetMCPStatus', path: '/api/Tooling/GetMCPStatus', payload: {} })
+    ]))
+  })
+
+  it('normalizes source-first Tooling page data without losing redaction metadata', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+    const view = await client.tools.getPageView()
+
+    expect(view.fixtureMode).toBe(true)
+    expect(view.secretsRedacted).toBe(true)
+    expect(view.policy.mode).toBe('enforce')
+    expect(view.policy.activeGrantCount).toBeGreaterThan(0)
+    expect(view.policy.pendingApprovalCount).toBe(1)
+    expect(view.policy.mcpServerCount).toBe(1)
+    expect(view.sources.map((source) => source.kind)).toEqual(expect.arrayContaining(['core', 'mcp', 'mesh_peer']))
+    expect(view.sources.some((source) => source.blockedToolCount > 0 || source.status === 'blocked')).toBe(true)
+    expect(view.grants.every((grant) => grant.secretsRedacted)).toBe(true)
+    expect(view.pendingApprovals[0]).toEqual(expect.objectContaining({ inlineAssistantOnly: true, secretsRedacted: true }))
+  })
+
+  it('preserves blocked, stale, review, and redacted audit state in normalizers', () => {
+    const view = buildToolingPageView({
+      catalog: toolCatalogFixture,
+      policy: toolingSharingPolicyFixture,
+      grants: toolingApprovalGrantsFixture.grants,
+      pendingApprovals: [],
+      auditEvents: [
+        {
+          id: 'audit-secret-test',
+          event: 'tooling.policy.set',
+          action: 'Tooling.SetSharingPolicy',
+          principal_id: 'principal-owner',
+          correlation_id: 'corr-secret-test',
+          details: '{"api_key":"should-not-leak","token":"also-secret","secrets_redacted":true}',
+          created_at: '2026-06-19T02:00:00Z'
+        }
+      ],
+      mcpStatus: toolingMcpStatusFixture,
+      transportKind: 'mock',
+      fixtureMode: true
+    })
+
+    expect(JSON.stringify(view.auditEvents[0]?.details)).not.toContain('should-not-leak')
+    expect(view.auditEvents[0]?.details).toEqual(expect.objectContaining({ api_key: '[REDACTED]', token: '[REDACTED]' }))
+    expect(view.sources.some((source) => source.status === 'blocked' || source.staleGrantCount > 0)).toBe(true)
+    expect(view.policy.blockedToolCount).toBeGreaterThanOrEqual(0)
+  })
+
+  it('labels unsupported MCP/plugin onboarding drafts and redacts secret previews', async () => {
+    const client = new AuroraClient({ transport: new MockAuroraTransport() })
+
+    const mcp: ToolOnboardingValidationResult = await client.tools.testMcpSource({
+      name: 'private-mail',
+      command: 'node',
+      env: { API_KEY: 'super-secret', NORMAL: 'visible' }
+    })
+    const plugin: ToolOnboardingValidationResult = await client.tools.testPluginSource({
+      packageName: '@aurora/private-plugin',
+      metadata: { token: 'secret-token' }
+    })
+
+    expect(mcp).toEqual(expect.objectContaining({ kind: 'mcp', supported: false, secretsRedacted: true }))
+    expect(mcp.redactedPreview.source_id).toBe('local:mcp:default')
+    expect(mcp.redactedPreview.env as Record<string, unknown>).toEqual(expect.objectContaining({ API_KEY: '[REDACTED]', NORMAL: 'visible' }))
+    expect(plugin.redactedPreview.source_id).toBe('local:plugin:default')
+    expect(plugin.redactedPreview.metadata as Record<string, unknown>).toEqual(expect.objectContaining({ token: '[REDACTED]' }))
+  })
+
+  it('keeps local unsupported onboarding fallbacks non-ok and canonical when backend routes are unavailable', async () => {
+    const client = new AuroraClient({ transport: MockAuroraTransport.empty() })
+
+    const mcp = await client.tools.testMcpSource({
+      name: 'private-mail',
+      command: 'node',
+      env: { API_KEY: 'super-secret' }
+    })
+    const plugin = await client.tools.testPluginSource({
+      packageName: '@aurora/private-plugin',
+      metadata: { token: 'secret-token' }
+    })
+
+    expect(mcp).toEqual(expect.objectContaining({ kind: 'mcp', ok: false, supported: false, status: 'unsupported' }))
+    expect(mcp.redactedPreview.source_id).toBe('local:mcp:private-mail')
+    expect(plugin).toEqual(expect.objectContaining({ kind: 'plugin', ok: false, supported: false, status: 'unsupported' }))
+    expect(plugin.redactedPreview.source_id).toBe('local:plugin:aurora_private-plugin')
+  })
+})

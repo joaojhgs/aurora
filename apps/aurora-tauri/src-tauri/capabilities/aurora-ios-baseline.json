@@ -11,19 +11,19 @@
     "aurora-request",
     "aurora-subscribe",
     "aurora-native-capability-manifest",
-    "aurora-sidecar-status",
-    "aurora-sidecar-session",
-    "aurora-sidecar-start",
-    "aurora-sidecar-stop",
-    "aurora-log-tail",
+    "aurora-ios-native-plugin",
     "aurora-secure-storage",
+    "aurora-local-data-storage",
+    "aurora-mesh-authority",
+    "aurora-mesh-session",
+    "aurora-native-webrtc",
+    "aurora-local-data-envelope-crypto",
     "aurora-native-permissions",
-    "aurora-tray",
     "aurora-notifications",
+    "aurora-ios-voice",
     "aurora-dialogs",
     "aurora-local-file",
     "aurora-secure-file-handle",
-    "aurora-audio-bridge",
-    "aurora-shutdown"
+    "aurora-audio-bridge"
   ]
 }

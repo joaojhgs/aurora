@@ -1,0 +1,5 @@
+module CAuroraIOSAudioBridge {
+    header "../../../include/aurora_ios_audio_bridge.h"
+    link "aurora_ios_audio_spike"
+    export *
+}

@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, KeyRound, Lock, RotateCcw, ShieldCheck, UserCog } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -19,7 +18,22 @@ import {
   type PermissionPatchRequest,
   type PrincipalResponse
 } from '@aurora/client'
-import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
+import { PageHeader } from './state-surface'
+import { Card, DataTable, Button, type DataColumn } from './primitives'
+import { ConfirmDialog, PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
+import { adminCapabilityReason, adminErrorTitle, productAdminReasonCopy } from './admin-product-copy'
+import { Badge } from '#components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '#components/ui/dropdown-menu'
+import { buttonVariants } from '#components/ui/button'
+import { cn } from '#lib/utils'
 
 export type AdminRbacLoadState =
   | 'loading'
@@ -114,6 +128,7 @@ export interface AdminRbacSnapshot {
   principals: AdminRbacPrincipalRow[]
   roles: AdminRbacRoleRow[]
   permissions: AdminRbacPermissionRow[]
+  permissionCatalog: PermissionCatalogEntry[]
   audit: AdminRbacAuditRow[]
   mutationState: AvailabilityState
   mutationReason: string
@@ -125,11 +140,13 @@ export interface AdminRbacSnapshot {
 export interface AdminRbacResourceProps {
   client: AuroraClient
   onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
+  onPreviewAdminActions?: ((actions: readonly AdminRbacAction[]) => void) | undefined
 }
 
 export interface AdminRbacViewProps {
   snapshot: AdminRbacSnapshot
   onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
+  onPreviewAdminActions?: ((actions: readonly AdminRbacAction[]) => void) | undefined
 }
 
 const loadingSnapshot: AdminRbacSnapshot = {
@@ -139,15 +156,16 @@ const loadingSnapshot: AdminRbacSnapshot = {
   principals: [],
   roles: [],
   permissions: [],
+  permissionCatalog: [],
   audit: [],
   mutationState: 'pending',
-  mutationReason: 'Loading RBAC principals, permission catalog, capability catalog, and audit log through AuroraClient.',
+  mutationReason: 'Loading principals, permissions, and audit records through Aurora.',
   warnings: [],
   error: null,
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
-export function AdminRbacResource({ client, onPreviewAdminAction }: AdminRbacResourceProps) {
+export function AdminRbacResource({ client, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacResourceProps) {
   const [snapshot, setSnapshot] = useState<AdminRbacSnapshot>(loadingSnapshot)
 
   useEffect(() => {
@@ -161,7 +179,13 @@ export function AdminRbacResource({ client, onPreviewAdminAction }: AdminRbacRes
     }
   }, [client])
 
-  return <AdminRbacView snapshot={snapshot} onPreviewAdminAction={onPreviewAdminAction} />
+  return (
+    <AdminRbacView
+      snapshot={snapshot}
+      onPreviewAdminAction={onPreviewAdminAction}
+      onPreviewAdminActions={onPreviewAdminActions}
+    />
+  )
 }
 
 export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<AdminRbacSnapshot> {
@@ -186,7 +210,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
   const denied = [principalsResult, permissionsResult, catalogResult, auditResult].some(isDeniedFailure)
 
   if (!principalResponse && permissionCatalog.length === 0 && !capabilityCatalog && !auditResponse) {
-    const unavailableMessage = 'Auth RBAC SDK resources are unavailable.'
+    const unavailableMessage = 'Aurora permission resources are unavailable.'
     return {
       ...loadingSnapshot,
       loadState: denied ? 'denied' : 'service-unavailable',
@@ -194,7 +218,7 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
       mutationReason: failures.join(' ') || unavailableMessage,
       error: denied ? failures.join(' ') || unavailableMessage : unavailableMessage,
       warnings: failures,
-      evidenceSource: 'AuroraClient SDK error'
+      evidenceSource: 'Aurora request error'
     }
   }
 
@@ -219,52 +243,288 @@ export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<Admi
     principals,
     roles,
     permissions,
+    permissionCatalog,
     audit,
     mutationState,
-    mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Auth.PatchPermissions is not advertised by the capability catalog.',
+    mutationReason: mutationCapability ? capabilityReason(mutationCapability) : 'Permission changes are not ready yet.',
     warnings: failures,
     error: failures[0] ?? null,
-    evidenceSource: client.transport.kind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response'
+    evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
-export function AdminRbacView({ snapshot, onPreviewAdminAction }: AdminRbacViewProps) {
-  const totals = useMemo(() => rbacTotals(snapshot), [snapshot])
+export function AdminRbacView({ snapshot, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacViewProps) {
+  const [editingRole, setEditingRole] = useState<AdminRbacRoleRow | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<PendingRbacConfirm | null>(null)
+
+  const requestChangeRole = (principal: AdminRbacPrincipalRow, role: AdminRbacRoleRow) => {
+    const grant = role.permissions.filter((permission) => !principal.permissions.includes(permission))
+    const revoke = principal.permissions.filter((permission) => !role.permissions.includes(permission))
+    const action = buildRbacPermissionPatchAction(principal, { grant, revoke, reason: `Change role to ${role.label}` })
+    setPendingConfirm({
+      title: `Change role for ${principal.username}`,
+      description: `Move ${principal.username} from ${principal.roleLabel} to ${role.label}.`,
+      actions: [action]
+    })
+  }
+
+  const requestRevoke = (principal: AdminRbacPrincipalRow) => {
+    const action = buildRbacPermissionPatchAction(principal, {
+      revoke: principal.permissions,
+      reason: `Revoke ${principal.username}`
+    })
+    setPendingConfirm({
+      title: `Revoke ${principal.username}`,
+      description: `Remove every granted permission from ${principal.username}. They keep no standing access until re-granted.`,
+      actions: [action]
+    })
+  }
+
+  const requestSaveRoleEditor = (role: AdminRbacRoleRow, nextPermissions: string[]) => {
+    setEditingRole(null)
+    const affected = snapshot.principals.filter((principal) => principal.roleLabel === role.label)
+    const actions = affected
+      .map((principal) => {
+        const grant = nextPermissions.filter((permission) => !principal.permissions.includes(permission))
+        const revoke = principal.permissions.filter((permission) => !nextPermissions.includes(permission))
+        if (grant.length === 0 && revoke.length === 0) return null
+        return buildRbacPermissionPatchAction(principal, { grant, revoke, reason: `Update ${role.label} permissions` })
+      })
+      .filter((action): action is AdminRbacAction => action !== null)
+    if (actions.length === 0) return
+    setPendingConfirm({
+      title: `Update ${role.label} permissions`,
+      description: `Apply the new permission set to ${affected.length} principal${affected.length === 1 ? '' : 's'} currently in this role.`,
+      actions
+    })
+  }
 
   return (
-    <section className="aui-admin-rbac" aria-labelledby="admin-rbac-title">
-      <header className="aui-admin-header">
-        <div>
-          <p className="aui-kicker">Admin</p>
-          <h1 id="admin-rbac-title">Access and RBAC</h1>
-          <p>
-            Principals, role summaries, effective permission previews, and audit evidence are loaded through AuroraClient.
-          </p>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        id="admin-rbac-title"
+        eyebrow="Admin"
+        title="Access & RBAC"
+        description="Roles define permission sets; principals are assigned a role."
+      />
+
+      {snapshot.loadState !== 'ready' && snapshot.loadState !== 'empty' ? (
+        <p role="alert" className="text-sm text-destructive">
+          {productAdminReasonCopy(snapshot.error, 'RBAC status needs attention. Controls remain disabled until Aurora marks them ready.')}
+        </p>
+      ) : null}
+
+      <RolesGrid roles={snapshot.roles} onEdit={setEditingRole} />
+
+      <PrincipalsTable
+        principals={snapshot.principals}
+        roles={snapshot.roles}
+        onChangeRole={requestChangeRole}
+        onRevoke={requestRevoke}
+      />
+
+      <RoleEditorDialog
+        role={editingRole}
+        catalog={snapshot.permissionCatalog}
+        onCancel={() => setEditingRole(null)}
+        onSave={requestSaveRoleEditor}
+      />
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ''}
+        description={pendingConfirm?.description ?? ''}
+        confirmLabel="Confirm"
+        destructive
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          if (pendingConfirm) previewRbacActions(pendingConfirm.actions, onPreviewAdminAction, onPreviewAdminActions)
+          setPendingConfirm(null)
+        }}
+      />
+    </div>
+  )
+}
+
+export function previewRbacActions(
+  actions: readonly AdminRbacAction[],
+  previewOne?: (action: AdminRbacAction) => void,
+  previewMany?: (actions: readonly AdminRbacAction[]) => void
+): void {
+  if (actions.length === 1) previewOne?.(actions[0]!)
+  else if (actions.length > 1) previewMany?.(actions)
+}
+
+interface PendingRbacConfirm {
+  title: string
+  description: string
+  actions: AdminRbacAction[]
+}
+
+function RolesGrid({ roles, onEdit }: { roles: AdminRbacRoleRow[]; onEdit: (role: AdminRbacRoleRow) => void }) {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3.5" role="list" aria-label="Roles">
+      {roles.map((role) => (
+        <Card key={role.id} title={role.label} description={role.description} actions={<Badge variant="secondary">{role.principalCount}</Badge>}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">{role.permissions.length} permissions</span>
+            {!role.system ? (
+              <Button variant="outline" onClick={() => onEdit(role)}>
+                Edit
+              </Button>
+            ) : null}
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function PrincipalsTable({
+  principals,
+  roles,
+  onChangeRole,
+  onRevoke
+}: {
+  principals: AdminRbacPrincipalRow[]
+  roles: AdminRbacRoleRow[]
+  onChangeRole: (principal: AdminRbacPrincipalRow, role: AdminRbacRoleRow) => void
+  onRevoke: (principal: AdminRbacPrincipalRow) => void
+}) {
+  const columns: DataColumn<AdminRbacPrincipalRow>[] = [
+    {
+      key: 'principal',
+      header: 'Principal',
+      render: (principal) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{principal.username}</span>
+          <span className="text-xs text-muted-foreground">{principal.isAdmin ? 'Admin account' : 'User account'}</span>
         </div>
-        <div className="aui-admin-badges" aria-label="RBAC backend evidence">
-          {isAvailabilityState(snapshot.loadState) ? <StatusBadge state={snapshot.loadState} /> : <span className={`aui-badge aui-badge-${snapshot.loadState}`}>{snapshot.loadState}</span>}
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
-          <PrivacyBadge privacy="admin-critical" />
-        </div>
-      </header>
+      )
+    },
+    {
+      key: 'kind',
+      header: 'Kind',
+      render: (principal) => principal.providerLabel || (principal.isAdmin ? 'Admin' : 'User')
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (principal) => <Badge variant="secondary">{principal.roleLabel}</Badge>
+    },
+    {
+      key: 'lastActive',
+      header: 'Created',
+      hideAt: 'md',
+      render: (principal) => principal.createdAt ?? '-'
+    },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'end',
+      render: (principal) => {
+        if (principal.roleLabel === 'Owner') return null
+        return (
+          <div className="flex items-center justify-end gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>Change role</DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Change role</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {roles.map((role) => (
+                  <DropdownMenuCheckboxItem
+                    key={role.id}
+                    checked={role.label === principal.roleLabel}
+                    onCheckedChange={() => {
+                      if (role.label !== principal.roleLabel) onChangeRole(principal, role)
+                    }}
+                  >
+                    {role.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="danger" onClick={() => onRevoke(principal)}>
+              Revoke
+            </Button>
+          </div>
+        )
+      }
+    }
+  ]
 
-      <RbacStatusPanel snapshot={snapshot} />
+  return (
+    <Card title="Principals" ariaLabel="RBAC principals" flush>
+      <DataTable columns={columns} rows={principals} getRowKey={(principal) => principal.id} empty="No principals to grant or manage yet." />
+    </Card>
+  )
+}
 
-      <div className="aui-admin-metrics" aria-label="RBAC coverage summary">
-        <Metric label="Principals" value={String(snapshot.principals.length)} detail={`${totals.admins} admin/system`} />
-        <Metric label="Roles" value={String(snapshot.roles.length)} detail="derived from backend permissions" />
-        <Metric label="Permissions" value={String(snapshot.permissions.length)} detail={`${totals.managePermissions} manage/admin`} />
-        <Metric label="Audit" value={String(snapshot.audit.length)} detail="redacted Auth events" />
-      </div>
+function RoleEditorDialog({
+  role,
+  catalog,
+  onCancel,
+  onSave
+}: {
+  role: AdminRbacRoleRow | null
+  catalog: PermissionCatalogEntry[]
+  onCancel: () => void
+  onSave: (role: AdminRbacRoleRow, permissions: string[]) => void
+}) {
+  const [checked, setChecked] = useState<Record<string, boolean>>({})
+  const [roleTemplate, setRoleTemplate] = useState('custom')
 
-      <div className="aui-rbac-layout">
-        <PrincipalsPanel principals={snapshot.principals} onPreviewAdminAction={onPreviewAdminAction} />
-        <RolesPanel roles={snapshot.roles} />
-        <PermissionsPanel permissions={snapshot.permissions} />
-        <AuditPanel audit={snapshot.audit} />
-      </div>
-    </section>
+  useEffect(() => {
+    if (!role) return
+    setChecked(Object.fromEntries(role.permissions.map((permission) => [permission, true])))
+    setRoleTemplate(matchRoleTemplate(role.permissions))
+  }, [role])
+
+  return (
+    <Dialog
+      open={role !== null}
+      onOpenChange={(open: boolean) => {
+        if (!open) onCancel()
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit {role?.label ?? ''} permissions</DialogTitle>
+          <DialogDescription>Applies to every principal currently grouped under {role?.label ?? 'this role'}.</DialogDescription>
+        </DialogHeader>
+        {role ? (
+          <PermissionEditorTable
+            catalog={catalog}
+            checked={checked}
+            roleTemplate={roleTemplate}
+            onSelectRoleTemplate={(templateId) => {
+              setRoleTemplate(templateId)
+              const preset = ROLE_TEMPLATES.find((template) => template.id === templateId)
+              if (preset?.permissions) {
+                setChecked(Object.fromEntries(preset.permissions.map((permission) => [permission, true])))
+              }
+            }}
+            onToggle={(permissionId) => {
+              setRoleTemplate('custom')
+              setChecked((previous) => ({ ...previous, [permissionId]: !previous[permissionId] }))
+            }}
+          />
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (role) onSave(role, Object.keys(checked).filter((permissionId) => checked[permissionId]))
+            }}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -283,7 +543,7 @@ export function buildRbacPermissionPatchAction(
   }
   return {
     title: `Patch permissions for ${principal.username}`,
-    description: 'Aurora will submit the permission patch only after AdminAction draft, confirmation, and audit receipt.',
+    description: 'Aurora will change permissions only after admin confirmation and audit logging.',
     methodId: AUTH_METHODS.patchPermissions,
     payload: payload as unknown as JsonObject,
     affectedResources: [`principal:${principal.id}`, ...grant.map((permission) => `grant:${permission}`), ...revoke.map((permission) => `revoke:${permission}`)],
@@ -296,217 +556,6 @@ export function buildRbacPermissionPatchAction(
       { key: 'revoke', before: 'none', after: revoke.join(', ') || 'none' }
     ]
   }
-}
-
-function RbacStatusPanel({ snapshot }: { snapshot: AdminRbacSnapshot }) {
-  if (snapshot.loadState === 'loading') {
-    return (
-      <div className="aui-admin-notice" aria-live="polite">
-        <Activity size={18} aria-hidden />
-        <span>Loading RBAC principals, permissions, capabilities, and audit events through AuroraClient.</span>
-      </div>
-    )
-  }
-  if (snapshot.loadState === 'ready') return null
-  if (snapshot.loadState === 'empty') {
-    return (
-      <div className="aui-admin-notice" role="status">
-        <UserCog size={18} aria-hidden />
-        <span>No principals were returned by Auth.ListPrincipals.</span>
-      </div>
-    )
-  }
-  return (
-    <div className="aui-admin-notice aui-admin-notice-warning" role="alert">
-      <Lock size={18} aria-hidden />
-      <span>{snapshot.error ?? 'RBAC evidence is degraded. Unsupported or denied controls remain disabled.'}</span>
-    </div>
-  )
-}
-
-function PrincipalsPanel({
-  principals,
-  onPreviewAdminAction
-}: {
-  principals: AdminRbacPrincipalRow[]
-  onPreviewAdminAction?: ((action: AdminRbacAction) => void) | undefined
-}) {
-  return (
-    <section className="aui-admin-panel aui-rbac-principals" aria-labelledby="rbac-principals-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Principals</p>
-          <h2 id="rbac-principals-title">Identity access</h2>
-        </div>
-      </div>
-      {principals.length === 0 ? (
-        <p className="aui-muted">No principals are available from Auth.ListPrincipals.</p>
-      ) : (
-        <div className="aui-table-scroll">
-          <table className="aui-table">
-            <thead>
-              <tr>
-                <th>Identity</th>
-                <th>Role</th>
-                <th>Effective access</th>
-                <th>Route</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {principals.map((principal) => (
-                <tr key={principal.id}>
-                  <td>
-                    <details className="aui-service-details">
-                      <summary>
-                        <strong>{principal.username}</strong>
-                        <small>{principal.id}</small>
-                      </summary>
-                      <div className="aui-service-drawer">
-                        <dl>
-                          <div><dt>Created</dt><dd>{principal.createdAt ?? 'not reported'}</dd></div>
-                          <div><dt>Provider</dt><dd>{principal.providerLabel}</dd></div>
-                          <div><dt>Patch preview</dt><dd>{principal.patchPreview.reason}</dd></div>
-                        </dl>
-                        <PermissionChips permissions={principal.permissions} emptyLabel="No stored permissions" />
-                      </div>
-                    </details>
-                  </td>
-                  <td>
-                    <div className="aui-state-line">
-                      {principal.isAdmin ? <ShieldCheck size={16} aria-hidden /> : <UserCog size={16} aria-hidden />}
-                      <span>{principal.roleLabel}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <PermissionChips permissions={principal.effectivePermissions.slice(0, 4)} emptyLabel="none" />
-                    {principal.effectivePermissions.length > 4 ? <small className="aui-muted">+{principal.effectivePermissions.length - 4} more</small> : null}
-                  </td>
-                  <td>
-                    <div className="aui-state-line">
-                      <StatusBadge state={principal.accessState} />
-                      <span>{principal.accessReason}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      className="aui-action-chip"
-                      type="button"
-                      disabled={!principal.patchPreview.available || !principal.patchPreview.action}
-                      title={principal.patchPreview.reason}
-                      onClick={() => {
-                        if (principal.patchPreview.action) onPreviewAdminAction?.(principal.patchPreview.action)
-                      }}
-                    >
-                      <KeyRound size={15} aria-hidden />
-                      Preview patch
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function RolesPanel({ roles }: { roles: AdminRbacRoleRow[] }) {
-  return (
-    <section className="aui-admin-panel" aria-labelledby="rbac-roles-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Roles</p>
-          <h2 id="rbac-roles-title">Role summaries</h2>
-        </div>
-      </div>
-      <div className="aui-rbac-card-list">
-        {roles.map((role) => (
-          <article className="aui-rbac-role" key={role.id}>
-            <header>
-              <strong>{role.label}</strong>
-              <StatusBadge state={role.manageState} />
-            </header>
-            <p>{role.description}</p>
-            <PermissionChips permissions={role.permissions.slice(0, 5)} emptyLabel="No permissions" />
-            <small>{role.principalCount} principals. {role.manageReason}</small>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function PermissionsPanel({ permissions }: { permissions: AdminRbacPermissionRow[] }) {
-  return (
-    <section className="aui-admin-panel" aria-labelledby="rbac-permissions-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Catalog</p>
-          <h2 id="rbac-permissions-title">Permissions</h2>
-        </div>
-      </div>
-      <div className="aui-rbac-permission-grid">
-        {permissions.slice(0, 18).map((permission) => (
-          <article className="aui-rbac-permission" key={permission.id}>
-            <strong>{permission.label}</strong>
-            <code>{permission.id}</code>
-            <p>{permission.description}</p>
-            <small>{permission.kind} / used by {permission.requiredByCount} contracts / held by {permission.coveredPrincipals} principals</small>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function AuditPanel({ audit }: { audit: AdminRbacAuditRow[] }) {
-  return (
-    <section className="aui-admin-panel" aria-labelledby="rbac-audit-title">
-      <div className="aui-panel-heading">
-        <div>
-          <p className="aui-kicker">Audit</p>
-          <h2 id="rbac-audit-title">Recent access changes</h2>
-        </div>
-      </div>
-      {audit.length === 0 ? (
-        <p className="aui-muted">No Auth audit entries were returned.</p>
-      ) : (
-        <ol className="aui-rbac-audit">
-          {audit.map((entry) => (
-            <li key={entry.id}>
-              <span>{entry.createdAt}</span>
-              <strong>{entry.action || entry.event}</strong>
-              <code>{entry.correlationId}</code>
-              <small>{entry.principalId}: {entry.details}</small>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  )
-}
-
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <article className="aui-admin-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </article>
-  )
-}
-
-function PermissionChips({ permissions, emptyLabel }: { permissions: string[]; emptyLabel: string }) {
-  return (
-    <div className="aui-chip-list">
-      {permissions.map((permission) => (
-        <code className="aui-chip" key={permission}>{permission}</code>
-      ))}
-      {permissions.length === 0 ? <span className="aui-muted">{emptyLabel}</span> : null}
-    </div>
-  )
 }
 
 function buildPrincipalRows(
@@ -528,8 +577,8 @@ function buildPrincipalRows(
       effectivePermissions,
       createdAt: principal.created_at ?? null,
       accessState: mutationCapability?.availability ?? 'unsupported',
-      accessReason: mutationCapability ? capabilityReason(mutationCapability) : 'Capability catalog does not advertise Auth RBAC mutation.',
-      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Auth provider pending',
+      accessReason: mutationCapability ? capabilityReason(mutationCapability) : 'Permission changes are not ready yet.',
+      providerLabel: mutationCapability ? providerLabel(mutationCapability) : 'Access target pending',
       patchPreview: preview
     }
   })
@@ -549,12 +598,12 @@ function buildRoleRows(
     return {
       id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       label,
-      description: `${label} is derived from current principal permissions because no standalone role CRUD contract is exposed.`,
+      description: `${label} is based on current principal permissions. Edit members by changing their permissions.`,
       principalCount: rows.length,
       permissions,
       system: permissions.includes('*'),
       manageState: mutationCapability?.availability ?? 'unsupported',
-      manageReason: 'Role CRUD is not a backend contract in this checkout; use principal permission AdminAction patches instead.'
+      manageReason: 'Role editing is not ready here. Change principal permissions instead.'
     }
   })
 }
@@ -586,11 +635,11 @@ function permissionPatchPreview(
   const after = sortedUnique([...before.filter((permission) => !revoke.includes(permission)), ...grant])
   const requiresAdminAction = true
   const available = Boolean(capability && ['available-local', 'available-remote', 'degraded'].includes(capability.availability))
-  const reason = capability ? capabilityReason(capability) : 'Auth.PatchPermissions is not advertised by the capability catalog.'
+  const reason = capability ? capabilityReason(capability) : 'Permission changes are not ready yet.'
   const cascade = [
     `Principal ${principal.id} permissions change from ${before.length} to ${after.length}.`,
-    'New sessions/tokens use backend effective-permission resolution.',
-    'Audit receipt is required after AdminAction submit.'
+    'New sessions and tokens use the updated permissions.',
+    'An audit record is required after submit.'
   ]
   return {
     methodId: AUTH_METHODS.patchPermissions,
@@ -640,14 +689,11 @@ function roleLabel(principal: PrincipalResponse): string {
 }
 
 function capabilityReason(capability: CapabilitySummary): string {
-  if (capability.routeBlockers.length > 0) return capability.routeBlockers.join(', ')
-  if (capability.raw.policy.approval_required) return `${capability.busTopic} requires AdminAction approval.`
-  return `${capability.busTopic} is ${capability.availability}.`
+  return adminCapabilityReason(capability)
 }
 
 function providerLabel(capability: CapabilitySummary): string {
-  const location = capability.peerId && capability.peerId !== 'local-peer' ? `remote:${capability.peerId}` : capability.providerId
-  return `${location} / ${capability.serviceInstanceId}`
+  return capability.peerId && capability.peerId !== 'local-peer' ? 'Connected device' : 'This device'
 }
 
 function rbacTotals(snapshot: AdminRbacSnapshot) {
@@ -682,8 +728,7 @@ function isDeniedFailure(settled: PromiseSettledResult<unknown>): boolean {
 }
 
 function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+  return adminErrorTitle(error)
 }
 
 function stringValue(value: unknown): string {
@@ -703,6 +748,7 @@ function isAvailabilityState(value: string): value is AvailabilityState {
     'available-local',
     'available-remote',
     'pending',
+    'offline',
     'denied',
     'degraded',
     'stale',

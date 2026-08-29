@@ -7,12 +7,20 @@ FastAPI routes.
 
 from __future__ import annotations
 
+import json
+from contextlib import suppress
 from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info, log_warning
 from app.messaging.bus import Envelope
-from app.services.auth.auth_manager import AuthManager
+from app.services.auth.auth_manager import (
+    AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+    AuthManager,
+    MeshPairingDeniedError,
+)
 from app.shared.auth.audit import audit_event
+from app.shared.auth.identity import ANONYMOUS, SYSTEM
+from app.shared.auth.permissions import validate_permission
 from app.shared.contracts.models.auth import (
     AuditLogRequest,
     AuditLogResponse,
@@ -34,6 +42,10 @@ from app.shared.contracts.models.auth import (
     MeshCredentialLoadResponse,
     MeshCredentialSaveRequest,
     MeshCredentialSaveResponse,
+    MeshPairingTokenValidationRequest,
+    MeshPairingTokenValidationResponse,
+    MeshReconnectProofRequest,
+    MeshReconnectProofResponse,
     PairingApproveRequest,
     PairingApproveResponse,
     PairingConnectRequest,
@@ -76,7 +88,8 @@ from app.shared.contracts.models.auth import (
     WhoAmIRequest,
     WhoAmIResponse,
 )
-from app.shared.contracts.models.common import EmptyOutput
+from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.db import DBMethods, DBPruneOrphanedMeshPeerRowsRequest
 from app.shared.contracts.models.mesh import (
     MeshBoolResponse,
     MeshEvents,
@@ -85,6 +98,8 @@ from app.shared.contracts.models.mesh import (
     MeshIdentitySaveRequest,
     MeshPeerApprovedEvent,
     MeshPeerApproveRequest,
+    MeshPeerAuthoritySnapshotRequest,
+    MeshPeerAuthoritySnapshotResponse,
     MeshPeerDenyRequest,
     MeshPeerGetRequest,
     MeshPeerGetResponse,
@@ -105,6 +120,41 @@ from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
 
 
+def _api_permission_list(value: Any) -> list[str]:
+    """Return permission/scopes values in the public contract format.
+
+    Older local databases may contain JSON-encoded permission lists or the
+    legacy token scope ``"all"``. Public contract models validate against the
+    current Permission type, so normalize those stored forms at the service
+    boundary instead of letting one stale row break local admin pages.
+    """
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            decoded = [value]
+        value = decoded
+    if not isinstance(value, list):
+        value = list(value) if isinstance(value, tuple | set) else [value]
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if item is None:
+            continue
+        permission = "*" if str(item) == "all" else str(item)
+        with suppress(ValueError):
+            permission = validate_permission(permission)
+        if permission in seen:
+            continue
+        seen.add(permission)
+        normalized.append(permission)
+    return normalized
+
+
 class AuthService(BaseService):
     """Standalone authentication service for Aurora."""
 
@@ -112,6 +162,9 @@ class AuthService(BaseService):
         # Before BaseService.__init__: contract scan may access ``manager`` property,
         # which reads ``_manager`` — must exist or Python raises AttributeError.
         self._manager: AuthManager | None = None
+        self._mesh_peer_orphan_pruning_enabled = True
+        self._mesh_peer_orphan_retention_seconds = 30 * 24 * 60 * 60
+        self._mesh_peer_orphan_prune_max_rows = 256
         super().__init__(
             module="Auth",
             summary="Authentication, authorization, pairing, and principal management",
@@ -156,12 +209,14 @@ class AuthService(BaseService):
             default_perms = list(auth_cfg.default_pairing_permissions or [])
             if default_perms:
                 self._manager.update_permission_defaults(default_perms)
+            self._apply_auth_config(auth_cfg)
         except Exception as e:
             log_warning(
                 f"Could not load services.auth.default_pairing_permissions from ConfigService: {e}",
                 exc_info=True,
             )
 
+        await self._prune_orphaned_mesh_peer_rows_once()
         log_info("Auth service started")
 
     async def on_stop(self) -> None:
@@ -179,6 +234,7 @@ class AuthService(BaseService):
                     ConfigKeys.services.auth, AuthConfigModel, config_timeout=20.0
                 )
                 default_perms = list(auth_cfg.default_pairing_permissions or [])
+                self._apply_auth_config(auth_cfg)
                 if self._manager:
                     self._manager.invalidate_mesh_inbound_key_cache()
                     self._manager.update_permission_defaults(default_perms)
@@ -187,6 +243,50 @@ class AuthService(BaseService):
                     f"Auth reload: could not refresh permission defaults: {e}",
                     exc_info=True,
                 )
+
+    def _apply_auth_config(self, auth_cfg: Any) -> None:
+        self._mesh_peer_orphan_pruning_enabled = bool(
+            getattr(auth_cfg, "mesh_peer_orphan_pruning_enabled", True)
+        )
+        self._mesh_peer_orphan_retention_seconds = int(
+            getattr(auth_cfg, "mesh_peer_orphan_retention_seconds", None) or 30 * 24 * 60 * 60
+        )
+        self._mesh_peer_orphan_prune_max_rows = int(
+            getattr(auth_cfg, "mesh_peer_orphan_prune_max_rows", None) or 256
+        )
+
+    async def _prune_orphaned_mesh_peer_rows_once(self) -> None:
+        """Run bounded Auth-owned mesh peer row maintenance without blocking startup."""
+
+        if not self._mesh_peer_orphan_pruning_enabled:
+            log_info("Auth mesh peer orphan pruning disabled by configuration")
+            return
+
+        request = DBPruneOrphanedMeshPeerRowsRequest(
+            retention_seconds=self._mesh_peer_orphan_retention_seconds,
+            max_rows=self._mesh_peer_orphan_prune_max_rows,
+        )
+        try:
+            result = await self.bus.request(
+                DBMethods.PRUNE_ORPHANED_MESH_PEER_ROWS,
+                request,
+                timeout=AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+            )
+            ok = bool(getattr(result, "ok", True))
+            payload = getattr(result, "data", result)
+            if isinstance(payload, dict):
+                ok = ok and bool(payload.get("success", True))
+                pruned_count = len(payload.get("pruned_rows") or [])
+            else:
+                ok = ok and bool(getattr(payload, "success", True))
+                pruned_count = len(getattr(payload, "pruned_rows", ()) or ())
+            if not ok:
+                log_warning("Auth mesh peer orphan pruning did not complete successfully")
+                return
+            if pruned_count:
+                log_info(f"Auth pruned {pruned_count} orphaned mesh peer row(s)")
+        except Exception as exc:
+            log_warning(f"Auth mesh peer orphan pruning failed safely: {exc}")
 
     # ── Login / Logout ───────────────────────────────────────────────────
 
@@ -197,6 +297,7 @@ class AuthService(BaseService):
         output_model=LoginResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_login(self, data: LoginRequest) -> LoginResponse | dict[str, str]:
         result = await self.manager.login(data.username, data.password)
@@ -214,7 +315,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.Logout",
+        method_id=AuthMethods.LOGOUT,
         summary="Revoke the current session token",
         input_model=LogoutRequest,
         output_model=LogoutResponse,
@@ -230,7 +331,7 @@ class AuthService(BaseService):
     # ── Token Validation ─────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ValidateToken",
+        method_id=AuthMethods.VALIDATE_TOKEN,
         summary="Validate a bearer token and return the resolved identity",
         input_model=ValidateTokenRequest,
         output_model=ValidateTokenResponse,
@@ -254,10 +355,73 @@ class AuthService(BaseService):
             source=identity.source,
         )
 
+    @method_contract(
+        method_id=AuthMethods.VERIFY_MESH_RECONNECT_PROOF,
+        summary="Verify a channel-bound mesh reconnect proof",
+        input_model=MeshReconnectProofRequest,
+        output_model=MeshReconnectProofResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_verify_mesh_reconnect_proof(
+        self, data: MeshReconnectProofRequest
+    ) -> MeshReconnectProofResponse:
+        identity = await self.manager.verify_mesh_reconnect_proof(
+            token_id=data.token_id,
+            challenge=data.challenge,
+            proof=data.proof,
+            channel_binding=data.channel_binding,
+            claimant_peer_id=data.claimant_peer_id,
+            verifier_peer_id=data.verifier_peer_id,
+            room_name=data.room_name,
+        )
+        if identity is None:
+            return MeshReconnectProofResponse(valid=False)
+        return MeshReconnectProofResponse(
+            valid=True,
+            principal_id=identity.principal_id,
+            principal_name=identity.principal_name,
+            is_admin=identity.is_admin,
+            permissions=list(identity.permissions),
+            effective_perms=list(identity.effective_perms),
+            device_id=identity.device_id,
+            source=identity.source,
+        )
+
+    @method_contract(
+        method_id=AuthMethods.VALIDATE_MESH_PAIRING_TOKEN,
+        summary="Validate the exact bearer minted by a bilateral pairing session",
+        input_model=MeshPairingTokenValidationRequest,
+        output_model=MeshPairingTokenValidationResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_validate_mesh_pairing_token(
+        self, data: MeshPairingTokenValidationRequest
+    ) -> MeshPairingTokenValidationResponse:
+        identity = await self.manager.validate_mesh_pairing_token(
+            token_str=data.token,
+            pairing_session_id=data.pairing_session_id,
+            claimant_peer_id=data.claimant_peer_id,
+            room_name=data.room_name,
+        )
+        if identity is None:
+            return MeshPairingTokenValidationResponse(valid=False)
+        return MeshPairingTokenValidationResponse(
+            valid=True,
+            principal_id=identity.principal_id,
+            principal_name=identity.principal_name,
+            is_admin=identity.is_admin,
+            permissions=list(identity.permissions),
+            effective_perms=list(identity.effective_perms),
+            device_id=identity.device_id,
+            source=identity.source,
+        )
+
     # ── Token Refresh ────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.RefreshToken",
+        method_id=AuthMethods.REFRESH_TOKEN,
         summary="Refresh a token (revoke old, issue new with same scopes)",
         input_model=TokenRefreshRequest,
         output_model=TokenRefreshResponse,
@@ -280,7 +444,7 @@ class AuthService(BaseService):
     # ── WhoAmI ───────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.WhoAmI",
+        method_id=AuthMethods.WHO_AM_I,
         summary="Get the identity of the authenticated principal",
         input_model=WhoAmIRequest,
         output_model=WhoAmIResponse,
@@ -292,12 +456,23 @@ class AuthService(BaseService):
     ) -> WhoAmIResponse | dict[str, str]:
         """Return identity for the principal_id on the envelope."""
         pid = envelope.principal_id if envelope else None
-        if not pid:
-            return {"error": "No authenticated principal"}
+        if not pid or pid == ANONYMOUS.principal_id:
+            return {"error": "authentication_required"}
+
+        if pid == SYSTEM.principal_id:
+            return WhoAmIResponse(
+                principal_id=SYSTEM.principal_id,
+                principal_name=SYSTEM.principal_name,
+                device_id=SYSTEM.device_id,
+                is_admin=SYSTEM.is_admin,
+                permissions=sorted(SYSTEM.permissions),
+                effective_perms=sorted(envelope.effective_perms or SYSTEM.effective_perms),
+                source=envelope.identity_source or SYSTEM.source,
+            )
 
         user = await self.manager.get_principal(pid)
         if not user:
-            return {"error": "Principal not found"}
+            return {"error": "authentication_required"}
 
         return WhoAmIResponse(
             principal_id=user.id,
@@ -312,25 +487,72 @@ class AuthService(BaseService):
     # ── Pairing ──────────────────────────────────────────────────────────
 
     @method_contract(
+        method_id=AuthMethods.PAIRING_READY,
+        summary="Report whether the in-process pairing contract surface is subscribed",
+        input_model=EmptyInput,
+        output_model=MeshBoolResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_pairing_ready(self, _data: EmptyInput) -> MeshBoolResponse:
+        """Provide a side-effect-free readiness probe for Gateway startup/reload."""
+        return MeshBoolResponse(success=True)
+
+    @method_contract(
         method_id=AuthMethods.PAIRING_START,
-        summary="Start a device pairing request (returns 6-digit code)",
+        summary="Start a pairing request and return an opaque request handle",
         input_model=PairingStartRequest,
         output_model=PairingStartResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_start(
-        self, data: PairingStartRequest
+        self, data: PairingStartRequest, envelope: Envelope | None = None
     ) -> PairingStartResponse | dict[str, str]:
-        code = await self.manager.start_pairing(
-            data.device_name,
-            data.client_ip,
-            remote_peer_id=data.remote_peer_id,
-            remote_node_name=data.remote_node_name,
+        # Both identifiers are set by trusted transports outside PairingStart.
+        # Never let unauthenticated payload fields choose their own bucket.
+        trusted_rate_limit_key = None
+        if envelope is not None and envelope.caller_peer_id:
+            trusted_rate_limit_key = f"webrtc:{envelope.caller_peer_id}"
+        elif envelope is not None and envelope.transport_source_id:
+            trusted_rate_limit_key = f"http:{envelope.transport_source_id}"
+        trusted_mesh_context = bool(
+            envelope is not None
+            and envelope.caller_peer_id
+            and envelope.identity_source == "webrtc_rpc"
         )
+        if trusted_mesh_context and (not data.pairing_session_id or not data.verification_code):
+            return {"error": "WebRTC pairing verification handshake is not ready"}
+        pairing_session_id = data.pairing_session_id if trusted_mesh_context else ""
+        verification_code = data.verification_code if trusted_mesh_context else ""
+        room_name = data.room_name if trusted_mesh_context else ""
+        pairing_kwargs: dict[str, Any] = {
+            "remote_peer_id": data.remote_peer_id,
+            "remote_node_name": data.remote_node_name,
+            "room_name": room_name,
+            "pairing_session_id": pairing_session_id,
+            "verification_code": verification_code,
+            "trusted_rate_limit_key": trusted_rate_limit_key,
+        }
+        if trusted_mesh_context:
+            pairing_kwargs["raise_on_denied"] = True
+        try:
+            code = await self.manager.start_pairing(
+                data.device_name,
+                data.client_ip,
+                **pairing_kwargs,
+            )
+        except MeshPairingDeniedError:
+            return {"error": "Pairing denied", "status": "denied"}
         if not code:
             return {"error": "Rate limit exceeded"}
-        return PairingStartResponse(code=code, expires_in_seconds=300)
+        return PairingStartResponse(
+            code=code,
+            expires_in_seconds=300,
+            pairing_session_id=pairing_session_id,
+            verification_code=verification_code,
+        )
 
     @method_contract(
         method_id=AuthMethods.LIST_PENDING_PAIRINGS,
@@ -363,17 +585,29 @@ class AuthService(BaseService):
         output_model=PairingConnectResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_connect(
-        self, data: PairingConnectRequest
+        self, data: PairingConnectRequest, envelope: Envelope | None = None
     ) -> PairingConnectResponse | dict[str, str]:
-        result = await self.manager.connect_pairing(data.code)
+        trusted_rate_limit_key = (
+            f"webrtc:{envelope.caller_peer_id}"
+            if envelope is not None and envelope.caller_peer_id
+            else "pairing:external"
+        )
+        result = await self.manager.connect_pairing(
+            data.code,
+            pairing_session_id=data.pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        )
         if not result:
             return {"error": "Invalid or expired code"}
         return PairingConnectResponse(
             request_id=result["id"],
             device_name=result["device_name"],
             status=result["status"],
+            pairing_session_id=result.get("pairing_session_id", ""),
+            verification_code=result.get("verification_code", ""),
         )
 
     @method_contract(
@@ -424,11 +658,21 @@ class AuthService(BaseService):
         output_model=PairingExchangeResponse,
         exposure="both",
         method_type="use",
+        public_infrastructure=True,
     )
     async def handle_pairing_exchange(
-        self, data: PairingExchangeRequest
+        self, data: PairingExchangeRequest, envelope: Envelope | None = None
     ) -> PairingExchangeResponse | dict[str, str]:
-        result = await self.manager.exchange_pairing(data.code)
+        trusted_rate_limit_key = (
+            f"webrtc:{envelope.caller_peer_id}"
+            if envelope is not None and envelope.caller_peer_id
+            else "pairing:external"
+        )
+        result = await self.manager.exchange_pairing(
+            data.code,
+            pairing_session_id=data.pairing_session_id,
+            trusted_rate_limit_key=trusted_rate_limit_key,
+        )
         if not result:
             return {"error": "Pairing not approved or expired"}
         return PairingExchangeResponse(
@@ -437,6 +681,8 @@ class AuthService(BaseService):
             user_id=result["user_id"],
             permissions=result.get("permissions", []),
             token_id=result.get("token_id", ""),
+            peer_id=result.get("peer_id", ""),
+            node_name=result.get("node_name", ""),
         )
 
     async def _audit_admin_pairing_queue_list(
@@ -469,7 +715,7 @@ class AuthService(BaseService):
     # ── Principal CRUD ───────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListPrincipals",
+        method_id=AuthMethods.LIST_PRINCIPALS,
         summary="List all principals",
         input_model=PrincipalListRequest,
         output_model=PrincipalListResponse,
@@ -483,7 +729,7 @@ class AuthService(BaseService):
                 PrincipalResponse(
                     id=u.id,
                     username=u.username,
-                    permissions=u.permissions or [],
+                    permissions=_api_permission_list(u.permissions),
                     is_admin=u.is_admin,
                     created_at=u.created_at.isoformat() if u.created_at else None,
                 )
@@ -492,7 +738,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.CreatePrincipal",
+        method_id=AuthMethods.CREATE_PRINCIPAL,
         summary="Create a new principal (user or device account)",
         input_model=PrincipalCreateRequest,
         output_model=PrincipalResponse,
@@ -513,13 +759,13 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
 
     @method_contract(
-        method_id="Auth.GetPrincipal",
+        method_id=AuthMethods.GET_PRINCIPAL,
         summary="Get a principal by ID",
         input_model=PrincipalGetRequest,
         output_model=PrincipalResponse,
@@ -535,13 +781,13 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
 
     @method_contract(
-        method_id="Auth.UpdatePrincipal",
+        method_id=AuthMethods.UPDATE_PRINCIPAL,
         summary="Update a principal's fields",
         input_model=PrincipalUpdateRequest,
         output_model=PrincipalResponse,
@@ -565,13 +811,13 @@ class AuthService(BaseService):
         return PrincipalResponse(
             id=user.id,
             username=user.username,
-            permissions=user.permissions or [],
+            permissions=_api_permission_list(user.permissions),
             is_admin=user.is_admin,
             created_at=user.created_at.isoformat() if user.created_at else None,
         )
 
     @method_contract(
-        method_id="Auth.DeletePrincipal",
+        method_id=AuthMethods.DELETE_PRINCIPAL,
         summary="Delete a principal (cascades to devices and tokens)",
         input_model=PrincipalDeleteRequest,
         output_model=PrincipalDeleteResponse,
@@ -587,7 +833,7 @@ class AuthService(BaseService):
     # ── Permissions ──────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.SetPermissions",
+        method_id=AuthMethods.SET_PERMISSIONS,
         summary="Set permissions for a principal (full replace)",
         input_model=PermissionSetRequest,
         output_model=PermissionSetResponse,
@@ -599,7 +845,7 @@ class AuthService(BaseService):
         return PermissionSetResponse(success=success)
 
     @method_contract(
-        method_id="Auth.PatchPermissions",
+        method_id=AuthMethods.PATCH_PERMISSIONS,
         summary="Add/remove specific permissions for a principal",
         input_model=PermissionPatchRequest,
         output_model=PermissionPatchResponse,
@@ -617,7 +863,7 @@ class AuthService(BaseService):
     # ── Password ─────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ChangePassword",
+        method_id=AuthMethods.CHANGE_PASSWORD,
         summary="Change a principal's password",
         input_model=PasswordChangeRequest,
         output_model=PasswordChangeResponse,
@@ -633,7 +879,7 @@ class AuthService(BaseService):
     # ── Token CRUD ───────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListTokens",
+        method_id=AuthMethods.LIST_TOKENS,
         summary="List tokens, optionally filtered by principal or device",
         input_model=TokenListRequest,
         output_model=TokenListResponse,
@@ -651,7 +897,7 @@ class AuthService(BaseService):
                     prefix=t.prefix or "",
                     device_id=t.device_id,
                     user_id=t.user_id,
-                    scopes=t.scopes or [],
+                    scopes=_api_permission_list(t.scopes),
                     created_at=t.created_at.isoformat() if t.created_at else None,
                     expires_at=t.expires_at.isoformat() if t.expires_at else None,
                 )
@@ -660,7 +906,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.CreateToken",
+        method_id=AuthMethods.CREATE_TOKEN,
         summary="Create a token for a principal",
         input_model=TokenCreateRequest,
         output_model=TokenCreateResponse,
@@ -688,12 +934,12 @@ class AuthService(BaseService):
             token=token_str,
             id=token.id,
             prefix=token.prefix or "",
-            scopes=token.scopes or [],
+            scopes=_api_permission_list(token.scopes),
             expires_at=token.expires_at.isoformat() if token.expires_at else None,
         )
 
     @method_contract(
-        method_id="Auth.UpdateTokenScopes",
+        method_id=AuthMethods.UPDATE_TOKEN_SCOPES,
         summary="Update token scopes",
         input_model=TokenScopeUpdateRequest,
         output_model=TokenScopeUpdateResponse,
@@ -710,7 +956,7 @@ class AuthService(BaseService):
         return TokenScopeUpdateResponse(success=success)
 
     @method_contract(
-        method_id="Auth.RevokeToken",
+        method_id=AuthMethods.REVOKE_TOKEN,
         summary="Revoke a token",
         input_model=TokenRevokeRequest,
         output_model=TokenRevokeResponse,
@@ -724,7 +970,7 @@ class AuthService(BaseService):
     # ── Devices ──────────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.ListDevices",
+        method_id=AuthMethods.LIST_DEVICES,
         summary="List devices, optionally filtered by principal",
         input_model=DeviceListRequest,
         output_model=DeviceListResponse,
@@ -748,7 +994,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.DeleteDevice",
+        method_id=AuthMethods.DELETE_DEVICE,
         summary="Delete a device",
         input_model=DeviceDeleteRequest,
         output_model=DeviceDeleteResponse,
@@ -768,6 +1014,10 @@ class AuthService(BaseService):
         output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
+        # The gateway fails AdminAction confirmations closed when this sink is
+        # unreachable, so audit storage must stay subscribed even when the Auth
+        # feature surface (services.auth.enabled) is off.
+        always_available=True,
     )
     async def handle_store_audit_event(self, data: StoreAuditEventRequest) -> MeshBoolResponse:
         import uuid
@@ -787,7 +1037,7 @@ class AuthService(BaseService):
                         data.ip_address,
                     ],
                 ),
-                timeout=5.0,
+                timeout=AUTH_DB_REQUEST_TIMEOUT_SECONDS,
             )
             return MeshBoolResponse(success=result.ok if hasattr(result, "ok") else True)
         except Exception as e:
@@ -821,7 +1071,7 @@ class AuthService(BaseService):
     # ── Mesh Credentials ─────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.SaveMeshCredential",
+        method_id=AuthMethods.SAVE_MESH_CREDENTIAL,
         summary="Save an outbound mesh token for a remote peer",
         input_model=MeshCredentialSaveRequest,
         output_model=MeshCredentialSaveResponse,
@@ -840,7 +1090,7 @@ class AuthService(BaseService):
         return MeshCredentialSaveResponse(success=success)
 
     @method_contract(
-        method_id="Auth.LoadMeshCredential",
+        method_id=AuthMethods.LOAD_MESH_CREDENTIAL,
         summary="Load a previously saved mesh token for a room",
         input_model=MeshCredentialLoadRequest,
         output_model=MeshCredentialLoadResponse,
@@ -854,7 +1104,7 @@ class AuthService(BaseService):
         return MeshCredentialLoadResponse(token=token)
 
     @method_contract(
-        method_id="Auth.DeleteMeshCredential",
+        method_id=AuthMethods.DELETE_MESH_CREDENTIAL,
         summary="Delete a stored mesh credential",
         input_model=MeshCredentialDeleteRequest,
         output_model=MeshCredentialDeleteResponse,
@@ -870,7 +1120,7 @@ class AuthService(BaseService):
     # ── Mesh Identity ────────────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.LoadMeshIdentity",
+        method_id=AuthMethods.LOAD_MESH_IDENTITY,
         summary="Load this instance's stable mesh identity",
         input_model=MeshIdentityLoadRequest,
         output_model=MeshIdentityLoadResponse,
@@ -887,24 +1137,27 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.SaveMeshIdentity",
+        method_id=AuthMethods.SAVE_MESH_IDENTITY,
         summary="Save this instance's stable mesh identity",
         input_model=MeshIdentitySaveRequest,
-        output_model=EmptyOutput,
+        output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_mesh_identity(self, data: MeshIdentitySaveRequest) -> EmptyOutput:
-        await self.manager.save_mesh_identity(
+    async def handle_save_mesh_identity(self, data: MeshIdentitySaveRequest) -> MeshBoolResponse:
+        success = await self.manager.save_mesh_identity(
             peer_id=data.peer_id,
             node_name=data.node_name,
         )
-        return EmptyOutput()
+        return MeshBoolResponse(
+            success=success,
+            message="" if success else "Mesh identity was not durably persisted",
+        )
 
     # ── Mesh Peer Management ─────────────────────────────────────────────
 
     @method_contract(
-        method_id="Auth.MeshUpsertPeer",
+        method_id=AuthMethods.MESH_UPSERT_PEER,
         summary="Create or update a mesh peer record on discovery",
         input_model=MeshPeerUpsertRequest,
         output_model=MeshBoolResponse,
@@ -913,20 +1166,23 @@ class AuthService(BaseService):
     )
     async def handle_upsert_peer(self, data: MeshPeerUpsertRequest) -> MeshBoolResponse:
         try:
-            await self.manager.upsert_mesh_peer(
+            success = await self.manager.upsert_mesh_peer(
                 peer_id=data.peer_id,
                 room_name=data.room_name,
                 node_name=data.node_name,
                 ip=data.ip,
                 port=data.port,
             )
-            return MeshBoolResponse(success=True)
+            return MeshBoolResponse(
+                success=success,
+                message="" if success else "Mesh peer row was not persisted",
+            )
         except Exception as e:
             log_error(f"Failed to upsert mesh peer: {e}", exc_info=True)
             return MeshBoolResponse(success=False, message=str(e))
 
     @method_contract(
-        method_id="Auth.MeshListPeers",
+        method_id=AuthMethods.MESH_LIST_PEERS,
         summary="List known mesh peers with optional filters",
         input_model=MeshPeerListRequest,
         output_model=MeshPeerListResponse,
@@ -939,11 +1195,20 @@ class AuthService(BaseService):
             outbound_status=data.outbound_status,
             include_disconnected=data.include_disconnected,
         )
-        peers = [MeshPeerInfo(**row) for row in rows]
+        peers = [
+            MeshPeerInfo(
+                **{
+                    **row,
+                    "outbound_permissions": _api_permission_list(row.get("outbound_permissions")),
+                    "inbound_permissions": _api_permission_list(row.get("inbound_permissions")),
+                }
+            )
+            for row in rows
+        ]
         return MeshPeerListResponse(peers=peers, total=len(peers))
 
     @method_contract(
-        method_id="Auth.MeshGetPeer",
+        method_id=AuthMethods.MESH_GET_PEER,
         summary="Get a single mesh peer by peer_id",
         input_model=MeshPeerGetRequest,
         output_model=MeshPeerGetResponse,
@@ -956,11 +1221,35 @@ class AuthService(BaseService):
             room_name=data.room_name,
         )
         if row:
-            return MeshPeerGetResponse(peer=MeshPeerInfo(**row))
+            return MeshPeerGetResponse(
+                peer=MeshPeerInfo(
+                    **{
+                        **row,
+                        "outbound_permissions": _api_permission_list(
+                            row.get("outbound_permissions")
+                        ),
+                        "inbound_permissions": _api_permission_list(row.get("inbound_permissions")),
+                    }
+                )
+            )
         return MeshPeerGetResponse(peer=None)
 
     @method_contract(
-        method_id="Auth.MeshApprovePeer",
+        method_id=AuthMethods.MESH_GET_AUTHORITY_SNAPSHOT,
+        summary="Read durable mesh peer authority snapshot",
+        input_model=MeshPeerAuthoritySnapshotRequest,
+        output_model=MeshPeerAuthoritySnapshotResponse,
+        exposure="internal",
+        method_type="use",
+    )
+    async def handle_get_authority_snapshot(
+        self, data: MeshPeerAuthoritySnapshotRequest
+    ) -> MeshPeerAuthoritySnapshotResponse:
+        authorities = await self.manager.get_mesh_peer_authority_snapshot(data.peer_id)
+        return MeshPeerAuthoritySnapshotResponse(authorities=authorities)
+
+    @method_contract(
+        method_id=AuthMethods.MESH_APPROVE_PEER,
         summary="Approve a mesh peer with specific permissions",
         input_model=MeshPeerApproveRequest,
         output_model=MeshBoolResponse,
@@ -995,7 +1284,7 @@ class AuthService(BaseService):
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshDenyPeer",
+        method_id=AuthMethods.MESH_DENY_PEER,
         summary="Deny/block a mesh peer",
         input_model=MeshPeerDenyRequest,
         output_model=MeshBoolResponse,
@@ -1009,7 +1298,7 @@ class AuthService(BaseService):
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshUpdatePeerPermissions",
+        method_id=AuthMethods.MESH_UPDATE_PEER_PERMISSIONS,
         summary="Update permissions for an approved mesh peer",
         input_model=MeshPeerUpdatePermissionsRequest,
         output_model=MeshBoolResponse,
@@ -1045,7 +1334,7 @@ class AuthService(BaseService):
         )
 
     @method_contract(
-        method_id="Auth.MeshRemovePeer",
+        method_id=AuthMethods.MESH_REMOVE_PEER,
         summary="Remove a mesh peer record entirely",
         input_model=MeshPeerRemoveRequest,
         output_model=MeshBoolResponse,
@@ -1053,42 +1342,44 @@ class AuthService(BaseService):
         method_type="manage",
     )
     async def handle_remove_peer(self, data: MeshPeerRemoveRequest) -> MeshBoolResponse:
-        # Optionally revoke associated token
-        if data.revoke_token:
-            peer = await self.manager.get_mesh_peer(data.peer_id)
-            if peer and peer.get("outbound_token_id"):
-                try:
-                    await self.manager._revoke_token(peer["outbound_token_id"])
-                except Exception as e:
-                    log_warning(f"Failed to revoke peer token: {e}")
-
-        success = await self.manager.remove_mesh_peer(data.peer_id)
+        # Peer rows, linked tokens, and the durable removed revision commit in
+        # one DB transaction; pre-revoking here would create two generations.
+        success = await self.manager.remove_mesh_peer(
+            data.peer_id,
+            revoke_token=data.revoke_token,
+        )
         if success:
             return MeshBoolResponse(success=True)
         return MeshBoolResponse(success=False, message=f"Peer {data.peer_id} not found")
 
     @method_contract(
-        method_id="Auth.MeshSaveInboundCredential",
+        method_id=AuthMethods.MESH_SAVE_INBOUND_CREDENTIAL,
         summary="Save the token a remote peer issued to us",
         input_model=MeshPeerSaveInboundRequest,
-        output_model=EmptyOutput,
+        output_model=MeshBoolResponse,
         exposure="internal",
         method_type="use",
     )
-    async def handle_save_inbound_credential(self, data: MeshPeerSaveInboundRequest) -> EmptyOutput:
-        await self.manager.save_inbound_credential(
+    async def handle_save_inbound_credential(
+        self, data: MeshPeerSaveInboundRequest
+    ) -> MeshBoolResponse:
+        success = await self.manager.save_inbound_credential(
             remote_peer_id=data.remote_peer_id,
             room_name=data.room_name,
             token=data.token,
+            token_id=data.token_id,
             permissions=data.permissions,
             remote_device_id=data.remote_device_id,
             remote_user_id=data.remote_user_id,
             remote_node_name=data.remote_node_name,
         )
-        return EmptyOutput()
+        return MeshBoolResponse(
+            success=success,
+            message="" if success else "Inbound credential was not persisted",
+        )
 
     @method_contract(
-        method_id="Auth.MeshLoadInboundCredentials",
+        method_id=AuthMethods.MESH_LOAD_INBOUND_CREDENTIALS,
         summary="Load inbound tokens for reconnection",
         input_model=MeshPeerLoadInboundRequest,
         output_model=MeshPeerLoadInboundResponse,
@@ -1105,7 +1396,7 @@ class AuthService(BaseService):
         return MeshPeerLoadInboundResponse(credentials=credentials)
 
     @method_contract(
-        method_id="Auth.MeshUpdatePeerConnection",
+        method_id=AuthMethods.MESH_UPDATE_PEER_CONNECTION,
         summary="Update connection status of a mesh peer",
         input_model=MeshPeerUpdateConnectionRequest,
         output_model=EmptyOutput,

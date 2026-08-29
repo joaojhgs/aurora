@@ -197,6 +197,9 @@ def _bare_manager(config: dict) -> ConfigManager:
     cm.config_lock = threading.RLock()
     cm._config = config
     cm._schema = cm._get_config_schema()
+    cm._observers = []
+    cm._version_history = []
+    cm._revision = 0
     return cm
 
 
@@ -206,7 +209,18 @@ class TestPydanticSchemaValidation:
 
     def test_valid_config_passes(self):
         """A valid minimal config should pass validation."""
-        cm = _bare_manager({})
+        cm = _bare_manager(
+            {
+                "services": {
+                    "stt": {
+                        "transcription": {
+                            "realtime_model": {},
+                            "accurate_model": {},
+                        }
+                    }
+                }
+            }
+        )
         cm._validate_config({"ui": {"activate": False}})
 
     def test_extra_keys_are_ignored(self):
@@ -219,6 +233,38 @@ class TestPydanticSchemaValidation:
         cm = _bare_manager({})
         with pytest.raises(ValidationError):
             cm._validate_config({"ui": {"activate": "not_a_bool"}})
+
+    def test_stt_model_size_or_path_round_trips_through_config_manager(self, tmp_path):
+        """Generated config accepts Faster Whisper IDs and local paths."""
+        defaults_path = os.path.join(
+            os.path.dirname(__file__), "../../../../app/services/config/config_defaults.json"
+        )
+        with open(defaults_path) as f:
+            cm = _bare_manager(json.load(f))
+        hf_id = "Systran/faster-whisper-large-v3"
+        local_path = str(tmp_path / "whisper-local")
+
+        cm.set(
+            "services.stt.transcription.realtime_model.model_size_or_path",
+            hf_id,
+            save=False,
+        )
+        cm.set(
+            "services.stt.transcription.accurate_model.model_size_or_path",
+            local_path,
+            save=False,
+        )
+
+        cm._validate_config(cm._config)
+        with patch("app.services.config.config_manager.log_warning") as mock_warn:
+            cm._validate_json_schema(cm._config)
+
+        assert cm.get("services.stt.transcription.realtime_model.model_size_or_path") == hf_id
+        assert cm.get("services.stt.transcription.accurate_model.model_size_or_path") == local_path
+        model_size_or_path_calls = [
+            c for c in mock_warn.call_args_list if "model_size_or_path" in str(c)
+        ]
+        assert model_size_or_path_calls == []
 
 
 @pytest.mark.unit

@@ -12,6 +12,7 @@ from app.shared.models.db import (  # noqa: F401 — explicit re-exports for typ
     Message,
     MessageType,
     ScheduleType,
+    Session,
     Token,
     User,
 )

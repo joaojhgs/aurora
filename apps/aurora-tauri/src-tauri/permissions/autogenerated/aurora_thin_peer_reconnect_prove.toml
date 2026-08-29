@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-thin-peer-reconnect-prove"
+description = "Enables the aurora_thin_peer_reconnect_prove command without any pre-configured scope."
+commands.allow = ["aurora_thin_peer_reconnect_prove"]
+
+[[permission]]
+identifier = "deny-aurora-thin-peer-reconnect-prove"
+description = "Denies the aurora_thin_peer_reconnect_prove command without any pre-configured scope."
+commands.deny = ["aurora_thin_peer_reconnect_prove"]

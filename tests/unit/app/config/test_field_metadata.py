@@ -2,9 +2,16 @@
 Tests for configuration field metadata extraction
 """
 
+import json
+from pathlib import Path
+
 import pytest
 
 from app.services.config.config_manager import ConfigManager
+
+CONFIG_DEFAULTS_PATH = (
+    Path(__file__).resolve().parents[4] / "app/services/config/config_defaults.json"
+)
 
 
 class TestConfigFieldMetadata:
@@ -35,6 +42,11 @@ class TestConfigFieldMetadata:
         assert ui_dark_mode["type"] == "bool"
         assert "dark mode" in ui_dark_mode["description"].lower()
 
+        close_behavior = metadata.get("ui.desktop_overlay.close_behavior")
+        assert close_behavior is not None
+        assert close_behavior["type"] == "choice"
+        assert close_behavior["choices"] == ["hide_to_tray"]
+
     def test_llm_provider_choice_field(self, config_manager):
         """Test that LLM provider has correct choice metadata."""
         metadata = config_manager.get_field_metadata()
@@ -44,7 +56,14 @@ class TestConfigFieldMetadata:
         assert llm_provider["type"] == "choice"
         assert "choices" in llm_provider
 
-        expected_choices = ["llama_cpp", "openai", "huggingface_endpoint", "huggingface_pipeline"]
+        expected_choices = [
+            "llama_cpp",
+            "openai",
+            "huggingface_endpoint",
+            "huggingface_pipeline",
+            "remote_peer",
+            "mesh_peer",
+        ]
         assert llm_provider["choices"] == expected_choices
         assert "LLM provider" in llm_provider["description"]
 
@@ -109,6 +128,16 @@ class TestConfigFieldMetadata:
         expected_langs = ["", "en", "pt", "es", "fr", "de", "it", "ja", "ko", "zh"]
         assert lang_field["choices"] == expected_langs
         assert "auto-detect" in lang_field["description"]
+
+    def test_generated_defaults_start_local_voice_services(self):
+        """New installs should start local speech services and leave STT language automatic."""
+        defaults = json.loads(CONFIG_DEFAULTS_PATH.read_text(encoding="utf-8"))
+
+        assert defaults["services"]["tts"]["enabled"] is True
+        assert defaults["services"]["stt"]["language"] == ""
+        assert defaults["services"]["stt"]["coordinator"]["enabled"] is True
+        assert defaults["services"]["stt"]["wakeword"]["enabled"] is True
+        assert defaults["services"]["stt"]["transcription"]["enabled"] is True
 
     def test_mcp_enabled_field(self, config_manager):
         """Test that MCP enabled field has correct metadata."""

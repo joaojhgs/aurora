@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "aurora-thin-profile"
+description = "Allow the desktop-thin shell to load and save only the nonsecret connection-profile document. This does not expose generic secure-storage get/set/delete or auth/admin/gateway secret keys."
+commands.allow = [
+  "aurora_thin_profile_get",
+  "aurora_thin_profile_set"
+]

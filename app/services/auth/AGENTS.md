@@ -66,7 +66,10 @@ permissions=["tts.request", "auth.manage"]
 
 ## Pairing Flow
 
-Device pairing is an in-memory state machine with 5-minute expiry:
+Device pairing is an in-memory state machine with a five-minute approval
+window. Expired entries are pruned on access; mesh peer database rows have a
+separate bounded startup-pruning policy and must not be confused with pending
+pairing entries.
 
 ```
 1. Remote device calls Auth.PairingStart
@@ -86,11 +89,29 @@ Device pairing is an in-memory state machine with 5-minute expiry:
    -> Returns token + device_id + user_id + permissions
 ```
 
-Pairing state is in-memory (`_pending_pairings` dict). Expired pairings are cleaned on access.
+Pairing state is in-memory (`_pending_pairings` dict). For mesh-originated
+pairing, every start/connect/approve/exchange step must preserve the
+`pairing_session_id` derived from the bound SAS transcript and the stable
+`remote_peer_id`. A trusted mesh context requires both fields plus the
+verification code; verifier/claimant identities must match the same peer and
+session. Reject malformed, conflicting, or duplicate sessions instead of
+merging them. Non-admin approvals may not grant the global `"*"` wildcard;
+admin pairing is the only path that normalizes a grant to `["*"]`.
 
 ### Bilateral Mesh Pairing
 
 When a mesh peer authenticates with a `remote_peer_id`, RTCClient auto-triggers `_reverse_pairing()` so both admins independently approve each other.
+
+Pairing and grants are intentionally separate. Pairing establishes stable peer
+identity, bilateral approval, and reconnect credentials; the Rust mesh
+authority decides whether a paired peer may see or call a specific method, tool
+contract, capability pack, or resource scope. Do not duplicate grant evaluation
+inside AuthService.
+
+Forward and reverse directions are independent credential relationships. A
+completed direction may reconnect with its stored proof, while an incomplete
+direction must repeat SAS approval. Denied peers, mismatched channel/session
+bindings, and authority-context conflicts fail closed.
 
 ---
 
@@ -153,6 +174,11 @@ The `mesh_peers` table tracks peer trust state:
 - `inbound_permissions`: permissions they grant to us
 - `connection_status`: `connected` | `disconnected`
 
+On Auth startup, orphaned rows may be pruned only through the typed DB pruning
+contract and the configured retention/max-row bounds. Never delete a row that
+still has an auth principal/device/token relationship, active trust state, or
+reconnect material. Pruning failures log and leave data intact.
+
 ### Permission Sync
 
 When a mesh peer is approved (`Auth.MeshApprovePeer`):
@@ -171,6 +197,11 @@ When a remote peer grants US a token (during pairing), it's saved via `Auth.Mesh
 - Stored in `mesh_peers.inbound_token` column
 - Loaded on reconnect via `Auth.MeshLoadInboundCredentials`
 - Keyed by `remote_peer_id`
+
+Reconnect credentials and pairing challenges are per peer. Challenge replay,
+cross-peer credential use, inconsistent wildcard grants, and orphaned peer-row
+cleanup are security-sensitive paths; keep the dedicated unit tests green when
+editing these tables.
 
 ### Mesh Identity
 

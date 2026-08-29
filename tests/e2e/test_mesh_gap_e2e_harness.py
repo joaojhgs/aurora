@@ -1,4 +1,4 @@
-"""E2E gate for the PER-163 mesh production harness."""
+"""E2E tests for the mesh transport harness."""
 
 import json
 
@@ -8,6 +8,7 @@ from scripts.mesh_gap_e2e_harness import (
     MODES,
     SCENARIOS,
     ScenarioResult,
+    TwoPeerHarness,
     _summary,
     run_harness,
 )
@@ -64,9 +65,17 @@ def test_mesh_gap_harness_covers_required_modes_scenarios_and_artifacts(tmp_path
         assert report.summary["status"] == "pass"
         assert report.summary["dependency_gap_modes"] == []
         assert all(result["status"] == "pass" for result in process_results)
+        local_process_scenarios = {
+            "safe_local_tool",
+            "dangerous_local_approval",
+        }
         assert all(
             result["evidence"]["transport_path"]
-            == "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            == (
+                "LocalBus.request"
+                if result["scenario_id"] in local_process_scenarios
+                else "BullMQBus.request->Redis->BullMQBus.worker->BullMQBus.reply"
+            )
             for result in process_results
         )
 
@@ -176,6 +185,20 @@ def test_mesh_gap_harness_uses_executable_component_paths(tmp_path):
     assert synthetic_summary["status"] == "pass"
     assert synthetic_summary["dependency_gap"] == 0
     assert synthetic_summary["passed"] == len(SCENARIOS)
+
+
+@pytest.mark.e2e
+def test_mesh_gap_webrtc_mode_does_not_require_http_gateway_startup(tmp_path, monkeypatch):
+    async def fail_if_http_starts(self):  # noqa: ANN001
+        raise AssertionError("HTTP Gateway should not start for mesh-only harness mode")
+
+    monkeypatch.setattr(TwoPeerHarness, "_start_http_gateway", fail_if_http_starts)
+
+    report = run_harness(output_dir=tmp_path, mode_filter={"mesh_webrtc"})
+
+    assert report.summary["status"] == "pass"
+    assert report.summary["component_modes"] == ["mesh_webrtc"]
+    assert report.summary["final_mesh_mode_status"] == "pass"
 
 
 @pytest.mark.e2e

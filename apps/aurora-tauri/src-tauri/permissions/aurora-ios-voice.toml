@@ -1,0 +1,17 @@
+[[permission]]
+identifier = "aurora-ios-voice"
+description = "Allow iOS foreground voice status and explicit start/stop controls without granting background listening or system assistant ownership."
+commands.allow = [
+  "aurora_ios_voice_status",
+  "aurora_ios_voice_foreground_capture_start",
+  "aurora_ios_voice_foreground_capture_stop",
+  "aurora_ios_voice_foreground_capture_finish",
+  "aurora_ios_voice_foreground_capture_status",
+  "aurora_ios_voice_pack_catalog_set",
+  "aurora_ios_voice_pack_list",
+  "aurora_ios_voice_pack_status",
+  "aurora_ios_voice_pack_download",
+  "aurora_ios_voice_pack_activate",
+  "aurora_ios_voice_pack_remove",
+  "aurora_ios_background_status",
+]

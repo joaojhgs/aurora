@@ -127,7 +127,6 @@ class TestRegistryAggregator:
     @pytest.mark.asyncio
     async def test_handle_service_announcement(self, bus):
         """Test handling service announcements."""
-        from app.messaging import Envelope
         from app.services.gateway.registry_aggregator import RegistryAggregator
 
         aggregator = RegistryAggregator(bus=bus, mode="threads")
@@ -158,6 +157,68 @@ class TestRegistryAggregator:
         test_services = [s for s in services if s.module == "TestService"]
         assert len(test_services) == 1
         assert test_services[0].version == "1.0.0"
+
+        await aggregator.stop()
+
+    @pytest.mark.asyncio
+    async def test_reannounce_without_contract_change_does_not_notify_routes(self, bus):
+        """Periodic service re-announces should not regenerate routes when only timestamp changes."""
+        from app.services.gateway.registry_aggregator import RegistryAggregator
+
+        aggregator = RegistryAggregator(bus=bus, mode="threads")
+        change_count = 0
+
+        async def on_change():
+            nonlocal change_count
+            change_count += 1
+
+        aggregator.on_registry_change(on_change)
+        await aggregator.start()
+        # Earlier tests may leave an in-process contract registered. Startup
+        # hydration is outside this test's re-announcement assertion.
+        change_count = 0
+
+        first = ServiceAnnouncement(
+            module="StableService",
+            version="1.0.0",
+            summary="Stable service",
+            methods=[
+                MethodInfo(
+                    name="Method1",
+                    exposure="external",
+                    input_schema={
+                        "type": "object",
+                        "properties": {"q": {"type": "string"}},
+                    },
+                    output_schema={"type": "object"},
+                )
+            ],
+            timestamp="2026-07-04T00:00:00",
+        )
+        second = first.model_copy(
+            update={
+                "timestamp": "2026-07-04T00:00:30",
+                "instance_id": "stable-service-worker-2",
+                "methods": [
+                    MethodInfo(
+                        name="Method1",
+                        exposure="external",
+                        input_schema={
+                            "properties": {"q": {"type": "string"}},
+                            "type": "object",
+                        },
+                        output_schema={"type": "object"},
+                    )
+                ],
+            }
+        )
+
+        await bus.publish(GatewayMethods.SERVICE_ANNOUNCE, first, event=True)
+        await asyncio.sleep(0.1)
+        await bus.publish(GatewayMethods.SERVICE_ANNOUNCE, second, event=True)
+        await asyncio.sleep(0.1)
+
+        assert change_count == 1
 
         await aggregator.stop()
 
@@ -254,6 +315,7 @@ class TestRegistryAggregator:
                     "module": "Auth",
                     "bus_topic": method_id,
                     "exposure": "both",
+                    "public_infrastructure": True,
                     "summary": f"{method_name} method",
                     "input_model": _Dummy,
                     "output_model": None,

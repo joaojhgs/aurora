@@ -1,0 +1,231 @@
+{
+  "inventory_method": "recursive ONNX scan with subgraph traversal and model IR/opset metadata",
+  "models": [
+    {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "onnx.quantize",
+        "producer_version": "0.1.0"
+      },
+      "operator_inventory": {
+        "node_count": 4591,
+        "operator_counts": {
+          "Abs": 4,
+          "Add": 318,
+          "Cast": 182,
+          "Concat": 160,
+          "Constant": 1583,
+          "ConstantOfShape": 19,
+          "Conv": 30,
+          "Div": 24,
+          "DynamicQuantizeLinear": 104,
+          "Equal": 42,
+          "Exp": 41,
+          "Expand": 30,
+          "Gather": 190,
+          "GatherElements": 6,
+          "LessOrEqual": 1,
+          "Log": 34,
+          "MatMul": 30,
+          "MatMulInteger": 110,
+          "Max": 4,
+          "Mul": 417,
+          "Neg": 16,
+          "Pow": 14,
+          "Range": 12,
+          "ReduceMean": 7,
+          "ReduceSum": 6,
+          "Reshape": 102,
+          "Shape": 220,
+          "Sigmoid": 12,
+          "Slice": 171,
+          "Softmax": 12,
+          "Sub": 167,
+          "Tanh": 6,
+          "Tile": 6,
+          "Transpose": 87,
+          "Unsqueeze": 364,
+          "Where": 60
+        },
+        "status": "extracted",
+        "top_level_inputs": [
+          "x",
+          "cached_key_0",
+          "cached_nonlin_attn_0",
+          "cached_val1_0",
+          "cached_val2_0",
+          "cached_conv1_0",
+          "cached_conv2_0",
+          "cached_key_1",
+          "cached_nonlin_attn_1",
+          "cached_val1_1",
+          "cached_val2_1",
+          "cached_conv1_1",
+          "cached_conv2_1",
+          "cached_key_2",
+          "cached_nonlin_attn_2",
+          "cached_val1_2",
+          "cached_val2_2",
+          "cached_conv1_2",
+          "cached_conv2_2",
+          "cached_key_3",
+          "cached_nonlin_attn_3",
+          "cached_val1_3",
+          "cached_val2_3",
+          "cached_conv1_3",
+          "cached_conv2_3",
+          "cached_key_4",
+          "cached_nonlin_attn_4",
+          "cached_val1_4",
+          "cached_val2_4",
+          "cached_conv1_4",
+          "cached_conv2_4",
+          "cached_key_5",
+          "cached_nonlin_attn_5",
+          "cached_val1_5",
+          "cached_val2_5",
+          "cached_conv1_5",
+          "cached_conv2_5",
+          "embed_states",
+          "processed_lens"
+        ],
+        "top_level_outputs": [
+          "encoder_out",
+          "new_cached_key_0",
+          "new_cached_nonlin_attn_0",
+          "new_cached_val1_0",
+          "new_cached_val2_0",
+          "new_cached_conv1_0",
+          "new_cached_conv2_0",
+          "new_cached_key_1",
+          "new_cached_nonlin_attn_1",
+          "new_cached_val1_1",
+          "new_cached_val2_1",
+          "new_cached_conv1_1",
+          "new_cached_conv2_1",
+          "new_cached_key_2",
+          "new_cached_nonlin_attn_2",
+          "new_cached_val1_2",
+          "new_cached_val2_2",
+          "new_cached_conv1_2",
+          "new_cached_conv2_2",
+          "new_cached_key_3",
+          "new_cached_nonlin_attn_3",
+          "new_cached_val1_3",
+          "new_cached_val2_3",
+          "new_cached_conv1_3",
+          "new_cached_conv2_3",
+          "new_cached_key_4",
+          "new_cached_nonlin_attn_4",
+          "new_cached_val1_4",
+          "new_cached_val2_4",
+          "new_cached_conv1_4",
+          "new_cached_conv2_4",
+          "new_cached_key_5",
+          "new_cached_nonlin_attn_5",
+          "new_cached_val1_5",
+          "new_cached_val2_5",
+          "new_cached_conv1_5",
+          "new_cached_conv2_5",
+          "new_embed_states",
+          "new_processed_lens"
+        ]
+      },
+      "path": "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+      "sha256": "1e721676515bcd42a186979733981213c66c80db680e1cc582dfedf3be76e678",
+      "size_bytes": 4807159
+    },
+    {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "pytorch",
+        "producer_version": "1.13.0"
+      },
+      "operator_inventory": {
+        "node_count": 17,
+        "operator_counts": {
+          "Cast": 2,
+          "Clip": 1,
+          "Constant": 4,
+          "Conv": 1,
+          "Gather": 1,
+          "Gemm": 1,
+          "GreaterOrEqual": 1,
+          "Mul": 1,
+          "Relu": 1,
+          "Squeeze": 1,
+          "Transpose": 2,
+          "Unsqueeze": 1
+        },
+        "status": "extracted",
+        "top_level_inputs": [
+          "y"
+        ],
+        "top_level_outputs": [
+          "decoder_out"
+        ]
+      },
+      "path": "decoder-epoch-12-avg-2-chunk-16-left-64.onnx",
+      "sha256": "f61ebd3eed3773a44d088d53dfae92dbb6aec4839f4dcaee2d402414741663a3",
+      "size_bytes": 1063189
+    },
+    {
+      "format": "onnx",
+      "metadata": {
+        "ir_version": 7,
+        "model_domain": "",
+        "model_version": 0,
+        "opset_imports": [
+          {
+            "domain": "ai.onnx",
+            "version": 13
+          }
+        ],
+        "producer_name": "onnx.quantize",
+        "producer_version": "0.1.0"
+      },
+      "operator_inventory": {
+        "node_count": 8,
+        "operator_counts": {
+          "Add": 2,
+          "Cast": 1,
+          "DynamicQuantizeLinear": 1,
+          "MatMulInteger": 1,
+          "Mul": 2,
+          "Tanh": 1
+        },
+        "status": "extracted",
+        "top_level_inputs": [
+          "encoder_out",
+          "decoder_out"
+        ],
+        "top_level_outputs": [
+          "logit"
+        ]
+      },
+      "path": "joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx",
+      "sha256": "eae9da0c7e1e6c6a3f4cc42d167899c388f6c6701b94cb96320e4f55df79624c",
+      "size_bytes": 163380
+    }
+  ],
+  "schema_version": 1,
+  "source_archive_sha256": "f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a"
+}

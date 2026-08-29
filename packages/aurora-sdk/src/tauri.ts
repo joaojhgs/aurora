@@ -6,9 +6,35 @@ import {
   type AuroraStreamRequest
 } from './events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
-import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject, NativeCapabilityManifest } from './types.js'
+import type {
+  AndroidAssistantRoleRequestResult,
+  AndroidAssistantRoleStatus,
+  AndroidEntrypointPayload,
+  AndroidFallbackEntrypoint,
+  AndroidLocalLightInferenceStatus,
+  AndroidNativePermissionRequestResult,
+  AndroidVoiceForegroundServiceRequestResult,
+  AndroidVoiceForegroundServiceStatus,
+  AuditReceipt,
+  AuroraEvent,
+  AuroraTransportEnvelope,
+  IOSEntrypointPayload,
+  IOSInvocationStatus,
+  JsonObject,
+  NativeCapabilityManifest
+} from './types.js'
 
 export type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<unknown>
+export type TauriListen = <TPayload = unknown>(
+  event: string,
+  handler: (event: TauriEvent<TPayload>) => void
+) => Promise<() => void>
+
+export interface TauriEvent<TPayload = unknown> {
+  event: string
+  id?: number
+  payload: TPayload
+}
 
 export interface TauriCommandNames {
   request: string
@@ -17,25 +43,78 @@ export interface TauriCommandNames {
   sidecarStop: string
   sidecarStatus: string
   nativeCapabilityManifest: string
+  androidAssistantRoleStatus: string
+  androidAssistantRoleRequest: string
+  androidFallbackEntrypoints: string
+  androidLocalLightInferenceStatus: string
+  androidPermissionRequest: string
+  androidVoiceForegroundServiceStatus: string
+  androidVoiceForegroundServiceStart: string
+  androidVoiceForegroundServiceStop: string
+  androidEntrypointPayload: string
+  iosEntrypointPayload: string
   nativePermissionStatus: string
   trayStatus: string
   notificationStatus: string
   notificationSend: string
+  iosVoiceStatus: string
+  iosVoiceForegroundCaptureStart: string
+  iosVoiceBackgroundCaptureStart: string
+  iosVoiceForegroundCaptureStop: string
+  iosVoiceForegroundCaptureFinish: string
+  iosVoiceForegroundCaptureStatus: string
+  iosBackgroundStatus: string
+  iosVoicePackCatalogSet: string
+  iosVoicePackList: string
+  iosVoicePackStatus: string
+  iosVoicePackDownload: string
+  iosVoicePackActivate: string
+  iosVoicePackRemove: string
+  androidVoicePackCatalogStatus: string
+  androidVoicePackCatalogSet: string
+  androidVoicePackDownload: string
+  androidVoicePackDownloadStatus: string
+  androidVoicePackActivate: string
+  androidVoicePackRemove: string
+  nativeSpeechPackCatalog: string
+  nativeSpeechPackStatus: string
+  nativeSpeechPackInstall: string
+  nativeSpeechPackActivate: string
+  nativeSpeechPackRemove: string
   dialogStatus: string
   audioBridgeStatus: string
+  androidBaselineStatus: string
+  iosNativePluginManifest: string
+  iosInvocationStatus: string
+  iosLocalLightInferenceStatus: string
+  iosInvokeAction: string
+  nativeShareText: string
+  nativeOpenDeepLink: string
+  nativeShowNotification: string
   logTail: string
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
+  iosSecureStorageStatus: string
+  iosVoiceCredentialSet: string
+  iosVoiceCredentialStatus: string
+  iosVoiceCredentialDelete: string
+  iosBiometricStatus: string
+  iosAdminUnlock: string
+  biometricAdminUnlockStatus: string
+  biometricAdminUnlock: string
   localFileRead: string
   localFileWrite: string
   localFilePick: string
   secureFileHandleOpen: string
   eventSubscribe: string
+  eventActivateSubscription: string
+  eventUnsubscribe: string
 }
 
 export interface TauriLocalTransportOptions {
   invoke?: TauriInvoke
+  listen?: TauriListen
   commands?: Partial<TauriCommandNames>
   requestArgName?: string
   defaultTimeoutMs?: number
@@ -87,9 +166,253 @@ export interface TauriNativeFeatureStatus {
   details?: JsonObject
 }
 
+export interface IosVoiceCredentialRequest {
+  gateway: string
+  bearer?: string | null
+  remoteAudioConsent: boolean
+}
+
+export interface IosVoiceCredentialStatus {
+  configured: boolean
+  hasBearer: boolean
+  remoteAudioConsent: boolean
+  endpointClass?: 'loopback' | 'secure_remote' | string
+  secretsRedacted: true
+}
+
+export interface IosVoiceCaptureStatus {
+  available: boolean
+  foregroundOnly: boolean
+  running: boolean
+  queuedChunks: number
+  acceptedChunks: number
+  droppedChunks: number
+  discontinuities: number
+  rawAudioLogged: false
+  backgroundListening: false
+  siriReplacement: false
+  secretsRedacted: true
+}
+
+export interface TauriAndroidAssistantRoleStatus {
+  roleAvailable?: boolean | null
+  packageQualified?: boolean | null
+  roleHeld?: boolean | null
+  requestable?: boolean | null
+  denied?: boolean | null
+  oemUnavailable?: boolean | null
+  probeImplemented: boolean
+  reason: string
+}
+
+export interface TauriAndroidBaselineStatus {
+  platform: string
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  feature: string
+  available: boolean
+  assistantRole: TauriAndroidAssistantRoleStatus
+  fallbackEntrypoints: Record<string, boolean>
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export type NativeSpeechPackTask = 'stt' | 'vad' | 'kws' | 'tts'
+
+export interface NativeSpeechPackCatalogRequest {
+  task?: NativeSpeechPackTask | null
+  language?: string | null
+}
+
+export interface NativeSpeechPackIdRequest {
+  packId: string
+  task: NativeSpeechPackTask
+}
+
+export interface NativeSpeechReferenceProfileRequest {
+  referenceId?: string | null
+  referenceAudioUri?: string | null
+  referenceText?: string | null
+  referenceRevision?: string | null
+  referenceSampleRateHz?: number | null
+  referenceSamples?: number[] | null
+}
+
+export interface NativeSpeechPackActivateRequest extends NativeSpeechPackIdRequest, NativeSpeechReferenceProfileRequest {
+  slot?: string | null
+}
+
+export interface NativeMobileSpeechPackDownloadRequest extends NativeSpeechPackIdRequest, NativeSpeechReferenceProfileRequest {
+  forceDownload?: boolean
+  activate?: boolean
+}
+
+export interface NativeMobileSpeechPackActivateRequest extends NativeSpeechPackActivateRequest {}
+
+export interface AndroidVoicePackCatalogEntry {
+  packId: string
+  packName: string
+  provider?: string
+  language?: string
+  uri?: string
+  sha256: string
+  sizeBytes: number
+  engineRuntimeRevision?: string
+  installed: boolean
+  active: boolean
+  runtimeTask?: NativeSpeechPackTask | null
+  tasks?: string[]
+  modelFamily?: string
+  requiresReferenceAudio?: boolean
+  referenceAudioMode?: 'profile' | 'internal' | string
+  requiresReferenceProfile?: boolean
+  referenceSelectionRequired?: boolean
+  referenceSelectionPresent?: boolean
+  readyForRuntime?: boolean
+  readyForInstall?: boolean
+}
+
+export interface AndroidVoicePackCatalogStatus {
+  platform: 'android' | string
+  available: boolean
+  backgroundRuntimeReady?: boolean
+  activeSttPackId?: string | null
+  activeTtsPackId?: string | null
+  activeVadPackId?: string | null
+  activeKwsPackId?: string | null
+  entries: AndroidVoicePackCatalogEntry[]
+  secretsRedacted: boolean
+}
+
+export interface AndroidVoicePackDownloadResult {
+  started: boolean
+  packId: string
+  jobId?: string
+  installed?: boolean
+  reason?: string
+  status?: AndroidVoicePackCatalogStatus
+}
+
+export interface AndroidVoicePackDownloadStatus {
+  jobId: string
+  status: 'queued' | 'started' | 'completed' | 'failed' | string
+  packId: string
+  downloadedBytes: number
+  totalBytes: number
+  error?: string | null
+  completedAtMs?: number
+}
+
+export interface NativeSpeechPackCatalogEntry {
+  packId: string
+  displayName: string
+  task: NativeSpeechPackTask
+  languages: string[]
+  language?: string | null
+  sha256: string
+  fileSize: number
+  installed: boolean
+  activeSlot?: string | null
+  revision?: string | null
+  runtimeRevision?: string | null
+  modelFamily?: string | null
+  requiresReferenceAudio?: boolean
+  referenceAudioMode?: 'profile' | 'internal' | string | null
+  requiresReferenceProfile?: boolean
+  voiceId?: string | null
+  voiceRevision?: string | null
+  referenceProfileId?: string | null
+}
+
+export function resolveNativeTtsRequiresReferenceProfile(input: {
+  referenceAudioMode?: string | null
+  requiresReferenceProfile?: boolean
+  requiresReferenceAudio?: boolean
+  modelFamily?: string | null
+}): boolean {
+  const mode = input.referenceAudioMode?.trim()
+  if (mode === 'internal') return false
+  if (mode === 'profile') return true
+  if (input.requiresReferenceProfile === true || input.requiresReferenceAudio === true) return true
+  if (input.requiresReferenceProfile === false || input.requiresReferenceAudio === false) return false
+  return input.modelFamily === 'pockettts'
+}
+
+export interface NativeSpeechPackCatalogResponse {
+  available: boolean
+  count: number
+  languages: string[]
+  packs: NativeSpeechPackCatalogEntry[]
+  secretsRedacted: boolean
+}
+
+export interface NativeSpeechPackStatusResponse {
+  available: boolean
+  activeSlots: Record<string, string>
+  count: number
+  packs: NativeSpeechPackCatalogEntry[]
+  secretsRedacted: boolean
+}
+
+export type IosAuroraActionId =
+  | 'app-intent.open-assistant'
+  | 'app-intent.stop-speech'
+  | 'shortcut.open-assistant'
+  | 'share.import-context'
+  | 'deeplink.open'
+
+export interface TauriIosInvocationStatus {
+  available: boolean
+  state: 'available' | 'degraded' | 'pending_native_target' | 'needs_native_permission' | 'unsupported_platform' | string
+  surface: string
+  supportedActions: IosAuroraActionId[]
+  siriReplacement: false
+  requiresBackendEvidence: boolean
+  secretsRedacted: boolean
+}
+
+export interface TauriIosInvokeActionRequest {
+  action: IosAuroraActionId
+  correlationId?: string
+}
+
+export interface TauriIosInvokeActionResult {
+  accepted: boolean
+  action: string
+  handoff?: string
+  reason?: string
+  correlationId?: string
+  secretsRedacted: boolean
+}
+
 export interface TauriNotificationRequest {
   title: string
   body: string
+}
+
+export interface TauriNativeShareTextRequest {
+  text: string
+  title?: string
+}
+
+export interface TauriNativeShareTextResult {
+  shared: boolean
+}
+
+export interface TauriNativeOpenDeepLinkRequest {
+  url: string
+}
+
+export interface TauriNativeOpenDeepLinkResult {
+  opened: boolean
+}
+
+export interface TauriNativeShowNotificationRequest {
+  title: string
+  body?: string
+}
+
+export interface TauriNativeShowNotificationResult {
+  shown: boolean
 }
 
 export interface SecureStorageGetResult {
@@ -100,6 +423,35 @@ export interface SecureStorageGetResult {
 export interface SecureStorageWriteResult {
   key: string
   ok: boolean
+}
+
+export interface IosAdminUnlockRequest {
+  reason: string
+  action?: string
+  correlationId?: string
+  allowDeviceCredential?: boolean
+}
+
+export interface BiometricAdminUnlockStatus {
+  platform: 'android' | 'ios' | string
+  available: boolean
+  requestable: boolean
+  deviceSecure: boolean
+  biometricReady: boolean
+  lastDenied: boolean
+  state: 'available' | 'needs_native_permission' | 'unsupported_platform' | 'degraded' | 'fallback' | string
+  reason: string
+  privacyClass: 'admin-critical' | string
+  evidenceSource: string
+  secretsRedacted: boolean
+}
+
+export interface BiometricAdminUnlockResult {
+  started: boolean
+  requestCode?: number
+  status: BiometricAdminUnlockStatus
+  reason: string
+  secretsRedacted: boolean
 }
 
 export interface LocalFileReadOptions {
@@ -145,33 +497,87 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   sidecarStop: 'aurora_sidecar_stop',
   sidecarStatus: 'aurora_sidecar_status',
   nativeCapabilityManifest: 'aurora_native_capability_manifest',
+  androidAssistantRoleStatus: 'assistantRoleStatus',
+  androidAssistantRoleRequest: 'requestAssistantRole',
+  androidFallbackEntrypoints: 'fallbackEntrypoints',
+  androidLocalLightInferenceStatus: 'localLightInferenceStatus',
+  androidPermissionRequest: 'requestAndroidPermission',
+  androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
+  androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
+  androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
+  androidEntrypointPayload: 'entrypointPayload',
+  iosEntrypointPayload: 'aurora_ios_entrypoint_payload',
   nativePermissionStatus: 'aurora_native_permission_status',
   trayStatus: 'aurora_tray_status',
   notificationStatus: 'aurora_notification_status',
   notificationSend: 'aurora_notification_send',
+  iosVoiceStatus: 'aurora_ios_voice_status',
+  iosVoiceForegroundCaptureStart: 'aurora_ios_voice_foreground_capture_start',
+  iosVoiceBackgroundCaptureStart: 'aurora_ios_voice_background_capture_start',
+  iosVoiceForegroundCaptureStop: 'aurora_ios_voice_foreground_capture_stop',
+  iosVoiceForegroundCaptureFinish: 'aurora_ios_voice_foreground_capture_finish',
+  iosVoiceForegroundCaptureStatus: 'aurora_ios_voice_foreground_capture_status',
+  iosBackgroundStatus: 'aurora_ios_background_status',
+  iosVoicePackCatalogSet: 'aurora_ios_voice_pack_catalog_set',
+  iosVoicePackList: 'aurora_ios_voice_pack_list',
+  iosVoicePackStatus: 'aurora_ios_voice_pack_status',
+  iosVoicePackDownload: 'aurora_ios_voice_pack_download',
+  iosVoicePackActivate: 'aurora_ios_voice_pack_activate',
+  iosVoicePackRemove: 'aurora_ios_voice_pack_remove',
+  androidVoicePackCatalogStatus: 'aurora_android_voice_pack_catalog_status',
+  androidVoicePackCatalogSet: 'aurora_android_voice_pack_catalog_set',
+  androidVoicePackDownload: 'aurora_android_voice_pack_download',
+  androidVoicePackDownloadStatus: 'aurora_android_voice_pack_download_status',
+  androidVoicePackActivate: 'aurora_android_voice_pack_activate',
+  androidVoicePackRemove: 'aurora_android_voice_pack_remove',
+  nativeSpeechPackCatalog: 'aurora_native_speech_pack_catalog',
+  nativeSpeechPackStatus: 'aurora_native_speech_pack_status',
+  nativeSpeechPackInstall: 'aurora_native_speech_pack_install',
+  nativeSpeechPackActivate: 'aurora_native_speech_pack_activate',
+  nativeSpeechPackRemove: 'aurora_native_speech_pack_remove',
   dialogStatus: 'aurora_dialog_status',
   audioBridgeStatus: 'aurora_audio_bridge_status',
+  androidBaselineStatus: 'aurora_android_baseline_status',
+  iosNativePluginManifest: 'aurora_ios_native_plugin_manifest',
+  iosInvocationStatus: 'aurora_ios_invocation_status',
+  iosLocalLightInferenceStatus: 'aurora_ios_local_light_inference_status',
+  iosInvokeAction: 'aurora_ios_invoke_action',
+  nativeShareText: 'aurora_native_share_text',
+  nativeOpenDeepLink: 'aurora_native_open_deep_link',
+  nativeShowNotification: 'aurora_native_show_notification',
   logTail: 'aurora_log_tail',
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
+  iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
+  iosVoiceCredentialSet: 'aurora_ios_voice_credential_set',
+  iosVoiceCredentialStatus: 'aurora_ios_voice_credential_status',
+  iosVoiceCredentialDelete: 'aurora_ios_voice_credential_delete',
+  iosBiometricStatus: 'aurora_ios_biometric_status',
+  iosAdminUnlock: 'aurora_ios_admin_unlock',
+  biometricAdminUnlockStatus: 'aurora_biometric_admin_unlock_status',
+  biometricAdminUnlock: 'aurora_biometric_admin_unlock',
   localFileRead: 'aurora_local_file_read',
   localFileWrite: 'aurora_local_file_write',
   localFilePick: 'aurora_local_file_pick',
   secureFileHandleOpen: 'aurora_secure_file_handle_open',
-  eventSubscribe: 'aurora_subscribe'
+  eventSubscribe: 'aurora_subscribe',
+  eventActivateSubscription: 'aurora_activate_subscription',
+  eventUnsubscribe: 'aurora_unsubscribe'
 }
 
 export class TauriLocalTransport implements AuroraTransport {
   readonly kind = 'tauri-local'
   readonly commands: TauriCommandNames
   private readonly invokeImpl: TauriInvoke
+  private readonly listenImpl: TauriListen | null
   private readonly requestArgName: string
   private readonly defaultTimeoutMs: number
   private sidecarSession: Promise<TauriSidecarSession | null> | null = null
 
   constructor(options: TauriLocalTransportOptions = {}) {
     this.invokeImpl = options.invoke ?? resolveTauriInvoke()
+    this.listenImpl = options.listen ?? resolveTauriListen()
     this.commands = { ...DEFAULT_COMMANDS, ...options.commands }
     this.requestArgName = options.requestArgName ?? 'request'
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
@@ -217,6 +623,56 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<NativeCapabilityManifest>(this.commands.nativeCapabilityManifest)
   }
 
+  getAndroidAssistantRoleStatus(): Promise<AndroidAssistantRoleStatus> {
+    return this.invokeCommand<AndroidAssistantRoleStatus>(this.commands.androidAssistantRoleStatus)
+  }
+
+  requestAndroidAssistantRole(): Promise<AndroidAssistantRoleRequestResult> {
+    return this.invokeCommand<AndroidAssistantRoleRequestResult>(this.commands.androidAssistantRoleRequest)
+  }
+
+  getAndroidFallbackEntrypoints(): Promise<AndroidFallbackEntrypoint[]> {
+    return this.invokeCommand<AndroidFallbackEntrypoint[]>(this.commands.androidFallbackEntrypoints)
+  }
+
+  getAndroidLocalLightInferenceStatus(): Promise<AndroidLocalLightInferenceStatus> {
+    return this.invokeCommand<AndroidLocalLightInferenceStatus>(this.commands.androidLocalLightInferenceStatus)
+  }
+
+  requestAndroidPermission(permission: string): Promise<AndroidNativePermissionRequestResult> {
+    return this.invokeCommand<AndroidNativePermissionRequestResult>(this.commands.androidPermissionRequest, { permission })
+  }
+
+  getAndroidVoiceForegroundServiceStatus(): Promise<AndroidVoiceForegroundServiceStatus> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceStatus>(this.commands.androidVoiceForegroundServiceStatus)
+  }
+
+  startAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStart)
+  }
+
+  stopAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStop)
+  }
+
+  getAndroidEntrypointPayload(): Promise<{
+    payload: AndroidEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.androidEntrypointPayload)
+  }
+
+  getIOSEntrypointPayload(): Promise<{
+    payload: IOSEntrypointPayload
+    entrypoints: NonNullable<NativeCapabilityManifest['entrypoints']>
+    evidenceSource: string
+    secretsRedacted: boolean
+  }> {
+    return this.invokeCommand(this.commands.iosEntrypointPayload)
+  }
+
   getNativePermissionStatus(): Promise<TauriNativePermissionStatus> {
     return this.invokeCommand<TauriNativePermissionStatus>(this.commands.nativePermissionStatus)
   }
@@ -233,12 +689,180 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.notificationSend, { request })
   }
 
+  getIosVoiceStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosVoiceStatus)
+  }
+
+  startIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStart)
+  }
+
+  startIosVoiceBackgroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceBackgroundCaptureStart)
+  }
+
+  stopIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStop)
+  }
+
+  finishIosVoiceForegroundCapture(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureFinish)
+  }
+
+  getIosVoiceForegroundCaptureStatus(): Promise<IosVoiceCaptureStatus> {
+    return this.invokeCommand<IosVoiceCaptureStatus>(this.commands.iosVoiceForegroundCaptureStatus)
+  }
+
+  getIosBackgroundStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosBackgroundStatus)
+  }
+
   getDialogStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.dialogStatus)
   }
 
   getAudioBridgeStatus(): Promise<TauriNativeFeatureStatus> {
     return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.audioBridgeStatus)
+  }
+
+  getAndroidBaselineStatus(): Promise<TauriAndroidBaselineStatus> {
+    return this.invokeCommand<TauriAndroidBaselineStatus>(this.commands.androidBaselineStatus)
+  }
+
+  getNativeSpeechPackCatalog(
+    request: NativeSpeechPackCatalogRequest = {}
+  ): Promise<NativeSpeechPackCatalogResponse> {
+    return this.invokeCommand<NativeSpeechPackCatalogResponse>(
+      this.commands.nativeSpeechPackCatalog,
+      { request }
+    )
+  }
+
+  getNativeSpeechPackStatus(): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(this.commands.nativeSpeechPackStatus)
+  }
+
+  installNativeSpeechPack(
+    request: NativeSpeechPackIdRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackInstall,
+      { request }
+    )
+  }
+
+  activateNativeSpeechPack(
+    request: NativeSpeechPackActivateRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackActivate,
+      { request }
+    )
+  }
+
+  removeNativeSpeechPack(
+    request: NativeSpeechPackIdRequest
+  ): Promise<NativeSpeechPackStatusResponse> {
+    return this.invokeCommand<NativeSpeechPackStatusResponse>(
+      this.commands.nativeSpeechPackRemove,
+      { request }
+    )
+  }
+
+  setIosVoicePackCatalog(request: {
+    entries: unknown[]
+    replaceExisting: boolean
+    trustedHosts?: string[]
+  }): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackCatalogSet, { request })
+  }
+
+  listIosVoicePacks(): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackList)
+  }
+
+  getIosVoicePackStatus(): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackStatus)
+  }
+
+  downloadIosVoicePack(request: NativeMobileSpeechPackDownloadRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackDownload, { request })
+  }
+
+  activateIosVoicePack(request: NativeMobileSpeechPackActivateRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackActivate, { request })
+  }
+
+  removeIosVoicePack(request: NativeSpeechPackIdRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.iosVoicePackRemove, { request })
+  }
+
+  getAndroidVoicePackCatalogStatus(): Promise<AndroidVoicePackCatalogStatus> {
+    return this.invokeCommand<AndroidVoicePackCatalogStatus>(this.commands.androidVoicePackCatalogStatus)
+  }
+
+  setAndroidVoicePackCatalog(catalogJson: string): Promise<AndroidVoicePackCatalogStatus> {
+    return this.invokeCommand<AndroidVoicePackCatalogStatus>(
+      this.commands.androidVoicePackCatalogSet,
+      { request: { catalogJson } }
+    )
+  }
+
+  downloadAndroidVoicePack(
+    request: NativeMobileSpeechPackDownloadRequest
+  ): Promise<AndroidVoicePackDownloadResult> {
+    return this.invokeCommand<AndroidVoicePackDownloadResult>(
+      this.commands.androidVoicePackDownload,
+      { request }
+    )
+  }
+
+  getAndroidVoicePackDownloadStatus(jobId: string): Promise<AndroidVoicePackDownloadStatus> {
+    return this.invokeCommand<AndroidVoicePackDownloadStatus>(
+      this.commands.androidVoicePackDownloadStatus,
+      { request: { jobId } }
+    )
+  }
+
+  activateAndroidVoicePack(
+    request: NativeMobileSpeechPackActivateRequest
+  ): Promise<unknown> {
+    return this.invokeCommand(this.commands.androidVoicePackActivate, { request })
+  }
+
+  removeAndroidVoicePack(request: NativeSpeechPackIdRequest): Promise<unknown> {
+    return this.invokeCommand(this.commands.androidVoicePackRemove, { request })
+  }
+
+  getIosNativePluginManifest(): Promise<NativeCapabilityManifest> {
+    return this.invokeCommand<NativeCapabilityManifest>(this.commands.iosNativePluginManifest)
+  }
+
+  getIosInvocationStatus(): Promise<TauriIosInvocationStatus> {
+    return this.invokeCommand<TauriIosInvocationStatus>(this.commands.iosInvocationStatus)
+  }
+
+  getIosLocalLightInferenceStatus(): Promise<AndroidLocalLightInferenceStatus> {
+    return this.invokeCommand<AndroidLocalLightInferenceStatus>(this.commands.iosLocalLightInferenceStatus)
+  }
+
+  invokeIosAuroraAction(request: TauriIosInvokeActionRequest): Promise<TauriIosInvokeActionResult> {
+    return this.invokeCommand<TauriIosInvokeActionResult>(this.commands.iosInvokeAction, { request })
+  }
+
+  async shareNativeText(request: TauriNativeShareTextRequest): Promise<TauriNativeShareTextResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeShareText, { request })
+    return requireNativeActionSuccess(result, 'shared', this.commands.nativeShareText)
+  }
+
+  async openNativeDeepLink(request: TauriNativeOpenDeepLinkRequest): Promise<TauriNativeOpenDeepLinkResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeOpenDeepLink, { request })
+    return requireNativeActionSuccess(result, 'opened', this.commands.nativeOpenDeepLink)
+  }
+
+  async showNativeNotification(request: TauriNativeShowNotificationRequest): Promise<TauriNativeShowNotificationResult> {
+    const result = await this.invokeCommand<unknown>(this.commands.nativeShowNotification, { request })
+    return requireNativeActionSuccess(result, 'shown', this.commands.nativeShowNotification)
   }
 
   getLogTail(request: TauriLogTailRequest = {}): Promise<TauriLogTailResult> {
@@ -255,6 +879,38 @@ export class TauriLocalTransport implements AuroraTransport {
 
   secureStorageDelete(key: string): Promise<SecureStorageWriteResult> {
     return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
+  }
+
+  getIosSecureStorageStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosSecureStorageStatus)
+  }
+
+  setIosVoiceCredential(request: IosVoiceCredentialRequest): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialSet, { request })
+  }
+
+  getIosVoiceCredentialStatus(): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialStatus)
+  }
+
+  deleteIosVoiceCredential(): Promise<IosVoiceCredentialStatus> {
+    return this.invokeCommand<IosVoiceCredentialStatus>(this.commands.iosVoiceCredentialDelete)
+  }
+
+  getIosBiometricStatus(): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosBiometricStatus)
+  }
+
+  iosAdminUnlock(request: IosAdminUnlockRequest): Promise<TauriNativeFeatureStatus> {
+    return this.invokeCommand<TauriNativeFeatureStatus>(this.commands.iosAdminUnlock, { request })
+  }
+
+  getBiometricAdminUnlockStatus(): Promise<BiometricAdminUnlockStatus> {
+    return this.invokeCommand<BiometricAdminUnlockStatus>(this.commands.biometricAdminUnlockStatus)
+  }
+
+  requestBiometricAdminUnlock(): Promise<BiometricAdminUnlockResult> {
+    return this.invokeCommand<BiometricAdminUnlockResult>(this.commands.biometricAdminUnlock)
   }
 
   readLocalFile(path: string, options: LocalFileReadOptions = {}): Promise<LocalFileReadResult> {
@@ -280,13 +936,46 @@ export class TauriLocalTransport implements AuroraTransport {
   async subscribe<TEventPayload = unknown, TPayload = unknown>(
     request: AuroraStreamRequest<TPayload>
   ): Promise<AuroraEventSubscription<TEventPayload>> {
+    const sidecarSession = await this.getSidecarSession()
+    const bridgeRequest = withSubscribeSidecarHeader(request, sidecarSession)
     const context: TauriInvokeContext = { method: this.commands.eventSubscribe }
     if (request.topics[0] !== undefined) context.busTopic = request.topics[0]
     const response = await this.invokeCommand<unknown>(
       this.commands.eventSubscribe,
-      { [this.requestArgName]: request },
+      { [this.requestArgName]: bridgeRequest },
       context
     )
+    if (isTauriSubscriptionDescriptor(response)) {
+      if (!this.listenImpl) {
+        throw new AuroraError({
+          code: 'unsupported_feature',
+          message: 'Tauri event listener API is unavailable; pass a listen implementation to TauriLocalTransport.'
+        })
+      }
+      return createTauriIpcEventSubscription<TEventPayload>(
+        response,
+        request,
+        this.listenImpl,
+        (subscriptionId) => {
+          const activateContext: TauriInvokeContext = { method: this.commands.eventActivateSubscription }
+          if (context.busTopic !== undefined) activateContext.busTopic = context.busTopic
+          return this.invokeCommand(
+            this.commands.eventActivateSubscription,
+            { [this.requestArgName]: { subscriptionId } },
+            activateContext
+          )
+        },
+        (subscriptionId) => {
+          const unsubscribeContext: TauriInvokeContext = { method: this.commands.eventUnsubscribe }
+          if (context.busTopic !== undefined) unsubscribeContext.busTopic = context.busTopic
+          void this.invokeCommand(
+            this.commands.eventUnsubscribe,
+            { [this.requestArgName]: { subscriptionId } },
+            unsubscribeContext
+          )
+        }
+      )
+    }
     return createEventSubscription(normalizeTauriEvents<TEventPayload>(response, request))
   }
 
@@ -329,7 +1018,7 @@ export class TauriLocalTransport implements AuroraTransport {
   private async getSidecarSession(): Promise<TauriSidecarSession | null> {
     this.sidecarSession ??= withTimeout(
       this.invokeImpl(this.commands.sidecarSession).then((value) => value as TauriSidecarSession),
-      { command: this.commands.sidecarSession, timeoutMs: 250 }
+      { command: this.commands.sidecarSession, timeoutMs: 3_000 }
     ).catch(() => null)
     return this.sidecarSession
   }
@@ -347,6 +1036,139 @@ function withSidecarSessionHeader<TPayload>(
       'x-aurora-sidecar-token': session.token
     }
   }
+}
+
+function withSubscribeSidecarHeader<TPayload>(
+  request: AuroraStreamRequest<TPayload>,
+  session: TauriSidecarSession | null
+): AuroraStreamRequest<TPayload> {
+  if (!session?.token) return request
+  return {
+    ...request,
+    headers: {
+      ...request.headers,
+      'x-aurora-sidecar-token': session.token
+    }
+  }
+}
+
+function requireNativeActionSuccess<TKey extends 'shared' | 'opened' | 'shown'>(
+  value: unknown,
+  key: TKey,
+  command: string
+): Record<TKey, boolean> {
+  if (typeof value !== 'object' || value === null || (value as Record<string, unknown>)[key] !== true) {
+    throw new AuroraError({
+      code: 'validation',
+      message: `Tauri command ${command} returned an invalid native action result`
+    })
+  }
+  return { [key]: true } as Record<TKey, boolean>
+}
+
+interface TauriSubscriptionDescriptor {
+  subscriptionId: string
+  eventName: string
+}
+
+interface TauriSubscriptionPayload {
+  subscriptionId?: string
+  event?: unknown
+}
+
+interface TauriSubscriptionClosedPayload {
+  subscriptionId?: string
+  reason?: string
+  code?: string
+  secretsRedacted?: boolean
+}
+
+function isTauriSubscriptionDescriptor(value: unknown): value is TauriSubscriptionDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string' &&
+    typeof (value as { eventName?: unknown }).eventName === 'string'
+  )
+}
+
+async function createTauriIpcEventSubscription<TPayload>(
+  descriptor: TauriSubscriptionDescriptor,
+  request: AuroraStreamRequest,
+  listen: TauriListen,
+  activate: (subscriptionId: string) => Promise<unknown>,
+  unsubscribe: (subscriptionId: string) => void
+): Promise<AuroraEventSubscription<TPayload>> {
+  const queue: Array<AuroraEvent<TPayload>> = []
+  const waiters: Array<() => void> = []
+  let closed = false
+  let closeError: AuroraError | null = null
+  const wake = () => waiters.splice(0).forEach((resolve) => resolve())
+  const closeFromNative = (payload: TauriSubscriptionClosedPayload) => {
+    closed = true
+    if (payload.code && payload.code !== 'closed') {
+      closeError = new AuroraError({
+        code: payload.code as AuroraErrorCode,
+        message: payload.reason ?? 'Tauri event subscription closed unexpectedly',
+        method: 'aurora_subscribe',
+        busTopic: request.topics[0],
+        detail: {
+          code: payload.code,
+          reason: payload.reason,
+          secretsRedacted: payload.secretsRedacted ?? true
+        }
+      })
+    }
+    wake()
+  }
+  const unlistenEvents = await listen<TauriSubscriptionPayload>(descriptor.eventName, ({ payload }) => {
+    const raw = payload?.event ?? payload
+    queue.push(eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit }))
+    wake()
+  })
+  const unlistenClosed = await listen<TauriSubscriptionClosedPayload>(`${descriptor.eventName}/closed`, ({ payload }) => {
+    closeFromNative(payload ?? {})
+  })
+  try {
+    await activate(descriptor.subscriptionId)
+  } catch (error) {
+    unlistenEvents()
+    unlistenClosed()
+    unsubscribe(descriptor.subscriptionId)
+    throw error
+  }
+  const cleanup = () => {
+    if (!closed) {
+      closed = true
+      unsubscribe(descriptor.subscriptionId)
+    }
+    unlistenEvents()
+    unlistenClosed()
+    wake()
+  }
+  const source: AsyncIterable<AuroraEvent<TPayload>> = {
+    async *[Symbol.asyncIterator]() {
+      try {
+        while (true) {
+          if (queue.length > 0) {
+            const event = queue.shift()
+            if (event) yield event
+            continue
+          }
+          if (closed) {
+            if (closeError) throw closeError
+            return
+          }
+          await new Promise<void>((resolve) => {
+            waiters.push(resolve)
+          })
+        }
+      } finally {
+        cleanup()
+      }
+    }
+  }
+  return createEventSubscription(source, cleanup)
 }
 
 async function* normalizeTauriEvents<TPayload>(
@@ -396,6 +1218,15 @@ function resolveTauriInvoke(): TauriInvoke {
     })
   }
   return invoke
+}
+
+function resolveTauriListen(): TauriListen | null {
+  const tauri = (globalThis as {
+    __TAURI__?: {
+      event?: { listen?: TauriListen }
+    }
+  }).__TAURI__
+  return tauri?.event?.listen ?? null
 }
 
 function toTransportEnvelope<TData>(value: unknown): AuroraTransportEnvelope<TData> {

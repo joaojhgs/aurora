@@ -1,22 +1,60 @@
 name: Tauri iOS Baseline
 
 on:
+  workflow_call:
+    inputs:
+      release_version:
+        description: "SemVer embedded in unsigned release artifacts"
+        required: false
+        default: ""
+        type: string
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
+      - "app/messaging/mesh_bus.py"
+      - "app/services/auth/**"
+      - "app/services/config/**"
+      - "app/services/db/**"
+      - "app/services/gateway/service.py"
+      - "app/services/gateway/mesh/**"
+      - "app/services/gateway/webrtc/**"
+      - "app/services/gateway/utils/crypto.py"
+      - "app/services/tooling/**"
+      - "app/shared/auth/**"
+      - "app/shared/config/**"
+      - "app/shared/contracts/**"
       - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
       - "packages/aurora-ui/**"
+      - "packages/aurora-voice-web/**"
+      - "rust/crates/**"
+      - "tools/voice-runtime/**"
+      - "tests/e2e/webrtc_interop/**"
+      - "scripts/webrtc_interop_gateway.py"
+      - "scripts/webrtc_interop_scan.py"
+      - "pyproject.toml"
+      - "uv.lock"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - ".github/scripts/ios_app_intent_smoke.swift"
+      - ".github/scripts/ios_entrypoint_payload_smoke.swift"
       - ".github/workflows/tauri-ios.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   macos-tauri-ios:
     name: macOS Xcode Tauri iOS init and build
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -28,9 +66,23 @@ jobs:
           xcrun simctl list runtimes
 
       - name: Set up Rust with iOS targets
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
-          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,x86_64-apple-ios,aarch64-apple-ios-sim,wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - name: Set up Python interop peer
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv for the external Python peer
+        uses: astral-sh/setup-uv@v5
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -41,6 +93,10 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Apply release artifact version
+        if: inputs.release_version != ''
+        run: node scripts/set_release_version.mjs "${{ inputs.release_version }}"
+
       - name: Install CocoaPods
         run: |
           if ! command -v pod >/dev/null 2>&1; then
@@ -48,13 +104,61 @@ jobs:
           fi
           pod --version
 
+      - name: Install local WebSocket MQTT broker
+        run: |
+          if ! command -v mosquitto >/dev/null 2>&1; then
+            brew install mosquitto
+          fi
+          if ! command -v turnserver >/dev/null 2>&1; then
+            brew install coturn
+          fi
+          mosquitto -h >/dev/null
+          command -v turnserver >/dev/null
+
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore patched iOS Sherpa runtime
+        id: sherpa-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim
+          key: sherpa-native-${{ runner.os }}-aarch64-apple-ios-sim-${{ hashFiles('tools/voice-runtime/build_sherpa_native.py', 'tools/voice-runtime/run_sherpa_cmake.py', 'tools/voice-runtime/sherpa-patches/**') }}
+
+      - name: Build patched iOS Sherpa runtime
+        if: steps.sherpa-cache.outputs.cache-hit != 'true'
+        run: >-
+          python tools/voice-runtime/build_sherpa_native.py
+          --target aarch64-apple-ios-sim
+          --jobs 2
+
+      - name: Configure patched iOS Sherpa runtime
+        run: |
+          SHERPA_RUNTIME="$GITHUB_WORKSPACE/.artifacts/sherpa-onnx/native-runtime-build/runtime/aarch64-apple-ios-sim"
+          echo "AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LIB_DIR=$SHERPA_RUNTIME" >> "$GITHUB_ENV"
+          echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
+
+      - name: Run iOS CI harness regression tests
+        run: >-
+          pnpm --filter @aurora/tauri-ui exec vitest run --environment node
+          src/ios-simulator-smoke.test.ts
+          src/ios-ci-evidence.test.ts
+          src/ci-native-evidence.test.ts
+          src/ios-webrtc-log-redaction.test.ts
+
+      - name: Install Python WebRTC peer dependencies
+        run: uv sync --extra sidecar-thin
+
       - name: Build Tauri workspace dependencies
         run: |
+          pnpm --filter @aurora/mesh-authority-web build
           pnpm --filter @aurora/client build
           pnpm --filter @aurora/ui build
+
+      - name: Run shared client regressions on macOS
+        run: pnpm test:tauri:shared-regressions
 
       - name: Build Tauri frontend bundle
         run: pnpm --filter @aurora/tauri-ui build
@@ -68,3 +172,149 @@ jobs:
           CODE_SIGNING_ALLOWED: "NO"
           CODE_SIGNING_REQUIRED: "NO"
         run: pnpm --filter @aurora/tauri-ui tauri ios build --target aarch64-sim --config src-tauri/tauri.ios.conf.json
+
+      - name: Build Python-free Tauri iOS client simulator app
+        env:
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:build:client:simulator
+
+      - name: Archive unsigned iOS simulator app
+        run: |
+          APP_PATH="$(node apps/aurora-tauri/scripts/ios-simulator-smoke.mjs --print-app-path)"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" apps/aurora-tauri/reports/Aurora-iOS-Simulator.zip
+
+      - name: Upload unsigned iOS simulator package
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-client-simulator
+          path: apps/aurora-tauri/reports/Aurora-iOS-Simulator.zip
+          if-no-files-found: error
+
+      - name: Upload iOS client build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-client-build-provenance
+          path: apps/aurora-tauri/reports/ios-client-simulator-build-provenance.json
+          if-no-files-found: error
+
+      - name: Install, launch, and screenshot the client app in an iOS simulator
+        run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
+
+      - name: Pair iOS MobileSafari with the external Python peer over WebRTC
+        env:
+          AURORA_IOS_WEBRTC_SURFACES: mobile-safari
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer over direct WebRTC
+        env:
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer through STUN
+        env:
+          AURORA_IOS_WEBRTC_LANE: stun
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Pair packaged WKWebView with the external Python peer through TURN
+        env:
+          AURORA_IOS_WEBRTC_LANE: turn
+          AURORA_IOS_WEBRTC_SURFACES: tauri-wkwebview
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: pnpm --filter @aurora/tauri-ui ios:webrtc:interop
+
+      - name: Require production simulator, MobileSafari, and packaged WKWebView evidence
+        if: always()
+        run: node apps/aurora-tauri/scripts/assert-ios-ci-evidence.mjs
+
+      - name: Smoke invoke Aurora App Intent handoff
+        run: |
+          xcrun swiftc \
+            -parse-as-library \
+            apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraAppIntents.swift \
+            .github/scripts/ios_app_intent_smoke.swift \
+            -o /tmp/aurora-ios-app-intent-smoke
+          /tmp/aurora-ios-app-intent-smoke | tee /tmp/aurora-ios-app-intent-smoke.json
+          grep '"action":"askAuroraAppIntent"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"backendMethod":"Orchestrator.ExternalUserInput"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"invocation":"app-intent"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"privacyClass":"personal"' /tmp/aurora-ios-app-intent-smoke.json
+          grep '"siriReplacement":false' /tmp/aurora-ios-app-intent-smoke.json
+
+      - name: Smoke IOS-004 entrypoint payload handoffs
+        run: |
+          xcrun swiftc \
+            -parse-as-library \
+            apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraEntrypointPayloads.swift \
+            .github/scripts/ios_entrypoint_payload_smoke.swift \
+            -o /tmp/aurora-ios-entrypoint-payload-smoke
+          /tmp/aurora-ios-entrypoint-payload-smoke | tee /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_share_extension"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_deep_link"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_widget"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"id":"ios_file_association"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"share_extension"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"deep_link"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"widget:open-assistant"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"invocation":"file_association"' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"backendHandoffRequired":true' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"secretsRedacted":true' /tmp/aurora-ios-entrypoint-payload-smoke.json
+          grep '"siriReplacement":false' /tmp/aurora-ios-entrypoint-payload-smoke.json
+
+      - name: Upload Aurora App Intent smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-app-intent-smoke
+          path: /tmp/aurora-ios-app-intent-smoke.json
+          if-no-files-found: error
+
+      - name: Upload Aurora IOS-004 entrypoint payload smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-entrypoint-payload-smoke
+          path: /tmp/aurora-ios-entrypoint-payload-smoke.json
+          if-no-files-found: error
+
+      - name: Upload aggregate iOS CI evidence summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-ci-evidence-summary
+          path: apps/aurora-tauri/reports/ios-ci-evidence-summary.json
+          if-no-files-found: error
+
+      - name: Upload iOS simulator runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-simulator-smoke
+          path: |
+            apps/aurora-tauri/reports/ios-simulator-smoke.json
+            apps/aurora-tauri/reports/ios-simulator-smoke.png
+            apps/aurora-tauri/reports/ios-simulator-smoke.log
+          if-no-files-found: error
+
+      - name: Upload iOS WebView and mobile-browser to Python WebRTC evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-ios-python-webrtc-interop
+          path: |
+            apps/aurora-tauri/reports/webrtc-interop/ios-mobile-safari/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview-stun/
+            apps/aurora-tauri/reports/webrtc-interop/ios-wkwebview-turn/
+          if-no-files-found: error

@@ -30,6 +30,8 @@ def service(mock_bus):
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
         service = TranscriptionService()
         service._process_audio_data = AsyncMock()
+        service._realtime_model = Mock()
+        service._model_status["realtime"] = "ready"
         yield service
 
 

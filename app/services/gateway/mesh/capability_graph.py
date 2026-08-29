@@ -7,7 +7,7 @@ state. It does not own routing decisions and must not mutate mesh state.
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from app.shared.contracts.models.gateway import (
@@ -25,8 +25,10 @@ from app.shared.contracts.models.gateway import (
 from .version_compat import is_compatible
 
 if TYPE_CHECKING:
-    from app.services.gateway.config import MeshConfig, MeshServiceConfig
+    from app.services.gateway.config import MeshConfig, MeshServicePolicy
     from app.services.gateway.mesh.models import PeerServiceInfo
+    from app.services.gateway.mesh.peer_registry import PeerRegistry
+    from app.services.gateway.mesh.policy_store import MeshPolicySnapshot
 
 
 _EXPLICIT_MODULES = {
@@ -78,12 +80,14 @@ def build_capability_graph(
     mesh_config: MeshConfig,
     local_services: dict[str, ServiceAnnouncement] | None = None,
     peers: list[Any] | None = None,
+    registry: PeerRegistry | None = None,
+    policy_snapshot: MeshPolicySnapshot | None = None,
     local_peer_id: str | None = None,
 ) -> CapabilityGraph:
     """Build a redacted graph from local registry and remote manifests."""
 
     local_services = local_services or {}
-    peers = peers or []
+    peers = registry.get_all_peers() if registry is not None else peers or []
 
     graph_peers: list[CapabilityPeerInfo] = []
     graph_services: list[CapabilityServiceInfo] = []
@@ -125,6 +129,8 @@ def build_capability_graph(
                     peer=peer,
                     service=remote_service,
                     mesh_config=mesh_config,
+                    registry=registry,
+                    policy_snapshot=policy_snapshot,
                     manifest_timestamp=manifest.timestamp or None,
                 )
                 graph_services.append(service)
@@ -157,7 +163,7 @@ def build_capability_graph(
     return CapabilityGraph(
         local_peer_id=local_peer_id,
         local_node_name=mesh_config.node_name,
-        generated_at=datetime.now(UTC).isoformat(),
+        generated_at=datetime.now(timezone.utc).isoformat(),
         peers=graph_peers,
         services=graph_services,
         resources=[],
@@ -202,14 +208,15 @@ def _local_service_to_graph(
         version=announcement.version,
         summary=announcement.summary,
         capabilities=list(announcement.capabilities),
+        callable_features=list(announcement.callable_features),
         method_count=len(methods),
         methods=methods,
-        max_concurrent=sharing_config.max_concurrent if sharing_config else 0,
+        max_concurrent=sharing_config.export.max_concurrent if sharing_config else 0,
         active_calls=0,
-        available_capacity=sharing_config.max_concurrent if sharing_config else None,
+        available_capacity=sharing_config.export.max_concurrent if sharing_config else None,
         latency_ms=0.0,
         digest="",
-        share=bool(sharing_config.share) if sharing_config else False,
+        share=bool(sharing_config.export.share) if sharing_config else False,
         routable=True,
         policy=policy,
         address=CapabilityAddressInfo(
@@ -226,6 +233,8 @@ def _remote_service_to_graph(
     peer: Any,
     service: PeerServiceInfo,
     mesh_config: MeshConfig,
+    registry: PeerRegistry | None,
+    policy_snapshot: MeshPolicySnapshot | None,
     manifest_timestamp: str | None,
 ) -> CapabilityServiceInfo:
     sharing_config = mesh_config.services.get(service.module)
@@ -238,7 +247,8 @@ def _remote_service_to_graph(
         peer=peer,
         service=service,
         sharing_config=sharing_config,
-        available_capacity=available_capacity,
+        registry=registry,
+        policy_snapshot=policy_snapshot,
         version_policy=mesh_config.version_policy,
     )
     provenance = CapabilityProvenanceInfo(
@@ -267,6 +277,7 @@ def _remote_service_to_graph(
         module=service.module,
         version=service.version,
         capabilities=list(service.capabilities),
+        callable_features=list(service.callable_features),
         method_count=len(methods),
         methods=methods,
         max_concurrent=service.max_concurrent,
@@ -304,6 +315,8 @@ def _method_to_graph(
         bus_topic=method.bus_topic,
         exposure=method.exposure,
         method_type=method.method_type,
+        callable_feature_ids=list(method.callable_feature_ids),
+        callable_features=list(method.callable_features),
         summary=method.summary,
         input_model=method.input_model,
         output_model=method.output_model,
@@ -323,11 +336,12 @@ def _method_to_graph(
 def _policy_for_method(
     module: str,
     method: MethodInfo,
-    sharing_config: MeshServiceConfig | None,
+    sharing_config: MeshServicePolicy | None,
     provider_kind: str,
 ) -> CapabilityPolicyInfo:
     policy = _policy_for_module(module, sharing_config, provider_kind=provider_kind)
     policy.required_perms = list(method.required_perms)
+    policy.required_callable_feature_ids = list(method.callable_feature_ids)
     policy.safety_class = _safety_class(module, method.method_type, method.name)
 
     low_risk_audio = _LOW_RISK_AUDIO_METHODS.get((module, method.name))
@@ -358,7 +372,7 @@ def _policy_for_method(
 
 def _policy_for_module(
     module: str,
-    sharing_config: MeshServiceConfig | None,
+    sharing_config: MeshServicePolicy | None,
     provider_kind: str,
 ) -> CapabilityPolicyInfo:
     safety_class = _safety_class(module)
@@ -370,8 +384,8 @@ def _policy_for_module(
     policy = CapabilityPolicyInfo(
         trust_tier="local" if provider_kind == "local" else "mesh_peer",
         safety_class=safety_class,
-        allowed_peers=list(sharing_config.allowed_peers)
-        if sharing_config and sharing_config.allowed_peers is not None
+        allowed_provider_peer_ids=list(sharing_config.routing.allowed_provider_peer_ids)
+        if sharing_config and sharing_config.routing.allowed_provider_peer_ids is not None
         else None,
         explicit_selector_required=explicit_required,
         confirmation_required=provider_kind == "remote"
@@ -382,8 +396,11 @@ def _policy_for_module(
         in {"AudioInput", "STTCoordinator", "WakeWord", "Transcription"},
         operation_class="audio_service" if module in _HARDWARE_OR_AUDIO_MODULES else None,
         resource_scope="audio" if module in _HARDWARE_OR_AUDIO_MODULES else None,
-        mesh_visible=bool(sharing_config.share) if sharing_config else provider_kind == "remote",
-        local_only=provider_kind == "local" and not (sharing_config and sharing_config.share),
+        mesh_visible=bool(sharing_config.export.share)
+        if sharing_config
+        else provider_kind == "remote",
+        local_only=provider_kind == "local"
+        and not (sharing_config and sharing_config.export.share),
     )
     if provider_kind == "remote" and safety_class == "delegated_action":
         policy.confirmation_required = True
@@ -394,48 +411,20 @@ def _remote_route_blockers(
     *,
     peer: Any,
     service: PeerServiceInfo,
-    sharing_config: MeshServiceConfig | None,
-    available_capacity: int | None,
+    sharing_config: MeshServicePolicy | None,
+    registry: PeerRegistry | None,
+    policy_snapshot: MeshPolicySnapshot | None,
     version_policy: str,
 ) -> list[str]:
-    blockers: list[str] = []
-
-    if peer.status != "negotiated":
-        blockers.append(f"peer_status:{peer.status}")
-
-    if not sharing_config:
-        blockers.append("no_routing_config")
-        return blockers
-
-    if sharing_config.prefer in {"local", "local_only"}:
-        blockers.append(f"routing_prefer:{sharing_config.prefer}")
-
-    if (
-        sharing_config.allowed_peers is not None
-        and peer.peer_id not in sharing_config.allowed_peers
-    ):
-        blockers.append("peer_not_allowed")
-
-    if sharing_config.min_version and not is_compatible(
-        sharing_config.min_version,
-        service.version,
-        version_policy,
-        sharing_config.min_version,
-    ):
-        blockers.append("version_incompatible")
-
-    missing_capabilities = [
-        capability
-        for capability in sharing_config.required_capabilities
-        if capability not in service.capabilities
-    ]
-    if missing_capabilities:
-        blockers.append("missing_required_capabilities")
-
-    if available_capacity == 0:
-        blockers.append("capacity_exhausted")
-
-    return blockers
+    if registry is None:
+        return ["registry_unavailable"]
+    return registry.get_service_route_blockers(
+        peer=peer,
+        service=service,
+        routing_config=sharing_config,
+        policy_snapshot=policy_snapshot,
+        version_policy=version_policy,
+    )
 
 
 def _safety_class(module: str, method_type: str = "use", method_name: str | None = None) -> str:

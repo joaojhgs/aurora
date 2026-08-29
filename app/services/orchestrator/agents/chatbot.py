@@ -1,10 +1,15 @@
+import asyncio
+import inspect
 import os
 from datetime import datetime
+
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
+from app.services.orchestrator.remote_mesh_chat_model import RemoteMeshChatModel
 from app.services.orchestrator.state import State
 from app.services.orchestrator.tool_bindings import (
     build_tool_approval_candidates,
@@ -27,14 +32,18 @@ from app.shared.config.models import (
     ThirdParty,
 )
 from app.shared.contracts.models.db import DBMethods
+from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.tooling import (
     ToolingGetToolCatalogRequest,
     ToolingGetToolsRequest,
     ToolingMethods,
 )
+from app.shared.messaging.bus_init import get_bus_singleton
 from app.shared.messaging.models.db_models import RAGSearchQuery
 
 config_api = ConfigAPI()
+
+_RECENT_PROMPT_MESSAGE_WINDOW = 4
 
 
 def _config_secret_plain(val):
@@ -45,6 +54,55 @@ def _config_secret_plain(val):
     return val
 
 
+def _dict_value(value, key: str, default=None):
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _remote_llm_config(raw_llm_config: dict | None, provider: str) -> dict:
+    if not isinstance(raw_llm_config, dict):
+        return {}
+    for key in (provider, "remote_peer", "mesh_peer", "remote"):
+        value = raw_llm_config.get(key)
+        if isinstance(value, dict):
+            return value
+    return raw_llm_config
+
+
+def _remote_mesh_selector_from_config(
+    raw_llm_config: dict | None, provider: str
+) -> MeshAddressSelector | None:
+    remote_cfg = _remote_llm_config(raw_llm_config, provider)
+    selector_value = remote_cfg.get("mesh_selector") or remote_cfg.get("selector")
+    if isinstance(selector_value, MeshAddressSelector):
+        selector = selector_value
+    elif isinstance(selector_value, dict):
+        selector = MeshAddressSelector.model_validate(selector_value)
+    else:
+        selector = MeshAddressSelector(
+            peer_id=remote_cfg.get("peer_id") or remote_cfg.get("peerId"),
+            provider_id=remote_cfg.get("provider_id") or remote_cfg.get("providerId"),
+            service_instance_id=remote_cfg.get("service_instance_id")
+            or remote_cfg.get("serviceInstanceId"),
+            resource_namespace=remote_cfg.get("resource_namespace")
+            or remote_cfg.get("resourceNamespace")
+            or "inference",
+        )
+    return selector if selector.has_routing_target() else None
+
+
+def _remote_timeout_from_config(raw_llm_config: dict | None, provider: str) -> float:
+    remote_cfg = _remote_llm_config(raw_llm_config, provider)
+    raw_timeout = (
+        remote_cfg.get("timeout") or remote_cfg.get("timeout_s") or remote_cfg.get("timeoutSeconds")
+    )
+    try:
+        return float(raw_timeout) if raw_timeout is not None else 60.0
+    except (TypeError, ValueError):
+        return 60.0
+
+
 """
 The chatbot agent is the main agent coordinator in the graph.
 """
@@ -52,9 +110,24 @@ The chatbot agent is the main agent coordinator in the graph.
 # Init LLM (lazy initialization)
 llm = None
 _llm_initialized = False
+_llm_init_lock = asyncio.Lock()
 
 
 async def _initialize_llm() -> None:
+    """Serialize lazy LLM initialization and reuse a completed model."""
+
+    if _llm_initialized:
+        log_debug("LLM already initialized, skipping initialization")
+        return
+
+    async with _llm_init_lock:
+        if _llm_initialized:
+            log_debug("LLM initialized by another request")
+            return
+        await _initialize_llm_unlocked()
+
+
+async def _initialize_llm_unlocked() -> None:
     """Initialize the LLM based on configuration.
 
     This is called lazily on first use to ensure ConfigService is ready.
@@ -65,8 +138,21 @@ async def _initialize_llm() -> None:
         log_debug("LLM already initialized, skipping initialization")
         return
 
-    _llm_initialized = True
+    llm = None
     log_info("Starting LLM initialization...")
+
+    raw_llm_config: dict | None = None
+    try:
+        services_config = await config_api.aget_config("services", timeout=20.0)
+        raw_orchestrator_config = (services_config or {}).get("orchestrator", {})
+        raw_llm_config = (
+            raw_orchestrator_config.get("llm", {})
+            if isinstance(raw_orchestrator_config, dict)
+            else {}
+        )
+    except Exception as e:
+        log_warning(f"Failed to load raw LLM config for mesh provider support: {e}")
+        raw_llm_config = None
 
     orchestrator_cfg = await config_api.aget(
         ConfigKeys.services.orchestrator,
@@ -76,14 +162,36 @@ async def _initialize_llm() -> None:
     llm_cfg = orchestrator_cfg.llm or Llm()
 
     try:
-        provider = llm_cfg.provider or "openai"
+        provider = str((raw_llm_config or {}).get("provider") or llm_cfg.provider or "openai")
         log_info(f"LLM provider from config: {provider}")
     except Exception as e:
         log_error(f"Failed to get LLM provider from config: {e}", exc_info=True)
         provider = "openai"
         log_warning(f"Using default provider: {provider}")
 
-    if provider == "openai":
+    if provider in {"remote_peer", "mesh_peer"}:
+        selector = _remote_mesh_selector_from_config(raw_llm_config, provider)
+        if selector is None:
+            log_error(
+                "Remote mesh LLM provider selected but no peer/provider/service selector was configured"
+            )
+            llm = None
+        else:
+            try:
+                llm = RemoteMeshChatModel(
+                    bus=get_bus_singleton(),
+                    mesh_selector=selector,
+                    timeout=_remote_timeout_from_config(raw_llm_config, provider),
+                )
+                log_info(
+                    "Initialized remote mesh LLM provider "
+                    f"with selector peer={selector.peer_id or selector.provider_id or selector.service_instance_id}"
+                )
+            except Exception as e:
+                log_error(f"Failed to initialize remote mesh LLM provider: {e}", exc_info=True)
+                llm = None
+
+    elif provider == "openai":
         from langchain_openai import ChatOpenAI
 
         log_info("Initializing OpenAI LLM...")
@@ -303,8 +411,10 @@ async def _initialize_llm() -> None:
                 llm = None
 
     if llm is not None:
+        _llm_initialized = True
         log_info(f"✅ LLM successfully initialized with provider: {provider}")
     else:
+        _llm_initialized = False
         log_error(f"❌ Failed to initialize LLM with provider: {provider}")
 
 
@@ -313,6 +423,68 @@ def _deserialize_tools(tool_schemas: list[dict]):
 
     tools, _ = build_tool_bindings(tool_schemas)
     return tools
+
+
+def _protocol_safe_prompt_suffix(
+    messages: list[BaseMessage],
+    *,
+    recent_window: int = _RECENT_PROMPT_MESSAGE_WINDOW,
+) -> list[BaseMessage]:
+    """Return recent messages without orphaning a leading tool-result transaction."""
+
+    start = max(0, len(messages) - max(0, recent_window))
+    if start >= len(messages) or not isinstance(messages[start], ToolMessage):
+        return messages[start:]
+
+    while start > 0 and isinstance(messages[start - 1], ToolMessage):
+        start -= 1
+    if start > 0 and isinstance(messages[start - 1], AIMessage):
+        start -= 1
+    return messages[start:]
+
+
+async def _chat_llm_for_state(state: State, bus: MessageBus):
+    override = state.get("inference_override") or {}
+    messages = state.get("messages", [])
+    if not override and messages:
+        for message in reversed(messages):
+            additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+            if isinstance(additional_kwargs, dict):
+                override = additional_kwargs.get("aurora_inference_override") or {}
+                if override:
+                    break
+    provider = override.get("inference_provider")
+    selector = override.get("inference_selector")
+    provider_id = override.get("inference_provider_id")
+    model_id = override.get("inference_model_id")
+    timeout = override.get("inference_timeout_s") or 60.0
+    if (
+        provider in {"local", "configured", None}
+        and selector is None
+        and not provider_id
+        and not model_id
+    ):
+        return llm
+    if isinstance(selector, dict):
+        selector = MeshAddressSelector.model_validate(selector)
+    if provider in {"remote_peer", "mesh_peer"} or selector is not None:
+        if selector is None:
+            selector = MeshAddressSelector(
+                provider_id=provider_id,
+                resource_namespace="inference",
+            )
+        return RemoteMeshChatModel(
+            bus=bus,
+            mesh_selector=selector,
+            timeout=float(timeout),
+            provider_id=provider_id,
+            model_id=model_id,
+        )
+    if provider_id or model_id:
+        from app.services.orchestrator.service import configured_provider_inference_llm
+
+        return await configured_provider_inference_llm(provider_id, model_id)
+    return llm
 
 
 # Def the chatbot node
@@ -330,8 +502,10 @@ async def chatbot(state: State, bus: MessageBus):
     else:
         log_debug("LLM already initialized, skipping initialization")
 
-    # Check if llm is initialized
-    if llm is None:
+    active_llm = await _chat_llm_for_state(state, bus)
+
+    # Check if an LLM is initialized or selected by a validated runtime override.
+    if active_llm is None:
         error_msg = (
             "The language model (llm) is not initialized. "
             "Check configuration and ensure API keys are set. "
@@ -374,20 +548,18 @@ async def chatbot(state: State, bus: MessageBus):
     # Request safe aggregate tools from ToolingService via bus.
     result = await bus.request(
         ToolingMethods.GET_TOOL_CATALOG,
-        ToolingGetToolCatalogRequest(query=state["messages"][-1].content, top_k=10),
+        ToolingGetToolCatalogRequest(
+            query=state["messages"][-1].content,
+            top_k=10,
+            caller_permissions=["*"],
+        ),
         timeout=5.0,
         priority=get_interactive_priority(),
     )
     if not result.ok:
         log_warning(
-            "Tool catalog retrieval failed; falling back to legacy Tooling.GetTools: "
+            "Tool catalog retrieval failed; failing closed with no model-visible tools: "
             f"{result.error}"
-        )
-        result = await bus.request(
-            ToolingMethods.GET_TOOLS,
-            ToolingGetToolsRequest(query=state["messages"][-1].content, top_k=10),
-            timeout=5.0,
-            priority=get_interactive_priority(),
         )
 
     tool_bindings = {}
@@ -415,32 +587,46 @@ async def chatbot(state: State, bus: MessageBus):
             log_error(f"Unexpected result.data type: {type(result.data)}")
             tools = []
 
-    llm_with_tools = llm.bind_tools(tools, tool_choice="auto") if tools else llm
+    llm_with_tools = active_llm.bind_tools(tools, tool_choice="auto") if tools else active_llm
     log_debug(f"Processing {len(state['messages'])} messages in chatbot node")
+    recent_messages = _protocol_safe_prompt_suffix(
+        state["messages"],
+        recent_window=_RECENT_PROMPT_MESSAGE_WINDOW,
+    )
+    prompt_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful voice assistant called Jarvis.\n"
+                "Be as concise as possible and provide the user with the most relevant information.\n"
+                "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
+                "Make sure to provide the user with the most relevant information and be concise."
+                "Alway respond in the language of the user"
+                "You can call tools to get information or execute actions.\n"
+                "Make sure to respond the user after finishing calling all necessary tools to gather data and/or execute actions"
+                "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
+                "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
+                f"{memories}"
+                f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ),
+        },
+        *recent_messages,
+    ]
+    response_message = None
+    try:
+        async for chunk in llm_with_tools.astream(prompt_messages):
+            response_message = chunk if response_message is None else response_message + chunk
+    except (AttributeError, NotImplementedError, TypeError):
+        response_message = None
+        if hasattr(llm_with_tools, "ainvoke"):
+            maybe_response = llm_with_tools.ainvoke(prompt_messages)
+            if inspect.isawaitable(maybe_response):
+                response_message = await maybe_response
+        if response_message is None:
+            response_message = await asyncio.to_thread(llm_with_tools.invoke, prompt_messages)
+
     return {
-        "messages": [
-            llm_with_tools.invoke(
-                [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a helpful voice assistant called Jarvis.\n"
-                            "Be as concise as possible and provide the user with the most relevant information.\n"
-                            "You are a voice assistant, so make all responses voice friendly, remove markdown and links.\n"
-                            "Make sure to provide the user with the most relevant information and be concise."
-                            "Alway respond in the language of the user"
-                            "You can call tools to get information or execute actions.\n"
-                            "Make sure to respond the user after finishing calling all necessary tools to gather data and/or execute actions"
-                            "A tool can be called only once per message, so if you need to call a tool, make sure to call it only once.\n"
-                            "The user should always get an answer at the end, summarize and adapt tool answers and respond to the user.\n"
-                            f"{memories}"
-                            f"\nCurrent time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                        ),
-                    },
-                    *state["messages"][-4:],
-                ]
-            )
-        ],
+        "messages": [response_message],
         "tool_bindings": tool_bindings,
         "approval_candidates": approval_candidates,
     }

@@ -12,12 +12,14 @@ import type {
 } from './types.js'
 
 export const GATEWAY_METHODS = {
+  health: 'Gateway.Health',
   getRegistry: 'Gateway.GetRegistry',
   getServices: 'Gateway.GetServices',
   getServiceHealth: 'Gateway.GetServiceHealth',
   getDeploymentTopology: 'Gateway.GetDeploymentTopology',
   getWebRTCDiagnostics: 'Gateway.GetWebRTCDiagnostics',
   getMeshStatus: 'Gateway.GetMeshStatus',
+  getMeshInviteConfig: 'Gateway.GetMeshInviteConfig',
   getCapabilityGraph: 'Gateway.GetCapabilityGraph',
   getCapabilityCatalog: 'Gateway.GetCapabilityCatalog',
   explainRoute: 'Gateway.ExplainRoute',
@@ -59,19 +61,104 @@ export const AUTH_METHODS = {
 
 export const TOOLING_METHODS = {
   listCatalog: 'Tooling.GetToolCatalog',
+  getStats: 'Tooling.GetStats',
+  getMcpStatus: 'Tooling.GetMCPStatus',
+  reloadMcpTools: 'Tooling.ReloadMCPTools',
+  getSharingPolicy: 'Tooling.GetSharingPolicy',
+  setSharingPolicy: 'Tooling.SetSharingPolicy',
+  testSharingPolicy: 'Tooling.TestSharingPolicy',
+  getExportCatalog: 'Tooling.GetExportCatalog',
+  getToolExportPolicy: 'Tooling.GetToolExportPolicy',
+  setToolExportDefault: 'Tooling.SetToolExportDefault',
+  upsertToolGroupExportPolicy: 'Tooling.UpsertToolGroupExportPolicy',
+  upsertToolExportOverride: 'Tooling.UpsertToolExportOverride',
+  clearToolExportOverride: 'Tooling.ClearToolExportOverride',
+  previewToolExportDecision: 'Tooling.PreviewToolExportDecision',
   prepareExecution: 'Tooling.PrepareExecution',
   requestApproval: 'Tooling.RequestApproval',
   confirmExecution: 'Tooling.ConfirmExecution',
+  listApprovalGrants: 'Tooling.ListApprovalGrants',
+  createApprovalGrant: 'Tooling.CreateApprovalGrant',
+  revokeApprovalGrant: 'Tooling.RevokeApprovalGrant',
+  evaluateApprovalGrant: 'Tooling.EvaluateApprovalGrant',
+  getPolicySummary: 'Tooling.GetPolicySummary',
+  listToolSources: 'Tooling.ListToolSources',
+  getToolSourceDetail: 'Tooling.GetToolSourceDetail',
+  setPolicyMode: 'Tooling.SetPolicyMode',
+  upsertSourcePolicy: 'Tooling.UpsertSourcePolicy',
+  clearSourcePolicy: 'Tooling.ClearSourcePolicy',
+  upsertToolPolicyOverride: 'Tooling.UpsertToolPolicyOverride',
+  clearToolPolicyOverride: 'Tooling.ClearToolPolicyOverride',
+  listPendingApprovals: 'Tooling.ListPendingApprovals',
+  listPolicyAuditEvents: 'Tooling.ListPolicyAuditEvents',
+  getOnboardingStatus: 'Tooling.GetOnboardingStatus',
+  testMcpSource: 'Tooling.TestMCPSource',
+  createMcpSource: 'Tooling.CreateMCPSource',
+  testPluginSource: 'Tooling.TestPluginSource',
+  createPluginSource: 'Tooling.CreatePluginSource',
   executeTool: 'Tooling.ExecuteTool'
 } as const
+
+export const TOOLING_EXPORT_POLICY_CONFIRMATION_TEXT = 'CONFIRM TOOL EXPORT POLICY CHANGE' as const
 
 export const ORCHESTRATOR_METHODS = {
   userInput: 'Orchestrator.UserInput',
   externalUserInput: 'Orchestrator.ExternalUserInput',
+  inferChat: 'Orchestrator.InferChat',
+  streamInferChat: 'Orchestrator.StreamInferChat',
   ingestContext: 'Orchestrator.IngestContext',
+  listPendingToolApprovals: 'Orchestrator.ListPendingToolApprovals',
+  resumeToolApproval: 'Orchestrator.ResumeToolApproval',
   interrupt: 'Orchestrator.Interrupt',
   toolResult: 'Orchestrator.ToolResult',
   response: 'Orchestrator.Response'
+} as const
+
+
+export const TTS_METHODS = {
+  request: 'TTS.Request',
+  synthesize: 'TTS.Synthesize',
+  streamStart: 'TTS.StreamStart',
+  streamChunk: 'TTS.StreamChunk',
+  streamEnd: 'TTS.StreamEnd',
+  audioChunk: 'TTS.AudioChunk',
+  stop: 'TTS.Stop',
+  pause: 'TTS.Pause',
+  resume: 'TTS.Resume'
+} as const
+
+export const STT_METHODS = {
+  listen: 'STTCoordinator.Listen',
+  stopListening: 'STTCoordinator.StopListening',
+  sessionStarted: 'STTCoordinator.SessionStarted',
+  sessionEnded: 'STTCoordinator.SessionEnded',
+  userSpeechCaptured: 'STTCoordinator.UserSpeechCaptured',
+  partial: 'STTCoordinator.Partial',
+  final: 'STTCoordinator.Final',
+  audioLevel: 'STTCoordinator.AudioLevel'
+} as const
+
+export const WAKEWORD_METHODS = {
+  processAudio: 'WakeWord.ProcessAudio',
+  detect: 'WakeWord.Detect',
+  control: 'WakeWord.Control'
+} as const
+
+export const AUDIO_SESSION_METHODS = {
+  prepare: 'AudioSession.Prepare',
+  requestConsent: 'AudioSession.RequestConsent',
+  start: 'AudioSession.Start',
+  stop: 'AudioSession.Stop',
+  status: 'AudioSession.Status',
+  events: 'AudioSession.Events',
+  listEvents: 'AudioSession.ListEvents'
+} as const
+
+export const TRANSCRIPTION_METHODS = {
+  transcribe: 'Transcription.Transcribe',
+  processAudio: 'Transcription.ProcessAudio',
+  result: 'Transcription.Result',
+  control: 'Transcription.Control'
 } as const
 
 export const CONFIG_METHODS = {
@@ -82,6 +169,7 @@ export const CONFIG_METHODS = {
   previewDiff: 'Config.PreviewDiff',
   getVersionHistory: 'Config.GetVersionHistory',
   rollback: 'Config.Rollback',
+  commitChangeSet: 'Config.CommitChangeSet',
   previewReloadImpact: 'Config.PreviewReloadImpact'
 } as const
 
@@ -122,6 +210,10 @@ export function describeMethod(module: string, method: MethodInfo): MethodDescri
     inputModel: method.input_model,
     outputModel: method.output_model,
     requiredPermissions: [...method.required_perms],
+    callableFeatureIds: [...(method.callable_feature_ids ?? [])],
+    callableFeatures: [...(method.callable_features ?? [])],
+    speechConstraints: cloneSchema(method.speech_constraints),
+    publicInfrastructure: method.public_infrastructure ?? false,
     inputSchema: method.input_schema ?? null,
     outputSchema: method.output_schema ?? null,
     availableOverHttp
@@ -161,6 +253,10 @@ export function describeBackendInventoryMethod(method: BackendInventoryMethod): 
     inputModel: method.input_model ?? null,
     outputModel: method.output_model ?? null,
     requiredPermissions: [...method.required_perms],
+    callableFeatureIds: [...(method.callable_feature_ids ?? [])],
+    callableFeatures: [...(method.callable_features ?? [])],
+    speechConstraints: cloneSchema(method.speech_constraints),
+    publicInfrastructure: method.public_infrastructure ?? false,
     inputSchema: cloneSchema(method.input_schema),
     outputSchema: cloneSchema(method.output_schema),
     availableOverHttp,

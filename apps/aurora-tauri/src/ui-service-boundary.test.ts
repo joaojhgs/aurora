@@ -1,0 +1,218 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+
+const scannedRoots = [
+  'apps/aurora-tauri/src',
+  'apps/aurora-tauri/src-tauri/src',
+  'apps/aurora-tauri/scripts',
+  'apps/aurora-web/app',
+  'packages/aurora-ui/src',
+  'packages/aurora-sdk/src'
+]
+
+const sourcePattern = /\.(ts|tsx|js|mjs|rs)$/
+const testPattern = /\.(test|spec)\.(ts|tsx|js|mjs)$/
+
+const excludedFiles = new Set([
+  // Fixtures may contain backend provenance strings such as source_file paths, but they are
+  // not live service bindings and should stay clearly outside production route truth.
+  'packages/aurora-sdk/src/fixtures.ts'
+])
+
+const allowedSidecarServiceResource = 'app/services/config/config_defaults.json'
+
+
+const approvedClientFactoryFiles = new Set([
+  'apps/aurora-tauri/src/aurora-client.ts',
+  'apps/aurora-tauri/src/eventstream-smoke.tsx',
+  'apps/aurora-tauri/src/local-data/tauri-local-data-invoke.ts',
+  'apps/aurora-tauri/src/native-webrtc.ts',
+  // The installed desktop voice E2E harness is the reviewed native Tauri boundary
+  // itself; it must invoke commands and listen for status events without routing
+  // through the production AuroraClient factory.
+  'apps/aurora-tauri/src/desktop-native-voice-e2e.ts',
+  // The desktop mesh E2E harness is dynamically imported only by the explicit
+  // VITE_AURORA_DESKTOP_LIVE_E2E build and must exercise the native invoke
+  // boundary directly to prove the WebView transport is not browser-backed.
+  'apps/aurora-tauri/src/desktop-live-e2e.ts',
+  'apps/aurora-web/app/aurora-client.ts',
+  'packages/aurora-sdk/src/http.ts',
+  'packages/aurora-sdk/src/mock.ts',
+  'packages/aurora-sdk/src/webrtc/runtime.ts',
+  'packages/aurora-sdk/src/tauri.ts',
+  'packages/aurora-sdk/src/test-utils.ts'
+])
+
+const approvedServerFetchFiles = new Set([
+  // This Next.js route is the reviewed same-origin server boundary for hosted
+  // Sherpa assets. It validates both the requested path and final redirect host.
+  'apps/aurora-web/app/aurora-voice-assets/[...path]/route.ts'
+])
+
+const forbiddenClientFactoryPatterns: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'AuroraClient construction', pattern: /\bnew\s+AuroraClient\s*\(/ },
+  { label: 'HTTP Gateway transport construction', pattern: /\bnew\s+HttpGatewayTransport\s*\(/ },
+  { label: 'Tauri local transport construction', pattern: /\bnew\s+TauriLocalTransport\s*\(/ },
+  { label: 'mock transport construction as live truth', pattern: /\bnew\s+MockAuroraTransport\s*\(/ },
+  { label: 'direct Tauri API import', pattern: /from\s+['"]@tauri-apps\/api\/(?:core|event)['"]/ },
+  { label: 'direct browser fetch', pattern: /\bfetch\s*\(/ }
+]
+
+const forbiddenBoundaryPatterns: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: 'Python service package import',
+    pattern: /\b(?:from|import)\s+['"]?app[./](?:services|messaging|shared[./](?:contracts|services|config))/
+  },
+  {
+    label: 'direct Aurora bus or service runtime object',
+    pattern: /\b(?:LocalBus|BullMQBus|MeshBus|ConfigManager|BaseService|method_contract|get_bus)\b/
+  },
+  {
+    label: 'Python service implementation file path',
+    pattern: /app\/services\/(?!config\/config_defaults\.json\b)[A-Za-z0-9_./-]+\.py\b/
+  },
+  {
+    label: 'direct Python app package path outside sidecar config default',
+    pattern: /app\/(?:messaging|shared\/contracts|shared\/services)\b/
+  }
+]
+
+function filesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return filesUnder(path)
+    return sourcePattern.test(entry.name) && !testPattern.test(entry.name) ? [path] : []
+  })
+}
+
+type ProductionSourceFile = {
+  rel: string
+  text: string
+}
+
+function readProductionSourceFiles(): ProductionSourceFile[] {
+  const files = scannedRoots.flatMap((root) => filesUnder(resolve(repoRoot, root)))
+    .filter((file) => !excludedFiles.has(relative(repoRoot, file)))
+
+  return files.map((file) => ({
+    rel: relative(repoRoot, file),
+    text: readFileSync(file, 'utf8')
+  }))
+}
+
+const productionSourceFiles = readProductionSourceFiles()
+
+function productionSourceFilesUnder(roots: string[]): ProductionSourceFile[] {
+  return productionSourceFiles.filter(({ rel }) =>
+    roots.some((root) => rel === root || rel.startsWith(`${root}/`))
+  )
+}
+
+function readRepo(path: string) {
+  return readFileSync(resolve(repoRoot, path), 'utf8')
+}
+
+function scrubAllowedServiceResource(text: string) {
+  return text.split(allowedSidecarServiceResource).join('')
+}
+
+describe('UI and Tauri service boundary contract', () => {
+  it('keeps production UI, SDK, and Tauri code behind SDK/Gateway/Tauri boundaries', () => {
+    expect(productionSourceFiles.length).toBeGreaterThan(0)
+
+    for (const { rel, text: rawText } of productionSourceFiles) {
+      const text = scrubAllowedServiceResource(rawText)
+
+      for (const { label, pattern } of forbiddenBoundaryPatterns) {
+        expect(text, `${rel} must not cross the service boundary via ${label}`).not.toMatch(pattern)
+      }
+    }
+  })
+
+  it('limits frontend client and transport construction to approved boundary adapters', () => {
+    const scannedFiles = productionSourceFilesUnder([
+      'apps/aurora-tauri/src',
+      'apps/aurora-web/app',
+      'packages/aurora-ui/src',
+      'packages/aurora-sdk/src'
+    ])
+
+    expect(scannedFiles.length).toBeGreaterThan(0)
+
+    for (const { rel, text } of scannedFiles) {
+      if (approvedClientFactoryFiles.has(rel)) continue
+
+      for (const { label, pattern } of forbiddenClientFactoryPatterns) {
+        if (label === 'direct browser fetch' && approvedServerFetchFiles.has(rel)) continue
+        expect(text, `${rel} must not bypass the app client factory via ${label}`).not.toMatch(pattern)
+      }
+    }
+  })
+
+  it('keeps the desktop sidecar as process supervisor and Gateway proxy, not app business logic', () => {
+    const rust = readRepo('apps/aurora-tauri/src-tauri/src/lib.rs')
+
+    expect(rust).toContain('fn spawn_sidecar(')
+    expect(rust).toContain('Command::new(&launch.program)')
+    expect(rust).toContain('command.env("AURORA_ARCHITECTURE_MODE", "threads")')
+    expect(rust).toContain('command.env("AURORA_GATEWAY_URL", gateway.to_string())')
+    expect(rust).toContain('command.env("AURORA_TAURI_SIDECAR_TOKEN", token)')
+    expect(rust).toContain('fn stop_sidecar(')
+    expect(rust).toContain('fn check_gateway_health(')
+    expect(rust).toContain('fn gateway_request_url(')
+    expect(rust).toContain('gateway path must be relative')
+    expect(rust).toContain('fn same_http_origin(')
+    expect(rust).toContain('.request(method, url)')
+    expect(rust).toContain('run_gateway_event_stream(')
+
+    expect(rust, 'Rust sidecar must not embed Python service imports').not.toMatch(/^\s*(?:use|mod)\s+app(?:::|\b)/m)
+    expect(rust, 'Rust sidecar must not embed Python or bus runtime frameworks').not.toMatch(
+      /\b(?:pyo3|PyModule|LocalBus|BullMQBus|MeshBus|ConfigManager|BaseService|method_contract|get_bus)\b/
+    )
+    expect(rust, 'Rust sidecar must not implement service-specific command handlers').not.toMatch(
+      /fn\s+aurora_(?:auth|orchestrator|tooling|db|scheduler|tts|stt|config)_[a-z0-9_]*\s*\(/i
+    )
+  })
+
+  it('documents the allowed live bridges as AuroraClient, Gateway transport, and Tauri invoke/listen only', () => {
+    const runtimeBridge = readRepo('apps/aurora-tauri/src/aurora-client.ts')
+    const nativeWebRtcBridge = readRepo('apps/aurora-tauri/src/native-webrtc.ts')
+    const tauriApp = readRepo('apps/aurora-tauri/src/tauri-app.tsx')
+    const httpTransport = readRepo('packages/aurora-sdk/src/http.ts')
+    const tauriTransport = readRepo('packages/aurora-sdk/src/tauri.ts')
+
+    expect(runtimeBridge).toMatch(/from ['\"]@aurora\/client['\"]/)
+    expect(runtimeBridge).toContain('new TauriLocalTransport({ invoke, listen })')
+    expect(runtimeBridge).toContain('new HttpGatewayTransport({')
+    expect(runtimeBridge).toContain('new MockAuroraTransport()')
+    expect(nativeWebRtcBridge).toContain(
+      'createTauriNativePeerConnectionFactory',
+    )
+    expect(nativeWebRtcBridge).toContain(
+      '"aurora_native_webrtc_data_channel_send"',
+    )
+    expect(nativeWebRtcBridge).not.toMatch(/\bnew\s+AuroraClient\s*\(/)
+    expect(nativeWebRtcBridge).not.toMatch(/\bfetch\s*\(/)
+    expect(tauriApp).toContain('createAuroraTauriRuntime')
+    expect(httpTransport).toContain('class HttpGatewayTransport')
+    expect(httpTransport).toContain('fetchImpl(`${this.baseUrl}${path}`, init)')
+    expect(tauriTransport).toContain('class TauriLocalTransport')
+    expect(tauriTransport).toContain('this.invokeCommand<unknown>(this.commands.request')
+  })
+
+  it('keeps tauri smoke coverage tied to the service-boundary gate', () => {
+    const packageJson = JSON.parse(readRepo('apps/aurora-tauri/package.json')) as { scripts: Record<string, string> }
+
+    const linuxSmoke = packageJson.scripts['tauri:smoke:linux']
+    const regressionGate = packageJson.scripts['test:ci-regression-gates'] ?? linuxSmoke
+
+    expect(packageJson.scripts['test:service-boundary']).toContain('ui-service-boundary.test.ts')
+    expect(linuxSmoke).toContain('test:ci-regression-gates')
+    expect(regressionGate).toContain('test:service-boundary')
+  })
+})

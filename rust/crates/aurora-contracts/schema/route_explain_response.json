@@ -1,0 +1,479 @@
+{
+  "$defs": {
+    "CapabilityFreshnessInfo": {
+      "description": "Source and staleness metadata for catalog entries.",
+      "properties": {
+        "last_probe_age_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Probe Age S"
+        },
+        "manifest_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Time"
+        },
+        "registry_digest": {
+          "default": "",
+          "title": "Registry Digest",
+          "type": "string"
+        },
+        "source": {
+          "default": "unknown",
+          "title": "Source",
+          "type": "string"
+        },
+        "stale": {
+          "default": false,
+          "title": "Stale",
+          "type": "boolean"
+        },
+        "ttl_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttl S"
+        }
+      },
+      "title": "CapabilityFreshnessInfo",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "CapabilityPolicyDecisionInfo": {
+      "description": "Policy facts needed by SDK/UI bindability decisions.",
+      "properties": {
+        "allowed_provider_peer_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allowed Provider Peer Ids"
+        },
+        "approval_required": {
+          "default": false,
+          "title": "Approval Required",
+          "type": "boolean"
+        },
+        "bandwidth_check_required": {
+          "default": false,
+          "title": "Bandwidth Check Required",
+          "type": "boolean"
+        },
+        "consent_required": {
+          "default": false,
+          "title": "Consent Required",
+          "type": "boolean"
+        },
+        "denial_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denial Reasons",
+          "type": "array"
+        },
+        "explicit_selector_required": {
+          "default": false,
+          "title": "Explicit Selector Required",
+          "type": "boolean"
+        },
+        "local_only": {
+          "default": false,
+          "title": "Local Only",
+          "type": "boolean"
+        },
+        "mesh_visible": {
+          "default": false,
+          "title": "Mesh Visible",
+          "type": "boolean"
+        },
+        "operation_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation Class"
+        },
+        "privacy_indicator_required": {
+          "default": false,
+          "title": "Privacy Indicator Required",
+          "type": "boolean"
+        },
+        "required_callable_feature_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Callable Feature Ids",
+          "type": "array"
+        },
+        "required_permissions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Required Permissions",
+          "type": "array"
+        },
+        "resource_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Scope"
+        },
+        "safety_class": {
+          "default": "standard",
+          "title": "Safety Class",
+          "type": "string"
+        },
+        "selector_required": {
+          "default": false,
+          "title": "Selector Required",
+          "type": "boolean"
+        },
+        "trust_tier": {
+          "default": "unknown",
+          "title": "Trust Tier",
+          "type": "string"
+        }
+      },
+      "title": "CapabilityPolicyDecisionInfo",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "RouteBlockerInfo": {
+      "description": "Route blocker or selector validation problem.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "security_privacy": {
+          "default": false,
+          "title": "Security Privacy",
+          "type": "boolean"
+        },
+        "severity": {
+          "default": "error",
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "RouteBlockerInfo",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "RouteCandidateDecision": {
+      "description": "Eligibility and selection decision for one route candidate.",
+      "properties": {
+        "active_calls": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Active Calls",
+          "type": "integer"
+        },
+        "auth_rbac_state": {
+          "default": "unknown",
+          "title": "Auth Rbac State",
+          "type": "string"
+        },
+        "available_capacity": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available Capacity"
+        },
+        "blockers": {
+          "items": {
+            "$ref": "#/$defs/RouteBlockerInfo"
+          },
+          "title": "Blockers",
+          "type": "array"
+        },
+        "freshness": {
+          "$ref": "#/$defs/CapabilityFreshnessInfo"
+        },
+        "included": {
+          "default": false,
+          "title": "Included",
+          "type": "boolean"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        },
+        "max_concurrent": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Max Concurrent",
+          "type": "integer"
+        },
+        "module": {
+          "title": "Module",
+          "type": "string"
+        },
+        "peer_id": {
+          "title": "Peer Id",
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/CapabilityPolicyDecisionInfo"
+        },
+        "privacy_class": {
+          "default": "public",
+          "title": "Privacy Class",
+          "type": "string"
+        },
+        "projection_digest": {
+          "default": "",
+          "title": "Projection Digest",
+          "type": "string"
+        },
+        "projection_revision": {
+          "default": "",
+          "title": "Projection Revision",
+          "type": "string"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_kind": {
+          "default": "remote",
+          "title": "Provider Kind",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "reason_code": {
+          "default": "",
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "selected": {
+          "default": false,
+          "title": "Selected",
+          "type": "boolean"
+        },
+        "service_instance_id": {
+          "title": "Service Instance Id",
+          "type": "string"
+        },
+        "transport": {
+          "default": "unknown",
+          "title": "Transport",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "module",
+        "peer_id",
+        "provider_id",
+        "service_instance_id"
+      ],
+      "title": "RouteCandidateDecision",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Route selection explanation for SDK route sheets.",
+  "properties": {
+    "blockers": {
+      "items": {
+        "$ref": "#/$defs/RouteBlockerInfo"
+      },
+      "title": "Blockers",
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/RouteCandidateDecision"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "fallback_behavior": {
+      "default": "",
+      "title": "Fallback Behavior",
+      "type": "string"
+    },
+    "module": {
+      "title": "Module",
+      "type": "string"
+    },
+    "secrets_redacted": {
+      "default": true,
+      "title": "Secrets Redacted",
+      "type": "boolean"
+    },
+    "security_privacy_blockers": {
+      "items": {
+        "$ref": "#/$defs/RouteBlockerInfo"
+      },
+      "title": "Security Privacy Blockers",
+      "type": "array"
+    },
+    "selected_peer_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Peer Id"
+    },
+    "selected_provider_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Provider Id"
+    },
+    "selected_service_instance_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Service Instance Id"
+    },
+    "selected_target": {
+      "default": "local",
+      "title": "Selected Target",
+      "type": "string"
+    },
+    "selector_valid": {
+      "default": true,
+      "title": "Selector Valid",
+      "type": "boolean"
+    },
+    "selector_validation_code": {
+      "default": "",
+      "title": "Selector Validation Code",
+      "type": "string"
+    },
+    "selector_validation_message": {
+      "default": "",
+      "title": "Selector Validation Message",
+      "type": "string"
+    },
+    "topic": {
+      "title": "Topic",
+      "type": "string"
+    }
+  },
+  "required": [
+    "module",
+    "topic"
+  ],
+  "title": "RouteExplainResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

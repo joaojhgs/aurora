@@ -1,0 +1,704 @@
+{
+  "artifact": "tooling_local_provider_v1",
+  "canonical_digest_vectors": {
+    "canonical_digest_cases": [
+      {
+        "canonical_a": {
+          "alpha": {},
+          "zeta": [
+            3,
+            {
+              "bang": "!",
+              "snow": "☃"
+            }
+          ]
+        },
+        "canonical_b": {
+          "alpha": {},
+          "zeta": [
+            3,
+            {
+              "bang": "!",
+              "snow": "☃"
+            }
+          ]
+        },
+        "digest": "052f7f39b9480c171df33d25f316b3099015a353ff656bd7adfe01129ae845bd",
+        "name": "reordered_nested"
+      },
+      {
+        "canonical_a": {
+          "blocked_tools": [],
+          "retirements": [],
+          "tools": []
+        },
+        "canonical_b": {
+          "blocked_tools": [],
+          "retirements": [],
+          "tools": []
+        },
+        "digest": "afc57677f518846e749b1767957654f89d39d5c9c056d5c7c831f542128871c8",
+        "name": "empty_projection"
+      },
+      {
+        "canonical_a": {
+          "label": "beforeafter"
+        },
+        "canonical_b": {
+          "label": "beforeafter"
+        },
+        "digest": "32811c760d55ee65799b8719d9aee17a05e01651d8d77bb46f31fdc6c177279a",
+        "name": "delete_control_character"
+      }
+    ],
+    "canonical_tool_identity": {
+      "global_tool_id": "aurora-tool:v1:peer%20%E2%98%83:Tooling:core.memory%2Fupsert%20%E2%98%83",
+      "stable_peer_id": "peer ☃",
+      "tool_contract_id": "core.memory/upsert ☃"
+    },
+    "canonical_tool_identity_cases": [
+      {
+        "global_tool_id": "aurora-tool:v1:peer%2Fslash:Tooling:core.tool%2Fslash",
+        "stable_peer_id": "peer/slash",
+        "tool_contract_id": "core.tool/slash"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%20space:Tooling:core.tool%20space",
+        "stable_peer_id": "peer space",
+        "tool_contract_id": "core.tool space"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%20%E2%98%83:Tooling:core.tool%20%E2%98%83",
+        "stable_peer_id": "peer ☃",
+        "tool_contract_id": "core.tool ☃"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%25percent:Tooling:core.tool%25percent",
+        "stable_peer_id": "peer%percent",
+        "tool_contract_id": "core.tool%percent"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%21bang:Tooling:core.tool%21bang",
+        "stable_peer_id": "peer!bang",
+        "tool_contract_id": "core.tool!bang"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%27quote:Tooling:core.tool%27quote",
+        "stable_peer_id": "peer'quote",
+        "tool_contract_id": "core.tool'quote"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%28paren%29:Tooling:core.tool%28paren%29",
+        "stable_peer_id": "peer(paren)",
+        "tool_contract_id": "core.tool(paren)"
+      },
+      {
+        "global_tool_id": "aurora-tool:v1:peer%2Astar:Tooling:core.tool%2Astar",
+        "stable_peer_id": "peer*star",
+        "tool_contract_id": "core.tool*star"
+      }
+    ],
+    "final_checksum": {
+      "canonical_blocked_tools": [],
+      "canonical_retirements": [],
+      "canonical_tools": [
+        {
+          "admin": false,
+          "aliases": [
+            "remember"
+          ],
+          "args_schema": {
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "argument_visibility": {},
+          "capability_class": "write",
+          "confirmation_required": false,
+          "data_egress": false,
+          "description": "Store a memory",
+          "display_name": "Memory",
+          "execution_location": "local",
+          "exportable": true,
+          "external": false,
+          "global_tool_id": "aurora-tool:v1:peer-%E2%98%83:Tooling:core.memory.upsert",
+          "legacy_global_tool_ids": [
+            "legacy-a",
+            "legacy-z"
+          ],
+          "local_name": "upsert_memory",
+          "mutating": true,
+          "name": "memory.upsert",
+          "namespace": "core.memory",
+          "privacy_hints": [],
+          "provenance": {
+            "advertised_name": "upsert_memory",
+            "provider_kind": "local",
+            "provider_peer_id": "peer-☃",
+            "provider_service_instance_id": "local:peer-%E2%98%83:Tooling",
+            "provider_tool_id": "upsert_memory",
+            "source": "core",
+            "stable_source_id": "core:memory"
+          },
+          "provider_available": null,
+          "provider_granted_permissions": null,
+          "provider_label": null,
+          "provider_peer_id": "peer-☃",
+          "provider_service_instance_id": "local:peer-%E2%98%83:Tooling",
+          "rate_limit_hints": null,
+          "required_permissions": [
+            "Tooling.ExecuteTool"
+          ],
+          "resource_scope": [],
+          "risk_class": "standard",
+          "safety_class": "standard",
+          "schema": {
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "share_group_id": "core:memory",
+          "share_group_label": "Memory",
+          "source": "core",
+          "source_id": "core:memory",
+          "source_type": "local",
+          "tool_contract_id": "core.memory.upsert",
+          "tool_id_scheme": "aurora-tool",
+          "tool_id_version": 1,
+          "trust_tier": "trusted"
+        }
+      ],
+      "digest": "8cb1f689c489d76802667a9bdb326039b13274a5fe15dbfd034616b8e90d9a5e"
+    },
+    "identity_digest": {
+      "canonical_a": {
+        "provider_peer_id": "peer-☃",
+        "service_instance_id": "local:peer-%E2%98%83:Tooling"
+      },
+      "canonical_b": {
+        "provider_peer_id": "peer-☃",
+        "service_instance_id": "local:peer-%E2%98%83:Tooling"
+      },
+      "digest": "9989ae91d8c7058d2b8c848bcd4c3c70cc1cd2bd2a3cb6e2af9da012e09f86eb",
+      "reordered_json_a": "{\"provider_peer_id\":\"peer-☃\",\"service_instance_id\":\"local:peer-%E2%98%83:Tooling\"}",
+      "reordered_json_b": "{\"service_instance_id\":\"local:peer-%E2%98%83:Tooling\",\"provider_peer_id\":\"peer-☃\"}"
+    },
+    "order_independent_final_checksum": {
+      "canonical_blocked_tools": [
+        {
+          "missing_permissions": [
+            "Tooling.ExecuteTool",
+            "Tooling.GetTools"
+          ],
+          "reason_code": "recipient_missing_tool_permissions",
+          "tool": {
+            "admin": false,
+            "aliases": [
+              "remember"
+            ],
+            "args_schema": {
+              "properties": {
+                "api_key": {
+                  "type": "string"
+                },
+                "options": {
+                  "properties": {
+                    "limit": {
+                      "maximum": 5,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                },
+                "query": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "argument_visibility": {
+              "api_key": "secret",
+              "query": "display"
+            },
+            "capability_class": "read",
+            "confirmation_required": false,
+            "data_egress": false,
+            "description": "Store a memory",
+            "display_name": "Alpha lookup",
+            "execution_location": "local",
+            "exportable": true,
+            "external": false,
+            "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.alpha.lookup",
+            "legacy_global_tool_ids": [
+              "legacy-alpha",
+              "legacy-beta"
+            ],
+            "local_name": "lookup_alpha",
+            "mutating": false,
+            "name": "alpha.lookup",
+            "namespace": "core.memory",
+            "privacy_hints": [],
+            "provenance": {
+              "advertised_name": "lookup_alpha",
+              "provider_kind": "local",
+              "provider_peer_id": "aurora-sdk-local-provider-v1",
+              "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+              "provider_tool_id": "lookup_alpha",
+              "source": "core",
+              "stable_source_id": "core:alpha"
+            },
+            "provider_available": null,
+            "provider_granted_permissions": null,
+            "provider_label": null,
+            "provider_peer_id": "aurora-sdk-local-provider-v1",
+            "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+            "rate_limit_hints": null,
+            "required_permissions": [
+              "Tooling.ExecuteTool"
+            ],
+            "resource_scope": [],
+            "risk_class": "standard",
+            "safety_class": "standard",
+            "schema": {
+              "properties": {
+                "metadata": {
+                  "properties": {},
+                  "type": "object"
+                },
+                "result": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "share_group_id": "core:alpha",
+            "share_group_label": "Alpha",
+            "source": "core",
+            "source_id": "core:alpha",
+            "source_type": "local",
+            "tool_contract_id": "core.alpha.lookup",
+            "tool_id_scheme": "aurora-tool",
+            "tool_id_version": 1,
+            "trust_tier": "trusted"
+          }
+        }
+      ],
+      "canonical_retirements": [
+        {
+          "availability": "removed",
+          "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.retired.tool",
+          "last_schema_hash": "987d31a8808fbb72014ecd6f2d9f158ccb6167d39aea4f31e8e29e983675de4a",
+          "reason_code": "removed_by_provider"
+        }
+      ],
+      "canonical_tools": [
+        {
+          "admin": false,
+          "aliases": [
+            "remember"
+          ],
+          "args_schema": {
+            "properties": {
+              "api_key": {
+                "type": "string"
+              },
+              "options": {
+                "properties": {
+                  "limit": {
+                    "maximum": 5,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "query": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "argument_visibility": {
+            "api_key": "secret",
+            "query": "display"
+          },
+          "capability_class": "read",
+          "confirmation_required": false,
+          "data_egress": false,
+          "description": "Store a memory",
+          "display_name": "Alpha lookup",
+          "execution_location": "local",
+          "exportable": true,
+          "external": false,
+          "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.alpha.lookup",
+          "legacy_global_tool_ids": [
+            "legacy-alpha",
+            "legacy-beta"
+          ],
+          "local_name": "lookup_alpha",
+          "mutating": false,
+          "name": "alpha.lookup",
+          "namespace": "core.memory",
+          "privacy_hints": [],
+          "provenance": {
+            "advertised_name": "lookup_alpha",
+            "provider_kind": "local",
+            "provider_peer_id": "aurora-sdk-local-provider-v1",
+            "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+            "provider_tool_id": "lookup_alpha",
+            "source": "core",
+            "stable_source_id": "core:alpha"
+          },
+          "provider_available": null,
+          "provider_granted_permissions": null,
+          "provider_label": null,
+          "provider_peer_id": "aurora-sdk-local-provider-v1",
+          "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+          "rate_limit_hints": null,
+          "required_permissions": [
+            "Tooling.ExecuteTool"
+          ],
+          "resource_scope": [],
+          "risk_class": "standard",
+          "safety_class": "standard",
+          "schema": {
+            "properties": {
+              "metadata": {
+                "properties": {},
+                "type": "object"
+              },
+              "result": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "share_group_id": "core:alpha",
+          "share_group_label": "Alpha",
+          "source": "core",
+          "source_id": "core:alpha",
+          "source_type": "local",
+          "tool_contract_id": "core.alpha.lookup",
+          "tool_id_scheme": "aurora-tool",
+          "tool_id_version": 1,
+          "trust_tier": "trusted"
+        },
+        {
+          "admin": false,
+          "aliases": [
+            "remember"
+          ],
+          "args_schema": {
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "argument_visibility": {},
+          "capability_class": "write",
+          "confirmation_required": false,
+          "data_egress": false,
+          "description": "Store a memory",
+          "display_name": "Memory",
+          "execution_location": "local",
+          "exportable": true,
+          "external": false,
+          "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
+          "legacy_global_tool_ids": [
+            "legacy-a",
+            "legacy-z"
+          ],
+          "local_name": "upsert_memory",
+          "mutating": true,
+          "name": "memory.upsert",
+          "namespace": "core.memory",
+          "privacy_hints": [],
+          "provenance": {
+            "advertised_name": "upsert_memory",
+            "provider_kind": "local",
+            "provider_peer_id": "aurora-sdk-local-provider-v1",
+            "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+            "provider_tool_id": "upsert_memory",
+            "source": "core",
+            "stable_source_id": "core:memory"
+          },
+          "provider_available": null,
+          "provider_granted_permissions": null,
+          "provider_label": null,
+          "provider_peer_id": "aurora-sdk-local-provider-v1",
+          "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+          "rate_limit_hints": null,
+          "required_permissions": [
+            "Tooling.ExecuteTool"
+          ],
+          "resource_scope": [],
+          "risk_class": "standard",
+          "safety_class": "standard",
+          "schema": {
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "share_group_id": "core:memory",
+          "share_group_label": "Memory",
+          "source": "core",
+          "source_id": "core:memory",
+          "source_type": "local",
+          "tool_contract_id": "core.memory.upsert",
+          "tool_id_scheme": "aurora-tool",
+          "tool_id_version": 1,
+          "trust_tier": "trusted"
+        }
+      ],
+      "digest": "459837d3e35455dc7ba8c7327c3f74c86e6cb621043a063f8b52ec13905fb86a"
+    },
+    "page_hash": {
+      "canonical_page": {
+        "authority_revision": {
+          "auth_grant_revision": 5,
+          "catalog_revision": 2,
+          "export_policy_revision": 3,
+          "manifest_revision": 7,
+          "protocol_revision": 13,
+          "switch_revision": 11
+        },
+        "blocked_tools": [],
+        "complete": true,
+        "final_checksum": "8cb1f689c489d76802667a9bdb326039b13274a5fe15dbfd034616b8e90d9a5e",
+        "next_cursor": null,
+        "ok": true,
+        "page_hash": "bb71dfc656f0c8051356e4271ccf97fd3738cd5225aa2ede20209525e949570a",
+        "page_index": 0,
+        "page_size": 1,
+        "projection_digest": "8cb1f689c489d76802667a9bdb326039b13274a5fe15dbfd034616b8e90d9a5e",
+        "projection_revision": "projection-☃",
+        "provider_peer_id": "peer-☃",
+        "reason_code": null,
+        "retirements": [],
+        "selected_protocol_tier": "projection_v1",
+        "service_instance_id": "local:peer-%E2%98%83:Tooling",
+        "tools": [
+          {
+            "admin": false,
+            "aliases": [
+              "remember"
+            ],
+            "args_schema": {
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "argument_visibility": {},
+            "capability_class": "write",
+            "confirmation_required": false,
+            "data_egress": false,
+            "description": "Store a memory",
+            "display_name": "Memory",
+            "execution_location": "local",
+            "exportable": true,
+            "external": false,
+            "global_tool_id": "aurora-tool:v1:peer-%E2%98%83:Tooling:core.memory.upsert",
+            "legacy_global_tool_ids": [
+              "legacy-a",
+              "legacy-z"
+            ],
+            "local_name": "upsert_memory",
+            "mutating": true,
+            "name": "memory.upsert",
+            "namespace": "core.memory",
+            "privacy_hints": [],
+            "provenance": {
+              "advertised_name": "upsert_memory",
+              "provider_kind": "local",
+              "provider_peer_id": "peer-☃",
+              "provider_service_instance_id": "local:peer-%E2%98%83:Tooling",
+              "provider_tool_id": "upsert_memory",
+              "source": "core",
+              "stable_source_id": "core:memory"
+            },
+            "provider_available": null,
+            "provider_granted_permissions": null,
+            "provider_label": null,
+            "provider_peer_id": "peer-☃",
+            "provider_service_instance_id": "local:peer-%E2%98%83:Tooling",
+            "rate_limit_hints": null,
+            "required_permissions": [
+              "Tooling.ExecuteTool"
+            ],
+            "resource_scope": [],
+            "risk_class": "standard",
+            "safety_class": "standard",
+            "schema": {
+              "properties": {
+                "text": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "share_group_id": "core:memory",
+            "share_group_label": "Memory",
+            "source": "core",
+            "source_id": "core:memory",
+            "source_type": "local",
+            "tool_contract_id": "core.memory.upsert",
+            "tool_id_scheme": "aurora-tool",
+            "tool_id_version": 1,
+            "trust_tier": "trusted"
+          }
+        ],
+        "total_count": 1
+      },
+      "digest": "bb71dfc656f0c8051356e4271ccf97fd3738cd5225aa2ede20209525e949570a"
+    },
+    "schema_digest": {
+      "canonical_a": {
+        "properties": {
+          "☃": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "canonical_b": {
+        "properties": {
+          "☃": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "digest": "40a6bbeda81a3f1eed0d4735f6f6994382fc40976b62ff9d7d2de3b47ceeb990",
+      "reordered_json_a": "{\"type\":\"object\",\"properties\":{\"☃\":{\"type\":\"string\"}}}",
+      "reordered_json_b": "{\"properties\":{\"☃\":{\"type\":\"string\"}},\"type\":\"object\"}"
+    },
+    "tool_schema_hash": {
+      "canonical_tool": {
+        "admin": false,
+        "aliases": [
+          "remember"
+        ],
+        "args_schema": {
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "argument_visibility": {},
+        "capability_class": "write",
+        "confirmation_required": false,
+        "data_egress": false,
+        "description": "Store a memory",
+        "display_name": "Memory",
+        "execution_location": "local",
+        "exportable": true,
+        "external": false,
+        "global_tool_id": "aurora-tool:v1:aurora-sdk-local-provider-v1:Tooling:core.memory.upsert",
+        "legacy_global_tool_ids": [
+          "legacy-a",
+          "legacy-z"
+        ],
+        "local_name": "upsert_memory",
+        "mutating": true,
+        "name": "memory.upsert",
+        "namespace": "core.memory",
+        "privacy_hints": [],
+        "provenance": {
+          "advertised_name": "upsert_memory",
+          "provider_kind": "local",
+          "provider_peer_id": "aurora-sdk-local-provider-v1",
+          "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+          "provider_tool_id": "upsert_memory",
+          "source": "core",
+          "stable_source_id": "core:memory"
+        },
+        "provider_available": null,
+        "provider_granted_permissions": null,
+        "provider_label": null,
+        "provider_peer_id": "aurora-sdk-local-provider-v1",
+        "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+        "rate_limit_hints": null,
+        "required_permissions": [
+          "Tooling.ExecuteTool"
+        ],
+        "resource_scope": [],
+        "risk_class": "standard",
+        "safety_class": "standard",
+        "schema": {
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "share_group_id": "core:memory",
+        "share_group_label": "Memory",
+        "source": "core",
+        "source_id": "core:memory",
+        "source_type": "local",
+        "tool_contract_id": "core.memory.upsert",
+        "tool_id_scheme": "aurora-tool",
+        "tool_id_version": 1,
+        "trust_tier": "trusted"
+      },
+      "digest": "c4532fa6e9ced621f75dea566e14eacb1f1bafa271b091d60a9974f20ad5a651"
+    }
+  },
+  "final_checksum": "5758c284cf09c8309f364d66edd0021a2ec48c86dbe51c738527b3afd4907798",
+  "methods": [
+    {
+      "input_schema_hash": "b40b50bac773b8e49ad345b17fffb816097a6d2e15fd88bbae6fa1bb0e910def",
+      "method_id": "Tooling.GetTools",
+      "output_schema_hash": "07afe3e44ed858f19b9cfbf8080a4a2f207b087bc4f2b6be7e431a08dd66c76c",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.GetTools"
+    },
+    {
+      "input_schema_hash": "cdeed2488d3f60ba2f6e26409c88256af3b7d5527f3a2a8e104bcf7e722726ba",
+      "method_id": "Tooling.GetExportCatalog",
+      "output_schema_hash": "db8352b1f39720c12988729b5da6564175e90fc9dc13a72be38f40b0d94399f8",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.GetTools"
+    },
+    {
+      "input_schema_hash": "f9fc82d8593ec382d85754ffd7bd43eb27c3088ab325676185e428493f6b4083",
+      "method_id": "Tooling.PrepareExecution",
+      "output_schema_hash": "9985c7c5b15f4e0aa59980459a983c7f3c70fbf8e4bbcd1a065aedbdacd9928e",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.ExecuteTool"
+    },
+    {
+      "input_schema_hash": "9547a17d13c96218f08f90c83258a985fc6d5aad9aef7aff3a643f784b001132",
+      "method_id": "Tooling.ExecuteTool",
+      "output_schema_hash": "e248ae6d8dfc0f2e73cd4362d9c4e4f6351fba4373e94f843cf4d7465b5bb9a7",
+      "provider_peer_id": "aurora-sdk-local-provider-v1",
+      "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+      "required_permission": "Tooling.ExecuteTool"
+    }
+  ],
+  "projection_page_hash": "1989b76c644843ee00108504f43b91bf8eb0ab9a751d398b42cb97f3a22abb56",
+  "provider_peer_id": "aurora-sdk-local-provider-v1",
+  "provider_service_instance_id": "local:aurora-sdk-local-provider-v1:Tooling",
+  "version": 1
+}

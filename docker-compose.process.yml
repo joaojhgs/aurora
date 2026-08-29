@@ -208,6 +208,7 @@ services:
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       - AURORA_DATA_DIR=/app/data
+      - HF_HOME=/app/voice_models/pockettts/huggingface
       - AURORA_TTS_MODEL_FILE_PATH=${AURORA_TTS_MODEL_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx}
       - AURORA_TTS_MODEL_CONFIG_FILE_PATH=${AURORA_TTS_MODEL_CONFIG_FILE_PATH:-/app/models/voice/en_US-lessac-medium.onnx.txt}
     volumes:
@@ -216,6 +217,7 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./models:/app/models
+      - aurora_voice_models:/app/voice_models
     networks:
       - aurora-network
     depends_on:
@@ -273,8 +275,8 @@ services:
       - AURORA_LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       - AURORA_DATA_DIR=/app/data
-      # Optional override; if unset, WakeWordService uses services.stt.wakeword.model_path
-      # from ConfigService (e.g. voice_models/jarvis.onnx under repo root /app/host).
+      # Optional advanced override for a user-managed wake word ONNX path.
+      # Normal setup uses the in-app catalog and caches the chosen wake word under /app/data.
       - AURORA_WAKE_WORD_MODEL_PATH=${AURORA_WAKE_WORD_MODEL_PATH:-}
       - AURORA_OPENWAKEWORD_MODELS_DIR=/app/data/openwakeword/models
     volumes:
@@ -392,4 +394,6 @@ volumes:
   redis_data:
     driver: local
   aurora_data:
+    driver: local
+  aurora_voice_models:
     driver: local

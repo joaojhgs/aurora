@@ -1,0 +1,33 @@
+{
+  "name": "@aurora/mesh-authority-web",
+  "version": "1.0.0",
+  "description": "WebAssembly host boundary for the Aurora mesh peer authority.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "pnpm run build:wasm && pnpm run build:typescript",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build:typescript": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run --environment node"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "vitest": "^4.0.16"
+  }
+}

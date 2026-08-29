@@ -1,7 +1,21 @@
 {
   "app": {
     "security": {
-      "capabilities": ["aurora-main", "aurora-desktop-updater"]
+      "capabilities": [
+        "aurora-main",
+        "aurora-overlay",
+        "aurora-desktop-updater"
+      ]
     }
+  },
+  "bundle": {
+    "macOS": {
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.macos.plist",
+      "infoPlist": "Info.macos.plist"
+    },
+    "targets": [
+      "dmg"
+    ]
   }
 }

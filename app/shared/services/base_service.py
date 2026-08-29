@@ -15,11 +15,16 @@ import asyncio
 import contextlib
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from app.helpers.aurora_logger import log_debug, log_error, log_info
+from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.messaging.bus_init import get_bus_singleton
+
+
+class ContractSubscriptionError(RuntimeError):
+    """Raised when decorator metadata cannot be bound to a bus contract."""
 
 
 class BaseService(ABC):
@@ -39,7 +44,7 @@ class BaseService(ABC):
         """
         self.module = module
         self._summary = summary
-        self._capabilities = capabilities or []
+        self._capabilities = list(capabilities) if capabilities is not None else None
         # self.service_name is deprecated, use self.module instead
         # For backward compatibility with logging/bus_init, we can use self.module
         self._bus = None
@@ -70,8 +75,8 @@ class BaseService(ABC):
                 if isinstance(descriptor, property):
                     continue
                 attr = getattr(self, attr_name)
-                if hasattr(attr, "_contract_metadata"):
-                    metadata = attr._contract_metadata
+                metadata = getattr(attr, "_contract_metadata", None)
+                if isinstance(metadata, Mapping):
                     method_id = metadata.get("method_id")
 
                     if method_id:
@@ -101,6 +106,7 @@ class BaseService(ABC):
                         log_debug(f"Registered contract: {method_id}")
             except Exception as e:
                 log_error(f"Error registering contract for {attr_name}: {e}")
+                raise
 
     @property
     def bus(self) -> Any:
@@ -144,11 +150,19 @@ class BaseService(ABC):
 
         self._runtime_state = "starting"
         self._set_started(True)
-        self._subscribe_to_config_changes()
+        try:
+            await self._subscribe_to_config_changes()
+        except Exception:
+            self._set_started(False)
+            self._runtime_state = "inactive"
+            raise
 
         if await self._is_runtime_enabled():
             await self.activate(reason="startup")
         else:
+            # Infrastructure sinks (always_available contracts) stay reachable so
+            # other services don't dead-letter into a lifecycle-disabled module.
+            await self._subscribe_registered_contracts(only_always_available=True)
             self._runtime_state = "inactive"
             log_info(f"{self.module} inactive because its enabled config is false")
 
@@ -189,6 +203,7 @@ class BaseService(ABC):
             await self.on_deactivate()
         except Exception as e:
             log_error(f"{self.module} deactivation hook failed: {e}", exc_info=True)
+        await self._subscribe_registered_contracts(only_always_available=True)
         self._set_started(True)
         self._runtime_state = "inactive"
         log_info(f"{self.module} inactive ({reason})")
@@ -323,7 +338,7 @@ class BaseService(ABC):
             except Exception as e:
                 log_error(f"Failed to unregister config observer: {e}")
 
-    def _subscribe_to_config_changes(self) -> None:
+    async def _subscribe_to_config_changes(self) -> None:
         """Subscribe to config change events.
 
         This method subscribes to Config.Changed events and calls reload() when config changes.
@@ -332,18 +347,19 @@ class BaseService(ABC):
             return
         if self._config_change_subscription is not None:
             return
+        from app.shared.contracts.models.config import ConfigMethods
+
+        async def on_config_changed(envelope: Any) -> None:
+            """Handle config change event."""
+            await self._handle_config_changed(envelope.payload)
+
         try:
-            from app.shared.contracts.models.config import ConfigMethods
-
-            async def on_config_changed(envelope: Any) -> None:
-                """Handle config change event."""
-                await self._handle_config_changed(envelope.payload)
-
-            self.bus.subscribe(ConfigMethods.UPDATED, on_config_changed)
-            self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
-            log_debug(f"{self.module} subscribed to config changes")
+            await self.bus.subscribe_event(ConfigMethods.UPDATED, on_config_changed)
         except Exception as e:
             log_error(f"Failed to subscribe to config changes: {e}")
+            raise
+        self._config_change_subscription = (ConfigMethods.UPDATED, on_config_changed)
+        log_debug(f"{self.module} subscribed to config changes")
 
     def _unsubscribe_from_config_changes(self) -> None:
         """Remove the config change subscription when the process is stopping."""
@@ -399,9 +415,27 @@ class BaseService(ABC):
         exact key-path behavior while existing reload implementations continue
         to work.
         """
-        section = event.affected_sections[0] if event.affected_sections else None
-        if section is None and event.key_path:
-            section = event.key_path.split(".", 1)[0]
+        key_path = str(getattr(event, "key_path", "") or "")
+        parts = key_path.split(".") if key_path else []
+        if (
+            len(parts) >= 3
+            and parts[:2] == ["services", "tooling"]
+            and parts[2] in {"mcp", "plugins"}
+        ):
+            # Tooling owns separate runtime managers for MCP and plugin tools.
+            # Preserve those manager boundaries while keeping other Tooling
+            # leaves on the policy/catalog-only ``services.tooling`` path.
+            section = ".".join(parts[:3])
+        elif len(parts) >= 2 and parts[0] == "services":
+            # ConfigManager reports every prefix, beginning with the broad
+            # ``services`` root. Passing that root made every active service
+            # perform an expensive reload for a leaf owned by one service.
+            section = ".".join(parts[:2])
+        elif parts:
+            section = parts[0]
+        else:
+            affected = list(getattr(event, "affected_sections", []) or [])
+            section = affected[-1] if affected else None
         await self.reload(section)
 
     def _event_matches_enabled_path(self, key_path: str, enabled_path: str) -> bool:
@@ -463,8 +497,8 @@ class BaseService(ABC):
         """
         self._started = started
 
-    async def _subscribe_registered_contracts(self) -> None:
-        """Subscribe all registered method contracts to the message bus.
+    async def _subscribe_registered_contracts(self, only_always_available: bool = False) -> None:
+        """Subscribe registered method contracts to the message bus.
 
         This method scans for methods decorated with @method_contract that have
         a bus_topic defined, and subscribes them to that topic.
@@ -473,10 +507,17 @@ class BaseService(ABC):
         2. Input model validation
         3. Method execution (passing Envelope if method accepts it, else payload)
         4. Response publishing (if reply_to is set)
+
+        Args:
+            only_always_available: Subscribe only contracts flagged
+                ``always_available`` (infrastructure sinks kept alive while the
+                service is lifecycle-disabled). Already-subscribed topics are
+                skipped, so a later full activation adds the remaining ones.
         """
         import inspect
 
         from app.messaging import Envelope
+        from app.shared.contracts.registry import get_contract, method_contract_advertisable
 
         def _wants_envelope(method: Any) -> bool:
             """Check if method signature has an 'envelope' parameter."""
@@ -486,8 +527,7 @@ class BaseService(ABC):
             except (ValueError, TypeError):
                 return False
 
-        if self._contract_subscriptions:
-            return
+        subscribed_topics = {existing_topic for existing_topic, _ in self._contract_subscriptions}
 
         for attr_name in dir(self):
             try:
@@ -495,22 +535,158 @@ class BaseService(ABC):
                 if isinstance(descriptor, property):
                     continue
                 attr = getattr(self, attr_name)
-                if hasattr(attr, "_contract_metadata"):
-                    metadata = attr._contract_metadata
+                metadata = getattr(attr, "_contract_metadata", None)
+                if isinstance(metadata, Mapping):
                     # Use method_id as topic (e.g., "TTS.Request", "Config.Get")
                     topic = metadata.get("bus_topic") or metadata.get("method_id")
-                    input_model = metadata.get("input_model")
+                    contract = get_contract(topic) if topic else None
+                    if topic and contract is None:
+                        raise ContractSubscriptionError(
+                            f"{self.module}.{attr_name} has decorator metadata for {topic} "
+                            "but no registered contract"
+                        )
+                    if contract is not None and not method_contract_advertisable(contract):
+                        raise ContractSubscriptionError(
+                            f"{self.module}.{attr_name} contract {topic} is not advertisable"
+                        )
+                    input_model = (
+                        contract.input_model
+                        if contract is not None
+                        else metadata.get("input_model")
+                    )
+                    required_perms = tuple(
+                        contract.required_perms
+                        if contract is not None
+                        else metadata.get("required_perms") or ()
+                    )
+                    contract_method_type = (
+                        contract.method_type
+                        if contract is not None
+                        else metadata.get("method_type")
+                    )
+                    if only_always_available and not (
+                        contract.always_available
+                        if contract is not None
+                        else metadata.get("always_available")
+                    ):
+                        continue
+                    if topic in subscribed_topics:
+                        continue
 
                     if topic:
+                        stream_handler: Any | None = None
+
+                        async def create_stream_handler(
+                            method=attr,
+                            model=input_model,
+                            topic=topic,
+                            method_name=attr_name,
+                            required_perms=required_perms,
+                            contract_method_type=contract_method_type,
+                            pass_envelope=_wants_envelope(attr),  # noqa: B008
+                        ):
+                            async def direct_stream_handler(envelope: Envelope) -> Any:
+                                if not self._envelope_authorized(
+                                    envelope,
+                                    required_perms=list(required_perms),
+                                    method_type=contract_method_type,
+                                    method_name=method_name,
+                                ):
+                                    raise PermissionError("Forbidden")
+
+                                if model:
+                                    try:
+                                        if isinstance(envelope.payload, model):
+                                            data = envelope.payload
+                                        elif isinstance(envelope.payload, dict):
+                                            data = model.model_validate(envelope.payload)
+                                        else:
+                                            data = model.model_validate(
+                                                envelope.payload.model_dump()
+                                                if hasattr(envelope.payload, "model_dump")
+                                                else envelope.payload
+                                            )
+                                    except Exception as e:
+                                        raise ValueError(f"Validation error: {e}") from e
+                                    if not self._envelope_speech_route_binding_valid(
+                                        envelope,
+                                        data,
+                                        topic=topic,
+                                    ):
+                                        raise RuntimeError("capability_changed")
+                                    return await self._invoke_contract_method(
+                                        method,
+                                        data,
+                                        envelope=envelope,
+                                        pass_envelope=pass_envelope,
+                                        topic=topic,
+                                        method_name=method_name,
+                                        method_type=contract_method_type,
+                                    )
+
+                                return await self._invoke_contract_method(
+                                    method,
+                                    envelope.payload,
+                                    envelope=envelope,
+                                    pass_envelope=pass_envelope,
+                                    topic=topic,
+                                    method_name=method_name,
+                                    method_type=contract_method_type,
+                                )
+
+                            return direct_stream_handler
+
+                        try:
+                            from app.shared.contracts.models.orchestrator import (
+                                OrchestratorMethods,
+                            )
+
+                            register_stream_handler = getattr(
+                                self.bus, "register_stream_handler", None
+                            )
+                            if topic == OrchestratorMethods.STREAM_INFER_CHAT and callable(
+                                register_stream_handler
+                            ):
+                                stream_handler = await create_stream_handler()
+                                register_stream_handler(topic, stream_handler)
+                        except Exception as e:
+                            log_error(f"Failed to register stream handler for {topic}: {e}")
+
                         # Create a wrapper to handle the envelope and types
                         async def create_wrapper(
                             method=attr,
                             model=input_model,
+                            topic=topic,
                             method_name=attr_name,
+                            required_perms=required_perms,
+                            contract_method_type=contract_method_type,
                             pass_envelope=_wants_envelope(attr),  # noqa: B008
                         ):
                             async def wrapper(envelope: Envelope) -> None:
                                 try:
+                                    if not self._envelope_authorized(
+                                        envelope,
+                                        required_perms=list(required_perms),
+                                        method_type=contract_method_type,
+                                        method_name=method_name,
+                                    ):
+                                        if envelope.reply_to:
+                                            from app.shared.contracts.models.common import (
+                                                ErrorOutput,
+                                            )
+
+                                            await self.bus.publish(
+                                                envelope.reply_to,
+                                                ErrorOutput(
+                                                    error="Forbidden",
+                                                    code="FORBIDDEN",
+                                                ),
+                                                event=False,
+                                                origin=self.module,
+                                                correlation_id=envelope.correlation_id,
+                                            )
+                                        return
+
                                     # 1. Unpack and validate input
                                     if model:
                                         try:
@@ -548,20 +724,49 @@ class BaseService(ABC):
                                                     correlation_id=envelope.correlation_id,
                                                 )
                                             return
+                                        if not self._envelope_speech_route_binding_valid(
+                                            envelope,
+                                            data,
+                                            topic=topic,
+                                        ):
+                                            if envelope.reply_to:
+                                                from app.shared.contracts.models.common import (
+                                                    ErrorOutput,
+                                                )
+
+                                                await self.bus.publish(
+                                                    envelope.reply_to,
+                                                    ErrorOutput(
+                                                        error="capability_changed",
+                                                        code="CAPABILITY_CHANGED",
+                                                    ),
+                                                    event=False,
+                                                    origin=self.module,
+                                                    correlation_id=envelope.correlation_id,
+                                                )
+                                            return
 
                                         # 2. Execute method
-                                        if pass_envelope:
-                                            result = await method(data, envelope=envelope)
-                                        else:
-                                            result = await method(data)
+                                        result = await self._invoke_contract_method(
+                                            method,
+                                            data,
+                                            envelope=envelope,
+                                            pass_envelope=pass_envelope,
+                                            topic=topic,
+                                            method_name=method_name,
+                                            method_type=contract_method_type,
+                                        )
                                     else:
                                         # No input model, pass payload directly
-                                        if pass_envelope:
-                                            result = await method(
-                                                envelope.payload, envelope=envelope
-                                            )
-                                        else:
-                                            result = await method(envelope.payload)
+                                        result = await self._invoke_contract_method(
+                                            method,
+                                            envelope.payload,
+                                            envelope=envelope,
+                                            pass_envelope=pass_envelope,
+                                            topic=topic,
+                                            method_name=method_name,
+                                            method_type=contract_method_type,
+                                        )
 
                                     # 3. Handle response
                                     if result is not None and envelope.reply_to:
@@ -609,16 +814,132 @@ class BaseService(ABC):
                         handler = await create_wrapper()
                         self.bus.subscribe(topic, handler)
                         self._contract_subscriptions.append((topic, handler))
+                        if stream_handler is not None:
+                            self._contract_subscriptions.append((f"stream:{topic}", stream_handler))
                         log_info(f"Auto-subscribed {attr_name} to {topic}")
 
+            except ContractSubscriptionError:
+                raise
             except Exception as e:
                 log_error(f"Error setting up subscription for {attr_name}: {e}")
+
+    def _envelope_speech_route_binding_valid(
+        self,
+        envelope: Any,
+        data: Any,
+        *,
+        topic: str,
+    ) -> bool:
+        """Validate trusted speech route metadata after typed payload construction."""
+
+        binding = getattr(envelope, "speech_route_binding", None)
+        is_webrtc_rpc = getattr(envelope, "identity_source", None) == "webrtc_rpc"
+        from app.shared.contracts.registry import get_contract
+
+        contract = get_contract(topic)
+        speech_constraints = contract.speech_constraints if contract is not None else None
+        if speech_constraints is None:
+            return binding is None
+        if not is_webrtc_rpc:
+            return True
+        if binding is None:
+            log_warning(f"{self.module} rejected speech request without route binding")
+            return False
+        try:
+            from app.shared.contracts.speech_routing import (
+                compute_speech_route_requirement_digest_for_payload,
+            )
+
+            expected_digest = compute_speech_route_requirement_digest_for_payload(topic, data)
+        except Exception as exc:
+            log_warning(f"{self.module} rejected speech request with invalid route need: {exc}")
+            return False
+        if binding.requirement_digest != expected_digest:
+            return False
+        return binding.speech_capability_revision == speech_constraints.speech_capability_revision
+
+    async def _invoke_contract_method(
+        self,
+        method: Any,
+        data: Any,
+        *,
+        envelope: Any,
+        pass_envelope: bool,
+        topic: str | None,
+        method_name: str,
+        method_type: str | None,
+    ) -> Any:
+        """Invoke one validated contract method.
+
+        Services may override this protected boundary to coordinate resources
+        shared across otherwise independent bus-topic subscribers. The default
+        preserves the existing concurrent delivery behavior.
+        """
+
+        del topic, method_name, method_type
+        if pass_envelope:
+            return await method(data, envelope=envelope)
+        return await method(data)
+
+    def _envelope_authorized(
+        self,
+        envelope: Any,
+        *,
+        required_perms: list[str],
+        method_type: str | None,
+        method_name: str,
+    ) -> bool:
+        """Enforce external bus permissions at service boundary.
+
+        Gateway/WebRTC/mesh callers are pre-checked at ingress, but the service
+        wrapper is the authoritative last gate for any message that reaches a
+        contract method. Internal/system messages keep existing bus semantics.
+        """
+        if not required_perms:
+            return True
+
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        externalish = origin == "external" or identity_source in {
+            "gateway_http",
+            "gateway_admin_action",
+            "webrtc_rpc",
+            "mesh_peer",
+            "remote_peer",
+            "token",
+        }
+        if not externalish:
+            return True
+
+        effective = set(getattr(envelope, "effective_perms", None) or [])
+        if not effective:
+            log_warning(
+                f"{self.module}.{method_name} denied external request without effective_perms"
+            )
+            return False
+
+        from app.shared.auth.permissions import check_access
+
+        allowed = check_access(effective, required_perms, method_type=method_type)
+        if not allowed:
+            log_warning(
+                f"{self.module}.{method_name} denied external request: "
+                f"required={required_perms} method_type={method_type} "
+                f"effective={sorted(effective)}"
+            )
+        return allowed
 
     def _unsubscribe_registered_contracts(self) -> None:
         """Unsubscribe all auto-registered method contracts."""
         for topic, handler in list(self._contract_subscriptions):
             try:
-                self.bus.unsubscribe(topic, handler)
+                if topic.startswith("stream:"):
+                    stream_topic = topic.split(":", 1)[1]
+                    unregister_stream_handler = getattr(self.bus, "unregister_stream_handler", None)
+                    if callable(unregister_stream_handler):
+                        unregister_stream_handler(stream_topic, handler)
+                else:
+                    self.bus.unsubscribe(topic, handler)
                 log_debug(f"Unsubscribed {self.module} contract from {topic}")
             except Exception as e:
                 log_error(f"Error unsubscribing {self.module} from {topic}: {e}")
@@ -706,6 +1027,10 @@ class BaseService(ABC):
             # Build method info list with schemas
             methods = []
             for method in module_contract.methods:
+                from app.shared.contracts.registry import method_contract_advertisable
+
+                if not method_contract_advertisable(method):
+                    continue
                 # Extract JSON schemas from Pydantic models
                 input_schema = None
                 output_schema = None
@@ -727,7 +1052,11 @@ class BaseService(ABC):
                         input_model=method.input_model.__name__ if method.input_model else None,
                         output_model=method.output_model.__name__ if method.output_model else None,
                         required_perms=method.required_perms,
+                        callable_feature_ids=method.callable_feature_ids,
+                        callable_features=method.callable_features,
+                        public_infrastructure=method.public_infrastructure,
                         method_type=method.method_type,
+                        speech_constraints=method.speech_constraints,
                         input_schema=input_schema,
                         output_schema=output_schema,
                     )
@@ -738,7 +1067,12 @@ class BaseService(ABC):
                 module=self.module,
                 version=module_contract.version,
                 summary=self._summary or module_contract.summary,
-                capabilities=self._capabilities or module_contract.capabilities,
+                capabilities=(
+                    self._capabilities
+                    if self._capabilities is not None
+                    else module_contract.capabilities
+                ),
+                callable_features=module_contract.callable_features,
                 methods=methods,
                 instance_id=self._instance_id,
             )

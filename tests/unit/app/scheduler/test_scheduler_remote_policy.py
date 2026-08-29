@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.messaging import QueryResult
 from app.services.scheduler.service import (
     DELEGATED_APPROVAL_REQUIRED_REASON,
     DELEGATED_ORCHESTRATOR_EXECUTION_UNSUPPORTED_REASON,
@@ -73,6 +74,22 @@ def make_job(
 async def test_schedule_job_stores_namespace_and_delegated_context():
     service = make_service()
     service.cron_service.schedule_from_text = AsyncMock(return_value="job-1")
+    service.bus.request = AsyncMock(
+        return_value=QueryResult(
+            ok=True,
+            data={
+                "ok": True,
+                "policy_decision": {
+                    "decision_id": "policy-1",
+                    "approval_required": False,
+                },
+                "local_tool_name": "switch_on",
+                "global_tool_id": "provider-peer:Tooling:tool:switch_on",
+                "provider_peer_id": "provider-peer",
+                "provider_service_instance_id": "remote:provider-peer:Tooling",
+            },
+        )
+    )
 
     await service.schedule_job(
         SchedulerScheduleJobRequest(
@@ -90,9 +107,15 @@ async def test_schedule_job_stores_namespace_and_delegated_context():
         )
     )
 
-    callback_args = service.cron_service.schedule_from_text.call_args.kwargs["callback_args"]
+    call_kwargs = service.cron_service.schedule_from_text.call_args.kwargs
+    callback_args = call_kwargs["callback_args"]
     context = callback_args["scheduler_context"]
 
+    assert call_kwargs["callback"] == "__typed_action__.execute_action_spec"
+    assert call_kwargs["action_kind"] == "tooling.execute"
+    assert call_kwargs["action_spec"]["binding"]["global_tool_id"] == (
+        "provider-peer:Tooling:tool:switch_on"
+    )
     assert context["namespace"] == "lab"
     assert context["owner_peer_id"] == "owner-peer"
     assert context["owner_principal_id"] == "principal-1"

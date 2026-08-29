@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Bug, Download, FileArchive, RadioTower, RefreshCw, Route, ShieldCheck } from 'lucide-react'
 import type {
   AuroraClient,
   AvailabilityState,
   CapabilityActionInfo,
   CapabilityCatalogResponse,
+  GatewaySupportBundleResponse,
+  SupportBundleDiagnosticItem,
   MeshPeerDiagnostic,
   MeshRouteDiagnostic,
   MeshStatusResponse,
@@ -12,8 +14,21 @@ import type {
   WebRTCDiagnosticsResponse,
   WebRTCPeerDiagnostic
 } from '@aurora/client'
-import { EvidenceBadge, StatusBadge } from './status-badges'
+import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
+import { Badge } from '#components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#components/ui/card'
+import { Progress } from '#components/ui/progress'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
+import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
+import { PageHeader } from './state-surface'
+import { Button, StatStrip } from './primitives'
+import {
+  isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
+  type BrowserWebRtcPeerController,
+  type BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
 
 export type MeshDiagnosticsLoadState = 'loading' | 'ready' | 'empty' | 'degraded' | 'denied' | 'unavailable' | 'error'
 
@@ -64,6 +79,41 @@ export interface MeshRouteDiagnosticRow {
   reason: string
 }
 
+export interface DiagnosticsProbeRow {
+  name: string
+  state: AvailabilityState
+  latency: string
+  detail: string
+}
+
+export interface RedactionPreviewRow {
+  label: string
+  value: number
+  detail: string
+}
+
+export interface DiagnosticsTimelineRow {
+  id: string
+  kind: string
+  title: string
+  detail: string
+  time: string
+  state: AvailabilityState
+}
+
+export interface DiagnosticsDetailRow {
+  id: string
+  name: string
+  state: AvailabilityState
+  source: string
+  detail: string
+}
+
+export interface SupportBundleExportState {
+  status: 'idle' | 'pending' | 'success' | 'error'
+  message: string | null
+}
+
 export interface MeshDiagnosticsSnapshot {
   loadState: MeshDiagnosticsLoadState
   generatedAt: string | null
@@ -85,6 +135,22 @@ export interface MeshDiagnosticsSnapshot {
   authenticatedPeerCount: number
   pairingPeerCount: number
   pendingRpcCount: number
+  supportBundleState: AvailabilityState
+  supportBundleReason: string
+  supportBundleGeneratedAt: string | null
+  supportBundleCorrelationId: string | null
+  supportBundleAuditReceipt: string | null
+  supportBundleServiceCount: number
+  supportBundleRouteCount: number
+  supportBundleRecentEventCount: number
+  supportBundleNativeCapabilityCount: number
+  liveProbes: DiagnosticsProbeRow[]
+  redactionRows: RedactionPreviewRow[]
+  timelineRows: DiagnosticsTimelineRow[]
+  serviceProbeRows: DiagnosticsDetailRow[]
+  nativeCapabilityRows: DiagnosticsDetailRow[]
+  sidecarLogRows: DiagnosticsDetailRow[]
+  frontendLogRows: DiagnosticsDetailRow[]
   transportRows: MeshTransportRow[]
   routeRows: MeshRouteDiagnosticRow[]
   recentErrors: WebRTCDiagnosticError[]
@@ -96,12 +162,175 @@ export interface MeshDiagnosticsSnapshot {
 export interface MeshDiagnosticsResourceProps {
   client: AuroraClient
   route: RouteAvailability
+  thinPeer?: BrowserWebRtcPeerController
 }
 
 export interface MeshDiagnosticsViewProps {
   snapshot: MeshDiagnosticsSnapshot
   route: RouteAvailability
   onRefresh?: () => void
+  onExportSupportBundle?: () => void | Promise<void>
+  supportBundleExportState?: SupportBundleExportState
+  reauthConfirmed?: boolean
+  onReauthConfirmedChange?: (value: boolean) => void
+}
+
+export const meshDiagnosticsInteractionAnchors = [
+  'Live probes',
+  'Redaction preview',
+  'Timeline',
+  'Transport',
+] as const
+
+export function redactDiagnosticText(value: string | null | undefined): string {
+  if (!value) return ''
+  return value
+    .replace(/"((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)"\s*:\s*"[^"]*"/gi, '"$1":"[redacted]"')
+    .replace(/\b(authorization)\b(\s*[:=]\s*)(?:bearer\s+)?[^\s,;<>\"']+/gi, '$1$2[redacted]')
+    .replace(/\b((?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)\b(\s*[:=]\s*)(["']?)[^\s,;<>\"']+/gi, '$1$2$3[redacted]')
+    .replace(/([?&](?:(?:access_?|refresh_?|api_?)?token|secret|password|credential|api[_-]?key|authorization|audio_buffer)=)[^&#\s]+/gi, '$1[redacted]')
+    .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [redacted]')
+    .replace(/\b(raw[-_ ]?audio\s+payload)(\s*[:=]\s*)?(["']?)[^\s,;<>\"']*/gi, '$1$2$3[redacted]')
+}
+
+const INTERNAL_RENDER_TERM_PATTERN = /\b(?:adminaction|contracts?|datachannel|debug|fallback|fixture|gateway(?:\.[a-z0-9_.]+)?|https?|ice|indexeddb|manifest|migration|opfs|proof|protocol|providers?|route|runtime|schema|sidecar|signaling|sqlite|tested|thin|transport|webrtc|wss?|[a-z]+(?:\.[a-z0-9_]+)+|[a-z]+[_-]?[a-z0-9_]*(?:_provider|_route|_method|_manifest|_transport|_protocol|_runtime)[a-z0-9_-]*)\b/iu
+
+function productDiagnosticCopy(value: string | null | undefined, fallback = 'Status details are available in the support export.'): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return fallback
+  const normalized = redacted.toLowerCase().replace(/[_-]+/gu, ' ')
+  if (/\b(?:permission|forbidden|denied|unauthorized|reauth)\b/iu.test(normalized)) return 'Access is required before this information can be shown.'
+  if (/\b(?:offline|not connected|connection|connect|unavailable|disabled|unsupported|down|failed|timeout|error)\b/iu.test(normalized)) return 'Could not connect to this Aurora device. Try again or reconnect the device.'
+  if (/\b(?:stale|expired|outdated)\b/iu.test(normalized)) return 'This information may be out of date. Reconnect the device, then refresh.'
+  if (/\b(?:privacy|encrypted|broker|presence|e2ee|room)\b/iu.test(normalized)) return 'Review privacy settings before showing nearby device presence.'
+  if (/\b(?:redacted|secret|credential|password|token|api\s*key|authorization|audio)\b/iu.test(normalized)) return 'Sensitive details are protected.'
+  if (/\b(?:pending|loading|wait)\b/iu.test(normalized)) return 'Waiting for this device to finish checking.'
+  if (/\b(?:available|ready|healthy|connected|authenticated|ok|running|open|complete|stable)\b/iu.test(normalized)) return 'Ready.'
+  if (INTERNAL_RENDER_TERM_PATTERN.test(redacted)) return fallback
+  return redacted
+}
+
+function productAvailabilityCopy(value: AvailabilityState | MeshDiagnosticsLoadState | string): string {
+  switch (value) {
+    case 'available-local':
+      return 'Ready on this device'
+    case 'available-remote':
+      return 'Ready on a connected device'
+    case 'degraded':
+      return 'Needs attention'
+    case 'denied':
+      return 'Access needed'
+    case 'empty':
+      return 'Nothing to show yet'
+    case 'error':
+    case 'unavailable':
+    case 'unsupported':
+      return 'Unavailable'
+    case 'loading':
+    case 'pending':
+      return 'Checking'
+    case 'privacy-blocked':
+      return 'Review privacy settings'
+    case 'ready':
+      return 'Ready'
+    case 'stale':
+      return 'May be out of date'
+    default:
+      return productDiagnosticCopy(value, 'Status unavailable')
+  }
+}
+
+function productDeviceCopy(value: string | null | undefined): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted || INTERNAL_RENDER_TERM_PATTERN.test(redacted)) return 'Aurora device'
+  return redacted.replace(/\s+/gu, ' ')
+}
+
+function productFeatureCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase()
+  if (normalized === 'gateway') return 'Connectivity'
+  if (normalized === 'tts') return 'Voice playback'
+  if (normalized === 'stt' || normalized === 'sttcoordinator' || normalized.includes('transcription')) return 'Voice input'
+  if (normalized === 'wakeword') return 'Hands-free listening'
+  if (normalized === 'scheduler') return 'Scheduled actions'
+  if (normalized === 'tooling') return 'Tools'
+  if (normalized === 'auth') return 'Device access'
+  if (normalized === 'db') return 'Local data'
+  if (normalized === 'orchestrator') return 'Assistant'
+  if (normalized === 'config') return 'Settings'
+  return productDiagnosticCopy(value, 'Aurora feature')
+}
+
+function productConnectionDetail(row: MeshTransportRow): string {
+  const response = row.rttMs === null ? 'response time unavailable' : `response time ${formatMs(row.rttMs)}`
+  return `${productDiagnosticCopy(row.connectionState, 'Connection needs attention')}; ${response}`
+}
+
+function productSupportReference(value: string | null | undefined): string {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return 'Pending'
+  if (isUnsafeRenderedValue(redacted)) return 'Reference available'
+  if (/^(?:support|receipt|audit|ref)-[a-z0-9][a-z0-9-]{2,39}$/iu.test(redacted)) return redacted
+  return 'Reference available'
+}
+
+function productRedactionLabel(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase()
+  if (normalized === 'credential values') return 'Account details'
+  if (normalized === 'audio capture data') return 'Voice data'
+  if (normalized === 'personal memory snippets') return 'Saved memory'
+  if (!normalized || isUnsafeRenderedValue(normalized)) return 'Privacy item'
+  return productDiagnosticCopy(value, 'Privacy item')
+}
+
+function productRedactionDetail(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (/\b(?:credential|secret|password|token|key|url|account)\b/iu.test(normalized)) return 'Account details are hidden before export.'
+  if (/\b(?:audio|voice|capture|media)\b/iu.test(normalized)) return 'Voice data is excluded before export.'
+  if (/\b(?:rag|memory|personal)\b/iu.test(normalized)) return 'Saved memory content is excluded before export.'
+  return productDiagnosticCopy(value, 'Sensitive details are protected before export.')
+}
+
+function productRedactionProgressLabel(label: string, value: number): string {
+  return `${productRedactionLabel(label)} protection ${value}%`
+}
+
+function productTrustCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (!normalized) return 'Access status unavailable'
+  if (isUnsafeRenderedValue(value)) return 'Access status unavailable'
+  if (/\b(?:denied|failed|unauthorized|forbidden)\b/iu.test(normalized)) return 'Access needed'
+  if (/\b(?:pairing|pending|approval)\b/iu.test(normalized)) return 'Approval pending'
+  if (/\b(?:admin|administrator)\b/iu.test(normalized)) return 'Administrator access approved'
+  if (/\b(?:authenticated|trusted|approved)\b/iu.test(normalized)) return 'Device approved'
+  if (/\b(?:stale|offline|unavailable)\b/iu.test(normalized)) return 'May be out of date'
+  return productDiagnosticCopy(value, 'Access status unavailable')
+}
+
+function productQualityCopy(value: string | null | undefined): string {
+  const normalized = redactDiagnosticText(value).trim().toLowerCase().replace(/[_-]+/gu, ' ')
+  if (!normalized) return 'Quality unavailable'
+  if (normalized === 'healthy' || normalized === 'connected') return 'Strong'
+  if (normalized === 'degraded') return 'Needs attention'
+  if (normalized === 'poor') return 'Poor'
+  if (normalized === 'stale') return 'May be out of date'
+  if (normalized === 'offline') return 'Offline'
+  if (normalized === 'latency unknown') return 'Response time unavailable'
+  if (isUnsafeRenderedValue(value)) return 'Quality unavailable'
+  return productDiagnosticCopy(value, 'Quality unavailable')
+}
+
+function safeMetricTitle(value: string): string {
+  return isUnsafeRenderedValue(value) ? 'Status available' : value
+}
+
+function isUnsafeRenderedValue(value: string | null | undefined): boolean {
+  const redacted = redactDiagnosticText(value).trim()
+  if (!redacted) return false
+  return INTERNAL_RENDER_TERM_PATTERN.test(redacted)
+    || /\b[A-Z][A-Za-z]+(?:\.[A-Z][A-Za-z0-9]+)+\b/u.test(redacted)
+    || /\b(?:AdminAction|Gateway|Get[A-Z][A-Za-z0-9]*|Confirm[A-Z][A-Za-z0-9]*|Draft[A-Z][A-Za-z0-9]*|Action[A-Z][A-Za-z0-9]*)\b/u.test(redacted)
+    || /\b(?:mesh:peer|peer[-_:][A-Za-z0-9._:-]+)\b/iu.test(redacted)
 }
 
 export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
@@ -117,7 +346,7 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   appLayerE2eeEnabled: false,
   secretsRedacted: true,
   signalingState: 'pending',
-  signalingEvidence: 'Loading Gateway.GetWebRTCDiagnostics through AuroraClient.',
+  signalingEvidence: 'Loading Gateway.GetWebRTCDiagnostics through Aurora.',
   signalingRepair: 'Wait for Gateway diagnostics to resolve.',
   diagnosticsCapabilityState: 'pending',
   diagnosticsCapabilityReason: 'Loading capability catalog for Gateway.GetWebRTCDiagnostics.',
@@ -125,24 +354,49 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   authenticatedPeerCount: 0,
   pairingPeerCount: 0,
   pendingRpcCount: 0,
+  supportBundleState: 'pending',
+  supportBundleReason: 'Loading Gateway.GetSupportBundle redaction preview through Aurora.',
+  supportBundleGeneratedAt: null,
+  supportBundleCorrelationId: null,
+  supportBundleAuditReceipt: null,
+  supportBundleServiceCount: 0,
+  supportBundleRouteCount: 0,
+  supportBundleRecentEventCount: 0,
+  supportBundleNativeCapabilityCount: 0,
+  liveProbes: [
+    { name: 'Gateway route registry', state: 'pending', latency: 'loading', detail: 'Gateway.GetCapabilityCatalog pending.' },
+    { name: 'WebRTC diagnostics', state: 'pending', latency: 'loading', detail: 'Gateway.GetWebRTCDiagnostics pending.' },
+    { name: 'Support bundle contract', state: 'pending', latency: 'loading', detail: 'Gateway.GetSupportBundle pending.' }
+  ],
+  redactionRows: [
+    { label: 'Credential values', value: 0, detail: 'Waiting for support bundle redaction metadata.' },
+    { label: 'Audio capture data', value: 0, detail: 'Waiting for omitted media metadata.' },
+    { label: 'Personal memory snippets', value: 0, detail: 'Waiting for RAG omission metadata.' }
+  ],
+  timelineRows: [],
+  serviceProbeRows: [],
+  nativeCapabilityRows: [],
+  sidecarLogRows: [],
+  frontendLogRows: [],
   transportRows: [],
   routeRows: [],
   recentErrors: [],
   warnings: [],
   errors: [],
-  evidenceSource: 'pending AuroraClient SDK calls'
+  evidenceSource: 'pending Aurora service calls'
 }
 
 export async function buildMeshDiagnosticsSnapshot(
   client: AuroraClient,
   route: RouteAvailability
 ): Promise<MeshDiagnosticsSnapshot> {
-  const [webrtc, mesh, catalog] = await Promise.all([
+  const [webrtc, mesh, catalog, supportBundle] = await Promise.all([
     captureDiagnostic(() => client.registry.getWebRTCDiagnostics()),
     captureDiagnostic(() => client.mesh.getStatus().then((response) => response.ok ? response.data : Promise.reject(response.error))),
-    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }))
+    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })),
+    captureDiagnostic(() => client.diagnostics.getSupportBundle({ event_limit: 6, audit_limit: 6, include_capability_catalog: true }).then((response) => response.ok ? response.data : Promise.reject(response.error)))
   ])
-  return meshDiagnosticsSnapshotFromResults({ route, webrtc, mesh, catalog })
+  return meshDiagnosticsSnapshotFromResults({ route, webrtc, mesh, catalog, supportBundle })
 }
 
 export function meshDiagnosticsSnapshotFromResults(input: {
@@ -150,9 +404,14 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   webrtc: SettledDiagnostic<WebRTCDiagnosticsResponse>
   mesh: SettledDiagnostic<MeshStatusResponse>
   catalog: SettledDiagnostic<CapabilityCatalogResponse>
+  supportBundle?: SettledDiagnostic<GatewaySupportBundleResponse>
 }): MeshDiagnosticsSnapshot {
   const diagnosticsCapability = input.catalog.data?.actions.find((action) => action.topic === 'Gateway.GetWebRTCDiagnostics' || action.action_id.includes('Gateway.GetWebRTCDiagnostics')) ?? null
-  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error].filter((error): error is string => Boolean(error))
+  const supportBundle = input.supportBundle?.data ?? null
+  const supportBundleError = input.supportBundle?.error ?? null
+  const errors = [input.webrtc.error, input.mesh.error, input.catalog.error, supportBundleError]
+    .filter((error): error is string => Boolean(error))
+    .map(redactDiagnosticText)
   const denied = Boolean(input.webrtc.denied || input.mesh.denied || input.catalog.denied || input.route.state === 'denied')
   const webRtc = input.webrtc.data
   const mesh = input.mesh.data
@@ -163,7 +422,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     ...signalingWarnings(webRtc),
     ...(mesh?.compatibility_failures ?? []).map((failure) => `${failure.peer_id} ${failure.module} ${failure.direction}: ${failure.reason}`),
     ...(input.route.disabled ? [input.route.explanation] : [])
-  ]
+  ].map((message) => redactDiagnosticText(presentableSignal(message)))
   const loadState: MeshDiagnosticsLoadState = denied
     ? 'denied'
     : errors.length > 0
@@ -179,7 +438,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   return {
     loadState,
     generatedAt: input.catalog.data?.generated_at ?? null,
-    localNodeName: webRtc?.local_node_name ?? mesh?.local.node_name ?? input.catalog.data?.local_node_name ?? 'Aurora node',
+    localNodeName: webRtc?.local_node_name ?? mesh?.local.node_name ?? input.catalog.data?.local_node_name ?? 'This device',
     localMeshPeerId: webRtc?.local_mesh_peer_id ?? mesh?.local.peer_id ?? input.catalog.data?.local_peer_id ?? null,
     localSignalingPeerId: webRtc?.local_signaling_peer_id ?? null,
     started: Boolean(webRtc?.started ?? mesh?.local.webrtc_started),
@@ -189,166 +448,708 @@ export function meshDiagnosticsSnapshotFromResults(input: {
     appLayerE2eeEnabled: Boolean(webRtc?.app_layer_e2ee_enabled),
     secretsRedacted: Boolean(webRtc?.secrets_redacted ?? mesh?.secrets_redacted ?? input.catalog.data?.secrets_redacted ?? true),
     signalingState: signalingState(webRtc, input.webrtc.error),
-    signalingEvidence: signalingEvidence(webRtc, input.webrtc.error),
-    signalingRepair: signalingRepair(webRtc, input.webrtc.error),
+    signalingEvidence: redactDiagnosticText(signalingEvidence(webRtc, input.webrtc.error)),
+    signalingRepair: redactDiagnosticText(signalingRepair(webRtc, input.webrtc.error)),
     diagnosticsCapabilityState: capabilityState(diagnosticsCapability, input.catalog.error),
-    diagnosticsCapabilityReason: capabilityReason(diagnosticsCapability, input.catalog.error),
+    diagnosticsCapabilityReason: redactDiagnosticText(capabilityReason(diagnosticsCapability, input.catalog.error)),
     connectedPeerCount: webRtc?.connected_peer_count ?? 0,
     authenticatedPeerCount: webRtc?.authenticated_peer_count ?? 0,
     pairingPeerCount: webRtc?.pairing_peer_count ?? 0,
     pendingRpcCount: webRtc?.pending_rpc_count ?? 0,
+    supportBundleState: supportBundleState(supportBundle, supportBundleError),
+    supportBundleReason: supportBundleReason(supportBundle, supportBundleError),
+    supportBundleGeneratedAt: supportBundle?.generated_at ?? null,
+    supportBundleCorrelationId: redactDiagnosticText(supportBundle?.correlation_id ?? null) || null,
+    supportBundleAuditReceipt: redactDiagnosticText(supportBundle?.audit_receipt ?? supportBundle?.audit_error ?? null) || null,
+    supportBundleServiceCount: supportBundle?.services.length ?? 0,
+    supportBundleRouteCount: supportBundle?.route_diagnostics.length ?? 0,
+    supportBundleRecentEventCount: supportBundle?.recent_events.length ?? 0,
+    supportBundleNativeCapabilityCount: supportBundle?.native_capabilities.length ?? 0,
+    liveProbes: buildLiveProbes({ supportBundle, supportBundleError, webRtc, mesh, catalog: input.catalog.data, diagnosticsCapability }),
+    redactionRows: buildRedactionRows(supportBundle, Boolean(webRtc?.secrets_redacted ?? mesh?.secrets_redacted ?? input.catalog.data?.secrets_redacted ?? true)),
+    timelineRows: buildTimelineRows(supportBundle),
+    serviceProbeRows: buildServiceProbeRows(supportBundle),
+    nativeCapabilityRows: buildSupportBundleDiagnosticRows(supportBundle?.native_capabilities ?? [], 'native'),
+    sidecarLogRows: buildSupportBundleDiagnosticRows(supportBundle?.sidecar_logs ?? [], 'sidecar'),
+    frontendLogRows: buildFrontendLogRows(supportBundle, webRtc),
     transportRows,
     routeRows,
-    recentErrors: webRtc?.recent_errors ?? [],
+    recentErrors: (webRtc?.recent_errors ?? []).map((error) => ({
+      ...error,
+      message: redactDiagnosticText(error.message),
+      peer_id: error.peer_id ? redactDiagnosticText(error.peer_id) : error.peer_id
+    })),
     warnings,
     errors,
-    evidenceSource: errors.length ? 'partial AuroraClient diagnostics responses' : 'AuroraClient Gateway diagnostics, mesh status, and capability catalog'
+    evidenceSource: errors.length ? 'partial Aurora diagnostics responses' : 'Aurora Gateway diagnostics, mesh status, and capability catalog'
   }
 }
 
-export function MeshDiagnosticsView({ snapshot, route, onRefresh }: MeshDiagnosticsViewProps) {
+/**
+ * Merge client-side thin transport truth with remote Gateway diagnostics.
+ * Gateway diagnostics can be unavailable precisely because the peer is
+ * offline; that must not be rendered as WebRTC being disabled.
+ */
+export function reconcileMeshDiagnosticsWithThinPeer(
+  next: MeshDiagnosticsSnapshot,
+  thinPeer: BrowserWebRtcSnapshot | null | undefined,
+  previous?: MeshDiagnosticsSnapshot | null,
+  measuredLatencyMs: number | null = null,
+): MeshDiagnosticsSnapshot {
+  if (!isBrowserWebRtcConfigured(thinPeer)) return next
+
+  const connected = isBrowserWebRtcConnected(thinPeer)
+  const remoteUnavailable =
+    next.loadState === 'unavailable'
+    || next.loadState === 'error'
+  const previousHasRemoteEvidence = Boolean(
+    previous
+    && previous.loadState !== 'loading'
+    && previous.loadState !== 'unavailable'
+    && previous.loadState !== 'error'
+    && previous.loadState !== 'denied',
+  )
+  const base = remoteUnavailable && previousHasRemoteEvidence
+    ? previous!
+    : next
+  const peerId = thinPeer.expectedStablePeerId!
+  const nodeName = thinPeer.nodeName?.trim() || 'Invited Aurora device'
+  const state: AvailabilityState = connected
+    ? 'available-remote'
+    : thinPeer.status === 'pairing'
+      ? 'pending'
+      : 'stale'
+  const thinRow: MeshTransportRow = {
+    id: `thin:${peerId}`,
+    peerId,
+    signalingPeerId: thinPeer.connectedSignalingPeerId ?? 'not connected',
+    nodeName,
+    state,
+    connectionState: connected ? 'connected' : 'offline',
+    iceConnectionState: connected ? thinPeer.icePathCategory : 'not connected',
+    iceGatheringState: connected ? 'complete' : 'idle',
+    signalingState: connected ? 'stable' : 'waiting for peer',
+    dataChannelState: connected ? 'open' : 'closed',
+    dataChannelLabel: 'aurora-rpc',
+    hasSendChannel: connected,
+    rttMs: connected ? measuredLatencyMs : null,
+    authState: connected ? 'authenticated' : 'saved peer offline',
+    identitySource: 'saved thin WebRTC profile',
+    isAdmin: false,
+    effectivePermissionCount: 0,
+    pairingState: thinPeer.status === 'pairing'
+      ? 'bilateral approval pending'
+      : 'no pairing work reported',
+    routeQuality: connected
+      ? routeQuality(measuredLatencyMs, 'connected')
+      : 'offline',
+    routeProvider: connected
+      ? 'authorized direct peer and its advertised mesh providers'
+      : 'last-known providers retained until reconnect',
+    trustLabel: connected
+      ? 'authenticated saved peer'
+      : 'saved peer identity; live trust state unavailable',
+    fingerprint: peerId,
+    permissions: connected
+      ? 'effective permissions loaded from the peer catalog'
+      : 'permissions refreshed on reconnect',
+    compatibility: 'checked again on reconnect',
+    lastSeen: thinPeer.updatedAt,
+  }
+  const transportRows = [
+    ...base.transportRows.filter((row) => row.peerId !== peerId),
+    thinRow,
+  ]
+  const errors = next.errors.filter(
+    (error) => !isExpectedOfflineTransportDiagnostic(error),
+  )
+  const warnings = [
+    ...new Set([
+      ...base.warnings.filter(
+        (warning) => !isExpectedOfflineTransportDiagnostic(warning),
+      ),
+      ...(!connected
+        ? [`${nodeName} is offline. WebRTC remains enabled and the saved peer identity will be retried.`]
+        : []),
+    ]),
+  ]
+  const liveProbes = base.liveProbes.some(
+    (probe) => probe.name === 'Thin WebRTC peer',
+  )
+    ? base.liveProbes.map((probe) =>
+        probe.name === 'Thin WebRTC peer'
+          ? thinPeerProbe(nodeName, state, connected, measuredLatencyMs)
+          : probe,
+      )
+    : [...base.liveProbes, thinPeerProbe(nodeName, state, connected, measuredLatencyMs)]
+
+  return {
+    ...base,
+    loadState: base.loadState === 'denied'
+      ? 'denied'
+      : connected && !remoteUnavailable
+        ? base.loadState
+        : 'degraded',
+    localNodeName: base.localNodeName === 'This device'
+      ? nodeName
+      : base.localNodeName,
+    started: true,
+    enabled: true,
+    meshEnabled: true,
+    signalingState: connected ? 'available-remote' : 'degraded',
+    signalingEvidence: connected
+      ? `Thin WebRTC runtime is enabled and connected to ${nodeName}.`
+      : `Thin WebRTC runtime is enabled; ${nodeName} peer is offline.`,
+    signalingRepair: connected
+      ? 'The saved thin peer is connected.'
+      : 'Wait for the peer or reconnect manually. WebRTC remains enabled and saved peer/capability metadata remains visible as stale.',
+    diagnosticsCapabilityState: connected
+      ? base.diagnosticsCapabilityState
+      : base.diagnosticsCapabilityState === 'denied'
+        ? 'denied'
+        : 'stale',
+    diagnosticsCapabilityReason: connected
+      ? base.diagnosticsCapabilityReason
+      : 'Remote diagnostics refresh when a trusted peer route reconnects.',
+    connectedPeerCount: connected
+      ? Math.max(1, base.connectedPeerCount)
+      : base.connectedPeerCount,
+    authenticatedPeerCount: connected
+      ? Math.max(1, base.authenticatedPeerCount)
+      : base.authenticatedPeerCount,
+    liveProbes,
+    transportRows,
+    warnings,
+    errors,
+    evidenceSource: remoteUnavailable
+      ? 'saved thin peer profile and last-known redacted diagnostics'
+      : `${base.evidenceSource}; local thin WebRTC runtime`,
+  }
+}
+
+export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null }, reauthConfirmed = false, onReauthConfirmedChange }: MeshDiagnosticsViewProps) {
   return (
-    <section className="aui-mesh-diagnostics" aria-labelledby="mesh-diagnostics-title">
-      <header className="aui-mesh-diagnostics-header">
-        <div>
-          <p className="aui-kicker">MESH-004</p>
-          <h1 id="mesh-diagnostics-title">WebRTC and ICE diagnostics</h1>
-          <p>
-            Signaling, ICE, auth, DataChannel, RTT, peer identity, compatibility, and route failures are rendered from AuroraClient diagnostics.
-          </p>
-        </div>
-        <div className="aui-mesh-badges" aria-label="Mesh diagnostics state">
-          <StatusBadge state={snapshot.loadState === 'ready' ? 'available-remote' : stateForLoad(snapshot.loadState)} />
-          <EvidenceBadge label={snapshot.secretsRedacted ? 'secrets redacted' : 'redaction unknown'} />
-          <EvidenceBadge label={snapshot.evidenceSource} />
-          {onRefresh ? <button className="aui-action-chip" type="button" onClick={onRefresh}><RefreshCw size={14} aria-hidden />Refresh</button> : null}
-        </div>
-      </header>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        id="mesh-diagnostics-title"
+        eyebrow="Troubleshooting"
+        title="Troubleshooting"
+        description="Check whether connected devices, service checks, support export, and repair steps are ready."
+        actions={
+          onRefresh ? (
+            <Button variant="ghost" icon={<RefreshCw size={14} aria-hidden />} onClick={onRefresh}>
+              Refresh
+            </Button>
+          ) : null
+        }
+      />
 
-      <dl className="aui-mesh-diagnostics-summary">
-        <Metric label="connected" value={String(snapshot.connectedPeerCount)} />
-        <Metric label="authenticated" value={String(snapshot.authenticatedPeerCount)} />
-        <Metric label="pairing" value={String(snapshot.pairingPeerCount)} />
-        <Metric label="pending RPC" value={String(snapshot.pendingRpcCount)} />
-        <Metric label="routes" value={String(snapshot.routeRows.length)} />
-      </dl>
+      <StatStrip
+        ariaLabel="Diagnostics overview"
+        items={[
+          { label: 'Services checked', value: String(snapshot.supportBundleServiceCount || snapshot.connectedPeerCount), caption: 'Recent service check' },
+          { label: 'Recent activity', value: String(snapshot.supportBundleRecentEventCount), caption: 'Sensitive details hidden' },
+          { label: 'Feature checks', value: String(snapshot.supportBundleRouteCount || snapshot.routeRows.length), caption: 'Device availability' },
+          { label: 'Live checks', value: String(snapshot.liveProbes.length), caption: 'Current device status' },
+          { label: 'Issues found', value: String(snapshot.recentErrors.length + snapshot.errors.length), caption: 'Sensitive details hidden' }
+        ]}
+      />
 
-      <div className="aui-mesh-diagnostics-grid">
-        <section className="aui-mesh-panel" aria-labelledby="mesh-signaling-title">
-          <PanelTitle icon={<RadioTower size={18} aria-hidden />} title="Signaling" description="MQTT/WebRTC setup, presence encryption, broker, room, and app-layer E2EE state." />
-          <StatusBadge state={snapshot.signalingState} />
-          <dl className="aui-mesh-meta">
-            <Metric label="node" value={snapshot.localNodeName} />
-            <Metric label="mesh peer" value={snapshot.localMeshPeerId ?? 'not reported'} />
-            <Metric label="signaling peer" value={snapshot.localSignalingPeerId ?? 'not reported'} />
-            <Metric label="auth" value={snapshot.requireAuth ? 'required' : 'not required'} />
-            <Metric label="app-layer E2EE" value={snapshot.appLayerE2eeEnabled ? 'enabled' : 'not enabled'} />
-            <Metric label="evidence" value={snapshot.signalingEvidence} />
-          </dl>
-          <p className="aui-mesh-diagnostics-note">{snapshot.signalingRepair}</p>
-        </section>
-
-        <section className="aui-mesh-panel" aria-labelledby="mesh-capability-title">
-          <PanelTitle icon={<ShieldCheck size={18} aria-hidden />} title="Capability gating" description="Feature visibility follows the capability graph and route availability." />
-          <dl className="aui-mesh-meta">
-            <Metric label="route state" value={route.state} />
-            <Metric label="provider" value={route.providerLabel} />
-            <Metric label="selector" value={route.selectorRequired ? 'required' : 'not required'} />
-            <Metric label="AdminAction" value={route.requiresAdminAction ? 'mutation only' : 'not required'} />
-            <Metric label="diagnostics method" value={snapshot.diagnosticsCapabilityState} />
-            <Metric label="reason" value={snapshot.diagnosticsCapabilityReason} />
-          </dl>
-        </section>
-      </div>
-
-      {snapshot.errors.length > 0 ? (
-        <div className="aui-mesh-diagnostics-alert" role="alert">
-          <AlertTriangle size={18} aria-hidden />
-          <div>
-            <strong>Degraded diagnostics inputs</strong>
-            <ul>{snapshot.errors.map((error) => <li key={error}>{error}</li>)}</ul>
-          </div>
-        </div>
-      ) : null}
-
-      {snapshot.warnings.length > 0 ? (
-        <section className="aui-mesh-panel" aria-labelledby="mesh-warning-title">
-          <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Repair evidence" description="Unsupported, stale, denied, or compatibility-blocked diagnostics remain visible." />
-          <ul className="aui-mesh-warnings">{snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-        </section>
-      ) : null}
-
-      <section className="aui-mesh-panel" aria-labelledby="mesh-transport-title">
-        <PanelTitle icon={<RadioTower size={18} aria-hidden />} title="Peer transport matrix" description="Stable identity is shown beside signaling session identity and live transport state." />
-        {snapshot.transportRows.length > 0 ? (
-          <div className="aui-mesh-diagnostics-table" role="table" aria-label="WebRTC peer transport diagnostics">
-            <div role="row" className="aui-mesh-diagnostics-table-head">
-              <span role="columnheader">Peer</span>
-              <span role="columnheader">Transport</span>
-              <span role="columnheader">Trust and permissions</span>
-              <span role="columnheader">Route and freshness</span>
-            </div>
-            {snapshot.transportRows.map((peer) => (
-              <div role="row" className="aui-mesh-diagnostics-table-row" key={peer.id}>
-                <span role="cell"><strong>{peer.nodeName}</strong><code>{peer.peerId}</code><small>signaling {peer.signalingPeerId}</small></span>
-                <span role="cell"><StatusBadge state={peer.state} /><small>ICE {peer.iceConnectionState}; gather {peer.iceGatheringState}; channel {peer.dataChannelState}; RTT {formatMs(peer.rttMs)}</small></span>
-                <span role="cell"><strong>{peer.trustLabel}</strong><small>{peer.authState}; {peer.permissions}; {peer.fingerprint}</small></span>
-                <span role="cell"><strong>{peer.routeQuality}</strong><small>{peer.routeProvider}; {peer.compatibility}; {peer.lastSeen}</small></span>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<RefreshCw size={18} aria-hidden />} title="Live checks" description="Current checks show which device or feature needs attention." ariaLabel="Live checks">
+          <div className="flex flex-col gap-2.5">
+            {snapshot.liveProbes.map((probe) => (
+              <div className="rounded-lg border bg-background/50 p-3" key={probe.name}>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <strong className="text-sm font-medium">{productDiagnosticCopy(probe.name, 'Device check')}</strong>
+                    <div className="text-xs text-muted-foreground">{productDiagnosticCopy(probe.latency, 'Updated recently')}</div>
+                  </div>
+                  <StatusBadge state={probe.state} />
+                </div>
+                <p className="mt-1.5 text-sm text-muted-foreground">{productDiagnosticCopy(probe.detail, 'Check the affected device, then refresh.')}</p>
               </div>
             ))}
           </div>
-        ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No live WebRTC peer sessions were reported by the backend.</p>
-        )}
-      </section>
+        </Panel>
 
-      <section className="aui-mesh-panel" aria-labelledby="mesh-routes-title">
-        <PanelTitle icon={<Route size={18} aria-hidden />} title="Route quality" description="Route decisions keep fallback and provider eligibility visible." />
-        {snapshot.routeRows.length > 0 ? (
-          <div className="aui-mesh-row-list">
-            {snapshot.routeRows.map((row) => (
-              <article className={`aui-mesh-row aui-mesh-card-${row.state}`} key={row.module}>
-                <header>
-                  <div>
-                    <p className="aui-kicker">{row.decisionTarget}</p>
-                    <h3>{row.module}</h3>
-                    <code>{row.decisionPeerId}</code>
-                  </div>
-                  <StatusBadge state={row.state} />
-                </header>
-                <dl className="aui-mesh-meta">
-                  <Metric label="quality" value={row.routeQuality} />
-                  <Metric label="latency" value={row.latency} />
-                  <Metric label="fallback" value={row.fallback} />
-                  <Metric label="providers" value={row.providerSummary} />
-                </dl>
-                <p className="aui-mesh-diagnostics-note">{row.reason}</p>
-                {row.blockers.length > 0 ? <ul className="aui-mesh-warnings">{row.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul> : null}
-              </article>
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Privacy check" description="Sensitive account, voice, and memory details are hidden before export.">
+          <div className="flex flex-col gap-3">
+            {snapshot.redactionRows.map((row) => (
+              <div key={row.label}>
+                <div className="flex items-center justify-between text-sm">
+                  <span>{productRedactionLabel(row.label)}</span>
+                  <strong>{row.value}%</strong>
+                </div>
+                <Progress value={row.value} className="mt-1" aria-label={productRedactionProgressLabel(row.label, row.value)} />
+                <p className="mt-1 text-xs text-muted-foreground">{productRedactionDetail(row.detail)}</p>
+              </div>
             ))}
           </div>
-        ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No mesh routes were reported by Gateway.GetMeshStatus.</p>
-        )}
-      </section>
+          <div className="mt-3 flex flex-wrap gap-2" aria-label="Redaction classes">
+            <EvidenceBadge label="Account details excluded" />
+            <EvidenceBadge label="Voice data excluded" />
+            <EvidenceBadge label="Recent approval required" />
+          </div>
+        </Panel>
+      </div>
 
-      <section className="aui-mesh-panel" aria-labelledby="mesh-errors-title">
-        <PanelTitle icon={<AlertTriangle size={18} aria-hidden />} title="Recent transport errors" description="Backend-reported signaling, ICE, DataChannel, and RPC failures." />
-        {snapshot.recentErrors.length > 0 ? (
-          <ul className="aui-mesh-error-list">
-            {snapshot.recentErrors.map((error) => (
-              <li key={`${error.timestamp}:${error.code}:${error.peer_id ?? 'local'}`}>
-                <strong>{error.code}</strong>
-                <span>{error.message}</span>
-                <small>{error.peer_id ?? 'local'}; {error.timestamp}</small>
+      <Panel icon={<Download size={18} aria-hidden />} title="Support export" description="Export requires recent approval, and sensitive details are excluded.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Metric label="approval" value={reauthConfirmed ? 'Confirmed' : 'Required'} />
+          <Metric label="contents" value={snapshot.secretsRedacted ? 'Sensitive details hidden' : 'Protection pending'} />
+          <Metric label="state" value={productAvailabilityCopy(snapshot.supportBundleState)} />
+          <Metric label="updated" value={snapshot.supportBundleGeneratedAt ?? 'not exported yet'} />
+          <Metric label="reference" value={productSupportReference(snapshot.supportBundleCorrelationId)} />
+          <Metric label="receipt" value={productSupportReference(snapshot.supportBundleAuditReceipt)} />
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">{productDiagnosticCopy(snapshot.supportBundleReason, 'Sensitive details are protected before export.')}</p>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          {onReauthConfirmedChange ? (
+            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+          ) : (
+            <input type="checkbox" checked={false} readOnly disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+          )}
+          <span>I confirm recent approval before exporting support data.</span>
+        </label>
+        <Button
+          className="mt-3"
+          icon={<Download size={15} aria-hidden />}
+          disabled={!onExportSupportBundle || !reauthConfirmed || supportBundleExportState.status === 'pending'}
+          {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
+        >
+          {supportBundleExportState.status === 'pending' ? 'Exporting...' : 'Export support data'}
+        </Button>
+        {supportBundleExportState.message ? (
+          <p className={`mt-2 text-sm ${supportBundleExportState.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`} role="status">
+            {productDiagnosticCopy(supportBundleExportState.message, 'Support export status changed.')}
+          </p>
+        ) : null}
+      </Panel>
+
+      <Panel icon={<Activity size={18} aria-hidden />} title="Service checks" description="Recent checks show service health and repair status for this device.">
+        {snapshot.serviceProbeRows.length > 0 ? (
+          <DetailGrid rows={snapshot.serviceProbeRows} label="Service health probes" />
+        ) : (
+          <p className="text-sm text-muted-foreground" role="status">
+            Service checks are not available yet.
+          </p>
+        )}
+      </Panel>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Device permissions" description="Desktop and mobile permission checks are shown without sensitive details.">
+          <DetailGrid rows={snapshot.nativeCapabilityRows} label="Device permission checks" empty="No device permission checks are available yet." />
+        </Panel>
+        <Panel icon={<Bug size={18} aria-hidden />} title="App logs" description="Only safe summaries are previewed; full log text, tokens, and media payloads are excluded.">
+          <DetailGrid rows={[...snapshot.sidecarLogRows, ...snapshot.frontendLogRows]} label="App log checks" empty="No app log summaries are available yet." />
+        </Panel>
+      </div>
+
+      <Panel icon={<FileArchive size={18} aria-hidden />} title="Recent activity" description="Recent safe activity summaries for support review.">
+        {snapshot.timelineRows.length > 0 ? (
+          <ul className="flex flex-col gap-2.5">
+            {snapshot.timelineRows.map((row) => (
+              <li key={row.id} className="flex items-start gap-3 rounded-lg border bg-background/50 p-3">
+                <StatusBadge state={row.state} />
+                <div className="min-w-0 flex-1">
+                  <strong className="text-sm font-medium">{productDiagnosticCopy(row.title, 'Recent activity')}</strong>
+                  <p className="text-sm text-muted-foreground">{productDiagnosticCopy(row.detail, 'Safe activity summary available.')}</p>
+                </div>
+                <time className="shrink-0 text-xs text-muted-foreground">{row.time}</time>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="aui-mesh-diagnostics-empty" role="status">No recent transport errors were reported.</p>
+          <p className="text-sm text-muted-foreground" role="status">
+            No recent activity is available yet.
+          </p>
         )}
-      </section>
-    </section>
+      </Panel>
+
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <Metric label="connected" value={String(snapshot.connectedPeerCount)} />
+        <Metric label="authenticated" value={String(snapshot.authenticatedPeerCount)} />
+        <Metric label="pairing" value={String(snapshot.pairingPeerCount)} />
+        <Metric label="pending actions" value={String(snapshot.pendingRpcCount)} />
+        <Metric label="feature checks" value={String(snapshot.routeRows.length)} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel icon={<RadioTower size={18} aria-hidden />} title="Device connection" description="Connection readiness, privacy, and nearby-device visibility.">
+          <StatusBadge state={snapshot.signalingState} />
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Metric label="device" value={productDeviceCopy(snapshot.localNodeName)} />
+            <Metric label="saved identity" value={snapshot.localMeshPeerId ? 'Available' : 'Not reported'} />
+            <Metric label="session" value={snapshot.localSignalingPeerId ? 'Available' : 'Not reported'} />
+            <Metric label="auth" value={snapshot.requireAuth ? 'required' : 'not required'} />
+            <Metric label="privacy" value={snapshot.appLayerE2eeEnabled ? 'Protected' : 'Needs review'} />
+            <Metric label="state" value={productDiagnosticCopy(snapshot.signalingEvidence, 'Connection status unavailable')} />
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{productDiagnosticCopy(snapshot.signalingRepair, 'Check the affected device, then refresh.')}</p>
+        </Panel>
+
+        <Panel icon={<ShieldCheck size={18} aria-hidden />} title="Feature access" description="Shows whether troubleshooting can read the required information.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Metric label="state" value={productAvailabilityCopy(route.state)} />
+            <Metric label="device" value={productDeviceCopy(route.providerLabel)} />
+            <Metric label="selection" value={route.selectorRequired ? 'Required' : 'Not required'} />
+            <Metric label="approval" value={route.requiresAdminAction ? 'Required for changes' : 'Not required'} />
+            <Metric label="readiness" value={productAvailabilityCopy(snapshot.diagnosticsCapabilityState)} />
+            <Metric label="reason" value={productDiagnosticCopy(snapshot.diagnosticsCapabilityReason, 'Feature information is unavailable.')} />
+          </div>
+        </Panel>
+      </div>
+
+      {snapshot.errors.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertTitle>Some checks need attention</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {snapshot.errors.map((error) => (
+                <li key={error}>{productDiagnosticCopy(error, 'Could not complete this check. Try again.')}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {snapshot.warnings.length > 0 ? (
+        <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Repair steps" description="Items that need attention stay visible until they recover.">
+          <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+            {snapshot.warnings.map((warning) => (
+              <li key={warning}>{productDiagnosticCopy(warning, 'Check the affected device, then refresh.')}</li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+
+      <Panel icon={<RadioTower size={18} aria-hidden />} title="Connected devices" description="Saved devices are shown with connection readiness and access status.">
+        {snapshot.transportRows.length > 0 ? (
+          <Table aria-label="Connected device checks">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Device</TableHead>
+                <TableHead>Connection</TableHead>
+                <TableHead>Trust and permissions</TableHead>
+                <TableHead>Readiness</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {snapshot.transportRows.map((peer) => (
+                <TableRow key={peer.id}>
+                  <TableCell>
+                    <div className="flex flex-col gap-0.5">
+                      <strong className="text-sm font-medium">{productDeviceCopy(peer.nodeName)}</strong>
+                      <span className="text-xs text-muted-foreground">{peer.peerId ? 'Saved device identity available' : 'Device identity unavailable'}</span>
+                      <span className="text-xs text-muted-foreground">{peer.signalingPeerId ? 'Current session available' : 'Current session unavailable'}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge state={peer.state} />
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {productConnectionDetail(peer)}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <strong className="text-sm font-medium">{productTrustCopy(peer.trustLabel)}</strong>
+                    <div className="text-xs text-muted-foreground">
+                      {productDiagnosticCopy(peer.authState, 'Access status unavailable')}; {productDiagnosticCopy(peer.permissions, 'Permissions unavailable')}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <strong className="text-sm font-medium">{productQualityCopy(peer.routeQuality)}</strong>
+                    <div className="text-xs text-muted-foreground">
+                      {productDiagnosticCopy(peer.routeProvider, 'Feature readiness unavailable')}; {productDiagnosticCopy(peer.compatibility, 'Compatibility check unavailable')}; {productDiagnosticCopy(peer.lastSeen, 'Last check unavailable')}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="text-sm text-muted-foreground" role="status">
+            No connected devices are available yet.
+          </p>
+        )}
+      </Panel>
+
+      <Panel icon={<Route size={18} aria-hidden />} title="Feature readiness" description="Shows which features can use this device or another approved device.">
+        {snapshot.routeRows.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {snapshot.routeRows.map((row) => (
+              <Card key={row.module} size="sm">
+                <CardContent className="flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{productDiagnosticCopy(row.decisionTarget, 'Selected device')}</p>
+                      <h3 className="text-sm font-semibold">{productFeatureCopy(row.module)}</h3>
+                      <span className="text-xs text-muted-foreground">{row.decisionPeerId ? 'Device reference available' : 'Device reference unavailable'}</span>
+                    </div>
+                    <StatusBadge state={row.state} />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Metric label="quality" value={productQualityCopy(row.routeQuality)} />
+                    <Metric label="latency" value={row.latency} />
+                    <Metric label="backup option" value={productDiagnosticCopy(row.fallback, 'No backup option reported')} />
+                    <Metric label="devices" value={productDiagnosticCopy(row.providerSummary, 'Device readiness unavailable')} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{productDiagnosticCopy(row.reason, 'Feature readiness details are unavailable.')}</p>
+                  {row.blockers.length > 0 ? (
+                    <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                      {row.blockers.map((blocker) => (
+                        <li key={blocker}>{productDiagnosticCopy(blocker, 'This device needs attention before the feature is ready.')}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground" role="status">
+            No feature readiness checks are available yet.
+          </p>
+        )}
+      </Panel>
+
+      <Panel icon={<AlertTriangle size={18} aria-hidden />} title="Recent connection issues" description="Recent safe error summaries and affected devices.">
+        {snapshot.recentErrors.length > 0 ? (
+          <ul className="flex flex-col gap-2.5">
+            {snapshot.recentErrors.map((error) => (
+              <li key={`${error.timestamp}:${error.code}:${error.peer_id ?? 'local'}`} className="rounded-lg border bg-background/50 p-3">
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">{productDiagnosticCopy(error.code, 'Connection issue')}</Badge>
+                  <span className="text-sm">{productDiagnosticCopy(error.message, 'Could not complete the request. Try again.')}</span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {error.peer_id ? 'Affected device' : 'This device'}; {productDiagnosticCopy(error.timestamp, 'time unavailable')}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground" role="status">
+            No recent connection issues were reported.
+          </p>
+        )}
+      </Panel>
+    </div>
+  )
+}
+
+
+function supportBundleState(bundle: GatewaySupportBundleResponse | null, error: string | null): AvailabilityState {
+  if (error) return errorState(error)
+  if (!bundle) return 'pending'
+  if (!bundle.secrets_redacted || !bundle.redaction.secrets_redacted) return 'degraded'
+  return 'available-local'
+}
+
+function supportBundleReason(bundle: GatewaySupportBundleResponse | null, error: string | null): string {
+  if (error) return redactDiagnosticText(`Gateway.GetSupportBundle unavailable: ${error}`)
+  if (!bundle) return 'Waiting for Gateway.GetSupportBundle support-bundle preview.'
+  const omitted = bundle.redaction.omitted_payloads.map(safeDiagnosticCategoryLabel).join(', ') || 'none reported'
+  return redactDiagnosticText(`Redacted support bundle ${bundle.correlation_id ?? 'without correlation'} omits ${omitted}.`)
+}
+
+function safeDiagnosticCategoryLabel(value: string): string {
+  const normalized = value.toLowerCase()
+  if (/raw[-_ ]?audio|audio_buffer/.test(normalized)) return 'audio capture data'
+  if (/tokens?|credentials?|secrets?|passwords?|api[_-]?keys?/.test(normalized)) return 'credential material'
+  return redactDiagnosticText(value)
+}
+
+function buildLiveProbes(input: {
+  supportBundle: GatewaySupportBundleResponse | null
+  supportBundleError: string | null
+  webRtc: WebRTCDiagnosticsResponse | null
+  mesh: MeshStatusResponse | null
+  catalog: CapabilityCatalogResponse | null
+  diagnosticsCapability: CapabilityActionInfo | null
+}): DiagnosticsProbeRow[] {
+  const bundle = input.supportBundle
+  const rows: DiagnosticsProbeRow[] = [
+    {
+      name: 'Gateway route registry',
+      state: input.catalog ? 'available-local' : 'degraded',
+      latency: input.catalog?.generated_at ? `updated ${input.catalog.generated_at}` : 'not reported',
+      detail: input.catalog ? `${input.catalog.actions.length} actions / ${input.catalog.providers.length} providers advertised.` : 'Gateway.GetCapabilityCatalog did not return route metadata.'
+    },
+    {
+      name: 'OpenAPI and contract surface',
+      state: capabilityState(input.diagnosticsCapability, null),
+      latency: bundle ? `${bundle.registry.modules.length} modules` : 'contract gap',
+      detail: bundle ? 'Registry snapshot included in redacted support bundle.' : 'Support bundle registry snapshot unavailable.'
+    },
+    {
+      name: 'Mesh peer metrics',
+      state: input.webRtc?.connected_peer_count ? 'available-remote' : input.mesh?.local.mesh_enabled ? 'degraded' : 'unsupported',
+      latency: input.webRtc ? `${input.webRtc.connected_peer_count} connected / ${input.webRtc.pending_rpc_count} pending RPC` : 'not reported',
+      detail: input.webRtc ? 'Gateway.GetWebRTCDiagnostics returned peer and route telemetry.' : 'WebRTC diagnostics unavailable or disabled.'
+    },
+    {
+      name: 'Diagnostics bundle contract',
+      state: supportBundleState(bundle, input.supportBundleError),
+      latency: bundle?.generated_at ?? 'not exported',
+      detail: supportBundleReason(bundle, input.supportBundleError)
+    }
+  ]
+  return rows.map((probe) => ({ ...probe, detail: redactDiagnosticText(probe.detail), latency: redactDiagnosticText(probe.latency) }))
+}
+
+function buildRedactionRows(bundle: GatewaySupportBundleResponse | null, fallbackRedacted: boolean): RedactionPreviewRow[] {
+  const redactedFields = bundle?.redaction.redacted_fields.join(' ').toLowerCase() ?? ''
+  const omittedPayloads = bundle?.redaction.omitted_payloads.join(' ').toLowerCase() ?? ''
+  const credentials = Boolean(bundle?.redaction.secrets_redacted ?? fallbackRedacted)
+  const rawAudio = omittedPayloads.includes('audio') || redactedFields.includes('audio')
+  const memory = omittedPayloads.includes('rag') || omittedPayloads.includes('memory') || redactedFields.includes('rag')
+  return [
+    {
+      label: 'Credential values',
+      value: credentials ? 100 : 0,
+      detail: credentials ? 'Credential, secret, password, key, and URL fields are redacted.' : 'Credential redaction was not confirmed by backend metadata.'
+    },
+    {
+      label: 'Audio capture data',
+      value: rawAudio ? 100 : 0,
+      detail: rawAudio ? 'Audio capture payloads are omitted from support bundles.' : 'Audio capture omission was not listed by the backend.'
+    },
+    {
+      label: 'Personal memory snippets',
+      value: memory ? 100 : 76,
+      detail: memory ? 'RAG and personal memory contents are omitted; only metadata/correlation remains.' : 'Backend reported generic redaction, but no RAG-specific omission entry.'
+    }
+  ]
+}
+
+function buildServiceProbeRows(bundle: GatewaySupportBundleResponse | null): DiagnosticsDetailRow[] {
+  if (!bundle) return []
+  const healthRows = bundle.service_health.map((health, index) => ({
+    id: `service-health-${health.module}-${index}`,
+    name: `${productFeatureCopy(health.module)} check`,
+    state: serviceHealthState(health.status),
+    source: `Gateway.GetSupportBundle service_health @ ${redactDiagnosticText(health.timestamp)}`,
+    detail: redactDiagnosticText(`${health.status}; checks ${safeDiagnosticDetails(health.checks)}`)
+  }))
+  const serviceRows = bundle.services
+    .filter((service) => !bundle.service_health.some((health) => health.module === service.module))
+    .map((service) => ({
+      id: `service-${service.module}-${service.instance_id ?? 'default'}`,
+      name: `${productFeatureCopy(service.module)} check`,
+      state: serviceHealthState(service.status),
+      source: 'Gateway.GetSupportBundle services',
+      detail: redactDiagnosticText(`${service.status}; ${service.method_count} methods; ${service.capabilities.join(', ') || 'no capabilities reported'}`)
+    }))
+  return [...healthRows, ...serviceRows]
+}
+
+function buildSupportBundleDiagnosticRows(items: SupportBundleDiagnosticItem[], prefix: string): DiagnosticsDetailRow[] {
+  return items.map((item, index) => ({
+    id: `${prefix}-${item.name}-${index}`,
+    name: redactDiagnosticText(item.name),
+    state: diagnosticItemState(item),
+    source: redactDiagnosticText(item.source),
+    detail: redactDiagnosticText(`${item.status}; ${safeDiagnosticDetails(item.details)}; ${item.redacted ? 'redacted metadata only' : 'redaction not confirmed'}`)
+  }))
+}
+
+function buildFrontendLogRows(bundle: GatewaySupportBundleResponse | null, webRtc: WebRTCDiagnosticsResponse | null): DiagnosticsDetailRow[] {
+  if (!bundle) return []
+  const frontendEvents = bundle.recent_events.filter((event) => /front[-_ ]?end|ui|browser|vite/i.test(`${event.kind} ${event.topic ?? ''} ${event.bus_topic ?? ''}`))
+  if (frontendEvents.length > 0) {
+    return frontendEvents.map((event, index) => ({
+      id: `frontend-event-${event.id || index}`,
+      name: 'Frontend errors/logs',
+      state: event.status === 'failed' || event.status === 'error' ? 'degraded' : 'available-local',
+      source: redactDiagnosticText(event.topic ?? event.kind ?? 'Gateway event stream'),
+      detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; ${safeDiagnosticDetails(event.payload_summary)}; ${event.secrets_redacted ? 'secrets protected' : 'redaction not confirmed'}`)
+    }))
+  }
+  return [{
+    id: 'frontend-logs-unavailable',
+    name: 'Frontend errors/logs',
+    state: webRtc?.recent_errors.length ? 'degraded' : 'unsupported',
+    source: 'Gateway.GetSupportBundle recent_events',
+    detail: 'No redacted frontend log stream is exposed yet; use this repair state instead of embedding raw frontend dumps on product pages.'
+  }]
+}
+
+function serviceHealthState(status: string): AvailabilityState {
+  const value = status.toLowerCase()
+  if (value.includes('healthy') || value === 'ok' || value === 'running') return 'available-local'
+  if (value.includes('degraded') || value.includes('warning') || value.includes('partial')) return 'degraded'
+  if (value.includes('denied') || value.includes('forbidden')) return 'denied'
+  if (value.includes('stale')) return 'stale'
+  if (value.includes('down') || value.includes('error') || value.includes('failed')) return 'unsupported'
+  return 'pending'
+}
+
+function diagnosticItemState(item: SupportBundleDiagnosticItem): AvailabilityState {
+  const status = item.status.toLowerCase()
+  if (!item.redacted) return 'degraded'
+  if (status.includes('available') || status.includes('ready') || status.includes('ok') || status.includes('metadata')) return 'available-local'
+  if (status.includes('degraded') || status.includes('partial')) return 'degraded'
+  if (status.includes('denied') || status.includes('forbidden')) return 'denied'
+  if (status.includes('unavailable') || status.includes('unsupported')) return 'unsupported'
+  return 'pending'
+}
+
+function safeDiagnosticDetails(value: unknown): string {
+  try {
+    return redactDiagnosticText(JSON.stringify(value).replace(/raw[-_ ]?audio/gi, 'audio capture data'))
+  } catch {
+    return '[redacted metadata]'
+  }
+}
+
+function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): DiagnosticsTimelineRow[] {
+  if (!bundle) return []
+  const eventRows = bundle.recent_events.map((event, index) => ({
+    id: event.id || `event-${index}`,
+    kind: redactDiagnosticText(event.kind || event.topic || 'event'),
+    title: redactDiagnosticText(event.topic || event.kind || 'Gateway event'),
+    detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; correlation ${event.correlation_id ?? bundle.correlation_id ?? 'none'}; peer ${event.peer_id ?? 'local'}`),
+    time: redactDiagnosticText(event.timestamp),
+    state: event.status === 'denied' || event.status === 'failed' ? 'denied' as AvailabilityState : 'available-local' as AvailabilityState
+  }))
+  const auditRows = bundle.recent_audit_events.map((event, index) => {
+    const eventObject = event as Record<string, unknown>
+    return {
+      id: `audit-${String(eventObject.audit_receipt ?? eventObject.correlation_id ?? index)}`,
+      kind: 'audit',
+      title: redactDiagnosticText(String(eventObject.event ?? 'audit event')),
+      detail: redactDiagnosticText(`receipt ${String(eventObject.audit_receipt ?? bundle.audit_receipt ?? 'pending')}; correlation ${String(eventObject.correlation_id ?? bundle.correlation_id ?? 'none')}`),
+      time: redactDiagnosticText(String(eventObject.timestamp ?? bundle.generated_at)),
+      state: 'available-local' as AvailabilityState
+    }
+  })
+  return [...eventRows, ...auditRows].slice(0, 8)
+}
+
+function DetailGrid({ rows, label, empty }: { rows: DiagnosticsDetailRow[]; label: string; empty?: string }) {
+  if (rows.length === 0)
+    return (
+      <p className="text-sm text-muted-foreground" role="status">
+        {empty ?? 'No diagnostics metadata was returned.'}
+      </p>
+    )
+  return (
+    <div className="flex flex-col gap-2.5" aria-label={label}>
+      {rows.map((row) => (
+        <div className="rounded-lg border bg-background/50 p-3" key={row.id}>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <strong className="text-sm font-medium">{productDiagnosticCopy(row.name, 'Device check')}</strong>
+              <div className="text-xs text-muted-foreground">{productDiagnosticCopy(row.source, 'Recent safe summary')}</div>
+            </div>
+            <StatusBadge state={row.state} />
+          </div>
+          <p className="mt-1.5 text-sm text-muted-foreground">{productDiagnosticCopy(row.detail, 'Check the affected device, then refresh.')}</p>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -388,6 +1189,30 @@ function buildTransportRows(
   })
 }
 
+function thinPeerProbe(
+  nodeName: string,
+  state: AvailabilityState,
+  connected: boolean,
+  measuredLatencyMs: number | null = null,
+): DiagnosticsProbeRow {
+  return {
+    name: 'Thin WebRTC peer',
+    state,
+    latency: connected && measuredLatencyMs !== null
+      ? formatMs(measuredLatencyMs)
+      : connected
+        ? 'response time unavailable'
+        : 'offline',
+    detail: connected
+      ? `${nodeName} is connected through the browser/WebView WebRTC runtime.`
+      : `${nodeName} is offline; WebRTC remains enabled and will retry the saved peer.`,
+  }
+}
+
+function isExpectedOfflineTransportDiagnostic(value: string): boolean {
+  return /webrtc mesh transport is not connected|transport datachannel not connected/i.test(value)
+}
+
 function findMeshPeer(mesh: MeshStatusResponse | null, peer: WebRTCPeerDiagnostic): MeshPeerDiagnostic | null {
   return mesh?.peers.find((candidate) => candidate.peer_id === peer.stable_peer_id || candidate.node_name === peer.node_name) ?? null
 }
@@ -402,18 +1227,20 @@ function peerState(peer: WebRTCPeerDiagnostic, meshPeer: MeshPeerDiagnostic | nu
 }
 
 function routeRow(route: MeshRouteDiagnostic): MeshRouteDiagnosticRow {
-  const blockers = route.providers.filter((provider) => !provider.eligible).map((provider) => `${provider.node_name}: ${provider.reason_code} (${provider.reason})`)
+  const blockers = route.providers
+    .filter((provider) => !provider.eligible)
+    .map((provider) => redactDiagnosticText(`${provider.node_name}: ${provider.reason_code} (${provider.reason})`))
   return {
-    module: route.module,
+    module: redactDiagnosticText(route.module),
     state: routeState(route),
-    decisionTarget: route.decision_target,
-    decisionPeerId: route.decision_peer_id ?? 'local',
+    decisionTarget: redactDiagnosticText(route.decision_target),
+    decisionPeerId: redactDiagnosticText(route.decision_peer_id ?? 'local'),
     routeQuality: routeQuality(route.decision_latency_ms, route.decision_target),
     latency: formatMs(route.decision_latency_ms),
-    fallback: route.fallback,
+    fallback: redactDiagnosticText(route.fallback),
     providerSummary: `${route.providers.filter((provider) => provider.eligible).length}/${route.providers.length} eligible`,
     blockers,
-    reason: route.reason
+    reason: redactDiagnosticText(route.reason)
   }
 }
 
@@ -447,7 +1274,7 @@ function signalingRepair(webrtc: WebRTCDiagnosticsResponse | null, error: string
   if (!webrtc.started) return 'Start the WebRTC mesh runtime before diagnosing peers.'
   if (!webrtc.signaling.connected) return 'Check signaling broker reachability and room configuration.'
   if (!webrtc.signaling.encrypted_presence || webrtc.signaling.public_broker_warning) return 'Review signaling privacy settings before exposing peer presence.'
-  return 'Signaling is connected with backend-reported privacy evidence.'
+  return 'Signaling is connected with backend-reported privacy status.'
 }
 
 function capabilityState(action: CapabilityActionInfo | null, error: string | null): AvailabilityState {
@@ -462,7 +1289,7 @@ function capabilityReason(action: CapabilityActionInfo | null, error: string | n
   if (error) return `Capability catalog unavailable: ${error}`
   if (!action) return 'Gateway.GetWebRTCDiagnostics is not advertised by the capability catalog.'
   const blockers = [...action.route_blockers, ...action.policy.denial_reasons]
-  return blockers.length > 0 ? blockers.join(', ') : `${action.provider_kind} provider ${action.provider_id}; bindability ${action.bindability}`
+  return blockers.length > 0 ? presentableSignal(blockers.join(', ')) : `${action.provider_kind} provider ${action.provider_id}; bindability ${action.bindability}`
 }
 
 function capabilityWarnings(action: CapabilityActionInfo | null): string[] {
@@ -508,7 +1335,7 @@ function stateForLoad(loadState: MeshDiagnosticsLoadState): AvailabilityState {
 }
 
 function pairingState(peer: WebRTCPeerDiagnostic): string {
-  if (peer.pending_pairing_task) return 'pending pairing task'
+  if (peer.pending_pairing_task) return 'pending pairing work'
   if (peer.pairing_active) return 'pairing active'
   if (peer.auth_timeout_pending) return 'auth timeout pending'
   return 'not pairing'
@@ -523,7 +1350,7 @@ function trustLabel(peer: WebRTCPeerDiagnostic, meshPeer: MeshPeerDiagnostic | n
 
 function routeProvider(mesh: MeshStatusResponse | null, peerId: string): string {
   const routes = (mesh?.routes ?? []).filter((route) => route.decision_peer_id === peerId)
-  return routes.length ? routes.map((route) => `${route.module}:${route.reason}`).join('; ') : 'no selected route'
+  return routes.length ? redactDiagnosticText(routes.map((route) => `${route.module}:${route.reason}`).join('; ')) : 'no selected route'
 }
 
 function compatibilityLabel(peer: MeshPeerDiagnostic | null): string {
@@ -553,17 +1380,27 @@ function formatMs(value: number | null): string {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value}</dd></div>
+  const title = safeMetricTitle(value)
+  return (
+    <div className="min-w-0 rounded-lg bg-muted/40 p-2">
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="truncate text-sm" title={title}>
+        {value}
+      </dd>
+    </div>
+  )
 }
 
-function PanelTitle({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function Panel({ icon, title, description, ariaLabel, children }: { icon: ReactNode; title: string; description: string; ariaLabel?: string; children: ReactNode }) {
   return (
-    <div className="aui-mesh-panel-title">
-      <span>{icon}</span>
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-    </div>
+    <Card aria-label={ariaLabel}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {icon} {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   )
 }

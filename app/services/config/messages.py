@@ -75,6 +75,10 @@ class ConfigChangedEvent(Event):
     key_path: str
     old_value: Any
     new_value: Any
+    transaction_id: str | None = None
+    config_revision: int | None = None
+    changed_paths: list[str] | None = None
+    actor: str | None = None
 
 
 class ReloadServiceCommand(Command):

@@ -1,28 +1,89 @@
 [package]
 name = "aurora-tauri"
-version = "0.1.0"
+# Keep in sync with the repo-root VERSION file (unified monorepo version).
+version = "1.0.0"
 description = "Official Tauri 2 desktop shell for Aurora."
 authors = ["Aurora contributors"]
 license = "MIT"
 repository = "https://github.com/joaojhgs/aurora"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.88.0"
 default-run = "aurora-tauri"
+
+[profile.release]
+debug = 0
+strip = "symbols"
 
 [lib]
 name = "aurora_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+desktop-live-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
+desktop-native-voice-e2e = []
+
 [build-dependencies]
+swift-rs = { version = "1.0.7", features = ["build"] }
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
-getrandom = "0.2"
-keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
+aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
+aurora-mesh-authority = { path = "../../../rust/crates/aurora-mesh-authority" }
+aurora-mesh-session = { path = "../../../rust/crates/aurora-mesh-session" }
+aurora-contracts = { path = "../../../rust/crates/aurora-contracts" }
+aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
+base64 = "=0.22.1"
+getrandom = "=0.2.17"
+hmac = "0.12"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tauri = { version = "2.9.5", features = ["tray-icon"] }
+sha2 = "0.10"
+tauri = { version = "=2.11.3", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-deep-link = "2.4.6"
+tauri-plugin-sql = { version = "=2.4.0", default-features = false, features = ["sqlite"] }
 tauri-plugin-updater = "2.9.0"
+tauri-plugin-wdio-webdriver = { version = "=1.2.0", optional = true }
 thiserror = "2.0"
+tokio = { version = "1", features = ["net", "rt", "sync", "time"] }
 url = "2.5"
+zeroize = "=1.9.0"
+async-trait = "0.1"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["desktop-sherpa-tts"] }
+aurora-voice-sherpa = { path = "../../../rust/crates/aurora-voice-sherpa" }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
+tauri-plugin-global-shortcut = "2.3.2"
+tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
+
+# Native WebRTC transport (src/native_webrtc.rs). Every platform that runs the
+# Rust transport, in one cfg rather than one block per target. build.rs turns the
+# same list into the `aurora_native_webrtc` cfg the source gates on — change the
+# two together.
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "android", target_os = "ios"))'.dependencies]
+bytes = "1"
+webrtc = "0.11.0"
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
+aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["native-sherpa-tts"] }
+jni = "0.21"
+
+[dev-dependencies]
+aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
+
+# webrtc 0.11 pins webrtc-dtls ^0.10.0, which cannot answer a browser that leads
+# its supported groups with a post-quantum hybrid. Vendored with the 0.12
+# named-curve selection backported, until that reaches a 0.10.x release.
+# Provenance and removal conditions: vendor/webrtc-dtls/README.aurora.md.
+[patch.crates-io]
+webrtc-dtls = { path = "vendor/webrtc-dtls" }
