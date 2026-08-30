@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 const defaultRepoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(process.env.AURORA_RELEASE_ROOT?.trim() || defaultRepoRoot)
 const version = process.argv[2]?.trim() ?? ''
-const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.exec(
+const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u.exec(
   version,
 )
 
@@ -24,6 +24,7 @@ if (!match) {
 }
 
 const [major, minor, patch] = match.slice(1, 4).map(Number)
+const wixVersion = windowsInstallerVersion(major, minor, patch, match[4])
 if (minor > 999 || patch > 999) {
   throw new Error('release minor and patch components must fit the Android version-code layout')
 }
@@ -40,8 +41,13 @@ if (explicitTauriConfig) {
   config.bundle ??= {}
   config.bundle.android ??= {}
   config.bundle.android.versionCode = versionCode
+  config.bundle.windows ??= {}
+  config.bundle.windows.wix ??= {}
+  config.bundle.windows.wix.version = wixVersion
   commitWrites(new Map([[configPath, `${JSON.stringify(config, null, 2)}\n`]]))
-  console.log(`Configured Tauri packages for ${version} (Android versionCode ${versionCode})`)
+  console.log(
+    `Configured Tauri packages for ${version} (Android versionCode ${versionCode}, WiX version ${wixVersion})`,
+  )
   process.exit(0)
 }
 
@@ -52,6 +58,9 @@ tauriConfig.version = version
 tauriConfig.bundle ??= {}
 tauriConfig.bundle.android ??= {}
 tauriConfig.bundle.android.versionCode = versionCode
+tauriConfig.bundle.windows ??= {}
+tauriConfig.bundle.windows.wix ??= {}
+tauriConfig.bundle.windows.wix.version = wixVersion
 writes.set(tauriConfigPath, `${JSON.stringify(tauriConfig, null, 2)}\n`)
 
 replaceOnce(
@@ -100,8 +109,34 @@ for (const packagePath of packageJsonPaths(repoRoot)) {
 updateGeneratedContractVersion(version, writes)
 commitWrites(writes)
 console.log(
-  `Configured ${writes.size} release files for ${version} (Android versionCode ${versionCode})`,
+  `Configured ${writes.size} release files for ${version} (Android versionCode ${versionCode}, WiX version ${wixVersion})`,
 )
+
+function windowsInstallerVersion(major, minor, patch, prerelease) {
+  if (major > 255 || minor > 255 || patch > 65_535) {
+    throw new Error(
+      `release version ${version} cannot be represented as a Windows Installer version`,
+    )
+  }
+
+  // MSI versions must be numeric. Reserve the highest build value for the
+  // stable release so it upgrades every prerelease of the same base version.
+  if (prerelease === undefined) return `${major}.${minor}.${patch}.65535`
+
+  const sequence = prerelease.split('.').at(-1)
+  if (!/^(0|[1-9]\d*)$/u.test(sequence ?? '')) {
+    throw new Error(
+      `release prerelease ${JSON.stringify(prerelease)} must end in a numeric sequence for Windows Installer`,
+    )
+  }
+  const build = Number(sequence)
+  if (!Number.isSafeInteger(build) || build > 65_534) {
+    throw new Error(
+      `release prerelease sequence ${sequence} cannot be represented as a Windows Installer build`,
+    )
+  }
+  return `${major}.${minor}.${patch}.${build}`
+}
 
 function updateGeneratedContractVersion(nextVersion, pendingWrites) {
   const generatedRoot = join(repoRoot, 'packages/aurora-sdk/src/generated')

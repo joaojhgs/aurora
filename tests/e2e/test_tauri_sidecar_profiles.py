@@ -140,6 +140,44 @@ def test_local_profiles_are_explicit_and_profile_specific():
 
 
 @pytest.mark.e2e
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("2.0.0-rc.1", (2, 0, 0, 1)),
+        ("2.0.0", (2, 0, 0, 65_535)),
+    ],
+)
+def test_windows_version_tuple_preserves_prerelease_upgrade_order(version, expected):
+    assert build_script.windows_version_tuple(version) == expected
+
+
+@pytest.mark.e2e
+def test_create_windows_version_file_accepts_semver_prerelease(monkeypatch, tmp_path):
+    monkeypatch.setattr(build_script.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(build_script, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(build_script, "get_version", lambda: "2.0.0-rc.1")
+
+    build_script.create_version_file()
+
+    version_file = (tmp_path / "version.txt").read_text(encoding="utf-8")
+    assert "filevers=(2, 0, 0, 1)" in version_file
+    assert "prodvers=(2, 0, 0, 1)" in version_file
+    assert "FileVersion', u'2.0.0-rc.1'" in version_file
+
+
+@pytest.mark.e2e
+def test_create_version_file_skips_windows_metadata_on_linux(monkeypatch):
+    monkeypatch.setattr(build_script.platform, "system", lambda: "Linux")
+
+    def unexpected_version_read():
+        raise AssertionError("non-Windows builds must not parse Windows version metadata")
+
+    monkeypatch.setattr(build_script, "get_version", unexpected_version_read)
+
+    build_script.create_version_file()
+
+
+@pytest.mark.e2e
 def test_sidecar_profiles_without_local_embeddings_stage_bundled_defaults_disabled(
     monkeypatch, tmp_path
 ):

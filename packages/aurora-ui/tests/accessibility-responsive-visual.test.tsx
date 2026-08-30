@@ -62,19 +62,19 @@ const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   // These baselines include the shared Spoken replies navigation entry. Admin
   // renders also use product labels for voice and local-data actions.
   assistant: {
-    desktop: 'a8bb9a1cb954',
-    tablet: '0cbe3471c66e',
-    mobile: 'c36699053885'
+    desktop: 'f1eddf71aaa5',
+    tablet: '4441d75ae496',
+    mobile: 'ff31bd0409c0'
   },
   admin: {
-    desktop: 'c18428174bed',
-    tablet: '59d0749db06f',
-    mobile: '3c7f07aeb80a'
+    desktop: '24025ef61432',
+    tablet: '63fb3e19321f',
+    mobile: '8fa72942a9cb'
   },
   'native-settings': {
-    desktop: '9f00fa3874aa',
-    tablet: 'cd3afd754914',
-    mobile: 'e3fc9dd841aa'
+    desktop: '7cfcbf2b64b8',
+    tablet: '3279246fdb5d',
+    mobile: '63f0cc9eb618'
   }
 }
 
@@ -217,6 +217,13 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       const actual = fingerprint(surface.html)
       expect(actual, `${surface.id}/${surface.viewport.id}`).toBe(expectedFingerprints[surface.id][surface.viewport.id])
     }
+  })
+
+  it('keeps visual fingerprints stable across release labels', () => {
+    const source = '<span class="aui-runtime-version">v1.0.0</span>'
+    const prerelease = '<span class="aui-runtime-version">v2.0.0-rc.1</span>'
+
+    expect(fingerprint(prerelease)).toBe(fingerprint(source))
   })
 
   it('documents security and privacy negative cases in the gate output', async () => {
@@ -373,6 +380,7 @@ function fingerprint(html: string): string {
 
 function normalizeHtml(html: string): string {
   return html
+    .replace(/(<span class="aui-runtime-version">)v[^<]+(<\/span>)/g, '$1vrelease-version$2')
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, 'iso-timestamp')
     .replace(/user-\d+/g, 'user-id')
     .replace(/assistant-pending-\d+/g, 'assistant-pending-id')

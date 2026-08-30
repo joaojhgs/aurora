@@ -11,6 +11,7 @@ Integrates with Aurora's wheel installer for optimal dependency management.
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -673,18 +674,48 @@ def get_version():
         return "0.1.0"
 
 
-def create_version_file():
-    """Create version file for Windows builds"""
-    version = get_version()
-    version_parts = version.split(".")
-    major, minor, patch = int(version_parts[0]), int(version_parts[1]), int(version_parts[2])
+def windows_version_tuple(version: str) -> tuple[int, int, int, int]:
+    """Convert an Aurora SemVer release into Windows numeric version fields."""
+    match = re.fullmatch(
+        r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+        r"(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?",
+        version,
+    )
+    if match is None:
+        raise ValueError(f"invalid Aurora release version: {version!r}")
 
-    if platform.system() == "Windows":
-        version_content = f"""# UTF-8
+    major, minor, patch = (int(value) for value in match.group(1, 2, 3))
+    if any(value > 65_535 for value in (major, minor, patch)):
+        raise ValueError(f"Aurora release version exceeds Windows version limits: {version}")
+
+    prerelease = match.group(4)
+    if prerelease is None:
+        return major, minor, patch, 65_535
+
+    sequence = prerelease.rsplit(".", maxsplit=1)[-1]
+    if not re.fullmatch(r"0|[1-9]\d*", sequence):
+        raise ValueError(
+            f"Aurora prerelease must end in a numeric sequence for Windows metadata: {version}"
+        )
+    build = int(sequence)
+    if build > 65_534:
+        raise ValueError(f"Aurora prerelease sequence exceeds Windows limits: {version}")
+    return major, minor, patch, build
+
+
+def create_version_file():
+    """Create version file for Windows builds."""
+    if platform.system() != "Windows":
+        return
+
+    version = get_version()
+    major, minor, patch, build = windows_version_tuple(version)
+
+    version_content = f"""# UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=({major}, {minor}, {patch}, 0),
-    prodvers=({major}, {minor}, {patch}, 0),
+    filevers=({major}, {minor}, {patch}, {build}),
+    prodvers=({major}, {minor}, {patch}, {build}),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -708,8 +739,8 @@ VSVersionInfo(
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
 )"""
-        with open(PROJECT_ROOT / "version.txt", "w") as f:
-            f.write(version_content)
+    with open(PROJECT_ROOT / "version.txt", "w") as f:
+        f.write(version_content)
 
 
 def handle_enum34_compatibility():

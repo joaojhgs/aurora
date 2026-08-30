@@ -307,6 +307,7 @@ def test_release_version_script_updates_semver_and_android_code(
     updated = json.loads(config_path.read_text(encoding="utf-8"))
     assert updated["version"] == "2.3.4-rc.5"
     assert updated["bundle"]["android"]["versionCode"] == 2_003_004
+    assert updated["bundle"]["windows"]["wix"]["version"] == "2.3.4.5"
 
 
 def test_release_version_script_rejects_unrepresentable_versions(
@@ -389,6 +390,7 @@ def test_release_version_script_synchronizes_every_package_surface(
     )
     assert tauri_config["version"] == "2.3.4"
     assert tauri_config["bundle"]["android"]["versionCode"] == 2_003_004
+    assert tauri_config["bundle"]["windows"]["wix"]["version"] == "2.3.4.65535"
     assert re.search(
         r'\[package\][\s\S]*?version = "2\.3\.4"',
         (tmp_path / "apps/aurora-tauri/src-tauri/Cargo.toml").read_text(encoding="utf-8"),
