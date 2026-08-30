@@ -24,6 +24,7 @@ import {
 } from '../../../packages/aurora-sdk/src/local-tools/index.js'
 import {
   candidatePairMatchesLane,
+  pollInteropStatus,
   type InteropCandidatePairEvidence
 } from './assertions.js'
 
@@ -677,18 +678,20 @@ async function waitForStreamStatus(
   probeId: string,
   timeoutMs: number
 ): Promise<Record<string, unknown>> {
-  const deadline = Date.now() + timeoutMs
-  let last: Record<string, unknown> = {}
-  while (Date.now() < deadline) {
-    last = await runtime.client.request<Record<string, unknown>>(
-      topic,
-      { probe_id: probeId },
-      { busTopic: topic, timeoutMs: 5000 }
-    )
-    if (last.cancelled === true) return last
-    await sleep(100)
-  }
-  throw new Error(`Timed out waiting for Python stream cancellation: ${JSON.stringify(last)}`)
+  return pollInteropStatus({
+    label: 'Python stream cancellation',
+    timeoutMs,
+    requestTimeoutMs: 5000,
+    intervalMs: 100,
+    request: (attemptTimeoutMs) =>
+      runtime.client.request<Record<string, unknown>>(
+        topic,
+        { probe_id: probeId },
+        { busTopic: topic, timeoutMs: attemptTimeoutMs }
+      ),
+    isComplete: (status) => status.cancelled === true,
+    isRetryableError: () => runtime.peer.snapshot().state === 'authorized'
+  })
 }
 
 async function waitForSelectedCandidatePair(runtime: ReturnType<typeof createBrowserWebRtcAuroraRuntime>, lane: string, timeoutMs: number) {

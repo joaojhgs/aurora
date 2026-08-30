@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  androidMobileInteropHarnessHtml,
   androidWebRtcBrokerUrl,
   androidWebRtcComposeArgs,
   androidWebRtcServicesComposeYaml,
@@ -136,6 +137,17 @@ describe('Android WebRTC harness utilities', () => {
         path: '/interop-config',
       }),
     ])
+  })
+
+  it('reports browser outcomes outside the instrumented application fetch path', () => {
+    const html = androidMobileInteropHarnessHtml(
+      '{"imports":{"mqtt":"/mqtt-bundle.mjs"}}',
+    )
+
+    expect(html).toContain("fetch('/interop-config'")
+    expect(html).toContain('new XMLHttpRequest()')
+    expect(html).toContain("request.open('POST', '/interop-result')")
+    expect(html).not.toContain("fetch('/interop-result'")
   })
 
   it('uses env-selected WebRTC service host ports without binding host MQTT TCP', () => {

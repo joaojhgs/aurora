@@ -121,6 +121,57 @@ export type InteropNetworkRequest = {
   url: string
 }
 
+export type InteropStatusPollOptions<T> = {
+  label: string
+  timeoutMs: number
+  requestTimeoutMs: number
+  intervalMs: number
+  request: (timeoutMs: number) => Promise<T>
+  isComplete: (value: T) => boolean
+  isRetryableError: (error: unknown) => boolean
+  now?: () => number
+  delay?: (milliseconds: number) => Promise<void>
+}
+
+export async function pollInteropStatus<T>({
+  label,
+  timeoutMs,
+  requestTimeoutMs,
+  intervalMs,
+  request,
+  isComplete,
+  isRetryableError,
+  now = Date.now,
+  delay = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+}: InteropStatusPollOptions<T>): Promise<T> {
+  const deadline = now() + timeoutMs
+  let lastError: unknown
+
+  while (now() < deadline) {
+    const remainingMs = Math.max(1, deadline - now())
+    try {
+      const value = await request(
+        Math.min(requestTimeoutMs, remainingMs),
+      )
+      if (isComplete(value)) return value
+      lastError = undefined
+    } catch (error) {
+      if (!isRetryableError(error)) throw error
+      lastError = error
+    }
+
+    const delayMs = Math.min(intervalMs, Math.max(0, deadline - now()))
+    if (delayMs > 0) await delay(delayMs)
+  }
+
+  const errorDetail =
+    lastError === undefined
+      ? ''
+      : `: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+  throw new Error(`Timed out waiting for ${label}${errorDetail}`)
+}
+
 export function redactInteropSeededText(
   value: string,
   seededSecrets: readonly string[],

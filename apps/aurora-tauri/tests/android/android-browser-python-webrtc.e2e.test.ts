@@ -29,6 +29,7 @@ import {
 import {
   androidWebRtcBrokerUrl,
   androidWebRtcComposeArgs,
+  androidMobileInteropHarnessHtml,
   androidWebRtcServicesComposeYaml,
   androidWebRtcStunUrl,
   androidWebRtcTurnUrl,
@@ -731,82 +732,7 @@ async function handleHarnessRequest(
     'content-type': 'text/html',
     'cache-control': 'no-store',
   })
-  response.end(mobileHarnessHtml())
-}
-
-function mobileHarnessHtml(): string {
-  return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Aurora Android WebRTC Interop</title>
-    <script type="importmap">${mqttImportMapJson}</script>
-    <style>
-      body { font-family: sans-serif; padding: 2rem; }
-      [data-status="passed"] { color: #087a32; }
-      [data-status="failed"] { color: #a00; }
-    </style>
-  </head>
-  <body>
-    <h1>Aurora mobile WebRTC interoperability</h1>
-    <p id="status" data-status="running">Connecting to the Python peer…</p>
-    <script type="module" src="/android-mobile-browser-bundle.js"></script>
-    <script>
-      (() => {
-        const status = document.getElementById('status');
-        const consoleErrors = [];
-        window.addEventListener('error', (event) => {
-          consoleErrors.push(String(event.error?.message ?? event.message));
-        });
-        window.addEventListener('unhandledrejection', (event) => {
-          consoleErrors.push(String(event.reason?.message ?? event.reason));
-        });
-        const publish = async (value) => {
-          await fetch('/interop-result', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ ...value, consoleErrors })
-          });
-        };
-        Promise.resolve().then(async () => {
-          const configResponse = await fetch('/interop-config', {
-            cache: 'no-store'
-          });
-          if (!configResponse.ok) {
-            throw new Error('Could not load the interop configuration');
-          }
-          const config = await configResponse.json();
-          const moduleDeadline = Date.now() + 120000;
-          while (
-            typeof globalThis.runAuroraWebRtcInterop !== 'function' &&
-            Date.now() < moduleDeadline
-          ) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-          }
-          if (typeof globalThis.runAuroraWebRtcInterop !== 'function') {
-            throw new Error('runAuroraWebRtcInterop was not installed');
-          }
-          const result = await globalThis.runAuroraWebRtcInterop(config);
-          status.dataset.status = 'passed';
-          status.textContent = 'Paired with the Python peer over WebRTC.';
-          await publish({ ok: true, result });
-        }).catch(async (error) => {
-          status.dataset.status = 'failed';
-          status.textContent = 'WebRTC interoperability failed.';
-          await publish({
-            ok: false,
-            error: {
-              name: error?.name ?? 'Error',
-              message: error?.message ?? String(error),
-              stack: error?.stack ?? ''
-            }
-          }).catch(() => undefined);
-        });
-      })();
-    </script>
-  </body>
-</html>`
+  response.end(androidMobileInteropHarnessHtml(mqttImportMapJson))
 }
 
 async function launchAndroidBrowser(url: string): Promise<void> {
