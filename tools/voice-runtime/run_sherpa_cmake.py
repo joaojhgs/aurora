@@ -25,6 +25,10 @@ AURORA_SHERPA_PATCHED_FILES = {
         "a7896e6e8df22d678fb325f12440eb42137276542012ee4246225a8d65a29567"
     ),
     "wasm/tts/CMakeLists.txt": ("bae61a4165725f1d67d4d0f16274b2c5b4fff445e10dde2527050e630355ce11"),
+    "wasm/vad-asr/CMakeLists.txt": (
+        "3fd71985745374ae49c39dda296880326588159c42b01d474a18b06454c6a553"
+    ),
+    "wasm/kws/CMakeLists.txt": ("333eb9872949a142c3941e10f72833a9073670e90530a400b3c3fc51b6b55737"),
     "cmake/onnxruntime-osx-arm64-static.cmake": (
         "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e"
     ),

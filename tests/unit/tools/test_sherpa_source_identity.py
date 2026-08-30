@@ -12,6 +12,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "tools/voice-runtime/run_sherpa_cmake.py"
+PATCH_DIR = REPO / "tools/voice-runtime/sherpa-patches"
 
 
 def load_wrapper() -> ModuleType:
@@ -158,13 +159,44 @@ def test_patched_tree_rejects_changed_omitted_symlink_target(
         wrapper._verify_patched_tree(archive_records, {}, tmp_path)
 
 
-def test_patched_tree_manifest_includes_verified_macos_ort_metadata() -> None:
+def test_patched_tree_manifest_covers_every_patch_queue_target() -> None:
+    patch_targets: set[str] = set()
+    for patch_name in (PATCH_DIR / "series").read_text(encoding="utf-8").splitlines():
+        patch_name = patch_name.strip()
+        if not patch_name or patch_name.startswith("#"):
+            continue
+        for line in (PATCH_DIR / patch_name).read_text(encoding="utf-8").splitlines():
+            if line.startswith("+++ b/"):
+                patch_targets.add(line.removeprefix("+++ b/"))
+
     wrapper = load_wrapper()
 
-    assert (
-        wrapper.AURORA_SHERPA_PATCHED_FILES["cmake/onnxruntime-osx-arm64-static.cmake"]
-        == "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e"
-    )
+    assert set(wrapper.AURORA_SHERPA_PATCHED_FILES) == patch_targets
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected_digest"),
+    [
+        (
+            "wasm/vad-asr/CMakeLists.txt",
+            "3fd71985745374ae49c39dda296880326588159c42b01d474a18b06454c6a553",
+        ),
+        (
+            "wasm/kws/CMakeLists.txt",
+            "333eb9872949a142c3941e10f72833a9073670e90530a400b3c3fc51b6b55737",
+        ),
+        (
+            "cmake/onnxruntime-osx-arm64-static.cmake",
+            "b8422656f5379ff338c810351a22981185894f6b4b0b9dc932b38e998320bf6e",
+        ),
+    ],
+)
+def test_patched_tree_manifest_includes_verified_runtime_metadata(
+    relative_path: str, expected_digest: str
+) -> None:
+    wrapper = load_wrapper()
+
+    assert wrapper.AURORA_SHERPA_PATCHED_FILES[relative_path] == expected_digest
 
 
 def test_wrapper_rejects_cmake_source_mismatch(tmp_path: Path) -> None:

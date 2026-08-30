@@ -139,6 +139,21 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
     assert 'tag="${{ needs.create-release.outputs.tag }}"' in release
 
 
+def test_portable_release_installs_the_pinned_browser_wasm_toolchain() -> None:
+    release = (REPO_ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    portable_start = release.index("  build-portable-packages:")
+    portable_end = release.index("\n  build-desktop-packages:", portable_start)
+    portable_job = release[portable_start:portable_end]
+
+    rust_setup = portable_job.index("Set up Rust for browser voice runtime")
+    tool_setup = portable_job.index("Install pinned browser voice toolchain")
+    web_package = portable_job.index("pnpm --filter @aurora/web package:unsigned")
+
+    assert "targets: wasm32-unknown-unknown" in portable_job
+    assert "tool: wasm-bindgen-cli@0.2.126" in portable_job
+    assert rust_setup < tool_setup < web_package
+
+
 def test_only_canonical_workflow_owns_product_release_publication() -> None:
     release = (REPO_ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
 

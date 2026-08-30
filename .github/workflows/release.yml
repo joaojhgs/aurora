@@ -171,6 +171,17 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@2eae45db285e407f22119950686d47e1101e071b # 1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
       - name: Install release dependencies
         run: |
           uv sync --extra build

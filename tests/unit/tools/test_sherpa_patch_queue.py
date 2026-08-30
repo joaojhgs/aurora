@@ -209,7 +209,7 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     assert payload["upstream"]["sha256"] == (
         "99f520db7364a06be0c174a385d03f9ccdbfe08f61146055229e4a990e285262"
     )
-    assert len(payload["patches"]) == 4
+    assert len(payload["patches"]) == 5
     source = Path(payload["source_root"])
     pocket = (source / "sherpa-onnx/csrc/offline-tts-pocket-model.cc").read_text(encoding="utf-8")
     assert "ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16" in pocket
@@ -227,6 +227,13 @@ def test_apply_queue_onto_official_v1_13_5_archive(tmp_path: Path) -> None:
     assert "-sEXPORT_ES6=1" in wasm
     assert "sherpa-onnx-tts.esm.js" in wasm
     assert "export { createOfflineTts, getDefaultOfflineTtsModelType };" in wasm
+    vad_asr_wasm = (source / "wasm/vad-asr/CMakeLists.txt").read_text(encoding="utf-8")
+    assert "AURORA_SHERPA_WASM_ENGINE_NEUTRAL" in vad_asr_wasm
+    assert "export { createVad };" in vad_asr_wasm
+    assert "export { OfflineRecognizer };" in vad_asr_wasm
+    kws_wasm = (source / "wasm/kws/CMakeLists.txt").read_text(encoding="utf-8")
+    assert "AURORA_SHERPA_WASM_ENGINE_NEUTRAL" in kws_wasm
+    assert "export { createKws };" in kws_wasm
     macos_ort = (source / "cmake/onnxruntime-osx-arm64-static.cmake").read_text(encoding="utf-8")
     assert "b9a84d5d1770818a8bb2a12d9adb45fc2cf5062b930176914cd4e7150ce3fcd2" in macos_ort
     assert "3c043b1d5231881d940f0184bd1aaeef29d8e816f2865feed0a268bddcf8b628" not in macos_ort
