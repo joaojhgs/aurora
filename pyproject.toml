@@ -652,10 +652,10 @@ dev-local-gpu = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/aurora-ai/aurora"
-"Bug Reports" = "https://github.com/aurora-ai/aurora/issues"
-"Source" = "https://github.com/aurora-ai/aurora"
-"Documentation" = "https://github.com/aurora-ai/aurora/blob/main/readme.md"
+"Homepage" = "https://github.com/joaojhgs/aurora"
+"Bug Reports" = "https://github.com/joaojhgs/aurora/issues"
+"Source" = "https://github.com/joaojhgs/aurora"
+"Documentation" = "https://github.com/joaojhgs/aurora/blob/main/readme.md"
 
 [project.scripts]
 aurora = "app.__main__:main"
@@ -673,6 +673,9 @@ service-gateway = "app.services.gateway.__main__:run"
 service-backup = "app.services.backup.__main__:run"
 aurora-build = "scripts.build:main"
 aurora-setup = "scripts.setup.setup:main"
+
+[tool.setuptools]
+py-modules = ["main"]
 
 [tool.setuptools.packages.find]
 include = ["app*", "scripts*"]

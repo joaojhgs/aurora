@@ -211,9 +211,11 @@ Default `build:bundle:*` scripts pass `--no-sign` so local and CI package-smoke 
 
 ## Linux bundle targets
 
-The platform Linux config builds AppImage and deb by default. RPM packaging is intentionally not part of the default local/CI bundle because it requires RPM tooling and can hang on generic Linux runners without that toolchain. Use this explicit command on an RPM-capable runner:
+The platform Linux config builds AppImage and DEB packages first. Tauri's in-process RPM bundler can hang indefinitely on generic GitHub-hosted Linux runners, so Aurora creates the RPM from that same validated DEB filesystem payload with `alien`, then inspects the result with `rpm -qpl`. The inspection requires the desktop entry and executable, requires the local package to contain `aurora-sidecar`, and rejects any sidecar in the client package. Install `alien` and `rpm` before running the explicit local commands:
 
 ```bash
 pnpm --filter @aurora/tauri-ui build:bundle:linux-rpm:desktop-local-minimal
 pnpm --filter @aurora/tauri-ui build:bundle:linux-rpm:thin
 ```
+
+The release workflow runs this conversion for both Linux matrix entries and uploads `tauri-desktop-local-linux` and `tauri-desktop-client-linux` independently. Canonical publication renames their AppImage, DEB, and RPM files with `desktop-local` or `desktop-client` in the filename.

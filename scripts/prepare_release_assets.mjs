@@ -29,18 +29,22 @@ if (!existsSync(root)) throw new Error(`release artifact root does not exist: ${
 
 const sourceFiles = collectFiles(root).filter((path) => !path.includes(`${join(root, 'published')}/`))
 const definitions = [
-  ['linux-appimage', (path) => path.endsWith('.AppImage'), `aurora-${version}-linux-x86_64.AppImage`],
-  ['linux-deb', (path) => path.endsWith('.deb'), `aurora-${version}-linux-x86_64.deb`],
-  ['linux-rpm', (path) => path.endsWith('.rpm'), `aurora-${version}-linux-x86_64.rpm`],
-  ['macos-dmg', (path) => path.endsWith('.dmg'), `aurora-${version}-macos-arm64.dmg`],
-  ['windows-msi', (path) => path.endsWith('.msi'), `aurora-${version}-windows-x86_64.msi`],
-  ['windows-nsis', (path) => /-setup\.exe$/iu.test(path) || /setup[^/]*\.exe$/iu.test(path), `aurora-${version}-windows-x86_64-setup.exe`],
-  ['android-apk', (path) => path.endsWith('.apk'), `aurora-${version}-android-arm64-unsigned.apk`],
-  ['android-aab', (path) => path.endsWith('.aab'), `aurora-${version}-android-unsigned.aab`],
-  ['ios-simulator', (path) => path.endsWith('.zip') && /ios|simulator/iu.test(path), `aurora-${version}-ios-simulator.zip`],
-  ['web-standalone', (path) => path.endsWith('.tar.gz') && /aurora-web/iu.test(path), `aurora-${version}-web.tar.gz`],
-  ['python-wheel', (path) => path.endsWith('.whl') && /^aurora[-_]/iu.test(basename(path)), basename],
-  ['python-sdist', (path) => path.endsWith('.tar.gz') && /^aurora[-_]/iu.test(basename(path)) && !/aurora-web/iu.test(path), basename],
+  ['desktop-client-linux-appimage', (path) => inGroup(path, 'desktop/client') && path.endsWith('.AppImage'), `aurora-${version}-desktop-client-linux-x86_64.AppImage`],
+  ['desktop-client-linux-deb', (path) => inGroup(path, 'desktop/client') && path.endsWith('.deb'), `aurora-${version}-desktop-client-linux-x86_64.deb`],
+  ['desktop-client-linux-rpm', (path) => inGroup(path, 'desktop/client') && path.endsWith('.rpm'), `aurora-${version}-desktop-client-linux-x86_64.rpm`],
+  ['desktop-client-macos-dmg', (path) => inGroup(path, 'desktop/client') && path.endsWith('.dmg'), `aurora-${version}-desktop-client-macos-arm64.dmg`],
+  ['desktop-client-windows-msi', (path) => inGroup(path, 'desktop/client') && path.endsWith('.msi'), `aurora-${version}-desktop-client-windows-x86_64.msi`],
+  ['desktop-client-windows-nsis', (path) => inGroup(path, 'desktop/client') && (/-setup\.exe$/iu.test(path) || /setup[^/]*\.exe$/iu.test(path)), `aurora-${version}-desktop-client-windows-x86_64-setup.exe`],
+  ['desktop-local-linux-appimage', (path) => inGroup(path, 'desktop/local') && path.endsWith('.AppImage'), `aurora-${version}-desktop-local-linux-x86_64.AppImage`],
+  ['desktop-local-linux-deb', (path) => inGroup(path, 'desktop/local') && path.endsWith('.deb'), `aurora-${version}-desktop-local-linux-x86_64.deb`],
+  ['desktop-local-linux-rpm', (path) => inGroup(path, 'desktop/local') && path.endsWith('.rpm'), `aurora-${version}-desktop-local-linux-x86_64.rpm`],
+  ['android-apk', (path) => inGroup(path, 'android') && path.endsWith('.apk'), `aurora-${version}-android-arm64-unsigned.apk`],
+  ['android-aab', (path) => inGroup(path, 'android') && path.endsWith('.aab'), `aurora-${version}-android-unsigned.aab`],
+  ['ios-simulator', (path) => inGroup(path, 'ios') && path.endsWith('.zip') && /ios|simulator/iu.test(path), `aurora-${version}-ios-simulator.zip`],
+  ['web-standalone', (path) => inGroup(path, 'portable') && path.endsWith('.tar.gz') && /aurora-web/iu.test(path), `aurora-${version}-web.tar.gz`],
+  ['server', (path) => inGroup(path, 'portable') && path.endsWith('.tar.gz') && /aurora-server/iu.test(path), `aurora-${version}-server.tar.gz`],
+  ['python-wheel', (path) => inGroup(path, 'portable') && path.endsWith('.whl') && /^aurora[-_]/iu.test(basename(path)), basename],
+  ['python-sdist', (path) => inGroup(path, 'portable') && path.endsWith('.tar.gz') && /^aurora[-_]/iu.test(basename(path)) && !/aurora-(?:web|server)/iu.test(path), basename],
 ]
 
 const selected = []
@@ -136,6 +140,11 @@ function collectFiles(directory) {
     }
   }
   return files.sort(compareCodePointStrings)
+}
+
+function inGroup(path, group) {
+  const normalized = relative(root, path).replaceAll('\\', '/')
+  return normalized === group || normalized.startsWith(`${group}/`)
 }
 
 function sha256(value) {

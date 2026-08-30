@@ -193,6 +193,20 @@ jobs:
       - name: Build Python wheel and source distribution
         run: uv build --out-dir release-portable/python
 
+      - name: Package the versioned Aurora server archive
+        run: |
+          mapfile -t wheels < <(find release-portable/python -maxdepth 1 -type f -name 'aurora-*.whl' -print)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "Expected exactly one Aurora wheel; found ${#wheels[@]}" >&2
+            exit 1
+          fi
+          mkdir -p release-portable/server
+          node scripts/package_server_release.mjs \
+            --version "${{ needs.release-readiness.outputs.version }}" \
+            --wheel "${wheels[0]}" \
+            --output "release-portable/server/aurora-server-${{ needs.release-readiness.outputs.version }}.tar.gz" \
+            --report "release-portable/server/aurora-server-${{ needs.release-readiness.outputs.version }}.json"
+
       - name: Install pinned Emscripten SDK
         run: |
           git clone --depth 1 --branch 4.0.23 https://github.com/emscripten-core/emsdk.git "${{ runner.temp }}/emsdk"
@@ -279,8 +293,8 @@ jobs:
       publish_images: false
       release_version: ${{ needs.release-readiness.outputs.version }}
 
-  create-release:
-    name: Create semantic release
+  validate-release-package-set:
+    name: Validate complete release package set
     runs-on: ubuntu-latest
     needs:
       - release-readiness
@@ -288,6 +302,72 @@ jobs:
       - build-desktop-packages
       - build-android-packages
       - build-ios-package
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download desktop client packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: tauri-desktop-client-*
+          path: release-artifacts/desktop/client
+          merge-multiple: true
+
+      - name: Download desktop local-sidecar packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: tauri-desktop-local-*
+          path: release-artifacts/desktop/local
+          merge-multiple: true
+
+      - name: Download Android packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: aurora-release-android-*
+          path: release-artifacts/android
+          merge-multiple: true
+
+      - name: Download iOS simulator package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: aurora-ios-client-simulator
+          path: release-artifacts/ios
+          merge-multiple: true
+
+      - name: Download portable packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: aurora-release-portable
+          path: release-artifacts/portable
+          merge-multiple: true
+
+      - name: Validate inventory, versions, and checksums before release creation
+        run: |
+          node scripts/prepare_release_assets.mjs \
+            --root release-artifacts \
+            --version "${{ needs.release-readiness.outputs.version }}" \
+            --tag "${{ needs.release-readiness.outputs.tag }}" \
+            --source-commit "$GITHUB_SHA" \
+            --release-commit "$GITHUB_SHA"
+
+      - name: Upload release package-set validation report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-package-set-validation
+          path: |
+            release-artifacts/published/RELEASE-MANIFEST.json
+            release-artifacts/published/SHA256SUMS
+            release-artifacts/published/UNSIGNED-ARTIFACTS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  create-release:
+    name: Create semantic release
+    runs-on: ubuntu-latest
+    needs:
+      - release-readiness
+      - validate-release-package-set
       - validate-containers
     if: success() && inputs.dry_run == false
     timeout-minutes: 20
@@ -345,11 +425,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download desktop packages
+      - name: Download desktop client packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: tauri-desktop-client-*
-          path: release-artifacts/desktop
+          path: release-artifacts/desktop/client
+          merge-multiple: true
+
+      - name: Download desktop local-sidecar packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: tauri-desktop-local-*
+          path: release-artifacts/desktop/local
           merge-multiple: true
 
       - name: Download Android packages

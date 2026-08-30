@@ -125,6 +125,7 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
 
     for artifact in (
         "tauri-desktop-client-*",
+        "tauri-desktop-local-*",
         "aurora-release-android-*",
         "aurora-ios-client-simulator",
         "aurora-release-portable",
@@ -136,7 +137,37 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
     assert "validate-containers:" in release
     assert "publish-containers:" in release
     assert "scripts/prepare_release_assets.mjs" in release
+    assert "scripts/package_server_release.mjs" in release
     assert 'tag="${{ needs.create-release.outputs.tag }}"' in release
+
+    validation = release.index("  validate-release-package-set:")
+    create = release.index("  create-release:")
+    assert validation < create
+    create_job = release[create : release.index("\n  publish-release-assets:", create)]
+    assert "- validate-release-package-set" in create_job
+
+
+def test_linux_desktop_workflow_publishes_client_and_sidecar_rpms() -> None:
+    desktop = (REPO_ROOT / ".github/workflows/tauri-desktop.yml").read_text(encoding="utf-8")
+
+    assert "sudo apt-get install -y alien rpm" in desktop
+    assert "node ./scripts/build-rpm-from-deb.mjs" in desktop
+    assert "name: tauri-desktop-${{ matrix.upload_suffix }}-linux" in desktop
+    upload_start = desktop.index("      - name: Upload Linux desktop package")
+    upload_end = desktop.index("\n      - name: Upload Linux RPM package report", upload_start)
+    assert "if: matrix.bundle_mode" not in desktop[upload_start:upload_end]
+
+
+def test_python_package_metadata_points_to_the_canonical_repository() -> None:
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert pyproject["project"]["urls"] == {
+        "Homepage": "https://github.com/joaojhgs/aurora",
+        "Bug Reports": "https://github.com/joaojhgs/aurora/issues",
+        "Source": "https://github.com/joaojhgs/aurora",
+        "Documentation": "https://github.com/joaojhgs/aurora/blob/main/readme.md",
+    }
+    assert "main" in pyproject["tool"]["setuptools"]["py-modules"]
 
 
 def test_portable_release_installs_the_pinned_browser_wasm_toolchain() -> None:

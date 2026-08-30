@@ -139,6 +139,9 @@ jobs:
         if: matrix.needs_python
         run: sudo apt-get install -y python3-dev
 
+      - name: Install RPM conversion tools
+        run: sudo apt-get install -y alien rpm
+
       - name: Set up Python
         if: matrix.needs_python
         uses: actions/setup-python@v5
@@ -235,16 +238,26 @@ jobs:
       - name: Build Linux Tauri bundle
         run: pnpm --filter @aurora/tauri-ui build:bundle:${{ matrix.bundle_mode }}
 
+      - name: Build and inspect Linux RPM from the validated DEB payload
+        run: node ./scripts/build-rpm-from-deb.mjs --mode ${{ matrix.bundle_mode }}
+        working-directory: apps/aurora-tauri
+
       - name: Verify Python-free desktop client artifact contents
         if: matrix.bundle_mode == 'desktop-client'
         run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client
 
-      - name: Upload Linux desktop client package
-        if: matrix.bundle_mode == 'desktop-client'
+      - name: Upload Linux desktop package
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-desktop-client-linux
+          name: tauri-desktop-${{ matrix.upload_suffix }}-linux
           path: apps/aurora-tauri/src-tauri/target/release/bundle/**
+          if-no-files-found: error
+
+      - name: Upload Linux RPM package report
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-desktop-${{ matrix.upload_suffix }}-rpm-report
+          path: apps/aurora-tauri/reports/rpm-package-${{ matrix.bundle_mode }}.json
           if-no-files-found: error
 
       - name: Upload desktop client artifact proof
