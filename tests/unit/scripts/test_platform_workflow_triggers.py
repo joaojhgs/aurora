@@ -219,7 +219,7 @@ def test_dry_run_uploads_the_complete_release_description_preview() -> None:
 def test_linux_desktop_workflow_publishes_client_and_sidecar_rpms() -> None:
     desktop = (REPO_ROOT / ".github/workflows/tauri-desktop.yml").read_text(encoding="utf-8")
 
-    assert "sudo apt-get install -y alien rpm" in desktop
+    assert "sudo apt-get install -y alien rpm rpm2cpio cpio" in desktop
     assert "node ./scripts/build-rpm-from-deb.mjs" in desktop
     assert "name: tauri-desktop-${{ matrix.upload_suffix }}-linux" in desktop
     upload_start = desktop.index("      - name: Upload Linux desktop package")

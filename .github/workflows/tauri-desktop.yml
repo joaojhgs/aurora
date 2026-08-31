@@ -139,8 +139,8 @@ jobs:
         if: matrix.needs_python
         run: sudo apt-get install -y python3-dev
 
-      - name: Install RPM conversion tools
-        run: sudo apt-get install -y alien rpm
+      - name: Install RPM conversion and inspection tools
+        run: sudo apt-get install -y alien rpm rpm2cpio cpio
 
       - name: Set up Python
         if: matrix.needs_python

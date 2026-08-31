@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,6 +26,7 @@ const MAX_ARCHIVE_DEPTH = 3
 const MAX_ARCHIVE_ENTRIES = 20_000
 const MAX_ARCHIVE_EXPANDED_BYTES = 128 * 1024 * 1024
 const MAX_TEXT_BYTES = 2_000_000
+const MAX_INSTALLER_LIST_BYTES = 16 * 1024 * 1024
 
 const approvedNativeVoiceLibraryPatterns = [
   /(^|[/\\])libaurora[_-](native[_-])?voice[^/\\]*\.(so|dylib)$/i,
@@ -174,7 +175,7 @@ function inspectRecognizedContainer(path, rel, archiveDepth) {
     return
   }
   if (extension === '.rpm') {
-    addFailure('installer-inspection-unavailable', `installer:${rel}`, 'RPM inspection requires rpm2cpio and cpio; unavailable in the Node-core scanner path')
+    inspectRpmInstaller(path, rel, archiveDepth)
     return
   }
   if (['.msi', '.exe'].includes(extension)) {
@@ -246,6 +247,91 @@ function inspectDebInstaller(path, rel) {
   } finally {
     rmSync(extractDir, { recursive: true, force: true })
   }
+}
+
+function inspectRpmInstaller(path, rel, archiveDepth) {
+  if (archiveDepth >= MAX_ARCHIVE_DEPTH) {
+    addFailure('archive-depth-limit', `installer:${rel}`, `nested installer depth exceeds ${MAX_ARCHIVE_DEPTH}`)
+    return
+  }
+
+  const inspectRoot = mkdtempSync(join(tmpdir(), 'aurora-native-voice-rpm-'))
+  const payloadPath = join(inspectRoot, 'payload.cpio')
+  const extractDir = join(inspectRoot, 'root')
+  mkdirSync(extractDir)
+
+  try {
+    withFileDescriptor(payloadPath, 'wx', (payloadFd) => {
+      execFileSync(rpm2cpioExecutable(), [path], {
+        stdio: ['ignore', payloadFd, 'pipe'],
+        timeout: 120_000,
+      })
+    })
+
+    const listing = withFileDescriptor(payloadPath, 'r', (payloadFd) =>
+      execFileSync(cpioExecutable(), ['--list', '--quiet'], {
+        encoding: 'utf8',
+        maxBuffer: MAX_INSTALLER_LIST_BYTES,
+        stdio: [payloadFd, 'pipe', 'pipe'],
+        timeout: 120_000,
+      }),
+    )
+    if (!validateRpmEntryPaths(listing, rel)) return
+
+    withFileDescriptor(payloadPath, 'r', (payloadFd) => {
+      execFileSync(
+        cpioExecutable(),
+        ['--extract', '--make-directories', '--no-absolute-filenames', '--no-preserve-owner', '--quiet'],
+        {
+          cwd: extractDir,
+          encoding: 'utf8',
+          maxBuffer: MAX_INSTALLER_LIST_BYTES,
+          stdio: [payloadFd, 'pipe', 'pipe'],
+          timeout: 120_000,
+        },
+      )
+    })
+
+    report.checkedInstallers += 1
+    scanExtractedTree(extractDir, `rpm:${rel}`, archiveDepth + 1)
+  } catch (error) {
+    const id = error?.code === 'ENOENT' ? 'installer-inspection-unavailable' : 'installer-inspection'
+    addFailure(id, `installer:${rel}`, `failed to extract RPM installer with rpm2cpio/cpio: ${errorMessage(error)}`)
+  } finally {
+    rmSync(inspectRoot, { recursive: true, force: true })
+  }
+}
+
+function rpm2cpioExecutable() {
+  return process.env.AURORA_RPM2CPIO_PATH || 'rpm2cpio'
+}
+
+function cpioExecutable() {
+  return process.env.AURORA_CPIO_PATH || 'cpio'
+}
+
+function withFileDescriptor(path, flags, callback) {
+  const descriptor = openSync(path, flags)
+  try {
+    return callback(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+function validateRpmEntryPaths(listing, rel) {
+  const entries = listing.split('\n').map((entry) => entry.trim()).filter(Boolean)
+  if (entries.length > MAX_ARCHIVE_ENTRIES) {
+    addFailure('archive-entry-limit', `installer:${rel}`, `RPM entries exceed global entry limit ${MAX_ARCHIVE_ENTRIES}`)
+    return false
+  }
+
+  const failuresBeforeValidation = failures.length
+  for (const entry of entries) {
+    const normalized = normalizePath(entry).replace(/^\.\//, '')
+    validateArchiveEntryPath(normalized, `rpm:${rel}:${normalized}`)
+  }
+  return failures.length === failuresBeforeValidation
 }
 
 function inspectAppImage(path, rel) {

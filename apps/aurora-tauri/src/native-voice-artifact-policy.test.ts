@@ -37,7 +37,7 @@ function createContext(): PolicyContext {
   }
 }
 
-function runPolicy(context: PolicyContext) {
+function runPolicy(context: PolicyContext, env: NodeJS.ProcessEnv = {}) {
   return spawnSync(process.execPath, [
     script,
     '--root',
@@ -47,6 +47,10 @@ function runPolicy(context: PolicyContext) {
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...env,
+    },
   })
 }
 
@@ -216,6 +220,62 @@ writeFileSync(logPath, \`extract:\${archive}:\${outputDirectory}\\n\`, { flag: '
   )
   chmodSync(scriptPath, 0o755)
   return { scriptPath, logPath }
+}
+
+function createFakeRpmTools(
+  context: PolicyContext,
+  extractedFiles: Record<string, string>,
+) {
+  const binDir = join(context.root, 'rpm-tools')
+  mkdirSync(binDir, { recursive: true })
+  const rpm2cpioPath = join(binDir, 'rpm2cpio')
+  const cpioPath = join(binDir, 'cpio')
+  const logPath = join(context.root, 'rpm-tools.log')
+  writeFileSync(
+    rpm2cpioPath,
+    `#!/usr/bin/env node
+const { readFileSync, writeFileSync } = require('node:fs')
+const archive = process.argv[2] ?? ''
+writeFileSync(${JSON.stringify(logPath)}, \`rpm2cpio:\${archive}\n\`, { flag: 'a' })
+process.stdout.write(readFileSync(archive))
+`,
+  )
+  writeFileSync(
+    cpioPath,
+    `#!/usr/bin/env node
+const { mkdirSync, writeFileSync } = require('node:fs')
+const { dirname, join } = require('node:path')
+async function main() {
+  const chunks = []
+  for await (const chunk of process.stdin) chunks.push(chunk)
+  const files = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  const args = process.argv.slice(2)
+  const mode = args.includes('--list') ? 'list' : args.includes('--extract') ? 'extract' : 'unknown'
+  writeFileSync(${JSON.stringify(logPath)}, \`cpio:\${mode}\n\`, { flag: 'a' })
+  if (mode === 'list') {
+    process.stdout.write(Object.keys(files).join('\\n') + '\\n')
+  } else if (mode === 'extract') {
+    for (const [relativePath, content] of Object.entries(files)) {
+      const output = join(process.cwd(), relativePath)
+      mkdirSync(dirname(output), { recursive: true })
+      writeFileSync(output, content)
+    }
+  } else {
+    process.exitCode = 64
+  }
+}
+main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
+`,
+  )
+  chmodSync(rpm2cpioPath, 0o755)
+  chmodSync(cpioPath, 0o755)
+  const rpm = join(context.artifactRoot, 'Aurora.rpm')
+  mkdirSync(dirname(rpm), { recursive: true })
+  writeFileSync(rpm, JSON.stringify(extractedFiles))
+  return { binDir, logPath }
 }
 
 describe('native voice desktop artifact policy', () => {
@@ -523,6 +583,51 @@ symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
     expect(result.stderr).toContain('speech-model-asset')
     const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
     expect(report.checkedInstallers).toBe(1)
+  })
+
+  it('extracts and scans RPM installers with rpm2cpio and cpio', () => {
+    const context = createContext()
+    const { binDir, logPath } = createFakeRpmTools(context, {
+      'usr/bin/aurora': 'native shell\n',
+      'usr/lib/libaurora_native_voice.so': 'rust native voice library\n',
+    })
+
+    const result = runPolicy(context, { PATH: `${binDir}:${process.env.PATH ?? ''}` })
+
+    expect(result.status, result.stderr).toBe(0)
+    const report = JSON.parse(readFileSync(context.reportPath, 'utf8'))
+    expect(report.checkedInstallers).toBe(1)
+    expect(report.approvedNativeVoiceLibraries).toContain('usr/lib/libaurora_native_voice.so')
+    expect(readFileSync(logPath, 'utf8')).toContain('rpm2cpio:')
+    expect(readFileSync(logPath, 'utf8')).toContain('cpio:list')
+    expect(readFileSync(logPath, 'utf8')).toContain('cpio:extract')
+  })
+
+  it('rejects speech models extracted from RPM installers', () => {
+    const context = createContext()
+    const { binDir } = createFakeRpmTools(context, {
+      'usr/share/aurora/models/tts/pockettts.onnx': 'model bytes\n',
+    })
+
+    const result = runPolicy(context, { PATH: `${binDir}:${process.env.PATH ?? ''}` })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('speech-model-asset')
+  })
+
+  it('rejects unsafe RPM entry paths before extracting the payload', () => {
+    const context = createContext()
+    const { binDir, logPath } = createFakeRpmTools(context, {
+      '../escape/model.onnx': 'model bytes\n',
+    })
+
+    const result = runPolicy(context, { PATH: `${binDir}:${process.env.PATH ?? ''}` })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('archive-entry-path')
+    const toolLog = readFileSync(logPath, 'utf8')
+    expect(toolLog).toContain('cpio:list')
+    expect(toolLog).not.toContain('cpio:extract')
   })
 
   it('fails closed for recognized installer formats that cannot be inspected', () => {
