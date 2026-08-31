@@ -25,6 +25,7 @@ describe('iOS simulator smoke runner', () => {
       status: string
       bundleId: string
       appStayedAliveThroughSettleWindow: boolean
+      launchAttempts: number
       pythonSidecarExpected: boolean
       secretsRedacted: boolean
       screenshotEvidence: {
@@ -41,6 +42,7 @@ describe('iOS simulator smoke runner', () => {
       status: 'passed',
       bundleId: 'dev.aurora.desktop',
       appStayedAliveThroughSettleWindow: true,
+      launchAttempts: 1,
       pythonSidecarExpected: false,
       secretsRedacted: true,
       screenshotEvidence: {
@@ -85,17 +87,21 @@ describe('iOS simulator smoke runner', () => {
     const report = JSON.parse(readFileSync(fixture.reportPath, 'utf8')) as {
       status: string
       error: string
+      launchAttempts: number
       screenshotEvidence: {
         status: string
         failures: string[]
       }
     }
+    const capturedLog = readFileSync(fixture.logPath, 'utf8')
 
     expect(result.status).not.toBe(0)
     expect(report.status).toBe('failed')
     expect(report.error).toContain('did not show meaningful rendered UI')
+    expect(report.launchAttempts).toBe(2)
     expect(report.screenshotEvidence.status).toBe('failed')
     expect(report.screenshotEvidence.failures).not.toEqual([])
+    expect(capturedLog).toContain('Aurora simulator log: application running')
   })
 
   it('fails when the simulator screenshot is not a valid PNG', () => {
@@ -136,6 +142,38 @@ describe('iOS simulator smoke runner', () => {
     expect(
       invocations.match(/simctl io ios-simulator-1 screenshot/g),
     ).toHaveLength(2)
+  })
+
+  it('relaunches once when the first launched app never renders visible UI', () => {
+    const fixture = createFixture({
+      screenshotSequence: ['blank', 'visible'],
+    })
+    const result = runSmoke(fixture, {
+      launchAttempts: 2,
+      renderTimeoutMs: 0,
+      screenshotRetryMs: 0,
+    })
+    const report = JSON.parse(readFileSync(fixture.reportPath, 'utf8')) as {
+      status: string
+      launchAttempts: number
+      screenshotEvidence: {
+        status: string
+        captureAttempts: number
+      }
+    }
+    const invocations = readFileSync(fixture.invocationPath, 'utf8')
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(report).toMatchObject({
+      status: 'passed',
+      launchAttempts: 2,
+      screenshotEvidence: {
+        status: 'passed',
+        captureAttempts: 1,
+      },
+    })
+    expect(invocations.match(/simctl launch ios-simulator-1 dev\.aurora\.desktop/g)).toHaveLength(2)
+    expect(invocations).toContain('simctl spawn ios-simulator-1 log show')
   })
 
   it('discovers the newest simulator app from a generated build tree', () => {
@@ -259,6 +297,7 @@ function runSmoke(
   fixture: ReturnType<typeof createFixture>,
   options: {
     useConfiguredApp?: boolean
+    launchAttempts?: number
     renderTimeoutMs?: number
     screenshotRetryMs?: number
   } = {},
@@ -281,6 +320,9 @@ function runSmoke(
       AURORA_IOS_SIMULATOR_SCREENSHOT: fixture.screenshotPath,
       AURORA_IOS_SIMULATOR_LOG: fixture.logPath,
       AURORA_IOS_SIMULATOR_SETTLE_MS: '0',
+      AURORA_IOS_SIMULATOR_LAUNCH_ATTEMPTS: String(
+        options.launchAttempts ?? 2,
+      ),
       AURORA_IOS_SIMULATOR_RENDER_TIMEOUT_MS: String(
         options.renderTimeoutMs ?? 0,
       ),

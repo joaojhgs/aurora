@@ -636,7 +636,11 @@ symlinkSync(${JSON.stringify(externalIcon)}, join(root, '.DirIcon'))
     writeArtifact(context, 'Aurora.msi', 'not a msi\n')
     writeArtifact(context, 'Aurora Setup.exe', 'not an installer\n')
 
-    const result = runPolicy(context)
+    const missingTool = join(context.root, 'missing-installer-tool')
+    const result = runPolicy(context, {
+      AURORA_RPM2CPIO_PATH: missingTool,
+      AURORA_CPIO_PATH: missingTool,
+    })
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('installer-inspection-unavailable')

@@ -37,6 +37,7 @@ let bootedByHarness = false
 let appPath = ''
 let capturedLog = ''
 let screenshotEvidence = null
+let launchAttempts = 0
 
 if (process.argv.includes('--print-app-path')) {
   process.stdout.write(`${resolveSimulatorApp()}\n`)
@@ -69,16 +70,44 @@ try {
   if (!bundleId) throw new Error('Built simulator app has no CFBundleIdentifier')
 
   run('xcrun', ['simctl', 'install', selectedDevice.udid, appPath])
-  const launchOutput = runCapture('xcrun', [
-    'simctl',
-    'launch',
-    selectedDevice.udid,
-    bundleId,
-  ])
-  launchedPid = parseLaunchPid(launchOutput, bundleId)
-  sleep(Number(process.env.AURORA_IOS_SIMULATOR_SETTLE_MS ?? 8_000))
+  const maxLaunchAttempts = Math.max(
+    1,
+    Math.trunc(
+      readNonNegativeDuration('AURORA_IOS_SIMULATOR_LAUNCH_ATTEMPTS', 2),
+    ),
+  )
+  let renderError = null
+  for (let attempt = 1; attempt <= maxLaunchAttempts; attempt += 1) {
+    launchAttempts = attempt
+    const launchOutput = runCapture('xcrun', [
+      'simctl',
+      'launch',
+      selectedDevice.udid,
+      bundleId,
+    ])
+    launchedPid = parseLaunchPid(launchOutput, bundleId)
+    sleep(Number(process.env.AURORA_IOS_SIMULATOR_SETTLE_MS ?? 8_000))
 
-  screenshotEvidence = captureVisibleScreenshot(selectedDevice.udid)
+    try {
+      screenshotEvidence = captureVisibleScreenshot(selectedDevice.udid)
+      renderError = null
+      break
+    } catch (error) {
+      renderError = error instanceof Error ? error : new Error(String(error))
+      capturedLog = collectProcessLog(selectedDevice.udid, launchedPid)
+      assertNoCrashEvidence(capturedLog)
+      if (attempt >= maxLaunchAttempts) throw renderError
+      runBestEffort('xcrun', [
+        'simctl',
+        'terminate',
+        selectedDevice.udid,
+        bundleId,
+      ])
+      launchedPid = null
+      sleep(Number(process.env.AURORA_IOS_SIMULATOR_RELAUNCH_SETTLE_MS ?? 2_000))
+    }
+  }
+  if (renderError) throw renderError
 
   const appContainer = runCapture('xcrun', [
     'simctl',
@@ -89,23 +118,7 @@ try {
   ]).trim()
   if (!appContainer) throw new Error('simctl did not return an installed app container')
 
-  capturedLog = runCapture(
-    'xcrun',
-    [
-      'simctl',
-      'spawn',
-      selectedDevice.udid,
-      'log',
-      'show',
-      '--style',
-      'compact',
-      '--last',
-      '2m',
-      '--predicate',
-      `processIdentifier == ${launchedPid}`,
-    ],
-    { allowFailure: true },
-  )
+  capturedLog = collectProcessLog(selectedDevice.udid, launchedPid)
   assertNoCrashEvidence(capturedLog)
 
   // A successful terminate after the settle window proves the app remained alive.
@@ -127,6 +140,7 @@ try {
     appPath: redactedPath(appPath),
     bundleId,
     appStayedAliveThroughSettleWindow: true,
+    launchAttempts,
     screenshotPath: redactedPath(screenshotPath),
     screenshotEvidence,
     logPath: redactedPath(logPath),
@@ -146,6 +160,8 @@ try {
     device: selectedDevice,
     appPath: appPath ? redactedPath(appPath) : null,
     bundleId: bundleId || null,
+    launchedPid,
+    launchAttempts,
     error: error instanceof Error ? error.message : String(error),
     screenshotPath: redactedPath(screenshotPath),
     screenshotEvidence,
@@ -344,6 +360,27 @@ function assertNoCrashEvidence(log) {
   if (matched) {
     throw new Error(`iOS simulator log contains crash evidence matching ${matched}`)
   }
+}
+
+function collectProcessLog(udid, processId) {
+  if (processId == null) return capturedLog
+  return runCapture(
+    'xcrun',
+    [
+      'simctl',
+      'spawn',
+      udid,
+      'log',
+      'show',
+      '--style',
+      'compact',
+      '--last',
+      '2m',
+      '--predicate',
+      `processIdentifier == ${processId}`,
+    ],
+    { allowFailure: true },
+  )
 }
 
 function* walk(root) {

@@ -19,7 +19,7 @@ def _write_archive(tmp_path: Path, surface: str, version: str) -> Path:
     if surface == "server":
         installer = stage / "install.sh"
         installer.write_text(
-            "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" > \"$AURORA_TEST_INSTALL_ARGS\"\n",
+            '#!/bin/sh\nset -eu\nprintf \'%s\\n\' "$*" > "$AURORA_TEST_INSTALL_ARGS"\n',
             encoding="utf-8",
         )
         installer.chmod(0o755)
@@ -97,9 +97,7 @@ def test_installer_downloads_verifies_and_installs_versioned_release(
     installed = prefix / surface / version
     assert installed.is_dir()
     if surface == "server":
-        assert install_args.read_text(encoding="utf-8").strip() == (
-            f"--bin-dir {command_bin}"
-        )
+        assert install_args.read_text(encoding="utf-8").strip() == (f"--bin-dir {command_bin}")
     else:
         launcher = command_bin / "aurora-web"
         assert launcher.is_symlink()

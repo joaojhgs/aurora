@@ -50,10 +50,7 @@ def test_server_release_contains_wheel_and_versioned_installer(tmp_path: Path) -
         assert "aurora-server-2.3.4-rc.1/RELEASE.json" in names
         assert "aurora-server-2.3.4-rc.1/config.json" in names
         assert "aurora-server-2.3.4-rc.1/install.sh" in names
-        assert (
-            "aurora-server-2.3.4-rc.1/packages/aurora-2.3.4rc1-py3-none-any.whl"
-            in names
-        )
+        assert "aurora-server-2.3.4-rc.1/packages/aurora-2.3.4rc1-py3-none-any.whl" in names
         release = json.load(archive.extractfile("aurora-server-2.3.4-rc.1/RELEASE.json"))
         config = json.load(archive.extractfile("aurora-server-2.3.4-rc.1/config.json"))
         installer = archive.extractfile("aurora-server-2.3.4-rc.1/install.sh").read().decode()

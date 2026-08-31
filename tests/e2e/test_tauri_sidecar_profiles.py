@@ -985,7 +985,10 @@ def test_tauri_platform_bundle_targets_keep_linux_rpm_opt_in():
     assert linux["bundle"]["targets"] == ["appimage", "deb"]
     assert macos["bundle"]["targets"] == ["dmg"]
     assert windows["bundle"]["targets"] == ["msi", "nsis"]
-    assert "--bundles rpm" in package["scripts"]["build:bundle:linux-rpm:desktop-client"]
+    assert (
+        "node ./scripts/build-rpm-from-deb.mjs --mode desktop-client"
+        in package["scripts"]["build:bundle:linux-rpm:desktop-client"]
+    )
     assert (
         package["scripts"]["build:bundle:linux-rpm:thin"]
         == "pnpm build:bundle:linux-rpm:desktop-client"
