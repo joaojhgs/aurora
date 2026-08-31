@@ -186,6 +186,22 @@ describe('release trust static policy guard', () => {
     ]))
   })
 
+  it('rejects a canonical multi-platform workflow that bypasses package-set validation', () => {
+    const fixture = createFixture()
+    writeJson(fixture.config, {
+      bundle: { createUpdaterArtifacts: false },
+    })
+    const workflow = readFileSync(join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8')
+    writeFileSync(fixture.workflow, workflow.replace('      - validate-release-package-set\n', ''))
+
+    const result = runPolicy(fixture, ['--unsigned-source-gate'])
+
+    expect(result.status).not.toBe(0)
+    expect(readReport(fixture).blockers).toContainEqual(
+      expect.objectContaining({ id: 'workflow-create-release-needs-readiness' }),
+    )
+  })
+
   it('reports the current repo as statically blocked without claiming signature or store proof', () => {
     const fixture = createFixture()
     const result = spawnSync(process.execPath, [

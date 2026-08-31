@@ -1330,6 +1330,7 @@ function inspectReleaseProducingJobs(lines, directJobs) {
     'build-android-packages',
     'build-ios-package',
     'validate-containers',
+    'validate-release-package-set',
     'create-release',
     'publish-release-assets',
     'publish-containers',
@@ -1393,10 +1394,7 @@ function inspectCreateReleaseJob(lines, createRelease, canonicalProductWorkflow)
   const expectedNeeds = canonicalProductWorkflow
     ? [
         'release-readiness',
-        'build-portable-packages',
-        'build-desktop-packages',
-        'build-android-packages',
-        'build-ios-package',
+        'validate-release-package-set',
         'validate-containers',
       ]
     : ['release-readiness']
