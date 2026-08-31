@@ -144,6 +144,24 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
     assert "--changelog" in release
     assert "aurora-$version-full-changelog.md" in release
     assert 'gh release edit "$tag" --notes-file' in release
+    assert "copilot-requests: write" in release
+    assert "npm install --global @github/copilot@1.0.82" in release
+    assert "--attachment release-artifacts/release-notes/copilot-summary-context.md" in release
+    assert "--available-tools view" in release
+    assert "--deny-tool 'shell,write,url,memory'" in release
+    assert "scripts/compose_copilot_release_summary.mjs" in release
+    assert "continue-on-error: true" in release
+
+    publish_start = release.index("  publish-release-assets:")
+    publish_end = release.index("\n  publish-containers:", publish_start)
+    publish_job = release[publish_start:publish_end]
+    assert publish_job.index("gh release upload") < publish_job.index(
+        "Append Copilot AI release summary"
+    )
+    assert "COPILOT_GITHUB_TOKEN: ${{ github.token }}" in publish_job
+    assert "--context long_context" in publish_job
+    assert "--yolo" not in publish_job
+    assert "--allow-all " not in publish_job
 
     validation = release.index("  validate-release-package-set:")
     create = release.index("  create-release:")

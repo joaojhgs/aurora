@@ -25,7 +25,9 @@ def _commit(repo: Path, subject: str, content: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
-def _run(repo: Path, output: Path, summary: Path) -> subprocess.CompletedProcess[str]:
+def _run(
+    repo: Path, output: Path, summary: Path, ai_context: Path
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             "node",
@@ -44,6 +46,8 @@ def _run(repo: Path, output: Path, summary: Path) -> subprocess.CompletedProcess
             str(output),
             "--summary-output",
             str(summary),
+            "--ai-context-output",
+            str(ai_context),
         ],
         cwd=repo,
         check=False,
@@ -65,8 +69,9 @@ def test_generates_an_exhaustive_unfiltered_changelog(tmp_path: Path) -> None:
     third = _commit(repo, "Merge release history", "merge-like subject\n")
     output = tmp_path / "aurora-2.0.0-full-changelog.md"
     summary = tmp_path / "summary.md"
+    ai_context = tmp_path / "ai-context.md"
 
-    result = _run(repo, output, summary)
+    result = _run(repo, output, summary, ai_context)
 
     assert result.returncode == 0, result.stderr
     changelog = output.read_text(encoding="utf-8")
@@ -85,6 +90,15 @@ def test_generates_an_exhaustive_unfiltered_changelog(tmp_path: Path) -> None:
     assert "aurora-2.0.0-full-changelog.md" in release_summary
     assert "v1.0.0...v2.0.0" in release_summary
 
+    compact_history = ai_context.read_text(encoding="utf-8")
+    assert "all 3 commit subjects" in compact_history
+    assert "untrusted commit metadata" in compact_history
+    for commit in (first, second, third):
+        assert compact_history.count(f" {commit[:7]} ") == 1
+    assert "feat(ui): render \\[mobile\\] status" in compact_history
+    assert "chore: keep maintenance commits" in compact_history
+    assert "Merge release history" in compact_history
+
 
 def test_rejects_a_diverged_release_tag(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
@@ -99,7 +113,12 @@ def test_rejects_a_diverged_release_tag(tmp_path: Path) -> None:
     _git(repo, "switch", "main")
     _commit(repo, "feat: replacement history", "replacement\n")
 
-    result = _run(repo, tmp_path / "changelog.md", tmp_path / "summary.md")
+    result = _run(
+        repo,
+        tmp_path / "changelog.md",
+        tmp_path / "summary.md",
+        tmp_path / "ai-context.md",
+    )
 
     assert result.returncode != 0
     assert "is not an ancestor" in result.stderr
