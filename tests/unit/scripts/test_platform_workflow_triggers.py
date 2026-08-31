@@ -137,8 +137,13 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
     assert "validate-containers:" in release
     assert "publish-containers:" in release
     assert "scripts/prepare_release_assets.mjs" in release
+    assert "scripts/generate_release_changelog.mjs" in release
     assert "scripts/package_server_release.mjs" in release
     assert 'tag="${{ needs.create-release.outputs.tag }}"' in release
+    assert "previous_tag: ${{ steps.history.outputs.previous_tag }}" in release
+    assert "--changelog" in release
+    assert "aurora-$version-full-changelog.md" in release
+    assert 'gh release edit "$tag" --notes-file' in release
 
     validation = release.index("  validate-release-package-set:")
     create = release.index("  create-release:")

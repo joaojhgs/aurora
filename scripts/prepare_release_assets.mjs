@@ -18,6 +18,7 @@ const version = requiredOption('--version')
 const tag = requiredOption('--tag')
 const sourceCommit = requiredOption('--source-commit')
 const releaseCommit = requiredOption('--release-commit')
+const changelogSource = resolve(requiredOption('--changelog'))
 const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u
 
 if (!semver.test(version)) throw new Error(`invalid release version: ${version}`)
@@ -26,6 +27,18 @@ if (!/^[a-f0-9]{40}$/u.test(sourceCommit) || !/^[a-f0-9]{40}$/u.test(releaseComm
   throw new Error('source and release commits must be full lowercase Git object IDs')
 }
 if (!existsSync(root)) throw new Error(`release artifact root does not exist: ${root}`)
+if (!existsSync(changelogSource)) throw new Error(`release changelog does not exist: ${changelogSource}`)
+if (lstatSync(changelogSource).isSymbolicLink() || !lstatSync(changelogSource).isFile()) {
+  throw new Error(`release changelog must be a regular file: ${changelogSource}`)
+}
+const changelogRelative = relative(root, changelogSource)
+if (
+  changelogRelative.startsWith('..') ||
+  changelogRelative === '' ||
+  changelogRelative.split(/[\\/]/u).includes('published')
+) {
+  throw new Error('release changelog must be inside the artifact root and outside its published directory')
+}
 
 const sourceFiles = collectFiles(root).filter((path) => !path.includes(`${join(root, 'published')}/`))
 const definitions = [
@@ -81,6 +94,17 @@ const artifacts = selected
   })
   .sort((left, right) => compareCodePointStrings(left.path, right.path))
 
+const changelogDestination = join(publishedRoot, `aurora-${version}-full-changelog.md`)
+copyFileSync(changelogSource, changelogDestination)
+const documents = [
+  {
+    class: 'full-changelog',
+    path: relative(root, changelogDestination).replaceAll('\\', '/'),
+    bytes: statSync(changelogDestination).size,
+    sha256: sha256(readFileSync(changelogDestination)),
+  },
+]
+
 const manifest = {
   schema: 'aurora.release-manifest.v1',
   version,
@@ -89,11 +113,14 @@ const manifest = {
   releaseCommit,
   signed: false,
   artifacts,
+  documents,
 }
 const manifestPath = join(publishedRoot, 'RELEASE-MANIFEST.json')
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-const sums = artifacts.map((artifact) => `${artifact.sha256}  ${basename(artifact.path)}`).join('\n')
+const sums = [...artifacts, ...documents]
+  .map((artifact) => `${artifact.sha256}  ${basename(artifact.path)}`)
+  .join('\n')
 writeFileSync(join(publishedRoot, 'SHA256SUMS'), `${sums}\n`)
 writeFileSync(
   join(publishedRoot, 'UNSIGNED-ARTIFACTS.txt'),
@@ -110,12 +137,13 @@ writeFileSync(
 
 const releaseFiles = [
   ...artifacts.map((artifact) => join(root, artifact.path)),
+  ...documents.map((document) => join(root, document.path)),
   manifestPath,
   join(publishedRoot, 'SHA256SUMS'),
   join(publishedRoot, 'UNSIGNED-ARTIFACTS.txt'),
 ]
 writeFileSync(join(root, 'RELEASE-ASSETS.txt'), `${releaseFiles.join('\n')}\n`)
-console.log(`Prepared ${artifacts.length} canonical release packages for ${tag}`)
+console.log(`Prepared ${artifacts.length} canonical release packages and ${documents.length} release document for ${tag}`)
 
 function requiredOption(name) {
   const index = process.argv.indexOf(name)

@@ -35,6 +35,7 @@ jobs:
     outputs:
       version: ${{ steps.semver.outputs.version }}
       tag: ${{ steps.semver.outputs.tag }}
+      previous_tag: ${{ steps.history.outputs.previous_tag }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -105,6 +106,21 @@ jobs:
             echo "Product releases may only be published from main" >&2
             exit 1
           fi
+
+      - name: Resolve previous release history
+        id: history
+        run: |
+          previous_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$GITHUB_SHA" 2>/dev/null || true)
+          if [ -z "$previous_tag" ]; then
+            echo "No released version is reachable from $GITHUB_SHA" >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$previous_tag" "$GITHUB_SHA"; then
+            echo "$previous_tag is not an ancestor of $GITHUB_SHA" >&2
+            exit 1
+          fi
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+          echo "Complete changelog base: $previous_tag"
 
       - name: Run lightweight release check
         run: |
@@ -306,6 +322,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - name: Download desktop client packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -342,14 +360,28 @@ jobs:
           path: release-artifacts/portable
           merge-multiple: true
 
-      - name: Validate inventory, versions, and checksums before release creation
+      - name: Generate complete unfiltered changelog
         run: |
+          version="${{ needs.release-readiness.outputs.version }}"
+          node scripts/generate_release_changelog.mjs \
+            --from-tag "${{ needs.release-readiness.outputs.previous_tag }}" \
+            --to-ref "$GITHUB_SHA" \
+            --version "$version" \
+            --tag "${{ needs.release-readiness.outputs.tag }}" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "release-artifacts/release-notes/aurora-$version-full-changelog.md" \
+            --summary-output release-artifacts/release-notes/full-changelog-summary.md
+
+      - name: Validate inventory, versions, changelog, and checksums before release creation
+        run: |
+          version="${{ needs.release-readiness.outputs.version }}"
           node scripts/prepare_release_assets.mjs \
             --root release-artifacts \
-            --version "${{ needs.release-readiness.outputs.version }}" \
+            --version "$version" \
             --tag "${{ needs.release-readiness.outputs.tag }}" \
             --source-commit "$GITHUB_SHA" \
-            --release-commit "$GITHUB_SHA"
+            --release-commit "$GITHUB_SHA" \
+            --changelog "release-artifacts/release-notes/aurora-$version-full-changelog.md"
 
       - name: Upload release package-set validation report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -359,6 +391,7 @@ jobs:
             release-artifacts/published/RELEASE-MANIFEST.json
             release-artifacts/published/SHA256SUMS
             release-artifacts/published/UNSIGNED-ARTIFACTS.txt
+            release-artifacts/published/aurora-*-full-changelog.md
           if-no-files-found: error
           retention-days: 7
 
@@ -474,12 +507,21 @@ jobs:
           fi
           git fetch origin "refs/tags/$tag:refs/tags/$tag"
           release_commit=$(git rev-list -n 1 "$tag")
+          node scripts/generate_release_changelog.mjs \
+            --from-tag "${{ needs.release-readiness.outputs.previous_tag }}" \
+            --to-ref "$GITHUB_SHA" \
+            --version "$expected_version" \
+            --tag "$tag" \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "release-artifacts/release-notes/aurora-$expected_version-full-changelog.md" \
+            --summary-output release-artifacts/release-notes/full-changelog-summary.md
           node scripts/prepare_release_assets.mjs \
             --root release-artifacts \
             --version "$expected_version" \
             --tag "$tag" \
             --source-commit "$GITHUB_SHA" \
-            --release-commit "$release_commit"
+            --release-commit "$release_commit" \
+            --changelog "release-artifacts/release-notes/aurora-$expected_version-full-changelog.md"
 
       - name: Upload release packages
         env:
@@ -489,6 +531,13 @@ jobs:
           gh release view "$tag" >/dev/null
           mapfile -t assets < release-artifacts/RELEASE-ASSETS.txt
           gh release upload "$tag" "${assets[@]}" --clobber
+          gh release view "$tag" --json body --jq .body > release-artifacts/semantic-release-notes.md
+          {
+            cat release-artifacts/semantic-release-notes.md
+            printf '\n\n'
+            cat release-artifacts/release-notes/full-changelog-summary.md
+          } > release-artifacts/final-release-notes.md
+          gh release edit "$tag" --notes-file release-artifacts/final-release-notes.md
 
   publish-containers:
     name: Publish container images

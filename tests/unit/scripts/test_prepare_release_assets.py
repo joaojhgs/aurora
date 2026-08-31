@@ -39,6 +39,9 @@ def _write_packages(root: Path, *, debug_apk: bool = False) -> None:
 
 
 def _run(root: Path) -> subprocess.CompletedProcess[str]:
+    changelog = root / "release-notes/full-changelog.md"
+    changelog.parent.mkdir(parents=True, exist_ok=True)
+    changelog.write_text("# Complete changelog\n\n- all commits\n", encoding="utf-8")
     return subprocess.run(
         [
             "node",
@@ -53,6 +56,8 @@ def _run(root: Path) -> subprocess.CompletedProcess[str]:
             SOURCE_COMMIT,
             "--release-commit",
             RELEASE_COMMIT,
+            "--changelog",
+            str(changelog),
         ],
         cwd=REPO_ROOT,
         check=False,
@@ -74,6 +79,15 @@ def test_prepares_one_versioned_manifest_for_every_release_package(tmp_path: Pat
     assert manifest["releaseCommit"] == RELEASE_COMMIT
     assert manifest["signed"] is False
     assert len(manifest["artifacts"]) == 16
+    assert manifest["documents"] == [
+        {
+            "class": "full-changelog",
+            "path": "published/aurora-2.3.4-full-changelog.md",
+            "bytes": len("# Complete changelog\n\n- all commits\n"),
+            "sha256": manifest["documents"][0]["sha256"],
+        }
+    ]
+    assert len(manifest["documents"][0]["sha256"]) == 64
     assert {item["class"] for item in manifest["artifacts"]} == {
         "desktop-client-linux-appimage",
         "desktop-client-linux-deb",
@@ -94,7 +108,10 @@ def test_prepares_one_versioned_manifest_for_every_release_package(tmp_path: Pat
     }
     assert all(item["bytes"] > 0 and len(item["sha256"]) == 64 for item in manifest["artifacts"])
     assert "debug" not in (tmp_path / "RELEASE-ASSETS.txt").read_text().lower()
-    assert len((tmp_path / "published/SHA256SUMS").read_text().splitlines()) == 16
+    assert len((tmp_path / "published/SHA256SUMS").read_text().splitlines()) == 17
+    assert "aurora-2.3.4-full-changelog.md" in (
+        tmp_path / "RELEASE-ASSETS.txt"
+    ).read_text()
 
     published_names = {Path(item["path"]).name for item in manifest["artifacts"]}
     assert "aurora-2.3.4-desktop-client-linux-x86_64.rpm" in published_names
