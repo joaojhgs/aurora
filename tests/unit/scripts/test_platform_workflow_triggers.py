@@ -146,9 +146,7 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
     assert 'gh release edit "$tag" --notes-file' in release
     assert "copilot-requests: write" in release
     assert "npm install --global @github/copilot@1.0.82" in release
-    assert "--attachment release-artifacts/release-notes/copilot-summary-context.md" in release
-    assert "--available-tools view" in release
-    assert "--deny-tool 'shell,write,url,memory'" in release
+    assert "scripts/generate_copilot_release_summary.mjs" in release
     assert "scripts/compose_copilot_release_summary.mjs" in release
     assert "continue-on-error: true" in release
 
@@ -159,15 +157,63 @@ def test_canonical_release_reuses_every_platform_package_workflow() -> None:
         "Append Copilot AI release summary"
     )
     assert "COPILOT_GITHUB_TOKEN: ${{ github.token }}" in publish_job
-    assert "--context long_context" in publish_job
     assert "--yolo" not in publish_job
     assert "--allow-all " not in publish_job
+
+    copilot_script = (REPO_ROOT / "scripts/generate_copilot_release_summary.mjs").read_text(
+        encoding="utf-8"
+    )
+    assert "--attachment" in copilot_script
+    assert "--context" in copilot_script
+    assert "long_context" in copilot_script
+    assert "--available-tools" in copilot_script
+    assert "shell,write,url,memory" in copilot_script
+    assert "--yolo" not in copilot_script
+    assert "'--allow-all'," not in copilot_script
 
     validation = release.index("  validate-release-package-set:")
     create = release.index("  create-release:")
     assert validation < create
     create_job = release[create : release.index("\n  publish-release-assets:", create)]
     assert "- validate-release-package-set" in create_job
+
+
+def test_dry_run_uploads_the_complete_release_description_preview() -> None:
+    release = (REPO_ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    readiness_start = release.index("  release-readiness:")
+    readiness_end = release.index("\n  build-portable-packages:", readiness_start)
+    readiness_job = release[readiness_start:readiness_end]
+    assert "Render semantic release notes for dry-run preview" in readiness_job
+    assert "uv run semantic-release --strict version" in readiness_job
+    assert "scripts/extract_semantic_release_notes.mjs" in readiness_job
+    for flag in (
+        "--no-commit",
+        "--no-tag",
+        "--no-push",
+        "--no-vcs-release",
+        "--skip-build",
+    ):
+        assert flag in readiness_job
+    assert "release-semantic-notes-preview" in readiness_job
+
+    validation_start = release.index("  validate-release-package-set:")
+    validation_end = release.index("\n  create-release:", validation_start)
+    validation_job = release[validation_start:validation_end]
+    assert "copilot-requests: write" in validation_job
+    assert "Download semantic release notes for dry-run preview" in validation_job
+    assert "Compose deterministic dry-run release description" in validation_job
+    assert "Append Copilot summary to dry-run release description" in validation_job
+    assert "continue-on-error: true" in validation_job
+    assert "scripts/generate_copilot_release_summary.mjs" in validation_job
+    assert "scripts/compose_copilot_release_summary.mjs" in validation_job
+    assert "Upload dry-run release description preview" in validation_job
+    assert "aurora-*-release-description.md" in validation_job
+    assert "aurora-*-full-changelog.md" in validation_job
+    assert "if: always() && inputs.dry_run == true" in validation_job
+    assert validation_job.index("prepare_release_assets.mjs") < validation_job.index(
+        "Upload dry-run release description preview"
+    )
 
 
 def test_linux_desktop_workflow_publishes_client_and_sidecar_rpms() -> None:

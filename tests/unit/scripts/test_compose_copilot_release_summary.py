@@ -94,3 +94,46 @@ def test_rejects_links_or_release_marker_injection(tmp_path: Path) -> None:
     )
     assert injected.returncode != 0
     assert "forbidden links" in injected.stderr
+
+
+def test_rejects_duplicate_changelog_markers_in_base_notes(tmp_path: Path) -> None:
+    base = tmp_path / "base.md"
+    raw_summary = tmp_path / "summary.md"
+    output = tmp_path / "release.md"
+    base.write_text(
+        BASE_NOTES.replace(
+            "Semantic release notes.",
+            "Semantic release notes.\n\n<!-- aurora:full-changelog:start -->",
+        ),
+        encoding="utf-8",
+    )
+    raw_summary.write_text(
+        "Aurora 2.0 expands the product across local and connected surfaces.\n\n"
+        "- Adds desktop, mobile, and hosted application experiences.\n"
+        "- Strengthens service isolation and release packaging.\n"
+        "- Improves server deployment and operational controls.\n"
+        "- Expands local speech recognition and voice choices.\n"
+        "- Tightens authentication and device security.\n"
+        "- Improves installation across supported platforms.\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "node",
+            str(SCRIPT),
+            "--base",
+            str(base),
+            "--summary",
+            str(raw_summary),
+            "--output",
+            str(output),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "exactly one complete changelog section" in result.stderr

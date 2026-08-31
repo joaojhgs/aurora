@@ -31,10 +31,13 @@ if (introduction.length < 40) {
 const aiSectionPattern = /\n?<!-- aurora:ai-summary:start -->[\s\S]*?<!-- aurora:ai-summary:end -->\n?/gu
 const cleanBase = base.replace(aiSectionPattern, '\n').trim()
 const changelogMarker = '<!-- aurora:full-changelog:start -->'
-const changelogOffset = cleanBase.indexOf(changelogMarker)
-if (changelogOffset === -1) {
-  throw new Error('base release notes do not contain the full changelog marker')
+const changelogEndMarker = '<!-- aurora:full-changelog:end -->'
+const changelogStartCount = cleanBase.split(changelogMarker).length - 1
+const changelogEndCount = cleanBase.split(changelogEndMarker).length - 1
+if (changelogStartCount !== 1 || changelogEndCount !== 1) {
+  throw new Error('base release notes must contain exactly one complete changelog section')
 }
+const changelogOffset = cleanBase.indexOf(changelogMarker)
 
 const safeSummary = rawSummary.replace(/@(?=[A-Za-z0-9-])/gu, '@\u200b')
 const aiSection = [
