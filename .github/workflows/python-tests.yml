@@ -122,7 +122,7 @@ jobs:
 
       - name: Upload HTML coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-coverage-html
           path: |
@@ -133,7 +133,7 @@ jobs:
 
       - name: Upload mesh E2E artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-mesh-transport-e2e
           path: .artifacts/e2e/mesh-transport/latest/

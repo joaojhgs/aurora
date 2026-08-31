@@ -144,7 +144,7 @@ jobs:
         run: pnpm --filter @aurora/tauri-ui android:preflight:ci
 
       - name: Upload Android preflight report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-preflight
           path: apps/aurora-tauri/reports/android-preflight.json
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload Android client APK proof
         if: inputs.release_version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-client-apk-proof
           path: apps/aurora-tauri/reports/android-client-apk-artifact-proof.json
@@ -178,7 +178,7 @@ jobs:
 
       - name: Upload Android client debug APK
         if: inputs.release_version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-client-debug-apk
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
@@ -231,7 +231,7 @@ jobs:
 
       - name: Upload Android arm64 unsigned release APK
         if: inputs.release_version != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-release-android-arm64-unsigned-apk
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
@@ -256,7 +256,7 @@ jobs:
 
       - name: Upload Android client AAB proof
         if: inputs.release_version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-client-aab-proof
           path: apps/aurora-tauri/reports/android-client-aab-artifact-proof.json
@@ -265,7 +265,7 @@ jobs:
 
       - name: Upload Android client debug AAB
         if: inputs.release_version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-client-debug-aab
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
@@ -274,7 +274,7 @@ jobs:
 
       - name: Upload Android unsigned release AAB
         if: inputs.release_version != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-release-android-unsigned-aab
           path: apps/aurora-tauri/src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
@@ -310,7 +310,7 @@ jobs:
 
       - name: Upload Android to Python WebRTC evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-android-python-webrtc-interop
           path: apps/aurora-tauri/reports/webrtc-interop/
