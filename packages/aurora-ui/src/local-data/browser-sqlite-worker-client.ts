@@ -364,6 +364,10 @@ class BrowserSqliteConversationRepository {
     return (await this.client.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations' }, this.txId)).map(parseConversationRecord)
   }
 
+  async listMessageCounts(): Promise<Record<string, number>> {
+    return await this.client.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts' }, this.txId)
+  }
+
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
     return (await this.client.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', conversationId }, this.txId)).map(parseConversationMessageRecord)
   }

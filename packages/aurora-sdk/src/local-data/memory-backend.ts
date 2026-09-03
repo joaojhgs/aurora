@@ -269,6 +269,10 @@ class MemoryConversationRepository {
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
         throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation')
       }
+      const existing = this.session.mutable.messages.find((message) => message.id === record.id)
+      if (existing !== undefined && existing.conversationId !== record.conversationId) {
+        throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+      }
       upsert(this.session.mutable.messages, record, (item) => item.id === record.id)
     })
   }
@@ -290,6 +294,16 @@ class MemoryConversationRepository {
 
   async listConversations(): Promise<ConversationRecord[]> {
     return this.session.withRepositoryAccess(this.access, () => clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
+  }
+
+  async listMessageCounts(): Promise<Record<string, number>> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const counts: Record<string, number> = {}
+      for (const message of this.session.mutable.messages) {
+        counts[message.conversationId] = (counts[message.conversationId] ?? 0) + 1
+      }
+      return counts
+    })
   }
 
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {

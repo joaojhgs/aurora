@@ -41,11 +41,11 @@ interface ConversationsState {
   readonly messagesByConversation: ReadonlyMap<string, ConversationMessageRecord[]>
 }
 
-const emptyMessages = new Map<string, ConversationMessageRecord[]>()
-
 export function useLocalConversations(options: UseLocalConversationsOptions = {}): UseLocalConversationsResult {
   const localData = useLocalData()
   const requestId = useRef(0)
+  const messageCache = useRef(new Map<string, ConversationMessageRecord[]>())
+  const messageRequests = useRef(new Map<string, Promise<ConversationMessageRecord[]>>())
   const includeArchived = options.includeArchived === true
   const limit = options.limit ?? 100
   const messageLimit = options.messageLimit ?? 500
@@ -53,7 +53,7 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
     loading: localData.state === 'opening',
     error: null,
     summaries: [],
-    messagesByConversation: emptyMessages
+    messagesByConversation: new Map()
   }))
 
   const selectedConversationId = useMemo(() => {
@@ -64,17 +64,17 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
   const refresh = useCallback(async () => {
     const conversations = localData.conversations
     if (localData.state !== 'ready' || conversations === null) {
+      messageCache.current.clear()
       setState((current) => ({
         ...current,
         loading: localData.state === 'opening',
         error: localData.error?.title ?? null,
         summaries: [],
-        messagesByConversation: emptyMessages
+        messagesByConversation: new Map()
       }))
       return
     }
 
-    const abortController = new AbortController()
     const activeRequest = requestId.current + 1
     requestId.current = activeRequest
     setState((current) => ({ ...current, loading: true, error: null }))
@@ -82,44 +82,83 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
       const summaries = await conversations.listConversations({
         scope: localData.scope,
         includeArchived,
-        limit,
-        signal: abortController.signal
+        limit
       })
-      const pairs = await Promise.all(summaries.map(async (summary) => [
-        summary.record.id,
-        await conversations.listMessages({
-          scope: localData.scope,
-          conversationId: summary.record.id,
-          limit: messageLimit,
-          signal: abortController.signal
-        })
-      ] as const))
       if (requestId.current !== activeRequest) return
+      const summaryIds = new Set(summaries.map((summary) => summary.record.id))
+      for (const conversationId of messageCache.current.keys()) {
+        if (!summaryIds.has(conversationId)) messageCache.current.delete(conversationId)
+      }
       setState({
         loading: false,
         error: null,
         summaries,
-        messagesByConversation: new Map(pairs)
+        messagesByConversation: new Map(messageCache.current)
       })
     } catch (error) {
-      if (requestId.current !== activeRequest || isAbortError(error)) return
+      if (requestId.current !== activeRequest) return
       setState((current) => ({
         ...current,
         loading: false,
         error: localDataProductError(error).title
       }))
     }
-  }, [localData, includeArchived, limit, messageLimit])
+  }, [localData, includeArchived, limit])
+
+  const loadMessages = useCallback(async (conversationId: string, force = false): Promise<void> => {
+    const conversations = localData.conversations
+    if (localData.state !== 'ready' || conversations === null) return
+    if (!force && messageCache.current.has(conversationId)) return
+    const activeRequest = requestId.current
+    const existingRequest = messageRequests.current.get(conversationId)
+    if (existingRequest) {
+      await existingRequest
+      if (!force) return
+    }
+    const request = conversations.listMessages({
+      scope: localData.scope,
+      conversationId,
+      limit: messageLimit
+    })
+    messageRequests.current.set(conversationId, request)
+    try {
+      const messages = await request
+      if (requestId.current !== activeRequest) return
+      messageCache.current.set(conversationId, messages)
+      setState((current) => ({
+        ...current,
+        messagesByConversation: new Map(messageCache.current)
+      }))
+    } finally {
+      if (messageRequests.current.get(conversationId) === request) {
+        messageRequests.current.delete(conversationId)
+      }
+    }
+  }, [localData, messageLimit])
 
   useEffect(() => {
     if (options.autoRefresh === false) return
     void refresh()
     return () => {
       requestId.current += 1
+      messageRequests.current.clear()
     }
   }, [refresh, options.autoRefresh])
 
-  const mutate = useCallback(async (work: (signal: AbortSignal) => Promise<void>) => {
+  useEffect(() => {
+    if (selectedConversationId === null) return
+    void loadMessages(selectedConversationId).catch((error) => {
+      setState((current) => ({
+        ...current,
+        error: localDataProductError(error).title
+      }))
+    })
+  }, [loadMessages, selectedConversationId])
+
+  const mutate = useCallback(async (
+    work: (signal: AbortSignal) => Promise<void>,
+    affectedConversationId?: string
+  ) => {
     const activeRequest = requestId.current + 1
     requestId.current = activeRequest
     const abortController = new AbortController()
@@ -127,12 +166,15 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
     try {
       await work(abortController.signal)
       if (requestId.current !== activeRequest) return
+      if (affectedConversationId !== undefined) {
+        await loadMessages(affectedConversationId, true)
+      }
       await refresh()
     } catch (error) {
-      if (requestId.current !== activeRequest || isAbortError(error)) return
+      if (requestId.current !== activeRequest) return
       setState((current) => ({ ...current, loading: false, error: localDataProductError(error).title }))
     }
-  }, [refresh])
+  }, [loadMessages, refresh])
 
   return {
     loading: state.loading,
@@ -154,7 +196,7 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
       await mutate(async (signal) => {
         const input: AppendLocalConversationMessageInput = { scope: localData.scope, record, signal }
         await conversations.appendMessage(input)
-      })
+      }, record.conversationId)
     },
     archiveConversation: async (conversationId, archivedAtMs = Date.now()) => {
       const conversations = requireConversations(localData)
@@ -175,10 +217,4 @@ export function useLocalConversations(options: UseLocalConversationsOptions = {}
 function requireConversations(localData: ReturnType<typeof useLocalData>) {
   if (localData.conversations === null) throw new Error('This device history is unavailable.')
   return localData.conversations
-}
-
-function isAbortError(error: unknown): boolean {
-  return typeof DOMException !== 'undefined'
-    && error instanceof DOMException
-    && error.name === 'AbortError'
 }

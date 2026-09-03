@@ -260,8 +260,13 @@ export function AppShell({
               activityRailCollapsed ? "border-transparent" : "border-border",
             )}
             style={{
-              width: activityRailCollapsed ? 0 : 280,
-              transition: "width 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease",
+              width: 280,
+              flexBasis: 280,
+              marginRight: activityRailCollapsed ? -280 : 0,
+              transform: activityRailCollapsed ? "translateX(100%)" : "translateX(0)",
+              transition: "transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease",
+              willChange: "transform",
+              pointerEvents: activityRailCollapsed ? "none" : undefined,
             }}
             aria-label="Aurora activity"
             aria-hidden={activityRailCollapsed}

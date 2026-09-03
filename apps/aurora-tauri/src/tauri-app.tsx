@@ -1,67 +1,59 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ComponentProps,
   ComponentType,
   ReactElement,
   ReactNode,
 } from "react";
+import { AppShell, RouteMatrix } from "@aurora/ui/shell";
 import {
-  AdminAuditResource,
-  AdminOverviewContent,
-  AdminDevicesResource,
-  AdminRbacResource,
-  AdminSchedulerView,
-  AdminServicesResource,
-  AdminContractsResource,
-  AdminTokensResource,
-  AdminPluginsView,
-  AppShell,
-  AssistantView,
-  AURORA_OWL_LOADER_STAGES,
-  AuroraOwlLoader,
-  BackupRestoreView,
-  Button,
-  ConfigEditorView,
-  MemoryView,
-  DataPolicyResource,
-  EvidenceBadge,
-  MeshDiagnosticsResource,
-  MeshPeersResource,
-  ModelsView,
-  VoiceSettingsView,
-  type OnboardingModePreferenceStore,
-  type OnboardingProductModeId,
-  OnboardingView,
-  PageHeader,
-  PairingQueueView,
-  RouteMatrix,
-  MeshServiceSharingResource,
-  SettingsPermissionsView,
-  SettingsView,
-  StateSurface,
-  LightweightToolApprovalPanel,
-  ToolApprovalPanel,
-  WebThinConnectionPanel,
-  getAuroraSurfaceProfile,
-  shouldShowForSurface,
-  auroraNavSections,
-  auroraEmbeddedNavItems,
-  getAuroraNavItem,
   buildShellSnapshot,
   errorShellSnapshot,
   loadingShellSnapshot,
-  navItemSnapshot,
   retainThinShellSnapshot,
-  thinConnectionProfileWithManualAddress,
-  type AuroraNavItem,
-  type AuroraOwlLoaderStageId,
-  type AuroraDesktopOverlayPreferences,
-  type AuroraLocalSpeechLanguagePrefs,
-  type AuroraLocalSpeechSelectionProfile,
   type AuroraShellSnapshot,
   type RouteAvailability,
-  type WebThinRoomSecret,
-} from "@aurora/ui";
+} from "@aurora/ui/shell-data";
+import {
+  AURORA_OWL_LOADER_STAGES,
+  AuroraOwlLoader,
+  type AuroraOwlLoaderStageId,
+} from "@aurora/ui/owl-loader";
+import { AssistantView } from "@aurora/ui/assistant-view";
+import { AdminOverviewContent } from "@aurora/ui/admin-overview-view";
+import { MeshDiagnosticsResource } from "@aurora/ui/mesh-diagnostics-resource";
+import { Button } from "@aurora/ui/primitives";
+import { EvidenceBadge } from "@aurora/ui/status-badges";
+import {
+  type OnboardingModePreferenceStore,
+  type OnboardingProductModeId,
+  OnboardingView,
+} from "@aurora/ui/onboarding-view";
+import { PageHeader, StateSurface } from "@aurora/ui/state-surface";
+import { SettingsPermissionsView } from "@aurora/ui/settings-permissions-view";
+import { SettingsView } from "@aurora/ui/settings-view";
+import {
+  LightweightToolApprovalPanel,
+  ToolApprovalPanel,
+} from "@aurora/ui/tool-approval-panel";
+import {
+  type AuroraLocalSpeechLanguagePrefs,
+  type AuroraLocalSpeechSelectionProfile,
+  type AuroraDesktopOverlayPreferences,
+} from "@aurora/ui/runtime-profile";
+import { WebThinConnectionPanel, type WebThinRoomSecret } from "@aurora/ui/web-thin-connection-panel";
+import {
+  getAuroraSurfaceProfile,
+  shouldShowForSurface,
+} from "@aurora/ui/platform-surface";
+import {
+  auroraEmbeddedNavItems,
+  auroraNavSections,
+  getAuroraNavItem,
+  navItemSnapshot,
+  type AuroraNavItem,
+} from "@aurora/ui/nav";
+import { thinConnectionProfileWithManualAddress } from "@aurora/ui/thin-connection-profile";
 import {
   type LightweightAssistantDependencies,
 } from "@aurora/ui/local-assistant";
@@ -80,6 +72,58 @@ import {
   AlertDialogTitle,
 } from "@aurora/ui/components/ui/alert-dialog";
 import owlSrc from "./assets/aurora-owl.png";
+
+const LazyAdminServicesResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-services-view")).AdminServicesResource,
+}));
+const LazyAdminContractsResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-services-view")).AdminContractsResource,
+}));
+const LazyAdminRbacResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-rbac-view")).AdminRbacResource,
+}));
+const LazyAdminTokensResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-tokens-view")).AdminTokensResource,
+}));
+const LazyBackupRestoreView = lazy(async () => ({
+  default: (await import("@aurora/ui/backup-restore-view")).BackupRestoreView,
+}));
+const LazyAdminSchedulerView = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-scheduler-view")).AdminSchedulerView,
+}));
+const LazyAdminAuditResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-audit-view")).AdminAuditResource,
+}));
+const LazyAdminDevicesResource = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-devices-view")).AdminDevicesResource,
+}));
+const LazyConfigEditorView = lazy(async () => ({
+  default: (await import("@aurora/ui/config-editor-view")).ConfigEditorView,
+}));
+const LazyVoiceSettingsView = lazy(async () => ({
+  default: (await import("@aurora/ui/voice-settings-view")).VoiceSettingsView,
+}));
+const LazyAdminPluginsView = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-plugins-view")).AdminPluginsView,
+}));
+const LazyPairingQueueView = lazy(async () => ({
+  default: (await import("@aurora/ui/pairing-queue-view")).PairingQueueView,
+}));
+const LazyDataPolicyResource = lazy(async () => ({
+  default: (await import("@aurora/ui/data-policy-view")).DataPolicyResource,
+}));
+const LazyModelsView = lazy(async () => ({
+  default: (await import("@aurora/ui/models-view")).ModelsView,
+}));
+const LazyMeshPeersResource = lazy(async () => ({
+  default: (await import("@aurora/ui/mesh-peers-view")).MeshPeersResource,
+}));
+const LazyMeshServiceSharingResource = lazy(async () => ({
+  default: (await import("@aurora/ui/service-routing-view")).MeshServiceSharingResource,
+}));
+const LazyMemoryView = lazy(async () => ({
+  default: (await import("@aurora/ui/memory-view")).MemoryView,
+}));
 import { GATEWAY_METHODS } from "@aurora/client";
 import {
   createLightweightToolClientAdapter,
@@ -291,7 +335,7 @@ export const tauriRouteRegistry = {
             device&apos;s setup and try again.
           </p>
         ) : null}
-        <MeshPeersResource
+        <LazyMeshPeersResource
           key={inviteParam ?? "mesh-peers"}
           client={client}
           route={route}
@@ -303,7 +347,7 @@ export const tauriRouteRegistry = {
           sessionIsAdmin={client.auth.snapshot().isAdmin}
           {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
         />
-        <MeshServiceSharingResource
+        <LazyMeshServiceSharingResource
           client={client}
           route={route}
           surface={nativeContext.surfaceProfile}
@@ -323,16 +367,16 @@ export const tauriRouteRegistry = {
       shutdown={shutdown}
     />
   ),
-  services: ({ client }) => <AdminServicesResource client={client} />,
-  access: ({ client }) => <AdminRbacResource client={client} />,
-  tokens: ({ client }) => <AdminTokensResource client={client} />,
+  services: ({ client }) => <LazyAdminServicesResource client={client} />,
+  access: ({ client }) => <LazyAdminRbacResource client={client} />,
+  tokens: ({ client }) => <LazyAdminTokensResource client={client} />,
   backups: ({ route, client }) => (
-    <BackupRestoreView client={client} route={route} />
+    <LazyBackupRestoreView client={client} route={route} />
   ),
   scheduler: ({ route, client }) => (
-    <AdminSchedulerView client={client} route={route} />
+    <LazyAdminSchedulerView client={client} route={route} />
   ),
-  audit: ({ client }) => <AdminAuditResource client={client} />,
+  audit: ({ client }) => <LazyAdminAuditResource client={client} />,
   settings: ({ route, snapshot, nativeContext, client, navigate }) => (
     <TauriSettingsPage
       route={route}
@@ -343,13 +387,13 @@ export const tauriRouteRegistry = {
       onChangeDeviceSetup={() => navigate("/onboarding")}
     />
   ),
-  devices: ({ client }) => <AdminDevicesResource client={client} />,
+  devices: ({ client }) => <LazyAdminDevicesResource client={client} />,
   config: ({ route, client }) => (
-    <ConfigEditorView client={client} route={route} />
+    <LazyConfigEditorView client={client} route={route} />
   ),
   "spoken-replies": ({ nativeContext, client }) => (
     <section aria-label="Spoken replies">
-      <VoiceSettingsView
+      <LazyVoiceSettingsView
         client={client}
         runtimeProfile={nativeContext.runtimeProfile ?? null}
         surfaceProfile={nativeContext.surfaceProfile}
@@ -358,12 +402,12 @@ export const tauriRouteRegistry = {
       />
     </section>
   ),
-  contracts: ({ client }) => <AdminContractsResource client={client} />,
+  contracts: ({ client }) => <LazyAdminContractsResource client={client} />,
   plugins: ({ route, client }) => (
-    <AdminPluginsView client={client} route={route} />
+    <LazyAdminPluginsView client={client} route={route} />
   ),
   pairing: ({ route, client }) => (
-    <PairingQueueView client={client} route={route} />
+    <LazyPairingQueueView client={client} route={route} />
   ),
   diagnostics: ({
     route,
@@ -381,7 +425,7 @@ export const tauriRouteRegistry = {
     />
   ),
   data: ({ route, client }) => (
-    <DataPolicyResource client={client} route={route} />
+    <LazyDataPolicyResource client={client} route={route} />
   ),
   native: ({ snapshot, nativeContext }) => (
     <TauriNativeSettingsPage
@@ -389,7 +433,7 @@ export const tauriRouteRegistry = {
       nativeContext={nativeContext}
     />
   ),
-  models: ({ client }) => <ModelsView client={client} />,
+  models: ({ client }) => <LazyModelsView client={client} />,
   onboarding: ({
     snapshot,
     nativeContext,
@@ -1781,18 +1825,37 @@ function TauriRouteContent({
     [snapshot.nativeCapabilities],
   );
   if (!renderRoute) return <MissingTauriRoute route={route} />;
-  return renderRoute({
-    route,
-    snapshot,
-    nativeContext,
-    client,
-    shutdown,
-    modePreferenceStore,
-    applyModePreference,
-    navigate,
-    assistantNativePermissions,
-    assistantNativeCapabilities,
-  });
+  return (
+    <Suspense fallback={<TauriRouteLoading route={route} />}>
+      {renderRoute({
+        route,
+        snapshot,
+        nativeContext,
+        client,
+        shutdown,
+        modePreferenceStore,
+        applyModePreference,
+        navigate,
+        assistantNativePermissions,
+        assistantNativeCapabilities,
+      })}
+    </Suspense>
+  );
+}
+
+function TauriRouteLoading({ route }: { route: RouteAvailability }) {
+  return (
+    <section
+      className="ata-panel"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label={`Loading ${route.item.label}`}
+    >
+      <p className="text-sm text-muted-foreground">
+        Loading {route.item.label}…
+      </p>
+    </section>
+  );
 }
 
 function TauriMemoryPage({
@@ -1809,7 +1872,7 @@ function TauriMemoryPage({
     () => (localData ? tauriLocalDataBackendFactory(localData) : null),
     [localData],
   );
-  if (!localData) return <MemoryView client={client} route={route} />;
+  if (!localData) return <LazyMemoryView client={client} route={route} />;
   return (
     <LocalDataProvider
       profileId={localData.profileId}
@@ -1817,7 +1880,7 @@ function TauriMemoryPage({
       ownerAvailable={localData.ownerAvailable}
       backendFactory={backendFactory ?? undefined}
     >
-      <MemoryView client={client} route={route} />
+      <LazyMemoryView client={client} route={route} />
     </LocalDataProvider>
   );
 }

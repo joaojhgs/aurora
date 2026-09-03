@@ -35,6 +35,7 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
@@ -229,6 +230,9 @@ class TauriConversationRepository {
   }
   async listConversations(): Promise<ConversationRecord[]> {
     return (await this.session.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseConversationRecord)
+  }
+  async listMessageCounts(): Promise<Record<string, number>> {
+    return await this.session.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts', profileId: this.session.profileId, localNodeId: this.session.localNodeId })
   }
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
     return (await this.session.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId })).map(parseConversationMessageRecord)
