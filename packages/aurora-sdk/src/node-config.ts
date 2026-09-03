@@ -726,7 +726,10 @@ function assertNodeConfigStorageKey(key: string): void {
 }
 
 function isIdentityValue(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= 256
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 256 &&
+    /\S/u.test(value)
 }
 
 function isRoutingPreference(value: unknown): value is AuroraNodeRoutingPreference {

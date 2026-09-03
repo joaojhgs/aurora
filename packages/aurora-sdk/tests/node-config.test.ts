@@ -534,6 +534,80 @@ describe('resolveServiceRouting', () => {
     )
   })
 
+  it('rejects whitespace-only candidate identities and generated selector fields', () => {
+    const identityCases = [
+      ['peerId', 'peer_id'],
+      ['providerId', 'provider_id'],
+      ['serviceInstanceId', 'service_instance_id'],
+    ] as const
+    const validFallback: AuroraNodeRouteCandidate = {
+      peerId: 'fallback-peer',
+      providerId: 'fallback-provider',
+      serviceInstanceId: 'fallback-instance',
+      module: 'TTS',
+    }
+
+    for (const [candidateField, selectorField] of identityCases) {
+      const malformedCandidate: AuroraNodeRouteCandidate = {
+        ...remoteCandidate,
+        [candidateField]: ' ',
+        selector: {
+          ...remoteCandidate.selector,
+          [selectorField]: ' ',
+        },
+      }
+      const result = resolveServiceRouting({
+        module: 'tts',
+        config: configFor('tts', 'network', 'error'),
+        localCapability: { available: false },
+        remoteCandidates: [malformedCandidate, validFallback],
+      })
+
+      expect(result.attempt.candidate?.peerId).toBe('fallback-peer')
+      expect(result.record.remoteCandidateIds).toEqual(['fallback-peer|fallback-provider|fallback-instance|TTS'])
+      const parsed = TTSRequestInputTTSRequestSchema.safeParse({
+        text: 'dispatch boundary',
+        mesh_selector: {
+          ...result.selector,
+          [selectorField]: ' ',
+        },
+      })
+      expect(parsed.success).toBe(false)
+    }
+
+    const optionalSelectorFields = [
+      'resource_namespace',
+      'tool_id',
+      'data_scope',
+      'hardware_target',
+    ] as const
+    for (const selectorField of optionalSelectorFields) {
+      const malformedSelectorCandidate: AuroraNodeRouteCandidate = {
+        ...remoteCandidate,
+        selector: {
+          ...remoteCandidate.selector,
+          [selectorField]: ' ',
+        },
+      }
+
+      expect(() => resolveServiceRouting({
+        module: 'tts',
+        config: configFor('tts', 'network', 'error'),
+        localCapability: { available: false },
+        remoteCandidates: [malformedSelectorCandidate],
+      })).toThrow(AuroraNodeConfigValidationError)
+
+      const parsed = TTSRequestInputTTSRequestSchema.safeParse({
+        text: 'dispatch boundary',
+        mesh_selector: {
+          peer_id: 'home-peer',
+          [selectorField]: ' ',
+        },
+      })
+      expect(parsed.success).toBe(false)
+    }
+  })
+
   it('rejects selectors whose identity conflicts with the candidate audit identity', () => {
     for (const selector of [
       { peerId: 'other-peer' },
