@@ -592,10 +592,14 @@ describe('Aurora production shell', () => {
 
   it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
     const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/styles.css'), 'utf8')
+    const shell = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/shell.tsx'), 'utf8')
 
     expect(css).toContain('.aui-content>* { width:min(100%,112rem);margin-inline:auto }')
     expect(css).toContain('.aui-activity-drawer { display:block }')
     expect(css).toContain('.aui-activity-drawer-panel')
+    expect(css).toContain('transform: translateX(100%)')
+    expect(css).toContain('transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease !important')
+    expect(shell).not.toContain('transition: "width 300ms')
     expect(css).toContain('.aui-content:where(button,.aui-button,.aui-action-chip,input,select,textarea,summary) { min-height:2.6rem }')
     expect(css).toContain('[data-slot="card-footer"]')
     expect(css).toContain('[data-slot="button"]')
