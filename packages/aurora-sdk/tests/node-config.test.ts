@@ -283,7 +283,7 @@ describe('resolveServiceRouting', () => {
       module: 'tts',
       config: configFor('tts', 'network', 'error'),
       localCapability: { available: false },
-      remoteCandidates: [{ ...remoteCandidate, selector: undefined, module: 'memory' }],
+      remoteCandidates: [{ ...remoteCandidate, selector: null, module: 'memory' }],
     })).toThrow('must match the requested service module')
   })
 
