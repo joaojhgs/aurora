@@ -231,6 +231,39 @@ const tauriRouteIds = [
 
 type TauriRouteId = (typeof tauriRouteIds)[number];
 
+type TauriRouteLoadingCopy = {
+  title: string;
+  description?: string;
+  message?: string;
+};
+
+const tauriRouteLoadingCopy: Partial<
+  Record<TauriRouteId, TauriRouteLoadingCopy>
+> = {
+  mesh: {
+    title: "Connected devices",
+    description: "Connect trusted devices and choose what each one can use.",
+  },
+  config: {
+    title: "Configuration",
+  },
+  tokens: {
+    title: "RBAC",
+  },
+  backups: {
+    title: "Backups & Restore",
+    description:
+      "Create and verify snapshots, or preview a restore before making changes.",
+  },
+  audit: {
+    title: "Audit log",
+  },
+  models: {
+    title: "Models & Sources",
+    message: "Loading model sources from Aurora.",
+  },
+};
+
 export const tauriRouteRegistry = {
   assistant: ({
     route,
@@ -1842,16 +1875,26 @@ function TauriRouteContent({
 }
 
 function TauriRouteLoading({ route }: { route: RouteAvailability }) {
+  const routeLoadingCopy = tauriRouteLoadingCopy[route.item.id as TauriRouteId];
+  const title = routeLoadingCopy?.title ?? route.item.label;
+  const description =
+    routeLoadingCopy?.description ?? `Loading ${title} from Aurora.`;
+  const message = routeLoadingCopy?.message ?? `Loading ${title}…`;
+
   return (
     <section
       className="ata-panel"
       aria-busy="true"
       aria-live="polite"
-      aria-label={`Loading ${route.item.label}`}
+      aria-label={title}
     >
-      <p className="text-sm text-muted-foreground">
-        Loading {route.item.label}…
-      </p>
+      <PageHeader
+        eyebrow={route.item.label}
+        id={`${route.item.id}-loading-title`}
+        title={title}
+        description={description}
+      />
+      <p className="text-sm text-muted-foreground">{message}</p>
     </section>
   );
 }
