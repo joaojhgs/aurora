@@ -29,6 +29,11 @@
       "import": "./dist/webrtc/index.js",
       "default": "./dist/webrtc/index.js"
     },
+    "./node-config": {
+      "types": "./dist/node-config.d.ts",
+      "import": "./dist/node-config.js",
+      "default": "./dist/node-config.js"
+    },
     "./local-data": {
       "types": "./dist/local-data/index.d.ts",
       "import": "./dist/local-data/index.js",

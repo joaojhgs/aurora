@@ -23,7 +23,7 @@ import {
   parseAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
   type AuroraNodeConfigDocumentV1,
-} from '@aurora/client'
+} from '@aurora/client/node-config'
 import {
   BROWSER_PEER_CREDENTIAL_PREFIX as CREDENTIAL_PREFIX,
   BROWSER_PEER_INBOUND_VERIFIER_KEY_PREFIX as INBOUND_VERIFIER_KEY_PREFIX,

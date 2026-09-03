@@ -1,4 +1,4 @@
-import { AURORA_NODE_CONFIG_STORAGE_KEY } from '@aurora/client'
+import { AURORA_NODE_CONFIG_STORAGE_KEY } from '@aurora/client/node-config'
 
 export const BROWSER_PEER_VAULT_VERSION = 1
 export const BROWSER_PEER_VAULT_DATABASE_NAME = 'aurora-web-thin-v1'
