@@ -15,6 +15,36 @@ export type AuroraNodeConfigModule = (typeof AURORA_NODE_CONFIG_MODULES)[number]
 export type AuroraNodeRoutingPreference = 'local' | 'network' | 'local_only' | 'network_only'
 export type AuroraNodeRoutingFallback = 'local' | 'network' | 'error' | 'none'
 
+/**
+ * Maps the user-facing policy domains to the module IDs emitted by capability
+ * discovery and accepted by the generated backend contracts. Keeping this
+ * adapter centralized prevents policy keys from becoming wire identities.
+ */
+export const AURORA_NODE_RUNTIME_MODULES_BY_POLICY = {
+  tooling: ['Tooling'],
+  tts: ['TTS'],
+  stt: ['STTCoordinator', 'Transcription'],
+  orchestrator: ['Orchestrator'],
+  memory: ['DB']
+} as const
+
+export type AuroraNodeRuntimeModule =
+  (typeof AURORA_NODE_RUNTIME_MODULES_BY_POLICY)[AuroraNodeConfigModule][number]
+
+export function runtimeModulesForNodeConfigModule(
+  module: AuroraNodeConfigModule
+): readonly AuroraNodeRuntimeModule[] {
+  return AURORA_NODE_RUNTIME_MODULES_BY_POLICY[module]
+}
+
+export function isRuntimeModuleForNodeConfigModule(
+  module: AuroraNodeConfigModule,
+  runtimeModule: unknown
+): runtimeModule is AuroraNodeRuntimeModule {
+  return typeof runtimeModule === 'string' &&
+    (runtimeModulesForNodeConfigModule(module) as readonly string[]).includes(runtimeModule)
+}
+
 export interface AuroraNodeServiceRouting {
   prefer: AuroraNodeRoutingPreference
   fallback: AuroraNodeRoutingFallback
@@ -67,6 +97,18 @@ export interface AuroraNodeRouteCandidate extends MeshRouteCandidate {
   selector?: MeshAddressSelector | null
 }
 
+/** Selector shape that can cross the generated speech and memory boundaries. */
+export interface AuroraNodeWireSelector {
+  peer_id: string
+  provider_id?: string | null
+  service_instance_id?: string | null
+  resource_namespace?: string | null
+  tool_id?: string | null
+  data_scope?: string | null
+  hardware_target?: string | null
+  [key: string]: string | null | undefined
+}
+
 export type RouteCandidate = AuroraNodeRouteCandidate
 
 export interface AuroraNodeRoutingResolutionRecord {
@@ -96,7 +138,7 @@ export interface ResolveServiceRoutingInput {
 export interface ServiceRoutingResolution {
   attempt: AuroraNodeRoutingAttempt
   source: 'local' | 'remote'
-  selector: MeshAddressSelector | null
+  selector: AuroraNodeWireSelector | null
   fallback: AuroraNodeRoutingAttempt[]
   record: AuroraNodeRoutingResolutionRecord
 }
@@ -104,7 +146,7 @@ export interface ServiceRoutingResolution {
 export interface AuroraNodeRoutingAttempt {
   id: string
   source: 'local' | 'remote'
-  selector: MeshAddressSelector | null
+  selector: AuroraNodeWireSelector | null
   candidate: AuroraNodeRouteCandidate | null
 }
 
@@ -314,10 +356,14 @@ export function resolveServiceRouting(input: ResolveServiceRoutingInput): Servic
   const candidates = input.remoteCandidates
     .filter((candidate) => candidate.eligible !== false)
     .map((candidate) => {
-      if (candidate.module !== undefined && candidate.module !== null && candidate.module !== input.module) {
+      if (
+        candidate.module !== undefined &&
+        candidate.module !== null &&
+        !isRuntimeModuleForNodeConfigModule(input.module, candidate.module)
+      ) {
         throw new AuroraNodeConfigValidationError(
           'remoteCandidates.module',
-          'must match the requested service module'
+          `must match the requested service module runtime alias (${runtimeModulesForNodeConfigModule(input.module).join(', ')})`
         )
       }
       return candidate
@@ -526,7 +572,7 @@ function emitResolution(
   }
 }
 
-function selectorForCandidate(candidate: AuroraNodeRouteCandidate): MeshAddressSelector {
+function selectorForCandidate(candidate: AuroraNodeRouteCandidate): AuroraNodeWireSelector {
   return canonicalizeSelector(candidate)
 }
 
@@ -565,62 +611,112 @@ function routingAttemptId(attempt: AuroraNodeRoutingAttempt): string {
   return attempt.id
 }
 
-function canonicalizeSelector(candidate: AuroraNodeRouteCandidate): MeshAddressSelector {
+const SELECTOR_FIELDS = [
+  ['resource_namespace', 'resourceNamespace'],
+  ['tool_id', 'toolId'],
+  ['data_scope', 'dataScope'],
+  ['hardware_target', 'hardwareTarget']
+] as const
+
+function canonicalizeSelector(candidate: AuroraNodeRouteCandidate): AuroraNodeWireSelector {
   const selectorValue = candidate.selector
   const selector = selectorValue === undefined || selectorValue === null
     ? {}
     : asRecord(selectorValue, 'remoteCandidates.selector')
-  const canonical: Record<string, unknown> = {}
+  const allowedKeys = new Set<string>([
+    'peer_id',
+    'peerId',
+    'provider_id',
+    'providerId',
+    'service_instance_id',
+    'serviceInstanceId',
+    'module',
+    ...SELECTOR_FIELDS.flatMap(([wireKey, camelKey]) => [wireKey, camelKey])
+  ])
   for (const key of Object.keys(selector)) {
     if (PROTOTYPE_SENSITIVE_KEYS.has(key)) {
       throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${key}`, 'prototype-sensitive selector field is not allowed')
     }
-    canonical[key] = selector[key]
+    if (!allowedKeys.has(key)) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${key}`, 'unsupported selector field')
+    }
   }
-  addCanonicalSelectorIdentity(canonical, selector, 'peerId', 'peer_id', candidate.peerId, true)
-  addCanonicalSelectorIdentity(canonical, selector, 'providerId', 'provider_id', candidate.providerId ?? undefined, false)
-  addCanonicalSelectorIdentity(canonical, selector, 'serviceInstanceId', 'service_instance_id', candidate.serviceInstanceId ?? undefined, false)
-  addCanonicalSelectorIdentity(canonical, selector, 'module', 'module', candidate.module ?? undefined, false)
-  delete canonical.peer_id
-  delete canonical.provider_id
-  delete canonical.service_instance_id
-  return canonical as MeshAddressSelector
+
+  const canonical: AuroraNodeWireSelector = { peer_id: candidate.peerId }
+  addCanonicalSelectorIdentity(canonical, selector, 'peer_id', 'peerId', candidate.peerId, true)
+  addCanonicalSelectorIdentity(canonical, selector, 'provider_id', 'providerId', candidate.providerId ?? undefined, false)
+  addCanonicalSelectorIdentity(canonical, selector, 'service_instance_id', 'serviceInstanceId', candidate.serviceInstanceId ?? undefined, false)
+  addCanonicalSelectorIdentity(canonical, selector, 'module', undefined, candidate.module ?? undefined, false)
+  for (const [wireKey, camelKey] of SELECTOR_FIELDS) {
+    const value = readSelectorValue(selector, wireKey, camelKey)
+    if (value !== undefined) canonical[wireKey] = value
+  }
+  return canonical
 }
 
 function addCanonicalSelectorIdentity(
-  canonical: Record<string, unknown>,
+  canonical: AuroraNodeWireSelector,
   selector: Record<string, unknown>,
-  canonicalKey: string,
-  aliasKey: string,
+  wireKey: keyof AuroraNodeWireSelector | 'module',
+  camelKey: string | undefined,
   candidateValue: string | undefined,
   required: boolean
 ): void {
-  const suppliedValues = [canonicalKey, aliasKey]
-    .filter((key, index, keys) => keys.indexOf(key) === index && Object.prototype.hasOwnProperty.call(selector, key))
-    .map((key) => selector[key])
-  for (const value of suppliedValues) {
-    if (!isIdentityValue(value)) {
-      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'must be a non-empty string')
-    }
-  }
-  if (suppliedValues.length > 1 && suppliedValues[0] !== suppliedValues[1]) {
-    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'snake_case and camelCase values must match')
-  }
-  const supplied = suppliedValues[0] as string | undefined
+  const supplied = readSelectorIdentity(selector, String(wireKey), camelKey)
   if (candidateValue === undefined) {
     if (supplied !== undefined) {
-      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'selector identity is not present on the candidate')
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'selector identity is not present on the candidate')
     }
-    if (required) throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'candidate identity is required')
+    if (required) throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'candidate identity is required')
     return
   }
   if (!isIdentityValue(candidateValue)) {
-    throw new AuroraNodeConfigValidationError(`remoteCandidates.${canonicalKey}`, 'must be a non-empty string')
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.${wireKey}`, 'must be a non-empty string')
   }
   if (supplied !== undefined && supplied !== candidateValue) {
-    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'does not match candidate identity')
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'does not match candidate identity')
   }
-  canonical[canonicalKey] = candidateValue
+  if (wireKey !== 'module') canonical[wireKey] = candidateValue
+}
+
+function readSelectorIdentity(
+  selector: Record<string, unknown>,
+  wireKey: string,
+  camelKey: string | undefined
+): string | undefined {
+  const keys = [wireKey, camelKey].filter((key): key is string => key !== undefined)
+  const suppliedValues = keys
+    .filter((key) => Object.prototype.hasOwnProperty.call(selector, key))
+    .map((key) => selector[key])
+  for (const value of suppliedValues) {
+    if (!isIdentityValue(value)) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'must be a non-empty string')
+    }
+  }
+  if (suppliedValues.length > 1 && suppliedValues[0] !== suppliedValues[1]) {
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'snake_case and camelCase values must match')
+  }
+  return suppliedValues[0] as string | undefined
+}
+
+function readSelectorValue(
+  selector: Record<string, unknown>,
+  wireKey: string,
+  camelKey: string
+): string | null | undefined {
+  const keys = [wireKey, camelKey].filter((key, index, values) => values.indexOf(key) === index)
+  const suppliedValues = keys
+    .filter((key) => Object.prototype.hasOwnProperty.call(selector, key))
+    .map((key) => selector[key])
+  for (const value of suppliedValues) {
+    if (value !== null && !isIdentityValue(value)) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'must be a non-empty string or null')
+    }
+  }
+  if (suppliedValues.length > 1 && suppliedValues[0] !== suppliedValues[1]) {
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'snake_case and camelCase values must match')
+  }
+  return suppliedValues[0] as string | null | undefined
 }
 
 function assertNodeConfigStorageKey(key: string): void {

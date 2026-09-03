@@ -1,19 +1,24 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { TTSRequestInputTTSRequestSchema } from '../src/generated/backend-contracts.zod.js'
+import { MemoryClient } from '../src/memory.js'
 import {
   AURORA_NODE_CONFIG_MODULES,
   AURORA_NODE_CONFIG_STORAGE_KEY,
+  AURORA_NODE_RUNTIME_MODULES_BY_POLICY,
   AuroraNodeConfigValidationError,
   AuroraServiceRoutingError,
   createAuroraNodeConfigTauriStore,
   emptyAuroraNodeConfigDocument,
   isAuroraNodeConfigModule,
   isAuroraNodeServiceExposed,
+  isRuntimeModuleForNodeConfigModule,
   migrateAuroraNodeConfigDocument,
   parseAuroraNodeConfigDocument,
   parseAuroraNodeConfigDocumentWire,
   resolveServiceRouting,
   sanitizeAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
+  runtimeModulesForNodeConfigModule,
   TauriLocalTransport,
   type AuroraNodeConfigDocumentV1,
   type AuroraNodeConfigModule,
@@ -22,19 +27,23 @@ import {
   type AuroraNodeRoutingFallback,
   type AuroraNodeRoutingPreference,
 } from '../src/index.js'
+import type { AuroraClient } from '../src/client.js'
 
   const remoteCandidate: AuroraNodeRouteCandidate = {
   peerId: 'home-peer',
   providerId: 'tts-provider',
-    serviceInstanceId: 'tts-instance',
-    module: 'tts',
+  serviceInstanceId: 'tts-instance',
+  module: 'TTS',
   selector: {
-    peerId: 'home-peer',
-    providerId: 'tts-provider',
-    serviceInstanceId: 'tts-instance',
-    module: 'tts',
+    peer_id: 'home-peer',
+    provider_id: 'tts-provider',
+    service_instance_id: 'tts-instance',
+    module: 'TTS',
   },
 }
+
+const remoteCandidateId = 'home-peer|tts-provider|tts-instance|TTS'
+const backupCandidateId = 'backup-peer|backup-provider|backup-instance|TTS'
 
 function configFor(
   module: AuroraNodeConfigModule,
@@ -171,7 +180,11 @@ describe('resolveServiceRouting', () => {
       expect(result.record.resolvedAtMs).toBe(500)
       expect(records).toEqual([result.record])
       if (result.source === 'remote') {
-        expect(result.selector).toEqual(remoteCandidate.selector)
+        expect(result.selector).toEqual({
+          peer_id: 'home-peer',
+          provider_id: 'tts-provider',
+          service_instance_id: 'tts-instance',
+        })
       } else {
         expect(result.selector).toBeNull()
       }
@@ -179,7 +192,7 @@ describe('resolveServiceRouting', () => {
   }
 
   it('returns remaining remote candidates in stable fallback order and ignores ineligible routes', () => {
-    const second: AuroraNodeRouteCandidate = { peerId: 'backup-peer', module: 'tts' }
+    const second: AuroraNodeRouteCandidate = { peerId: 'backup-peer', module: 'TTS' }
     const result = resolveServiceRouting({
       module: 'tts',
       config: configFor('tts', 'network', 'network'),
@@ -192,12 +205,13 @@ describe('resolveServiceRouting', () => {
     })
 
     expect(result.source).toBe('remote')
-    expect(result.selector).toEqual(remoteCandidate.selector)
+    expect(result.selector).toEqual({
+      peer_id: 'home-peer',
+      provider_id: 'tts-provider',
+      service_instance_id: 'tts-instance',
+    })
     expect(result.fallback.map((attempt) => attempt.candidate)).toEqual([expect.objectContaining(second)])
-    expect(result.record.remoteCandidateIds).toEqual([
-      'home-peer|tts-provider|tts-instance|tts',
-      'backup-peer|||tts',
-    ])
+    expect(result.record.remoteCandidateIds).toEqual([remoteCandidateId, 'backup-peer|||TTS'])
   })
 
   it('keeps strict and explicit fallback attempts inside their selected route class', () => {
@@ -235,50 +249,314 @@ describe('resolveServiceRouting', () => {
   })
 
   it('supports the full preference/fallback availability matrix without implicit crossing', () => {
-    const preferences = ['local', 'network', 'local_only', 'network_only'] as const
-    const fallbacks = ['local', 'network', 'error', 'none'] as const
-    for (const prefer of preferences) {
-      for (const fallback of fallbacks) {
-        for (const localAvailable of [false, true]) {
-          for (const remotes of [[], [remoteCandidate]]) {
-            let result: ReturnType<typeof resolveServiceRouting> | undefined
-            try {
-              result = resolveServiceRouting({
-                module: 'tts',
-                config: configFor('tts', prefer, fallback),
-                localCapability: { available: localAvailable },
-                remoteCandidates: remotes,
-              })
-            } catch (error) {
-              expect(error).toBeInstanceOf(AuroraServiceRoutingError)
-            }
-            if (result === undefined) continue
-            const attempts = [result.attempt, ...result.fallback]
-            if (prefer.endsWith('_only')) {
-              expect(attempts.every((attempt) => attempt.source === (prefer === 'local_only' ? 'local' : 'remote'))).toBe(true)
-            }
-            if (fallback === 'error' || fallback === 'none') expect(result.fallback).toEqual([])
-            if (fallback === 'local') expect(result.fallback.every((attempt) => attempt.source === 'local')).toBe(true)
-            if (fallback === 'network') expect(result.fallback.every((attempt) => attempt.source === 'remote')).toBe(true)
+    type MatrixOutcome = {
+      expectedSource: 'local' | 'remote' | 'error'
+      expectedAttempts: string[]
+    }
+    type MatrixScenario = {
+      prefer: AuroraNodeRoutingPreference
+      fallback: AuroraNodeRoutingFallback
+      outcomes: Record<'00' | '01' | '10' | '11', MatrixOutcome>
+    }
+    const matrix: MatrixScenario[] = [
+      {
+        prefer: 'local', fallback: 'local', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'local', fallback: 'network', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, backupCandidateId] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts', remoteCandidateId, backupCandidateId] },
+        },
+      },
+      {
+        prefer: 'local', fallback: 'error', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'local', fallback: 'none', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'network', fallback: 'local', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, 'local:tts'] },
+        },
+      },
+      {
+        prefer: 'network', fallback: 'network', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, backupCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, backupCandidateId] },
+        },
+      },
+      {
+        prefer: 'network', fallback: 'error', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+        },
+      },
+      {
+        prefer: 'network', fallback: 'none', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+        },
+      },
+      {
+        prefer: 'local_only', fallback: 'local', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'local_only', fallback: 'network', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'local_only', fallback: 'error', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'local_only', fallback: 'none', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'error', expectedAttempts: [] },
+          '10': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+          '11': { expectedSource: 'local', expectedAttempts: ['local:tts'] },
+        },
+      },
+      {
+        prefer: 'network_only', fallback: 'local', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+        },
+      },
+      {
+        prefer: 'network_only', fallback: 'network', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, backupCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId, backupCandidateId] },
+        },
+      },
+      {
+        prefer: 'network_only', fallback: 'error', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+        },
+      },
+      {
+        prefer: 'network_only', fallback: 'none', outcomes: {
+          '00': { expectedSource: 'error', expectedAttempts: [] },
+          '01': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+          '10': { expectedSource: 'error', expectedAttempts: [] },
+          '11': { expectedSource: 'remote', expectedAttempts: [remoteCandidateId] },
+        },
+      },
+    ]
+
+    const backupCandidate: AuroraNodeRouteCandidate = {
+      peerId: 'backup-peer',
+      providerId: 'backup-provider',
+      serviceInstanceId: 'backup-instance',
+      module: 'TTS',
+      selector: {
+        peer_id: 'backup-peer',
+        provider_id: 'backup-provider',
+        service_instance_id: 'backup-instance',
+        module: 'TTS',
+      },
+    }
+
+    for (const scenario of matrix) {
+      for (const localAvailable of [false, true]) {
+        for (const remoteAvailable of [false, true]) {
+          const matrixKey = `${localAvailable ? '1' : '0'}${remoteAvailable ? '1' : '0'}` as keyof MatrixScenario['outcomes']
+          const expected = scenario.outcomes[matrixKey]
+          const remoteCandidates = remoteAvailable ? [remoteCandidate, backupCandidate] : []
+          let result: ReturnType<typeof resolveServiceRouting> | undefined
+          let error: unknown
+          try {
+            result = resolveServiceRouting({
+              module: 'tts',
+              config: configFor('tts', scenario.prefer, scenario.fallback),
+              localCapability: { available: localAvailable },
+              remoteCandidates,
+            })
+          } catch (caught) {
+            error = caught
           }
+
+          if (expected.expectedSource === 'error') {
+            expect(result).toBeUndefined()
+            expect(error).toBeInstanceOf(AuroraServiceRoutingError)
+            expect((error as AuroraServiceRoutingError).record).toMatchObject({
+              preference: scenario.prefer,
+              fallbackPolicy: scenario.fallback,
+              selectedCandidateId: null,
+              fallbackCandidateIds: [],
+            })
+            continue
+          }
+
+          expect(error).toBeUndefined()
+          expect(result?.source).toBe(expected.expectedSource)
+          expect(result && [result.attempt, ...result.fallback].map((attempt) => attempt.id))
+            .toEqual(expected.expectedAttempts)
+          expect(result?.record.selectedCandidateId)
+            .toBe(expected.expectedSource === 'remote' ? remoteCandidateId : null)
+          expect(result?.record.fallbackCandidateIds).toEqual(expected.expectedAttempts.slice(1))
+          expect(result?.record.remoteCandidateIds).toEqual(remoteAvailable
+            ? [remoteCandidateId, backupCandidateId]
+            : [])
         }
       }
     }
   })
 
+  it('maps every policy domain to production capability module IDs', () => {
+    expect(AURORA_NODE_RUNTIME_MODULES_BY_POLICY).toEqual({
+      tooling: ['Tooling'],
+      tts: ['TTS'],
+      stt: ['STTCoordinator', 'Transcription'],
+      orchestrator: ['Orchestrator'],
+      memory: ['DB'],
+    })
+
+    for (const module of AURORA_NODE_CONFIG_MODULES) {
+      const runtimeModules = runtimeModulesForNodeConfigModule(module)
+      expect(runtimeModules.length).toBeGreaterThan(0)
+      for (const runtimeModule of runtimeModules) {
+        expect(isRuntimeModuleForNodeConfigModule(module, runtimeModule)).toBe(true)
+        const result = resolveServiceRouting({
+          module,
+          config: configFor(module, 'network', 'error'),
+          localCapability: { available: false },
+          remoteCandidates: [{
+            peerId: `${module}-peer`,
+            providerId: `${module}-provider`,
+            serviceInstanceId: `${module}-instance`,
+            module: runtimeModule,
+            selector: {
+              peer_id: `${module}-peer`,
+              provider_id: `${module}-provider`,
+              service_instance_id: `${module}-instance`,
+              module: runtimeModule,
+            },
+          }],
+        })
+        expect(result.source).toBe('remote')
+        expect(result.attempt.candidate?.module).toBe(runtimeModule)
+      }
+    }
+    expect(isRuntimeModuleForNodeConfigModule('tts', 'tts')).toBe(false)
+  })
+
+  it('emits selectors that survive generated speech parsing and memory routing', async () => {
+    const result = resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'network', 'error'),
+      localCapability: { available: false },
+      remoteCandidates: [{
+        ...remoteCandidate,
+        selector: {
+          peerId: 'home-peer',
+          providerId: 'tts-provider',
+          serviceInstanceId: 'tts-instance',
+          module: 'TTS',
+        },
+      }],
+    })
+    const expectedIdentity = {
+      peer_id: 'home-peer',
+      provider_id: 'tts-provider',
+      service_instance_id: 'tts-instance',
+    }
+
+    expect(result.selector).toEqual(expectedIdentity)
+    expect(result.attempt.selector).toEqual(expectedIdentity)
+    expect(result.selector).not.toHaveProperty('peerId')
+    expect(result.selector).not.toHaveProperty('providerId')
+    expect(result.selector).not.toHaveProperty('serviceInstanceId')
+
+    const parsedSpeechRequest = TTSRequestInputTTSRequestSchema.parse({
+      text: 'hello from a selected peer',
+      mesh_selector: result.selector,
+    })
+    expect(parsedSpeechRequest.mesh_selector).toMatchObject(expectedIdentity)
+    expect(parsedSpeechRequest.mesh_selector).not.toHaveProperty('peerId')
+    expect(parsedSpeechRequest.mesh_selector).not.toHaveProperty('providerId')
+    expect(parsedSpeechRequest.mesh_selector).not.toHaveProperty('serviceInstanceId')
+
+    const requestResult = vi.fn().mockResolvedValue({
+      data: { messages: [], total: 0, has_more: false },
+    })
+    const memory = new MemoryClient({ requestResult } as unknown as AuroraClient)
+    await memory.listMessages({ mesh_selector: result.selector })
+    expect(requestResult).toHaveBeenCalledWith(
+      'DB.GetMessages',
+      { mesh_selector: expectedIdentity },
+      { path: '/api/DB/GetMessages' },
+    )
+  })
+
   it('rejects selectors whose identity conflicts with the candidate audit identity', () => {
+    for (const selector of [
+      { peerId: 'other-peer' },
+      { peer_id: 'home-peer', provider_id: 'other-provider' },
+      { peer_id: 'home-peer', service_instance_id: 'other-instance' },
+      { peer_id: 'home-peer', module: 'DB' },
+    ]) {
+      expect(() => resolveServiceRouting({
+        module: 'tts',
+        config: configFor('tts', 'network', 'error'),
+        localCapability: { available: false },
+        remoteCandidates: [{ ...remoteCandidate, selector }],
+      })).toThrow('does not match candidate identity')
+    }
     expect(() => resolveServiceRouting({
       module: 'tts',
       config: configFor('tts', 'network', 'error'),
       localCapability: { available: false },
-      remoteCandidates: [{ ...remoteCandidate, selector: { peerId: 'other-peer' } }],
-    })).toThrow('does not match candidate identity')
-    expect(() => resolveServiceRouting({
-      module: 'tts',
-      config: configFor('tts', 'network', 'error'),
-      localCapability: { available: false },
-      remoteCandidates: [{ ...remoteCandidate, selector: { peerId: 'home-peer', module: 'memory' } }],
-    })).toThrow('does not match candidate identity')
+      remoteCandidates: [{
+        ...remoteCandidate,
+        selector: { peer_id: 'home-peer', peerId: 'other-peer' },
+      }],
+    })).toThrow('snake_case and camelCase values must match')
     expect(() => resolveServiceRouting({
       module: 'tts',
       config: configFor('tts', 'network', 'error'),

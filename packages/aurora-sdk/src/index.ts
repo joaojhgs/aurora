@@ -87,6 +87,7 @@ export {
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export {
+  AURORA_NODE_RUNTIME_MODULES_BY_POLICY,
   AURORA_NODE_CONFIG_MODULES,
   AURORA_NODE_CONFIG_STORAGE_KEY,
   AURORA_NODE_CONFIG_VERSION,
@@ -100,6 +101,8 @@ export {
   parseAuroraNodeConfigDocument,
   parseAuroraNodeConfigDocumentWire,
   resolveServiceRouting,
+  isRuntimeModuleForNodeConfigModule,
+  runtimeModulesForNodeConfigModule,
   sanitizeAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument
 } from './node-config.js'
@@ -113,6 +116,8 @@ export type {
   AuroraNodeFeatureOverrides,
   AuroraNodeLocalCapability,
   AuroraNodeRouteCandidate,
+  AuroraNodeRuntimeModule,
+  AuroraNodeWireSelector,
   AuroraNodeRoutingFallback,
   AuroraNodeRoutingPreference,
   AuroraNodeRoutingResolutionEmitter,

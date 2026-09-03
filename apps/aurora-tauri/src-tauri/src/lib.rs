@@ -3912,12 +3912,13 @@ async fn aurora_node_config_get(
     #[cfg(desktop)]
     {
         let _ = native;
-        let entry = node_config_storage_entry()?;
-        let value = match entry.get_password() {
-            Ok(value) => Some(value),
-            Err(keyring::Error::NoEntry) => None,
-            Err(error) => return Err(AuroraCommandError::SecureStorage(error.to_string())),
-        };
+        let value =
+            run_secure_storage_blocking(|| match node_config_storage_entry()?.get_password() {
+                Ok(value) => Ok(Some(value)),
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+            })
+            .await?;
         Ok(json!({
             "key": NODE_CONFIG_STORAGE_KEY,
             "value": value,
