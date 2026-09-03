@@ -32,6 +32,7 @@ import {
 import { PageHeader, StateSurface } from "@aurora/ui/state-surface";
 import { SettingsPermissionsView } from "@aurora/ui/settings-permissions-view";
 import { SettingsView } from "@aurora/ui/settings-view";
+import { VoiceSettingsView } from "@aurora/ui/voice-settings-view";
 import {
   LightweightToolApprovalPanel,
   ToolApprovalPanel,
@@ -99,9 +100,6 @@ const LazyAdminDevicesResource = lazy(async () => ({
 }));
 const LazyConfigEditorView = lazy(async () => ({
   default: (await import("@aurora/ui/config-editor-view")).ConfigEditorView,
-}));
-const LazyVoiceSettingsView = lazy(async () => ({
-  default: (await import("@aurora/ui/voice-settings-view")).VoiceSettingsView,
 }));
 const LazyAdminPluginsView = lazy(async () => ({
   default: (await import("@aurora/ui/admin-plugins-view")).AdminPluginsView,
@@ -393,7 +391,7 @@ export const tauriRouteRegistry = {
   ),
   "spoken-replies": ({ nativeContext, client }) => (
     <section aria-label="Spoken replies">
-      <LazyVoiceSettingsView
+      <VoiceSettingsView
         client={client}
         runtimeProfile={nativeContext.runtimeProfile ?? null}
         surfaceProfile={nativeContext.surfaceProfile}

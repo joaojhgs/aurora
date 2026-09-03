@@ -433,6 +433,7 @@ class UnusedSession implements LocalDataSession {
     deleteConversation: async () => ({ deleted: false, deletedMessages: 0 }),
     listConversations: async () => [],
     listMessageCounts: async () => ({}),
+    listFirstUserMessages: async () => ({}),
     listMessages: async () => []
   }
   readonly memory: LocalDataRepositories['memory'] = {

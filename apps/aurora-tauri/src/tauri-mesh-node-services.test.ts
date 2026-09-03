@@ -772,6 +772,7 @@ function emptyConversationRepository() {
     deleteConversation: async (): Promise<DeleteConversationResult> => ({ deleted: false, deletedMessages: 0 }),
     listConversations: async () => [],
     listMessageCounts: async () => ({}),
+    listFirstUserMessages: async () => ({}),
     listMessages: async () => [],
   };
 }

@@ -6762,14 +6762,17 @@ async function loadLocalAssistantConversationRows(
   history: LocalAssistantHistoryDependencies,
 ): Promise<AssistantConversationRow[]> {
   const conversations = createLocalConversations(history.localData)
-  const summaries = await conversations.listConversations({
-    scope: history.scope,
-    includeArchived: false,
-    limit: 100,
-  })
+  const [summaries, firstUserMessages] = await Promise.all([
+    conversations.listConversations({
+      scope: history.scope,
+      includeArchived: false,
+      limit: 100,
+    }),
+    history.localData.conversations.listFirstUserMessages(),
+  ])
   return await Promise.all(summaries.map(async (summary) => ({
     id: summary.record.id,
-    title: await localAssistantConversationTitle(history, summary.record),
+    title: await localAssistantConversationTitle(history, summary.record, firstUserMessages[summary.record.id]),
     route: 'This device',
     updated: `${formatSessionActivity(new Date(summary.record.updatedAtMs).toISOString())} · ${summary.messageCount} ${summary.messageCount === 1 ? 'message' : 'messages'}`,
     active: false,
@@ -6828,6 +6831,7 @@ async function activateLocalAssistantConversation(
 async function localAssistantConversationTitle(
   history: LocalAssistantHistoryDependencies,
   record: ConversationRecord,
+  firstUserMessage?: ConversationMessageRecord,
 ): Promise<string> {
   if (record.titleEnvelope) {
     const title = await decryptLocalAssistantText(history, {
@@ -6837,6 +6841,15 @@ async function localAssistantConversationTitle(
       field: 'title_envelope_json',
     })
     if (title.trim()) return conciseConversationTitle(title)
+  }
+  if (firstUserMessage?.contentEnvelope) {
+    const prompt = await decryptLocalAssistantText(history, {
+      envelope: firstUserMessage.contentEnvelope,
+      table: 'aurora_messages',
+      recordId: firstUserMessage.id,
+      field: 'content_envelope_json',
+    })
+    if (prompt.trim()) return conciseConversationTitle(prompt)
   }
   return 'New chat'
 }

@@ -306,6 +306,20 @@ class MemoryConversationRepository {
     })
   }
 
+  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const firstByConversation = new Map<string, ConversationMessageRecord>()
+      for (const message of this.session.mutable.messages) {
+        if (message.role !== 'user') continue
+        const current = firstByConversation.get(message.conversationId)
+        if (current === undefined || message.sequence < current.sequence || (message.sequence === current.sequence && compareUtf8(message.id, current.id) < 0)) {
+          firstByConversation.set(message.conversationId, message)
+        }
+      }
+      return Object.fromEntries(Array.from(firstByConversation.entries(), ([conversationId, message]) => [conversationId, clone(message)]))
+    })
+  }
+
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
     return this.session.withRepositoryAccess(this.access, () => clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
       .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id)))

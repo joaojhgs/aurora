@@ -16,6 +16,8 @@ export interface ConversationRepository {
   listConversations(): Promise<ConversationRecord[]>
   /** Returns message counts keyed by conversation for the active local scope. */
   listMessageCounts(): Promise<Record<string, number>>
+  /** Returns the earliest user message keyed by conversation for title previews. */
+  listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>>
   listMessages(conversationId: string): Promise<ConversationMessageRecord[]>
 }
 

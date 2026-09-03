@@ -60,6 +60,7 @@ export type BrowserSqliteRepositoryOperation =
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations' }
   | { readonly kind: 'conversations.listMessageCounts' }
+  | { readonly kind: 'conversations.listFirstUserMessages' }
   | { readonly kind: 'conversations.listMessages'; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
@@ -391,6 +392,12 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
         'SELECT messages.conversation_id, COUNT(*) AS count FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? GROUP BY messages.conversation_id;',
         [workerState.profileId, workerState.localNodeId]
       ).map((row) => [row.conversation_id, Number(row.count)]))
+    case 'conversations.listFirstUserMessages':
+      return Object.fromEntries(selectObjects<MessageRow>(
+        db,
+        'SELECT messages.* FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? AND messages.role = ? AND NOT EXISTS (SELECT 1 FROM aurora_messages earlier WHERE earlier.conversation_id = messages.conversation_id AND earlier.role = ? AND (earlier.sequence < messages.sequence OR (earlier.sequence = messages.sequence AND earlier.id < messages.id))) ORDER BY messages.conversation_id ASC, messages.sequence ASC, messages.id ASC;',
+        [workerState.profileId, workerState.localNodeId, 'user', 'user']
+      ).map((row) => [row.conversation_id, rowToMessage(row)]))
     case 'conversations.listMessages':
       return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
     case 'conversations.deleteConversation': {
