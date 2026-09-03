@@ -600,6 +600,7 @@ describe('Aurora production shell', () => {
     expect(css).toContain('transform: translateX(100%)')
     expect(css).toContain('transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease !important')
     expect(shell).not.toContain('transition: "width 300ms')
+    expect(shell).not.toContain('Aurora pages are ready')
     expect(css).toContain('.aui-content:where(button,.aui-button,.aui-action-chip,input,select,textarea,summary) { min-height:2.6rem }')
     expect(css).toContain('[data-slot="card-footer"]')
     expect(css).toContain('[data-slot="button"]')

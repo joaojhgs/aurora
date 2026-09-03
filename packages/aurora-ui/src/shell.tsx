@@ -230,9 +230,6 @@ export function AppShell({
               <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
             </strong>
           </span>
-          <span className="sr-only" aria-label="Aurora readiness">
-            Aurora pages are ready
-          </span>
           <Button
             type="button"
             variant="ghost"
