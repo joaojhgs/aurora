@@ -307,6 +307,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.inboundVerifierStorage": true,
         "aurora.iosThinPeerProof": true,
         "aurora.iosThinProfile": true,
+        "aurora.iosNodeConfig": true,
         "aurora.iosBiometricUnlock": true,
         "aurora.iosVoicePackCatalog": true,
         "aurora.iosVoiceTTSReference": true,
@@ -338,6 +339,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.inboundVerifierStorage": true,
         "ios.thinPeerProof": true,
         "ios.thinProfile": true,
+        "ios.nodeConfig": true,
         "ios.biometric.adminUnlock": true,
         "ios.voiceForegroundCapture": true,
         "ios.voicePackCatalog": true,
@@ -368,6 +370,7 @@ public final class AuroraNativePlugin: Plugin {
         "aurora.inboundVerifierStorage": "available",
         "aurora.iosThinPeerProof": "available",
         "aurora.iosThinProfile": "available",
+        "aurora.iosNodeConfig": "available",
         "aurora.iosBiometricUnlock": "available",
         "aurora.iosVoicePackCatalog": "available",
         "aurora.iosVoiceTTSReference": "available",
@@ -395,6 +398,7 @@ public final class AuroraNativePlugin: Plugin {
         "native.inboundVerifierStorage": "available",
         "ios.thinPeerProof": "available",
         "ios.thinProfile": "available",
+        "ios.nodeConfig": "available",
         "ios.biometric.adminUnlock": "available",
         "ios.voiceForegroundCapture": voiceState,
         "ios.voicePackCatalog": "available",
@@ -1048,6 +1052,28 @@ public final class AuroraNativePlugin: Plugin {
         )
       )
     }
+  }
+
+  @objc public func nodeConfigGet(_ invoke: Invoke) {
+    invoke.resolve(AuroraThinPeerStorage.nodeConfigGet())
+  }
+
+  @objc public func nodeConfigSet(_ invoke: Invoke) {
+    do {
+      let args = try invoke.parseArgs(AuroraNodeConfigSetArgs.self)
+      invoke.resolve(try AuroraThinPeerStorage.nodeConfigSet(value: args.value))
+    } catch {
+      invoke.reject(
+        AuroraThinStorageError.redactedCode(
+          for: error,
+          fallback: "node_config_set_failed"
+        )
+      )
+    }
+  }
+
+  @objc public func nodeConfigDelete(_ invoke: Invoke) {
+    invoke.resolve(AuroraThinPeerStorage.nodeConfigDelete())
   }
 
   @objc public func thinRoomSecretSet(_ invoke: Invoke) {

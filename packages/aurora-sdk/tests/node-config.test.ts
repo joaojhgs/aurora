@@ -14,23 +14,25 @@ import {
   resolveServiceRouting,
   sanitizeAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
+  TauriLocalTransport,
   type AuroraNodeConfigDocumentV1,
   type AuroraNodeConfigModule,
-  type AuroraNodeConfigSecureStorage,
+  type AuroraNodeConfigTauriTransport,
   type AuroraNodeRouteCandidate,
   type AuroraNodeRoutingFallback,
   type AuroraNodeRoutingPreference,
 } from '../src/index.js'
 
-const remoteCandidate: AuroraNodeRouteCandidate = {
+  const remoteCandidate: AuroraNodeRouteCandidate = {
   peerId: 'home-peer',
   providerId: 'tts-provider',
-  serviceInstanceId: 'tts-instance',
-  module: 'tts',
+    serviceInstanceId: 'tts-instance',
+    module: 'tts',
   selector: {
-    peer_id: 'home-peer',
-    provider_id: 'tts-provider',
-    service_instance_id: 'tts-instance',
+    peerId: 'home-peer',
+    providerId: 'tts-provider',
+    serviceInstanceId: 'tts-instance',
+    module: 'tts',
   },
 }
 
@@ -125,6 +127,13 @@ describe('Aurora node config document', () => {
         tts: { routing: { prefer: 'sometimes', fallback: 'network' } },
       },
     })).toThrow('unsupported preference')
+    const prototypePollution = JSON.parse('{"tts":{"__proto__":{"enabled":true}}}') as Record<string, unknown>
+    expect(() => sanitizeAuroraNodeConfigDocument({
+      ...document,
+      expose: {
+        featureOverrides: prototypePollution,
+      },
+    })).toThrow('feature ID')
     expect(parseAuroraNodeConfigDocument('{"version":1,"updatedAtMs":-1}')).toBeNull()
   })
 })
@@ -173,7 +182,7 @@ describe('resolveServiceRouting', () => {
     const second: AuroraNodeRouteCandidate = { peerId: 'backup-peer', module: 'tts' }
     const result = resolveServiceRouting({
       module: 'tts',
-      config: configFor('tts', 'network', 'local'),
+      config: configFor('tts', 'network', 'network'),
       localCapability: { available: false },
       remoteCandidates: [
         { ...remoteCandidate, eligible: false },
@@ -184,11 +193,98 @@ describe('resolveServiceRouting', () => {
 
     expect(result.source).toBe('remote')
     expect(result.selector).toEqual(remoteCandidate.selector)
-    expect(result.fallback).toEqual([second])
+    expect(result.fallback.map((attempt) => attempt.candidate)).toEqual([expect.objectContaining(second)])
     expect(result.record.remoteCandidateIds).toEqual([
-      'home-peer|tts-provider|tts-instance',
-      'backup-peer||',
+      'home-peer|tts-provider|tts-instance|tts',
+      'backup-peer|||tts',
     ])
+  })
+
+  it('keeps strict and explicit fallback attempts inside their selected route class', () => {
+    const localOnly = resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'local_only', 'network'),
+      localCapability: { available: true },
+      remoteCandidates: [remoteCandidate],
+    })
+    expect(localOnly.attempt.source).toBe('local')
+    expect(localOnly.fallback).toEqual([])
+
+    const remoteWithLocalFallback = resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'network', 'local'),
+      localCapability: { available: true },
+      remoteCandidates: [remoteCandidate],
+    })
+    expect(remoteWithLocalFallback.attempt.source).toBe('remote')
+    expect(remoteWithLocalFallback.fallback).toEqual([
+      { id: 'local:tts', source: 'local', selector: null, candidate: null },
+    ])
+    expect(remoteWithLocalFallback.record.fallbackCandidateIds).toEqual(['local:tts'])
+
+    for (const fallback of ['error', 'none'] as const) {
+      const result = resolveServiceRouting({
+        module: 'tts',
+        config: configFor('tts', 'local', fallback),
+        localCapability: { available: true },
+        remoteCandidates: [remoteCandidate],
+      })
+      expect(result.fallback).toEqual([])
+      expect(result.record.fallbackCandidateIds).toEqual([])
+    }
+  })
+
+  it('supports the full preference/fallback availability matrix without implicit crossing', () => {
+    const preferences = ['local', 'network', 'local_only', 'network_only'] as const
+    const fallbacks = ['local', 'network', 'error', 'none'] as const
+    for (const prefer of preferences) {
+      for (const fallback of fallbacks) {
+        for (const localAvailable of [false, true]) {
+          for (const remotes of [[], [remoteCandidate]]) {
+            let result: ReturnType<typeof resolveServiceRouting> | undefined
+            try {
+              result = resolveServiceRouting({
+                module: 'tts',
+                config: configFor('tts', prefer, fallback),
+                localCapability: { available: localAvailable },
+                remoteCandidates: remotes,
+              })
+            } catch (error) {
+              expect(error).toBeInstanceOf(AuroraServiceRoutingError)
+            }
+            if (result === undefined) continue
+            const attempts = [result.attempt, ...result.fallback]
+            if (prefer.endsWith('_only')) {
+              expect(attempts.every((attempt) => attempt.source === (prefer === 'local_only' ? 'local' : 'remote'))).toBe(true)
+            }
+            if (fallback === 'error' || fallback === 'none') expect(result.fallback).toEqual([])
+            if (fallback === 'local') expect(result.fallback.every((attempt) => attempt.source === 'local')).toBe(true)
+            if (fallback === 'network') expect(result.fallback.every((attempt) => attempt.source === 'remote')).toBe(true)
+          }
+        }
+      }
+    }
+  })
+
+  it('rejects selectors whose identity conflicts with the candidate audit identity', () => {
+    expect(() => resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'network', 'error'),
+      localCapability: { available: false },
+      remoteCandidates: [{ ...remoteCandidate, selector: { peerId: 'other-peer' } }],
+    })).toThrow('does not match candidate identity')
+    expect(() => resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'network', 'error'),
+      localCapability: { available: false },
+      remoteCandidates: [{ ...remoteCandidate, selector: { peerId: 'home-peer', module: 'memory' } }],
+    })).toThrow('does not match candidate identity')
+    expect(() => resolveServiceRouting({
+      module: 'tts',
+      config: configFor('tts', 'network', 'error'),
+      localCapability: { available: false },
+      remoteCandidates: [{ ...remoteCandidate, selector: undefined, module: 'memory' }],
+    })).toThrow('must match the requested service module')
   })
 
   it('never crosses local-only or network-only policies when the required route is unavailable', () => {
@@ -235,26 +331,26 @@ describe('resolveServiceRouting', () => {
 })
 
 describe('createAuroraNodeConfigTauriStore', () => {
-  class FakeSecureStorage implements AuroraNodeConfigSecureStorage {
+  class FakeTauriTransport implements AuroraNodeConfigTauriTransport {
     readonly values = new Map<string, string>()
 
-    async get(key: string): Promise<{ value: string | null }> {
-      return { value: this.values.get(key) ?? null }
+    async nodeConfigGet(): Promise<{ key: string; value: string | null }> {
+      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, value: this.values.get(AURORA_NODE_CONFIG_STORAGE_KEY) ?? null }
     }
 
-    async set(key: string, value: string): Promise<{ ok: boolean }> {
-      this.values.set(key, value)
-      return { ok: true }
+    async nodeConfigSet(value: string): Promise<{ key: string; ok: boolean }> {
+      this.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, value)
+      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
     }
 
-    async delete(key: string): Promise<{ ok: boolean }> {
-      this.values.delete(key)
-      return { ok: true }
+    async nodeConfigDelete(): Promise<{ key: string; ok: boolean }> {
+      this.values.delete(AURORA_NODE_CONFIG_STORAGE_KEY)
+      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
     }
   }
 
   it('uses a dedicated secure-storage key and drops invalid persisted documents', async () => {
-    const storage = new FakeSecureStorage()
+    const storage = new FakeTauriTransport()
     const store = createAuroraNodeConfigTauriStore(storage)
     const document = emptyAuroraNodeConfigDocument(600)
 
@@ -267,5 +363,40 @@ describe('createAuroraNodeConfigTauriStore', () => {
     expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(false)
     await store.clear?.()
     expect(storage.values.size).toBe(0)
+  })
+
+  it('uses the real narrow TauriLocalTransport command boundary', async () => {
+    const values = new Map<string, string>()
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = []
+    const transport = new TauriLocalTransport({
+      listen: async () => () => {},
+      invoke: async (command, args) => {
+        calls.push(args === undefined ? { command } : { command, args })
+        if (command === 'aurora_node_config_get') {
+          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, value: values.get(AURORA_NODE_CONFIG_STORAGE_KEY) ?? null }
+        }
+        if (command === 'aurora_node_config_set') {
+          values.set(AURORA_NODE_CONFIG_STORAGE_KEY, String(args?.value))
+          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
+        }
+        if (command === 'aurora_node_config_delete') {
+          values.delete(AURORA_NODE_CONFIG_STORAGE_KEY)
+          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
+        }
+        throw new Error(`unexpected command ${command}`)
+      },
+    })
+    const store = createAuroraNodeConfigTauriStore(transport)
+    const document = emptyAuroraNodeConfigDocument(610)
+
+    await store.save(document)
+    expect(await store.load()).toEqual(document)
+    await store.clear?.()
+    expect(calls.map(({ command }) => command)).toEqual([
+      'aurora_node_config_set',
+      'aurora_node_config_get',
+      'aurora_node_config_delete',
+    ])
+    expect(calls.some(({ command, args }) => command.startsWith('aurora_secure_storage') || args?.key !== undefined)).toBe(false)
   })
 })

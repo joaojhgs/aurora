@@ -106,7 +106,7 @@ export {
 export type {
   AuroraNodeConfigDocumentV1,
   AuroraNodeConfigModule,
-  AuroraNodeConfigSecureStorage,
+  AuroraNodeConfigTauriTransport,
   AuroraNodeConfigStore,
   AuroraNodeConfigTauriStoreOptions,
   AuroraNodeFeatureOverride,
@@ -117,6 +117,7 @@ export type {
   AuroraNodeRoutingPreference,
   AuroraNodeRoutingResolutionEmitter,
   AuroraNodeRoutingResolutionRecord,
+  AuroraNodeRoutingAttempt,
   AuroraNodeServiceConfig,
   AuroraNodeServiceExposure,
   AuroraNodeServiceRouting,

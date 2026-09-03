@@ -48,14 +48,13 @@ export interface AuroraNodeConfigStore {
   clear?(): Promise<void>
 }
 
-export interface AuroraNodeConfigSecureStorage {
-  get(key: string): Promise<{ value: string | null }>
-  set(key: string, value: string): Promise<{ ok: boolean }>
-  delete(key: string): Promise<{ ok: boolean }>
+export interface AuroraNodeConfigTauriTransport {
+  nodeConfigGet(): Promise<{ key: string; value: string | null }>
+  nodeConfigSet(value: string): Promise<{ key: string; ok: boolean }>
+  nodeConfigDelete(): Promise<{ key: string; ok: boolean }>
 }
 
 export interface AuroraNodeConfigTauriStoreOptions {
-  key?: string
   evidence?: string
 }
 
@@ -95,10 +94,18 @@ export interface ResolveServiceRoutingInput {
 }
 
 export interface ServiceRoutingResolution {
+  attempt: AuroraNodeRoutingAttempt
   source: 'local' | 'remote'
   selector: MeshAddressSelector | null
-  fallback: AuroraNodeRouteCandidate[]
+  fallback: AuroraNodeRoutingAttempt[]
   record: AuroraNodeRoutingResolutionRecord
+}
+
+export interface AuroraNodeRoutingAttempt {
+  id: string
+  source: 'local' | 'remote'
+  selector: MeshAddressSelector | null
+  candidate: AuroraNodeRouteCandidate | null
 }
 
 export class AuroraNodeConfigValidationError extends Error {
@@ -154,6 +161,7 @@ const FALLBACK_VALUES = new Set<AuroraNodeRoutingFallback>([
 const MODULE_VALUES = new Set<string>(AURORA_NODE_CONFIG_MODULES)
 const SAFE_FEATURE_ID = /^[A-Za-z0-9._:-]{1,128}$/u
 const MAX_FEATURE_OVERRIDES = 256
+const PROTOTYPE_SENSITIVE_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 
 export function emptyAuroraNodeConfigDocument(now = Date.now()): AuroraNodeConfigDocumentV1 {
   const services = Object.fromEntries(
@@ -206,7 +214,7 @@ export function sanitizeAuroraNodeConfigDocument(document: unknown): AuroraNodeC
       if (overrideCount > MAX_FEATURE_OVERRIDES) {
         throw new AuroraNodeConfigValidationError('document.expose.featureOverrides', 'too many feature overrides')
       }
-      if (!SAFE_FEATURE_ID.test(featureId)) {
+      if (!SAFE_FEATURE_ID.test(featureId) || PROTOTYPE_SENSITIVE_KEYS.has(featureId)) {
         throw new AuroraNodeConfigValidationError(
           `document.expose.featureOverrides.${module}.${featureId}`,
           'feature ID must contain only safe identifier characters'
@@ -305,13 +313,23 @@ export function resolveServiceRouting(input: ResolveServiceRoutingInput): Servic
   const routing = service?.routing ?? DEFAULT_ROUTING[input.module]
   const candidates = input.remoteCandidates
     .filter((candidate) => candidate.eligible !== false)
+    .map((candidate) => {
+      if (candidate.module !== undefined && candidate.module !== null && candidate.module !== input.module) {
+        throw new AuroraNodeConfigValidationError(
+          'remoteCandidates.module',
+          'must match the requested service module'
+        )
+      }
+      return candidate
+    })
     .filter((candidate) => isUsableCandidate(candidate))
     .map(cloneCandidate)
   const candidateIds = candidates.map(routeCandidateId)
   const selectedRemote = candidates[0]
-  const fallback = candidates.slice(1)
+  const remoteAttempts = candidates.map((candidate) => remoteAttempt(candidate))
+  const localAttempt = localRoutingAttempt(input.module)
 
-  const chooseLocal = (reason: string): ServiceRoutingResolution => {
+  const chooseLocal = (reason: string, fallback: AuroraNodeRoutingAttempt[] = []): ServiceRoutingResolution => {
     const record = createResolutionRecord({
       input,
       routing,
@@ -320,13 +338,16 @@ export function resolveServiceRouting(input: ResolveServiceRoutingInput): Servic
       decision: 'local',
       reason,
       selectedCandidateId: null,
-      fallbackCandidateIds: candidateIds
+      fallbackCandidateIds: fallback.map(routingAttemptId)
     })
     emitResolution(input.emit, record)
-    return { source: 'local', selector: null, fallback: candidates, record }
+    return { attempt: localAttempt, source: 'local', selector: null, fallback, record }
   }
 
-  const chooseRemote = (reason: string): ServiceRoutingResolution => {
+  const chooseRemote = (
+    reason: string,
+    fallback: AuroraNodeRoutingAttempt[] = remoteAttempts.slice(1)
+  ): ServiceRoutingResolution => {
     if (selectedRemote === undefined) return failNoRoute(input, routing, localAvailable, candidateIds, [], reason)
     const record = createResolutionRecord({
       input,
@@ -336,10 +357,11 @@ export function resolveServiceRouting(input: ResolveServiceRoutingInput): Servic
       decision: 'remote',
       reason,
       selectedCandidateId: routeCandidateId(selectedRemote),
-      fallbackCandidateIds: fallback.map(routeCandidateId)
+      fallbackCandidateIds: fallback.map(routingAttemptId)
     })
     emitResolution(input.emit, record)
     return {
+      attempt: remoteAttempt(selectedRemote),
       source: 'remote',
       selector: selectorForCandidate(selectedRemote),
       fallback,
@@ -352,57 +374,70 @@ export function resolveServiceRouting(input: ResolveServiceRoutingInput): Servic
     return failNoRoute(input, routing, false, candidateIds, [], input.localCapability.reason ?? 'local capability unavailable')
   }
   if (routing.prefer === 'network_only') {
-    if (selectedRemote !== undefined) return chooseRemote('network_only policy selected the first eligible remote candidate')
+    if (selectedRemote !== undefined) {
+      const fallback = routing.fallback === 'network' ? remoteAttempts.slice(1) : []
+      return chooseRemote('network_only policy selected the first eligible remote candidate', fallback)
+    }
     return failNoRoute(input, routing, localAvailable, candidateIds, [], 'no eligible remote candidate')
   }
   if (routing.prefer === 'local' && localAvailable) {
-    return chooseLocal('local preference selected the available local capability')
+    return chooseLocal(
+      'local preference selected the available local capability',
+      routing.fallback === 'network' ? remoteAttempts : []
+    )
   }
   if (routing.prefer === 'network' && selectedRemote !== undefined) {
-    return chooseRemote('network preference selected the first eligible remote candidate')
+    return chooseRemote(
+      'network preference selected the first eligible remote candidate',
+      routing.fallback === 'local' && localAvailable ? [localAttempt] :
+        routing.fallback === 'network' ? remoteAttempts.slice(1) : []
+    )
   }
   if (routing.fallback === 'local' && localAvailable) {
     return chooseLocal('preferred route unavailable; local fallback selected')
   }
   if (routing.fallback === 'network' && selectedRemote !== undefined) {
-    return chooseRemote('preferred route unavailable; network fallback selected')
+    return chooseRemote('preferred route unavailable; network fallback selected', remoteAttempts.slice(1))
   }
   return failNoRoute(
     input,
     routing,
     localAvailable,
     candidateIds,
-    fallback.map(routeCandidateId),
+    [],
     input.localCapability.reason ?? 'no eligible route satisfies the configured policy'
   )
 }
 
 export function createAuroraNodeConfigTauriStore(
-  storage: AuroraNodeConfigSecureStorage,
+  storage: AuroraNodeConfigTauriTransport,
   options: AuroraNodeConfigTauriStoreOptions = {}
 ): AuroraNodeConfigStore {
-  const key = options.key ?? AURORA_NODE_CONFIG_STORAGE_KEY
   const evidence = options.evidence ?? 'Tauri narrow nonsecret node-config storage'
   return {
     evidence,
     load: async () => {
-      const result = await storage.get(key)
+      const result = await storage.nodeConfigGet()
+      assertNodeConfigStorageKey(result.key)
       if (typeof result.value !== 'string' || result.value.length === 0) return null
       const parsed = parseAuroraNodeConfigDocument(result.value)
       if (parsed) return parsed
       try {
-        await storage.delete(key)
+        const deleted = await storage.nodeConfigDelete()
+        assertNodeConfigStorageKey(deleted.key)
       } catch {
         // Invalid policy remains fail-closed even when cleanup is unavailable.
       }
       return null
     },
     save: async (document) => {
-      const result = await storage.set(key, serializeAuroraNodeConfigDocument(document))
+      const result = await storage.nodeConfigSet(serializeAuroraNodeConfigDocument(document))
+      assertNodeConfigStorageKey(result.key)
       if (!result.ok) throw new Error('Node config save failed')
     },
     clear: async () => {
-      const result = await storage.delete(key)
+      const result = await storage.nodeConfigDelete()
+      assertNodeConfigStorageKey(result.key)
       if (!result.ok) throw new Error('Node config clear failed')
     }
   }
@@ -492,27 +527,110 @@ function emitResolution(
 }
 
 function selectorForCandidate(candidate: AuroraNodeRouteCandidate): MeshAddressSelector {
-  if (candidate.selector !== undefined && candidate.selector !== null) return { ...candidate.selector }
-  const selector: MeshAddressSelector = { peerId: candidate.peerId }
-  if (candidate.providerId) selector.providerId = candidate.providerId
-  if (candidate.serviceInstanceId) selector.serviceInstanceId = candidate.serviceInstanceId
-  if (candidate.module) selector.module = candidate.module
-  return selector
+  return canonicalizeSelector(candidate)
 }
 
 function cloneCandidate(candidate: AuroraNodeRouteCandidate): AuroraNodeRouteCandidate {
+  const selector = canonicalizeSelector(candidate)
   return {
     ...candidate,
-    ...(candidate.selector === undefined ? {} : { selector: candidate.selector === null ? null : { ...candidate.selector } })
+    selector
   }
 }
 
 function isUsableCandidate(candidate: AuroraNodeRouteCandidate): boolean {
-  return typeof candidate.peerId === 'string' && candidate.peerId.length > 0 && candidate.peerId.length <= 256
+  return isIdentityValue(candidate.peerId) &&
+    (candidate.providerId === undefined || candidate.providerId === null || isIdentityValue(candidate.providerId)) &&
+    (candidate.serviceInstanceId === undefined || candidate.serviceInstanceId === null || isIdentityValue(candidate.serviceInstanceId)) &&
+    (candidate.module === undefined || candidate.module === null || isIdentityValue(candidate.module))
 }
 
 function routeCandidateId(candidate: AuroraNodeRouteCandidate): string {
-  return [candidate.peerId, candidate.providerId ?? '', candidate.serviceInstanceId ?? ''].join('|')
+  return [candidate.peerId, candidate.providerId ?? '', candidate.serviceInstanceId ?? '', candidate.module ?? ''].join('|')
+}
+
+function localRouteId(module: AuroraNodeConfigModule): string {
+  return `local:${module}`
+}
+
+function localRoutingAttempt(module: AuroraNodeConfigModule): AuroraNodeRoutingAttempt {
+  return { id: localRouteId(module), source: 'local', selector: null, candidate: null }
+}
+
+function remoteAttempt(candidate: AuroraNodeRouteCandidate): AuroraNodeRoutingAttempt {
+  return { id: routeCandidateId(candidate), source: 'remote', selector: selectorForCandidate(candidate), candidate: cloneCandidate(candidate) }
+}
+
+function routingAttemptId(attempt: AuroraNodeRoutingAttempt): string {
+  return attempt.id
+}
+
+function canonicalizeSelector(candidate: AuroraNodeRouteCandidate): MeshAddressSelector {
+  const selectorValue = candidate.selector
+  const selector = selectorValue === undefined || selectorValue === null
+    ? {}
+    : asRecord(selectorValue, 'remoteCandidates.selector')
+  const canonical: Record<string, unknown> = {}
+  for (const key of Object.keys(selector)) {
+    if (PROTOTYPE_SENSITIVE_KEYS.has(key)) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${key}`, 'prototype-sensitive selector field is not allowed')
+    }
+    canonical[key] = selector[key]
+  }
+  addCanonicalSelectorIdentity(canonical, selector, 'peerId', 'peer_id', candidate.peerId, true)
+  addCanonicalSelectorIdentity(canonical, selector, 'providerId', 'provider_id', candidate.providerId ?? undefined, false)
+  addCanonicalSelectorIdentity(canonical, selector, 'serviceInstanceId', 'service_instance_id', candidate.serviceInstanceId ?? undefined, false)
+  addCanonicalSelectorIdentity(canonical, selector, 'module', 'module', candidate.module ?? undefined, false)
+  delete canonical.peer_id
+  delete canonical.provider_id
+  delete canonical.service_instance_id
+  return canonical as MeshAddressSelector
+}
+
+function addCanonicalSelectorIdentity(
+  canonical: Record<string, unknown>,
+  selector: Record<string, unknown>,
+  canonicalKey: string,
+  aliasKey: string,
+  candidateValue: string | undefined,
+  required: boolean
+): void {
+  const suppliedValues = [canonicalKey, aliasKey]
+    .filter((key, index, keys) => keys.indexOf(key) === index && Object.prototype.hasOwnProperty.call(selector, key))
+    .map((key) => selector[key])
+  for (const value of suppliedValues) {
+    if (!isIdentityValue(value)) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'must be a non-empty string')
+    }
+  }
+  if (suppliedValues.length > 1 && suppliedValues[0] !== suppliedValues[1]) {
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'snake_case and camelCase values must match')
+  }
+  const supplied = suppliedValues[0] as string | undefined
+  if (candidateValue === undefined) {
+    if (supplied !== undefined) {
+      throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'selector identity is not present on the candidate')
+    }
+    if (required) throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'candidate identity is required')
+    return
+  }
+  if (!isIdentityValue(candidateValue)) {
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.${canonicalKey}`, 'must be a non-empty string')
+  }
+  if (supplied !== undefined && supplied !== candidateValue) {
+    throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${canonicalKey}`, 'does not match candidate identity')
+  }
+  canonical[canonicalKey] = candidateValue
+}
+
+function assertNodeConfigStorageKey(key: string): void {
+  if (key !== AURORA_NODE_CONFIG_STORAGE_KEY) {
+    throw new Error(`Node config storage returned unexpected key: ${key}`)
+  }
+}
+
+function isIdentityValue(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256
 }
 
 function isRoutingPreference(value: unknown): value is AuroraNodeRoutingPreference {
