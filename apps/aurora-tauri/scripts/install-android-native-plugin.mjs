@@ -49,6 +49,10 @@ if (!existsSync(appManifestPath)) {
   throw new Error('Tauri Android project is missing. Run android:init before installing the Aurora native plugin.')
 }
 
+// The Tauri scaffold persists generated sources between runs. Reconcile the
+// whole plugin directory before copying so removed canonical sources cannot
+// remain as stale generated classes and fail the parity preflight.
+rmSync(generatedPluginSourceDir, { recursive: true, force: true })
 mkdirSync(generatedPluginSourceDir, { recursive: true })
 cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
 syncAuroraAndroidNativeResources()

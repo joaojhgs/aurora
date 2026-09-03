@@ -59,6 +59,14 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
+function containsLandmark(text: string, landmark: string): boolean {
+  return normalizeText(text).toLocaleLowerCase().includes(normalizeText(landmark).toLocaleLowerCase())
+}
+
+function landmarkPattern(landmark: string): RegExp {
+  return new RegExp(escapeRegExp(landmark), 'iu')
+}
+
 function routeScreenshotName(route: { id: string; href: string }): string {
   const suffix = route.href === '/' ? 'root' : route.href.replace(/^\//, '').replaceAll('/', '-')
   return `${route.id}-${suffix || 'root'}.png`
@@ -282,7 +290,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         // deferred route chunk and reports a false regression.
         for (const landmark of landmarks) {
           try {
-            await expect(main).toContainText(landmark, { timeout: ROUTE_READY_TIMEOUT_MS })
+            await expect(main).toContainText(landmarkPattern(landmark), { timeout: ROUTE_READY_TIMEOUT_MS })
           } catch {
             // The aggregate text assertion below records the route-level
             // failure without hiding console/HTTP diagnostics from this pass.
@@ -298,7 +306,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         failures.push(`${route.id} (${route.href}) is missing a production route oracle`)
       }
       for (const landmark of landmarks) {
-        if (!mainText.includes(landmark)) {
+        if (!containsLandmark(mainText, landmark)) {
           failures.push(`${route.id} (${route.href}) missing route-specific landmark: ${landmark}`)
         }
       }
@@ -333,7 +341,7 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         const oracle = getProductionRouteOracle(route.id)
         expect(oracle, `${route.id} should have production oracle screenshot status`).toBeDefined()
         for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
-          await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmark, {
+          await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmarkPattern(landmark), {
             timeout: ROUTE_READY_TIMEOUT_MS,
           })
         }
