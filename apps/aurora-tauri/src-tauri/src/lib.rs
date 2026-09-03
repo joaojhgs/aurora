@@ -101,6 +101,7 @@ const LOCAL_DATA_ENVELOPE_ALGORITHM: &str = "AES-GCM-256";
 const LOCAL_DATA_ENVELOPE_KEY_PURPOSE: &str = "local-structured-data";
 const LOCAL_DATA_ENVELOPE_CURRENT_VERSION: u32 = 1;
 const DESKTOP_THIN_PROFILES_KEY: &str = "aurora.session.desktop-thin-connection-profiles.v1";
+const NODE_CONFIG_STORAGE_KEY: &str = "aurora.nodeConfig.v1";
 const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
 #[cfg(test)]
 const UPDATER_ENDPOINT: &str =
@@ -3888,6 +3889,128 @@ async fn aurora_thin_profile_set(
     }
 }
 
+#[tauri::command]
+async fn aurora_node_config_get(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "nodeConfigGet", json!({}));
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "nodeConfigGet", json!({}));
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "node config storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
+                .to_string(),
+        ));
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        let value =
+            run_secure_storage_blocking(|| match node_config_storage_entry()?.get_password() {
+                Ok(value) => Ok(Some(value)),
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+            })
+            .await?;
+        Ok(json!({
+            "key": NODE_CONFIG_STORAGE_KEY,
+            "value": value,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "privacyClass": "nonsecret-node-config",
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_node_config_set(
+    value: String,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    validate_non_empty_field("nodeConfig", &value, 65_536)?;
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "nodeConfigSet", json!({ "value": value }));
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "nodeConfigSet", json!({ "value": value }));
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = (value, native);
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "node config storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
+                .to_string(),
+        ));
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        run_secure_storage_blocking(move || {
+            node_config_storage_entry()?
+                .set_password(&value)
+                .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
+        })
+        .await?;
+        Ok(json!({
+            "key": NODE_CONFIG_STORAGE_KEY,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": true,
+            "privacyClass": "nonsecret-node-config",
+            "secretsRedacted": true
+        }))
+    }
+}
+
+#[tauri::command]
+async fn aurora_node_config_delete(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        return run_android_plugin_command(native, "nodeConfigDelete", json!({}));
+    }
+    #[cfg(target_os = "ios")]
+    {
+        return run_ios_plugin_command(native, "nodeConfigDelete", json!({}));
+    }
+    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
+    {
+        let _ = native;
+        return Err(AuroraCommandError::UnsupportedFeature(
+            "node config storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
+                .to_string(),
+        ));
+    }
+    #[cfg(desktop)]
+    {
+        let _ = native;
+        run_secure_storage_blocking(|| match node_config_storage_entry()?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
+        })
+        .await?;
+        Ok(json!({
+            "key": NODE_CONFIG_STORAGE_KEY,
+            "ok": true,
+            "backend": "platform-keychain",
+            "persisted": false,
+            "privacyClass": "nonsecret-node-config",
+            "secretsRedacted": true
+        }))
+    }
+}
+
 #[cfg(any(target_os = "android", target_os = "ios"))]
 fn refresh_thin_profile_state_from_payload(
     profile_state: &SharedThinProfileState,
@@ -6233,6 +6356,11 @@ fn secure_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError>
 #[cfg(desktop)]
 fn thin_profile_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
     raw_secure_storage_entry(DESKTOP_THIN_PROFILES_KEY)
+}
+
+#[cfg(desktop)]
+fn node_config_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
+    raw_secure_storage_entry(NODE_CONFIG_STORAGE_KEY)
 }
 
 #[cfg(desktop)]
@@ -9280,6 +9408,9 @@ pub fn run() {
             aurora_remote_origin_policy,
             aurora_thin_profile_get,
             aurora_thin_profile_set,
+            aurora_node_config_get,
+            aurora_node_config_set,
+            aurora_node_config_delete,
             aurora_thin_room_secret_set,
             aurora_thin_room_secret_get,
             aurora_thin_room_secret_delete,

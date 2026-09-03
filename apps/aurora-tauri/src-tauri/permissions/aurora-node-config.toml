@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-node-config"
+description = "Allow the node-owned, nonsecret routing policy document through its fixed platform storage namespace. This does not expose generic credential storage or arbitrary keys."
+commands.allow = [
+  "aurora_node_config_get",
+  "aurora_node_config_set",
+  "aurora_node_config_delete"
+]

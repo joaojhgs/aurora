@@ -68,6 +68,46 @@ describe('Tauri secure storage policy', () => {
     expect(thinCapability).not.toMatch(/aurora_secure_storage_(get|set|delete)/)
   })
 
+  it('exposes node config through a fixed narrow boundary on every native shell', () => {
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const sdkSource = readFileSync(resolve(repoRoot, 'packages/aurora-sdk/src/tauri.ts'), 'utf8')
+    const nodeConfigSource = readFileSync(resolve(repoRoot, 'packages/aurora-sdk/src/node-config.ts'), 'utf8')
+    const rustSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/src/lib.rs'), 'utf8')
+    const permission = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/permissions/aurora-node-config.toml'), 'utf8')
+    const buildSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/build.rs'), 'utf8')
+    const capabilities = [
+      'aurora-main.json',
+      'aurora-thin.json',
+      'aurora-android-thin.json',
+      'aurora-ios-thin.json',
+      'aurora-ios-baseline.json',
+    ].map((name) => readFileSync(resolve(repoRoot, `apps/aurora-tauri/src-tauri/capabilities/${name}`), 'utf8'))
+    const kotlinSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin/AuroraNativePlugin.kt'), 'utf8')
+    const swiftSource = readFileSync(resolve(repoRoot, 'apps/aurora-tauri/src-tauri/ios/AuroraNativePlugin/Sources/AuroraNativePlugin/AuroraNativePlugin.swift'), 'utf8')
+
+    for (const command of ['aurora_node_config_get', 'aurora_node_config_set', 'aurora_node_config_delete']) {
+      expect(permission).toContain(command)
+      expect(buildSource).toContain(command)
+      expect(rustSource).toContain(command)
+      expect(permission).not.toContain('aurora_secure_storage')
+    }
+    for (const capability of capabilities) expect(capability).toContain('aurora-node-config')
+    expect(nodeConfigSource).toContain('nodeConfigGet()')
+    expect(nodeConfigSource).toContain('nodeConfigSet(value: string)')
+    expect(sdkSource).toContain("nodeConfigGet: 'aurora_node_config_get'")
+    expect(sdkSource).toContain("nodeConfigSet: 'aurora_node_config_set'")
+    expect(sdkSource).toContain("nodeConfigDelete: 'aurora_node_config_delete'")
+    expect(rustSource).toContain('NODE_CONFIG_STORAGE_KEY: &str = "aurora.nodeConfig.v1"')
+    expect(rustSource).toContain('node_config_storage_entry()')
+    expect(rustSource).not.toContain('validate_secure_storage_key(&NODE_CONFIG_STORAGE_KEY)')
+    expect(kotlinSource).toContain('fun nodeConfigGet')
+    expect(kotlinSource).toContain('fun nodeConfigSet')
+    expect(kotlinSource).toContain('fun nodeConfigDelete')
+    expect(swiftSource).toContain('nodeConfigGet')
+    expect(swiftSource).toContain('nodeConfigSet')
+    expect(swiftSource).toContain('nodeConfigDelete')
+  })
+
 
   it('keeps desktop-thin on narrow nonsecret profile and peer permissions only', () => {
     const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')

@@ -21,6 +21,7 @@
     "aurora-sidecar-stop",
     "aurora-log-tail",
     "aurora-secure-storage",
+    "aurora-node-config",
     "aurora-local-data-storage",
     "aurora-mesh-authority",
     "aurora-mesh-session",

@@ -13,6 +13,7 @@ private let auroraLocalDataEnvelopeCurrentPrefix = "aurora.local-data-envelope-c
 private let auroraLocalDataEnvelopeAlgorithm = "AES-GCM-256"
 private let auroraLocalDataEnvelopePurpose = "local-structured-data"
 private let auroraThinProfileKey = "aurora.session.ios-thin-connection-profile.v1"
+private let auroraNodeConfigKey = "aurora.nodeConfig.v1"
 private let auroraReconnectProofDomain = Data("aurora.mesh.reconnect-proof.v1\u{0}".utf8)
 
 enum AuroraThinStorageError: Error {
@@ -23,6 +24,7 @@ enum AuroraThinStorageError: Error {
   case invalidInput
   case keychainFailure
   case profileTooLarge
+  case nodeConfigTooLarge
   case proofFailure
 
   var redactedCode: String {
@@ -41,6 +43,8 @@ enum AuroraThinStorageError: Error {
       return "thin_peer_keychain_failure"
     case .profileTooLarge:
       return "thin_profile_value_too_large"
+    case .nodeConfigTooLarge:
+      return "node_config_value_too_large"
     case .proofFailure:
       return "thin_peer_proof_failure"
     }
@@ -96,6 +100,10 @@ struct AuroraMeshReconnectChallenge: Decodable {
 }
 
 struct AuroraThinProfileSetArgs: Decodable {
+  let value: String
+}
+
+struct AuroraNodeConfigSetArgs: Decodable {
   let value: String
 }
 
@@ -357,6 +365,51 @@ enum AuroraThinPeerStorage {
       "persisted": true,
       "privacyClass": "nonsecret-connection-profile",
       "secretsRedacted": true
+    ]
+  }
+
+  static func nodeConfigGet() -> [String: Any] {
+    let value: Any = UserDefaults.standard.string(forKey: auroraNodeConfigKey) ?? NSNull()
+    return [
+      "key": auroraNodeConfigKey,
+      "value": value,
+      "platform": "ios",
+      "backend": "ios-user-defaults",
+      "persisted": true,
+      "privacyClass": "nonsecret-node-config",
+      "secretsRedacted": true,
+      "allowedGenericSecureStorage": false
+    ]
+  }
+
+  static func nodeConfigSet(value: String) throws -> [String: Any] {
+    guard value.utf8.count <= 65_536 else {
+      throw AuroraThinStorageError.nodeConfigTooLarge
+    }
+    UserDefaults.standard.set(value, forKey: auroraNodeConfigKey)
+    return [
+      "key": auroraNodeConfigKey,
+      "ok": true,
+      "platform": "ios",
+      "backend": "ios-user-defaults",
+      "persisted": true,
+      "privacyClass": "nonsecret-node-config",
+      "secretsRedacted": true,
+      "allowedGenericSecureStorage": false
+    ]
+  }
+
+  static func nodeConfigDelete() -> [String: Any] {
+    UserDefaults.standard.removeObject(forKey: auroraNodeConfigKey)
+    return [
+      "key": auroraNodeConfigKey,
+      "ok": true,
+      "platform": "ios",
+      "backend": "ios-user-defaults",
+      "persisted": false,
+      "privacyClass": "nonsecret-node-config",
+      "secretsRedacted": true,
+      "allowedGenericSecureStorage": false
     ]
   }
 

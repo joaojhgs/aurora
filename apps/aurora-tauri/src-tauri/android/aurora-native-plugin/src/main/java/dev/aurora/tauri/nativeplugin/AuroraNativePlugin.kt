@@ -81,6 +81,8 @@ private const val AURORA_ACTION_NOTIFICATION_ID = 4208
 private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
+private const val NODE_CONFIG_PREFS = "aurora_node_config"
+private const val NODE_CONFIG_KEY = "aurora.nodeConfig.v1"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
 private const val VOICE_PACK_CATALOG_KEY = "catalog"
@@ -293,6 +295,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissions.put("aurora.android.thinPeerProof", secureStorageReady)
         permissions.put("aurora.android.inboundVerifierStorage", secureStorageReady)
         permissions.put("aurora.android.thinProfile", true)
+        permissions.put("aurora.android.nodeConfig", true)
         permissions.put("aurora.android.webviewMicMediation", true)
         permissions.put("aurora.android.lifecycleEvents", true)
         permissions.put("aurora.android.adminUnlock", adminUnlock.getBoolean("requestable"))
@@ -338,6 +341,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilities.put("android.thinPeerProof", secureStorageReady)
         capabilities.put("android.inboundVerifierStorage", secureStorageReady)
         capabilities.put("android.thinProfile", true)
+        capabilities.put("android.nodeConfig", true)
         capabilities.put("android.webviewMicMediation", true)
         capabilities.put("android.lifecycleEvents", true)
         capabilities.put("android.adminUnlock", adminUnlock.getBoolean("available"))
@@ -381,6 +385,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         permissionStates.put("aurora.android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.inboundVerifierStorage", if (secureStorageReady) "available" else "unsupported_platform")
         permissionStates.put("aurora.android.thinProfile", "available")
+        permissionStates.put("aurora.android.nodeConfig", "available")
         permissionStates.put("aurora.android.webviewMicMediation", "available")
         permissionStates.put("aurora.android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
         permissionStates.put("aurora.android.adminUnlock", adminUnlock.getString("state"))
@@ -421,6 +426,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         capabilityStates.put("android.thinPeerProof", if (secureStorageReady) "available" else "unsupported_platform")
         capabilityStates.put("android.inboundVerifierStorage", if (secureStorageReady) "available" else "unsupported_platform")
         capabilityStates.put("android.thinProfile", "available")
+        capabilityStates.put("android.nodeConfig", "available")
         capabilityStates.put("android.webviewMicMediation", "available")
         capabilityStates.put("android.lifecycleEvents", if (foreground && focused) "available" else "degraded")
         capabilityStates.put("android.adminUnlock", adminUnlock.getString("state"))
@@ -462,6 +468,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("thinPeerCredentialStorage", thinPeerCredentialStorageStatusObject())
         ret.put("inboundVerifierStorage", inboundVerifierStatusObject())
         ret.put("thinProfileStorage", thinProfileStatusObject())
+        ret.put("nodeConfigStorage", nodeConfigStatusObject())
         ret.put("webviewMicrophonePolicy", webviewMicrophonePolicyStatusObject())
         ret.put("lifecycle", lifecycleStatusObject())
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
@@ -1500,6 +1507,59 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("ok", true)
         ret.put("voiceRoute", syncNativeVoiceRoute())
         scheduleBackgroundVoiceAutoStart()
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun nodeConfigGet(invoke: Invoke) {
+        try {
+            val ret = nodeConfigStatusObject()
+            val stored = activity
+                .getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
+                .getString(NODE_CONFIG_KEY, null)
+            ret.put("key", NODE_CONFIG_KEY)
+            ret.put("value", stored ?: JSONObject.NULL)
+            invoke.resolve(ret)
+        } catch (error: Exception) {
+            invoke.reject(error.message ?: "node_config_get_failed")
+        }
+    }
+
+    @Command
+    fun nodeConfigSet(invoke: Invoke) {
+        val args = invoke.parseArgs(NodeConfigSetArgs::class.java)
+        if (args.value.toByteArray(Charsets.UTF_8).size > 65536) {
+            invoke.reject("node config value length must be <= 65536 bytes")
+            return
+        }
+        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(NODE_CONFIG_KEY, args.value)
+            .commit()
+        if (!committed) {
+            invoke.reject("node_config_set_failed")
+            return
+        }
+        val ret = nodeConfigStatusObject()
+        ret.put("key", NODE_CONFIG_KEY)
+        ret.put("ok", true)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun nodeConfigDelete(invoke: Invoke) {
+        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove(NODE_CONFIG_KEY)
+            .commit()
+        if (!committed) {
+            invoke.reject("node_config_delete_failed")
+            return
+        }
+        val ret = nodeConfigStatusObject()
+        ret.put("key", NODE_CONFIG_KEY)
+        ret.put("ok", true)
+        ret.put("persisted", false)
         invoke.resolve(ret)
     }
 
@@ -3145,6 +3205,17 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return ret
     }
 
+    private fun nodeConfigStatusObject(): JSObject {
+        val ret = JSObject()
+        ret.put("platform", "android")
+        ret.put("backend", "android-private-shared-preferences")
+        ret.put("persisted", true)
+        ret.put("privacyClass", "nonsecret-node-config")
+        ret.put("secretsRedacted", true)
+        ret.put("allowedGenericSecureStorage", false)
+        return ret
+    }
+
     /**
      * Resolve the native voice route from the active runtime profile and the
      * native peer credential store. Both remote-console and mesh-node profiles
@@ -4314,6 +4385,11 @@ class AndroidShowNotificationArgs {
 @InvokeArg
 class SecureStorageArgs {
     var key: String = ""
+    var value: String = ""
+}
+
+@InvokeArg
+class NodeConfigSetArgs {
     var value: String = ""
 }
 

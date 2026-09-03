@@ -86,6 +86,50 @@ export {
 } from './tools.js'
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
+export {
+  AURORA_NODE_RUNTIME_MODULES_BY_POLICY,
+  AURORA_NODE_CONFIG_MODULES,
+  AURORA_NODE_CONFIG_STORAGE_KEY,
+  AURORA_NODE_CONFIG_VERSION,
+  AuroraNodeConfigValidationError,
+  AuroraServiceRoutingError,
+  createAuroraNodeConfigTauriStore,
+  emptyAuroraNodeConfigDocument,
+  isAuroraNodeConfigModule,
+  isAuroraNodeServiceExposed,
+  migrateAuroraNodeConfigDocument,
+  parseAuroraNodeConfigDocument,
+  parseAuroraNodeConfigDocumentWire,
+  resolveServiceRouting,
+  isRuntimeModuleForNodeConfigModule,
+  runtimeModulesForNodeConfigModule,
+  sanitizeAuroraNodeConfigDocument,
+  serializeAuroraNodeConfigDocument
+} from './node-config.js'
+export type {
+  AuroraNodeConfigDocumentV1,
+  AuroraNodeConfigModule,
+  AuroraNodeConfigTauriTransport,
+  AuroraNodeConfigStore,
+  AuroraNodeConfigTauriStoreOptions,
+  AuroraNodeFeatureOverride,
+  AuroraNodeFeatureOverrides,
+  AuroraNodeLocalCapability,
+  AuroraNodeRouteCandidate,
+  AuroraNodeRuntimeModule,
+  AuroraNodeWireSelector,
+  AuroraNodeRoutingFallback,
+  AuroraNodeRoutingPreference,
+  AuroraNodeRoutingResolutionEmitter,
+  AuroraNodeRoutingResolutionRecord,
+  AuroraNodeRoutingAttempt,
+  AuroraNodeServiceConfig,
+  AuroraNodeServiceExposure,
+  AuroraNodeServiceRouting,
+  ResolveServiceRoutingInput,
+  RouteCandidate,
+  ServiceRoutingResolution
+} from './node-config.js'
 export { MockAuroraTransport } from './mock.js'
 export { TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from './tauri.js'
 export { AuthSession } from './session.js'

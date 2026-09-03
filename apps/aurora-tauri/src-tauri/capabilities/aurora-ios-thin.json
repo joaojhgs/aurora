@@ -17,6 +17,7 @@
     "aurora-ios-native-plugin",
     "aurora-ios-voice",
     "aurora-thin-profile",
+    "aurora-node-config",
     "aurora-thin-peer-credentials",
     "aurora-local-data-storage",
     "aurora-mesh-authority",
