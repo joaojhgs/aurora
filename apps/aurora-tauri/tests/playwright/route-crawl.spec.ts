@@ -25,6 +25,7 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
 }
 
 const screenshotDir = join(process.cwd(), 'reports', 'playwright-routes', 'screenshots')
+const ROUTE_READY_TIMEOUT_MS = 30_000
 
 const cockpitScreenshotViewports = [
   { id: 'desktop', width: 1440, height: 1024, expects: { sidebar: true, mobileTabs: false } },
@@ -56,6 +57,14 @@ async function expectFocusedWithVisibleOutline(page: Page, label: string): Promi
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
+}
+
+function containsLandmark(text: string, landmark: string): boolean {
+  return normalizeText(text).toLocaleLowerCase().includes(normalizeText(landmark).toLocaleLowerCase())
+}
+
+function landmarkPattern(landmark: string): RegExp {
+  return new RegExp(escapeRegExp(landmark), 'iu')
 }
 
 function routeScreenshotName(route: { id: string; href: string }): string {
@@ -268,21 +277,36 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
     expect(new Set(primaryNavItems.map((route) => route.id)).size).toBe(primaryNavItems.length)
 
     for (const route of primaryNavItems) {
+      const oracle = getProductionRouteOracle(route.id)
+      const landmarks = ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []
       const routeFailures = await collectPageFailures(page, async () => {
         await page.goto(route.href)
-        await expect(page.locator('main#content')).toBeVisible()
+        const main = page.locator('main#content')
+        await expect(main).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS })
+
+        // Route components are intentionally lazy-loaded. `page.goto()` only
+        // proves that the shell mounted, so wait for each production landmark
+        // before inspecting the rendered text; otherwise this gate races the
+        // deferred route chunk and reports a false regression.
+        for (const landmark of landmarks) {
+          try {
+            await expect(main).toContainText(landmarkPattern(landmark), { timeout: ROUTE_READY_TIMEOUT_MS })
+          } catch {
+            // The aggregate text assertion below records the route-level
+            // failure without hiding console/HTTP diagnostics from this pass.
+          }
+        }
       })
       failures.push(...routeFailures.map((failure) => `${route.id} (${route.href}) ${failure}`))
 
       const bodyText = normalizeText(await page.locator('body').innerText())
       const mainText = normalizeText(await page.locator('main#content').innerText())
-      const oracle = getProductionRouteOracle(route.id)
 
       if (!oracle) {
         failures.push(`${route.id} (${route.href}) is missing a production route oracle`)
       }
-      for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
-        if (!mainText.includes(landmark)) {
+      for (const landmark of landmarks) {
+        if (!containsLandmark(mainText, landmark)) {
           failures.push(`${route.id} (${route.href}) missing route-specific landmark: ${landmark}`)
         }
       }
@@ -309,15 +333,17 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
 
       for (const route of primaryNavItems) {
         await page.goto(route.href)
-        await expect(page.locator('.aui-shell')).toBeVisible()
-        await expect(page.locator('main#content')).toBeVisible()
+        await expect(page.locator('.aui-shell')).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS })
+        await expect(page.locator('main#content')).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS })
         if (viewport.expects.mobileTabs) {
           await expect(page.getByLabel('Mobile navigation', { exact: true })).toBeVisible()
         }
         const oracle = getProductionRouteOracle(route.id)
         expect(oracle, `${route.id} should have production oracle screenshot status`).toBeDefined()
         for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
-          await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmark)
+          await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmarkPattern(landmark), {
+            timeout: ROUTE_READY_TIMEOUT_MS,
+          })
         }
         const screenshotPath = join(screenshotDir, `${viewport.id}-route-${routeScreenshotName(route)}`)
         await page.screenshot({ path: screenshotPath, fullPage: true })

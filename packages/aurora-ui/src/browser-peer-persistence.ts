@@ -20,10 +20,16 @@ import {
   type AuroraRuntimeProfileDocumentV2,
 } from './runtime-profile'
 import {
+  parseAuroraNodeConfigDocument,
+  serializeAuroraNodeConfigDocument,
+  type AuroraNodeConfigDocumentV1,
+} from '@aurora/client/node-config'
+import {
   BROWSER_PEER_CREDENTIAL_PREFIX as CREDENTIAL_PREFIX,
   BROWSER_PEER_INBOUND_VERIFIER_KEY_PREFIX as INBOUND_VERIFIER_KEY_PREFIX,
   BROWSER_PEER_INBOUND_VERIFIER_PREFIX as INBOUND_VERIFIER_PREFIX,
   BROWSER_PEER_MESH_PROFILES_KEY as MESH_PROFILES_KEY,
+  BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY as NODE_CONFIG_DOCUMENT_KEY,
   BROWSER_PEER_PROFILE_KEY as PROFILE_KEY,
   BROWSER_PEER_ROOM_PREFIX as ROOM_PREFIX,
   BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY as RUNTIME_PROFILE_DOCUMENT_KEY,
@@ -37,6 +43,7 @@ import {
 } from './browser-peer-persistence-keys'
 
 export {
+  BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY,
   BROWSER_PEER_VAULT_DATABASE_NAME,
   clearBrowserPeerProfileMetadata,
 } from './browser-peer-persistence-keys'
@@ -90,6 +97,8 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   loadThinProfileDocument(): ThinProfileDocument | null
   saveRuntimeProfileDocument(document: AuroraRuntimeProfileDocumentV2): void
   loadRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 | null
+  saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): void
+  loadNodeConfigDocument(): AuroraNodeConfigDocumentV1 | null
   getOrCreateLocalStablePeerId(): string
   persistenceStatus(): BrowserPeerPersistenceStatus
 }
@@ -266,6 +275,25 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     return parsed
   }
 
+  saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): void {
+    this.assertOpen()
+    this.writeMetadata(NODE_CONFIG_DOCUMENT_KEY, serializeAuroraNodeConfigDocument(document))
+  }
+
+  loadNodeConfigDocument(): AuroraNodeConfigDocumentV1 | null {
+    this.assertOpen()
+    const encoded = this.readMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    if (!encoded) return null
+    const parsed = parseAuroraNodeConfigDocument(encoded)
+    if (parsed) {
+      const serialized = serializeAuroraNodeConfigDocument(parsed)
+      if (serialized !== encoded && this.metadataUsable) this.writeMetadata(NODE_CONFIG_DOCUMENT_KEY, serialized)
+      return parsed
+    }
+    this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    return null
+  }
+
   setRoomSecret(ref: string, value: string): void {
     this.assertOpen()
     assertStorageKey('room secret reference', ref)
@@ -401,6 +429,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.removeMetadata(MESH_PROFILES_KEY)
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
+    this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)
     if (vaultClearError !== undefined) {
       throw vaultClearError

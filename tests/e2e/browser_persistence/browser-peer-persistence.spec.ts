@@ -24,6 +24,7 @@ test.beforeAll(async () => {
         <script type="importmap">
           {"imports":{
             "@aurora/client/webrtc":"/packages/aurora-sdk/dist/webrtc/credentials.js",
+            "@aurora/client/node-config":"/packages/aurora-sdk/dist/node-config.js",
             "@noble/hashes/":"/packages/aurora-sdk/node_modules/@noble/hashes/"
           }}
         </script>

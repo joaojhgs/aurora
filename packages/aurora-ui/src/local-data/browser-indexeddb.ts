@@ -566,6 +566,33 @@ export class BrowserConversationRepository {
       .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
   }
 
+  async listMessageCounts(): Promise<Record<string, number>> {
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const counts: Record<string, number> = {}
+      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      for (const message of this.session.mutable.messages) {
+        if (!conversationIds.has(message.conversationId)) continue
+        counts[message.conversationId] = (counts[message.conversationId] ?? 0) + 1
+      }
+      return counts
+    })
+  }
+
+  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const firstByConversation = new Map<string, ConversationMessageRecord>()
+      for (const message of this.session.mutable.messages) {
+        if (message.role !== 'user' || !conversationIds.has(message.conversationId)) continue
+        const current = firstByConversation.get(message.conversationId)
+        if (current === undefined || message.sequence < current.sequence || (message.sequence === current.sequence && compareUtf8(message.id, current.id) < 0)) {
+          firstByConversation.set(message.conversationId, message)
+        }
+      }
+      return Object.fromEntries(Array.from(firstByConversation.entries(), ([conversationId, message]) => [conversationId, clone(message)]))
+    })
+  }
+
   async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
     return await this.session.withRepositoryAccess(this.access, false, () => {
       if (!this.session.mutable.conversations.some((conversation) => conversation.id === conversationId && conversation.profileId === this.session.profileId && conversation.localNodeId === this.session.localNodeId)) return []

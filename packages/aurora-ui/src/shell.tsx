@@ -230,9 +230,6 @@ export function AppShell({
               <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
             </strong>
           </span>
-          <span className="sr-only" aria-label="Aurora readiness">
-            Aurora pages are ready
-          </span>
           <Button
             type="button"
             variant="ghost"
@@ -259,10 +256,6 @@ export function AppShell({
               "aui-activity min-w-0 shrink-0 overflow-hidden border-l bg-background",
               activityRailCollapsed ? "border-transparent" : "border-border",
             )}
-            style={{
-              width: activityRailCollapsed ? 0 : 280,
-              transition: "width 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease",
-            }}
             aria-label="Aurora activity"
             aria-hidden={activityRailCollapsed}
             inert={activityRailCollapsed}

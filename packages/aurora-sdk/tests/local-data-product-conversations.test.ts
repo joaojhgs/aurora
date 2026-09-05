@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createLocalConversations } from '../src/local-data/conversations.js'
 import { LocalDataError, MemoryLocalDataBackend } from '../src/local-data/index.js'
@@ -33,6 +33,24 @@ describe('local-data product conversation facade', () => {
       messageFixture({ id: 'message-1', conversationId: 'conversation-a', sequence: 1 }),
       messageFixture({ id: 'message-2', conversationId: 'conversation-a', sequence: 2 })
     ])
+  })
+
+  it('uses one batched count read instead of loading every conversation body', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-a' }) })
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-b' }) })
+    await conversations.appendMessage({ scope, record: messageFixture({ id: 'message-1', conversationId: 'conversation-a', sequence: 0 }) })
+
+    const listMessages = vi.spyOn(session.conversations, 'listMessages')
+    const listMessageCounts = vi.spyOn(session.conversations, 'listMessageCounts')
+
+    await expect(conversations.listConversations({ scope })).resolves.toMatchObject([
+      { record: { id: 'conversation-a' }, messageCount: 1 },
+      { record: { id: 'conversation-b' }, messageCount: 0 }
+    ])
+    expect(listMessageCounts).toHaveBeenCalledTimes(1)
+    expect(listMessages).not.toHaveBeenCalled()
   })
 
   it('archives and deletes only scoped local history with repository cascade semantics', async () => {
