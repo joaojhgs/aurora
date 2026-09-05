@@ -1323,6 +1323,93 @@ def test_pending_unknown_revoked_and_empty_active_states_are_non_routable() -> N
         assert reason_counts(result) == {reason: 1}
 
 
+def test_projection_exports_only_authorized_and_eligible_registry_readiness_subset() -> None:
+    """Projection eligibility is enforced here; resource scopes stay in the authority corpus."""
+
+    reg = registry(
+        service(
+            "Config",
+            methods=(
+                method(
+                    "Config.Set",
+                    method_type="manage",
+                    perms=("Config.manage",),
+                    features=("config_admin",),
+                ),
+            ),
+            feature_members={"config_admin": ("Config.Set",)},
+        ),
+        service(
+            "TTS",
+            methods=(
+                method("TTS.Internal", exposure="internal", perms=("TTS.Internal",)),
+                method("TTS.Speak", perms=("TTS.Speak",), features=("speech",)),
+                method("TTS.Stream", perms=("TTS.Stream",), features=("speech",)),
+                method("TTS.UnsharedFeature", features=("hidden",)),
+            ),
+            feature_members={
+                "hidden": ("TTS.UnsharedFeature",),
+                "speech": ("TTS.Speak", "TTS.Stream"),
+            },
+        ),
+        service(
+            "Tooling",
+            methods=(
+                method(
+                    "Tooling.ExecuteTool",
+                    perms=("Tooling.ExecuteTool",),
+                    features=("remote_tools",),
+                ),
+                method("Tooling.ListTools", perms=("Tooling.ListTools",)),
+            ),
+            feature_members={"remote_tools": ("Tooling.ExecuteTool",)},
+        ),
+    )
+    pol = policy(
+        ServiceExportPolicy("Config", share=False),
+        ServiceExportPolicy("TTS", share=True, unshared_feature_ids=("hidden",)),
+        ServiceExportPolicy("Tooling", share=True),
+    )
+    rec = recipient(
+        "Config.manage",
+        "TTS.Internal",
+        "TTS.Speak",
+        "TTS.UnsharedFeature",
+        "Tooling.ExecuteTool",
+        "Tooling.MissingRegistryEntry",
+        revision=10,
+    )
+
+    result = project(reg=reg, pol=pol, rec=rec)
+    narrowed = project(reg=reg, pol=pol, rec=replace(rec, grants=(GrantEvidence("TTS.Speak"),)))
+    revoked = project(reg=reg, pol=pol, rec=recipient("TTS.Speak", state="revoked", revision=11))
+
+    assert result.readiness == "ready"
+    assert result.routable is True
+    assert topics(result) == ["TTS.Speak", "Tooling.ExecuteTool"]
+    assert [service.feature_ids for service in result.services] == [
+        (),
+        ("remote_tools",),
+    ]
+    assert reason_counts(result) == {
+        "exposure_not_exportable": 1,
+        "feature_unshared": 1,
+        "permissions_denied": 2,
+        "service_not_shared": 1,
+    }
+    assert topics(narrowed) == ["TTS.Speak"]
+    assert set(topics(narrowed)).issubset(topics(result))
+    assert revoked.services == ()
+    assert revoked.readiness == "revoked"
+    assert revoked.routable is False
+    assert reason_counts(revoked) == {
+        "authority_revoked": 4,
+        "exposure_not_exportable": 1,
+        "feature_unshared": 1,
+        "service_not_shared": 1,
+    }
+
+
 def test_protocol_contract_activates_projection_v1() -> None:
     protocol = ProtocolEvidence()
 
