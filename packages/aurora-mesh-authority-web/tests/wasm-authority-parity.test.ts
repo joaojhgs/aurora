@@ -42,6 +42,10 @@ function corpus(): any {
 
 const CORPUS = corpus()
 
+type ToolContractProjection = {
+  readonly grantedToolContractIds?: readonly string[]
+}
+
 async function storeWith(grants: readonly LocalPeerGrantV1[]): Promise<WasmPeerHostAuthorizationStore> {
   const store = await WasmPeerHostAuthorizationStore.create(nodeWasmSource)
   await store.hydrate([], grants)
@@ -153,6 +157,12 @@ describe('WASM mesh authority', () => {
       expect(decision.grantedMethodIds, `${entry.name}: grantedMethodIds`).toEqual(
         entry.expected.grantedMethodIds
       )
+      if (entry.expected.grantedToolContractIds !== undefined) {
+        expect(
+          (decision as ToolContractProjection).grantedToolContractIds,
+          `${entry.name}: grantedToolContractIds`
+        ).toEqual(entry.expected.grantedToolContractIds)
+      }
       store.free()
     }
   })
@@ -173,6 +183,12 @@ describe('WASM mesh authority', () => {
       expect(snapshot.grantedMethodIds, `${entry.name}: grantedMethodIds`).toEqual(
         entry.expected.grantedMethodIds
       )
+      if (entry.expected.grantedToolContractIds !== undefined) {
+        expect(
+          (snapshot as ToolContractProjection).grantedToolContractIds,
+          `${entry.name}: grantedToolContractIds`
+        ).toEqual(entry.expected.grantedToolContractIds)
+      }
       expect(snapshot.authGrantRevision, `${entry.name}: authGrantRevision`).toBe(
         entry.expected.authGrantRevision
       )

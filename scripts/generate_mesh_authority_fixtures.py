@@ -407,6 +407,101 @@ def grant_resolution_section() -> dict[str, Any]:
                 note="",
             ),
             case(
+                "mixed_grants_require_active_same_peer_same_token_full_dimension_coverage",
+                hostile=False,
+                grants=[
+                    grant(
+                        "grant-expired-full",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        expires_at_ms=1_500,
+                        revision=8,
+                    ),
+                    grant(
+                        "grant-revoked-full",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        revoked_at_ms=1_600,
+                        revision=7,
+                    ),
+                    grant(
+                        "grant-wrong-peer-full",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        claimant=PEER_B,
+                        revision=6,
+                    ),
+                    grant(
+                        "grant-wrong-token-full",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        token_id=TOKEN_B,
+                        revision=5,
+                    ),
+                    grant(
+                        "grant-active-narrow",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/public"],
+                        revision=4,
+                    ),
+                    grant(
+                        "grant-active-full",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        revision=3,
+                    ),
+                ],
+                request={
+                    "selector": selector(),
+                    "methodId": "Tooling.ExecuteTool",
+                    "toolContractId": "tool.calendar",
+                    "capabilityPackId": "pack.notes",
+                    "resourceScope": "notes/2024",
+                    "nowMs": 2_000,
+                },
+                expected={"allowed": True, "grantId": "grant-active-full"},
+                note=(
+                    "Positive control: expired, revoked, wrong-peer, wrong-token and narrowed "
+                    "resource grants cannot widen authority; only the active matching grant "
+                    "answers all requested dimensions."
+                ),
+            ),
+            case(
+                "narrower_active_grant_does_not_widen_resource_scope",
+                hostile=True,
+                grants=[
+                    grant(
+                        "grant-active-narrow",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/public"],
+                    )
+                ],
+                request={
+                    "selector": selector(),
+                    "methodId": "Tooling.ExecuteTool",
+                    "toolContractId": "tool.calendar",
+                    "capabilityPackId": "pack.notes",
+                    "resourceScope": "notes/private",
+                    "nowMs": 2_000,
+                },
+                expected={"allowed": False, "reasonCode": "resource_not_granted"},
+                note="A resource grant for one scope is not a prefix or wildcard grant for another.",
+            ),
+            case(
                 "newest_revision_is_tried_first_then_older_covers",
                 hostile=False,
                 grants=[
@@ -676,6 +771,73 @@ def authority_authorize_section() -> dict[str, Any]:
                 },
             ),
             case(
+                "allows_only_active_matching_tool_grant_from_mixed_corpus",
+                hostile=False,
+                grants=[
+                    grant(
+                        "grant-expired-tool",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        expires_at_ms=1_500,
+                        revision=8,
+                    ),
+                    grant(
+                        "grant-revoked-tool",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        revoked_at_ms=1_600,
+                        revision=7,
+                    ),
+                    grant(
+                        "grant-wrong-peer-tool",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        claimant=PEER_B,
+                        revision=6,
+                    ),
+                    grant(
+                        "grant-wrong-token-tool",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        token_id=TOKEN_B,
+                        revision=5,
+                    ),
+                    grant(
+                        "grant-active-tool",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        revision=4,
+                    ),
+                ],
+                request={
+                    "remotePeerId": PEER_A,
+                    "methodId": "Tooling.ExecuteTool",
+                    "authenticatedPeerContext": context(),
+                    "nowMs": 2_000,
+                },
+                expected={
+                    "allowed": True,
+                    "grantRevision": 4,
+                    "grantedMethodIds": ["Tooling.ExecuteTool"],
+                    "grantedToolContractIds": ["tool.calendar"],
+                },
+                note=(
+                    "Active/expired/revoked/wrong-peer/wrong-token corpus for the durable "
+                    "authority path; only the active matching selector contributes exportable "
+                    "tool authority."
+                ),
+            ),
+            case(
                 "denies_an_unauthenticated_caller",
                 hostile=True,
                 grants=[live],
@@ -827,6 +989,76 @@ def manifest_snapshot_section() -> dict[str, Any]:
                     "authGrantRevision": 5,
                     "authGrantState": "active",
                 },
+            },
+            {
+                "name": "aggregates_only_active_matching_tool_exports_for_the_proven_peer",
+                "hostile": False,
+                "grants": [
+                    grant(
+                        "grant-active-calendar",
+                        methods=["Tooling.ExecuteTool"],
+                        tools=["tool.calendar"],
+                        capabilities=["pack.notes"],
+                        scopes=["notes/2024"],
+                        revision=4,
+                    ),
+                    grant(
+                        "grant-active-files",
+                        methods=["Tooling.GetTools"],
+                        tools=["tool.files"],
+                        capabilities=["pack.files"],
+                        scopes=["files/public"],
+                        revision=5,
+                    ),
+                    grant(
+                        "grant-expired-extra",
+                        methods=["Tooling.DeleteTool"],
+                        tools=["tool.admin"],
+                        capabilities=["pack.admin"],
+                        scopes=["admin/private"],
+                        expires_at_ms=1_500,
+                        revision=9,
+                    ),
+                    grant(
+                        "grant-revoked-extra",
+                        methods=["Tooling.SetPolicyMode"],
+                        tools=["tool.policy"],
+                        revoked_at_ms=1_600,
+                        revision=8,
+                    ),
+                    grant(
+                        "grant-wrong-peer-extra",
+                        methods=["TTS.Request"],
+                        tools=["tool.tts"],
+                        claimant=PEER_B,
+                        revision=7,
+                    ),
+                    grant(
+                        "grant-wrong-token-extra",
+                        methods=["Config.Set"],
+                        tools=["tool.config"],
+                        token_id=TOKEN_B,
+                        revision=6,
+                    ),
+                ],
+                "request": {
+                    "remotePeerId": PEER_A,
+                    "authenticatedPeerContext": context(),
+                    "nowMs": 2_000,
+                },
+                "expected": {
+                    "recipientPeerId": PEER_A,
+                    "grantedMethodIds": ["Tooling.ExecuteTool", "Tooling.GetTools"],
+                    "grantedPermissions": [],
+                    "grantedToolContractIds": ["tool.calendar", "tool.files"],
+                    "authGrantRevision": 5,
+                    "authGrantState": "active",
+                },
+                "note": (
+                    "Exported tool authority is the subset of live grants for the authenticated "
+                    "peer/token; expired, revoked, wrong-peer and wrong-token records do not widen "
+                    "the manifest."
+                ),
             },
             {
                 "name": "advertises_nothing_without_a_proven_identity",

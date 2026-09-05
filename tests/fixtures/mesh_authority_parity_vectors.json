@@ -53,6 +53,155 @@
       },
       {
         "expected": {
+          "allowed": true,
+          "grantRevision": 4,
+          "grantedMethodIds": [
+            "Tooling.ExecuteTool"
+          ],
+          "grantedToolContractIds": [
+            "tool.calendar"
+          ]
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-expired-tool",
+            "grantRevision": 8,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked-tool",
+            "grantRevision": 7,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "revokedAtMs": 1600,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-peer-tool",
+            "grantRevision": 6,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-token-tool",
+            "grantRevision": 5,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-tool",
+            "grantRevision": 4,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "allows_only_active_matching_tool_grant_from_mixed_corpus",
+        "note": "Active/expired/revoked/wrong-peer/wrong-token corpus for the durable authority path; only the active matching selector contributes exportable tool authority.",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "methodId": "Tooling.ExecuteTool",
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
           "allowed": false,
           "reasonCode": "peer_not_authenticated"
         },
@@ -931,6 +1080,210 @@
           "methodId": "Tooling.GetTools",
           "nowMs": 2000,
           "resourceScope": "notes/2024",
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": true,
+          "grantId": "grant-active-full"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-expired-full",
+            "grantRevision": 8,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked-full",
+            "grantRevision": 7,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "revokedAtMs": 1600,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-peer-full",
+            "grantRevision": 6,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-token-full",
+            "grantRevision": 5,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-narrow",
+            "grantRevision": 4,
+            "resourceScopes": [
+              "notes/public"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-full",
+            "grantRevision": 3,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "mixed_grants_require_active_same_peer_same_token_full_dimension_coverage",
+        "note": "Positive control: expired, revoked, wrong-peer, wrong-token and narrowed resource grants cannot widen authority; only the active matching grant answers all requested dimensions.",
+        "request": {
+          "capabilityPackId": "pack.notes",
+          "methodId": "Tooling.ExecuteTool",
+          "nowMs": 2000,
+          "resourceScope": "notes/2024",
+          "selector": {
+            "claimantPeerId": "peer-a",
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host"
+          },
+          "toolContractId": "tool.calendar"
+        }
+      },
+      {
+        "expected": {
+          "allowed": false,
+          "reasonCode": "resource_not_granted"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-narrow",
+            "grantRevision": 1,
+            "resourceScopes": [
+              "notes/public"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": true,
+        "name": "narrower_active_grant_does_not_widen_resource_scope",
+        "note": "A resource grant for one scope is not a prefix or wildcard grant for another.",
+        "request": {
+          "capabilityPackId": "pack.notes",
+          "methodId": "Tooling.ExecuteTool",
+          "nowMs": 2000,
+          "resourceScope": "notes/private",
           "selector": {
             "claimantPeerId": "peer-a",
             "roomName": "lab-room",
@@ -1845,6 +2198,168 @@
         ],
         "hostile": false,
         "name": "aggregates_live_grants_for_the_proven_peer",
+        "request": {
+          "authenticatedPeerContext": {
+            "authenticatedAtMs": 500,
+            "credentialRevision": 1,
+            "selector": {
+              "claimantPeerId": "peer-a",
+              "roomName": "lab-room",
+              "tokenId": "token-a",
+              "verifierPeerId": "peer-host"
+            },
+            "transport": {
+              "channelBinding": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "claimantSignalingPeerId": "sig-a",
+              "verifierSignalingPeerId": "sig-host"
+            }
+          },
+          "nowMs": 2000,
+          "remotePeerId": "peer-a"
+        }
+      },
+      {
+        "expected": {
+          "authGrantRevision": 5,
+          "authGrantState": "active",
+          "grantedMethodIds": [
+            "Tooling.ExecuteTool",
+            "Tooling.GetTools"
+          ],
+          "grantedPermissions": [],
+          "grantedToolContractIds": [
+            "tool.calendar",
+            "tool.files"
+          ],
+          "recipientPeerId": "peer-a"
+        },
+        "grants": [
+          {
+            "allowedMethodIds": [
+              "Tooling.ExecuteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.calendar"
+            ],
+            "capabilityPackIds": [
+              "pack.notes"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-calendar",
+            "grantRevision": 4,
+            "resourceScopes": [
+              "notes/2024"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.GetTools"
+            ],
+            "allowedToolContractIds": [
+              "tool.files"
+            ],
+            "capabilityPackIds": [
+              "pack.files"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-active-files",
+            "grantRevision": 5,
+            "resourceScopes": [
+              "files/public"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.DeleteTool"
+            ],
+            "allowedToolContractIds": [
+              "tool.admin"
+            ],
+            "capabilityPackIds": [
+              "pack.admin"
+            ],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "expiresAtMs": 1500,
+            "grantId": "grant-expired-extra",
+            "grantRevision": 9,
+            "resourceScopes": [
+              "admin/private"
+            ],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Tooling.SetPolicyMode"
+            ],
+            "allowedToolContractIds": [
+              "tool.policy"
+            ],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-revoked-extra",
+            "grantRevision": 8,
+            "resourceScopes": [],
+            "revokedAtMs": 1600,
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "TTS.Request"
+            ],
+            "allowedToolContractIds": [
+              "tool.tts"
+            ],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-b",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-peer-extra",
+            "grantRevision": 7,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-a",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          },
+          {
+            "allowedMethodIds": [
+              "Config.Set"
+            ],
+            "allowedToolContractIds": [
+              "tool.config"
+            ],
+            "capabilityPackIds": [],
+            "claimantPeerId": "peer-a",
+            "createdAtMs": 1000,
+            "grantId": "grant-wrong-token-extra",
+            "grantRevision": 6,
+            "resourceScopes": [],
+            "roomName": "lab-room",
+            "tokenId": "token-b",
+            "verifierPeerId": "peer-host",
+            "version": 1
+          }
+        ],
+        "hostile": false,
+        "name": "aggregates_only_active_matching_tool_exports_for_the_proven_peer",
+        "note": "Exported tool authority is the subset of live grants for the authenticated peer/token; expired, revoked, wrong-peer and wrong-token records do not widen the manifest.",
         "request": {
           "authenticatedPeerContext": {
             "authenticatedAtMs": 500,
