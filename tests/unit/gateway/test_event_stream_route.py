@@ -300,7 +300,10 @@ async def test_event_stream_route_delivers_backfilled_event_over_http_sse():
 
     async def send(message: dict[str, Any]) -> None:
         messages.append(message)
-        if message["type"] == "http.response.body" and message.get("body"):
+        if (
+            message["type"] == "http.response.body"
+            and b"id: evt-http-1" in message.get("body", b"")
+        ):
             raise _StopStreamingError
 
     with pytest.raises(_StopStreamingError):
@@ -328,10 +331,19 @@ async def test_event_stream_route_delivers_backfilled_event_over_http_sse():
         )
 
     start = next(message for message in messages if message["type"] == "http.response.start")
-    body = next(message["body"] for message in messages if message["type"] == "http.response.body")
+    body = next(
+        message["body"]
+        for message in messages
+        if message["type"] == "http.response.body" and b"id: evt-http-1" in message.get("body", b"")
+    )
     lines = body.decode().splitlines()
 
     assert start["status"] == 200
+    assert any(
+        message.get("body") == b": aurora-event-stream\n\n"
+        for message in messages
+        if message["type"] == "http.response.body"
+    )
     assert lines[0] == "id: evt-http-1"
     assert lines[1] == "event: assistant.completed"
     assert '"correlation_id":"corr-http-1"' in lines[2]
