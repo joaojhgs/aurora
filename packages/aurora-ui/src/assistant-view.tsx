@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from 'react'
+import { memo, Profiler, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent, type ProfilerOnRenderCallback } from 'react'
 import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
@@ -79,6 +79,7 @@ import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoic
 import type { NativeMobileVoiceBackgroundResult, NativeMobileVoicePort } from './native-mobile-voice'
 import type { AuroraBrowserSpeechPacksRuntimeStatus } from './browser-speech-pack'
 import { assistantStreamTextStore } from './assistant-stream-store'
+import { ensureAuroraReactProfiler, recordAuroraReactProfilerSample } from './react-profiler'
 import {
   createLightweightAssistantOrchestrator,
   isLightweightLocalAssistantAvailable,
@@ -86,6 +87,34 @@ import {
 } from './local-assistant/lightweight-assistant'
 
 const NATIVE_MOBILE_BACKGROUND_STATUS_TIMEOUT_MS = 100
+
+ensureAuroraReactProfiler()
+
+const recordAssistantMessageProfilerRender: ProfilerOnRenderCallback = (
+  id,
+  phase,
+  actualDuration,
+  baseDuration,
+  startTime,
+  commitTime
+) => {
+  const prefix = 'assistant-message:'
+  const streamMessageId = id.startsWith(prefix) ? id.slice(prefix.length) : undefined
+  recordAuroraReactProfilerSample({
+    id,
+    phase,
+    actualDuration,
+    baseDuration,
+    startTime,
+    commitTime,
+    ...(streamMessageId
+      ? {
+          streamMessageId,
+          streamRevision: assistantStreamTextStore.getRevision(streamMessageId)
+        }
+      : {})
+  })
+}
 export interface AssistantViewProps {
   client: AuroraClient
   route: RouteAvailability
@@ -3805,13 +3834,25 @@ export function AssistantView({
                   ) : (
                     sessionMessages.map((message) => (
                       <MessageScrollerItem key={message.id} messageId={message.id}>
-                        <ChatBubble
-                          message={message}
-                          onReadAloud={stableReadAssistantMessageAloud}
-                          onResolveToolApproval={stableResolveAssistantToolApproval}
-                          speakingMessageId={speakingMessageIdState}
-                          executionPeerLabels={executionPeerLabels}
-                        />
+                        {message.status === 'streaming' ? (
+                          <Profiler id={`assistant-message:${message.id}`} onRender={recordAssistantMessageProfilerRender}>
+                            <ChatBubble
+                              message={message}
+                              onReadAloud={stableReadAssistantMessageAloud}
+                              onResolveToolApproval={stableResolveAssistantToolApproval}
+                              speakingMessageId={speakingMessageIdState}
+                              executionPeerLabels={executionPeerLabels}
+                            />
+                          </Profiler>
+                        ) : (
+                          <ChatBubble
+                            message={message}
+                            onReadAloud={stableReadAssistantMessageAloud}
+                            onResolveToolApproval={stableResolveAssistantToolApproval}
+                            speakingMessageId={speakingMessageIdState}
+                            executionPeerLabels={executionPeerLabels}
+                          />
+                        )}
                       </MessageScrollerItem>
                     ))
                   )}
