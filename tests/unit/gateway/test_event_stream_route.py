@@ -300,9 +300,8 @@ async def test_event_stream_route_delivers_backfilled_event_over_http_sse():
 
     async def send(message: dict[str, Any]) -> None:
         messages.append(message)
-        if (
-            message["type"] == "http.response.body"
-            and b"id: evt-http-1" in message.get("body", b"")
+        if message["type"] == "http.response.body" and b"id: evt-http-1" in message.get(
+            "body", b""
         ):
             raise _StopStreamingError
 
