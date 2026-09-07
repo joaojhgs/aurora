@@ -834,6 +834,10 @@ describe('generated backend contracts', () => {
       'TTS.StreamStart',
       'TTS.StreamChunk',
       'TTS.StreamEnd',
+      'TTS.StreamPrepareV1',
+      'TTS.StreamStatus',
+      'TTS.StreamCancel',
+      'TTS.StreamResult',
       'TTS.Synthesize',
       'STTCoordinator.Listen',
       'STTCoordinator.StopListening',
@@ -842,11 +846,30 @@ describe('generated backend contracts', () => {
       'STTCoordinator.CaptureStatus',
       'WakeWord.ProcessAudio',
       'WakeWord.Detect',
+      'WakeWord.StreamStart',
+      'WakeWord.StreamChunk',
+      'WakeWord.StreamEnd',
+      'WakeWord.StreamCancel',
+      'WakeWord.StreamStatus',
+      'WakeWord.StreamResult',
       'Transcription.ProcessAudio',
       'Transcription.Transcribe',
+      'Transcription.StreamStart',
+      'Transcription.StreamChunk',
+      'Transcription.StreamEnd',
+      'Transcription.StreamCancel',
+      'Transcription.StreamStatus',
+      'Transcription.StreamResult',
+      'VAD.Detect',
+      'VAD.StreamStart',
+      'VAD.StreamChunk',
+      'VAD.StreamEnd',
+      'VAD.StreamCancel',
+      'VAD.StreamStatus',
+      'VAD.StreamResult',
     ])
-    expect(contractSchema.schemas).toHaveLength(80)
-    expect(contractSchema.method_descriptors).toHaveLength(38)
+    expect(contractSchema.schemas).toHaveLength(126)
+    expect(contractSchema.method_descriptors).toHaveLength(61)
     expect(contractSchema.event_descriptors).toHaveLength(3)
     expect(contractSchema.envelope_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
@@ -979,10 +1002,32 @@ describe('generated backend contracts', () => {
     )
   })
 
+  it('materializes defaults for the typed TTS stream admission response', () => {
+    const schema = backendContractSchemaById['TTS.StreamPrepareV1.output.TTSStreamPrepareResponse']
+    const parsed = schema.parse({
+      attempt_id: 'attempt-1',
+      capability_revision: 1,
+      generation: 0,
+      operation_id: 'tts-operation-1',
+      reason_code: 'admitted',
+      session_id: 'tts-session-1',
+      status: 'admitted'
+    }) as { accepted_limits?: Record<string, number> }
+    expect(parsed.accepted_limits).toEqual({
+      heartbeat_ms: 5000,
+      idle_lease_ms: 15000,
+      max_active_ms: 300000,
+      max_chunk_bytes: 65536,
+      max_input_bytes: 4194304,
+      max_queue: 4,
+      max_text_bytes: 4096
+    })
+  })
+
   it('keeps generated method descriptors aligned with SDK coverage and streaming metadata', () => {
     const descriptorIds = backendContractMethodDescriptors.map((descriptor) => descriptor.method_id)
     expect(descriptorIds).toEqual(contractSchema.allowlist)
-    expect(new Set(descriptorIds).size).toBe(38)
+    expect(new Set(descriptorIds).size).toBe(61)
     expect(Object.keys(backendContractMethodDescriptorById).sort()).toEqual([...descriptorIds].sort())
 
     for (const methodId of ['TTS.StreamStart', 'TTS.StreamChunk', 'TTS.StreamEnd'] as const) {

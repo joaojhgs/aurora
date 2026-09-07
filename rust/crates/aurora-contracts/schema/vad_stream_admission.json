@@ -77,7 +77,16 @@
       "title": "Accepted Format"
     },
     "accepted_limits": {
-      "$ref": "#/$defs/SpeechStreamLimitsV1"
+      "$ref": "#/$defs/SpeechStreamLimitsV1",
+      "default": {
+        "heartbeat_ms": 5000,
+        "idle_lease_ms": 15000,
+        "max_active_ms": 300000,
+        "max_chunk_bytes": 65536,
+        "max_input_bytes": 4194304,
+        "max_queue": 4,
+        "max_text_bytes": 4096
+      }
     },
     "attempt_id": {
       "maxLength": 128,

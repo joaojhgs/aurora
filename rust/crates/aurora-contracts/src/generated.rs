@@ -926,7 +926,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.StreamPrepareV1",
         direction: "output",
         model_name: "TTSStreamPrepareResponse",
-        schema_hash: "1781d52f9ef26f1358c96e079a2ee299fe26340f5527189254f04f1fb0605729",
+        schema_hash: "22a0dbaa2750ba5cc4a6a23bd0f0e92ba892bb1f5313f0860bf54691cb6eca76",
         schema_json: include_str!("../schema/tts_stream_prepare_response.json"),
     },
     SchemaDescriptor {
@@ -1230,7 +1230,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Transcription.StreamStart",
         direction: "output",
         model_name: "TranscriptionStreamAdmission",
-        schema_hash: "d25cf737be1565db5e264b9340969326a59bbd1ffab51c298e9e7694c395d3ac",
+        schema_hash: "d86ef01934340de3aac53b956228364ac5a3f7f107035a04fc177032ac497f14",
         schema_json: include_str!("../schema/transcription_stream_admission.json"),
     },
     SchemaDescriptor {
@@ -1358,7 +1358,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "VAD.StreamStart",
         direction: "output",
         model_name: "VADStreamAdmission",
-        schema_hash: "6078db49bff44065cd68b8ac6851401745adbe61ab4feed8adc32951f72e6089",
+        schema_hash: "60e1c96e83ae3ce9ce0e51aef34338b148b9458f3dee7967840fde41e1caa364",
         schema_json: include_str!("../schema/vad_stream_admission.json"),
     },
     SchemaDescriptor {
@@ -1486,7 +1486,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "WakeWord.StreamStart",
         direction: "output",
         model_name: "WakeWordStreamAdmission",
-        schema_hash: "9d92f75145787252ac6c8586460665612799dc25a239624b9fba63032222be4c",
+        schema_hash: "bbf1328e6d9d1d3df0806129873a8441454eef8a9f1fa5cff829f29c0f60d64b",
         schema_json: include_str!("../schema/wake_word_stream_admission.json"),
     },
     SchemaDescriptor {

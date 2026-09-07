@@ -217,7 +217,12 @@ class SpeechStreamAdmissionV1(IOModel):
     reason_code: str = Field(min_length=1, max_length=80, pattern=_ID_PATTERN)
     capability_revision: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     accepted_format: str | None = Field(default=None, max_length=32)
-    accepted_limits: SpeechStreamLimitsV1 = Field(default_factory=SpeechStreamLimitsV1)
+    accepted_limits: SpeechStreamLimitsV1 = Field(
+        default_factory=SpeechStreamLimitsV1,
+        json_schema_extra={
+            "default": SpeechStreamLimitsV1().model_dump(mode="json"),
+        },
+    )
     next_sequence: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
     credits: int = Field(default=MAX_SPEECH_STAGE_CREDITS, ge=0, le=MAX_SPEECH_STAGE_CREDITS)
     lease_remaining_ms: int = Field(default=15_000, ge=0, le=MAX_SPEECH_STAGE_LEASE_MS)
