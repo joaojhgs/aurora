@@ -95,8 +95,12 @@ class SpeechStageCapabilityV1(IOModel):
     supported_languages: list[str] = Field(default_factory=list, max_length=64)
     model_ids: list[str] = Field(default_factory=list, max_length=64)
     lifecycle: list[SpeechLifecycle] = Field(min_length=1, max_length=2)
-    max_input_bytes: int = Field(default=MAX_SPEECH_STAGE_INPUT_BYTES, gt=0, le=MAX_SPEECH_STAGE_INPUT_BYTES)
-    max_chunk_bytes: int = Field(default=MAX_SPEECH_STAGE_CHUNK_BYTES, gt=0, le=MAX_SPEECH_STAGE_CHUNK_BYTES)
+    max_input_bytes: int = Field(
+        default=MAX_SPEECH_STAGE_INPUT_BYTES, gt=0, le=MAX_SPEECH_STAGE_INPUT_BYTES
+    )
+    max_chunk_bytes: int = Field(
+        default=MAX_SPEECH_STAGE_CHUNK_BYTES, gt=0, le=MAX_SPEECH_STAGE_CHUNK_BYTES
+    )
     max_concurrent: int = Field(default=1, gt=0, le=4)
     max_queue: int = Field(default=MAX_SPEECH_STAGE_QUEUE, ge=0, le=MAX_SPEECH_STAGE_QUEUE)
     lease_ms: int = Field(default=15_000, gt=0, le=MAX_SPEECH_STAGE_LEASE_MS)
@@ -108,7 +112,14 @@ class SpeechStageCapabilityV1(IOModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("method_ids", "supported_formats", "supported_languages", "model_ids", "required_permissions", mode="before")
+    @field_validator(
+        "method_ids",
+        "supported_formats",
+        "supported_languages",
+        "model_ids",
+        "required_permissions",
+        mode="before",
+    )
     @classmethod
     def _dedupe_strings(cls, value: list[str]) -> list[str]:
         if not isinstance(value, list):
@@ -146,16 +157,24 @@ class SpeechExecutionContextV1(IOModel):
     """Per-attempt metadata carried outside speech payload frames."""
 
     schema: Literal["speech-execution-context.v1"] = "speech-execution-context.v1"
-    operation_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    attempt_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    request_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    operation_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    request_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     stage: SpeechStage
     mode: SpeechStageMode
     config_revision: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     route_revision: str = Field(min_length=1, max_length=256)
     capability_revision: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
-    session_id: str | None = Field(default=None, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str | None = Field(
+        default=None, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     consent_revision: str | None = Field(default=None, max_length=256)
     cancellation_ref: str = Field(min_length=1, max_length=256, pattern=_ID_PATTERN)
     remaining_deadline_ms: int = Field(gt=0, le=MAX_SPEECH_STAGE_DEADLINE_MS)
@@ -174,9 +193,15 @@ class SpeechStageAdmissionRequestV1(IOModel):
     schema: Literal["speech-stage-admission.v1"] = "speech-stage-admission.v1"
     stage: SpeechStage
     mode: SpeechStageMode
-    operation_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    attempt_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    request_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    operation_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    request_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     config_revision: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     route_revision: str = Field(min_length=1, max_length=256)
@@ -184,7 +209,9 @@ class SpeechStageAdmissionRequestV1(IOModel):
     target_peer_id: str | None = Field(default=None, max_length=256, pattern=_ID_PATTERN)
     target_resource_id: str | None = Field(default=None, max_length=256, pattern=_ID_PATTERN)
     consent_revision: str | None = Field(default=None, max_length=256)
-    remaining_deadline_ms: int = Field(default=MAX_SPEECH_STAGE_DEADLINE_MS, gt=0, le=MAX_SPEECH_STAGE_DEADLINE_MS)
+    remaining_deadline_ms: int = Field(
+        default=MAX_SPEECH_STAGE_DEADLINE_MS, gt=0, le=MAX_SPEECH_STAGE_DEADLINE_MS
+    )
     exact_selector: bool = False
     experimental_remote: bool = False
 
@@ -194,13 +221,21 @@ class SpeechStageAdmissionRequestV1(IOModel):
 class SpeechStreamLimitsV1(IOModel):
     """Negotiated bounds for one admitted streaming session."""
 
-    max_chunk_bytes: int = Field(default=MAX_SPEECH_STAGE_CHUNK_BYTES, gt=0, le=MAX_SPEECH_STAGE_CHUNK_BYTES)
-    max_input_bytes: int = Field(default=MAX_SPEECH_STAGE_INPUT_BYTES, gt=0, le=MAX_SPEECH_STAGE_INPUT_BYTES)
-    max_text_bytes: int = Field(default=MAX_SPEECH_STAGE_TEXT_BYTES, gt=0, le=MAX_SPEECH_STAGE_TEXT_BYTES)
+    max_chunk_bytes: int = Field(
+        default=MAX_SPEECH_STAGE_CHUNK_BYTES, gt=0, le=MAX_SPEECH_STAGE_CHUNK_BYTES
+    )
+    max_input_bytes: int = Field(
+        default=MAX_SPEECH_STAGE_INPUT_BYTES, gt=0, le=MAX_SPEECH_STAGE_INPUT_BYTES
+    )
+    max_text_bytes: int = Field(
+        default=MAX_SPEECH_STAGE_TEXT_BYTES, gt=0, le=MAX_SPEECH_STAGE_TEXT_BYTES
+    )
     max_queue: int = Field(default=MAX_SPEECH_STAGE_QUEUE, ge=0, le=MAX_SPEECH_STAGE_QUEUE)
     heartbeat_ms: int = Field(default=5_000, gt=0, le=5_000)
     idle_lease_ms: int = Field(default=15_000, gt=0, le=MAX_SPEECH_STAGE_LEASE_MS)
-    max_active_ms: int = Field(default=MAX_SPEECH_STAGE_LEASE_MS, gt=0, le=MAX_SPEECH_STAGE_LEASE_MS)
+    max_active_ms: int = Field(
+        default=MAX_SPEECH_STAGE_LEASE_MS, gt=0, le=MAX_SPEECH_STAGE_LEASE_MS
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -209,9 +244,15 @@ class SpeechStreamAdmissionV1(IOModel):
     """Owner-bound start acknowledgement for ``speech.stage_session.v1``."""
 
     schema: Literal["speech.stage-session-admission.v1"] = "speech.stage-session-admission.v1"
-    session_id: str | None = Field(default=None, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    operation_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    attempt_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str | None = Field(
+        default=None, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    operation_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     status: Literal["admitted", "rejected"]
     reason_code: str = Field(min_length=1, max_length=80, pattern=_ID_PATTERN)
@@ -241,7 +282,9 @@ class SpeechStreamAdmissionV1(IOModel):
 class SpeechStreamStatusV1(IOModel):
     """Owner-scoped state and flow-control status."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     state: SpeechStreamState
     next_sequence: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     credits: int = Field(ge=0, le=MAX_SPEECH_STAGE_CREDITS)
@@ -254,7 +297,14 @@ class SpeechStreamStatusV1(IOModel):
 
     @model_validator(mode="after")
     def _terminal_requires_reason(self) -> SpeechStreamStatusV1:
-        terminal = self.state in {"completed", "canceled", "timed_out", "revoked", "interrupted", "failed"}
+        terminal = self.state in {
+            "completed",
+            "canceled",
+            "timed_out",
+            "revoked",
+            "interrupted",
+            "failed",
+        }
         if terminal and self.terminal_outcome is None:
             raise ValueError("terminal stream status requires terminal_outcome")
         if not terminal and self.terminal_outcome is not None:
@@ -265,7 +315,9 @@ class SpeechStreamStatusV1(IOModel):
 class SpeechStreamCancelV1(IOModel):
     """Explicit owner-scoped cancellation request."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     reason: Literal["canceled", "timed_out", "revoked", "interrupted"] = "canceled"
 
     model_config = ConfigDict(extra="forbid")
@@ -274,7 +326,9 @@ class SpeechStreamCancelV1(IOModel):
 class SpeechStreamEndV1(IOModel):
     """Close an admitted stream after all frames have been accepted."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     final_sequence: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
 
     model_config = ConfigDict(extra="forbid")
@@ -283,7 +337,9 @@ class SpeechStreamEndV1(IOModel):
 class SpeechStreamStatusRequestV1(IOModel):
     """Request status for the authenticated owner of one stream."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -291,8 +347,12 @@ class SpeechStreamStatusRequestV1(IOModel):
 class SpeechStreamFrameV1(IOModel):
     """Ordered frame metadata; payload is supplied to the engine separately."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    attempt_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     sequence: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     payload_kind: Literal["audio", "text"]
@@ -305,7 +365,9 @@ class SpeechStreamFrameV1(IOModel):
 class SpeechStreamResultV1(IOModel):
     """Terminal result metadata without raw payload or private provider data."""
 
-    session_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     stage: SpeechStage
     mode: SpeechStageMode
     state: Literal["completed", "canceled", "timed_out", "revoked", "interrupted", "failed"]
@@ -333,8 +395,12 @@ class SpeechObserverEventV1(IOModel):
         "failed",
     ]
     timestamp_ms: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
-    operation_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
-    attempt_id: str = Field(min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN)
+    operation_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
     generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
     stage: SpeechStage
     reason_code: str = Field(min_length=1, max_length=80, pattern=_ID_PATTERN)
@@ -373,7 +439,13 @@ def is_eligible_speech_fallback(
 
     if attempts_used >= 2 or accepted or committed or outcome in _NO_FALLBACK_OUTCOMES:
         return False
-    return outcome in {"missing_capability", "offline", "busy", "admission_timeout", "transport_unaccepted"}
+    return outcome in {
+        "missing_capability",
+        "offline",
+        "busy",
+        "admission_timeout",
+        "transport_unaccepted",
+    }
 
 
 class SpeechStreamLifecycle(str, Enum):

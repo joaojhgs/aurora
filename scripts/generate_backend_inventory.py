@@ -669,7 +669,10 @@ def _assert_language_field(entry: ValidatorDiscovery, schema: dict[str, Any]) ->
 VALIDATOR_EXTENSION_VERIFIERS = {
     ("SpeechStreamAdmissionV1", "_validate_session_reference"): _assert_stream_admission_schema,
     ("TTSStreamPrepareResponse", "_validate_session_reference"): _assert_stream_admission_schema,
-    ("TranscriptionStreamAdmission", "_validate_session_reference"): _assert_stream_admission_schema,
+    (
+        "TranscriptionStreamAdmission",
+        "_validate_session_reference",
+    ): _assert_stream_admission_schema,
     ("WakeWordStreamAdmission", "_validate_session_reference"): _assert_stream_admission_schema,
     ("VADStreamAdmission", "_validate_session_reference"): _assert_stream_admission_schema,
     ("SpeechStreamStatusV1", "_terminal_requires_reason"): _assert_stream_status_schema,

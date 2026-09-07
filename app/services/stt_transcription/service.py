@@ -1338,11 +1338,8 @@ class TranscriptionService(BaseService):
                     existing.operation_id == request.operation_id
                     and existing.attempt_id == request.attempt_id
                 ):
-                    if (
-                        existing.generation == request.generation
-                        and _stream_owner_matches(
-                            self._speech_stream_owners.get(existing.session_id or ""), envelope
-                        )
+                    if existing.generation == request.generation and _stream_owner_matches(
+                        self._speech_stream_owners.get(existing.session_id or ""), envelope
                     ):
                         return existing
                     return TranscriptionStreamAdmission(
@@ -1390,7 +1387,9 @@ class TranscriptionService(BaseService):
             terminal = self._speech_stream_terminal.get(request.session_id)
             expected = self._speech_stream_next_sequence.get(request.session_id, 0)
             digest = hashlib.sha256(request.audio_data).hexdigest()
-            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(request.sequence)
+            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(
+                request.sequence
+            )
             owner = self._speech_stream_owners.get(request.session_id)
         if admission is None:
             if terminal is not None:
@@ -1405,39 +1404,64 @@ class TranscriptionService(BaseService):
                     )
                 return terminal
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=0, credits=0,
-                lease_remaining_ms=0, terminal_outcome="failed",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
             )
         if not _stream_owner_matches(owner, envelope):
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
             )
         if request.attempt_id != admission.attempt_id or request.generation != admission.generation:
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
             )
         # The first frame is sequence zero.  Duplicates are idempotent, gaps
         # are terminal; the stream never silently reorders audio.
         if request.sequence < expected:
             if previous_digest != digest:
                 return TranscriptionStreamStatus(
-                    session_id=request.session_id, state="failed", next_sequence=expected, credits=0,
-                    lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="invalid_sequence",
                 )
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="active", next_sequence=expected,
-                credits=8, lease_remaining_ms=15_000,
+                session_id=request.session_id,
+                state="active",
+                next_sequence=expected,
+                credits=8,
+                lease_remaining_ms=15_000,
             )
         if request.sequence != expected:
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="invalid_sequence",
             )
         await self._process_audio_data(
             request.audio_data,
-            AudioFormat(sample_rate=16_000, channels=1, encoding=AudioEncoding.PCM_S16LE, bits_per_sample=16),
+            AudioFormat(
+                sample_rate=16_000, channels=1, encoding=AudioEncoding.PCM_S16LE, bits_per_sample=16
+            ),
             stream_id=request.session_id,
             source="speech_session",
         )
@@ -1447,8 +1471,12 @@ class TranscriptionService(BaseService):
             self._speech_stream_next_sequence[request.session_id] = expected + 1
             self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
         return TranscriptionStreamStatus(
-            session_id=request.session_id, state="active", next_sequence=expected + 1,
-            credits=7, lease_remaining_ms=15_000, accepted_chunks=1,
+            session_id=request.session_id,
+            state="active",
+            next_sequence=expected + 1,
+            credits=7,
+            lease_remaining_ms=15_000,
+            accepted_chunks=1,
         )
 
     @method_contract(
@@ -1570,12 +1598,19 @@ class TranscriptionService(BaseService):
             return terminal
         if admission is None:
             return TranscriptionStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=0, credits=0,
-                lease_remaining_ms=0, terminal_outcome="failed",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
             )
         return TranscriptionStreamStatus(
-            session_id=request.session_id, state="admitted", next_sequence=self._speech_stream_next_sequence.get(request.session_id, 0),
-            credits=8, lease_remaining_ms=15_000,
+            session_id=request.session_id,
+            state="admitted",
+            next_sequence=self._speech_stream_next_sequence.get(request.session_id, 0),
+            credits=8,
+            lease_remaining_ms=15_000,
         )
 
     @method_contract(

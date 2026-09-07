@@ -102,7 +102,9 @@ class VADService(BaseService):
         return VADDetectResponse(
             speech=score > 0.02,
             confidence=min(1.0, score * 4),
-            duration_ms=len(request.audio_data) / (2 * request.channels * request.sample_rate) * 1000,
+            duration_ms=len(request.audio_data)
+            / (2 * request.channels * request.sample_rate)
+            * 1000,
         )
 
     @method_contract(
@@ -129,9 +131,8 @@ class VADService(BaseService):
                     existing.operation_id == request.operation_id
                     and existing.attempt_id == request.attempt_id
                 ):
-                    if (
-                        existing.generation == request.generation
-                        and _stream_owner_matches(self._owners.get(existing.session_id or ""), envelope)
+                    if existing.generation == request.generation and _stream_owner_matches(
+                        self._owners.get(existing.session_id or ""), envelope
                     ):
                         return existing
                     return VADStreamAdmission(
@@ -311,7 +312,12 @@ class VADService(BaseService):
                 return _status(request.session_id, "failed", 0, "session_conflict")
         if terminal is not None:
             return terminal
-        return _status(request.session_id, "admitted" if known else "failed", next_sequence, None if known else "failed")
+        return _status(
+            request.session_id,
+            "admitted" if known else "failed",
+            next_sequence,
+            None if known else "failed",
+        )
 
     @method_contract(
         method_id=VADMethods.STREAM_RESULT,
@@ -360,7 +366,9 @@ def _rejected(request: VADStreamStartRequest, reason: str) -> VADStreamAdmission
     )
 
 
-def _status(session_id: str, state: str, next_sequence: int, reason: str | None = None) -> VADStreamStatus:
+def _status(
+    session_id: str, state: str, next_sequence: int, reason: str | None = None
+) -> VADStreamStatus:
     terminal = state in {"completed", "canceled", "timed_out", "revoked", "interrupted", "failed"}
     return VADStreamStatus(
         session_id=session_id,
@@ -372,7 +380,9 @@ def _status(session_id: str, state: str, next_sequence: int, reason: str | None 
     )
 
 
-def _result(session_id: str, state: str, reason: str, final_sequence: int | None = None) -> VADStreamResult:
+def _result(
+    session_id: str, state: str, reason: str, final_sequence: int | None = None
+) -> VADStreamResult:
     return VADStreamResult(
         session_id=session_id,
         state=state,  # type: ignore[arg-type]

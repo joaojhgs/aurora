@@ -3170,7 +3170,11 @@ class TTSService(BaseService):
             admission = self._speech_stream_admissions.get(request.session_id)
             state = self._stream_states.get(request.session_id)
             owner = self._speech_stream_owners.get(request.session_id)
-            if state is None and owner is not None and not _stream_owner_values_allowed(owner, envelope):
+            if (
+                state is None
+                and owner is not None
+                and not _stream_owner_values_allowed(owner, envelope)
+            ):
                 return TTSStreamSessionStatus(
                     session_id=request.session_id,
                     state="failed",
@@ -4072,7 +4076,11 @@ class TTSService(BaseService):
         """Persist a result once the legacy TTS stream has fully drained."""
         async with self._stream_state_lock:
             admission = self._speech_stream_admissions.get(stream_id)
-            if admission is None or stream_id in self._stream_states or stream_id in self._speech_stream_results:
+            if (
+                admission is None
+                or stream_id in self._stream_states
+                or stream_id in self._speech_stream_results
+            ):
                 return
             result = TTSStreamSessionResult(
                 session_id=stream_id,

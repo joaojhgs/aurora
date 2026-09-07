@@ -914,9 +914,12 @@ class WakeWordService(BaseService):
         owner = _stream_owner(envelope)
         if request.target_peer_id is not None and not request.experimental_remote:
             return WakeWordStreamAdmission(
-                operation_id=request.operation_id, attempt_id=request.attempt_id,
-                generation=request.generation, status="rejected",
-                reason_code="experimental_remote_required", capability_revision=request.capability_revision,
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="rejected",
+                reason_code="experimental_remote_required",
+                capability_revision=request.capability_revision,
             )
         async with self._speech_stream_lock:
             for existing in self._speech_stream_sessions.values():
@@ -924,11 +927,8 @@ class WakeWordService(BaseService):
                     existing.operation_id == request.operation_id
                     and existing.attempt_id == request.attempt_id
                 ):
-                    if (
-                        existing.generation == request.generation
-                        and _stream_owner_matches(
-                            self._speech_stream_owners.get(existing.session_id or ""), envelope
-                        )
+                    if existing.generation == request.generation and _stream_owner_matches(
+                        self._speech_stream_owners.get(existing.session_id or ""), envelope
                     ):
                         return existing
                     return WakeWordStreamAdmission(
@@ -941,8 +941,12 @@ class WakeWordService(BaseService):
                     )
         session_id = f"kws-session-{uuid.uuid4().hex}"
         admission = WakeWordStreamAdmission(
-            session_id=session_id, operation_id=request.operation_id, attempt_id=request.attempt_id,
-            generation=request.generation, status="admitted", reason_code="admitted",
+            session_id=session_id,
+            operation_id=request.operation_id,
+            attempt_id=request.attempt_id,
+            generation=request.generation,
+            status="admitted",
+            reason_code="admitted",
             capability_revision=request.capability_revision,
         )
         async with self._speech_stream_lock:
@@ -972,59 +976,99 @@ class WakeWordService(BaseService):
             expected = self._speech_stream_next_sequence.get(request.session_id, 0)
             terminal = self._speech_stream_terminal.get(request.session_id)
             digest = hashlib.sha256(request.audio_data).hexdigest()
-            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(request.sequence)
+            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(
+                request.sequence
+            )
             owner = self._speech_stream_owners.get(request.session_id)
         if admission is None:
             if terminal is not None:
                 if not _stream_owner_matches(owner, envelope):
                     return WakeWordStreamStatus(
-                        session_id=request.session_id, state="failed", next_sequence=0,
-                        credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                        session_id=request.session_id,
+                        state="failed",
+                        next_sequence=0,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="session_conflict",
                     )
                 return terminal
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=0,
-                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
             )
         if not _stream_owner_matches(owner, envelope):
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
             )
         if request.attempt_id != admission.attempt_id or request.generation != admission.generation:
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
             )
         if request.sequence < expected:
             if previous_digest != digest:
                 return WakeWordStreamStatus(
-                    session_id=request.session_id, state="failed", next_sequence=expected,
-                    credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="invalid_sequence",
                 )
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="active", next_sequence=expected,
-                credits=8, lease_remaining_ms=15_000,
+                session_id=request.session_id,
+                state="active",
+                next_sequence=expected,
+                credits=8,
+                lease_remaining_ms=15_000,
             )
         if request.sequence != expected:
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="invalid_sequence",
             )
         if not self._inference_ready():
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=expected,
-                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
             )
         await self._process_audio_data(
-            request.audio_data, stream_id=request.session_id, source="speech_session", timestamp=time.time()
+            request.audio_data,
+            stream_id=request.session_id,
+            source="speech_session",
+            timestamp=time.time(),
         )
         async with self._speech_stream_lock:
             self._speech_stream_next_sequence[request.session_id] = expected + 1
             self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
         return WakeWordStreamStatus(
-            session_id=request.session_id, state="active", next_sequence=expected + 1,
-            credits=7, lease_remaining_ms=15_000, accepted_chunks=1,
+            session_id=request.session_id,
+            state="active",
+            next_sequence=expected + 1,
+            credits=7,
+            lease_remaining_ms=15_000,
+            accepted_chunks=1,
         )
 
     @method_contract(
@@ -1055,13 +1099,18 @@ class WakeWordService(BaseService):
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
             result = WakeWordStreamResult(
-                session_id=request.session_id, state="completed" if admission else "failed",
-                reason_code="completed" if admission else "outcome_unknown", final_sequence=request.final_sequence,
+                session_id=request.session_id,
+                state="completed" if admission else "failed",
+                reason_code="completed" if admission else "outcome_unknown",
+                final_sequence=request.final_sequence,
             )
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
-                session_id=request.session_id, state="completed" if admission else "failed",
-                next_sequence=next_sequence, credits=0, lease_remaining_ms=0,
+                session_id=request.session_id,
+                state="completed" if admission else "failed",
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
                 terminal_outcome="completed" if admission else "outcome_unknown",
             )
         return result
@@ -1094,13 +1143,17 @@ class WakeWordService(BaseService):
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
             result = WakeWordStreamResult(
-                session_id=request.session_id, state="canceled" if admission else "failed",
+                session_id=request.session_id,
+                state="canceled" if admission else "failed",
                 reason_code=request.reason if admission else "outcome_unknown",
             )
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
-                session_id=request.session_id, state="canceled" if admission else "failed",
-                next_sequence=next_sequence, credits=0, lease_remaining_ms=0,
+                session_id=request.session_id,
+                state="canceled" if admission else "failed",
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
                 terminal_outcome=request.reason if admission else "outcome_unknown",
             )
         return result
@@ -1127,19 +1180,30 @@ class WakeWordService(BaseService):
             owner = self._speech_stream_owners.get(request.session_id)
             if owner is not None and not _stream_owner_matches(owner, envelope):
                 return WakeWordStreamStatus(
-                    session_id=request.session_id, state="failed", next_sequence=0,
-                    credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=0,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="session_conflict",
                 )
         if terminal is not None:
             return terminal
         if admission is None:
             return WakeWordStreamStatus(
-                session_id=request.session_id, state="failed", next_sequence=0,
-                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
             )
         return WakeWordStreamStatus(
-            session_id=request.session_id, state="admitted", next_sequence=next_sequence,
-            credits=8, lease_remaining_ms=15_000,
+            session_id=request.session_id,
+            state="admitted",
+            next_sequence=next_sequence,
+            credits=8,
+            lease_remaining_ms=15_000,
         )
 
     @method_contract(
