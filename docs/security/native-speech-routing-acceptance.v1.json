@@ -1,0 +1,270 @@
+{
+  "schema_version": "native-speech-routing-acceptance.v1",
+  "issue": "PER-286",
+  "status": "pending",
+  "integrated_commit": "4123484718415d1163ea0ae30d9f3718e765089c",
+  "integration_branch": "multica/PER-286-native-speech-routing",
+  "plan_sha256": "d5c1b831a43886ebafff97cc97608d84cef2bc0bfc5034fc52f8051ab1e5e897",
+  "schemas": {
+    "node_config": 2,
+    "speech_session": 1,
+    "capability": 1,
+    "observer": 1
+  },
+  "inventory_sha256": "29a6684b6504c00a48360fcd164d837aa1e3a5d3077741b76acb2a8768c61492",
+  "source_map": [
+    {
+      "stage": "stt",
+      "methods_or_events": ["Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"],
+      "file": "app/services/stt_transcription/service.py",
+      "symbols": ["start_speech_stream", "append_speech_stream", "end_speech_stream", "cancel_speech_stream", "speech_stream_status", "speech_stream_result"],
+      "generated_inventory_version": 1
+    },
+    {
+      "stage": "tts",
+      "methods_or_events": ["TTS.StreamPrepareV1", "TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamCancel", "TTS.StreamStatus", "TTS.StreamResult"],
+      "file": "app/services/tts/service.py",
+      "symbols": ["prepare_speech_stream", "_on_stream_start", "_on_stream_chunk", "_on_stream_end", "cancel_speech_stream", "speech_stream_status", "speech_stream_result"],
+      "generated_inventory_version": 1
+    },
+    {
+      "stage": "kws",
+      "methods_or_events": ["WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"],
+      "file": "app/services/stt_wakeword/service.py",
+      "symbols": ["start_speech_stream", "append_speech_stream", "end_speech_stream", "cancel_speech_stream", "speech_stream_status", "speech_stream_result"],
+      "generated_inventory_version": 1
+    },
+    {
+      "stage": "vad",
+      "methods_or_events": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"],
+      "file": "app/services/vad/service.py",
+      "symbols": ["detect", "start_speech_stream", "append_speech_stream", "end_speech_stream", "cancel_speech_stream", "speech_stream_status", "speech_stream_result"],
+      "generated_inventory_version": 1
+    },
+    {
+      "stage": "routing",
+      "methods_or_events": ["node-config-v2", "resolveSpeechStageRouting", "saveCas"],
+      "file": "packages/aurora-sdk/src/node-config.ts",
+      "symbols": ["AuroraNodeConfigDocumentV2", "resolveSpeechStageRouting", "createAuroraNodeConfigV2TauriStore"],
+      "generated_inventory_version": 1
+    },
+    {
+      "stage": "client",
+      "methods_or_events": ["typed speech clients", "VAD client"],
+      "file": "packages/aurora-sdk/src/speech.ts",
+      "symbols": ["TtsClient", "SttClient", "WakeWordClient", "TranscriptionClient", "VadClient", "SpeechClient"],
+      "generated_inventory_version": 1
+    }
+  ],
+  "capability_matrix": [
+    {
+      "surface": "Python services",
+      "role": "host",
+      "stage": "stt",
+      "direction": "consumer_and_host",
+      "placement": ["local", "gateway", "mesh_contract"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "owner_scoped_foreground_session",
+      "required_gate": "PER286-STREAM-001..012",
+      "implemented": "contract_and_service_adapter",
+      "build": "passed",
+      "live": "pending"
+    },
+    {
+      "surface": "Python services",
+      "role": "host",
+      "stage": "tts",
+      "direction": "consumer_and_host",
+      "placement": ["local", "gateway", "mesh_contract"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "owner_scoped_foreground_session",
+      "required_gate": "PER286-STREAM-001..012",
+      "implemented": "prepared_offload_and_legacy_stream_adapter",
+      "build": "passed",
+      "live": "pending"
+    },
+    {
+      "surface": "Python services",
+      "role": "host",
+      "stage": "kws",
+      "direction": "consumer_and_host",
+      "placement": ["local", "mesh_contract"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "explicit_experimental_foreground_only",
+      "required_gate": "PER286-KWS-001..004",
+      "implemented": "typed_stream_contract_and_owner_scope",
+      "build": "passed",
+      "live": "pending"
+    },
+    {
+      "surface": "Python services",
+      "role": "host",
+      "stage": "vad",
+      "direction": "consumer_and_host",
+      "placement": ["local", "mesh_contract"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "explicit_experimental_foreground_only",
+      "required_gate": "PER286-VAD-001..003",
+      "implemented": "independent_typed_service",
+      "build": "passed",
+      "live": "pending"
+    },
+    {
+      "surface": "Aurora SDK",
+      "role": "consumer",
+      "stage": "all",
+      "direction": "consumer",
+      "placement": ["local", "gateway", "mesh"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "node_policy_and_caller_session",
+      "required_gate": "PER286-CONTRACT-001..005",
+      "implemented": "typed_clients_and_generated_contracts",
+      "build": "passed",
+      "live": "pending"
+    },
+    {
+      "surface": "Native desktop/mobile/browser runtime",
+      "role": "consumer_and_host",
+      "stage": "all",
+      "direction": "consumer_and_host",
+      "placement": ["local", "gateway", "mesh"],
+      "finite": true,
+      "streaming": true,
+      "lifecycle_eligibility": "foreground_and_existing_capture_playback_owner",
+      "required_gate": "PER286-NATIVE-001..011 and PER286-LIVE-005..009",
+      "implemented": "not_claimed_by_this_linux_revision",
+      "build": "pending",
+      "live": "pending"
+    }
+  ],
+  "required_gates": [
+    {
+      "gate_id": "PER286-CONTRACT-001..005",
+      "status": "passed_local",
+      "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest --override-ini addopts= -q tests/unit/contracts/test_speech_runtime_contracts.py tests/unit/contracts/test_speech_tts_stt_contracts.py tests/unit/contracts/test_registry.py",
+      "exit_code": 0,
+      "notes": "Typed stage/session contracts and registry coverage passed."
+    },
+    {
+      "gate_id": "PER286-STREAM-001..012",
+      "status": "passed_local",
+      "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest -p pytest_asyncio.plugin --override-ini addopts= -q tests/unit/stt_transcription/test_service.py tests/unit/stt_wakeword/test_service.py tests/unit/tts/test_streaming_service.py",
+      "exit_code": 0,
+      "notes": "Existing service suites passed with the typed stream ownership changes."
+    },
+    {
+      "gate_id": "PER286-VAD-001..003",
+      "status": "passed_local_contract",
+      "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run pytest --override-ini addopts= -q tests/unit/contracts/test_speech_runtime_contracts.py",
+      "exit_code": 0,
+      "notes": "Finite VAD and stream lifecycle contract coverage passed; live model/platform behavior remains open."
+    },
+    {
+      "gate_id": "PER286-ACCEPT-003",
+      "status": "passed_local",
+      "command": "make check-sdk-backend-contracts",
+      "exit_code": 0,
+      "artifacts": [
+        "packages/aurora-sdk/src/generated/backend-contracts.manifest.json",
+        "packages/aurora-sdk/src/generated/backend-contracts.schema.json",
+        "packages/aurora-sdk/src/generated/backend-contracts.zod.ts",
+        "rust/crates/aurora-contracts/src/generated.rs",
+        "tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json"
+      ],
+      "notes": "Backend inventory, Rust schema parity, conformance budget, and generated-artifact cleanliness passed."
+    },
+    {
+      "gate_id": "PER286-LIVE-005",
+      "status": "skipped_environment",
+      "command": null,
+      "exit_code": null,
+      "notes": "Waydroid device/artifact gate was not available in this Linux coding environment."
+    },
+    {
+      "gate_id": "PER286-LIVE-006",
+      "status": "skipped_environment",
+      "command": null,
+      "exit_code": null,
+      "notes": "Apple-host macOS/Xcode iOS runtime gate was not available in this Linux coding environment."
+    },
+    {
+      "gate_id": "PER286-LIVE-001..004 and PER286-LIVE-007..010",
+      "status": "pending_qa_platform",
+      "command": null,
+      "exit_code": null,
+      "notes": "Hosted peer, native host/consumer, full nine-pair route, browser/WASM, revocation, observer, and lifecycle evidence requires QA and platform runners."
+    }
+  ],
+  "optional_limitations": [
+    "No OpenTelemetry, exporter, durable observer store, or PER-285 implementation is included.",
+    "No native Rust/iOS/Android/browser runtime result is claimed from Python contract tests.",
+    "Remote KWS/VAD remains opt-in and foreground-session scoped; default policy is local-only/error.",
+    "The artifact is pending QA, OCR code review, separate architecture/security review, target integration, and mandatory platform evidence."
+  ],
+  "evidence": [
+    {
+      "command": "uv run ruff check app/services/__init__.py app/services/stt_transcription/service.py app/services/stt_wakeword/service.py app/services/supervisor.py app/services/tts/service.py app/services/vad app/shared/contracts/mesh_surface.py app/shared/contracts/models/__init__.py app/shared/contracts/models/speech_runtime.py app/shared/contracts/models/stt.py app/shared/contracts/models/tts.py scripts/generate_backend_inventory.py scripts/generate_mesh_security_surface_inventory.py tests/unit/contracts/test_speech_runtime_contracts.py tests/unit/gateway/test_mesh_security_surface_inventory.py",
+      "exit_code": 0,
+      "commit": "4123484718415d1163ea0ae30d9f3718e765089c",
+      "artifact_sha256": null,
+      "device_os_browser": "Linux / Python 3.11",
+      "model_digest_format": null,
+      "scenario": "changed Python contract/service lint",
+      "classification": "fresh",
+      "skipped_assertions": "native runtime, platform matrix, model quality"
+    },
+    {
+      "command": "pnpm --filter @aurora/client exec tsc --noEmit && pnpm --filter @aurora/client exec vitest run --environment node tests/node-config.test.ts tests/generated-speech-client.test.ts",
+      "exit_code": 0,
+      "commit": "4123484718415d1163ea0ae30d9f3718e765089c",
+      "artifact_sha256": "8d298e208b517b9a3ffd5c73ec65ef4d9956453e11ae719600626d84f546a696",
+      "device_os_browser": "Linux / Node test environment",
+      "model_digest_format": null,
+      "scenario": "node-config v2 migration/CAS/store and generated speech client tests; 27 tests",
+      "classification": "fresh",
+      "skipped_assertions": "native UI/runtime and device routing"
+    },
+    {
+      "command": "cargo +1.88.0 check --manifest-path rust/Cargo.toml -p aurora-contracts",
+      "exit_code": 0,
+      "commit": "4123484718415d1163ea0ae30d9f3718e765089c",
+      "artifact_sha256": "8c433c204df5cce5ea4e73292f95def67ad163f11a12ae9e807f3b32bb5d46a7",
+      "device_os_browser": "Linux / Rust 1.88.0",
+      "model_digest_format": null,
+      "scenario": "generated Rust contract crate compilation",
+      "classification": "fresh",
+      "skipped_assertions": "native voice engine behavior"
+    },
+    {
+      "command": "uv run python scripts/generate_mesh_security_surface_inventory.py --check",
+      "exit_code": 0,
+      "commit": "4123484718415d1163ea0ae30d9f3718e765089c",
+      "artifact_sha256": "29a6684b6504c00a48360fcd164d837aa1e3a5d3077741b76acb2a8768c61492",
+      "device_os_browser": "Linux / Python 3.11",
+      "model_digest_format": null,
+      "scenario": "mesh method inventory reproducibility and permission surface",
+      "classification": "fresh",
+      "skipped_assertions": "live mesh transport and peer authorization"
+    },
+    {
+      "command": null,
+      "exit_code": null,
+      "commit": null,
+      "artifact_sha256": null,
+      "device_os_browser": "macOS/Xcode Apple-host and Android Waydroid unavailable",
+      "model_digest_format": null,
+      "scenario": "mandatory native runtime and nine-pair route acceptance",
+      "classification": "skipped",
+      "skipped_assertions": "all Apple-host iOS runtime claims, Waydroid route/output claims, native model/audio quality, and full lifecycle matrix"
+    }
+  ],
+  "reviews": {
+    "ocr": null,
+    "architecture_security": null
+  }
+}
