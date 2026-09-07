@@ -50,6 +50,7 @@ from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import System, Wakeword
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.speech_runtime import SpeechStreamLimitsV1
 from app.shared.contracts.models.stt import (
     AudioSessionEvent,
     AudioSessionMethods,
@@ -84,21 +85,21 @@ from app.shared.speech_language_policy import (
 )
 
 config_api = ConfigAPI()
+_MAX_ACTIVE_SPEECH_STREAMS = 4
 
 
-def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None, str | None]:
-    """Return the stable transport owner tuple for a speech stream."""
+def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None]:
+    """Return immutable authenticated identity, excluding per-request tracing IDs."""
     if envelope is None:
-        return (None, None, None)
+        return (None, None)
     return (
         envelope.caller_peer_id if envelope.caller_peer_id else None,
         envelope.principal_id if envelope.principal_id else None,
-        envelope.correlation_id if envelope.correlation_id else None,
     )
 
 
 def _stream_owner_matches(
-    owner: tuple[str | None, str | None, str | None] | None,
+    owner: tuple[str | None, str | None] | None,
     envelope: Envelope | None,
 ) -> bool:
     """Keep every stream operation bound to its authenticated transport owner."""
@@ -141,7 +142,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
         msg: str,
         headers: Any,
         newurl: str,
-    ) -> None:
+    ) -> bool:
         raise HTTPError(req.full_url, code, "redirects are not allowed", headers, fp)
 
 
@@ -289,7 +290,11 @@ class WakeWordService(BaseService):
         self._speech_stream_terminal: dict[str, WakeWordStreamStatus] = {}
         self._speech_stream_results: dict[str, WakeWordStreamResult] = {}
         self._speech_stream_payload_digests: dict[str, dict[int, str]] = {}
-        self._speech_stream_owners: dict[str, tuple[str | None, str | None, str | None]] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None]] = {}
+        self._speech_stream_input_bytes: dict[str, int] = {}
+        self._speech_stream_detections: dict[str, int] = {}
+        self._speech_stream_started_at: dict[str, float] = {}
+        self._speech_stream_last_activity: dict[str, float] = {}
         self._speech_stream_lock = asyncio.Lock()
 
         # State tracking
@@ -357,6 +362,10 @@ class WakeWordService(BaseService):
             self._speech_stream_results.clear()
             self._speech_stream_payload_digests.clear()
             self._speech_stream_owners.clear()
+            self._speech_stream_input_bytes.clear()
+            self._speech_stream_detections.clear()
+            self._speech_stream_started_at.clear()
+            self._speech_stream_last_activity.clear()
 
         # Cleanup backend resources
         if self._backend:
@@ -791,7 +800,7 @@ class WakeWordService(BaseService):
         stream_id: str = "default",
         source: str = "unknown",
         timestamp: float | None = None,
-    ) -> None:
+    ) -> bool:
         """Process raw audio data for wake word detection.
 
         Args:
@@ -801,7 +810,7 @@ class WakeWordService(BaseService):
             timestamp: Timestamp of the audio chunk
         """
         if not self._enabled or not self._inference_ready() or not self._backend:
-            return
+            return False
 
         try:
             # Run detection
@@ -835,9 +844,11 @@ class WakeWordService(BaseService):
                     priority=get_interactive_priority(),
                     origin="internal",
                 )
+                return True
 
         except Exception:
             log_error("Wake word detection failed")
+        return False
 
     async def _on_audio_chunk(self, env: Envelope) -> None:
         """Handle incoming audio chunks from internal bus.
@@ -939,21 +950,34 @@ class WakeWordService(BaseService):
                         reason_code="session_conflict",
                         capability_revision=request.capability_revision,
                     )
-        session_id = f"kws-session-{uuid.uuid4().hex}"
-        admission = WakeWordStreamAdmission(
-            session_id=session_id,
-            operation_id=request.operation_id,
-            attempt_id=request.attempt_id,
-            generation=request.generation,
-            status="admitted",
-            reason_code="admitted",
-            capability_revision=request.capability_revision,
-        )
-        async with self._speech_stream_lock:
+            if len(self._speech_stream_sessions) >= _MAX_ACTIVE_SPEECH_STREAMS:
+                return WakeWordStreamAdmission(
+                    operation_id=request.operation_id,
+                    attempt_id=request.attempt_id,
+                    generation=request.generation,
+                    status="rejected",
+                    reason_code="busy",
+                    capability_revision=request.capability_revision,
+                )
+            session_id = f"kws-session-{uuid.uuid4().hex}"
+            started_at = time.monotonic()
+            admission = WakeWordStreamAdmission(
+                session_id=session_id,
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="admitted",
+                reason_code="admitted",
+                capability_revision=request.capability_revision,
+            )
             self._speech_stream_sessions[session_id] = admission
             self._speech_stream_next_sequence[session_id] = 0
             self._speech_stream_payload_digests[session_id] = {}
             self._speech_stream_owners[session_id] = owner
+            self._speech_stream_input_bytes[session_id] = 0
+            self._speech_stream_detections[session_id] = 0
+            self._speech_stream_started_at[session_id] = started_at
+            self._speech_stream_last_activity[session_id] = started_at
         return admission
 
     @method_contract(
@@ -1032,8 +1056,9 @@ class WakeWordService(BaseService):
                 session_id=request.session_id,
                 state="active",
                 next_sequence=expected,
-                credits=8,
-                lease_remaining_ms=15_000,
+                credits=min(8, admission.accepted_limits.max_queue),
+                lease_remaining_ms=admission.accepted_limits.idle_lease_ms,
+                accepted_chunks=expected,
             )
         if request.sequence != expected:
             return WakeWordStreamStatus(
@@ -1044,6 +1069,70 @@ class WakeWordService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome="invalid_sequence",
             )
+        limits = admission.accepted_limits
+        now = time.monotonic()
+        async with self._speech_stream_lock:
+            input_bytes = self._speech_stream_input_bytes.get(request.session_id, 0)
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        if (
+            now - last_activity > limits.idle_lease_ms / 1000
+            or now - started_at > limits.max_active_ms / 1000
+        ):
+            async with self._speech_stream_lock:
+                self._speech_stream_sessions.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                detection_count = self._speech_stream_detections.pop(request.session_id, 0)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                timeout_status = WakeWordStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                )
+                self._speech_stream_terminal[request.session_id] = timeout_status
+                self._speech_stream_results[request.session_id] = WakeWordStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_bytes,
+                    output_count=detection_count,
+                )
+            return timeout_status
+        if (
+            len(request.audio_data) > limits.max_chunk_bytes
+            or input_bytes + len(request.audio_data) > limits.max_input_bytes
+        ):
+            async with self._speech_stream_lock:
+                self._speech_stream_sessions.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                status = WakeWordStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="resource_exhausted",
+                    accepted_chunks=expected,
+                )
+                self._speech_stream_terminal[request.session_id] = status
+                self._speech_stream_results[request.session_id] = WakeWordStreamResult(
+                    session_id=request.session_id,
+                    state="failed",
+                    reason_code="resource_exhausted",
+                    input_count=input_bytes,
+                    output_count=self._speech_stream_detections.pop(request.session_id, 0),
+                )
+            return status
         if not self._inference_ready():
             return WakeWordStreamStatus(
                 session_id=request.session_id,
@@ -1053,7 +1142,7 @@ class WakeWordService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome="failed",
             )
-        await self._process_audio_data(
+        detected = await self._process_audio_data(
             request.audio_data,
             stream_id=request.session_id,
             source="speech_session",
@@ -1062,13 +1151,21 @@ class WakeWordService(BaseService):
         async with self._speech_stream_lock:
             self._speech_stream_next_sequence[request.session_id] = expected + 1
             self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
+            self._speech_stream_input_bytes[request.session_id] = input_bytes + len(
+                request.audio_data
+            )
+            self._speech_stream_last_activity[request.session_id] = now
+            if detected:
+                self._speech_stream_detections[request.session_id] += 1
         return WakeWordStreamStatus(
             session_id=request.session_id,
             state="active",
             next_sequence=expected + 1,
-            credits=7,
-            lease_remaining_ms=15_000,
-            accepted_chunks=1,
+            credits=min(8, limits.max_queue)
+            if input_bytes + len(request.audio_data) < limits.max_input_bytes
+            else 0,
+            lease_remaining_ms=max(0, int(limits.idle_lease_ms - (time.monotonic() - now) * 1000)),
+            accepted_chunks=expected + 1,
         )
 
     @method_contract(
@@ -1095,14 +1192,54 @@ class WakeWordService(BaseService):
             existing = self._speech_stream_results.get(request.session_id)
             if existing is not None:
                 return existing
+            now = time.monotonic()
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+            admission = self._speech_stream_sessions.get(request.session_id)
+            next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+            if admission is not None and (
+                now - started_at > admission.accepted_limits.max_active_ms / 1000
+                or now - last_activity > admission.accepted_limits.idle_lease_ms / 1000
+            ):
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                detection_count = self._speech_stream_detections.pop(request.session_id, 0)
+                self._speech_stream_sessions.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                result = WakeWordStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                    output_count=detection_count,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                return result
             admission = self._speech_stream_sessions.pop(request.session_id, None)
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            detection_count = self._speech_stream_detections.pop(request.session_id, 0)
+            self._speech_stream_started_at.pop(request.session_id, None)
+            self._speech_stream_last_activity.pop(request.session_id, None)
             result = WakeWordStreamResult(
                 session_id=request.session_id,
                 state="completed" if admission else "failed",
                 reason_code="completed" if admission else "outcome_unknown",
                 final_sequence=request.final_sequence,
+                input_count=input_count,
+                output_count=detection_count,
             )
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
@@ -1142,15 +1279,20 @@ class WakeWordService(BaseService):
             admission = self._speech_stream_sessions.pop(request.session_id, None)
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            self._speech_stream_detections.pop(request.session_id, None)
+            self._speech_stream_started_at.pop(request.session_id, None)
+            self._speech_stream_last_activity.pop(request.session_id, None)
             result = WakeWordStreamResult(
                 session_id=request.session_id,
-                state="canceled" if admission else "failed",
+                state=request.reason if admission else "failed",
                 reason_code=request.reason if admission else "outcome_unknown",
+                input_count=input_count,
             )
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
                 session_id=request.session_id,
-                state="canceled" if admission else "failed",
+                state=request.reason if admission else "failed",
                 next_sequence=next_sequence,
                 credits=0,
                 lease_remaining_ms=0,
@@ -1198,12 +1340,58 @@ class WakeWordService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome="failed",
             )
+        limits = admission.accepted_limits
+        now = time.monotonic()
+        started_at = self._speech_stream_started_at.get(request.session_id, now)
+        last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        lease_remaining_ms = max(
+            0, int(limits.idle_lease_ms - (time.monotonic() - last_activity) * 1000)
+        )
+        expired = lease_remaining_ms == 0 or now - started_at > limits.max_active_ms / 1000
+        if not expired:
+            # Status is the authenticated protocol heartbeat. Refresh only
+            # while the absolute lease remains valid.
+            async with self._speech_stream_lock:
+                if request.session_id in self._speech_stream_sessions:
+                    self._speech_stream_last_activity[request.session_id] = now
+            lease_remaining_ms = limits.idle_lease_ms
+        if expired:
+            async with self._speech_stream_lock:
+                self._speech_stream_sessions.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                detection_count = self._speech_stream_detections.pop(request.session_id, 0)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                result = WakeWordStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                    output_count=detection_count,
+                )
+                status = WakeWordStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = status
+            return status
         return WakeWordStreamStatus(
             session_id=request.session_id,
             state="admitted",
             next_sequence=next_sequence,
-            credits=8,
-            lease_remaining_ms=15_000,
+            credits=min(8, limits.max_queue)
+            if self._speech_stream_input_bytes.get(request.session_id, 0) < limits.max_input_bytes
+            else 0,
+            lease_remaining_ms=lease_remaining_ms,
+            accepted_chunks=next_sequence,
         )
 
     @method_contract(

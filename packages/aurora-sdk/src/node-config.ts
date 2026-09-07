@@ -765,14 +765,22 @@ export function createAuroraNodeConfigV2TauriStore(
     evidence,
     load,
     save: async (document) => enqueue(async () => {
+      // Direct overwrite is intentionally limited to first initialization.
+      // User-facing edits must use saveCas so stale UI documents cannot
+      // silently replace a newer durable policy.
+      const current = await load()
+      if (current !== null) throw new Error('Node config v2 save requires saveCas')
       const normalized = sanitizeAuroraNodeConfigDocumentV2(document)
+      if (normalized.revision !== 1) {
+        throw new Error('Node config v2 initialization must start at revision 1')
+      }
       const result = await storage.set(key, serializeAuroraNodeConfigDocumentV2(normalized))
       if (!result.ok) throw new Error('Node config v2 save failed')
       return {
         savedRevision: normalized.revision,
-        effectiveRevision: normalized.revision,
-        pendingNextGeneration: false,
-        pendingRevision: null
+        effectiveRevision: 0,
+        pendingNextGeneration: true,
+        pendingRevision: normalized.revision
       }
     }),
     saveCas: (draft, expectedRevision) => enqueue(async () => {

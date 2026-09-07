@@ -16,6 +16,13 @@
       "title": "Capability Revision",
       "type": "integer"
     },
+    "channels": {
+      "default": 1,
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
     "config_revision": {
       "maximum": 9007199254740991,
       "minimum": 0,
@@ -34,6 +41,12 @@
       ],
       "default": null,
       "title": "Consent Revision"
+    },
+    "encoding": {
+      "const": "pcm_s16le",
+      "default": "pcm_s16le",
+      "title": "Encoding",
+      "type": "string"
     },
     "exact_selector": {
       "default": false,
@@ -83,6 +96,13 @@
       "minLength": 1,
       "title": "Route Revision",
       "type": "string"
+    },
+    "sample_rate": {
+      "default": 16000,
+      "maximum": 192000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
     },
     "schema": {
       "const": "speech-stage-admission.v1",

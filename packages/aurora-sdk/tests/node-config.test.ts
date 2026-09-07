@@ -335,7 +335,8 @@ describe('createAuroraNodeConfigTauriStore', () => {
     expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(true)
 
     const updated = { ...migrated!, revision: 2 }
-    const acknowledgement = await store.save(updated)
-    expect(acknowledgement).toMatchObject({ savedRevision: 2, effectiveRevision: 2, pendingNextGeneration: false })
+    await expect(store.save(updated)).rejects.toThrow(/requires saveCas/u)
+    const { acknowledgement } = await store.saveCas(updated, 1)
+    expect(acknowledgement).toMatchObject({ savedRevision: 2, effectiveRevision: 1, pendingNextGeneration: true })
   })
 })

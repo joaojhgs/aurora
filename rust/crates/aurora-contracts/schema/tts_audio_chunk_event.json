@@ -92,6 +92,20 @@
       ],
       "default": null,
       "title": "Text"
+    },
+    "text_digest": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Text Digest"
     }
   },
   "required": [

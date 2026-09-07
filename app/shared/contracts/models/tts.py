@@ -1344,6 +1344,10 @@ class TTSAudioChunkEvent(IOModel):
     channels: int = Field(default=1, ge=1, le=TTS_MAX_CHANNELS)
     duration_ms: float = Field(ge=0)
     text: str | None = None
+    # Audio events may cross a mesh boundary; never require the source text
+    # to travel with the audio payload.  Consumers that need correlation can
+    # compare this digest with a separately authorized assistant-stream item.
+    text_digest: str | None = Field(default=None, min_length=64, max_length=64)
     source_sequence: int | None = Field(default=None, ge=0, le=TTS_MAX_STREAM_SEQUENCE)
     is_final: bool = False
     reason: str | None = None

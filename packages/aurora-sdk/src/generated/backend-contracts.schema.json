@@ -144,7 +144,7 @@
       "required_perms": [
         "TTS.use"
       ],
-      "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+      "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
       "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
       "topic": "TTS.AudioChunk"
     }
@@ -2541,7 +2541,7 @@
       ],
       "exposure": "both",
       "input_model": "TranscriptionStreamStartRequest",
-      "input_schema_hash": "c71203e954d5c9e3de66195c40dbc703054a1ed73f722f0eed1a71486cacd8a9",
+      "input_schema_hash": "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696",
       "input_schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest",
       "method_id": "Transcription.StreamStart",
       "method_type": "use",
@@ -6922,6 +6922,20 @@
             ],
             "default": null,
             "title": "Text"
+          },
+          "text_digest": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text Digest"
           }
         },
         "required": [
@@ -6937,7 +6951,7 @@
         "x-aurora-extra-behavior": "strip",
         "x-aurora-tts-audio-chunk-event-invariant": true
       },
-      "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+      "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
       "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
       "vectors": {
         "negative": {
@@ -7074,9 +7088,10 @@
             "sequence": 0,
             "source_sequence": 0,
             "stream_id": "stream-1",
-            "text": "hello"
+            "text": "hello",
+            "text_digest": null
           },
-          "normalized_hash": "dfa9799bb419c86562e22b480e08c9f8786e10ad6d1074367f0acf667c8faa66"
+          "normalized_hash": "59f3f2a60309e8fc814fb60b7130fbedaa07f45e109146222ec2f89d79cfeb8d"
         }
       }
     },
@@ -20608,6 +20623,13 @@
             "title": "Capability Revision",
             "type": "integer"
           },
+          "channels": {
+            "default": 1,
+            "maximum": 8,
+            "minimum": 1,
+            "title": "Channels",
+            "type": "integer"
+          },
           "config_revision": {
             "maximum": 9007199254740991,
             "minimum": 0,
@@ -20626,6 +20648,12 @@
             ],
             "default": null,
             "title": "Consent Revision"
+          },
+          "encoding": {
+            "const": "pcm_s16le",
+            "default": "pcm_s16le",
+            "title": "Encoding",
+            "type": "string"
           },
           "exact_selector": {
             "default": false,
@@ -20675,6 +20703,13 @@
             "minLength": 1,
             "title": "Route Revision",
             "type": "string"
+          },
+          "sample_rate": {
+            "default": 16000,
+            "maximum": 192000,
+            "minimum": 8000,
+            "title": "Sample Rate",
+            "type": "integer"
           },
           "schema": {
             "const": "speech-stage-admission.v1",
@@ -20730,7 +20765,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "forbid"
       },
-      "schema_hash": "c71203e954d5c9e3de66195c40dbc703054a1ed73f722f0eed1a71486cacd8a9",
+      "schema_hash": "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696",
       "schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest",
       "vectors": {
         "positive": {
@@ -20747,8 +20782,10 @@
           "normalized": {
             "attempt_id": "attempt-1",
             "capability_revision": 1,
+            "channels": 1,
             "config_revision": 1,
             "consent_revision": null,
+            "encoding": "pcm_s16le",
             "exact_selector": false,
             "experimental_remote": false,
             "generation": 0,
@@ -20757,12 +20794,13 @@
             "remaining_deadline_ms": 60000,
             "request_id": "request-1",
             "route_revision": "route-1",
+            "sample_rate": 16000,
             "schema": "speech-stage-admission.v1",
             "stage": "stt",
             "target_peer_id": null,
             "target_resource_id": null
           },
-          "normalized_hash": "0ea2851392871a76dc2c5e1f030ccc6aa292d7113f63f75af985dff16fae6cbe"
+          "normalized_hash": "f2a344f58c8e21b256520a832ff55ed0bb32e6502a329cd29b57f03ff61717d5"
         }
       }
     },

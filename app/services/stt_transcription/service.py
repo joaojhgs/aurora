@@ -47,6 +47,7 @@ from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.speech_runtime import SpeechStreamLimitsV1
 from app.shared.contracts.models.stt import (
     AudioSessionEvent,
     AudioSessionMethods,
@@ -76,21 +77,21 @@ from app.shared.speech_language_policy import (
 )
 
 config_api = ConfigAPI()
+_MAX_ACTIVE_SPEECH_STREAMS = 4
 
 
-def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None, str | None]:
-    """Return the stable transport owner tuple for a speech stream."""
+def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None]:
+    """Return immutable authenticated identity, excluding per-request tracing IDs."""
     if envelope is None:
-        return (None, None, None)
+        return (None, None)
     return (
         envelope.caller_peer_id if envelope.caller_peer_id else None,
         envelope.principal_id if envelope.principal_id else None,
-        envelope.correlation_id if envelope.correlation_id else None,
     )
 
 
 def _stream_owner_matches(
-    owner: tuple[str | None, str | None, str | None] | None,
+    owner: tuple[str | None, str | None] | None,
     envelope: Envelope | None,
 ) -> bool:
     """Keep every stream operation bound to its authenticated transport owner."""
@@ -149,7 +150,12 @@ class TranscriptionService(BaseService):
         self._speech_stream_terminal: dict[str, TranscriptionStreamStatus] = {}
         self._speech_stream_results: dict[str, TranscriptionStreamResult] = {}
         self._speech_stream_payload_digests: dict[str, dict[int, str]] = {}
-        self._speech_stream_owners: dict[str, tuple[str | None, str | None, str | None]] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None]] = {}
+        self._speech_stream_audio: dict[str, bytearray] = {}
+        self._speech_stream_input_bytes: dict[str, int] = {}
+        self._speech_stream_started_at: dict[str, float] = {}
+        self._speech_stream_last_activity: dict[str, float] = {}
+        self._speech_stream_formats: dict[str, AudioFormat] = {}
         self._speech_stream_lock = asyncio.Lock()
 
         # Models
@@ -261,6 +267,11 @@ class TranscriptionService(BaseService):
             self._speech_stream_results.clear()
             self._speech_stream_payload_digests.clear()
             self._speech_stream_owners.clear()
+            self._speech_stream_audio.clear()
+            self._speech_stream_input_bytes.clear()
+            self._speech_stream_started_at.clear()
+            self._speech_stream_last_activity.clear()
+            self._speech_stream_formats.clear()
 
         # Wait for processing thread to finish
         if self._process_thread and self._process_thread.is_alive():
@@ -819,13 +830,34 @@ class TranscriptionService(BaseService):
 
         return audio_float32
 
+    def _stream_audio_to_numpy(self, audio_data: bytes, audio_format: AudioFormat) -> np.ndarray:
+        """Decode admitted PCM and normalize it for the configured model input."""
+        if audio_format.encoding != AudioEncoding.PCM_S16LE or audio_format.bits_per_sample != 16:
+            raise ValueError("speech stream requires pcm_s16le audio")
+        samples = np.frombuffer(audio_data, dtype=np.int16)
+        if audio_format.channels > 1:
+            if samples.size % audio_format.channels:
+                raise ValueError("speech stream frame is not aligned to channel count")
+            samples = samples.reshape(-1, audio_format.channels).mean(axis=1).astype(np.int16)
+        audio = samples.astype(np.float32) / 32768.0
+        if audio_format.sample_rate == self._default_sample_rate or audio.size == 0:
+            return audio
+        target_length = max(
+            1, round(audio.size * self._default_sample_rate / audio_format.sample_rate)
+        )
+        return np.interp(
+            np.linspace(0, audio.size - 1, target_length),
+            np.arange(audio.size),
+            audio,
+        ).astype(np.float32)
+
     def _transcribe_with_model(
         self,
         audio: np.ndarray,
         model: Any,
         transcription_type: TranscriptionType,
         duration_ms: float,
-    ) -> None:
+    ) -> bool:
         """Transcribe audio with specified model.
 
         Args:
@@ -854,11 +886,12 @@ class TranscriptionService(BaseService):
 
             if not text:
                 log_debug(f"Empty transcription from {transcription_type.value} model")
-                return
+                return False
 
             elapsed_ms = (time.time() - start_time) * 1000
             log_info(
-                f"{transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)"
+                f"{transcription_type.value.capitalize()} transcription: "
+                f"text_chars={len(text)} elapsed_ms={elapsed_ms:.0f}"
             )
 
             # Emit result
@@ -872,6 +905,7 @@ class TranscriptionService(BaseService):
             )
 
             self._transcriptions_done += 1
+            return True
 
         except Exception as e:
             log_error(
@@ -884,6 +918,7 @@ class TranscriptionService(BaseService):
                 error_message="Transcription failed",
                 error_type="transcription_failed",
             )
+            return False
 
     def _emit_result(
         self,
@@ -1350,21 +1385,40 @@ class TranscriptionService(BaseService):
                         reason_code="session_conflict",
                         capability_revision=request.capability_revision,
                     )
-        session_id = f"stt-session-{uuid.uuid4().hex}"
-        admission = TranscriptionStreamAdmission(
-            session_id=session_id,
-            operation_id=request.operation_id,
-            attempt_id=request.attempt_id,
-            generation=request.generation,
-            status="admitted",
-            reason_code="admitted",
-            capability_revision=request.capability_revision,
-        )
-        async with self._speech_stream_lock:
+            if len(self._speech_streams) >= _MAX_ACTIVE_SPEECH_STREAMS:
+                return TranscriptionStreamAdmission(
+                    operation_id=request.operation_id,
+                    attempt_id=request.attempt_id,
+                    generation=request.generation,
+                    status="rejected",
+                    reason_code="busy",
+                    capability_revision=request.capability_revision,
+                )
+            session_id = f"stt-session-{uuid.uuid4().hex}"
+            started_at = time.monotonic()
+            admission = TranscriptionStreamAdmission(
+                session_id=session_id,
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="admitted",
+                reason_code="admitted",
+                capability_revision=request.capability_revision,
+            )
             self._speech_streams[session_id] = admission
             self._speech_stream_next_sequence[session_id] = 0
             self._speech_stream_payload_digests[session_id] = {}
             self._speech_stream_owners[session_id] = owner
+            self._speech_stream_audio[session_id] = bytearray()
+            self._speech_stream_input_bytes[session_id] = 0
+            self._speech_stream_started_at[session_id] = started_at
+            self._speech_stream_last_activity[session_id] = started_at
+            self._speech_stream_formats[session_id] = AudioFormat(
+                sample_rate=request.sample_rate,
+                channels=request.channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+            )
         return admission
 
     @method_contract(
@@ -1445,8 +1499,9 @@ class TranscriptionService(BaseService):
                 session_id=request.session_id,
                 state="active",
                 next_sequence=expected,
-                credits=8,
-                lease_remaining_ms=15_000,
+                credits=min(8, admission.accepted_limits.max_queue),
+                lease_remaining_ms=admission.accepted_limits.idle_lease_ms,
+                accepted_chunks=expected,
             )
         if request.sequence != expected:
             return TranscriptionStreamStatus(
@@ -1457,11 +1512,77 @@ class TranscriptionService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome="invalid_sequence",
             )
+        limits = admission.accepted_limits
+        stream_format = self._speech_stream_formats.get(request.session_id)
+        now = time.monotonic()
+        async with self._speech_stream_lock:
+            input_bytes = self._speech_stream_input_bytes.get(request.session_id, 0)
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        if (
+            now - last_activity > limits.idle_lease_ms / 1000
+            or now - started_at > limits.max_active_ms / 1000
+        ):
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                timed_out = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=expected,
+                )
+                self._speech_stream_results[request.session_id] = timed_out
+                self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                )
+            return self._speech_stream_terminal[request.session_id]
+        reason = (
+            "resource_exhausted"
+            if len(request.audio_data) > limits.max_chunk_bytes
+            or input_bytes + len(request.audio_data) > limits.max_input_bytes
+            else None
+        )
+        if reason is not None:
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="failed",
+                    reason_code=reason,
+                    input_count=input_bytes,
+                )
+                terminal_status = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome=reason,
+                    accepted_chunks=expected,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = terminal_status
+            return terminal_status
         await self._process_audio_data(
             request.audio_data,
-            AudioFormat(
-                sample_rate=16_000, channels=1, encoding=AudioEncoding.PCM_S16LE, bits_per_sample=16
-            ),
+            stream_format,
             stream_id=request.session_id,
             source="speech_session",
         )
@@ -1470,13 +1591,48 @@ class TranscriptionService(BaseService):
         async with self._speech_stream_lock:
             self._speech_stream_next_sequence[request.session_id] = expected + 1
             self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
+            self._speech_stream_audio[request.session_id].extend(request.audio_data)
+            self._speech_stream_input_bytes[request.session_id] = input_bytes + len(
+                request.audio_data
+            )
+            self._speech_stream_last_activity[request.session_id] = now
         return TranscriptionStreamStatus(
             session_id=request.session_id,
             state="active",
             next_sequence=expected + 1,
-            credits=7,
-            lease_remaining_ms=15_000,
-            accepted_chunks=1,
+            credits=min(8, limits.max_queue)
+            if input_bytes + len(request.audio_data) < limits.max_input_bytes
+            else 0,
+            lease_remaining_ms=max(0, int(limits.idle_lease_ms - (time.monotonic() - now) * 1000)),
+            accepted_chunks=expected + 1,
+        )
+
+    async def _transcribe_stream_audio(
+        self, audio_data: bytes, audio_format: AudioFormat, stream_id: str
+    ) -> int:
+        """Run one terminal engine pass for an admitted stream."""
+        model = self._accurate_model if self._accurate_enabled else self._realtime_model
+        transcription_type = (
+            TranscriptionType.ACCURATE if self._accurate_enabled else TranscriptionType.REALTIME
+        )
+        if model is None or not audio_data:
+            return 0
+        duration_ms = (
+            len(audio_data)
+            / (audio_format.sample_rate * audio_format.channels * audio_format.bytes_per_sample)
+            * 1000
+        )
+        self._current_stream_id = stream_id
+        self._current_source = "speech_session"
+        return int(
+            await asyncio.to_thread(
+                self._transcribe_with_model,
+                self._stream_audio_to_numpy(audio_data, audio_format),
+                model,
+                transcription_type,
+                duration_ms,
+            )
+            or 0
         )
 
     @method_contract(
@@ -1503,23 +1659,87 @@ class TranscriptionService(BaseService):
             existing = self._speech_stream_results.get(request.session_id)
             if existing is not None:
                 return existing
-            admission = self._speech_streams.pop(request.session_id, None)
-            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            admission = self._speech_streams.get(request.session_id)
+            next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+            if admission is None:
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="outcome_unknown"
+                )
+                self._speech_stream_results[request.session_id] = result
+                return result
+            now = time.monotonic()
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+            if (
+                now - started_at > admission.accepted_limits.max_active_ms / 1000
+                or now - last_activity > admission.accepted_limits.idle_lease_ms / 1000
+            ):
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                self._speech_stream_formats.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                return result
+            if request.final_sequence is not None and request.final_sequence != next_sequence - 1:
+                return TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="failed",
+                    reason_code="invalid_sequence",
+                    input_count=next_sequence,
+                )
+            audio_data = bytes(self._speech_stream_audio.pop(request.session_id, bytearray()))
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            stream_format = self._speech_stream_formats.pop(request.session_id, None)
+            self._speech_streams.pop(request.session_id, None)
+            self._speech_stream_next_sequence.pop(request.session_id, None)
             self._speech_stream_payload_digests.pop(request.session_id, None)
-            result = TranscriptionStreamResult(
-                session_id=request.session_id,
-                state="completed" if admission is not None else "failed",
-                reason_code="completed" if admission is not None else "outcome_unknown",
-                final_sequence=request.final_sequence,
-            )
+            self._speech_stream_last_activity.pop(request.session_id, None)
+            self._speech_stream_started_at.pop(request.session_id, None)
+
+        output_count = (
+            await self._transcribe_stream_audio(audio_data, stream_format, request.session_id)
+            if stream_format is not None
+            else 0
+        )
+        state = "completed" if output_count else "failed"
+        reason_code = "completed" if state == "completed" else "model_unavailable"
+        result = TranscriptionStreamResult(
+            session_id=request.session_id,
+            state=state,
+            reason_code=reason_code,
+            final_sequence=request.final_sequence,
+            input_count=input_count,
+            output_count=output_count,
+        )
+        async with self._speech_stream_lock:
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
                 session_id=request.session_id,
-                state="completed" if admission is not None else "failed",
+                state=state,
                 next_sequence=next_sequence,
                 credits=0,
                 lease_remaining_ms=0,
-                terminal_outcome="completed" if admission is not None else "outcome_unknown",
+                terminal_outcome="completed" if state == "completed" else "failed",
+                accepted_chunks=next_sequence,
             )
         return result
 
@@ -1550,15 +1770,20 @@ class TranscriptionService(BaseService):
             admission = self._speech_streams.pop(request.session_id, None)
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            self._speech_stream_audio.pop(request.session_id, None)
+            self._speech_stream_last_activity.pop(request.session_id, None)
+            self._speech_stream_formats.pop(request.session_id, None)
             result = TranscriptionStreamResult(
                 session_id=request.session_id,
-                state="canceled" if admission is not None else "failed",
+                state=request.reason if admission is not None else "failed",
                 reason_code=request.reason if admission is not None else "outcome_unknown",
+                input_count=input_count,
             )
             self._speech_stream_results[request.session_id] = result
             self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
                 session_id=request.session_id,
-                state="canceled" if admission is not None else "failed",
+                state=request.reason if admission is not None else "failed",
                 next_sequence=next_sequence,
                 credits=0,
                 lease_remaining_ms=0,
@@ -1605,12 +1830,60 @@ class TranscriptionService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome="failed",
             )
+        limits = admission.accepted_limits
+        now = time.monotonic()
+        started_at = self._speech_stream_started_at.get(request.session_id, now)
+        last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+        lease_remaining_ms = max(0, int(limits.idle_lease_ms - (now - last_activity) * 1000))
+        expired = lease_remaining_ms == 0 or now - started_at > limits.max_active_ms / 1000
+        if not expired:
+            # Status is the authenticated protocol heartbeat. Refresh the
+            # idle lease only while the absolute lease remains valid.
+            async with self._speech_stream_lock:
+                if request.session_id in self._speech_streams:
+                    self._speech_stream_last_activity[request.session_id] = now
+            lease_remaining_ms = limits.idle_lease_ms
+        if expired:
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                self._speech_stream_formats.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                )
+                status = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = status
+            return status
         return TranscriptionStreamStatus(
             session_id=request.session_id,
             state="admitted",
-            next_sequence=self._speech_stream_next_sequence.get(request.session_id, 0),
-            credits=8,
-            lease_remaining_ms=15_000,
+            next_sequence=next_sequence,
+            credits=(
+                min(8, limits.max_queue)
+                if self._speech_stream_input_bytes.get(request.session_id, 0)
+                < limits.max_input_bytes
+                else 0
+            ),
+            lease_remaining_ms=lease_remaining_ms,
+            accepted_chunks=next_sequence,
         )
 
     @method_contract(

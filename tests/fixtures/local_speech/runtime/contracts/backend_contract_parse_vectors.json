@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "8e8d002a9210254f91733bcf19cd545754069344614c00d01c24461b38ab96cb",
+  "schema_content_hash": "8c327ed401c447c8b63d9e81a7136fbbf830185ebba9c602898b729549aa4362",
   "vectors": [
     {
       "accepted": true,
@@ -7246,8 +7246,10 @@
       "normalized": {
         "attempt_id": "attempt-1",
         "capability_revision": 1,
+        "channels": 1,
         "config_revision": 1,
         "consent_revision": null,
+        "encoding": "pcm_s16le",
         "exact_selector": false,
         "experimental_remote": false,
         "generation": 0,
@@ -7256,12 +7258,13 @@
         "remaining_deadline_ms": 60000,
         "request_id": "request-1",
         "route_revision": "route-1",
+        "sample_rate": 16000,
         "schema": "speech-stage-admission.v1",
         "stage": "stt",
         "target_peer_id": null,
         "target_resource_id": null
       },
-      "normalized_hash": "0ea2851392871a76dc2c5e1f030ccc6aa292d7113f63f75af985dff16fae6cbe",
+      "normalized_hash": "f2a344f58c8e21b256520a832ff55ed0bb32e6502a329cd29b57f03ff61717d5",
       "schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest"
     },
     {

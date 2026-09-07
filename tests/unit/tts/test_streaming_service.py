@@ -18,6 +18,8 @@ from app.shared.contracts.models.tts import (
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
+    TTSStreamPrepareRequest,
+    TTSStreamPrepareResponse,
     TTSStreamStartRequest,
     TTSSynthesizeRequest,
 )
@@ -60,8 +62,8 @@ def _audio_events(mock_bus) -> list[TTSAudioChunkEvent]:
 def _envelope(
     *,
     topic: str = TTSMethods.STREAM_CHUNK,
-    peer_id: str = "peer-a",
-    principal_id: str = "principal-a",
+    peer_id: str | None = "peer-a",
+    principal_id: str | None = "principal-a",
     correlation_id: str = "corr-a",
 ) -> Envelope:
     return Envelope(
@@ -81,6 +83,98 @@ def _audio_publish_calls(mock_bus):
 
 def _logged_messages(mock_log) -> str:
     return "\n".join(str(call.args[0]) for call in mock_log.call_args_list)
+
+
+async def _start_external_stream(
+    service: TTSService,
+    *,
+    stream_id: str,
+    peer_id: str | None = "peer-a",
+    principal_id: str | None = "principal-a",
+    correlation_id: str = "corr-a",
+    voice: str | None = None,
+    language: str | None = None,
+) -> tuple[TTSStreamPrepareResponse, Envelope]:
+    """Exercise the required prepare/start handshake for routed streams."""
+    envelope = _envelope(
+        topic=TTSMethods.STREAM_START,
+        peer_id=peer_id,
+        principal_id=principal_id,
+        correlation_id=correlation_id,
+    )
+    admission = await service.prepare_speech_stream(
+        TTSStreamPrepareRequest(
+            operation_id=f"operation-{stream_id}",
+            attempt_id=f"attempt-{stream_id}",
+            request_id=f"request-{stream_id}",
+            generation=0,
+            config_revision=0,
+            route_revision="route-1",
+            capability_revision=0,
+            voice=voice,
+            language=language,
+        ),
+        envelope,
+    )
+    assert admission.status == "admitted"
+    assert admission.session_id is not None
+    session_id = admission.session_id
+    await service._on_stream_start(
+        TTSStreamStartRequest(
+            stream_id=session_id,
+            format="wav",
+            interrupt=False,
+            play_on_server=False,
+            voice=voice,
+            language=language,
+            correlation_id=correlation_id,
+        ),
+        envelope,
+    )
+    return admission, envelope
+
+
+async def _external_chunk(
+    service: TTSService,
+    admission: TTSStreamPrepareResponse,
+    envelope: Envelope,
+    *,
+    sequence: int,
+    text: str,
+    is_final: bool = False,
+) -> None:
+    assert admission.session_id is not None
+    await service._on_stream_chunk(
+        TTSStreamChunkRequest(
+            stream_id=admission.session_id,
+            session_id=admission.session_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            sequence=sequence,
+            text=text,
+            is_final=is_final,
+        ),
+        envelope,
+    )
+
+
+async def _external_end(
+    service: TTSService,
+    admission: TTSStreamPrepareResponse,
+    envelope: Envelope,
+    *,
+    final_sequence: int | None,
+    correlation_id: str | None = None,
+) -> None:
+    assert admission.session_id is not None
+    await service._on_stream_end(
+        TTSStreamEndRequest(
+            stream_id=admission.session_id,
+            final_sequence=final_sequence,
+            correlation_id=correlation_id,
+        ),
+        envelope,
+    )
 
 
 def test_tts_stream_contracts_require_use_permissions():
@@ -150,8 +244,8 @@ async def test_stream_chunks_are_synthesized_in_sequence_when_received_out_of_or
 
     events = _audio_events(mock_bus)
     assert [(event.sequence, event.source_sequence, event.text) for event in events] == [
-        (0, 0, "first"),
-        (1, 1, "second"),
+        (0, 0, None),
+        (1, 1, None),
         (2, None, None),
     ]
     assert base64.b64decode(events[0].audio_data) == b"pcm:first"
@@ -279,19 +373,9 @@ async def test_stream_synthesis_receives_logical_voice_speed_and_sample_rate(ser
 async def test_targeted_stream_emits_ordered_and_final_audio_to_calling_peer(
     service: TTSService, mock_bus
 ):
-    await service._on_stream_start(
-        TTSStreamStartRequest(stream_id="peer-stream", format="raw", play_on_server=False),
-        _envelope(topic=TTSMethods.STREAM_START),
-    )
-
-    await service._on_stream_chunk(
-        TTSStreamChunkRequest(stream_id="peer-stream", sequence=0, text="hello peer"),
-        _envelope(),
-    )
-    await service._on_stream_end(
-        TTSStreamEndRequest(stream_id="peer-stream", final_sequence=0),
-        _envelope(topic=TTSMethods.STREAM_END),
-    )
+    admission, envelope = await _start_external_stream(service, stream_id="peer-stream")
+    await _external_chunk(service, admission, envelope, sequence=0, text="hello peer")
+    await _external_end(service, admission, envelope, final_sequence=0)
 
     calls = _audio_publish_calls(mock_bus)
     assert [(call.args[1].sequence, call.args[1].is_final) for call in calls] == [
@@ -305,6 +389,17 @@ async def test_targeted_stream_emits_ordered_and_final_audio_to_calling_peer(
     assert all(call.kwargs["correlation_id"] == "corr-a" for call in calls)
     service.stream.feed.assert_not_called()
     service.stream.play_async.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_external_stream_requires_prepare_before_legacy_frames(service: TTSService, mock_bus):
+    await service._on_stream_start(
+        TTSStreamStartRequest(stream_id="unprepared-stream", format="raw", play_on_server=False),
+        _envelope(topic=TTSMethods.STREAM_START),
+    )
+
+    assert "unprepared-stream" not in service._stream_states
+    assert any(call.args[0] == TTSMethods.ERROR for call in mock_bus.publish.await_args_list)
 
 
 @pytest.mark.asyncio
@@ -354,7 +449,7 @@ async def test_remote_peer_cannot_mutate_or_end_local_stream_with_colliding_id(
 
     events = _audio_events(mock_bus)
     assert [(event.text, event.is_final) for event in events] == [
-        ("local audio", False),
+        (None, False),
         (None, True),
     ]
     assert service.stream.feed.call_args_list[0].args == ("local audio",)
@@ -362,83 +457,59 @@ async def test_remote_peer_cannot_mutate_or_end_local_stream_with_colliding_id(
 
 @pytest.mark.asyncio
 async def test_mismatched_peer_cannot_append_or_end_targeted_stream(service: TTSService, mock_bus):
-    await service._on_stream_start(
-        TTSStreamStartRequest(stream_id="protected-stream", format="raw", play_on_server=False),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a"),
+    admission, envelope = await _start_external_stream(
+        service, stream_id="protected-stream", peer_id="peer-a"
     )
+    assert admission.session_id is not None
 
     await service._on_stream_chunk(
-        TTSStreamChunkRequest(stream_id="protected-stream", sequence=0, text="wrong peer"),
+        TTSStreamChunkRequest(
+            stream_id=admission.session_id,
+            session_id=admission.session_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            sequence=0,
+            text="wrong peer",
+        ),
         _envelope(peer_id="peer-b"),
     )
     await service._on_stream_end(
-        TTSStreamEndRequest(stream_id="protected-stream", final_sequence=0),
+        TTSStreamEndRequest(stream_id=admission.session_id, final_sequence=0),
         _envelope(topic=TTSMethods.STREAM_END, peer_id="peer-b"),
     )
 
     assert _audio_publish_calls(mock_bus) == []
-    assert "protected-stream" in service._stream_states
+    assert admission.session_id in service._stream_states
 
-    await service._on_stream_chunk(
-        TTSStreamChunkRequest(stream_id="protected-stream", sequence=0, text="right peer"),
-        _envelope(peer_id="peer-a"),
-    )
-    await service._on_stream_end(
-        TTSStreamEndRequest(stream_id="protected-stream", final_sequence=0),
-        _envelope(topic=TTSMethods.STREAM_END, peer_id="peer-a"),
-    )
+    await _external_chunk(service, admission, envelope, sequence=0, text="right peer")
+    await _external_end(service, admission, envelope, final_sequence=0)
 
     events = _audio_events(mock_bus)
     assert [(event.text, event.is_final) for event in events] == [
-        ("right peer", False),
+        (None, False),
         (None, True),
     ]
 
 
 @pytest.mark.asyncio
-async def test_same_peer_wrong_correlation_cannot_end_targeted_stream(
+async def test_same_peer_different_request_correlation_can_end_targeted_stream(
     service: TTSService, mock_bus
 ):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="protected-correlation",
-            format="raw",
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    admission, envelope = await _start_external_stream(
+        service,
+        stream_id="protected-correlation",
+        peer_id="peer-a",
+        correlation_id="corr-a",
     )
-    await service._on_stream_chunk(
-        TTSStreamChunkRequest(
-            stream_id="protected-correlation",
-            sequence=0,
-            text="right correlation",
-            correlation_id="corr-a",
-        ),
-        _envelope(peer_id="peer-a", correlation_id="corr-a"),
-    )
+    await _external_chunk(service, admission, envelope, sequence=0, text="right correlation")
 
     await service._on_stream_end(
         TTSStreamEndRequest(
-            stream_id="protected-correlation",
+            stream_id=admission.session_id,
             final_sequence=0,
             correlation_id="corr-b",
         ),
         _envelope(topic=TTSMethods.STREAM_END, peer_id="peer-a", correlation_id="corr-b"),
-    )
-
-    assert "protected-correlation" in service._stream_states
-    assert _audio_events(mock_bus) == [
-        event for event in _audio_events(mock_bus) if not event.is_final
-    ]
-
-    await service._on_stream_end(
-        TTSStreamEndRequest(
-            stream_id="protected-correlation",
-            final_sequence=0,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_END, peer_id="peer-a", correlation_id="corr-a"),
     )
 
     calls = _audio_publish_calls(mock_bus)
@@ -448,23 +519,21 @@ async def test_same_peer_wrong_correlation_cannot_end_targeted_stream(
 
 
 @pytest.mark.asyncio
-async def test_wrong_correlation_stream_start_cannot_interrupt_or_retarget_existing_stream(
+async def test_prepared_stream_start_is_idempotent_across_request_correlations(
     service: TTSService, mock_bus
 ):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="start-correlation",
-            format="raw",
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    admission, envelope = await _start_external_stream(
+        service,
+        stream_id="start-correlation",
+        peer_id="peer-a",
+        correlation_id="corr-a",
     )
-    original_state = service._stream_states["start-correlation"]
+    assert admission.session_id is not None
+    original_state = service._stream_states[admission.session_id]
 
     await service._on_stream_start(
         TTSStreamStartRequest(
-            stream_id="start-correlation",
+            stream_id=admission.session_id,
             format="wav",
             play_on_server=False,
             correlation_id="corr-b",
@@ -473,9 +542,9 @@ async def test_wrong_correlation_stream_start_cannot_interrupt_or_retarget_exist
     )
 
     assert _audio_publish_calls(mock_bus) == []
-    assert service._stream_states["start-correlation"] is original_state
-    assert service._stream_states["start-correlation"].correlation_id == "corr-a"
-    assert service._stream_states["start-correlation"].audio_format == "raw"
+    assert service._stream_states[admission.session_id] is original_state
+    assert service._stream_states[admission.session_id].correlation_id == "corr-a"
+    assert service._stream_states[admission.session_id].audio_format == "wav"
 
 
 @pytest.mark.asyncio
@@ -487,31 +556,17 @@ async def test_remote_interrupt_does_not_clear_local_or_other_peer_streams(
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=False)
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-b-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-b",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-b", correlation_id="corr-b"),
+    peer_b_admission, _ = await _start_external_stream(
+        service, stream_id="peer-b-stream", peer_id="peer-b", correlation_id="corr-b"
     )
-
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-a-stream",
-            format="raw",
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    peer_a_admission, _ = await _start_external_stream(
+        service, stream_id="peer-a-stream", peer_id="peer-a", correlation_id="corr-a"
     )
 
     assert set(service._stream_states) == {
         "local-stream",
-        "peer-a-stream",
-        "peer-b-stream",
+        peer_a_admission.session_id,
+        peer_b_admission.session_id,
     }
     assert _audio_publish_calls(mock_bus) == []
     service.stream.stop.assert_not_called()
@@ -521,27 +576,14 @@ async def test_remote_interrupt_does_not_clear_local_or_other_peer_streams(
 async def test_remote_stream_start_interrupt_clears_only_same_peer_correlation(
     service: TTSService, mock_bus
 ):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-a-corr-a",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    first_admission, _ = await _start_external_stream(
+        service, stream_id="peer-a-corr-a", peer_id="peer-a", correlation_id="corr-a"
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-a-corr-b",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-b",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-b"),
+    second_admission, _ = await _start_external_stream(
+        service, stream_id="peer-a-corr-b", peer_id="peer-a", correlation_id="corr-b"
     )
 
+    # A routed stream cannot opt into server playback/interruption after admission.
     await service._on_stream_start(
         TTSStreamStartRequest(
             stream_id="peer-a-corr-b-new",
@@ -553,31 +595,20 @@ async def test_remote_stream_start_interrupt_clears_only_same_peer_correlation(
         _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-b"),
     )
 
-    assert set(service._stream_states) == {"peer-a-corr-a", "peer-a-corr-b-new"}
-    calls = _audio_publish_calls(mock_bus)
-    assert len(calls) == 1
-    assert calls[0].args[1].stream_id == "peer-a-corr-b"
-    assert calls[0].kwargs["caller_peer_id"] == "peer-a"
-    assert calls[0].kwargs["correlation_id"] == "corr-b"
+    assert set(service._stream_states) == {first_admission.session_id, second_admission.session_id}
+    assert _audio_publish_calls(mock_bus) == []
 
 
 @pytest.mark.asyncio
 async def test_local_interrupt_does_not_clear_remote_streams(service: TTSService, mock_bus):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="remote-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    remote_admission, _ = await _start_external_stream(
+        service, stream_id="remote-stream", peer_id="peer-a", correlation_id="corr-a"
     )
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=True)
     )
 
-    assert set(service._stream_states) == {"local-stream", "remote-stream"}
+    assert set(service._stream_states) == {"local-stream", remote_admission.session_id}
     assert _audio_publish_calls(mock_bus) == []
 
 
@@ -586,35 +617,14 @@ async def test_external_peer_stop_targets_only_exact_correlation(service: TTSSer
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=False)
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-a-corr-a",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    peer_a_corr_a, _ = await _start_external_stream(
+        service, stream_id="peer-a-corr-a", peer_id="peer-a", correlation_id="corr-a"
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-a-corr-b",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-b",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-b"),
+    peer_a_corr_b, _ = await _start_external_stream(
+        service, stream_id="peer-a-corr-b", peer_id="peer-a", correlation_id="corr-b"
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-b-corr-a",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-b", correlation_id="corr-a"),
+    peer_b_corr_a, _ = await _start_external_stream(
+        service, stream_id="peer-b-corr-a", peer_id="peer-b", correlation_id="corr-a"
     )
 
     await service._on_stop(
@@ -624,12 +634,12 @@ async def test_external_peer_stop_targets_only_exact_correlation(service: TTSSer
 
     assert set(service._stream_states) == {
         "local-stream",
-        "peer-a-corr-b",
-        "peer-b-corr-a",
+        peer_a_corr_b.session_id,
+        peer_b_corr_a.session_id,
     }
     calls = _audio_publish_calls(mock_bus)
     assert len(calls) == 1
-    assert calls[0].args[1].stream_id == "peer-a-corr-a"
+    assert calls[0].args[1].stream_id == peer_a_corr_a.session_id
     assert calls[0].args[1].reason == "user_interrupt"
     assert calls[0].kwargs["caller_peer_id"] == "peer-a"
     assert calls[0].kwargs["correlation_id"] == "corr-a"
@@ -638,15 +648,8 @@ async def test_external_peer_stop_targets_only_exact_correlation(service: TTSSer
 
 @pytest.mark.asyncio
 async def test_peer_stop_without_correlation_fails_closed(service: TTSService, mock_bus):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="peer-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    admission, _ = await _start_external_stream(
+        service, stream_id="peer-stream", peer_id="peer-a", correlation_id="corr-a"
     )
 
     await service._on_stop(
@@ -654,7 +657,7 @@ async def test_peer_stop_without_correlation_fails_closed(service: TTSService, m
         _envelope(topic=TTSMethods.STOP, peer_id="peer-a", correlation_id=""),
     )
 
-    assert set(service._stream_states) == {"peer-stream"}
+    assert set(service._stream_states) == {admission.session_id}
     assert _audio_publish_calls(mock_bus) == []
     service.stream.stop.assert_not_called()
 
@@ -666,15 +669,8 @@ async def test_legacy_internal_empty_stop_remains_global(service: TTSService, mo
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=False)
     )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="remote-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+    remote_admission, _ = await _start_external_stream(
+        service, stream_id="remote-stream", peer_id="peer-a", correlation_id="corr-a"
     )
 
     await service._on_stop(EmptyInput())
@@ -683,7 +679,7 @@ async def test_legacy_internal_empty_stop_remains_global(service: TTSService, mo
     stopped_topics = [call.args[0] for call in mock_bus.publish.await_args_list]
     assert TTSMethods.STOPPED in stopped_topics
     terminal_stream_ids = {call.args[1].stream_id for call in _audio_publish_calls(mock_bus)}
-    assert terminal_stream_ids == {"local-stream", "remote-stream"}
+    assert terminal_stream_ids == {"local-stream", remote_admission.session_id}
 
 
 @pytest.mark.asyncio
@@ -693,21 +689,12 @@ async def test_authenticated_no_peer_stop_does_not_collide_with_local_stream(
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=False)
     )
-    principal_envelope = Envelope(
-        type=TTSMethods.STREAM_START,
-        payload={},
+    admission, principal_envelope = await _start_external_stream(
+        service,
+        stream_id="http-stream",
+        peer_id=None,
         principal_id="principal-http",
         correlation_id="corr-http",
-    )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="http-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-http",
-        ),
-        principal_envelope,
     )
 
     await service._on_stop(
@@ -718,7 +705,7 @@ async def test_authenticated_no_peer_stop_does_not_collide_with_local_stream(
     assert set(service._stream_states) == {"local-stream"}
     calls = _audio_publish_calls(mock_bus)
     assert len(calls) == 1
-    assert calls[0].args[1].stream_id == "http-stream"
+    assert calls[0].args[1].stream_id == admission.session_id
     assert calls[0].kwargs["caller_peer_id"] is None
     assert calls[0].kwargs["principal_id"] == "principal-http"
     assert calls[0].kwargs["correlation_id"] == "corr-http"
@@ -733,37 +720,19 @@ async def test_authenticated_no_peer_stream_start_interrupt_is_principal_scoped(
     await service._on_stream_start(
         TTSStreamStartRequest(stream_id="local-stream", format="raw", interrupt=False)
     )
-    http_corr_a = Envelope(
-        type=TTSMethods.STREAM_START,
-        payload={},
+    first_admission, _ = await _start_external_stream(
+        service,
+        stream_id="http-corr-a",
+        peer_id=None,
         principal_id="principal-http",
         correlation_id="corr-a",
     )
-    http_corr_b = Envelope(
-        type=TTSMethods.STREAM_START,
-        payload={},
+    second_admission, http_corr_b = await _start_external_stream(
+        service,
+        stream_id="http-corr-b",
+        peer_id=None,
         principal_id="principal-http",
         correlation_id="corr-b",
-    )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="http-corr-a",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        http_corr_a,
-    )
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="http-corr-b",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-b",
-        ),
-        http_corr_b,
     )
 
     await service._on_stream_start(
@@ -777,53 +746,36 @@ async def test_authenticated_no_peer_stream_start_interrupt_is_principal_scoped(
         http_corr_b,
     )
 
-    assert set(service._stream_states) == {"local-stream", "http-corr-a", "http-corr-b-new"}
+    assert set(service._stream_states) == {
+        "local-stream",
+        first_admission.session_id,
+        second_admission.session_id,
+    }
     service.stream.stop.assert_not_called()
-    calls = _audio_publish_calls(mock_bus)
-    assert len(calls) == 1
-    assert calls[0].args[1].stream_id == "http-corr-b"
-    assert calls[0].kwargs["caller_peer_id"] is None
-    assert calls[0].kwargs["principal_id"] == "principal-http"
-    assert calls[0].kwargs["correlation_id"] == "corr-b"
+    assert _audio_publish_calls(mock_bus) == []
 
 
 @pytest.mark.asyncio
-async def test_valid_same_owner_interrupt_replaces_stream_and_emits_terminal(
-    service: TTSService, mock_bus
-):
-    await service._on_stream_start(
-        TTSStreamStartRequest(
-            stream_id="replace-stream",
-            format="raw",
-            interrupt=False,
-            play_on_server=False,
-            correlation_id="corr-a",
-        ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+async def test_prepared_stream_rejects_legacy_interrupt_replacement(service: TTSService, mock_bus):
+    admission, envelope = await _start_external_stream(
+        service, stream_id="replace-stream", peer_id="peer-a", correlation_id="corr-a"
     )
-    original_state = service._stream_states["replace-stream"]
+    assert admission.session_id is not None
+    original_state = service._stream_states[admission.session_id]
 
     await service._on_stream_start(
         TTSStreamStartRequest(
-            stream_id="replace-stream",
+            stream_id=admission.session_id,
             format="wav",
             interrupt=True,
             play_on_server=False,
             correlation_id="corr-a",
         ),
-        _envelope(topic=TTSMethods.STREAM_START, peer_id="peer-a", correlation_id="corr-a"),
+        envelope,
     )
 
-    calls = _audio_publish_calls(mock_bus)
-    assert len(calls) == 1
-    assert calls[0].args[1].stream_id == "replace-stream"
-    assert calls[0].args[1].is_final is True
-    assert calls[0].args[1].reason == "interrupted"
-    assert calls[0].kwargs["caller_peer_id"] == "peer-a"
-    assert calls[0].kwargs["correlation_id"] == "corr-a"
-    assert service._stream_states["replace-stream"] is not original_state
-    assert service._stream_states["replace-stream"].audio_format == "wav"
-    assert service._stream_states["replace-stream"].correlation_id == "corr-a"
+    assert _audio_publish_calls(mock_bus) == []
+    assert service._stream_states[admission.session_id] is original_state
 
 
 @pytest.mark.asyncio
@@ -850,16 +802,22 @@ async def test_targeted_stream_error_does_not_mesh_broadcast(service: TTSService
 async def test_stop_emits_targeted_terminal_marker_once_and_clears_stream(
     service: TTSService, mock_bus
 ):
-    await service._on_stream_start(
-        TTSStreamStartRequest(stream_id="target-stop", format="raw", play_on_server=False),
-        _envelope(topic=TTSMethods.STREAM_START),
+    admission, envelope = await _start_external_stream(
+        service, stream_id="target-stop", peer_id="peer-a", principal_id="principal-a"
     )
 
     await service._on_stop(EmptyInput())
     await service._on_stop(EmptyInput())
     await service._on_stream_chunk(
-        TTSStreamChunkRequest(stream_id="target-stop", sequence=0, text="late"),
-        _envelope(),
+        TTSStreamChunkRequest(
+            stream_id=admission.session_id,
+            session_id=admission.session_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            sequence=0,
+            text="late",
+        ),
+        envelope,
     )
 
     calls = _audio_publish_calls(mock_bus)
@@ -886,27 +844,32 @@ async def test_stop_during_in_flight_synthesis_suppresses_late_audio_chunk(
         return f"pcm:{text}".encode(), 22050
 
     monkeypatch.setattr(service, "_synthesize_to_bytes", blocked_synthesize)
-    await service._on_stream_start(
-        TTSStreamStartRequest(stream_id="target-race", format="raw", play_on_server=False),
-        _envelope(topic=TTSMethods.STREAM_START),
+    admission, envelope = await _start_external_stream(
+        service, stream_id="target-race", peer_id="peer-a", principal_id="principal-a"
     )
 
     chunk_task = asyncio.create_task(
         service._on_stream_chunk(
-            TTSStreamChunkRequest(stream_id="target-race", sequence=0, text="late audio"),
-            _envelope(),
+            TTSStreamChunkRequest(
+                stream_id=admission.session_id,
+                session_id=admission.session_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                sequence=0,
+                text="late audio",
+            ),
+            envelope,
         )
     )
     await synthesis_started.wait()
 
     await service._on_stop(EmptyInput())
-    await service._on_stream_start(
-        TTSStreamStartRequest(stream_id="target-race", format="raw", play_on_server=False),
-        _envelope(
-            topic=TTSMethods.STREAM_START,
-            peer_id="peer-a",
-            correlation_id="corr-restarted",
-        ),
+    restarted_admission, _ = await _start_external_stream(
+        service,
+        stream_id="target-race-restarted",
+        peer_id="peer-a",
+        principal_id="principal-a",
+        correlation_id="corr-restarted",
     )
     release_synthesis.set()
     await chunk_task
@@ -921,9 +884,9 @@ async def test_stop_during_in_flight_synthesis_suppresses_late_audio_chunk(
     assert terminal.kwargs["principal_id"] == "principal-a"
     assert terminal.kwargs["correlation_id"] == "corr-a"
     assert [call for call in calls if not call.args[1].is_final] == []
-    assert "target-race" in service._stream_states
-    assert service._stream_states["target-race"].correlation_id == "corr-restarted"
-    assert service._stream_states["target-race"].next_text_sequence == 0
+    assert restarted_admission.session_id in service._stream_states
+    assert service._stream_states[restarted_admission.session_id].correlation_id == "corr-restarted"
+    assert service._stream_states[restarted_admission.session_id].next_text_sequence == 0
     service.stream.feed.assert_not_called()
     service.stream.play_async.assert_not_called()
 
@@ -956,7 +919,7 @@ async def test_concurrent_stream_chunk_delivery_keeps_audio_order(
 
     events = _audio_events(mock_bus)
     assert [(event.sequence, event.text, event.is_final) for event in events] == [
-        (0, "first", False),
-        (1, "second", False),
+        (0, None, False),
+        (1, None, False),
         (2, None, True),
     ]

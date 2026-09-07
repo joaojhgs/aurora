@@ -1625,6 +1625,25 @@ def _extract_mesh_selector(message: Any, *, topic: str | None = None) -> MeshAdd
         ):
             selector = getattr(message, "selector", None)
 
+    # Native speech-session requests carry their exact peer/resource selector
+    # as admission fields rather than embedding a second MeshAddressSelector.
+    # Normalize those fields at the mesh boundary so start/chunk/end/status
+    # calls all traverse the same policy and binding checks.
+    if selector is None and topic is not None:
+        speech_topic = topic.startswith(("TTS.", "STT.", "Transcription.", "WakeWord.", "VAD."))
+        if speech_topic:
+            if isinstance(message, Mapping):
+                target_peer_id = message.get("target_peer_id")
+                target_resource_id = message.get("target_resource_id")
+            else:
+                target_peer_id = getattr(message, "target_peer_id", None)
+                target_resource_id = getattr(message, "target_resource_id", None)
+            if target_peer_id is not None or target_resource_id is not None:
+                selector = MeshAddressSelector(
+                    peer_id=target_peer_id,
+                    service_instance_id=target_resource_id,
+                )
+
     if isinstance(selector, MeshAddressSelector):
         return selector
     if isinstance(selector, Mapping):

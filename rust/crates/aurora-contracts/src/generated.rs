@@ -654,7 +654,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.AudioChunk",
         direction: "event",
         model_name: "TTSAudioChunkEvent",
-        schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+        schema_hash: "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
         schema_json: include_str!("../schema/tts_audio_chunk_event.json"),
     },
     SchemaDescriptor {
@@ -1222,7 +1222,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "Transcription.StreamStart",
         direction: "input",
         model_name: "TranscriptionStreamStartRequest",
-        schema_hash: "c71203e954d5c9e3de66195c40dbc703054a1ed73f722f0eed1a71486cacd8a9",
+        schema_hash: "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696",
         schema_json: include_str!("../schema/transcription_stream_start_request.json"),
     },
     SchemaDescriptor {
@@ -2821,7 +2821,7 @@ pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[
         module: "TTS",
         name: "AudioChunk",
         schema_id: "TTS.AudioChunk.event.TTSAudioChunkEvent",
-        schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+        schema_hash: "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
         required_permissions: &["TTS.use"],
         bounded: true,
         authorized: true,

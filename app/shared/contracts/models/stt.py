@@ -145,6 +145,9 @@ class TranscriptionStreamStartRequest(SpeechStageAdmissionRequestV1):
 
     stage: Literal["stt"] = "stt"
     mode: Literal["streaming"] = "streaming"
+    sample_rate: int = Field(default=16_000, ge=8_000, le=MAX_AUDIO_SAMPLE_RATE)
+    channels: int = Field(default=1, ge=1, le=MAX_AUDIO_CHANNELS)
+    encoding: Literal["pcm_s16le"] = "pcm_s16le"
 
 
 class TranscriptionStreamChunkRequest(SpeechStreamFrameV1):
