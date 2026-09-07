@@ -801,7 +801,7 @@
       "handler": "push_speech_stream_chunk",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1373
+        "line": 1370
       },
       "exposure": "both",
       "method_type": "use",
@@ -822,7 +822,7 @@
       "handler": "end_speech_stream",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1454
+        "line": 1482
       },
       "exposure": "both",
       "method_type": "use",
@@ -843,7 +843,7 @@
       "handler": "cancel_speech_stream",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1498
+        "line": 1526
       },
       "exposure": "both",
       "method_type": "use",
@@ -864,7 +864,7 @@
       "handler": "speech_stream_status",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1541
+        "line": 1569
       },
       "exposure": "both",
       "method_type": "use",
@@ -885,7 +885,7 @@
       "handler": "speech_stream_result",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1581
+        "line": 1616
       },
       "exposure": "both",
       "method_type": "use",
@@ -906,7 +906,7 @@
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1611
+        "line": 1646
       },
       "exposure": "both",
       "method_type": "use",
@@ -969,7 +969,7 @@
       "handler": "push_speech_stream_chunk",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 955
+        "line": 959
       },
       "exposure": "both",
       "method_type": "use",
@@ -990,7 +990,7 @@
       "handler": "end_speech_stream",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1030
+        "line": 1074
       },
       "exposure": "both",
       "method_type": "use",
@@ -1011,7 +1011,7 @@
       "handler": "cancel_speech_stream",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1069
+        "line": 1118
       },
       "exposure": "both",
       "method_type": "use",
@@ -1032,7 +1032,7 @@
       "handler": "speech_stream_status",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1108
+        "line": 1161
       },
       "exposure": "both",
       "method_type": "use",
@@ -1053,7 +1053,7 @@
       "handler": "speech_stream_result",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1145
+        "line": 1209
       },
       "exposure": "both",
       "method_type": "use",
@@ -1074,7 +1074,7 @@
       "handler": "detect_wake_word",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1325
+        "line": 1389
       },
       "exposure": "both",
       "method_type": "use",
@@ -2334,7 +2334,7 @@
       "handler": "cancel_speech_stream",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3202
+        "line": 3206
       },
       "exposure": "both",
       "method_type": "use",
@@ -2354,7 +2354,7 @@
       "handler": "speech_stream_result",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3253
+        "line": 3257
       },
       "exposure": "both",
       "method_type": "use",
@@ -2374,7 +2374,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3279
+        "line": 3283
       },
       "exposure": "both",
       "method_type": "use",
@@ -2394,7 +2394,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3344
+        "line": 3348
       },
       "exposure": "both",
       "method_type": "use",
@@ -2414,7 +2414,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3769
+        "line": 3773
       },
       "exposure": "both",
       "method_type": "use",
@@ -2454,7 +2454,7 @@
       "handler": "start_stream",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 108
+        "line": 110
       },
       "exposure": "both",
       "method_type": "use",
@@ -2474,7 +2474,7 @@
       "handler": "push_stream_chunk",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 162
+        "line": 163
       },
       "exposure": "both",
       "method_type": "use",
@@ -2494,7 +2494,7 @@
       "handler": "end_stream",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 211
+        "line": 212
       },
       "exposure": "both",
       "method_type": "use",
@@ -2514,7 +2514,7 @@
       "handler": "cancel_stream",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 251
+        "line": 252
       },
       "exposure": "both",
       "method_type": "use",
@@ -2534,7 +2534,7 @@
       "handler": "stream_status",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 290
+        "line": 291
       },
       "exposure": "both",
       "method_type": "use",
@@ -2554,7 +2554,7 @@
       "handler": "stream_result",
       "source": {
         "file": "app/services/vad/service.py",
-        "line": 316
+        "line": 322
       },
       "exposure": "both",
       "method_type": "use",
