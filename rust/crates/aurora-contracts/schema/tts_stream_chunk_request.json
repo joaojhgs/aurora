@@ -103,6 +103,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Ordered text chunk for an active TTS streaming session.",
   "properties": {
+    "attempt_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attempt Id"
+    },
     "correlation_id": {
       "anyOf": [
         {
@@ -114,6 +128,20 @@
       ],
       "default": null,
       "title": "Correlation Id"
+    },
+    "generation": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generation"
     },
     "is_final": {
       "default": false,
@@ -137,11 +165,27 @@
       "title": "Sequence",
       "type": "integer"
     },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
     "stream_id": {
       "title": "Stream Id",
       "type": "string"
     },
     "text": {
+      "maxLength": 4096,
+      "minLength": 1,
       "title": "Text",
       "type": "string"
     }

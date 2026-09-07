@@ -2,18 +2,25 @@ import { describe, expect, it } from 'vitest'
 import {
   AURORA_NODE_CONFIG_MODULES,
   AURORA_NODE_CONFIG_STORAGE_KEY,
+  AURORA_NODE_CONFIG_V2_STORAGE_KEY,
   AuroraNodeConfigValidationError,
+  AuroraNodeConfigRevisionConflictError,
   AuroraServiceRoutingError,
   createAuroraNodeConfigTauriStore,
+  createAuroraNodeConfigV2TauriStore,
   emptyAuroraNodeConfigDocument,
+  emptyAuroraNodeConfigDocumentV2,
   isAuroraNodeConfigModule,
   isAuroraNodeServiceExposed,
   migrateAuroraNodeConfigDocument,
+  migrateAuroraNodeConfigDocumentV2,
   parseAuroraNodeConfigDocument,
   parseAuroraNodeConfigDocumentWire,
   resolveServiceRouting,
   sanitizeAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
+  updateAuroraNodeConfigDocumentV2,
+  type AuroraNodeConfigDocumentV2,
   type AuroraNodeConfigDocumentV1,
   type AuroraNodeConfigModule,
   type AuroraNodeConfigSecureStorage,
@@ -126,6 +133,52 @@ describe('Aurora node config document', () => {
       },
     })).toThrow('unsupported preference')
     expect(parseAuroraNodeConfigDocument('{"version":1,"updatedAtMs":-1}')).toBeNull()
+  })
+})
+
+describe('Aurora native speech node config v2', () => {
+  it('inherits STT/TTS routing while keeping KWS/VAD local-only and sharing disabled', () => {
+    const document = emptyAuroraNodeConfigDocumentV2(700)
+
+    expect(document.version).toBe(2)
+    expect(document.speech.stages.stt.routing).toEqual({ prefer: 'local', fallback: 'network' })
+    expect(document.speech.stages.tts.routing).toEqual({ prefer: 'local', fallback: 'network' })
+    expect(document.speech.stages.kws.routing).toEqual({ prefer: 'local_only', fallback: 'error' })
+    expect(document.speech.stages.vad.routing).toEqual({ prefer: 'local_only', fallback: 'error' })
+    expect(document.speech.sharing).toEqual({ stt: false, tts: false, kws: false, vad: false })
+    expect(document.legacyV1Snapshot).toBeNull()
+  })
+
+  it('migrates legacy routing independently and retains a read-only rollback snapshot', () => {
+    const migrated = migrateAuroraNodeConfigDocumentV2({
+      version: 1,
+      updatedAtMs: 710,
+      services: {
+        stt: { routing: { prefer: 'network', fallback: 'local' } },
+        tts: { routing: { prefer: 'local_only', fallback: 'error' } },
+      },
+      expose: { featureOverrides: {} },
+    }, 999)
+
+    expect(migrated.speech.stages.stt.routing).toEqual({ prefer: 'network', fallback: 'local' })
+    expect(migrated.speech.stages.tts.routing).toEqual({ prefer: 'local_only', fallback: 'error' })
+    expect(migrated.speech.stages.kws.experimentalRemote).toBe(false)
+    expect(migrated.legacyV1Snapshot?.services.tts?.routing).toEqual({ prefer: 'local_only', fallback: 'error' })
+  })
+
+  it('uses compare-and-swap revisions and reports next-generation effectiveness', () => {
+    const current = emptyAuroraNodeConfigDocumentV2(720)
+    const draft = { ...current, speech: { ...current.speech, sharing: { ...current.speech.sharing, tts: true } } }
+    const updated = updateAuroraNodeConfigDocumentV2(current, draft, 1, 721)
+
+    expect(updated.document.revision).toBe(2)
+    expect(updated.acknowledgement).toEqual({
+      savedRevision: 2,
+      effectiveRevision: 1,
+      pendingNextGeneration: true,
+      pendingRevision: 2,
+    })
+    expect(() => updateAuroraNodeConfigDocumentV2(current, draft, 0)).toThrow(AuroraNodeConfigRevisionConflictError)
   })
 })
 
@@ -267,5 +320,22 @@ describe('createAuroraNodeConfigTauriStore', () => {
     expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(false)
     await store.clear?.()
     expect(storage.values.size).toBe(0)
+  })
+
+  it('migrates the legacy key once and then reads the canonical v2 key', async () => {
+    const storage = new FakeSecureStorage()
+    const legacy = emptyAuroraNodeConfigDocument(800)
+    legacy.services.tts = { routing: { prefer: 'network', fallback: 'local' } }
+    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, JSON.stringify(legacy))
+    const store = createAuroraNodeConfigV2TauriStore(storage)
+
+    const migrated = await store.load()
+    expect(migrated?.version).toBe(2)
+    expect(migrated?.speech.stages.tts.routing).toEqual({ prefer: 'network', fallback: 'local' })
+    expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(true)
+
+    const updated = { ...migrated!, revision: 2 }
+    const acknowledgement = await store.save(updated)
+    expect(acknowledgement).toMatchObject({ savedRevision: 2, effectiveRevision: 2, pendingNextGeneration: false })
   })
 })

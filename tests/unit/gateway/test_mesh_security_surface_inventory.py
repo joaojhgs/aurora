@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_PATH = ROOT / "docs/security/mesh-security-surface-inventory.json"
 SCHEMA_PATH = ROOT / "docs/security/mesh-security-surface-inventory.schema.json"
 
-EXPECTED_METHOD_COUNT = 100
+EXPECTED_METHOD_COUNT = 123
 EXPECTED_PERMISSIONLESS_METHOD_COUNT = 0
 EXPECTED_MESH_PUBLISHER_COUNT = 0
 EXPECTED_PERMISSIONLESS_TOPICS: set[str] = set()
@@ -34,10 +34,11 @@ EXPECTED_METHOD_COUNTS_BY_MODULE = {
     "Orchestrator": 13,
     "Scheduler": 6,
     "STTCoordinator": 5,
-    "TTS": 22,
+    "TTS": 26,
     "Tooling": 39,
-    "Transcription": 2,
-    "WakeWord": 2,
+    "Transcription": 8,
+    "VAD": 7,
+    "WakeWord": 8,
 }
 EXPECTED_FEATURE_IDS_BY_MODULE = {
     module: {feature.feature_id for feature in CALLABLE_FEATURES if feature.module == module}
@@ -90,6 +91,13 @@ EXPECTED_REPAIRED_PERMISSIONS = {
     "Transcription.Transcribe": ["Transcription.Transcribe"],
     "WakeWord.Detect": ["WakeWord.Detect"],
     "WakeWord.ProcessAudio": ["WakeWord.ProcessAudio"],
+    "VAD.Detect": ["VAD.Detect"],
+    "VAD.StreamStart": ["VAD.StreamStart"],
+    "VAD.StreamChunk": ["VAD.StreamChunk"],
+    "VAD.StreamEnd": ["VAD.StreamEnd"],
+    "VAD.StreamCancel": ["VAD.StreamCancel"],
+    "VAD.StreamStatus": ["VAD.StreamStatus"],
+    "VAD.StreamResult": ["VAD.StreamResult"],
 }
 
 

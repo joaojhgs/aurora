@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import io
 import os
 import threading
 import time
+import uuid
 import wave
 from collections import deque
 from datetime import datetime
@@ -56,6 +58,14 @@ from app.shared.contracts.models.stt import (
     TranscribeAudioResponse,
     TranscriptionMethods,
     TranscriptionModule,
+    TranscriptionStreamAdmission,
+    TranscriptionStreamCancelRequest,
+    TranscriptionStreamChunkRequest,
+    TranscriptionStreamEndRequest,
+    TranscriptionStreamResult,
+    TranscriptionStreamStartRequest,
+    TranscriptionStreamStatus,
+    TranscriptionStreamStatusRequest,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.path_utils import ensure_path_writable_or_tmp
@@ -66,6 +76,27 @@ from app.shared.speech_language_policy import (
 )
 
 config_api = ConfigAPI()
+
+
+def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None, str | None]:
+    """Return the stable transport owner tuple for a speech stream."""
+    if envelope is None:
+        return (None, None, None)
+    return (
+        envelope.caller_peer_id if envelope.caller_peer_id else None,
+        envelope.principal_id if envelope.principal_id else None,
+        envelope.correlation_id if envelope.correlation_id else None,
+    )
+
+
+def _stream_owner_matches(
+    owner: tuple[str | None, str | None, str | None] | None,
+    envelope: Envelope | None,
+) -> bool:
+    """Keep every stream operation bound to its authenticated transport owner."""
+    if owner is None:
+        return False
+    return owner == _stream_owner(envelope)
 
 
 def _create_vad(mode: int) -> Any:
@@ -113,6 +144,13 @@ class TranscriptionService(BaseService):
         self._running = False
         self._transcribing = False
         self._paused = False
+        self._speech_streams: dict[str, TranscriptionStreamAdmission] = {}
+        self._speech_stream_next_sequence: dict[str, int] = {}
+        self._speech_stream_terminal: dict[str, TranscriptionStreamStatus] = {}
+        self._speech_stream_results: dict[str, TranscriptionStreamResult] = {}
+        self._speech_stream_payload_digests: dict[str, dict[int, str]] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None, str | None]] = {}
+        self._speech_stream_lock = asyncio.Lock()
 
         # Models
         self._realtime_model: Any | None = None
@@ -216,6 +254,13 @@ class TranscriptionService(BaseService):
         self._running = False
         self._transcribing = False
         self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        async with self._speech_stream_lock:
+            self._speech_streams.clear()
+            self._speech_stream_next_sequence.clear()
+            self._speech_stream_terminal.clear()
+            self._speech_stream_results.clear()
+            self._speech_stream_payload_digests.clear()
+            self._speech_stream_owners.clear()
 
         # Wait for processing thread to finish
         if self._process_thread and self._process_thread.is_alive():
@@ -1269,6 +1314,299 @@ class TranscriptionService(BaseService):
 
         else:
             raise ValueError(f"Unsupported audio format: {format}")
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_START,
+        summary="Admit an owner-scoped streaming transcription session",
+        input_model=TranscriptionStreamStartRequest,
+        output_model=TranscriptionStreamAdmission,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_START],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def start_speech_stream(
+        self,
+        request: TranscriptionStreamStartRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamAdmission:
+        """Start a bounded stream without moving microphone ownership."""
+        owner = _stream_owner(envelope)
+        async with self._speech_stream_lock:
+            for existing in self._speech_streams.values():
+                if (
+                    existing.operation_id == request.operation_id
+                    and existing.attempt_id == request.attempt_id
+                ):
+                    if (
+                        existing.generation == request.generation
+                        and _stream_owner_matches(
+                            self._speech_stream_owners.get(existing.session_id or ""), envelope
+                        )
+                    ):
+                        return existing
+                    return TranscriptionStreamAdmission(
+                        operation_id=request.operation_id,
+                        attempt_id=request.attempt_id,
+                        generation=request.generation,
+                        status="rejected",
+                        reason_code="session_conflict",
+                        capability_revision=request.capability_revision,
+                    )
+        session_id = f"stt-session-{uuid.uuid4().hex}"
+        admission = TranscriptionStreamAdmission(
+            session_id=session_id,
+            operation_id=request.operation_id,
+            attempt_id=request.attempt_id,
+            generation=request.generation,
+            status="admitted",
+            reason_code="admitted",
+            capability_revision=request.capability_revision,
+        )
+        async with self._speech_stream_lock:
+            self._speech_streams[session_id] = admission
+            self._speech_stream_next_sequence[session_id] = 0
+            self._speech_stream_payload_digests[session_id] = {}
+            self._speech_stream_owners[session_id] = owner
+        return admission
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_CHUNK,
+        summary="Accept one ordered audio frame for a transcription session",
+        input_model=TranscriptionStreamChunkRequest,
+        output_model=TranscriptionStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_CHUNK],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def push_speech_stream_chunk(
+        self,
+        request: TranscriptionStreamChunkRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamStatus:
+        async with self._speech_stream_lock:
+            admission = self._speech_streams.get(request.session_id)
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            expected = self._speech_stream_next_sequence.get(request.session_id, 0)
+            digest = hashlib.sha256(request.audio_data).hexdigest()
+            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(request.sequence)
+            owner = self._speech_stream_owners.get(request.session_id)
+        if admission is None:
+            if terminal is not None:
+                if not _stream_owner_matches(owner, envelope):
+                    return TranscriptionStreamStatus(
+                        session_id=request.session_id,
+                        state="failed",
+                        next_sequence=0,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="session_conflict",
+                    )
+                return terminal
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=0, credits=0,
+                lease_remaining_ms=0, terminal_outcome="failed",
+            )
+        if not _stream_owner_matches(owner, envelope):
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+            )
+        if request.attempt_id != admission.attempt_id or request.generation != admission.generation:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+            )
+        # The first frame is sequence zero.  Duplicates are idempotent, gaps
+        # are terminal; the stream never silently reorders audio.
+        if request.sequence < expected:
+            if previous_digest != digest:
+                return TranscriptionStreamStatus(
+                    session_id=request.session_id, state="failed", next_sequence=expected, credits=0,
+                    lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                )
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="active", next_sequence=expected,
+                credits=8, lease_remaining_ms=15_000,
+            )
+        if request.sequence != expected:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+            )
+        await self._process_audio_data(
+            request.audio_data,
+            AudioFormat(sample_rate=16_000, channels=1, encoding=AudioEncoding.PCM_S16LE, bits_per_sample=16),
+            stream_id=request.session_id,
+            source="speech_session",
+        )
+        # Admission objects are intentionally kept as immutable control-plane
+        # facts.  Sequence progress is stored separately on the instance.
+        async with self._speech_stream_lock:
+            self._speech_stream_next_sequence[request.session_id] = expected + 1
+            self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
+        return TranscriptionStreamStatus(
+            session_id=request.session_id, state="active", next_sequence=expected + 1,
+            credits=7, lease_remaining_ms=15_000, accepted_chunks=1,
+        )
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_END,
+        summary="Finish a streaming transcription session",
+        input_model=TranscriptionStreamEndRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_END],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def end_speech_stream(
+        self,
+        request: TranscriptionStreamEndRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_streams.pop(request.session_id, None)
+            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            result = TranscriptionStreamResult(
+                session_id=request.session_id,
+                state="completed" if admission is not None else "failed",
+                reason_code="completed" if admission is not None else "outcome_unknown",
+                final_sequence=request.final_sequence,
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="completed" if admission is not None else "failed",
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="completed" if admission is not None else "outcome_unknown",
+            )
+        return result
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_CANCEL,
+        summary="Cancel a streaming transcription session",
+        input_model=TranscriptionStreamCancelRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_CANCEL],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def cancel_speech_stream(
+        self,
+        request: TranscriptionStreamCancelRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_streams.pop(request.session_id, None)
+            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            result = TranscriptionStreamResult(
+                session_id=request.session_id,
+                state="canceled" if admission is not None else "failed",
+                reason_code=request.reason if admission is not None else "outcome_unknown",
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="canceled" if admission is not None else "failed",
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome=request.reason if admission is not None else "outcome_unknown",
+            )
+        return result
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_STATUS,
+        summary="Read streaming transcription session status",
+        input_model=TranscriptionStreamStatusRequest,
+        output_model=TranscriptionStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_STATUS],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def speech_stream_status(
+        self,
+        request: TranscriptionStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamStatus:
+        async with self._speech_stream_lock:
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            admission = self._speech_streams.get(request.session_id)
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=0,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="session_conflict",
+                )
+        if terminal is not None:
+            return terminal
+        if admission is None:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=0, credits=0,
+                lease_remaining_ms=0, terminal_outcome="failed",
+            )
+        return TranscriptionStreamStatus(
+            session_id=request.session_id, state="admitted", next_sequence=self._speech_stream_next_sequence.get(request.session_id, 0),
+            credits=8, lease_remaining_ms=15_000,
+        )
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_RESULT,
+        summary="Return terminal transcription stream metadata",
+        input_model=TranscriptionStreamStatusRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_RESULT],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def speech_stream_result(
+        self,
+        request: TranscriptionStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            result = self._speech_stream_results.get(request.session_id)
+        if result is not None:
+            return result
+        return TranscriptionStreamResult(
+            session_id=request.session_id,
+            state="failed",
+            reason_code="outcome_unknown",
+        )
 
     @method_contract(
         method_id=TranscriptionMethods.TRANSCRIBE,

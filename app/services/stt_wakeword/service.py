@@ -23,6 +23,7 @@ import json
 import os
 import socket
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,6 +61,14 @@ from app.shared.contracts.models.stt import (
     WakeWordDetectResponse,
     WakeWordMethods,
     WakeWordModule,
+    WakeWordStreamAdmission,
+    WakeWordStreamCancelRequest,
+    WakeWordStreamChunkRequest,
+    WakeWordStreamEndRequest,
+    WakeWordStreamResult,
+    WakeWordStreamStartRequest,
+    WakeWordStreamStatus,
+    WakeWordStreamStatusRequest,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.messaging.models.stt_wakeword_models import (
@@ -75,6 +84,25 @@ from app.shared.speech_language_policy import (
 )
 
 config_api = ConfigAPI()
+
+
+def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None, str | None]:
+    """Return the stable transport owner tuple for a speech stream."""
+    if envelope is None:
+        return (None, None, None)
+    return (
+        envelope.caller_peer_id if envelope.caller_peer_id else None,
+        envelope.principal_id if envelope.principal_id else None,
+        envelope.correlation_id if envelope.correlation_id else None,
+    )
+
+
+def _stream_owner_matches(
+    owner: tuple[str | None, str | None, str | None] | None,
+    envelope: Envelope | None,
+) -> bool:
+    """Keep every stream operation bound to its authenticated transport owner."""
+    return owner is not None and owner == _stream_owner(envelope)
 
 
 WAKEWORD_MODEL_CATALOG_ENV = "AURORA_WAKEWORD_MODEL_CATALOG"
@@ -256,6 +284,13 @@ class WakeWordService(BaseService):
         self._readiness_status = "unavailable"
         self._readiness_message = "not_loaded"
         self._model_cache_dir = ""
+        self._speech_stream_sessions: dict[str, WakeWordStreamAdmission] = {}
+        self._speech_stream_next_sequence: dict[str, int] = {}
+        self._speech_stream_terminal: dict[str, WakeWordStreamStatus] = {}
+        self._speech_stream_results: dict[str, WakeWordStreamResult] = {}
+        self._speech_stream_payload_digests: dict[str, dict[int, str]] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None, str | None]] = {}
+        self._speech_stream_lock = asyncio.Lock()
 
         # State tracking
         self._current_stream_id: str | None = None
@@ -315,6 +350,13 @@ class WakeWordService(BaseService):
         self._running = False
         self._enabled = False
         self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        async with self._speech_stream_lock:
+            self._speech_stream_sessions.clear()
+            self._speech_stream_next_sequence.clear()
+            self._speech_stream_terminal.clear()
+            self._speech_stream_results.clear()
+            self._speech_stream_payload_digests.clear()
+            self._speech_stream_owners.clear()
 
         # Cleanup backend resources
         if self._backend:
@@ -853,6 +895,282 @@ class WakeWordService(BaseService):
         )
 
         return EmptyOutput()
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_START,
+        summary="Admit an owner-scoped continuous wake-word session",
+        input_model=WakeWordStreamStartRequest,
+        output_model=WakeWordStreamAdmission,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_START],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def start_speech_stream(
+        self,
+        request: WakeWordStreamStartRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamAdmission:
+        owner = _stream_owner(envelope)
+        if request.target_peer_id is not None and not request.experimental_remote:
+            return WakeWordStreamAdmission(
+                operation_id=request.operation_id, attempt_id=request.attempt_id,
+                generation=request.generation, status="rejected",
+                reason_code="experimental_remote_required", capability_revision=request.capability_revision,
+            )
+        async with self._speech_stream_lock:
+            for existing in self._speech_stream_sessions.values():
+                if (
+                    existing.operation_id == request.operation_id
+                    and existing.attempt_id == request.attempt_id
+                ):
+                    if (
+                        existing.generation == request.generation
+                        and _stream_owner_matches(
+                            self._speech_stream_owners.get(existing.session_id or ""), envelope
+                        )
+                    ):
+                        return existing
+                    return WakeWordStreamAdmission(
+                        operation_id=request.operation_id,
+                        attempt_id=request.attempt_id,
+                        generation=request.generation,
+                        status="rejected",
+                        reason_code="session_conflict",
+                        capability_revision=request.capability_revision,
+                    )
+        session_id = f"kws-session-{uuid.uuid4().hex}"
+        admission = WakeWordStreamAdmission(
+            session_id=session_id, operation_id=request.operation_id, attempt_id=request.attempt_id,
+            generation=request.generation, status="admitted", reason_code="admitted",
+            capability_revision=request.capability_revision,
+        )
+        async with self._speech_stream_lock:
+            self._speech_stream_sessions[session_id] = admission
+            self._speech_stream_next_sequence[session_id] = 0
+            self._speech_stream_payload_digests[session_id] = {}
+            self._speech_stream_owners[session_id] = owner
+        return admission
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_CHUNK,
+        summary="Accept one ordered audio frame for a wake-word session",
+        input_model=WakeWordStreamChunkRequest,
+        output_model=WakeWordStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_CHUNK],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def push_speech_stream_chunk(
+        self,
+        request: WakeWordStreamChunkRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamStatus:
+        async with self._speech_stream_lock:
+            admission = self._speech_stream_sessions.get(request.session_id)
+            expected = self._speech_stream_next_sequence.get(request.session_id, 0)
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            digest = hashlib.sha256(request.audio_data).hexdigest()
+            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(request.sequence)
+            owner = self._speech_stream_owners.get(request.session_id)
+        if admission is None:
+            if terminal is not None:
+                if not _stream_owner_matches(owner, envelope):
+                    return WakeWordStreamStatus(
+                        session_id=request.session_id, state="failed", next_sequence=0,
+                        credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                    )
+                return terminal
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=0,
+                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+            )
+        if not _stream_owner_matches(owner, envelope):
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+            )
+        if request.attempt_id != admission.attempt_id or request.generation != admission.generation:
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+            )
+        if request.sequence < expected:
+            if previous_digest != digest:
+                return WakeWordStreamStatus(
+                    session_id=request.session_id, state="failed", next_sequence=expected,
+                    credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+                )
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="active", next_sequence=expected,
+                credits=8, lease_remaining_ms=15_000,
+            )
+        if request.sequence != expected:
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="invalid_sequence",
+            )
+        if not self._inference_ready():
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=expected,
+                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+            )
+        await self._process_audio_data(
+            request.audio_data, stream_id=request.session_id, source="speech_session", timestamp=time.time()
+        )
+        async with self._speech_stream_lock:
+            self._speech_stream_next_sequence[request.session_id] = expected + 1
+            self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
+        return WakeWordStreamStatus(
+            session_id=request.session_id, state="active", next_sequence=expected + 1,
+            credits=7, lease_remaining_ms=15_000, accepted_chunks=1,
+        )
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_END,
+        summary="Finish a continuous wake-word session",
+        input_model=WakeWordStreamEndRequest,
+        output_model=WakeWordStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_END],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def end_speech_stream(
+        self,
+        request: WakeWordStreamEndRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return WakeWordStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_stream_sessions.pop(request.session_id, None)
+            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            result = WakeWordStreamResult(
+                session_id=request.session_id, state="completed" if admission else "failed",
+                reason_code="completed" if admission else "outcome_unknown", final_sequence=request.final_sequence,
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
+                session_id=request.session_id, state="completed" if admission else "failed",
+                next_sequence=next_sequence, credits=0, lease_remaining_ms=0,
+                terminal_outcome="completed" if admission else "outcome_unknown",
+            )
+        return result
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_CANCEL,
+        summary="Cancel a continuous wake-word session",
+        input_model=WakeWordStreamCancelRequest,
+        output_model=WakeWordStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_CANCEL],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def cancel_speech_stream(
+        self,
+        request: WakeWordStreamCancelRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return WakeWordStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_stream_sessions.pop(request.session_id, None)
+            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            result = WakeWordStreamResult(
+                session_id=request.session_id, state="canceled" if admission else "failed",
+                reason_code=request.reason if admission else "outcome_unknown",
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = WakeWordStreamStatus(
+                session_id=request.session_id, state="canceled" if admission else "failed",
+                next_sequence=next_sequence, credits=0, lease_remaining_ms=0,
+                terminal_outcome=request.reason if admission else "outcome_unknown",
+            )
+        return result
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_STATUS,
+        summary="Read continuous wake-word session status",
+        input_model=WakeWordStreamStatusRequest,
+        output_model=WakeWordStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_STATUS],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def speech_stream_status(
+        self,
+        request: WakeWordStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamStatus:
+        async with self._speech_stream_lock:
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            admission = self._speech_stream_sessions.get(request.session_id)
+            next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return WakeWordStreamStatus(
+                    session_id=request.session_id, state="failed", next_sequence=0,
+                    credits=0, lease_remaining_ms=0, terminal_outcome="session_conflict",
+                )
+        if terminal is not None:
+            return terminal
+        if admission is None:
+            return WakeWordStreamStatus(
+                session_id=request.session_id, state="failed", next_sequence=0,
+                credits=0, lease_remaining_ms=0, terminal_outcome="failed",
+            )
+        return WakeWordStreamStatus(
+            session_id=request.session_id, state="admitted", next_sequence=next_sequence,
+            credits=8, lease_remaining_ms=15_000,
+        )
+
+    @method_contract(
+        method_id=WakeWordMethods.STREAM_RESULT,
+        summary="Return terminal wake-word stream metadata",
+        input_model=WakeWordStreamStatusRequest,
+        output_model=WakeWordStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[WakeWordMethods.STREAM_RESULT],
+        callable_feature_ids=["wake_word_detection"],
+    )
+    async def speech_stream_result(
+        self,
+        request: WakeWordStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> WakeWordStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return WakeWordStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            result = self._speech_stream_results.get(request.session_id)
+        if result is not None:
+            return result
+        return WakeWordStreamResult(
+            session_id=request.session_id,
+            state="failed",
+            reason_code="outcome_unknown",
+        )
 
     async def _validate_streaming_audio_session(self, chunk: STTAudioChunk) -> None:
         """Require selector and Gateway-issued consent for streaming audio."""

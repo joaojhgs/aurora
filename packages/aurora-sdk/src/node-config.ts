@@ -268,6 +268,316 @@ export function serializeAuroraNodeConfigDocument(document: AuroraNodeConfigDocu
   return JSON.stringify(sanitizeAuroraNodeConfigDocument(document))
 }
 
+// ---------------------------------------------------------------------------
+// Native speech policy v2
+// ---------------------------------------------------------------------------
+
+/** The v1 API remains readable for older clients; v2 is the canonical native policy. */
+export const AURORA_NODE_CONFIG_V2_VERSION = 2 as const
+export const AURORA_NODE_CONFIG_V2_STORAGE_KEY = 'aurora.nodeConfig.v2'
+export const AURORA_SPEECH_STAGE_KEYS = ['stt', 'tts', 'kws', 'vad'] as const
+export type AuroraSpeechStage = (typeof AURORA_SPEECH_STAGE_KEYS)[number]
+export type AuroraSpeechNetworkKind = 'mesh' | 'gateway'
+
+export interface AuroraSpeechStageTarget {
+  peerId: string
+  resourceId?: string | null
+  modelId?: string | null
+}
+
+export interface AuroraSpeechStageConfig {
+  routing: AuroraNodeServiceRouting
+  networkKind?: AuroraSpeechNetworkKind
+  target?: AuroraSpeechStageTarget | null
+  experimentalRemote?: boolean
+  modelId?: string | null
+  language?: string | null
+}
+
+export interface AuroraSpeechConfigV1 {
+  version: 1
+  stages: Record<AuroraSpeechStage, AuroraSpeechStageConfig>
+  sharing: Record<AuroraSpeechStage, boolean>
+  limits: {
+    maxAttempts: 1 | 2
+    admissionTimeoutMs: number
+    finiteDeadlineMs: number
+  }
+}
+
+export interface AuroraNodeConfigDocumentV2 {
+  version: typeof AURORA_NODE_CONFIG_V2_VERSION
+  revision: number
+  updatedAtMs: number
+  services: AuroraNodeConfigDocumentV1['services']
+  expose: AuroraNodeConfigDocumentV1['expose']
+  speech: AuroraSpeechConfigV1
+  /** Read-only provenance used for an explicit rollback/recovery operation. */
+  legacyV1Snapshot?: AuroraNodeConfigDocumentV1 | null
+}
+
+export interface AuroraNodeConfigSaveAck {
+  savedRevision: number
+  effectiveRevision: number
+  pendingNextGeneration: boolean
+  pendingRevision: number | null
+}
+
+export class AuroraNodeConfigRevisionConflictError extends Error {
+  readonly currentRevision: number
+  readonly expectedRevision: number
+
+  constructor(expectedRevision: number, currentRevision: number) {
+    super(`Node config revision conflict: expected ${expectedRevision}, current ${currentRevision}`)
+    this.name = 'AuroraNodeConfigRevisionConflictError'
+    this.expectedRevision = expectedRevision
+    this.currentRevision = currentRevision
+  }
+}
+
+const V2_STAGE_VALUES = new Set<string>(AURORA_SPEECH_STAGE_KEYS)
+const NETWORK_KIND_VALUES = new Set<AuroraSpeechNetworkKind>(['mesh', 'gateway'])
+const SPEECH_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u
+
+function defaultSpeechStage(stage: AuroraSpeechStage, services: AuroraNodeConfigDocumentV1['services']): AuroraSpeechStageConfig {
+  if (stage === 'kws' || stage === 'vad') {
+    return { routing: { prefer: 'local_only', fallback: 'error' }, experimentalRemote: false }
+  }
+  const inherited = services[stage]?.routing ?? DEFAULT_ROUTING[stage]
+  return { routing: { ...inherited }, experimentalRemote: false }
+}
+
+export function emptyAuroraNodeConfigDocumentV2(now = Date.now()): AuroraNodeConfigDocumentV2 {
+  const legacy = emptyAuroraNodeConfigDocument(now)
+  const stages = Object.fromEntries(
+    AURORA_SPEECH_STAGE_KEYS.map((stage) => [stage, defaultSpeechStage(stage, legacy.services)])
+  ) as Record<AuroraSpeechStage, AuroraSpeechStageConfig>
+  return {
+    version: AURORA_NODE_CONFIG_V2_VERSION,
+    revision: 1,
+    updatedAtMs: validateTimestamp(now, 'updatedAtMs'),
+    services: legacy.services,
+    expose: legacy.expose,
+    speech: {
+      version: 1,
+      stages,
+      sharing: { stt: false, tts: false, kws: false, vad: false },
+      limits: { maxAttempts: 2, admissionTimeoutMs: 5_000, finiteDeadlineMs: 60_000 }
+    },
+    legacyV1Snapshot: null
+  }
+}
+
+export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNodeConfigDocumentV2 {
+  const record = asRecord(document, 'document')
+  assertExactKeys(record, ['version', 'revision', 'updatedAtMs', 'services', 'expose', 'speech', 'legacyV1Snapshot'], 'document')
+  if (record.version !== AURORA_NODE_CONFIG_V2_VERSION) {
+    throw new AuroraNodeConfigValidationError('document.version', 'must be 2')
+  }
+  if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 1) {
+    throw new AuroraNodeConfigValidationError('document.revision', 'must be a positive safe integer')
+  }
+  const legacy = sanitizeAuroraNodeConfigDocument({
+    version: AURORA_NODE_CONFIG_VERSION,
+    updatedAtMs: record.updatedAtMs,
+    services: record.services,
+    expose: record.expose
+  })
+  const speech = asRecord(record.speech, 'document.speech')
+  assertExactKeys(speech, ['version', 'stages', 'sharing', 'limits'], 'document.speech')
+  if (speech.version !== 1) throw new AuroraNodeConfigValidationError('document.speech.version', 'must be 1')
+  const stagesRecord = asRecord(speech.stages, 'document.speech.stages')
+  const stages = {} as Record<AuroraSpeechStage, AuroraSpeechStageConfig>
+  for (const stage of AURORA_SPEECH_STAGE_KEYS) {
+    const stageValue = stagesRecord[stage]
+    if (stageValue === undefined) throw new AuroraNodeConfigValidationError(`document.speech.stages.${stage}`, 'is required')
+    stages[stage] = sanitizeSpeechStageConfig(stageValue, stage, `document.speech.stages.${stage}`)
+  }
+  for (const key of Object.keys(stagesRecord)) {
+    if (!V2_STAGE_VALUES.has(key)) throw new AuroraNodeConfigValidationError(`document.speech.stages.${key}`, 'unsupported stage')
+  }
+  const sharingRecord = asRecord(speech.sharing, 'document.speech.sharing')
+  assertExactKeys(sharingRecord, [...AURORA_SPEECH_STAGE_KEYS], 'document.speech.sharing')
+  const sharing = {} as Record<AuroraSpeechStage, boolean>
+  for (const stage of AURORA_SPEECH_STAGE_KEYS) {
+    if (typeof sharingRecord[stage] !== 'boolean') throw new AuroraNodeConfigValidationError(`document.speech.sharing.${stage}`, 'must be boolean')
+    sharing[stage] = sharingRecord[stage] as boolean
+  }
+  const limitsRecord = asRecord(speech.limits, 'document.speech.limits')
+  assertExactKeys(limitsRecord, ['maxAttempts', 'admissionTimeoutMs', 'finiteDeadlineMs'], 'document.speech.limits')
+  const maxAttempts = limitsRecord.maxAttempts
+  const admissionTimeoutMs = limitsRecord.admissionTimeoutMs
+  const finiteDeadlineMs = limitsRecord.finiteDeadlineMs
+  if (maxAttempts !== 1 && maxAttempts !== 2) throw new AuroraNodeConfigValidationError('document.speech.limits.maxAttempts', 'must be 1 or 2')
+  if (!isBoundedSafeInteger(admissionTimeoutMs, 1, 60_000)) throw new AuroraNodeConfigValidationError('document.speech.limits.admissionTimeoutMs', 'must be between 1 and 60000')
+  if (!isBoundedSafeInteger(finiteDeadlineMs, 1, 60_000)) throw new AuroraNodeConfigValidationError('document.speech.limits.finiteDeadlineMs', 'must be between 1 and 60000')
+  const legacyV1Snapshot = record.legacyV1Snapshot === undefined || record.legacyV1Snapshot === null
+    ? null
+    : sanitizeAuroraNodeConfigDocument(record.legacyV1Snapshot)
+  return {
+    version: 2,
+    revision: record.revision,
+    updatedAtMs: legacy.updatedAtMs,
+    services: legacy.services,
+    expose: legacy.expose,
+    speech: { version: 1, stages, sharing, limits: { maxAttempts, admissionTimeoutMs, finiteDeadlineMs } },
+    legacyV1Snapshot
+  }
+}
+
+export function migrateAuroraNodeConfigDocumentV2(value: unknown, now = Date.now()): AuroraNodeConfigDocumentV2 {
+  if (value === null || value === undefined) return emptyAuroraNodeConfigDocumentV2(now)
+  if (isRecord(value) && value.version === AURORA_NODE_CONFIG_V2_VERSION) return sanitizeAuroraNodeConfigDocumentV2(value)
+  const legacy = migrateAuroraNodeConfigDocument(value, now)
+  const migrated = emptyAuroraNodeConfigDocumentV2(legacy.updatedAtMs)
+  migrated.services = legacy.services
+  migrated.expose = legacy.expose
+  migrated.legacyV1Snapshot = legacy
+  migrated.speech.stages.stt.routing = { ...legacy.services.stt?.routing ?? migrated.speech.stages.stt.routing }
+  migrated.speech.stages.tts.routing = { ...legacy.services.tts?.routing ?? migrated.speech.stages.tts.routing }
+  return migrated
+}
+
+export function serializeAuroraNodeConfigDocumentV2(document: AuroraNodeConfigDocumentV2): string {
+  return JSON.stringify(sanitizeAuroraNodeConfigDocumentV2(document))
+}
+
+export function parseAuroraNodeConfigDocumentV2(value: unknown, now = Date.now()): AuroraNodeConfigDocumentV2 | null {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value
+    return migrateAuroraNodeConfigDocumentV2(parsed, now)
+  } catch {
+    return null
+  }
+}
+
+export function updateAuroraNodeConfigDocumentV2(
+  current: AuroraNodeConfigDocumentV2,
+  draft: unknown,
+  expectedRevision: number,
+  now = Date.now()
+): { document: AuroraNodeConfigDocumentV2; acknowledgement: AuroraNodeConfigSaveAck } {
+  const currentDocument = sanitizeAuroraNodeConfigDocumentV2(current)
+  if (currentDocument.revision !== expectedRevision) throw new AuroraNodeConfigRevisionConflictError(expectedRevision, currentDocument.revision)
+  const candidate = sanitizeAuroraNodeConfigDocumentV2(draft)
+  const document: AuroraNodeConfigDocumentV2 = {
+    ...candidate,
+    revision: currentDocument.revision + 1,
+    updatedAtMs: validateTimestamp(now, 'updatedAtMs')
+  }
+  return {
+    document,
+    acknowledgement: {
+      savedRevision: document.revision,
+      effectiveRevision: currentDocument.revision,
+      pendingNextGeneration: true,
+      pendingRevision: document.revision
+    }
+  }
+}
+
+export interface ResolveSpeechStageRoutingInput extends Omit<ResolveServiceRoutingInput, 'module' | 'config'> {
+  stage: AuroraSpeechStage
+  config: AuroraNodeConfigDocumentV2
+  exactSelector?: AuroraSpeechStageTarget | null
+}
+
+export interface SpeechStageRoutingResolution extends ServiceRoutingResolution {
+  stage: AuroraSpeechStage
+}
+
+/** Resolve the stage policy while preserving sticky exact selectors and local-only KWS/VAD. */
+export function resolveSpeechStageRouting(input: ResolveSpeechStageRoutingInput): SpeechStageRoutingResolution {
+  const config = sanitizeAuroraNodeConfigDocumentV2(input.config)
+  const stage = config.speech.stages[input.stage]
+  const exact = input.exactSelector ?? null
+  let candidates = input.remoteCandidates
+  if (exact !== null) {
+    candidates = candidates.filter((candidate) => candidate.peerId === exact.peerId &&
+      (exact.resourceId === undefined || exact.resourceId === null || candidate.serviceInstanceId === exact.resourceId) &&
+      (exact.modelId === undefined || exact.modelId === null || candidate.providerId === exact.modelId))
+  } else if (stage.target !== undefined && stage.target !== null) {
+    candidates = candidates.filter((candidate) => candidate.peerId === stage.target?.peerId &&
+      (stage.target?.resourceId === undefined || stage.target.resourceId === null || candidate.serviceInstanceId === stage.target.resourceId) &&
+      (stage.target?.modelId === undefined || stage.target.modelId === null || candidate.providerId === stage.target.modelId))
+  }
+  if ((input.stage === 'kws' || input.stage === 'vad') && !stage.experimentalRemote) {
+    candidates = []
+  }
+  const serviceModule: AuroraNodeConfigModule = input.stage === 'stt' ? 'stt' : 'tts'
+  const resolution = resolveServiceRouting({
+    ...input,
+    module: serviceModule,
+    config: {
+      version: 1,
+      updatedAtMs: config.updatedAtMs,
+      services: { [serviceModule]: { routing: stage.routing } },
+      expose: config.expose
+    },
+    remoteCandidates: candidates,
+    localCapability: exact === null ? input.localCapability : { available: false, reason: 'exact selector requires the selected peer' }
+  })
+  if (exact !== null && resolution.source !== 'remote') {
+    throw new AuroraServiceRoutingError({ ...resolution.record, reason: 'exact selector cannot use a local fallback' })
+  }
+  return { ...resolution, stage: input.stage }
+}
+
+function sanitizeSpeechStageConfig(value: unknown, stage: AuroraSpeechStage, path: string): AuroraSpeechStageConfig {
+  const record = asRecord(value, path)
+  assertExactKeys(record, ['routing', 'networkKind', 'target', 'experimentalRemote', 'modelId', 'language'], path)
+  const routingRecord = asRecord(record.routing, `${path}.routing`)
+  assertExactKeys(routingRecord, ['prefer', 'fallback'], `${path}.routing`)
+  if (!isRoutingPreference(routingRecord.prefer) || !isRoutingFallback(routingRecord.fallback)) {
+    throw new AuroraNodeConfigValidationError(`${path}.routing`, 'unsupported routing policy')
+  }
+  if (record.networkKind !== undefined && (!isString(record.networkKind) || !NETWORK_KIND_VALUES.has(record.networkKind as AuroraSpeechNetworkKind))) {
+    throw new AuroraNodeConfigValidationError(`${path}.networkKind`, 'must be mesh or gateway')
+  }
+  if (record.experimentalRemote !== undefined && typeof record.experimentalRemote !== 'boolean') {
+    throw new AuroraNodeConfigValidationError(`${path}.experimentalRemote`, 'must be boolean')
+  }
+  const experimentalRemote = record.experimentalRemote === true
+  if ((stage === 'kws' || stage === 'vad') && !experimentalRemote && (routingRecord.prefer === 'network' || routingRecord.prefer === 'network_only')) {
+    throw new AuroraNodeConfigValidationError(`${path}.routing.prefer`, 'continuous KWS/VAD remote routing requires experimentalRemote')
+  }
+  let target: AuroraSpeechStageTarget | null | undefined
+  if (record.target !== undefined && record.target !== null) {
+    const targetRecord = asRecord(record.target, `${path}.target`)
+    assertExactKeys(targetRecord, ['peerId', 'resourceId', 'modelId'], `${path}.target`)
+    if (!isBoundedId(targetRecord.peerId)) throw new AuroraNodeConfigValidationError(`${path}.target.peerId`, 'must be a bounded identifier')
+    for (const key of ['resourceId', 'modelId'] as const) {
+      if (targetRecord[key] !== undefined && targetRecord[key] !== null && !isBoundedId(targetRecord[key])) {
+        throw new AuroraNodeConfigValidationError(`${path}.target.${key}`, 'must be a bounded identifier')
+      }
+    }
+    target = {
+      peerId: targetRecord.peerId,
+      ...(targetRecord.resourceId === undefined ? {} : { resourceId: targetRecord.resourceId as string | null }),
+      ...(targetRecord.modelId === undefined ? {} : { modelId: targetRecord.modelId as string | null })
+    }
+  } else if (record.target === null) target = null
+  for (const key of ['modelId', 'language'] as const) {
+    if (record[key] !== undefined && record[key] !== null && typeof record[key] !== 'string') {
+      throw new AuroraNodeConfigValidationError(`${path}.${key}`, 'must be a string or null')
+    }
+  }
+  return {
+    routing: { prefer: routingRecord.prefer as AuroraNodeRoutingPreference, fallback: routingRecord.fallback as AuroraNodeRoutingFallback },
+    ...(record.networkKind === undefined ? {} : { networkKind: record.networkKind as AuroraSpeechNetworkKind }),
+    ...(record.target === undefined ? {} : { target: target ?? null }),
+    experimentalRemote,
+    ...(record.modelId === undefined ? {} : { modelId: record.modelId as string | null }),
+    ...(record.language === undefined ? {} : { language: record.language as string | null })
+  }
+}
+
+function isString(value: unknown): value is string { return typeof value === 'string' }
+function isBoundedId(value: unknown): value is string { return typeof value === 'string' && SPEECH_ID.test(value) }
+function isBoundedSafeInteger(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max
+}
+
 export function parseAuroraNodeConfigDocument(value: unknown): AuroraNodeConfigDocumentV1 | null {
   try {
     const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value
@@ -405,6 +715,78 @@ export function createAuroraNodeConfigTauriStore(
       const result = await storage.delete(key)
       if (!result.ok) throw new Error('Node config clear failed')
     }
+  }
+}
+
+export interface AuroraNodeConfigV2Store {
+  readonly evidence?: string
+  load(): Promise<AuroraNodeConfigDocumentV2 | null>
+  save(document: AuroraNodeConfigDocumentV2): Promise<AuroraNodeConfigSaveAck>
+  saveCas(draft: unknown, expectedRevision: number): Promise<{
+    document: AuroraNodeConfigDocumentV2
+    acknowledgement: AuroraNodeConfigSaveAck
+  }>
+  clear?(): Promise<void>
+}
+
+/**
+ * Native node-policy storage adapter.  The Rust command remains the durable
+ * authority; this adapter supplies a serialized, revision-checked boundary
+ * for Tauri callers and never stores credentials or model paths.
+ */
+export function createAuroraNodeConfigV2TauriStore(
+  storage: AuroraNodeConfigSecureStorage,
+  options: AuroraNodeConfigTauriStoreOptions = {}
+): AuroraNodeConfigV2Store {
+  const key = options.key ?? AURORA_NODE_CONFIG_V2_STORAGE_KEY
+  const evidence = options.evidence ?? 'Tauri native-owned v2 speech policy storage'
+  let writeChain: Promise<unknown> = Promise.resolve()
+  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
+    const next = writeChain.then(operation, operation)
+    writeChain = next.then(() => undefined, () => undefined)
+    return next
+  }
+  const load = async (): Promise<AuroraNodeConfigDocumentV2 | null> => {
+    const result = await storage.get(key)
+    if (typeof result.value === 'string' && result.value.length > 0) {
+      return parseAuroraNodeConfigDocumentV2(result.value)
+    }
+    // A v1 document is read-only provenance.  Persist its v2 projection under
+    // the new key so subsequent reads use one canonical authority.
+    const legacyResult = await storage.get(AURORA_NODE_CONFIG_STORAGE_KEY)
+    if (typeof legacyResult.value !== 'string' || legacyResult.value.length === 0) return null
+    const migrated = parseAuroraNodeConfigDocumentV2(legacyResult.value)
+    if (migrated === null) return null
+    const persisted = await storage.set(key, serializeAuroraNodeConfigDocumentV2(migrated))
+    if (!persisted.ok) throw new Error('Node config v2 migration save failed')
+    return migrated
+  }
+  return {
+    evidence,
+    load,
+    save: async (document) => enqueue(async () => {
+      const normalized = sanitizeAuroraNodeConfigDocumentV2(document)
+      const result = await storage.set(key, serializeAuroraNodeConfigDocumentV2(normalized))
+      if (!result.ok) throw new Error('Node config v2 save failed')
+      return {
+        savedRevision: normalized.revision,
+        effectiveRevision: normalized.revision,
+        pendingNextGeneration: false,
+        pendingRevision: null
+      }
+    }),
+    saveCas: (draft, expectedRevision) => enqueue(async () => {
+      const current = await load()
+      if (current === null) throw new Error('Node config v2 is not initialized')
+      const updated = updateAuroraNodeConfigDocumentV2(current, draft, expectedRevision)
+      const result = await storage.set(key, serializeAuroraNodeConfigDocumentV2(updated.document))
+      if (!result.ok) throw new Error('Node config v2 save failed')
+      return updated
+    }),
+    clear: async () => enqueue(async () => {
+      const result = await storage.delete(key)
+      if (!result.ok) throw new Error('Node config v2 clear failed')
+    })
   }
 }
 

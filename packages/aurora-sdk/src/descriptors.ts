@@ -119,8 +119,12 @@ export const TTS_METHODS = {
   request: 'TTS.Request',
   synthesize: 'TTS.Synthesize',
   streamStart: 'TTS.StreamStart',
+  streamPrepare: 'TTS.StreamPrepareV1',
   streamChunk: 'TTS.StreamChunk',
   streamEnd: 'TTS.StreamEnd',
+  streamStatus: 'TTS.StreamStatus',
+  streamCancel: 'TTS.StreamCancel',
+  streamResult: 'TTS.StreamResult',
   audioChunk: 'TTS.AudioChunk',
   stop: 'TTS.Stop',
   pause: 'TTS.Pause',
@@ -141,7 +145,13 @@ export const STT_METHODS = {
 export const WAKEWORD_METHODS = {
   processAudio: 'WakeWord.ProcessAudio',
   detect: 'WakeWord.Detect',
-  control: 'WakeWord.Control'
+  control: 'WakeWord.Control',
+  streamStart: 'WakeWord.StreamStart',
+  streamChunk: 'WakeWord.StreamChunk',
+  streamEnd: 'WakeWord.StreamEnd',
+  streamCancel: 'WakeWord.StreamCancel',
+  streamStatus: 'WakeWord.StreamStatus',
+  streamResult: 'WakeWord.StreamResult'
 } as const
 
 export const AUDIO_SESSION_METHODS = {
@@ -158,7 +168,23 @@ export const TRANSCRIPTION_METHODS = {
   transcribe: 'Transcription.Transcribe',
   processAudio: 'Transcription.ProcessAudio',
   result: 'Transcription.Result',
-  control: 'Transcription.Control'
+  control: 'Transcription.Control',
+  streamStart: 'Transcription.StreamStart',
+  streamChunk: 'Transcription.StreamChunk',
+  streamEnd: 'Transcription.StreamEnd',
+  streamCancel: 'Transcription.StreamCancel',
+  streamStatus: 'Transcription.StreamStatus',
+  streamResult: 'Transcription.StreamResult'
+} as const
+
+export const VAD_METHODS = {
+  detect: 'VAD.Detect',
+  streamStart: 'VAD.StreamStart',
+  streamChunk: 'VAD.StreamChunk',
+  streamEnd: 'VAD.StreamEnd',
+  streamCancel: 'VAD.StreamCancel',
+  streamStatus: 'VAD.StreamStatus',
+  streamResult: 'VAD.StreamResult'
 } as const
 
 export const CONFIG_METHODS = {

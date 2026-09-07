@@ -13,6 +13,7 @@ type SpeechMethodId = Extract<
   | `STTCoordinator.${string}`
   | `WakeWord.${string}`
   | `Transcription.${string}`
+  | `VAD.${string}`
 >
 
 type SpeechInput<TMethodId extends SpeechMethodId> = GeneratedBackendMethodInput<TMethodId>
@@ -194,6 +195,38 @@ export class TtsClient extends SpeechNamespaceClient {
     return this.request('TTS.StreamEnd', input, options)
   }
 
+  /** Admit a caller-owned stream before sending text frames. */
+  prepareStream(
+    input: SpeechInput<'TTS.StreamPrepareV1'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.StreamPrepareV1'> {
+    return this.request('TTS.StreamPrepareV1', input, options)
+  }
+
+  /** Read the bounded status of an admitted caller-owned stream. */
+  streamStatus(
+    input: SpeechInput<'TTS.StreamStatus'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.StreamStatus'> {
+    return this.request('TTS.StreamStatus', input, options)
+  }
+
+  /** Cancel a caller-owned stream without taking server playback ownership. */
+  cancelStream(
+    input: SpeechInput<'TTS.StreamCancel'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.StreamCancel'> {
+    return this.request('TTS.StreamCancel', input, options)
+  }
+
+  /** Return terminal metadata for a caller-owned stream. */
+  resultStream(
+    input: SpeechInput<'TTS.StreamResult'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'TTS.StreamResult'> {
+    return this.request('TTS.StreamResult', input, options)
+  }
+
   /** Synthesize speech without starting playback. */
   synthesize(
     input: SpeechInput<'TTS.Synthesize'>,
@@ -231,6 +264,48 @@ export class WakeWordClient extends SpeechNamespaceClient {
   ): SpeechResult<'WakeWord.Detect'> {
     return this.request('WakeWord.Detect', input, options)
   }
+
+  startStream(
+    input: SpeechInput<'WakeWord.StreamStart'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamStart'> {
+    return this.request('WakeWord.StreamStart', input, options)
+  }
+
+  appendStreamChunk(
+    input: SpeechInput<'WakeWord.StreamChunk'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamChunk'> {
+    return this.request('WakeWord.StreamChunk', input, options)
+  }
+
+  endStream(
+    input: SpeechInput<'WakeWord.StreamEnd'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamEnd'> {
+    return this.request('WakeWord.StreamEnd', input, options)
+  }
+
+  cancelStream(
+    input: SpeechInput<'WakeWord.StreamCancel'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamCancel'> {
+    return this.request('WakeWord.StreamCancel', input, options)
+  }
+
+  streamStatus(
+    input: SpeechInput<'WakeWord.StreamStatus'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamStatus'> {
+    return this.request('WakeWord.StreamStatus', input, options)
+  }
+
+  resultStream(
+    input: SpeechInput<'WakeWord.StreamResult'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'WakeWord.StreamResult'> {
+    return this.request('WakeWord.StreamResult', input, options)
+  }
 }
 
 /** Bounded audio transcription operations backed by generated contracts. */
@@ -242,6 +317,100 @@ export class TranscriptionClient extends SpeechNamespaceClient {
   ): SpeechResult<'Transcription.Transcribe'> {
     return this.request('Transcription.Transcribe', input, options)
   }
+
+  startStream(
+    input: SpeechInput<'Transcription.StreamStart'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamStart'> {
+    return this.request('Transcription.StreamStart', input, options)
+  }
+
+  appendStreamChunk(
+    input: SpeechInput<'Transcription.StreamChunk'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamChunk'> {
+    return this.request('Transcription.StreamChunk', input, options)
+  }
+
+  endStream(
+    input: SpeechInput<'Transcription.StreamEnd'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamEnd'> {
+    return this.request('Transcription.StreamEnd', input, options)
+  }
+
+  cancelStream(
+    input: SpeechInput<'Transcription.StreamCancel'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamCancel'> {
+    return this.request('Transcription.StreamCancel', input, options)
+  }
+
+  streamStatus(
+    input: SpeechInput<'Transcription.StreamStatus'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamStatus'> {
+    return this.request('Transcription.StreamStatus', input, options)
+  }
+
+  resultStream(
+    input: SpeechInput<'Transcription.StreamResult'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'Transcription.StreamResult'> {
+    return this.request('Transcription.StreamResult', input, options)
+  }
+}
+
+/** Bounded finite and foreground streaming voice-activity operations. */
+export class VadClient extends SpeechNamespaceClient {
+  detect(
+    input: SpeechInput<'VAD.Detect'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.Detect'> {
+    return this.request('VAD.Detect', input, options)
+  }
+
+  startStream(
+    input: SpeechInput<'VAD.StreamStart'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamStart'> {
+    return this.request('VAD.StreamStart', input, options)
+  }
+
+  appendStreamChunk(
+    input: SpeechInput<'VAD.StreamChunk'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamChunk'> {
+    return this.request('VAD.StreamChunk', input, options)
+  }
+
+  endStream(
+    input: SpeechInput<'VAD.StreamEnd'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamEnd'> {
+    return this.request('VAD.StreamEnd', input, options)
+  }
+
+  cancelStream(
+    input: SpeechInput<'VAD.StreamCancel'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamCancel'> {
+    return this.request('VAD.StreamCancel', input, options)
+  }
+
+  streamStatus(
+    input: SpeechInput<'VAD.StreamStatus'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamStatus'> {
+    return this.request('VAD.StreamStatus', input, options)
+  }
+
+  resultStream(
+    input: SpeechInput<'VAD.StreamResult'>,
+    options?: GeneratedContractRequestOptions
+  ): SpeechResult<'VAD.StreamResult'> {
+    return this.request('VAD.StreamResult', input, options)
+  }
 }
 
 /** Generated-contract speech client grouped by service responsibility. */
@@ -250,11 +419,13 @@ export class SpeechClient {
   readonly stt: SttClient
   readonly wakeWord: WakeWordClient
   readonly transcription: TranscriptionClient
+  readonly vad: VadClient
 
   constructor(contracts: GeneratedContractClient) {
     this.tts = new TtsClient(contracts)
     this.stt = new SttClient(contracts)
     this.wakeWord = new WakeWordClient(contracts)
     this.transcription = new TranscriptionClient(contracts)
+    this.vad = new VadClient(contracts)
   }
 }

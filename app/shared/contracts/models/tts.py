@@ -20,6 +20,16 @@ from app.shared.contracts.models.speech import (
     normalize_speech_language,
     validate_logical_voice_id,
 )
+from app.shared.contracts.models.speech_runtime import (
+    SpeechStageAdmissionRequestV1,
+    SpeechStreamAdmissionV1,
+    SpeechStreamCancelV1,
+    SpeechStreamEndV1,
+    SpeechStreamFrameV1,
+    SpeechStreamResultV1,
+    SpeechStreamStatusRequestV1,
+    SpeechStreamStatusV1,
+)
 from app.shared.contracts.registry import IOModel
 
 VOICE_IMPORT_MAX_TOTAL_BYTES = 2 * 1024 * 1024
@@ -107,6 +117,10 @@ class TTSMethods:
     STREAM_START = f"{TTSModule.NAME}.StreamStart"
     STREAM_CHUNK = f"{TTSModule.NAME}.StreamChunk"
     STREAM_END = f"{TTSModule.NAME}.StreamEnd"
+    STREAM_PREPARE = f"{TTSModule.NAME}.StreamPrepareV1"
+    STREAM_STATUS = f"{TTSModule.NAME}.StreamStatus"
+    STREAM_CANCEL = f"{TTSModule.NAME}.StreamCancel"
+    STREAM_RESULT = f"{TTSModule.NAME}.StreamResult"
     AUDIO_CHUNK = f"{TTSModule.NAME}.AudioChunk"
     STOP = f"{TTSModule.NAME}.Stop"
     PAUSE = f"{TTSModule.NAME}.Pause"
@@ -223,6 +237,81 @@ class TTSStreamStartRequest(IOModel):
     @classmethod
     def _validate_voice_id(cls, value: str | None) -> str | None:
         return _normalize_optional_voice_id(value)
+
+
+class TTSStreamPrepareRequest(SpeechStageAdmissionRequestV1):
+    """Negotiate speech-session-v1 before using legacy TTS stream frames."""
+
+    stage: Literal["tts"] = "tts"
+    mode: Literal["streaming"] = "streaming"
+    # An offloaded stream returns audio to its caller; the provider never
+    # plays it or interrupts another owner's playback.
+    play_on_server: bool = False
+    interrupt: bool = False
+    voice: LogicalVoiceId | None = None
+    language: SpeechLanguageTag | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def _normalize_prepare_language(cls, value: str | None) -> str | None:
+        normalized = normalize_speech_language(value, allow_auto=True)
+        if normalized == "auto":
+            raise ValueError("TTS stream language must be exact, not auto")
+        return normalized
+
+    @field_validator("voice", mode="before")
+    @classmethod
+    def _validate_prepare_voice(cls, value: str | None) -> str | None:
+        return _normalize_optional_voice_id(value)
+
+
+class TTSStreamPrepareResponse(SpeechStreamAdmissionV1):
+    """Typed TTS admission acknowledgement."""
+
+
+class TTSStreamSessionChunkRequest(IOModel):
+    """Session-scoped text frame for an admitted TTS stream."""
+
+    session_id: str = Field(min_length=1, max_length=128, pattern=_OPERATION_ID_RE.pattern)
+    attempt_id: str = Field(min_length=1, max_length=128, pattern=_OPERATION_ID_RE.pattern)
+    generation: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
+    sequence: int = Field(ge=0, le=TTS_MAX_STREAM_SEQUENCE)
+    text: str = Field(min_length=1, max_length=4096)
+    is_final: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text_size(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 4096:
+            raise ValueError("TTS stream text chunk exceeds 4096 UTF-8 bytes")
+        return value
+
+
+class TTSStreamSessionEndRequest(SpeechStreamEndV1):
+    """Close a session-scoped TTS stream."""
+
+
+class TTSStreamSessionCancelRequest(SpeechStreamCancelV1):
+    """Cancel a session-scoped TTS stream."""
+
+
+class TTSStreamSessionStatusRequest(SpeechStreamStatusRequestV1):
+    """Read status for a session-scoped TTS stream."""
+
+
+class TTSStreamSessionStatus(SpeechStreamStatusV1):
+    """TTS stream status response."""
+
+
+class TTSStreamSessionResult(SpeechStreamResultV1):
+    """TTS stream terminal result metadata."""
+
+    stage: Literal["tts"] = "tts"
+    mode: Literal["streaming"] = "streaming"
 
 
 class TTSGetCapabilitiesRequest(_StrictTTSIOModel):
@@ -1214,11 +1303,24 @@ class TTSStreamChunkRequest(IOModel):
     """Ordered text chunk for an active TTS streaming session."""
 
     stream_id: str
+    # The optional session fields bind the legacy text-stream transport to a
+    # speech-session-v1 admission.  They remain optional for trusted legacy
+    # callers so existing local playback streams are wire-compatible.
+    session_id: str | None = Field(default=None, min_length=1, max_length=128)
+    attempt_id: str | None = Field(default=None, min_length=1, max_length=128)
+    generation: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
     sequence: int = Field(ge=0, le=TTS_MAX_STREAM_SEQUENCE)
-    text: str
+    text: str = Field(min_length=1, max_length=4096)
     is_final: bool = False
     mesh_selector: MeshAddressSelector | None = None
     correlation_id: str | None = None
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text_size(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 4096:
+            raise ValueError("TTS stream text chunk exceeds 4096 UTF-8 bytes")
+        return value
 
 
 class TTSStreamEndRequest(IOModel):

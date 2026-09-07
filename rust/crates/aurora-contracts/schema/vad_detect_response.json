@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Finite VAD result with no source-audio echo.",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "duration_ms": {
+      "default": 0.0,
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "redacted": {
+      "const": true,
+      "default": true,
+      "title": "Redacted",
+      "type": "boolean"
+    },
+    "speech": {
+      "title": "Speech",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "speech"
+  ],
+  "title": "VADDetectResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

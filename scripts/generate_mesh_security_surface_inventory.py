@@ -42,6 +42,7 @@ MODULE_CAPABILITIES: dict[str, list[str]] = {
     "STTCoordinator": ["audio_capture", "session_management", "stt_coordination"],
     "Transcription": ["audio_transcription", "vad", "whisper"],
     "WakeWord": ["wake_word_detection", "openwakeword", "porcupine"],
+    "VAD": ["vad_detection", "audio_segmentation"],
     "Tooling": ["tool_discovery", "tool_execution", "mcp_integration"],
     "TTS": ["speech_synthesis", "audio_playback"],
 }

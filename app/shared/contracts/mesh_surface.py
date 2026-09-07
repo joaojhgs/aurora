@@ -11,6 +11,7 @@ MESH_CAPABLE_MODULES: tuple[str, ...] = (
     "STTCoordinator",
     "WakeWord",
     "Transcription",
+    "VAD",
     "DB",
     "TTS",
     "Tooling",
@@ -44,14 +45,32 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
         module="WakeWord",
         label="Wake Word Detection",
         summary="Detect wake words in submitted or streamed audio.",
-        method_ids=("WakeWord.ProcessAudio", "WakeWord.Detect"),
+        method_ids=(
+            "WakeWord.ProcessAudio",
+            "WakeWord.Detect",
+            "WakeWord.StreamStart",
+            "WakeWord.StreamChunk",
+            "WakeWord.StreamEnd",
+            "WakeWord.StreamCancel",
+            "WakeWord.StreamStatus",
+            "WakeWord.StreamResult",
+        ),
     ),
     CallableFeatureContract(
         feature_id="audio_transcription",
         module="Transcription",
         label="Audio Transcription",
         summary="Transcribe submitted or streamed audio.",
-        method_ids=("Transcription.ProcessAudio", "Transcription.Transcribe"),
+        method_ids=(
+            "Transcription.ProcessAudio",
+            "Transcription.Transcribe",
+            "Transcription.StreamStart",
+            "Transcription.StreamChunk",
+            "Transcription.StreamEnd",
+            "Transcription.StreamCancel",
+            "Transcription.StreamStatus",
+            "Transcription.StreamResult",
+        ),
     ),
     CallableFeatureContract(
         feature_id="session_management",
@@ -93,7 +112,30 @@ CALLABLE_FEATURES: tuple[CallableFeatureContract, ...] = (
         module="TTS",
         label="Speech Streaming",
         summary="Start, stream, and end ordered text-to-speech audio streams.",
-        method_ids=("TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"),
+        method_ids=(
+            "TTS.StreamStart",
+            "TTS.StreamChunk",
+            "TTS.StreamEnd",
+            "TTS.StreamPrepareV1",
+            "TTS.StreamStatus",
+            "TTS.StreamCancel",
+            "TTS.StreamResult",
+        ),
+    ),
+    CallableFeatureContract(
+        feature_id="vad_detection",
+        module="VAD",
+        label="Voice Activity Detection",
+        summary="Detect speech activity in submitted or explicitly admitted audio.",
+        method_ids=(
+            "VAD.Detect",
+            "VAD.StreamStart",
+            "VAD.StreamChunk",
+            "VAD.StreamEnd",
+            "VAD.StreamCancel",
+            "VAD.StreamStatus",
+            "VAD.StreamResult",
+        ),
     ),
     CallableFeatureContract(
         feature_id="speech_synthesis",
@@ -315,9 +357,9 @@ _FEATURES_BY_TOPIC: dict[str, tuple[CallableFeatureContract, ...]] = {
 }
 
 _FEATURE_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-_EXPECTED_MODULE_COUNT = 8
-_EXPECTED_FEATURE_GROUP_COUNT = 28
-_EXPECTED_CALLABLE_METHOD_COUNT = 100
+_EXPECTED_MODULE_COUNT = 9
+_EXPECTED_FEATURE_GROUP_COUNT = 29
+_EXPECTED_CALLABLE_METHOD_COUNT = 123
 
 
 def feature_contracts_for_module(module: str) -> tuple[CallableFeatureContract, ...]:
