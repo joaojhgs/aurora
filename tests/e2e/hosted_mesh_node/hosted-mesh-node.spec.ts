@@ -446,19 +446,30 @@ test('hosted browser mesh-node shares its local Tools service and tools with the
   expect(tool.provider_peer_id).toBe(browserPeerId)
   expect(tool.provider_service_instance_id).toContain(browserPeerId)
 
-  const execution = await post<ToolExecutionResponse>(
-    request,
-    '/api/Tooling/ExecuteTool',
-    {
-      tool_name: tool.name ?? tool.global_tool_id ?? browserToolContractId,
-      arguments: {},
-      mesh_selector: {
-        peer_id: browserPeerId,
-        service_instance_id: tool.provider_service_instance_id,
-        tool_id: tool.global_tool_id ?? tool.name,
-      },
-      correlation_id: 'hosted-mesh-node-python-invokes-browser-tool',
+  const execution = await waitFor(
+    async () => {
+      try {
+        return await post<ToolExecutionResponse>(
+          request,
+          '/api/Tooling/ExecuteTool',
+          {
+            tool_name: tool.name ?? tool.global_tool_id ?? browserToolContractId,
+            arguments: {},
+            mesh_selector: {
+              peer_id: browserPeerId,
+              service_instance_id: tool.provider_service_instance_id,
+              tool_id: tool.global_tool_id ?? tool.name,
+            },
+            correlation_id: 'hosted-mesh-node-python-invokes-browser-tool',
+          },
+        )
+      } catch (error) {
+        if (!String(error).includes('provider is not ready')) throw error
+        return null
+      }
     },
+    'Python executes the shared browser-local tool after provider readiness',
+    120_000,
   )
   expect(execution).toMatchObject({
     ok: true,
