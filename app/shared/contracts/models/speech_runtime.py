@@ -78,10 +78,34 @@ SpeechFallbackOutcome = Literal[
 ]
 
 
-class SpeechStageCapabilityV1(IOModel):
+class _SpeechSchemaModel(IOModel):
+    """Base for versioned contracts whose wire key is named ``schema``.
+
+    Pydantic's ``BaseModel.schema`` class method makes a field with the same
+    Python name emit a shadowing warning during child-process startup.  Keep
+    the public wire key and instance attribute stable while using a private
+    Python field name internally.  The class-level compatibility method
+    remains available through the normal ``Model.schema()`` API.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
+
+    def __getattribute__(self, name: str) -> object:
+        if name == "schema" and "schema_" in type(self).__pydantic_fields__:
+            return super().__getattribute__("schema_")
+        return super().__getattribute__(name)
+
+
+class SpeechStageCapabilityV1(_SpeechSchemaModel):
     """Redacted projection of one executable, currently ready stage."""
 
-    schema: Literal["speech-stage-capability.v1"] = "speech-stage-capability.v1"
+    schema_: Literal["speech-stage-capability.v1"] = Field(
+        default="speech-stage-capability.v1", alias="schema"
+    )
     stage: SpeechStage
     method_ids: list[str] = Field(min_length=1, max_length=MAX_SPEECH_STAGE_METHODS)
     modes: list[SpeechStageMode] = Field(min_length=1, max_length=2)
@@ -110,7 +134,11 @@ class SpeechStageCapabilityV1(IOModel):
     experimental: bool = False
     exported: bool = False
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
     @field_validator(
         "method_ids",
@@ -153,10 +181,12 @@ class SpeechStageCapabilityV1(IOModel):
         return self
 
 
-class SpeechExecutionContextV1(IOModel):
+class SpeechExecutionContextV1(_SpeechSchemaModel):
     """Per-attempt metadata carried outside speech payload frames."""
 
-    schema: Literal["speech-execution-context.v1"] = "speech-execution-context.v1"
+    schema_: Literal["speech-execution-context.v1"] = Field(
+        default="speech-execution-context.v1", alias="schema"
+    )
     operation_id: str = Field(
         min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
     )
@@ -184,13 +214,19 @@ class SpeechExecutionContextV1(IOModel):
     clock_domain: str = Field(min_length=1, max_length=64, pattern=_ID_PATTERN)
     monotonic_ns: int = Field(ge=0, le=MAX_JS_SAFE_INTEGER)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
 
-class SpeechStageAdmissionRequestV1(IOModel):
+class SpeechStageAdmissionRequestV1(_SpeechSchemaModel):
     """Request to authorize one finite operation or stream."""
 
-    schema: Literal["speech-stage-admission.v1"] = "speech-stage-admission.v1"
+    schema_: Literal["speech-stage-admission.v1"] = Field(
+        default="speech-stage-admission.v1", alias="schema"
+    )
     stage: SpeechStage
     mode: SpeechStageMode
     operation_id: str = Field(
@@ -215,7 +251,11 @@ class SpeechStageAdmissionRequestV1(IOModel):
     exact_selector: bool = False
     experimental_remote: bool = False
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
 
 class SpeechStreamLimitsV1(IOModel):
@@ -240,10 +280,12 @@ class SpeechStreamLimitsV1(IOModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SpeechStreamAdmissionV1(IOModel):
+class SpeechStreamAdmissionV1(_SpeechSchemaModel):
     """Owner-bound start acknowledgement for ``speech.stage_session.v1``."""
 
-    schema: Literal["speech.stage-session-admission.v1"] = "speech.stage-session-admission.v1"
+    schema_: Literal["speech.stage-session-admission.v1"] = Field(
+        default="speech.stage-session-admission.v1", alias="schema"
+    )
     session_id: str | None = Field(
         default=None, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
     )
@@ -268,7 +310,11 @@ class SpeechStreamAdmissionV1(IOModel):
     credits: int = Field(default=MAX_SPEECH_STAGE_CREDITS, ge=0, le=MAX_SPEECH_STAGE_CREDITS)
     lease_remaining_ms: int = Field(default=15_000, ge=0, le=MAX_SPEECH_STAGE_LEASE_MS)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
     @model_validator(mode="after")
     def _validate_session_reference(self) -> SpeechStreamAdmissionV1:

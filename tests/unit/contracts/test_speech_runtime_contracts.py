@@ -64,6 +64,28 @@ def test_ready_capability_is_exported_and_continuous_kws_requires_opt_in() -> No
         )
 
 
+def test_versioned_schema_field_keeps_wire_and_python_compatibility() -> None:
+    capability = SpeechStageCapabilityV1(
+        schema="speech-stage-capability.v1",
+        stage="stt",
+        method_ids=["Transcription.StreamStart"],
+        modes=["finite"],
+        implementation="python",
+        peer_id="local-peer",
+        capability_revision=1,
+        lifecycle=["foreground"],
+        readiness="ready",
+        exported=True,
+    )
+
+    assert capability.schema == "speech-stage-capability.v1"
+    assert capability.model_dump(mode="json")["schema"] == "speech-stage-capability.v1"
+    assert callable(SpeechStageCapabilityV1.schema)
+    assert SpeechStageCapabilityV1.model_json_schema()["properties"]["schema"]["const"] == (
+        "speech-stage-capability.v1"
+    )
+
+
 def test_admission_and_audio_frames_are_bounded_and_rejected_sessions_do_not_leak_ids() -> None:
     rejected = SpeechStreamAdmissionV1(
         operation_id="operation-1",
