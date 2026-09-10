@@ -630,7 +630,10 @@ async def test_ordered_stream_and_scoped_stop_emit_one_terminal_without_late_eve
 
     non_terminal = [chunk for chunk in chunks if not chunk.is_final]
     terminal = [chunk for chunk in chunks if chunk.is_final]
-    assert [chunk.text for chunk in non_terminal[:3]] == ["first", "second", "third"]
+    assert [chunk.text for chunk in non_terminal[:3]] == [None, None, None]
+    assert [chunk.text_digest for chunk in non_terminal[:3]] == [
+        hashlib.sha256(text.encode("utf-8")).hexdigest() for text in ("first", "second", "third")
+    ]
     assert [chunk.source_sequence for chunk in non_terminal[:3]] == [0, 1, 2]
     assert len(terminal) == 1
     assert terminal[0].reason == "stopped"
