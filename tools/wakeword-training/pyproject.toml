@@ -1,0 +1,26 @@
+[project]
+name = "aurora-wakeword-training"
+version = "0.1.0"
+description = "Isolated Aurora Phase 0 wakeword training/export feasibility tool"
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[project.optional-dependencies]
+runtime-smoke = [
+    "numpy==2.4.6",
+    "onnxruntime==1.20.1",
+    "openwakeword==0.6.0",
+]
+livekit-train = [
+    "livekit-wakeword[train,eval,export]==0.2.1",
+]
+livekit-train-voxcpm = [
+    "livekit-wakeword[train,eval,export,voxcpm]==0.2.1",
+]
+
+[project.scripts]
+aurora-wakeword-training = "aurora_wakeword_training.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

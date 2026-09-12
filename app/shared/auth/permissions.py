@@ -3,7 +3,8 @@
 Pure functions — no dependencies on DB, HTTP, or any I/O.
 Exports the ``Permission`` annotated type for use in Pydantic models.
 
-Permissions use bus topic strings as the single namespace:
+Permissions use bus topic strings plus explicitly registered device-capability
+permissions:
 - ``"*"`` — superuser wildcard
 - ``"Auth.*"`` — all Auth methods
 - ``"Auth.use"`` / ``"Auth.manage"`` — type-based coarse access
@@ -21,6 +22,33 @@ from pydantic import AfterValidator, WithJsonSchema
 # ---------------------------------------------------------------------------
 
 PERM_ALL = "*"
+
+
+class NativeToolPermissions:
+    """Permissions carried by credentials for native device tools.
+
+    These are capability grants rather than Python bus topics, so they are
+    registered explicitly instead of opening the whole ``Native.*`` prefix.
+    Keep this vocabulary aligned with the native tool descriptors in the SDK.
+    """
+
+    SHARE_TEXT = "Native.ShareText"
+    OPEN_DEEP_LINK = "Native.OpenDeepLink"
+    SHOW_NOTIFICATION = "Native.ShowNotification"
+    PICK_DOCUMENT = "Native.PickDocument"
+    READ_GRANTED_DOCUMENT = "Native.ReadGrantedDocument"
+    WRITE_GRANTED_DOCUMENT = "Native.WriteGrantedDocument"
+    GET_CLIPBOARD_TEXT = "Native.GetClipboardText"
+    SET_CLIPBOARD_TEXT = "Native.SetClipboardText"
+    GET_DEVICE_STATUS = "Native.GetDeviceStatus"
+    START_FOREGROUND_VOICE_CAPTURE = "Native.StartForegroundVoiceCapture"
+
+
+NATIVE_TOOL_PERMISSIONS = frozenset(
+    value
+    for name, value in vars(NativeToolPermissions).items()
+    if not name.startswith("_") and isinstance(value, str)
+)
 
 # ---------------------------------------------------------------------------
 # Auto-generated permission registry from *Methods classes
@@ -128,6 +156,7 @@ def _ensure_initialized() -> None:
         perms, prefixes = _collect_permissions(*_load_all_method_classes())
     except Exception:
         return
+    perms.update(NATIVE_TOOL_PERMISSIONS)
     KNOWN_PERMISSIONS.update(perms)
     KNOWN_PERMISSION_PREFIXES.update(prefixes)
     _permission_enum_list.extend(sorted(KNOWN_PERMISSIONS))

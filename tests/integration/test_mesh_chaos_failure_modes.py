@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from app.messaging.bus import QueryResult
 from app.messaging.mesh_bus import MeshBus
 from app.services.gateway.acl.identity import Identity
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
+from app.services.gateway.config import MeshConfig
 from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo
 from app.services.gateway.mesh.peer_registry import PeerRegistry
 from app.services.gateway.mesh.routing_table import RoutingTable
@@ -27,6 +27,8 @@ from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 class ChaosPayload(BaseModel):
@@ -52,7 +54,25 @@ class ScriptedPeerBridge:
         *,
         timeout: float,
         correlation_id: str | None = None,
+        principal_id: str | None = None,
+        effective_perms: list[str] | None = None,
+        identity_source: str | None = None,
+        method_type: str | None = None,
+        caller_peer_id: str | None = None,
+        auth_grant_revision: int | None = None,
+        manifest_revision: int | None = None,
+        speech_route_binding: Any | None = None,
     ) -> QueryResult:
+        _ = (
+            principal_id,
+            effective_perms,
+            identity_source,
+            method_type,
+            caller_peer_id,
+            auth_grant_revision,
+            manifest_revision,
+            speech_route_binding,
+        )
         self.calls.append((peer_id, method, correlation_id))
         outcomes = self._outcomes.get(peer_id)
         outcome = outcomes.popleft() if outcomes else QueryResult(ok=True, data={"peer": peer_id})
@@ -77,10 +97,10 @@ def mesh_config() -> MeshConfig:
         enabled=True,
         node_name="chaos-local",
         services={
-            "Orchestrator": MeshServiceConfig(prefer="network", fallback="local"),
-            "STT": MeshServiceConfig(prefer="network", fallback="network"),
-            "Tooling": MeshServiceConfig(prefer="network_only", fallback="error"),
-            "TTS": MeshServiceConfig(share=True, prefer="local", fallback="local"),
+            "Orchestrator": mesh_policy(prefer="network", fallback="local"),
+            "STT": mesh_policy(prefer="network", fallback="network"),
+            "Tooling": mesh_policy(prefer="network_only", fallback="error"),
+            "TTS": mesh_policy(share=True, prefer="local", fallback="local"),
         },
         peer_selection="lowest_latency",
         stale_peer_timeout_s=120.0,
@@ -120,26 +140,44 @@ async def _register_peer(
     await registry.register_peer(peer_id, node_name or peer_id)
     await registry.update_manifest(
         peer_id,
-        PeerManifest(
-            peer_id=peer_id,
+        verified_peer_manifest(
+            peer_id,
+            [_service_for_module(module, max_concurrent=max_concurrent) for module in modules],
             node_name=node_name or peer_id,
-            shared_services=[
-                PeerServiceInfo(
-                    module=module,
-                    version="1.0.0",
-                    max_concurrent=max_concurrent,
-                )
-                for module in modules
-            ],
         ),
     )
     await registry.update_latency(peer_id, latency_ms)
 
 
+def _service_for_module(module: str, *, max_concurrent: int) -> PeerServiceInfo:
+    topics = {
+        "Orchestrator": [OrchestratorMethods.USER_INPUT],
+        "Tooling": [ToolingMethods.EXECUTE_TOOL],
+        "TTS": [TTSMethods.REQUEST, TTSMethods.STARTED],
+    }.get(module, [f"{module}.Query"])
+    return PeerServiceInfo(
+        module=module,
+        version="1.0.0",
+        max_concurrent=max_concurrent,
+        available_feature_ids=["test_feature"],
+        methods=[
+            MethodInfo(
+                name=topic.rsplit(".", 1)[-1],
+                bus_topic=topic,
+                exposure="external",
+                method_type="use",
+                required_perms=[topic],
+                callable_feature_ids=["test_feature"],
+            )
+            for topic in topics
+        ],
+    )
+
+
 @pytest.mark.integration
 class TestMeshChaosFallbacks:
     @pytest.mark.asyncio
-    async def test_provider_disconnect_mid_request_falls_back_to_local(
+    async def test_provider_disconnect_mid_request_returns_terminal_error(
         self,
         inner_bus: AsyncMock,
         routing_table: RoutingTable,
@@ -152,27 +190,80 @@ class TestMeshChaosFallbacks:
 
         result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())
 
-        assert result.ok is True
-        assert result.data == {"source": "local"}
+        assert result.ok is False
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "remote_transport_unavailable"}
+        assert "data channel closed" not in result.error
         assert len(bridge.calls) == 1
         assert bridge.calls[0][0:2] == ("orchestrator-peer", OrchestratorMethods.USER_INPUT)
         assert bridge.calls[0][2]
-        inner_bus.request.assert_awaited_once()
+        inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_remote_failure_falls_back_to_second_network_provider(
+    async def test_remote_app_error_does_not_try_second_network_provider(
         self,
         inner_bus: AsyncMock,
         routing_table: RoutingTable,
         peer_registry: PeerRegistry,
         mesh_config: MeshConfig,
     ) -> None:
-        mesh_config.services["Orchestrator"].fallback = "network"
+        mesh_config = mesh_config.model_copy(
+            update={
+                "services": {
+                    **dict(mesh_config.services),
+                    "Orchestrator": mesh_policy(prefer="network", fallback="network"),
+                }
+            }
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
         await _register_peer(peer_registry, "orchestrator-fast", ["Orchestrator"], latency_ms=5.0)
         await _register_peer(peer_registry, "orchestrator-slow", ["Orchestrator"], latency_ms=25.0)
         bridge = ScriptedPeerBridge(
             {
                 "orchestrator-fast": [QueryResult(ok=False, error="provider overloaded")],
+                "orchestrator-slow": [QueryResult(ok=True, data={"source": "orchestrator-slow"})],
+            }
+        )
+        mesh_bus = MeshBus(inner_bus, routing_table, bridge, mesh_config)
+
+        result = await mesh_bus.request(OrchestratorMethods.USER_INPUT, ChaosPayload())
+
+        assert result.ok is False
+        assert result.error == "provider overloaded"
+        assert [call[0:2] for call in bridge.calls] == [
+            ("orchestrator-fast", OrchestratorMethods.USER_INPUT),
+        ]
+        assert all(call[2] for call in bridge.calls)
+        inner_bus.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_capability_changed_preaccept_tries_second_network_provider(
+        self,
+        inner_bus: AsyncMock,
+        routing_table: RoutingTable,
+        peer_registry: PeerRegistry,
+        mesh_config: MeshConfig,
+    ) -> None:
+        mesh_config = mesh_config.model_copy(
+            update={
+                "services": {
+                    **dict(mesh_config.services),
+                    "Orchestrator": mesh_policy(prefer="network", fallback="network"),
+                }
+            }
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        await _register_peer(peer_registry, "orchestrator-fast", ["Orchestrator"], latency_ms=5.0)
+        await _register_peer(peer_registry, "orchestrator-slow", ["Orchestrator"], latency_ms=25.0)
+        bridge = ScriptedPeerBridge(
+            {
+                "orchestrator-fast": [
+                    QueryResult(
+                        ok=False,
+                        data={"accepted": False, "reason_code": "capability_changed"},
+                        error="capability_changed",
+                    )
+                ],
                 "orchestrator-slow": [QueryResult(ok=True, data={"source": "orchestrator-slow"})],
             }
         )
@@ -242,7 +333,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not negotiated" in result.error
+        assert result.error == "The selected device is unavailable."
+        assert result.data == {"reason_code": "selector_peer_stale"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -255,7 +347,19 @@ class TestMeshChaosSafeHardFailures:
         mesh_config: MeshConfig,
     ) -> None:
         await _register_peer(peer_registry, "tooling-peer", ["Tooling"])
-        mesh_config.services["Tooling"].allowed_peers = ["other-peer"]
+        mesh_config = mesh_config.model_copy(
+            update={
+                "services": {
+                    **dict(mesh_config.services),
+                    "Tooling": mesh_policy(
+                        prefer="network_only",
+                        fallback="error",
+                        allowed_peers=["other-peer"],
+                    ),
+                }
+            }
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
         bridge = ScriptedPeerBridge()
         mesh_bus = MeshBus(inner_bus, routing_table, bridge, mesh_config)
         payload = ChaosPayload(mesh_selector=MeshAddressSelector(peer_id="tooling-peer"))
@@ -263,7 +367,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "not allowed by policy" in result.error
+        assert result.error == "The selected device is not allowed to handle this action."
+        assert result.data == {"reason_code": "selector_peer_unauthorized"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -289,7 +394,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, payload)
 
         assert result.ok is False
-        assert "at capacity" in result.error
+        assert result.error == "The selected device is busy."
+        assert result.data == {"reason_code": "selector_provider_at_capacity"}
         assert bridge.calls == []
         inner_bus.request.assert_not_awaited()
 
@@ -305,7 +411,8 @@ class TestMeshChaosSafeHardFailures:
         result = await mesh_bus.request(ToolingMethods.EXECUTE_TOOL, ChaosPayload())
 
         assert result.ok is False
-        assert "No route available" in result.error
+        assert result.error == "No available device can handle this action."
+        assert result.data == {"reason_code": "no_route"}
         inner_bus.request.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -335,7 +442,7 @@ class TestMeshChaosSafeHardFailures:
         mesh_config = MeshConfig(
             enabled=True,
             node_name="chaos-rpc",
-            services={"TTS": MeshServiceConfig(share=True)},
+            services={"TTS": mesh_policy(share=True)},
         )
         handler = RPCHandler(
             bus,
@@ -382,7 +489,7 @@ class TestMeshChaosForwardingLoops:
         assert bridge.forwarded_events == [("event-peer", TTSMethods.STARTED, "evt-1")]
 
     @pytest.mark.asyncio
-    async def test_forwarded_event_is_republished_locally_without_reforwarding(
+    async def test_unsafe_forwarded_event_is_rejected_without_local_publish(
         self,
         inner_bus: AsyncMock,
         routing_table: RoutingTable,
@@ -419,7 +526,5 @@ class TestMeshChaosForwardingLoops:
             )
         )
 
-        inner_bus.publish.assert_awaited_once()
-        assert inner_bus.publish.call_args.kwargs["origin"] == "mesh_forwarded"
-        assert inner_bus.publish.call_args.kwargs["correlation_id"] == "evt-forwarded"
+        inner_bus.publish.assert_not_awaited()
         assert bridge.forwarded_events == []

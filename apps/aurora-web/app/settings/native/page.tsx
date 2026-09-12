@@ -1,7 +1,7 @@
-import { SettingsPermissionsView } from '@aurora/ui'
 import { getShellSnapshot } from '../../shell-state'
+import { NativeSettingsClientPage } from './native-settings-client'
 
 export default async function Page() {
   const snapshot = await getShellSnapshot()
-  return <SettingsPermissionsView snapshot={snapshot} />
+  return <NativeSettingsClientPage snapshot={snapshot} />
 }

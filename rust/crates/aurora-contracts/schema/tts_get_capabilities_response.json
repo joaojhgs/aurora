@@ -1,0 +1,271 @@
+{
+  "$defs": {
+    "TTSCapabilities": {
+      "additionalProperties": false,
+      "description": "Redacted provider-neutral TTS capability projection.",
+      "properties": {
+        "accepted_clone_import_formats": {
+          "items": {
+            "enum": [
+              "pcm_s16le",
+              "wav"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Accepted Clone Import Formats",
+          "type": "array"
+        },
+        "cancellation": {
+          "default": false,
+          "title": "Cancellation",
+          "type": "boolean"
+        },
+        "capability_revision": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Capability Revision",
+          "type": "integer"
+        },
+        "cloning": {
+          "default": false,
+          "title": "Cloning",
+          "type": "boolean"
+        },
+        "contract_revision": {
+          "const": "aurora-tts-capabilities-v1",
+          "default": "aurora-tts-capabilities-v1",
+          "title": "Contract Revision",
+          "type": "string"
+        },
+        "installed_language_pack_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Installed Language Pack Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "max_clone_chunk_bytes": {
+          "default": 0,
+          "maximum": 49152,
+          "minimum": 0,
+          "title": "Max Clone Chunk Bytes",
+          "type": "integer"
+        },
+        "max_clone_import_bytes": {
+          "default": 0,
+          "maximum": 2097152,
+          "minimum": 0,
+          "title": "Max Clone Import Bytes",
+          "type": "integer"
+        },
+        "max_resident_base_models": {
+          "default": 1,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Max Resident Base Models",
+          "type": "integer"
+        },
+        "model_status": {
+          "default": "unavailable",
+          "enum": [
+            "degraded",
+            "error",
+            "loading",
+            "ready",
+            "unavailable"
+          ],
+          "title": "Model Status",
+          "type": "string"
+        },
+        "output_formats": {
+          "items": {
+            "enum": [
+              "raw",
+              "wav"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Output Formats",
+          "type": "array"
+        },
+        "ready": {
+          "default": false,
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "ready_languages": {
+          "items": {
+            "maxLength": 255,
+            "minLength": 2,
+            "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Ready Languages",
+          "type": "array",
+          "x-aurora-speech-language-array-normalize": true
+        },
+        "requires_model_reload_for_voice_change": {
+          "default": true,
+          "title": "Requires Model Reload For Voice Change",
+          "type": "boolean"
+        },
+        "resident_base_model_count": {
+          "default": 0,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Resident Base Model Count",
+          "type": "integer"
+        },
+        "resident_language_pack_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Resident Language Pack Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "resident_language_packs": {
+          "items": {
+            "$ref": "#/$defs/TTSResidentLanguagePack"
+          },
+          "maxItems": 8,
+          "title": "Resident Language Packs",
+          "type": "array"
+        },
+        "sample_rates": {
+          "items": {
+            "maximum": 192000,
+            "minimum": 8000,
+            "type": "integer"
+          },
+          "maxItems": 16,
+          "title": "Sample Rates",
+          "type": "array"
+        },
+        "standard_pack_revision": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Standard Pack Revision"
+        },
+        "streaming": {
+          "default": false,
+          "title": "Streaming",
+          "type": "boolean"
+        },
+        "supported_language_pack_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Supported Language Pack Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "voice_selection_mode": {
+          "default": "active_only",
+          "enum": [
+            "active_only",
+            "in_model_speaker",
+            "shared_model_state"
+          ],
+          "title": "Voice Selection Mode",
+          "type": "string"
+        },
+        "voice_state_memory_class": {
+          "default": "none",
+          "enum": [
+            "full_model",
+            "none",
+            "small_state"
+          ],
+          "title": "Voice State Memory Class",
+          "type": "string"
+        }
+      },
+      "title": "TTSCapabilities",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-capabilities-invariant": true
+    },
+    "TTSResidentLanguagePack": {
+      "additionalProperties": false,
+      "description": "Language readiness bound to one resident provider-neutral pack id.",
+      "properties": {
+        "pack_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Pack Id",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "ready_languages": {
+          "items": {
+            "maxLength": 255,
+            "minLength": 2,
+            "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Ready Languages",
+          "type": "array",
+          "x-aurora-speech-language-array-normalize": true
+        }
+      },
+      "required": [
+        "pack_id"
+      ],
+      "title": "TTSResidentLanguagePack",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "TTS runtime capabilities response.",
+  "properties": {
+    "capabilities": {
+      "$ref": "#/$defs/TTSCapabilities"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    }
+  },
+  "required": [
+    "capabilities"
+  ],
+  "title": "TTSGetCapabilitiesResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

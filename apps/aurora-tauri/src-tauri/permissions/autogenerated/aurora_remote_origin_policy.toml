@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-remote-origin-policy"
+description = "Enables the aurora_remote_origin_policy command without any pre-configured scope."
+commands.allow = ["aurora_remote_origin_policy"]
+
+[[permission]]
+identifier = "deny-aurora-remote-origin-policy"
+description = "Denies the aurora_remote_origin_policy command without any pre-configured scope."
+commands.deny = ["aurora_remote_origin_policy"]

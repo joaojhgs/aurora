@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Release a native microphone ownership lease.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "lease_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Lease Id",
+      "type": "string"
+    },
+    "owner": {
+      "const": "native",
+      "default": "native",
+      "title": "Owner",
+      "type": "string"
+    },
+    "owner_id": {
+      "maxLength": 80,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Owner Id",
+      "type": "string"
+    },
+    "reason": {
+      "default": "native_release",
+      "maxLength": 80,
+      "title": "Reason",
+      "type": "string"
+    },
+    "restart_python_capture": {
+      "default": true,
+      "title": "Restart Python Capture",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "generation",
+    "lease_id",
+    "owner_id"
+  ],
+  "title": "STTCaptureReleaseRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_aurora_entrypoint"
+        android:shortcutDisabledMessage="@string/aurora_shortcut_disabled"
+        android:shortcutId="aurora_assistant"
+        android:shortcutLongLabel="@string/aurora_shortcut_assistant_long"
+        android:shortcutShortLabel="@string/aurora_shortcut_assistant_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="aurora://assistant/new" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

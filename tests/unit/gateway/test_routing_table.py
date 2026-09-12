@@ -1,14 +1,30 @@
 """Unit tests for the mesh RoutingTable."""
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 import pytest
 
-from app.services.gateway.config import MeshConfig, MeshServiceConfig
-from app.services.gateway.mesh.models import PeerManifest, PeerServiceInfo, PeerState, RouteDecision
+from app.services.gateway.config import MeshConfig
+from app.services.gateway.mesh.models import (
+    PeerManifest,
+    PeerServiceInfo,
+    PeerState,
+    ProviderLeaseState,
+    RouteDecision,
+)
 from app.services.gateway.mesh.peer_registry import PeerRegistry
+from app.services.gateway.mesh.policy_store import MeshPolicyStore
 from app.services.gateway.mesh.routing_table import RoutingTable, _extract_module
+from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.stt import TranscriptionMethods, WakeWordMethods
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
+from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+from tests.unit.gateway.verified_manifest_helpers import verified_peer_manifest
 
 
 class TestExtractModule:
@@ -30,12 +46,13 @@ def mesh_config():
         enabled=True,
         node_name="test-node",
         services={
-            "TTS": MeshServiceConfig(prefer="network", fallback="local"),
-            "DB": MeshServiceConfig(prefer="local"),
-            "STT": MeshServiceConfig(prefer="network_only", fallback="error"),
-            "Transcription": MeshServiceConfig(prefer="network", fallback="local"),
-            "Scheduler": MeshServiceConfig(prefer="local_only"),
-            "Tooling": MeshServiceConfig(prefer="local", require_explicit_selector=True),
+            "TTS": mesh_policy(prefer="network", fallback="local"),
+            "DB": mesh_policy(prefer="local"),
+            "STT": mesh_policy(prefer="network_only", fallback="error"),
+            "Transcription": mesh_policy(prefer="network", fallback="local"),
+            "Scheduler": mesh_policy(prefer="local_only"),
+            "Tooling": mesh_policy(prefer="local", require_explicit_selector=True),
+            "Orchestrator": mesh_policy(prefer="local"),
         },
     )
 
@@ -52,10 +69,36 @@ def routing_table(mesh_config, peer_registry):
 
 def _make_negotiated_peer(peer_id, modules, latency_ms=50.0, *, max_concurrent=10):
     """Create a negotiated PeerState with given modules."""
+    topics = {
+        "DB": "DB.GetMessages",
+        "TTS": TTSMethods.SYNTHESIZE,
+        "Transcription": TranscriptionMethods.PROCESS_AUDIO,
+        "WakeWord": WakeWordMethods.PROCESS_AUDIO,
+        "Orchestrator": OrchestratorMethods.INFER_CHAT,
+        "Tooling": ToolingMethods.EXECUTE_TOOL,
+    }
+    topic_sets = {
+        "TTS": [TTSMethods.SYNTHESIZE, TTSMethods.REQUEST],
+    }
     services = [
-        PeerServiceInfo(module=m, version="1.0.0", max_concurrent=max_concurrent) for m in modules
+        PeerServiceInfo(
+            module=m,
+            version="1.0.0",
+            available_feature_ids=["basic_feature"],
+            methods=[
+                MethodInfo(
+                    name=topic.split(".", 1)[1],
+                    bus_topic=topic,
+                    exposure="external",
+                    required_perms=[topic],
+                )
+                for topic in topic_sets.get(m, [topics.get(m, f"{m}.Execute")])
+            ],
+            max_concurrent=max_concurrent,
+        )
+        for m in modules
     ]
-    manifest = PeerManifest(peer_id=peer_id, shared_services=services)
+    manifest = verified_peer_manifest(peer_id, services)
     return PeerState(
         peer_id=peer_id,
         manifest=manifest,
@@ -64,8 +107,41 @@ def _make_negotiated_peer(peer_id, modules, latency_ms=50.0, *, max_concurrent=1
     )
 
 
+def _config_with_service(mesh_config: MeshConfig, module: str, policy) -> MeshConfig:
+    services = dict(mesh_config.services)
+    services[module] = policy
+    return mesh_config.model_copy(update={"services": services})
+
+
 class TestRoutingTableResolve:
     """Tests for RoutingTable.resolve()."""
+
+    @pytest.mark.parametrize(
+        ("topic", "selector"),
+        [
+            pytest.param("Unknown.Topic", None, id="implicit-local-disabled"),
+            pytest.param(TTSMethods.SYNTHESIZE, None, id="automatic-remote-disabled"),
+            pytest.param(
+                "DB.GetMessages",
+                MeshAddressSelector(peer_id="local", provider_id="local:DB"),
+                id="explicit-local-disabled",
+            ),
+            pytest.param(
+                "DB.GetMessages",
+                MeshAddressSelector(peer_id="peer-1"),
+                id="explicit-remote-disabled",
+            ),
+        ],
+    )
+    def test_disabled_mesh_config_fails_closed_for_all_resolution_shapes(
+        self, peer_registry, topic, selector
+    ):
+        routing_table = RoutingTable(MeshConfig(enabled=False), peer_registry)
+
+        route = routing_table.resolve(topic, selector=selector)
+
+        assert route.target == "error"
+        assert route.error_code == "mesh_disabled"
 
     def test_no_routing_config_returns_local(self, routing_table):
         route = routing_table.resolve("Unknown.Topic")
@@ -102,6 +178,109 @@ class TestRoutingTableResolve:
         assert route.module == "TTS"
 
     @pytest.mark.asyncio
+    async def test_provider_unavailable_peer_is_excluded_from_automatic_route(
+        self,
+        routing_table,
+        peer_registry,
+    ):
+        peer = _make_negotiated_peer("peer-1", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+        await peer_registry.require_provider_lease("peer-1")
+        await peer_registry.apply_provider_lease(
+            ProviderLeaseState(
+                peer_id="peer-1",
+                connection_epoch="epoch-1",
+                availability_revision=1,
+                issued_at_ms=1000,
+                expires_at_ms=1000,
+                available=False,
+                reason_code="paused",
+            ),
+            now_ms=1000,
+        )
+
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
+
+        assert route.target == "local"
+
+    @pytest.mark.asyncio
+    async def test_required_provider_feature_ids_block_automatic_route(
+        self, mesh_config, peer_registry
+    ):
+        mesh_config = _config_with_service(
+            mesh_config,
+            "TTS",
+            mesh_policy(
+                prefer="network",
+                fallback="error",
+                required_provider_feature_ids=["future-feature"],
+            ),
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(TTSMethods.SYNTHESIZE)
+
+        assert mesh_config.services["TTS"].routing.required_provider_feature_ids == (
+            "future-feature",
+        )
+        assert route.target == "error"
+
+    @pytest.mark.asyncio
+    async def test_required_provider_feature_ids_block_explicit_route(
+        self, mesh_config, peer_registry
+    ):
+        mesh_config = _config_with_service(
+            mesh_config,
+            "TTS",
+            mesh_policy(
+                prefer="local",
+                required_provider_feature_ids=["future-feature"],
+            ),
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["TTS"], latency_ms=20.0)
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            TTSMethods.SYNTHESIZE,
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_missing_required_features"
+
+    @pytest.mark.asyncio
+    async def test_explicit_resolution_captures_one_policy_snapshot(
+        self, mesh_config, peer_registry
+    ):
+        store = MeshPolicyStore()
+        store.replace(mesh_config, source_revision=1)
+        calls = 0
+
+        def provider():
+            nonlocal calls
+            calls += 1
+            return store.current()
+
+        routing_table = RoutingTable(mesh_config, peer_registry, policy_provider=provider)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == "remote"
+        assert calls == 1
+
+    @pytest.mark.asyncio
     async def test_prefer_network_only_no_peer(self, routing_table):
         """network_only with no peer → none (fallback=error maps to error)."""
         route = routing_table.resolve("STT.Transcribe")
@@ -136,6 +315,77 @@ class TestRoutingTableResolve:
         assert route.selector.resource_namespace == "journal"
 
     @pytest.mark.asyncio
+    async def test_remote_canonical_local_service_id_routes_to_owning_peer(
+        self, mesh_config, peer_registry
+    ):
+        """A provider-local identity is remote when its owning peer is remote."""
+
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+        peer = _make_negotiated_peer("browser-peer", ["Tooling"])
+        await peer_registry.register_peer("browser-peer")
+        await peer_registry.update_manifest("browser-peer", peer.manifest)
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id="browser-peer",
+                service_instance_id="local:browser-peer:Tooling",
+                tool_id="aurora-tool:v1:browser-peer:Tooling:native.get_device_status",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "browser-peer"
+
+    @pytest.mark.asyncio
+    async def test_remote_percent_encoded_local_service_id_routes_to_raw_peer(
+        self, mesh_config, peer_registry
+    ):
+        """Canonical service IDs decode their RFC3986 peer component for routing."""
+
+        remote_peer_id = "browser peer/☃"
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+        peer = _make_negotiated_peer(remote_peer_id, ["Tooling"])
+        await peer_registry.register_peer(remote_peer_id)
+        await peer_registry.update_manifest(remote_peer_id, peer.manifest)
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id=remote_peer_id,
+                service_instance_id="local:browser%20peer%2F%E2%98%83:Tooling",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == remote_peer_id
+
+    def test_canonical_local_service_id_stays_on_current_peer(self, mesh_config, peer_registry):
+        routing_table = RoutingTable(
+            mesh_config,
+            peer_registry,
+            local_peer_id="python-peer",
+        )
+
+        route = routing_table.resolve(
+            ToolingMethods.EXECUTE_TOOL,
+            selector=MeshAddressSelector(
+                peer_id="python-peer",
+                service_instance_id="local:python-peer:Tooling",
+            ),
+        )
+
+        assert route.target == "local"
+
+    @pytest.mark.asyncio
     async def test_explicit_missing_peer_returns_actionable_error(self, routing_table):
         route = routing_table.resolve(
             "DB.GetMessages",
@@ -148,7 +398,11 @@ class TestRoutingTableResolve:
 
     @pytest.mark.asyncio
     async def test_explicit_peer_not_allowed_returns_unauthorized(self, mesh_config, peer_registry):
-        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", allowed_peers=["peer-2"])
+        mesh_config = _config_with_service(
+            mesh_config,
+            "DB",
+            mesh_policy(prefer="local", allowed_peers=["peer-2"]),
+        )
         routing_table = RoutingTable(mesh_config, peer_registry)
         peer = _make_negotiated_peer("peer-1", ["DB"])
         await peer_registry.register_peer("peer-1")
@@ -161,6 +415,54 @@ class TestRoutingTableResolve:
 
         assert route.target == "error"
         assert route.error_code == "selector_peer_unauthorized"
+
+    @pytest.mark.parametrize(
+        ("allowed_peers", "expected_target", "expected_error"),
+        [
+            pytest.param(None, "remote", None, id="null-allows-any-provider"),
+            pytest.param([], "error", "selector_peer_unauthorized", id="empty-denies-all"),
+            pytest.param(["peer-1"], "remote", None, id="populated-allows-member"),
+            pytest.param(
+                ["peer-2"],
+                "error",
+                "selector_peer_unauthorized",
+                id="populated-denies-nonmember",
+            ),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_explicit_outbound_legacy_allowed_peers_semantics_are_locked(
+        self,
+        mesh_config,
+        peer_registry,
+        allowed_peers,
+        expected_target,
+        expected_error,
+    ):
+        """Explicit outbound selectors preserve legacy null/empty/list allowlist meaning."""
+
+        mesh_config = _config_with_service(
+            mesh_config,
+            "DB",
+            mesh_policy(
+                prefer="local",
+                allowed_peers=allowed_peers,
+            ),
+        )
+        routing_table = RoutingTable(mesh_config, peer_registry)
+        peer = _make_negotiated_peer("peer-1", ["DB"])
+        await peer_registry.register_peer("peer-1")
+        await peer_registry.update_manifest("peer-1", peer.manifest)
+
+        route = routing_table.resolve(
+            "DB.GetMessages",
+            selector=MeshAddressSelector(peer_id="peer-1"),
+        )
+
+        assert route.target == expected_target
+        assert route.error_code == expected_error
+        if expected_target == "remote":
+            assert route.peer_id == "peer-1"
 
     @pytest.mark.asyncio
     async def test_explicit_stale_peer_returns_actionable_error(self, routing_table, peer_registry):
@@ -182,7 +484,11 @@ class TestRoutingTableResolve:
     async def test_explicit_peer_version_mismatch_returns_actionable_error(
         self, mesh_config, peer_registry
     ):
-        mesh_config.services["DB"] = MeshServiceConfig(prefer="local", min_version="2.0.0")
+        mesh_config = _config_with_service(
+            mesh_config,
+            "DB",
+            mesh_policy(prefer="local", min_version="2.0.0"),
+        )
         routing_table = RoutingTable(mesh_config, peer_registry)
         peer = _make_negotiated_peer("peer-1", ["DB"])
         await peer_registry.register_peer("peer-1")
@@ -252,6 +558,175 @@ class TestRoutingTableResolve:
         assert route.target == "local"
         assert route.module == "WakeWord"
 
+    def test_registered_manage_requires_explicit_selector(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_not_called()
+
+    def test_projected_manage_requires_explicit_selector(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="use"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(method_type="manage"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_method_type_lookup_failure_requires_explicit_selector(self, mesh_config, monkeypatch):
+        def raise_lookup_failure(topic):
+            raise RuntimeError("registry unavailable")
+
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", raise_lookup_failure)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_not_called()
+
+    def test_missing_contract_without_projection_requires_explicit_selector(
+        self, mesh_config, monkeypatch
+    ):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_missing_contract_allows_projected_use(self, mesh_config, monkeypatch):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "TTS", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="tts-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="TTS", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="TTS", version="1.0.0"),
+            decision=SimpleNamespace(method_type="use"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            TTSMethods.SYNTHESIZE,
+            routing_config=config.services["TTS"],
+            mesh_config=config,
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "tts-peer"
+        assert route.method_type == "use"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_missing_contract_blocks_projected_manage(self, mesh_config, monkeypatch):
+        monkeypatch.setattr("app.shared.contracts.registry.get_contract", lambda topic: None)
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="network"))
+        registry = MagicMock()
+        registry.get_best_provider_candidate.return_value = SimpleNamespace(
+            peer=SimpleNamespace(
+                peer_id="admin-peer",
+                latency_ms=1.0,
+                manifest=SimpleNamespace(
+                    shared_services=[SimpleNamespace(module="Auth", version="1.0.0")]
+                ),
+            ),
+            service=SimpleNamespace(module="Auth", version="1.0.0"),
+            decision=SimpleNamespace(method_type="manage"),
+        )
+        table = RoutingTable(config, registry)
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_required"
+        registry.get_best_provider_candidate.assert_called_once()
+
+    def test_local_preferred_manage_without_selector_remains_local(self, mesh_config, monkeypatch):
+        monkeypatch.setattr(
+            "app.shared.contracts.registry.get_contract",
+            lambda topic: SimpleNamespace(method_type="manage"),
+        )
+        config = _config_with_service(mesh_config, "Auth", mesh_policy(prefer="local"))
+        table = RoutingTable(config, MagicMock())
+
+        route = table.resolve(
+            AuthMethods.MESH_REMOVE_PEER,
+            routing_config=config.services["Auth"],
+            mesh_config=config,
+        )
+
+        assert route.target == "local"
+        assert route.module == "Auth"
+
     @pytest.mark.asyncio
     async def test_explicit_audio_selector_routes_to_selected_peer(
         self, routing_table, peer_registry
@@ -281,9 +756,80 @@ class TestRoutingTableResolve:
         assert route.target == "error"
         assert route.error_code == "selector_conflict"
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "provider_id",
+        [
+            "remote:studio-gpu:Orchestrator",
+            "studio-gpu:Orchestrator",
+            "mesh:studio-gpu:Orchestrator",
+        ],
+    )
+    async def test_orchestrator_provider_aliases_route_to_selected_peer(
+        self, routing_table, peer_registry, provider_id
+    ):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"], latency_ms=12.0)
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+        await peer_registry.update_latency("studio-gpu", 12.0)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(provider_id=provider_id),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "studio-gpu"
+        assert route.module == "Orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_infer_chat_selector_from_sdk_mesh_provider_alias_routes_to_peer(
+        self, routing_table, peer_registry
+    ):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"], latency_ms=12.0)
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+        await peer_registry.update_latency("studio-gpu", 12.0)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(
+                peer_id="studio-gpu",
+                service_instance_id="remote:studio-gpu:Orchestrator",
+            ),
+        )
+
+        assert route.target == "remote"
+        assert route.peer_id == "studio-gpu"
+        assert route.module == "Orchestrator"
+        assert route.selector.service_instance_id == "remote:studio-gpu:Orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_wrong_module_mesh_alias_returns_conflict(self, routing_table, peer_registry):
+        peer = _make_negotiated_peer("studio-gpu", ["Orchestrator"])
+        await peer_registry.register_peer("studio-gpu")
+        await peer_registry.update_manifest("studio-gpu", peer.manifest)
+
+        route = routing_table.resolve(
+            OrchestratorMethods.INFER_CHAT,
+            selector=MeshAddressSelector(provider_id="mesh:studio-gpu:TTS"),
+        )
+
+        assert route.target == "error"
+        assert route.error_code == "selector_conflict"
+        assert "targets TTS, not Orchestrator" in route.error_message
+
 
 class TestRoutingTableResolveFallback:
     """Tests for RoutingTable.resolve_fallback()."""
+
+    def test_disabled_mesh_config_fails_closed_for_fallback(self, peer_registry):
+        routing_table = RoutingTable(MeshConfig(enabled=False), peer_registry)
+
+        route = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
+
+        assert route.target == "error"
+        assert route.error_code == "mesh_disabled"
 
     def test_fallback_local(self, routing_table):
         route = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
@@ -291,15 +837,32 @@ class TestRoutingTableResolveFallback:
 
     @pytest.mark.asyncio
     async def test_fallback_network_finds_another_peer(self, mesh_config, peer_registry):
-        mesh_config.services["TTS"] = MeshServiceConfig(prefer="network", fallback="network")
+        mesh_config = _config_with_service(
+            mesh_config,
+            "TTS",
+            mesh_policy(prefer="network", fallback="network"),
+        )
         routing_table = RoutingTable(mesh_config, peer_registry)
 
         # Register two peers
         for pid, lat in [("peer-1", 20.0), ("peer-2", 30.0)]:
             await peer_registry.register_peer(pid)
-            manifest = PeerManifest(
-                peer_id=pid,
-                shared_services=[PeerServiceInfo(module="TTS", version="1.0.0")],
+            manifest = verified_peer_manifest(
+                pid,
+                [
+                    PeerServiceInfo(
+                        module="TTS",
+                        version="1.0.0",
+                        methods=[
+                            MethodInfo(
+                                name="Synthesize",
+                                bus_topic=TTSMethods.SYNTHESIZE,
+                                exposure="external",
+                                required_perms=[TTSMethods.SYNTHESIZE],
+                            )
+                        ],
+                    )
+                ],
             )
             await peer_registry.update_manifest(pid, manifest)
             await peer_registry.update_latency(pid, lat)
@@ -309,10 +872,27 @@ class TestRoutingTableResolveFallback:
         assert fallback.peer_id == "peer-2"
 
     def test_fallback_error(self, routing_table):
-        config = MeshServiceConfig(prefer="network_only", fallback="error")
+        config = mesh_policy(prefer="network_only", fallback="error")
         route = routing_table.resolve_fallback("STT.Request", routing_config=config)
         assert route.target == "error"
 
     def test_no_routing_config_returns_local(self, routing_table):
         route = routing_table.resolve_fallback("Unknown.Topic")
         assert route.target == "local"
+
+    def test_fallback_resolution_captures_one_policy_snapshot(self, mesh_config, peer_registry):
+        store = MeshPolicyStore()
+        store.replace(mesh_config, source_revision=1)
+        calls = 0
+
+        def provider():
+            nonlocal calls
+            calls += 1
+            return store.current()
+
+        routing_table = RoutingTable(mesh_config, peer_registry, policy_provider=provider)
+
+        route = routing_table.resolve_fallback(TTSMethods.SYNTHESIZE, failed_peer_id="peer-1")
+
+        assert route.target == "local"
+        assert calls == 1

@@ -115,6 +115,12 @@ if result.ok:
 - Each service gets its own queue
 - Job priorities mapped to BullMQ priority levels
 - Wildcard via base queue + topic filtering
+- Every event is also serialized once onto Redis pub/sub. Exact subscribers use
+  durable per-subscriber BullMQ queues, but wildcard subscribers in another
+  process are not visible to the publisher's local subscription registry; the
+  pub/sub copy is therefore required for cross-process wildcard correctness.
+  Keep hardware-rate streams such as raw audio local or on a purpose-built
+  stream transport rather than publishing them as ordinary BullMQ events.
 - Performance: 1,000+ msg/s, 5-10ms latency
 - Requires `REDIS_URL` environment variable
 
@@ -125,7 +131,11 @@ Wraps the inner bus (LocalBus or BullMQBus) to add cross-instance routing:
 - **Commands**: `RoutingTable.resolve()` decides local vs remote; `PeerBridge` sends to remote peer via WebRTC DataChannel
 - **Events with `mesh=True`**: Delivered locally first, then forwarded to all negotiated peers (if module has `share: true`)
 - **Loop prevention**: Events with `origin="mesh_forwarded"` are never re-forwarded
-- **Fallback**: On remote failure, falls back per routing config (local, network, error)
+- **Fallback**: May select local or another eligible route only before a remote
+  call can have been accepted, including explicit structured pre-accept
+  rejection. After a send may have been accepted, timeout, transport failure,
+  and application error are terminal to prevent duplicate mutations. An
+  explicit peer selector never falls back transparently.
 
 ---
 
@@ -203,6 +213,12 @@ Even with `mesh=True`, the event won't forward unless the module has `share: tru
 
 - **Does a remote instance need to know?** -> `mesh=True`
 - **Hardware-bound, high-frequency, or purely local?** -> default (`mesh=False`)
+
+Peer identity, authenticated-context, grant/authority revision, manifest, and
+lease fields are security-critical routing state, not incidental transport
+metadata. Preserve their typed models and per-peer correlation across MeshBus;
+follow the Auth and Gateway guides before adding, rewriting, or forwarding such
+fields. A missing or mismatched authority context must fail closed.
 
 ---
 

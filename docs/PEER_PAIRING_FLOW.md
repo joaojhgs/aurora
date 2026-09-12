@@ -215,12 +215,26 @@ The new device sends its name to the Gateway to begin pairing. When the request 
 {
     "device_name": "John's iPhone",
     "remote_peer_id": "a1b2c3d4-...",   // Stable UUID of the requesting peer
-    "remote_node_name": "living-room"     // Human-readable peer name
+    "remote_node_name": "living-room",    // Human-readable peer name
+    "room_name": "home-mesh",
+    "pairing_session_id": "<64-char transcript hash>",
+    "verification_code": "123456"
 }
 
 // Response (200)
-{ "code": "482937", "expires_in_seconds": 300 }
+{
+  "code": "<opaque pairing handle>",
+  "expires_in_seconds": 300,
+  "pairing_session_id": "<same transcript hash>",
+  "verification_code": "123456"
+}
 ```
+
+For a trusted mesh DataChannel call, `room_name`, `remote_peer_id`,
+`pairing_session_id`, and `verification_code` are transport-bound values
+injected/overwritten by the Gateway RPC handler. They are not trusted from an
+arbitrary caller payload. Basic HTTP device pairing continues to use the opaque
+pairing handle without mesh transcript fields.
 
 **What happens server-side:**
 1. **Rate limiting** — max 5 attempts per client IP. Returns `429` if exceeded.
@@ -236,6 +250,9 @@ The new device sends its name to the Gateway to begin pairing. When the request 
        "approved_by": None,
        "remote_peer_id": "a1b2c3d4-...",    # Empty string if not a mesh peer
        "remote_node_name": "living-room",    # Empty string if not a mesh peer
+       "room_name": "home-mesh",
+       "pairing_session_id": "<64-char transcript hash>",
+       "verification_code": "123456",
    }
    ```
 4. **Bus event:** `Auth.PairingRequested` is published with `PairingRequestedEvent` payload so the UI and mesh subsystem can react (e.g., display a notification to the admin).
@@ -299,7 +316,12 @@ The admin (on a separate already-authenticated session — e.g., web dashboard o
    request["granted_permissions"] = permissions or config_defaults
    request["granted_is_admin"] = is_admin
    ```
-4. **Permission fallback:** If `permissions` is `None` (not provided), the system uses `_default_device_permissions` from the Gateway config. If `permissions` is `[]` (explicitly empty), the device gets zero permissions.
+4. **Permission fallback and wildcard guard:** If `permissions` is `None`
+   (not provided), the system uses `_default_device_permissions` from the
+   Gateway config. If `permissions` is `[]` (explicitly empty), the device gets
+   zero permissions. Non-admin approvals may not grant the global `"*"`
+   wildcard; only an approval marked `is_admin: true` may normalize the device's
+   grant to `["*"]`.
 5. **Mesh peer sync:** If the pairing request has a `remote_peer_id` (i.e., it came from a mesh peer), the system also updates the `mesh_peers` table — setting `outbound_status = 'approved'` and `outbound_permissions` to the granted permissions. This ensures the mesh peer table stays in sync with the pairing approval.
 6. **Audit event:** `pairing.approved` with the approving admin's ID, granted permissions, and admin flag.
 
@@ -366,7 +388,8 @@ Once the device detects `status: "approved"`, it exchanges the code for a perman
    }
    ```
    - **Admin devices** get `scopes: ["*"]` (full access).
-   - **Non-admin devices** get `scopes` = exactly the granted permissions.
+   - **Non-admin devices** get `scopes` = exactly the granted permissions and
+     cannot receive the global `"*"` wildcard.
 
 5. **Outbound FK linking (mesh peers):** If the pairing request has a `remote_peer_id`, the system writes the outbound foreign keys to `mesh_peers`:
    ```sql
@@ -467,6 +490,10 @@ If only one phase completes (admin on one side didn't approve in time), the syst
 | ❌ Denied | N/A | Pairing fails entirely — no trust established |
 
 The `mesh_peers` row persists even when a phase is incomplete. The admin can always come back later and approve via the **Peer Management API** (`POST /mesh/peers/{peer_id}/approve`), at which point the next WebRTC reconnection will complete the missing phase.
+
+Transport loss does not restart a direction that already completed credential exchange. On the fresh SDP-bound DataChannel, the credential holder answers a new reconnect challenge; after that proof, the verifier reports `already_trusted` for the completed direction and only the missing direction continues its approval flow. This avoids duplicate requests and credential rotation without reusing an old SAS. If the connection dropped before the approved credential reached the other device, there is no reconnect proof yet, so the replacement transport requires a fresh verification-code comparison.
+
+Browser/WebView mesh nodes keep the five-minute pairing window open and automatically renegotiate after timeout or transient loss until the user disconnects. Each retry clears transport-bound commitments, RPC waits, and SAS state, republishes presence, and derives a new channel-bound code. Durable credentials and completed proof-capable directions remain intact.
 
 ---
 
@@ -699,6 +726,23 @@ Device                           RTCClient
 
 ---
 
+## WebView peer validation
+
+The browser/WebView peer path is implemented through the shared TypeScript runtime. The retained contract is the harness and scanner behavior: direct, configured-STUN, and forced-TURN lanes run in Chromium, Firefox, and WebKit; preserve the raw `selectedCandidatePair.category`; and accept peer-reflexive STUN only when candidate stats prove a configured server gathered a true `srflx` candidate. Per-run lane reports are generated under ignored `reports/webrtc-interop/` paths and retained only when uploaded as CI artifacts.
+
+Those lanes run with the Python HTTP API disabled and use MQTT only for signaling. Authenticated Aurora calls, results, events, and TTS event delivery travel over the `aurora-rpc` `RTCDataChannel`. Scoped authorization uses public production Auth pairing/connect/exchange and Gateway/Auth DataChannel method boundaries, not private service calls.
+
+Every passing run asserts:
+
+- bilateral SAS pairing completes before service access;
+- canonical reconnect HMAC proof authorizes a returning peer without a new SAS prompt;
+- revocation fails closed and leaves the route unauthorized after revocation;
+- the uncertain-loss mutation proof starts `G009Interop.Mutate`, observes `G009Interop.MutationStarted`, disconnects before response settlement, and records execution count 1;
+- wildcard and wrong-correlation event deliveries are blocked;
+- report/output secret scans pass with secrets redacted.
+
+The direct, STUN, and forced-TURN lanes are live-proven in Chromium, Firefox, and Playwright WebKit. Hosted and Linux desktop live paths are also proven against the real Python service. Android Waydroid acceptance proves packaged pairing, reconnect, background native ping/tool serving, ordered resume, app force-stop recovery, server restart recovery, and assistant turns through the paired mesh. These remain bounded harness and Waydroid evidence, not universal browser certification, physical-device Doze/OEM-kill/power/thermal proof, signing/store evidence, or iOS proof. iOS runtime validation remains macOS/Xcode-bound.
+
 ## WebRTC Peer Lifecycle
 
 ### Auth Enabled Mode
@@ -848,7 +892,13 @@ When authentication is enabled, the RTCClient enforces a strict **auth gate** on
 
 ### Pairing Over WebRTC DataChannel
 
-Devices that connect via WebRTC can complete the pairing flow directly over the DataChannel using RPC calls, without needing the HTTP API. For mesh peers, `remote_peer_id` and `remote_node_name` are included to enable bilateral pairing and mesh_peers DB tracking.
+Devices that connect via WebRTC can complete the pairing flow directly over the
+DataChannel without the HTTP API. Mesh flows bind the stable
+`remote_peer_id`, room, verification code, and `pairing_session_id` to the same
+SAS transcript. Connect and exchange must echo that session id; a conflicting
+duplicate, cross-peer claimant/verifier, or stale channel binding is rejected.
+The Gateway overwrites those fields from its transport context before bus
+dispatch.
 
 ```
 New Device              RTCClient (Gateway)          Admin
@@ -1276,7 +1326,7 @@ The peer pairing system in Aurora provides a **secure, auditable, and permission
 1. **Pairing** is a 4-step code-based handshake: start → poll → approve → exchange.
 2. **Bilateral mesh pairing** extends this to a 2-phase process (forward + reverse) for P2P mesh connections, each phase requiring independent admin approval.
 3. **Authentication** uses bearer tokens (HTTP) or DataChannel auth messages (WebRTC).
-4. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes.
+4. **Authorization** uses a wildcard-aware intersection of user permissions and token scopes. Non-admin pairing approvals cannot grant global `"*"`; only admin pairing normalizes to `["*"]`.
 5. **Consolidated trust stores** — mesh_peers and auth tables (users/devices/tokens) are bidirectionally synced via outbound FKs. Permission changes through any admin interface propagate to both stores.
 6. **Live updates** are supported for WebRTC peers via admin-triggered permission refresh and mesh peer management API.
 7. **Every action** is recorded in the audit log for security compliance.
@@ -1545,54 +1595,75 @@ Since event forwarding is now handled per-publish-call via `mesh=True`, the only
 
 ### Security Controls
 
-- **Sharing gate**: Remote peers can only call services explicitly marked `share: true`.
-- **Allowed peers**: Each shared service can restrict which peer IDs may call it via `allowed_peers`.
+- **Service export gate**: Remote peers can only call services explicitly exported with
+  `mesh_sharing.share: true`.
+- **Feature and method export**: `mesh_sharing.unshared_feature_ids` and
+  `mesh_sharing.unshared_method_ids` subtract sensitive callable features or exact bus
+  topics from the exported service. Empty lists export all current external-or-both
+  features and methods, so operators must account for compatible future methods.
 - **Capacity limits**: Each shared service specifies `max_concurrent`; calls beyond that limit get HTTP 429.
-- **Permission checks**: Standard RBAC permission checks apply to all inbound RPC calls.
+- **Permission checks**: Standard Auth RBAC scopes remain authoritative for each inbound
+  RPC call. Exporting a service or method does not grant a peer permission to invoke it.
+- **Outbound routing gate**: `mesh_routing` selects providers for calls originating on this
+  device. Its allowed provider IDs, feature requirements, capability tags, version floor,
+  preference, fallback, and selector requirement never grant inbound access.
 - **Version compatibility**: Configurable version matching policies (`exact`, `compatible`, `any`).
 - **Event forwarding scope**: Only events published with `mesh=True` from modules marked `share: true` are forwarded. A module that is not shared will never leak events to peers. Events without `mesh=True` (like audio streams) stay local regardless of config.
 
 ### Mesh Configuration
 
-All nine Aurora service modules are pre-populated in the default configuration with safe defaults (`share: false`, `prefer: "local"`), so users do not need to guess module names or write configuration objects from scratch — they only need to toggle the settings they want to change.
+Aurora's routable service modules are pre-populated with separate safe-default export and
+outbound-routing blocks. `mesh_sharing` answers **what this device advertises to peers**;
+`mesh_routing` answers **where this device may send its own work**. The latter is not an
+inbound access-control list.
 
 ```json
 {
-  "gateway": {
-    "mesh": {
-      "enabled": true,
-      "node_name": "aurora-desktop",
-      "sharing": {
-        "TTS": { "share": true, "max_concurrent": 10 },
-        "STTCoordinator": { "share": false, "max_concurrent": 10 },
-        "WakeWord": { "share": false, "max_concurrent": 10 },
-        "Transcription": { "share": false, "max_concurrent": 10 },
-        "DB": { "share": false, "max_concurrent": 10 },
-        "Orchestrator": { "share": true, "max_concurrent": 2 },
-        "Tooling": { "share": false, "max_concurrent": 10 },
-        "Scheduler": { "share": false, "max_concurrent": 10 },
-        "Config": { "share": false, "max_concurrent": 10 }
+  "services": {
+    "gateway": {
+      "mesh_network": {
+        "enabled": true,
+        "node_name": "aurora-desktop",
+        "version_policy": "compatible",
+        "peer_selection": "lowest_latency"
       },
-      "routing": {
-        "TTS": { "prefer": "network", "fallback": "local", "min_version": "1.0.0" },
-        "STTCoordinator": { "prefer": "local", "fallback": "local" },
-        "WakeWord": { "prefer": "local", "fallback": "local" },
-        "Transcription": { "prefer": "local", "fallback": "local" },
-        "DB": { "prefer": "local", "fallback": "local" },
-        "Orchestrator": { "prefer": "local", "fallback": "local" },
-        "Tooling": { "prefer": "local", "fallback": "local" },
-        "Scheduler": { "prefer": "local", "fallback": "local" },
-        "Config": { "prefer": "local", "fallback": "local" }
+      "webrtc": {
+        "enabled": true,
+        "app_id": "aurora",
+        "room": "generated-room",
+        "password": "generated-room-secret"
+      }
+    },
+    "tts": {
+      "mesh_sharing": {
+        "share": true,
+        "max_concurrent": 2,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": ["TTS.Request"]
       },
-      "version_policy": "compatible",
-      "peer_selection": "lowest_latency",
-      "ping_interval_s": 30.0,
-      "stale_peer_timeout_s": 120.0,
-      "remote_timeout_s": 30.0
+      "mesh_routing": {
+        "prefer": "network",
+        "fallback": "local",
+        "allowed_provider_peer_ids": ["stable-peer-id"],
+        "min_version": "1.0.0",
+        "required_provider_feature_ids": ["speech_synthesis"],
+        "required_provider_capability_tags": [],
+        "require_explicit_selector": false
+      }
     }
   }
 }
 ```
+
+This example exports TTS while excluding remote playback through the exact `TTS.Request`
+topic. Separately, this device prefers one stable peer for outbound synthesis. The selected
+provider's display name may change, but configuration and persistence use the stable peer
+ID. That outbound selection does not authorize the provider to call this device.
+
+> **Migration-only compatibility:** older generated configuration may place routing or
+> peer-filter fields inside `mesh_sharing`. Treat those fields only as legacy migration
+> input. Current policy writes keep export controls under `mesh_sharing`, outbound provider
+> controls under `mesh_routing`, and inbound authorization in Auth RBAC.
 
 ### Key Mesh Components
 

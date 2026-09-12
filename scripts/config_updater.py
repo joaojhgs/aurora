@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import UTC
+from datetime import datetime, timezone
 
 from app.services.config.config_manager import ConfigManager
 
@@ -202,8 +202,6 @@ def setup_api_keys():
 
 def export_room_invite(passphrase=None):
     """Generate an invite code from this device's room config."""
-    from datetime import datetime, timezone
-
     config = ConfigManager()
 
     room = config.get("services.gateway.webrtc.room", "")
@@ -220,7 +218,7 @@ def export_room_invite(passphrase=None):
         "password": password,
         "brokers": config.get("services.gateway.signaling_mqtt.brokers", []),
         "topic_root": config.get("services.gateway.signaling_mqtt.topic_root", "aurora"),
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
     key = _derive_invite_key(passphrase or _DEFAULT_PASSPHRASE)

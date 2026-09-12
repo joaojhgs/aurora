@@ -1,0 +1,135 @@
+{
+  "activation_policy": {
+    "automatic_download": false,
+    "bundled_model_weights": false,
+    "cache_scope": "private persistent application storage",
+    "capability_ready_when": "the exact task pack is downloaded, hash-verified, installed, selected, and active",
+    "download_initiated_by_user": true,
+    "redistributed_by_aurora": false,
+    "terms_presented_from_catalog": true
+  },
+  "allowed_behavior": {
+    "kws": "explicit_user_download_cache_and_activate",
+    "stt": "explicit_user_download_cache_and_activate",
+    "tts": "explicit_user_download_cache_and_activate",
+    "vad": "explicit_user_download_cache_and_activate"
+  },
+  "candidate_validations": {
+    "kws": {
+      "advertised_languages": [
+        "en"
+      ],
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/sherpa-gigaspeech-kws-en.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-sherpa-gigaspeech-kws-en",
+      "candidate_scope": "bounded English validation evidence; production selection comes from the embedded metadata catalog",
+      "embedded_catalog_eligible": true,
+      "release_capability": true,
+      "release_index_eligible": false,
+      "remaining_evidence_gaps": [
+        "physical-device false-acceptance and false-rejection rates",
+        "accent, distance, battery, and thermal measurements"
+      ],
+      "wake_phrase_policy": "a user-selected phrase is compiled for the active compatible pack"
+    },
+    "stt": {
+      "advertised_languages_source": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json",
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/moonshine-tiny-en-stt.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-moonshine-tiny-en-stt",
+      "candidate_scope": "bounded English Linux validation evidence; production selection comes from the embedded metadata catalog",
+      "embedded_catalog_eligible": true,
+      "release_capability": true,
+      "release_index_eligible": false,
+      "remaining_evidence_gaps": [
+        "physical-device acoustic quality by selected language and device class",
+        "physical-device battery and thermal measurements"
+      ]
+    },
+    "tts": {
+      "advertised_languages_source": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_tts_catalog.json",
+      "catalog_entry_count": 537,
+      "catalog_language_count": 50,
+      "catalog_source": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_tts_catalog.json",
+      "distribution_disposition": "tools/voice-runtime/model-packs/candidates/blocked-tts-disposition.json",
+      "embedded_catalog_eligible": true,
+      "release_capability": true,
+      "release_index_eligible": false,
+      "selectable_model_pack": true,
+      "remaining_evidence_gaps": [
+        "physical-device intelligibility, latency, battery, and thermal measurements for each selected voice",
+        "store review of user-facing terms for restricted upstream packs"
+      ]
+    },
+    "vad": {
+      "advertised_languages": [
+        "und"
+      ],
+      "candidate_manifest": "tools/voice-runtime/model-packs/candidates/silero-vad-v4.candidate.manifest.json",
+      "candidate_pack_id": "aurora-candidate-silero-vad-v4",
+      "candidate_scope": "bounded validation evidence; production selection comes from the embedded metadata catalog",
+      "embedded_catalog_eligible": true,
+      "release_capability": true,
+      "release_index_eligible": false,
+      "remaining_evidence_gaps": [
+        "physical-device latency, battery, and thermal measurements"
+      ]
+    }
+  },
+  "evidence_boundaries": {
+    "android": {
+      "physical_device_quality_or_resource_evidence": false,
+      "runtime_implementation": true,
+      "unsigned_package_allowed": true
+    },
+    "browser": {
+      "physical_device_claim": false,
+      "runtime_implementation": true,
+      "unsigned_package_allowed": true
+    },
+    "ios": {
+      "apple_runtime_evidence_present": false,
+      "runtime_implementation": true,
+      "unsigned_frontend_and_project_allowed": true
+    },
+    "native_linux": {
+      "candidate_engine_validation": true,
+      "runtime_implementation": true,
+      "unsigned_package_allowed": true
+    }
+  },
+  "metadata_catalogs": {
+    "speech": {
+      "entry_count": 19,
+      "language_count": 100,
+      "path": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json"
+    },
+    "tts": {
+      "entry_count": 537,
+      "language_count": 50,
+      "path": "rust/crates/aurora-voice-engine/resources/sherpa_onnx_tts_catalog.json"
+    }
+  },
+  "overall_status": "production_runtime_enabled_on_demand",
+  "production_capabilities": {
+    "kws": true,
+    "stt": true,
+    "tts": true,
+    "vad": true
+  },
+  "release_index_eligible": {
+    "aurora-candidate-moonshine-tiny-en-stt": false,
+    "aurora-candidate-sherpa-gigaspeech-kws-en": false,
+    "aurora-candidate-silero-vad-v4": false
+  },
+  "schema_version": "aurora.voice.phase6.capability_disposition.v2",
+  "source_references": [
+    "tools/voice-runtime/model-packs/candidates/signed-candidate-trust.json",
+    "tools/voice-runtime/model-packs/candidates/phase6-candidate-provenance.json",
+    "tools/voice-runtime/model-packs/candidates/blocked-tts-disposition.json",
+    "tools/voice-runtime/model-packs/candidates/silero-vad-v4.candidate.manifest.json",
+    "tools/voice-runtime/model-packs/candidates/sherpa-gigaspeech-kws-en.candidate.manifest.json",
+    "tools/voice-runtime/model-packs/candidates/moonshine-tiny-en-stt.candidate.manifest.json",
+    "rust/crates/aurora-voice-engine/resources/sherpa_onnx_speech_catalog.json",
+    "rust/crates/aurora-voice-engine/resources/sherpa_onnx_tts_catalog.json"
+  ],
+  "trust_boundary": "legacy candidate manifests remain bounded validation evidence; production discovery uses pinned metadata-only catalogs and every selected archive is fetched by explicit user action and verified against its immutable hash"
+}

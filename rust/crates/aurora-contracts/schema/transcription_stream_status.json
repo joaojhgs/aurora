@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "STT stream status response.",
+  "properties": {
+    "accepted_chunks": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Accepted Chunks",
+      "type": "integer"
+    },
+    "credits": {
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Credits",
+      "type": "integer"
+    },
+    "dropped_chunks": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Dropped Chunks",
+      "type": "integer"
+    },
+    "lease_remaining_ms": {
+      "maximum": 300000,
+      "minimum": 0,
+      "title": "Lease Remaining Ms",
+      "type": "integer"
+    },
+    "next_sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Next Sequence",
+      "type": "integer"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "active",
+        "admitted",
+        "canceled",
+        "completed",
+        "failed",
+        "finishing",
+        "interrupted",
+        "prepared",
+        "revoked",
+        "timed_out"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "terminal_outcome": {
+      "anyOf": [
+        {
+          "enum": [
+            "canceled",
+            "completed",
+            "consent_required",
+            "failed",
+            "interrupted",
+            "invalid_sequence",
+            "outcome_unknown",
+            "resource_exhausted",
+            "revoked",
+            "session_conflict",
+            "timed_out",
+            "unsupported_protocol"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Terminal Outcome"
+    }
+  },
+  "required": [
+    "credits",
+    "lease_remaining_ms",
+    "next_sequence",
+    "session_id",
+    "state"
+  ],
+  "title": "TranscriptionStreamStatus",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

@@ -1,0 +1,4 @@
+model_path: models/portuguese_24l.bin
+tokenizer_file: tokenizers/portuguese_24l.json
+repo_revision: pockettts-test
+language: portuguese

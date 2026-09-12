@@ -61,6 +61,8 @@ ENV_CONFIG_MAP: dict[str, tuple[str, Callable[[str], Any]]] = {
     "services.db.embeddings.use_local": ("USE_LOCAL_EMBEDDINGS", _to_bool),
     # Speech-to-text
     "services.stt.language": ("STT_LANGUAGE", str),
+    "system.primary_language": ("AURORA_PRIMARY_LANGUAGE", str),
+    "system.voice_language": ("AURORA_VOICE_LANGUAGE", str),
     "services.stt.wakeword.model_path": (
         "AURORA_WAKE_WORD_MODEL_PATH",
         str,
@@ -74,6 +76,21 @@ ENV_CONFIG_MAP: dict[str, tuple[str, Callable[[str], Any]]] = {
         _to_bool,
     ),
     # Text-to-speech
+    "services.tts.provider": ("AURORA_TTS_PROVIDER", str),
+    "services.tts.fallback_provider": ("AURORA_TTS_FALLBACK_PROVIDER", str),
+    "services.tts.providers.piper.model_file_path": (
+        "AURORA_TTS_MODEL_FILE_PATH",
+        str,
+    ),
+    "services.tts.providers.piper.model_config_file_path": (
+        "AURORA_TTS_MODEL_CONFIG_FILE_PATH",
+        str,
+    ),
+    "services.tts.providers.piper.model_sample_rate": (
+        "AURORA_TTS_MODEL_SAMPLE_RATE",
+        int,
+    ),
+    "services.tts.providers.piper.executable_path": ("PIPER_PATH", str),
     "services.tts.model_file_path": (
         "AURORA_TTS_MODEL_FILE_PATH",
         str,

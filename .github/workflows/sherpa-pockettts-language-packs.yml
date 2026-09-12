@@ -1,0 +1,124 @@
+name: Sherpa PocketTTS language packs
+
+# Temporary bootstrap publisher. Remove the convert/build job after GitHub
+# release tag sherpa-pockettts-language-packs has stable archive URLs for the
+# English 2026-04 and French 24l packs. A later task will point the on-demand
+# catalog at those URLs.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub release tag that receives the pack assets
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sherpa-pockettts-language-packs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  convert-language-packs:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'sherpa-pockettts-language-packs'
+    name: Convert official Kyutai PocketTTS language packs
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Cache PocketTTS conversion artifacts
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .artifacts/pockettts/export-venv
+            .artifacts/pockettts/language-packs/export-helper-src
+            .artifacts/pockettts/language-packs/kyutai-pocket-tts-src
+            .artifacts/pockettts/language-packs/hf-cache
+          key: pockettts-language-packs-${{ hashFiles('tools/voice-runtime/pockettts-packs/language_pack_sources.json', '.github/workflows/sherpa-pockettts-language-packs.yml') }}
+          restore-keys: |
+            pockettts-language-packs-
+
+      - name: Provision pinned PocketTTS exporter
+        run: |
+          uv venv --python 3.11 --allow-existing .artifacts/pockettts/export-venv
+          uv pip install --python .artifacts/pockettts/export-venv/bin/python \
+            --index https://download.pytorch.org/whl/cpu \
+            'torch==2.13.0+cpu'
+          uv pip install --python .artifacts/pockettts/export-venv/bin/python \
+            'beartype==0.22.9' \
+            'einops==0.8.2' \
+            'huggingface-hub==1.27.0' \
+            'numpy==2.4.6' \
+            'onnx==1.22.0' \
+            'onnxruntime==1.28.0' \
+            'onnxscript==0.7.1' \
+            'pydantic==2.13.4' \
+            'requests==2.34.2' \
+            'safetensors==0.8.0' \
+            'scipy==1.17.1' \
+            'sentencepiece==0.2.2' \
+            'soundfile==0.14.0' \
+            'transformers==5.15.0'
+
+      - name: Convert English current-generation pack
+        run: |
+          .artifacts/pockettts/export-venv/bin/python \
+            tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+            --pack aurora-pockettts-en-2026-04 \
+            --weights-source public-fixed-voice \
+            --json
+
+      - name: Convert French newer-protocol pack
+        run: |
+          .artifacts/pockettts/export-venv/bin/python \
+            tools/voice-runtime/pockettts-packs/convert_language_pack.py \
+            --pack aurora-pockettts-fr-24l \
+            --weights-source public-fixed-voice \
+            --json
+
+      - name: Write checksum manifest
+        run: |
+          uv run python tools/voice-runtime/pockettts-packs/publish_language_packs.py \
+            --artifact-dir .artifacts/pockettts/language-packs \
+            --output .artifacts/pockettts/language-packs/checksum-manifest.json \
+            --check-workflow
+
+      - name: Upload language-pack diagnostics
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sherpa-pockettts-language-packs
+          path: |
+            .artifacts/pockettts/language-packs/aurora-pockettts-en-2026-04.tar.bz2
+            .artifacts/pockettts/language-packs/aurora-pockettts-fr-24l.tar.bz2
+            .artifacts/pockettts/language-packs/checksum-manifest.json
+            .artifacts/pockettts/language-packs/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Attach packs to the existing GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          test "$RELEASE_TAG" = "sherpa-pockettts-language-packs"
+          gh release view "$RELEASE_TAG"
+          gh release upload "$RELEASE_TAG" \
+            .artifacts/pockettts/language-packs/aurora-pockettts-en-2026-04.tar.bz2 \
+            .artifacts/pockettts/language-packs/aurora-pockettts-fr-24l.tar.bz2 \
+            .artifacts/pockettts/language-packs/checksum-manifest.json \
+            .artifacts/pockettts/language-packs/SHA256SUMS \
+            --clobber

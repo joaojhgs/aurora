@@ -1,0 +1,26 @@
+Backport of the webrtc-dtls 0.12 named-curve selection into 0.10.0.
+
+Without this, the DTLS server flight adopts the peer's most-preferred group
+without checking whether it is supported. Current Chromium leads with a
+post-quantum hybrid, so the handshake aborts with a fatal IllegalParameter and
+ErrInvalidNamedCurve, and the data channel never opens.
+
+Apply with [patch.crates-io] against a vendored copy of webrtc-dtls 0.10.0.
+
+--- a/src/flight/flight0.rs
++++ b/src/flight/flight0.rs
+@@
++use crate::curve::named_curve::NamedCurve;
++
+@@
+-                        state.named_curve = e.elliptic_curves[0];
++                        // Pick the first MUTUALLY supported curve. Taking [0]
++                        // blindly adopts the peer's most-preferred group, which
++                        // for current browsers is a post-quantum hybrid this
++                        // version cannot generate keys for.
++                        for curve in e.elliptic_curves.iter() {
++                            if curve != &NamedCurve::Unsupported {
++                                state.named_curve = *curve;
++                                break;
++                            }
++                        }

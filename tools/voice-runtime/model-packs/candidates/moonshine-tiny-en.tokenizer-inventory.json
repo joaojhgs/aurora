@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "tokenizer_assets": [
+    {
+      "language": "en",
+      "path": "tokens.txt",
+      "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+      "size_bytes": 549350
+    }
+  ]
+}

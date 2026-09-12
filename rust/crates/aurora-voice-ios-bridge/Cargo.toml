@@ -1,0 +1,18 @@
+[package]
+name = "aurora-voice-ios-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+async-trait.workspace = true
+aurora-voice-core = { path = "../aurora-voice-core" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
+tokio = { workspace = true, features = ["time"] }
+
+[lints]
+workspace = true

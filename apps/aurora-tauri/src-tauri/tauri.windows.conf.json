@@ -1,0 +1,22 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-main",
+        "aurora-overlay",
+        "aurora-desktop-updater"
+      ]
+    }
+  },
+  "bundle": {
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
+    "targets": [
+      "msi",
+      "nsis"
+    ]
+  }
+}

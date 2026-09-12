@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-authority-revoke-peer-authority"
+description = "Enables the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope."
+commands.allow = ["aurora_mesh_authority_revoke_peer_authority"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-authority-revoke-peer-authority"
+description = "Denies the aurora_mesh_authority_revoke_peer_authority command without any pre-configured scope."
+commands.deny = ["aurora_mesh_authority_revoke_peer_authority"]

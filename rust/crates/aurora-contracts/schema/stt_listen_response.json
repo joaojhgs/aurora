@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Response for listen requests.\n\nListen is idempotent: if a wakeword or another client already has the\ncoordinator in a non-idle session, the active session is returned instead\nof attempting to start a duplicate session.",
+  "properties": {
+    "current_state": {
+      "default": "idle",
+      "title": "Current State",
+      "type": "string"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Message"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "source": {
+      "default": "push_to_talk",
+      "title": "Source",
+      "type": "string"
+    },
+    "status": {
+      "default": "listening",
+      "title": "Status",
+      "type": "string"
+    },
+    "success": {
+      "default": true,
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "title": "STTListenResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

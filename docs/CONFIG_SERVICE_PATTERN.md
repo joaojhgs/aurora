@@ -109,20 +109,33 @@ CI enforces sync: `make generate-config && git diff --exit-code` fails if genera
 
 ---
 
-## Mesh sharing policy examples
+## Mesh export and outbound routing policy examples
 
-Per-service `mesh_sharing` combines sharing and routing policy. Defaults are privacy-first:
-`share=false`, local routing is preferred, no version floor is set, and no extra remote
-capabilities are required. `allowed_peers=null` means any authenticated peer may use the
-service only after that service is explicitly shared.
+Per-service mesh policy has two independent blocks:
+
+- `mesh_sharing` is the **export policy for this device**. `share` determines whether the
+  service is advertised to authenticated peers, `max_concurrent` limits inbound remote
+  calls, and `unshared_feature_ids` / `unshared_method_ids` subtract callable features or
+  canonical bus topics from the exported service. Empty exclusion lists share every
+  current external-or-both feature and method, including compatible methods added later.
+- `mesh_routing` is the **outbound provider-selection policy for work originating on this
+  device**. It controls local-versus-network preference and fallback, eligible stable
+  provider peer IDs, provider version, required recipient-visible feature IDs, required
+  provider metadata tags, and explicit-selector requirements. It never grants a peer
+  inbound authority.
+
+Inbound authority remains the intersection of service export, feature/method export, and
+the authenticated peer's RBAC scopes. Outbound provider filters do not replace or grant
+RBAC. Defaults are privacy-first: services are not exported, local execution is preferred,
+and no remote provider requirements are configured.
 
 Auth and Config do not expose operator-facing `mesh_sharing` blocks. Pairing/login
 infrastructure is handled by the WebRTC RPC auth gate, and local Auth peer management
 or Config mutation remains local-admin behavior. Do not model broad remote Auth admin
 or Config writes as ordinary transparent mesh service sharing.
 
-Home LAN / VPN: share a low-risk local service with authenticated peers, but keep local
-execution preferred and fall back locally if the peer is unavailable.
+Home LAN / VPN: export a low-risk local service to authenticated peers, while keeping this
+device's own outbound work local-first.
 
 ```json
 {
@@ -131,19 +144,25 @@ execution preferred and fall back locally if the peer is unavailable.
       "mesh_sharing": {
         "share": true,
         "max_concurrent": 2,
-        "allowed_peers": null,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
         "prefer": "local",
         "fallback": "local",
+        "allowed_provider_peer_ids": null,
         "min_version": null,
-        "required_capabilities": []
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
+        "require_explicit_selector": false
       }
     }
   }
 }
 ```
 
-Process cluster: prefer a known provider for a service that is safe to route inside the
-cluster, while allowing local fallback during rolling restarts.
+Process cluster: do not export the local Orchestrator, but route this device's Orchestrator
+work to one known provider and allow local fallback during rolling restarts.
 
 ```json
 {
@@ -152,18 +171,26 @@ cluster, while allowing local fallback during rolling restarts.
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 4,
-        "allowed_peers": ["peer-gpu-node-01"],
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
         "prefer": "network",
         "fallback": "local",
+        "allowed_provider_peer_ids": ["peer-gpu-node-01"],
         "min_version": "1.0.0",
-        "required_capabilities": ["llm"]
+        "required_provider_feature_ids": ["inference"],
+        "required_provider_capability_tags": ["llm"],
+        "require_explicit_selector": false
       }
     }
   }
 }
 ```
 
-Internet-crossing peers: require explicit stable peer IDs, version policy, and capabilities.
+Internet-crossing peers: export only the intended local Tooling features and methods, and
+separately require explicit stable provider IDs, version policy, and provider features for
+outbound Tooling routes.
 Use `network_only` only when the local node should not satisfy the call itself; otherwise
 prefer `network` with `fallback=error` so failures are visible instead of silently routing
 to an unintended provider.
@@ -175,16 +202,28 @@ to an unintended provider.
       "mesh_sharing": {
         "share": true,
         "max_concurrent": 1,
-        "allowed_peers": ["peer-admin-laptop"],
+        "unshared_feature_ids": ["approval_administration", "policy_administration"],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
         "prefer": "network",
         "fallback": "error",
+        "allowed_provider_peer_ids": ["peer-admin-laptop"],
         "min_version": "1.0.0",
-        "required_capabilities": ["tools"]
+        "required_provider_feature_ids": ["execution"],
+        "required_provider_capability_tags": ["tools"],
+        "require_explicit_selector": true
       }
     }
   }
 }
 ```
+
+> **Migration-only compatibility:** older generated configs may still contain routing or
+> peer-filter keys inside `mesh_sharing`. They are compatibility input during migration,
+> not the current policy-authoring model. New configuration and operator-facing guidance
+> must write export controls to `mesh_sharing` and outbound provider controls to
+> `mesh_routing`; inbound peer authorization belongs to Auth RBAC.
 
 ---
 

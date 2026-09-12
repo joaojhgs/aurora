@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-thin-profile-get"
+description = "Enables the aurora_thin_profile_get command without any pre-configured scope."
+commands.allow = ["aurora_thin_profile_get"]
+
+[[permission]]
+identifier = "deny-aurora-thin-profile-get"
+description = "Denies the aurora_thin_profile_get command without any pre-configured scope."
+commands.deny = ["aurora_thin_profile_get"]

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Start a typed streaming STT session.",
+  "properties": {
+    "attempt_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "capability_revision": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Capability Revision",
+      "type": "integer"
+    },
+    "channels": {
+      "default": 1,
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "config_revision": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Config Revision",
+      "type": "integer"
+    },
+    "consent_revision": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consent Revision"
+    },
+    "encoding": {
+      "const": "pcm_s16le",
+      "default": "pcm_s16le",
+      "title": "Encoding",
+      "type": "string"
+    },
+    "exact_selector": {
+      "default": false,
+      "title": "Exact Selector",
+      "type": "boolean"
+    },
+    "experimental_remote": {
+      "default": false,
+      "title": "Experimental Remote",
+      "type": "boolean"
+    },
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "mode": {
+      "const": "streaming",
+      "default": "streaming",
+      "title": "Mode",
+      "type": "string"
+    },
+    "operation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "remaining_deadline_ms": {
+      "default": 60000,
+      "exclusiveMinimum": 0,
+      "maximum": 60000,
+      "title": "Remaining Deadline Ms",
+      "type": "integer"
+    },
+    "request_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "route_revision": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Route Revision",
+      "type": "string"
+    },
+    "sample_rate": {
+      "default": 16000,
+      "maximum": 192000,
+      "minimum": 8000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema": {
+      "const": "speech-stage-admission.v1",
+      "default": "speech-stage-admission.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "stage": {
+      "const": "stt",
+      "default": "stt",
+      "title": "Stage",
+      "type": "string"
+    },
+    "target_peer_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Peer Id"
+    },
+    "target_resource_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Resource Id"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "capability_revision",
+    "config_revision",
+    "generation",
+    "operation_id",
+    "request_id",
+    "route_revision"
+  ],
+  "title": "TranscriptionStreamStartRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

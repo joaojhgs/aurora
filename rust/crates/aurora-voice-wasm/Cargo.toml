@@ -1,0 +1,36 @@
+[package]
+name = "aurora-voice-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Thin WebAssembly host boundary for the Aurora voice core"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+async-trait.workspace = true
+aurora-contracts = { path = "../aurora-contracts" }
+aurora-voice-core = { path = "../aurora-voice-core" }
+aurora-voice-engine = { path = "../aurora-voice-engine" }
+bzip2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true
+
+[lints]
+workspace = true

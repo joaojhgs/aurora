@@ -1,0 +1,37 @@
+--- a/tools/make_attention_tail_custom_onnx.py
++++ b/tools/make_attention_tail_custom_onnx.py
+@@ -15,2 +15,3 @@
+ import argparse
++import re
+ from pathlib import Path
+@@ -64,2 +65,4 @@
+     model = onnx.load(str(input_path), load_external_data=False)
++    if layers < 1:
++        layers = infer_layer_count(model)
+     nodes_by_name = {node.name: node for node in model.graph.node}
+@@ -148,5 +151,20 @@
+-def main() -> None:
+-    parser = argparse.ArgumentParser()
+-    parser.add_argument("input", type=Path, help="flow_lm_main_delta ONNX file")
+-    parser.add_argument("output", type=Path, help="custom-attention ONNX output file")
++def infer_layer_count(model: onnx.ModelProto) -> int:
++    layers = {
++        int(match.group(1))
++        for node in model.graph.node
++        for match in [re.search(r"/transformer/layers\.(\d+)/self_attn/", node.name)]
++        if match
++    }
++    if not layers:
++        raise RuntimeError("could not infer transformer layer count from graph node names")
++    expected = set(range(max(layers) + 1))
++    if layers != expected:
++        raise RuntimeError(f"non-contiguous transformer layers: {sorted(layers)}")
++    return len(layers)
++
++
++def main() -> None:
++    parser = argparse.ArgumentParser()
++    parser.add_argument("input", type=Path, help="flow_lm_main_delta ONNX file")
++    parser.add_argument("output", type=Path, help="custom-attention ONNX output file")
+-    parser.add_argument("--layers", type=int, default=6)
++    parser.add_argument("--layers", type=int, default=0, help="override transformer layer count; 0 infers from graph")

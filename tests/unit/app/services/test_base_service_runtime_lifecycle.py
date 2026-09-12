@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -10,8 +11,8 @@ import pytest_asyncio
 from app.messaging.local_bus import LocalBus
 from app.services.config.messages import ConfigChangedEvent
 from app.shared.contracts.models.common import EmptyInput
-from app.shared.contracts.registry import method_contract
-from app.shared.messaging.bus_init import set_bus as set_shared_bus
+from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.registry import clear_registry, method_contract, unregister_method
 from app.shared.services.base_service import BaseService
 
 
@@ -57,19 +58,123 @@ class RuntimeLifecycleService(BaseService):
         return RuntimeTestResponse()
 
 
+class CallableFeatureAnnouncementService(BaseService):
+    def __init__(self) -> None:
+        super().__init__(module="TTS", summary="Feature announcement test")
+
+    async def _is_runtime_enabled(self) -> bool:
+        return True
+
+    async def on_start(self) -> None:
+        return None
+
+    async def on_stop(self) -> None:
+        return None
+
+    async def reload(self, config_section: str | None = None) -> None:
+        return None
+
+    @method_contract(
+        method_id="TTS.Synthesize",
+        summary="Synthesize test audio",
+        input_model=EmptyInput,
+        output_model=RuntimeTestResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=["TTS.Synthesize"],
+        callable_feature_ids=["speech_synthesis"],
+        speech_constraints=SpeechMethodConstraints(
+            exact_languages=["en"],
+            ready_voice_ids=["standard:test:voice-a"],
+            resident_model_identity_digest="b" * 64,
+            speech_capability_revision=11,
+        ),
+    )
+    async def synthesize(self, _data: EmptyInput) -> RuntimeTestResponse:
+        return RuntimeTestResponse()
+
+
+class ExplicitEmptyCapabilitiesAnnouncementService(BaseService):
+    def __init__(self) -> None:
+        super().__init__(
+            module="Auth",
+            summary="Explicit empty capability test",
+            capabilities=["registered_capability"],
+        )
+
+    async def _is_runtime_enabled(self) -> bool:
+        return True
+
+    async def on_start(self) -> None:
+        self._capabilities = []
+
+    async def on_stop(self) -> None:
+        return None
+
+    async def reload(self, config_section: str | None = None) -> None:
+        return None
+
+    @method_contract(
+        method_id="Auth.EmptyCapabilitiesTest",
+        summary="Explicit empty capability method",
+        input_model=EmptyInput,
+        output_model=RuntimeTestResponse,
+        exposure="internal",
+    )
+    async def handle_empty_capability_test(self, _data: EmptyInput) -> RuntimeTestResponse:
+        return RuntimeTestResponse()
+
+
+class InvalidPermissionlessCallableService(BaseService):
+    def __init__(self) -> None:
+        super().__init__(module="TTS", summary="Invalid callable test")
+
+    async def _is_runtime_enabled(self) -> bool:
+        return True
+
+    async def on_start(self) -> None:
+        return None
+
+    async def on_stop(self) -> None:
+        return None
+
+    async def reload(self, config_section: str | None = None) -> None:
+        return None
+
+    @method_contract(
+        method_id="TTS.Request",
+        summary="Invalid permissionless external callable",
+        input_model=EmptyInput,
+        output_model=RuntimeTestResponse,
+        exposure="both",
+        method_type="use",
+        callable_feature_ids=["speech_playback"],
+    )
+    async def request(self, _data: EmptyInput) -> RuntimeTestResponse:
+        return RuntimeTestResponse()
+
+
 @pytest_asyncio.fixture
-async def local_bus():
+async def local_bus(monkeypatch: pytest.MonkeyPatch):
+    import app.messaging.bus_runtime as bus_runtime
+    import app.shared.messaging.bus_init as bus_init
+
     bus = LocalBus(validate_topics=False)
     await bus.start()
-    set_shared_bus(bus)
+    monkeypatch.setattr(bus_init, "_bus", bus)
+    monkeypatch.setattr(bus_runtime, "_bus", bus)
     yield bus
     await bus.stop()
 
 
 @pytest.mark.asyncio
 async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> None:
+    from app.shared.contracts.models.config import ConfigMethods
+
     service = RuntimeLifecycleService()
     await service.start()
+
+    assert ConfigMethods.UPDATED in local_bus._evt_worker_tasks
 
     await service._handle_config_changed(
         {
@@ -99,6 +204,188 @@ async def test_config_event_decodes_dict_and_pydantic_payloads(local_bus) -> Non
     assert service._config_change_subscription is not None
 
     await service.stop()
+
+
+@pytest.mark.asyncio
+async def test_config_subscription_failure_blocks_service_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A service must not report started if config event readiness fails."""
+
+    import app.messaging.bus_runtime as bus_runtime
+    import app.shared.messaging.bus_init as bus_init
+
+    class FailingConfigBus:
+        async def subscribe_event(self, topic, handler) -> None:
+            raise RuntimeError("config listener unavailable")
+
+    bus = FailingConfigBus()
+    monkeypatch.setattr(bus_init, "_bus", bus)
+    monkeypatch.setattr(bus_runtime, "_bus", bus)
+    service = RuntimeLifecycleService()
+
+    with pytest.raises(RuntimeError, match="config listener unavailable"):
+        await service.start()
+
+    assert service._started is False
+    assert service._runtime_state == "inactive"
+    assert service._config_change_subscription is None
+
+
+@pytest.mark.asyncio
+async def test_contract_registry_skew_blocks_service_start(local_bus) -> None:
+    """Decorator metadata without a registered contract must fail readiness."""
+
+    service = RuntimeLifecycleService()
+    unregister_method("Auth.RuntimeLifecycleTest")
+
+    with pytest.raises(RuntimeError, match="no registered contract"):
+        await service.start()
+
+    assert "Auth.RuntimeLifecycleTest" not in local_bus._subs
+    assert service._started is False
+    assert service._runtime_state == "failed"
+
+
+@pytest.mark.asyncio
+async def test_service_announcement_carries_callable_feature_metadata(local_bus) -> None:
+    from app.shared.contracts.models.gateway import GatewayMethods, ServiceAnnouncement
+
+    clear_registry()
+    announcements: list[ServiceAnnouncement] = []
+    announcement_received = asyncio.Event()
+
+    async def capture(envelope) -> None:
+        announcements.append(envelope.payload)
+        announcement_received.set()
+
+    local_bus.subscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+    try:
+        service = CallableFeatureAnnouncementService()
+        await service.start()
+
+        await asyncio.wait_for(announcement_received.wait(), timeout=1)
+        announcement = announcements[-1]
+        assert announcement.module == "TTS"
+        assert [feature.feature_id for feature in announcement.callable_features] == [
+            "speech_playback",
+            "speech_streaming",
+            "speech_synthesis",
+            "speech_voice_discovery",
+            "speech_voice_management",
+        ]
+        assert [method.bus_topic for method in announcement.methods] == ["TTS.Synthesize"]
+        method = announcement.methods[0]
+        assert method.required_perms == ["TTS.Synthesize"]
+        assert method.callable_feature_ids == ["speech_synthesis"]
+        assert method.callable_features[0].feature_id == "speech_synthesis"
+        assert method.speech_constraints is not None
+        assert method.speech_constraints.exact_languages == ["en"]
+        assert method.speech_constraints.speech_capability_revision == 11
+        await service.stop()
+    finally:
+        local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+        clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_service_announcement_preserves_explicit_empty_capabilities(local_bus) -> None:
+    from app.shared.contracts.models.gateway import GatewayMethods, ServiceAnnouncement
+
+    clear_registry()
+    announcements: list[ServiceAnnouncement] = []
+    announcement_received = asyncio.Event()
+
+    async def capture(envelope) -> None:
+        announcements.append(envelope.payload)
+        announcement_received.set()
+
+    local_bus.subscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+    try:
+        service = ExplicitEmptyCapabilitiesAnnouncementService()
+        await service.start()
+
+        await asyncio.wait_for(announcement_received.wait(), timeout=1)
+        announcement = announcements[-1]
+        assert announcement.module == "Auth"
+        assert announcement.capabilities == []
+        assert [method.bus_topic for method in announcement.methods] == [
+            "Auth.EmptyCapabilitiesTest"
+        ]
+        await service.stop()
+    finally:
+        local_bus.unsubscribe(GatewayMethods.SERVICE_ANNOUNCE, capture)
+        clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_invalid_permissionless_callable_contract_never_subscribes(local_bus) -> None:
+    """BaseService construction failure prevents the old raw-decorator startup bypass."""
+
+    clear_registry()
+
+    with pytest.raises(ValueError, match="missing required_perms"):
+        InvalidPermissionlessCallableService()
+
+    assert "TTS.Request" not in local_bus._subs
+    clear_registry()
+
+
+@pytest.mark.asyncio
+async def test_default_reload_routes_service_leaf_to_owning_service_section(local_bus) -> None:
+    """A Gateway leaf update must not look like a broad all-services reload."""
+    service = RuntimeLifecycleService()
+    service.reload = AsyncMock()
+
+    event = ConfigChangedEvent(
+        key_path="services.gateway.webrtc.room",
+        affected_sections=[
+            "services",
+            "services.gateway",
+            "services.gateway.webrtc",
+            "services.gateway.webrtc.room",
+        ],
+        old_value="old-room",
+        new_value="new-room",
+    )
+
+    await BaseService.reload_config(service, event)
+
+    service.reload.assert_awaited_once_with("services.gateway")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("key_path", "expected_section"),
+    [
+        ("services.tooling.mcp.servers.local.command", "services.tooling.mcp"),
+        ("services.tooling.plugins.github.activate", "services.tooling.plugins"),
+        (
+            "services.tooling.approval_policy.default_share",
+            "services.tooling",
+        ),
+    ],
+)
+async def test_default_reload_preserves_tooling_runtime_manager_boundaries(
+    local_bus, key_path: str, expected_section: str
+) -> None:
+    """Only manager-owned Tooling subtrees receive a manager-specific reload."""
+    service = RuntimeLifecycleService()
+    service.reload = AsyncMock()
+    parts = key_path.split(".")
+    affected_sections = [".".join(parts[:index]) for index in range(1, len(parts) + 1)]
+
+    await BaseService.reload_config(
+        service,
+        ConfigChangedEvent(
+            key_path=key_path,
+            affected_sections=affected_sections,
+            old_value=None,
+            new_value=True,
+        ),
+    )
+
+    service.reload.assert_awaited_once_with(expected_section)
 
 
 @pytest.mark.asyncio

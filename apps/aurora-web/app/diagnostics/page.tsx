@@ -1,11 +1,8 @@
-import { AuroraRoutePage } from '../page-content'
+import { getShellSnapshot } from '../shell-state'
+import { DiagnosticsClientPage } from './diagnostics-client'
 
-export default function Page() {
-  return (
-    <AuroraRoutePage
-      routeId="diagnostics"
-      title="Diagnostics"
-      description="Shell diagnostics expose capability, privacy, provider, and route state without revealing secrets or treating graph data as executable."
-    />
-  )
+export default async function Page() {
+  const shell = await getShellSnapshot()
+  const diagnosticsRoute = shell.routes.find((candidate) => candidate.item.id === 'diagnostics') ?? shell.routes[0]!
+  return <DiagnosticsClientPage diagnosticsRoute={diagnosticsRoute} />
 }

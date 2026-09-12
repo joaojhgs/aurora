@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-inbound-verifier-delete"
+description = "Enables the aurora_inbound_verifier_delete command without any pre-configured scope."
+commands.allow = ["aurora_inbound_verifier_delete"]
+
+[[permission]]
+identifier = "deny-aurora-inbound-verifier-delete"
+description = "Denies the aurora_inbound_verifier_delete command without any pre-configured scope."
+commands.deny = ["aurora_inbound_verifier_delete"]

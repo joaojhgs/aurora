@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-dialogs"
+description = "Allow dialog capability status checks without granting native open/save dialogs by default."
+commands.allow = ["aurora_dialog_status"]

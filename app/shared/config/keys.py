@@ -191,6 +191,48 @@ class _ServicesOrchestratorLlmLocalConfigPath(ConfigPath):
         return self
 
 
+class _ServicesOrchestratorLlmMeshPeerConfigPath(ConfigPath):
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorLlmMeshPeerConfigPath:
+        self = super().__new__(cls, "services.orchestrator.llm.mesh_peer")
+        self.peer_id = ConfigPath("services.orchestrator.llm.mesh_peer.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.llm.mesh_peer.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.llm.mesh_peer.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.llm.mesh_peer.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.llm.mesh_peer.timeout_s")
+        return self
+
+
+class _ServicesOrchestratorLlmRemotePeerConfigPath(ConfigPath):
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorLlmRemotePeerConfigPath:
+        self = super().__new__(cls, "services.orchestrator.llm.remote_peer")
+        self.peer_id = ConfigPath("services.orchestrator.llm.remote_peer.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.llm.remote_peer.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.llm.remote_peer.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.llm.remote_peer.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.llm.remote_peer.timeout_s")
+        return self
+
+
 class _ServicesOrchestratorLlmThirdPartyConfigPath(ConfigPath):
     huggingface_endpoint: _ServicesOrchestratorLlmThirdPartyHuggingfaceEndpointConfigPath
     openai: _ServicesOrchestratorLlmThirdPartyOpenaiConfigPath
@@ -201,6 +243,54 @@ class _ServicesOrchestratorLlmThirdPartyConfigPath(ConfigPath):
             _ServicesOrchestratorLlmThirdPartyHuggingfaceEndpointConfigPath()
         )
         self.openai = _ServicesOrchestratorLlmThirdPartyOpenaiConfigPath()
+        return self
+
+
+class _ServicesOrchestratorRoutingDispatchDefaultConfigPath(ConfigPath):
+    enabled: ConfigPath
+    peer_id: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingDispatchDefaultConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing.dispatch_default")
+        self.enabled = ConfigPath("services.orchestrator.routing.dispatch_default.enabled")
+        self.peer_id = ConfigPath("services.orchestrator.routing.dispatch_default.peer_id")
+        self.provider_id = ConfigPath("services.orchestrator.routing.dispatch_default.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.routing.dispatch_default.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.routing.dispatch_default.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.routing.dispatch_default.timeout_s")
+        return self
+
+
+class _ServicesOrchestratorRoutingInferenceDefaultConfigPath(ConfigPath):
+    model_id: ConfigPath
+    peer_id: ConfigPath
+    provider: ConfigPath
+    provider_id: ConfigPath
+    resource_namespace: ConfigPath
+    service_instance_id: ConfigPath
+    timeout_s: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingInferenceDefaultConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing.inference_default")
+        self.model_id = ConfigPath("services.orchestrator.routing.inference_default.model_id")
+        self.peer_id = ConfigPath("services.orchestrator.routing.inference_default.peer_id")
+        self.provider = ConfigPath("services.orchestrator.routing.inference_default.provider")
+        self.provider_id = ConfigPath("services.orchestrator.routing.inference_default.provider_id")
+        self.resource_namespace = ConfigPath(
+            "services.orchestrator.routing.inference_default.resource_namespace"
+        )
+        self.service_instance_id = ConfigPath(
+            "services.orchestrator.routing.inference_default.service_instance_id"
+        )
+        self.timeout_s = ConfigPath("services.orchestrator.routing.inference_default.timeout_s")
         return self
 
 
@@ -246,6 +336,35 @@ class _ServicesSttCoordinatorAudioInputConfigPath(ConfigPath):
         return self
 
 
+class _ServicesSttCoordinatorMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesSttCoordinatorMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.stt.coordinator.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.stt.coordinator.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.stt.coordinator.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.stt.coordinator.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.stt.coordinator.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.coordinator.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.stt.coordinator.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.stt.coordinator.mesh_routing.required_provider_feature_ids"
+        )
+        return self
+
+
 class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
     allowed_peers: ConfigPath
     fallback: ConfigPath
@@ -255,6 +374,8 @@ class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesSttCoordinatorMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.coordinator.mesh_sharing")
@@ -270,6 +391,12 @@ class _ServicesSttCoordinatorMeshSharingConfigPath(ConfigPath):
             "services.stt.coordinator.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.stt.coordinator.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath(
+            "services.stt.coordinator.mesh_sharing.unshared_feature_ids"
+        )
+        self.unshared_method_ids = ConfigPath(
+            "services.stt.coordinator.mesh_sharing.unshared_method_ids"
+        )
         return self
 
 
@@ -278,6 +405,7 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionAccurateModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.accurate_model")
@@ -285,6 +413,38 @@ class _ServicesSttTranscriptionAccurateModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.accurate_model.device")
         self.enabled = ConfigPath("services.stt.transcription.accurate_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.accurate_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.accurate_model.model_size_or_path"
+        )
+        return self
+
+
+class _ServicesSttTranscriptionMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesSttTranscriptionMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.stt.transcription.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.stt.transcription.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.stt.transcription.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.stt.transcription.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.stt.transcription.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.transcription.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.stt.transcription.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.stt.transcription.mesh_routing.required_provider_feature_ids"
+        )
         return self
 
 
@@ -297,6 +457,8 @@ class _ServicesSttTranscriptionMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.transcription.mesh_sharing")
@@ -312,6 +474,12 @@ class _ServicesSttTranscriptionMeshSharingConfigPath(ConfigPath):
             "services.stt.transcription.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.stt.transcription.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath(
+            "services.stt.transcription.mesh_sharing.unshared_feature_ids"
+        )
+        self.unshared_method_ids = ConfigPath(
+            "services.stt.transcription.mesh_sharing.unshared_method_ids"
+        )
         return self
 
 
@@ -320,6 +488,7 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
     device: ConfigPath
     enabled: ConfigPath
     model_size: ConfigPath
+    model_size_or_path: ConfigPath
 
     def __new__(cls) -> _ServicesSttTranscriptionRealtimeModelConfigPath:
         self = super().__new__(cls, "services.stt.transcription.realtime_model")
@@ -327,6 +496,38 @@ class _ServicesSttTranscriptionRealtimeModelConfigPath(ConfigPath):
         self.device = ConfigPath("services.stt.transcription.realtime_model.device")
         self.enabled = ConfigPath("services.stt.transcription.realtime_model.enabled")
         self.model_size = ConfigPath("services.stt.transcription.realtime_model.model_size")
+        self.model_size_or_path = ConfigPath(
+            "services.stt.transcription.realtime_model.model_size_or_path"
+        )
+        return self
+
+
+class _ServicesSttWakewordMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesSttWakewordMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.stt.wakeword.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.stt.wakeword.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.stt.wakeword.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.stt.wakeword.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.stt.wakeword.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.stt.wakeword.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.stt.wakeword.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.stt.wakeword.mesh_routing.required_provider_feature_ids"
+        )
         return self
 
 
@@ -339,6 +540,8 @@ class _ServicesSttWakewordMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesSttWakewordMeshSharingConfigPath:
         self = super().__new__(cls, "services.stt.wakeword.mesh_sharing")
@@ -354,6 +557,12 @@ class _ServicesSttWakewordMeshSharingConfigPath(ConfigPath):
             "services.stt.wakeword.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.stt.wakeword.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath(
+            "services.stt.wakeword.mesh_sharing.unshared_feature_ids"
+        )
+        self.unshared_method_ids = ConfigPath(
+            "services.stt.wakeword.mesh_sharing.unshared_method_ids"
+        )
         return self
 
 
@@ -445,12 +654,101 @@ class _ServicesToolingPluginsSlackConfigPath(ConfigPath):
         return self
 
 
+class _ServicesTtsProvidersPiperConfigPath(ConfigPath):
+    cache_dir: ConfigPath
+    executable_path: ConfigPath
+    model_config_file_path: ConfigPath
+    model_file_path: ConfigPath
+    model_sample_rate: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersPiperConfigPath:
+        self = super().__new__(cls, "services.tts.providers.piper")
+        self.cache_dir = ConfigPath("services.tts.providers.piper.cache_dir")
+        self.executable_path = ConfigPath("services.tts.providers.piper.executable_path")
+        self.model_config_file_path = ConfigPath(
+            "services.tts.providers.piper.model_config_file_path"
+        )
+        self.model_file_path = ConfigPath("services.tts.providers.piper.model_file_path")
+        self.model_sample_rate = ConfigPath("services.tts.providers.piper.model_sample_rate")
+        return self
+
+
+class _ServicesTtsProvidersPocketttsConfigPath(ConfigPath):
+    cache_dir: ConfigPath
+    custom_config_path: ConfigPath
+    device: ConfigPath
+    eos_threshold: ConfigPath
+    initialization_timeout_s: ConfigPath
+    lsd_decode_steps: ConfigPath
+    max_concurrent_requests: ConfigPath
+    noise_clamp: ConfigPath
+    preload_model: ConfigPath
+    preload_voice_ids: ConfigPath
+    quality_tier: ConfigPath
+    quantize: ConfigPath
+    request_timeout_s: ConfigPath
+    temperature: ConfigPath
+    voice_state_dir: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersPocketttsConfigPath:
+        self = super().__new__(cls, "services.tts.providers.pockettts")
+        self.cache_dir = ConfigPath("services.tts.providers.pockettts.cache_dir")
+        self.custom_config_path = ConfigPath("services.tts.providers.pockettts.custom_config_path")
+        self.device = ConfigPath("services.tts.providers.pockettts.device")
+        self.eos_threshold = ConfigPath("services.tts.providers.pockettts.eos_threshold")
+        self.initialization_timeout_s = ConfigPath(
+            "services.tts.providers.pockettts.initialization_timeout_s"
+        )
+        self.lsd_decode_steps = ConfigPath("services.tts.providers.pockettts.lsd_decode_steps")
+        self.max_concurrent_requests = ConfigPath(
+            "services.tts.providers.pockettts.max_concurrent_requests"
+        )
+        self.noise_clamp = ConfigPath("services.tts.providers.pockettts.noise_clamp")
+        self.preload_model = ConfigPath("services.tts.providers.pockettts.preload_model")
+        self.preload_voice_ids = ConfigPath("services.tts.providers.pockettts.preload_voice_ids")
+        self.quality_tier = ConfigPath("services.tts.providers.pockettts.quality_tier")
+        self.quantize = ConfigPath("services.tts.providers.pockettts.quantize")
+        self.request_timeout_s = ConfigPath("services.tts.providers.pockettts.request_timeout_s")
+        self.temperature = ConfigPath("services.tts.providers.pockettts.temperature")
+        self.voice_state_dir = ConfigPath("services.tts.providers.pockettts.voice_state_dir")
+        return self
+
+
 class _ServicesDbEmbeddingsConfigPath(ConfigPath):
     use_local: ConfigPath
 
     def __new__(cls) -> _ServicesDbEmbeddingsConfigPath:
         self = super().__new__(cls, "services.db.embeddings")
         self.use_local = ConfigPath("services.db.embeddings.use_local")
+        return self
+
+
+class _ServicesDbMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesDbMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.db.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.db.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.db.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.db.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.db.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.db.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.db.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.db.mesh_routing.required_provider_feature_ids"
+        )
         return self
 
 
@@ -463,6 +761,8 @@ class _ServicesDbMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesDbMeshSharingConfigPath:
         self = super().__new__(cls, "services.db.mesh_sharing")
@@ -476,6 +776,8 @@ class _ServicesDbMeshSharingConfigPath(ConfigPath):
         )
         self.required_capabilities = ConfigPath("services.db.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.db.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath("services.db.mesh_sharing.unshared_feature_ids")
+        self.unshared_method_ids = ConfigPath("services.db.mesh_sharing.unshared_method_ids")
         return self
 
 
@@ -537,6 +839,7 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
     enable_app_layer_e2ee: ConfigPath
     enabled: ConfigPath
     encrypt_signaling: ConfigPath
+    legacy_event_broadcast: ConfigPath
     password: ConfigPath
     room: ConfigPath
     strategy: ConfigPath
@@ -549,6 +852,7 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
         self.enable_app_layer_e2ee = ConfigPath("services.gateway.webrtc.enable_app_layer_e2ee")
         self.enabled = ConfigPath("services.gateway.webrtc.enabled")
         self.encrypt_signaling = ConfigPath("services.gateway.webrtc.encrypt_signaling")
+        self.legacy_event_broadcast = ConfigPath("services.gateway.webrtc.legacy_event_broadcast")
         self.password = ConfigPath("services.gateway.webrtc.password")
         self.room = ConfigPath("services.gateway.webrtc.room")
         self.strategy = ConfigPath("services.gateway.webrtc.strategy")
@@ -559,14 +863,47 @@ class _ServicesGatewayWebrtcConfigPath(ConfigPath):
 
 class _ServicesOrchestratorLlmConfigPath(ConfigPath):
     local: _ServicesOrchestratorLlmLocalConfigPath
+    mesh_peer: _ServicesOrchestratorLlmMeshPeerConfigPath
     provider: ConfigPath
+    remote_peer: _ServicesOrchestratorLlmRemotePeerConfigPath
     third_party: _ServicesOrchestratorLlmThirdPartyConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorLlmConfigPath:
         self = super().__new__(cls, "services.orchestrator.llm")
         self.local = _ServicesOrchestratorLlmLocalConfigPath()
+        self.mesh_peer = _ServicesOrchestratorLlmMeshPeerConfigPath()
         self.provider = ConfigPath("services.orchestrator.llm.provider")
+        self.remote_peer = _ServicesOrchestratorLlmRemotePeerConfigPath()
         self.third_party = _ServicesOrchestratorLlmThirdPartyConfigPath()
+        return self
+
+
+class _ServicesOrchestratorMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.orchestrator.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.orchestrator.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.orchestrator.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.orchestrator.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.orchestrator.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.orchestrator.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.orchestrator.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.orchestrator.mesh_routing.required_provider_feature_ids"
+        )
         return self
 
 
@@ -579,6 +916,8 @@ class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorMeshSharingConfigPath:
         self = super().__new__(cls, "services.orchestrator.mesh_sharing")
@@ -594,6 +933,52 @@ class _ServicesOrchestratorMeshSharingConfigPath(ConfigPath):
             "services.orchestrator.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.orchestrator.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath(
+            "services.orchestrator.mesh_sharing.unshared_feature_ids"
+        )
+        self.unshared_method_ids = ConfigPath(
+            "services.orchestrator.mesh_sharing.unshared_method_ids"
+        )
+        return self
+
+
+class _ServicesOrchestratorRoutingConfigPath(ConfigPath):
+    dispatch_default: _ServicesOrchestratorRoutingDispatchDefaultConfigPath
+    inference_default: _ServicesOrchestratorRoutingInferenceDefaultConfigPath
+
+    def __new__(cls) -> _ServicesOrchestratorRoutingConfigPath:
+        self = super().__new__(cls, "services.orchestrator.routing")
+        self.dispatch_default = _ServicesOrchestratorRoutingDispatchDefaultConfigPath()
+        self.inference_default = _ServicesOrchestratorRoutingInferenceDefaultConfigPath()
+        return self
+
+
+class _ServicesSchedulerMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesSchedulerMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.scheduler.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.scheduler.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.scheduler.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.scheduler.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.scheduler.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.scheduler.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.scheduler.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.scheduler.mesh_routing.required_provider_feature_ids"
+        )
         return self
 
 
@@ -606,6 +991,8 @@ class _ServicesSchedulerMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesSchedulerMeshSharingConfigPath:
         self = super().__new__(cls, "services.scheduler.mesh_sharing")
@@ -621,6 +1008,10 @@ class _ServicesSchedulerMeshSharingConfigPath(ConfigPath):
             "services.scheduler.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.scheduler.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath(
+            "services.scheduler.mesh_sharing.unshared_feature_ids"
+        )
+        self.unshared_method_ids = ConfigPath("services.scheduler.mesh_sharing.unshared_method_ids")
         return self
 
 
@@ -628,6 +1019,7 @@ class _ServicesSttCoordinatorConfigPath(ConfigPath):
     ambient_transcription: _ServicesSttCoordinatorAmbientTranscriptionConfigPath
     audio_input: _ServicesSttCoordinatorAudioInputConfigPath
     enabled: ConfigPath
+    mesh_routing: _ServicesSttCoordinatorMeshRoutingConfigPath
     mesh_sharing: _ServicesSttCoordinatorMeshSharingConfigPath
     multi_turn_enabled: ConfigPath
     pause_tts_on_listen: ConfigPath
@@ -638,6 +1030,7 @@ class _ServicesSttCoordinatorConfigPath(ConfigPath):
         self.ambient_transcription = _ServicesSttCoordinatorAmbientTranscriptionConfigPath()
         self.audio_input = _ServicesSttCoordinatorAudioInputConfigPath()
         self.enabled = ConfigPath("services.stt.coordinator.enabled")
+        self.mesh_routing = _ServicesSttCoordinatorMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesSttCoordinatorMeshSharingConfigPath()
         self.multi_turn_enabled = ConfigPath("services.stt.coordinator.multi_turn_enabled")
         self.pause_tts_on_listen = ConfigPath("services.stt.coordinator.pause_tts_on_listen")
@@ -649,6 +1042,7 @@ class _ServicesSttTranscriptionConfigPath(ConfigPath):
     accurate_model: _ServicesSttTranscriptionAccurateModelConfigPath
     enabled: ConfigPath
     max_speech_duration_s: ConfigPath
+    mesh_routing: _ServicesSttTranscriptionMeshRoutingConfigPath
     mesh_sharing: _ServicesSttTranscriptionMeshSharingConfigPath
     realtime_model: _ServicesSttTranscriptionRealtimeModelConfigPath
     silence_duration_ms: ConfigPath
@@ -660,6 +1054,7 @@ class _ServicesSttTranscriptionConfigPath(ConfigPath):
         self.accurate_model = _ServicesSttTranscriptionAccurateModelConfigPath()
         self.enabled = ConfigPath("services.stt.transcription.enabled")
         self.max_speech_duration_s = ConfigPath("services.stt.transcription.max_speech_duration_s")
+        self.mesh_routing = _ServicesSttTranscriptionMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesSttTranscriptionMeshSharingConfigPath()
         self.realtime_model = _ServicesSttTranscriptionRealtimeModelConfigPath()
         self.silence_duration_ms = ConfigPath("services.stt.transcription.silence_duration_ms")
@@ -672,6 +1067,7 @@ class _ServicesSttWakewordConfigPath(ConfigPath):
     backend: ConfigPath
     enabled: ConfigPath
     inference_framework: ConfigPath
+    mesh_routing: _ServicesSttWakewordMeshRoutingConfigPath
     mesh_sharing: _ServicesSttWakewordMeshSharingConfigPath
     model_path: ConfigPath
     threshold: ConfigPath
@@ -681,6 +1077,7 @@ class _ServicesSttWakewordConfigPath(ConfigPath):
         self.backend = ConfigPath("services.stt.wakeword.backend")
         self.enabled = ConfigPath("services.stt.wakeword.enabled")
         self.inference_framework = ConfigPath("services.stt.wakeword.inference_framework")
+        self.mesh_routing = _ServicesSttWakewordMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesSttWakewordMeshSharingConfigPath()
         self.model_path = ConfigPath("services.stt.wakeword.model_path")
         self.threshold = ConfigPath("services.stt.wakeword.threshold")
@@ -691,6 +1088,7 @@ class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
     default_approval_mode: ConfigPath
     default_share: ConfigPath
     default_token_ttl_seconds: ConfigPath
+    policy_mode: ConfigPath
     rules: ConfigPath
 
     def __new__(cls) -> _ServicesToolingApprovalPolicyConfigPath:
@@ -702,6 +1100,7 @@ class _ServicesToolingApprovalPolicyConfigPath(ConfigPath):
         self.default_token_ttl_seconds = ConfigPath(
             "services.tooling.approval_policy.default_token_ttl_seconds"
         )
+        self.policy_mode = ConfigPath("services.tooling.approval_policy.policy_mode")
         self.rules = ConfigPath("services.tooling.approval_policy.rules")
         return self
 
@@ -728,6 +1127,35 @@ class _ServicesToolingMcpConfigPath(ConfigPath):
         return self
 
 
+class _ServicesToolingMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesToolingMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.tooling.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.tooling.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.tooling.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.tooling.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.tooling.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tooling.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.tooling.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.tooling.mesh_routing.required_provider_feature_ids"
+        )
+        return self
+
+
 class _ServicesToolingMeshSharingConfigPath(ConfigPath):
     allowed_peers: ConfigPath
     fallback: ConfigPath
@@ -737,6 +1165,8 @@ class _ServicesToolingMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesToolingMeshSharingConfigPath:
         self = super().__new__(cls, "services.tooling.mesh_sharing")
@@ -752,6 +1182,8 @@ class _ServicesToolingMeshSharingConfigPath(ConfigPath):
             "services.tooling.mesh_sharing.required_capabilities"
         )
         self.share = ConfigPath("services.tooling.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath("services.tooling.mesh_sharing.unshared_feature_ids")
+        self.unshared_method_ids = ConfigPath("services.tooling.mesh_sharing.unshared_method_ids")
         return self
 
 
@@ -778,6 +1210,35 @@ class _ServicesToolingPluginsConfigPath(ConfigPath):
         return self
 
 
+class _ServicesTtsMeshRoutingConfigPath(ConfigPath):
+    allowed_provider_peer_ids: ConfigPath
+    fallback: ConfigPath
+    min_version: ConfigPath
+    prefer: ConfigPath
+    require_explicit_selector: ConfigPath
+    required_provider_capability_tags: ConfigPath
+    required_provider_feature_ids: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsMeshRoutingConfigPath:
+        self = super().__new__(cls, "services.tts.mesh_routing")
+        self.allowed_provider_peer_ids = ConfigPath(
+            "services.tts.mesh_routing.allowed_provider_peer_ids"
+        )
+        self.fallback = ConfigPath("services.tts.mesh_routing.fallback")
+        self.min_version = ConfigPath("services.tts.mesh_routing.min_version")
+        self.prefer = ConfigPath("services.tts.mesh_routing.prefer")
+        self.require_explicit_selector = ConfigPath(
+            "services.tts.mesh_routing.require_explicit_selector"
+        )
+        self.required_provider_capability_tags = ConfigPath(
+            "services.tts.mesh_routing.required_provider_capability_tags"
+        )
+        self.required_provider_feature_ids = ConfigPath(
+            "services.tts.mesh_routing.required_provider_feature_ids"
+        )
+        return self
+
+
 class _ServicesTtsMeshSharingConfigPath(ConfigPath):
     allowed_peers: ConfigPath
     fallback: ConfigPath
@@ -787,6 +1248,8 @@ class _ServicesTtsMeshSharingConfigPath(ConfigPath):
     require_explicit_selector: ConfigPath
     required_capabilities: ConfigPath
     share: ConfigPath
+    unshared_feature_ids: ConfigPath
+    unshared_method_ids: ConfigPath
 
     def __new__(cls) -> _ServicesTtsMeshSharingConfigPath:
         self = super().__new__(cls, "services.tts.mesh_sharing")
@@ -800,6 +1263,66 @@ class _ServicesTtsMeshSharingConfigPath(ConfigPath):
         )
         self.required_capabilities = ConfigPath("services.tts.mesh_sharing.required_capabilities")
         self.share = ConfigPath("services.tts.mesh_sharing.share")
+        self.unshared_feature_ids = ConfigPath("services.tts.mesh_sharing.unshared_feature_ids")
+        self.unshared_method_ids = ConfigPath("services.tts.mesh_sharing.unshared_method_ids")
+        return self
+
+
+class _ServicesTtsProvidersConfigPath(ConfigPath):
+    piper: _ServicesTtsProvidersPiperConfigPath
+    pockettts: _ServicesTtsProvidersPocketttsConfigPath
+
+    def __new__(cls) -> _ServicesTtsProvidersConfigPath:
+        self = super().__new__(cls, "services.tts.providers")
+        self.piper = _ServicesTtsProvidersPiperConfigPath()
+        self.pockettts = _ServicesTtsProvidersPocketttsConfigPath()
+        return self
+
+
+class _ServicesTtsVoiceRegistryConfigPath(ConfigPath):
+    accepted_import_formats: ConfigPath
+    asset_base_url: ConfigPath
+    cache_dir: ConfigPath
+    clone_max_duration_s: ConfigPath
+    clone_max_source_bytes: ConfigPath
+    clone_max_wire_bytes: ConfigPath
+    clone_min_duration_s: ConfigPath
+    cloning_enabled: ConfigPath
+    manifest_path: ConfigPath
+    retain_clone_source: ConfigPath
+    standard_pack_enabled: ConfigPath
+    trusted_manifest_public_keys: ConfigPath
+    trusted_manifest_sha256: ConfigPath
+    trusted_manifest_signature: ConfigPath
+    verify_sha256: ConfigPath
+
+    def __new__(cls) -> _ServicesTtsVoiceRegistryConfigPath:
+        self = super().__new__(cls, "services.tts.voice_registry")
+        self.accepted_import_formats = ConfigPath(
+            "services.tts.voice_registry.accepted_import_formats"
+        )
+        self.asset_base_url = ConfigPath("services.tts.voice_registry.asset_base_url")
+        self.cache_dir = ConfigPath("services.tts.voice_registry.cache_dir")
+        self.clone_max_duration_s = ConfigPath("services.tts.voice_registry.clone_max_duration_s")
+        self.clone_max_source_bytes = ConfigPath(
+            "services.tts.voice_registry.clone_max_source_bytes"
+        )
+        self.clone_max_wire_bytes = ConfigPath("services.tts.voice_registry.clone_max_wire_bytes")
+        self.clone_min_duration_s = ConfigPath("services.tts.voice_registry.clone_min_duration_s")
+        self.cloning_enabled = ConfigPath("services.tts.voice_registry.cloning_enabled")
+        self.manifest_path = ConfigPath("services.tts.voice_registry.manifest_path")
+        self.retain_clone_source = ConfigPath("services.tts.voice_registry.retain_clone_source")
+        self.standard_pack_enabled = ConfigPath("services.tts.voice_registry.standard_pack_enabled")
+        self.trusted_manifest_public_keys = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_public_keys"
+        )
+        self.trusted_manifest_sha256 = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_sha256"
+        )
+        self.trusted_manifest_signature = ConfigPath(
+            "services.tts.voice_registry.trusted_manifest_signature"
+        )
+        self.verify_sha256 = ConfigPath("services.tts.voice_registry.verify_sha256")
         return self
 
 
@@ -809,6 +1332,9 @@ class _ServicesAuthConfigPath(ConfigPath):
     audit_retention_days: ConfigPath
     default_pairing_permissions: ConfigPath
     enabled: ConfigPath
+    mesh_peer_orphan_prune_max_rows: ConfigPath
+    mesh_peer_orphan_pruning_enabled: ConfigPath
+    mesh_peer_orphan_retention_seconds: ConfigPath
     pairing_code_expiry_minutes: ConfigPath
     pairing_max_attempts_per_ip: ConfigPath
     session_token_expiry_hours: ConfigPath
@@ -823,6 +1349,15 @@ class _ServicesAuthConfigPath(ConfigPath):
         self.audit_retention_days = ConfigPath("services.auth.audit_retention_days")
         self.default_pairing_permissions = ConfigPath("services.auth.default_pairing_permissions")
         self.enabled = ConfigPath("services.auth.enabled")
+        self.mesh_peer_orphan_prune_max_rows = ConfigPath(
+            "services.auth.mesh_peer_orphan_prune_max_rows"
+        )
+        self.mesh_peer_orphan_pruning_enabled = ConfigPath(
+            "services.auth.mesh_peer_orphan_pruning_enabled"
+        )
+        self.mesh_peer_orphan_retention_seconds = ConfigPath(
+            "services.auth.mesh_peer_orphan_retention_seconds"
+        )
         self.pairing_code_expiry_minutes = ConfigPath("services.auth.pairing_code_expiry_minutes")
         self.pairing_max_attempts_per_ip = ConfigPath("services.auth.pairing_max_attempts_per_ip")
         self.session_token_expiry_hours = ConfigPath("services.auth.session_token_expiry_hours")
@@ -846,12 +1381,14 @@ class _ServicesConfigConfigPath(ConfigPath):
 class _ServicesDbConfigPath(ConfigPath):
     embeddings: _ServicesDbEmbeddingsConfigPath
     enabled: ConfigPath
+    mesh_routing: _ServicesDbMeshRoutingConfigPath
     mesh_sharing: _ServicesDbMeshSharingConfigPath
 
     def __new__(cls) -> _ServicesDbConfigPath:
         self = super().__new__(cls, "services.db")
         self.embeddings = _ServicesDbEmbeddingsConfigPath()
         self.enabled = ConfigPath("services.db.enabled")
+        self.mesh_routing = _ServicesDbMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesDbMeshSharingConfigPath()
         return self
 
@@ -877,24 +1414,30 @@ class _ServicesOrchestratorConfigPath(ConfigPath):
     enabled: ConfigPath
     hardware_acceleration: ConfigPath
     llm: _ServicesOrchestratorLlmConfigPath
+    mesh_routing: _ServicesOrchestratorMeshRoutingConfigPath
     mesh_sharing: _ServicesOrchestratorMeshSharingConfigPath
+    routing: _ServicesOrchestratorRoutingConfigPath
 
     def __new__(cls) -> _ServicesOrchestratorConfigPath:
         self = super().__new__(cls, "services.orchestrator")
         self.enabled = ConfigPath("services.orchestrator.enabled")
         self.hardware_acceleration = ConfigPath("services.orchestrator.hardware_acceleration")
         self.llm = _ServicesOrchestratorLlmConfigPath()
+        self.mesh_routing = _ServicesOrchestratorMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesOrchestratorMeshSharingConfigPath()
+        self.routing = _ServicesOrchestratorRoutingConfigPath()
         return self
 
 
 class _ServicesSchedulerConfigPath(ConfigPath):
     enabled: ConfigPath
+    mesh_routing: _ServicesSchedulerMeshRoutingConfigPath
     mesh_sharing: _ServicesSchedulerMeshSharingConfigPath
 
     def __new__(cls) -> _ServicesSchedulerConfigPath:
         self = super().__new__(cls, "services.scheduler")
         self.enabled = ConfigPath("services.scheduler.enabled")
+        self.mesh_routing = _ServicesSchedulerMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesSchedulerMeshSharingConfigPath()
         return self
 
@@ -921,6 +1464,7 @@ class _ServicesToolingConfigPath(ConfigPath):
     enabled: ConfigPath
     hardware_acceleration: _ServicesToolingHardwareAccelerationConfigPath
     mcp: _ServicesToolingMcpConfigPath
+    mesh_routing: _ServicesToolingMeshRoutingConfigPath
     mesh_sharing: _ServicesToolingMeshSharingConfigPath
     plugins: _ServicesToolingPluginsConfigPath
 
@@ -930,29 +1474,72 @@ class _ServicesToolingConfigPath(ConfigPath):
         self.enabled = ConfigPath("services.tooling.enabled")
         self.hardware_acceleration = _ServicesToolingHardwareAccelerationConfigPath()
         self.mcp = _ServicesToolingMcpConfigPath()
+        self.mesh_routing = _ServicesToolingMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesToolingMeshSharingConfigPath()
         self.plugins = _ServicesToolingPluginsConfigPath()
         return self
 
 
 class _ServicesTtsConfigPath(ConfigPath):
+    default_voice_id: ConfigPath
     enabled: ConfigPath
+    fallback_provider: ConfigPath
     hardware_acceleration: ConfigPath
+    mesh_routing: _ServicesTtsMeshRoutingConfigPath
     mesh_sharing: _ServicesTtsMeshSharingConfigPath
     model_config_file_path: ConfigPath
     model_file_path: ConfigPath
     model_sample_rate: ConfigPath
     piper_path: ConfigPath
+    provider: ConfigPath
+    providers: _ServicesTtsProvidersConfigPath
+    voice_registry: _ServicesTtsVoiceRegistryConfigPath
 
     def __new__(cls) -> _ServicesTtsConfigPath:
         self = super().__new__(cls, "services.tts")
+        self.default_voice_id = ConfigPath("services.tts.default_voice_id")
         self.enabled = ConfigPath("services.tts.enabled")
+        self.fallback_provider = ConfigPath("services.tts.fallback_provider")
         self.hardware_acceleration = ConfigPath("services.tts.hardware_acceleration")
+        self.mesh_routing = _ServicesTtsMeshRoutingConfigPath()
         self.mesh_sharing = _ServicesTtsMeshSharingConfigPath()
         self.model_config_file_path = ConfigPath("services.tts.model_config_file_path")
         self.model_file_path = ConfigPath("services.tts.model_file_path")
         self.model_sample_rate = ConfigPath("services.tts.model_sample_rate")
         self.piper_path = ConfigPath("services.tts.piper_path")
+        self.provider = ConfigPath("services.tts.provider")
+        self.providers = _ServicesTtsProvidersConfigPath()
+        self.voice_registry = _ServicesTtsVoiceRegistryConfigPath()
+        return self
+
+
+class _UiAssistantConfigPath(ConfigPath):
+    automatic_tts_readback: ConfigPath
+
+    def __new__(cls) -> _UiAssistantConfigPath:
+        self = super().__new__(cls, "ui.assistant")
+        self.automatic_tts_readback = ConfigPath("ui.assistant.automatic_tts_readback")
+        return self
+
+
+class _UiDesktopOverlayConfigPath(ConfigPath):
+    auto_close_delay_ms: ConfigPath
+    close_behavior: ConfigPath
+    enabled: ConfigPath
+    persist_positions: ConfigPath
+    text_hotkey: ConfigPath
+    visible_on_all_workspaces: ConfigPath
+    voice_overlay_enabled: ConfigPath
+
+    def __new__(cls) -> _UiDesktopOverlayConfigPath:
+        self = super().__new__(cls, "ui.desktop_overlay")
+        self.auto_close_delay_ms = ConfigPath("ui.desktop_overlay.auto_close_delay_ms")
+        self.close_behavior = ConfigPath("ui.desktop_overlay.close_behavior")
+        self.enabled = ConfigPath("ui.desktop_overlay.enabled")
+        self.persist_positions = ConfigPath("ui.desktop_overlay.persist_positions")
+        self.text_hotkey = ConfigPath("ui.desktop_overlay.text_hotkey")
+        self.visible_on_all_workspaces = ConfigPath("ui.desktop_overlay.visible_on_all_workspaces")
+        self.voice_overlay_enabled = ConfigPath("ui.desktop_overlay.voice_overlay_enabled")
         return self
 
 
@@ -983,23 +1570,31 @@ class _ServicesConfigPath(ConfigPath):
 
 class _SystemConfigPath(ConfigPath):
     models_dir: ConfigPath
+    primary_language: ConfigPath
+    voice_language: ConfigPath
 
     def __new__(cls) -> _SystemConfigPath:
         self = super().__new__(cls, "system")
         self.models_dir = ConfigPath("system.models_dir")
+        self.primary_language = ConfigPath("system.primary_language")
+        self.voice_language = ConfigPath("system.voice_language")
         return self
 
 
 class _UiConfigPath(ConfigPath):
     activate: ConfigPath
+    assistant: _UiAssistantConfigPath
     dark_mode: ConfigPath
     debug: ConfigPath
+    desktop_overlay: _UiDesktopOverlayConfigPath
 
     def __new__(cls) -> _UiConfigPath:
         self = super().__new__(cls, "ui")
         self.activate = ConfigPath("ui.activate")
+        self.assistant = _UiAssistantConfigPath()
         self.dark_mode = ConfigPath("ui.dark_mode")
         self.debug = ConfigPath("ui.debug")
+        self.desktop_overlay = _UiDesktopOverlayConfigPath()
         return self
 
 

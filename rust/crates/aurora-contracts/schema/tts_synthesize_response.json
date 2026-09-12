@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Synthesized audio response.",
+  "properties": {
+    "audio_data": {
+      "title": "Audio Data",
+      "type": "string"
+    },
+    "channels": {
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "duration_ms": {
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "format": {
+      "title": "Format",
+      "type": "string"
+    },
+    "sample_rate": {
+      "exclusiveMinimum": 0,
+      "maximum": 192000,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "audio_data",
+    "channels",
+    "duration_ms",
+    "format",
+    "sample_rate",
+    "text"
+  ],
+  "title": "TTSSynthesizeResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

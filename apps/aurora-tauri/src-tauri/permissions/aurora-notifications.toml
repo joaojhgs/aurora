@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-notifications"
+description = "Allow notification status checks and structured denied send responses without granting notification delivery by default."
+commands.allow = ["aurora_notification_status", "aurora_notification_send"]

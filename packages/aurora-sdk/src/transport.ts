@@ -20,6 +20,13 @@ export interface AuroraTransport {
   ): Promise<AuroraTransportResponse<TData>>
 }
 
+export interface AuroraPeerBoundTransport extends AuroraTransport {
+  requestPeer<TData = unknown, TPayload = unknown>(
+    peerId: string,
+    request: AuroraTransportRequest<TPayload>
+  ): Promise<AuroraTransportResponse<TData>>
+}
+
 export type AuroraResponse<TData> = AuroraResult<TData>
 
 export async function captureResult<TData>(

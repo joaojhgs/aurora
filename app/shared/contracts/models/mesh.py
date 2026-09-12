@@ -7,7 +7,9 @@ violating the "no cross-service imports" rule.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.shared.auth.permissions import Permission
 
@@ -21,6 +23,7 @@ class MeshEvents:
 
     PEER_APPROVED = "Mesh.PeerApproved"
     PEER_PERMISSIONS_UPDATED = "Mesh.PeerPermissionsUpdated"
+    PEER_AUTHORITY_CHANGED = "Mesh.PeerAuthorityChanged"
 
 
 # ── Hybrid addressing selectors ─────────────────────────────────────────
@@ -204,6 +207,7 @@ class MeshPeerSaveInboundRequest(BaseModel):
     remote_peer_id: str
     room_name: str
     token: str
+    token_id: str = ""
     permissions: list[Permission] = Field(default_factory=list)
     remote_device_id: str | None = None
     remote_user_id: str | None = None
@@ -217,10 +221,29 @@ class MeshPeerLoadInboundRequest(BaseModel):
     remote_peer_id: str | None = None  # None = all peers in room
 
 
-class MeshPeerLoadInboundResponse(BaseModel):
-    """Map of remote_peer_id → inbound_token."""
+class MeshInboundCredential(BaseModel):
+    """A remote-issued bearer plus its non-secret database selector.
 
-    credentials: dict[str, str] = Field(default_factory=dict)
+    Legacy Auth responses used a bare token string. Accepting that input keeps
+    old persisted/runtime values readable while new callers receive the public
+    ``token_id`` required for reconnect proofs.
+    """
+
+    token: str
+    token_id: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_legacy_token(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {"token": value, "token_id": ""}
+        return value
+
+
+class MeshPeerLoadInboundResponse(BaseModel):
+    """Map of remote peer ID to its saved reconnect credential."""
+
+    credentials: dict[str, MeshInboundCredential] = Field(default_factory=dict)
 
 
 # ── Upsert Peer Record (create or update on discovery) ──────────────────
@@ -261,6 +284,50 @@ class MeshPeerPermissionsUpdatedEvent(BaseModel):
 
     peer_id: str
     permissions: list[Permission]
+
+
+class MeshPeerAuthorityChangedEvent(BaseModel):
+    """Committed per-peer authority generation without credentials or secrets."""
+
+    peer_id: str
+    auth_grant_revision: int = Field(ge=1)
+    disposition: Literal["present", "removed"] = "present"
+    state: Literal["active", "pending", "revoked"] = "revoked"
+    effective_permissions: tuple[Permission, ...] = Field(default_factory=tuple)
+    reason: Literal[
+        "approved",
+        "permissions_updated",
+        "denied",
+        "removed",
+        "credential_linked",
+        "token_revoked",
+    ]
+
+    model_config = ConfigDict(frozen=True)
+
+
+class MeshPeerAuthoritySnapshot(BaseModel):
+    """Current secret-free, stable-peer authority state."""
+
+    peer_id: str
+    auth_grant_revision: int = Field(ge=0)
+    disposition: Literal["present", "removed"] = "present"
+    state: Literal["active", "pending", "revoked"] = "revoked"
+    effective_permissions: tuple[Permission, ...] = Field(default_factory=tuple)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class MeshPeerAuthoritySnapshotRequest(BaseModel):
+    """Read all durable peer generations or one exact stable peer."""
+
+    peer_id: str | None = None
+
+
+class MeshPeerAuthoritySnapshotResponse(BaseModel):
+    """Consistent authority snapshot for restart and event-gap recovery."""
+
+    authorities: tuple[MeshPeerAuthoritySnapshot, ...] = Field(default_factory=tuple)
 
 
 class PairingRequestedEvent(BaseModel):

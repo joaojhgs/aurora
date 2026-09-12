@@ -1,11 +1,48 @@
+import './legacy-webview-polyfills'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import { getAuroraSurfaceProfile } from '@aurora/ui'
 import '@aurora/ui/styles.css'
 import './styles.css'
+import { AuroraOverlayApp } from './overlay-app'
 import { AuroraTauriApp } from './tauri-app'
 
-createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <AuroraTauriApp />
-  </React.StrictMode>
-)
+const root = document.getElementById('root') as HTMLElement
+const isOverlaySurface = new URLSearchParams(window.location.search).get('surface') === 'overlay' || window.location.hash.includes('overlay')
+const surfaceProfile = getAuroraSurfaceProfile({
+  userAgent: window.navigator.userAgent,
+})
+
+document.documentElement.dataset.auroraPlatform = surfaceProfile.kind
+document.body.dataset.auroraPlatform = surfaceProfile.kind
+
+if (import.meta.env.VITE_AURORA_DESKTOP_LIVE_E2E === '1') {
+  void import('./desktop-live-e2e').then(({ installDesktopLiveE2eHook }) => {
+    installDesktopLiveE2eHook()
+  })
+}
+
+if (import.meta.env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === '1') {
+  void import('./desktop-native-voice-e2e').then(({ installDesktopNativeVoiceE2eHook }) => {
+    installDesktopNativeVoiceE2eHook()
+  })
+}
+
+if (isOverlaySurface) {
+  document.documentElement.classList.add('aurora-overlay-surface')
+  document.documentElement.dataset.auroraSurface = 'overlay'
+  document.body.classList.add('aurora-overlay-surface')
+  document.body.dataset.auroraSurface = 'overlay'
+}
+
+if (import.meta.env.VITE_AURORA_EVENTSTREAM_SMOKE === '1') {
+  void import('./eventstream-smoke').then(({ mountEventStreamSmoke }) => {
+    mountEventStreamSmoke(root)
+  })
+} else {
+  createRoot(root).render(
+    <React.StrictMode>
+      {isOverlaySurface ? <AuroraOverlayApp /> : <AuroraTauriApp />}
+    </React.StrictMode>
+  )
+}

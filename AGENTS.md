@@ -8,6 +8,15 @@
 
 Detailed guidance lives next to the code it describes. **Always read the relevant sub-guide before working on a subsystem.**
 
+## Repository Exploration Docs
+
+Use the documentation index when orienting yourself before implementation, investigation, or review:
+
+- Start with [`docs/DOCS_INDEX.md`](docs/DOCS_INDEX.md) to find the canonical current docs and to distinguish current guidance from archived/provenance material.
+- For high-level repo orientation, read [`readme.md`](readme.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md).
+- For domain-specific work, follow the index to the relevant docs, especially [`docs/API_AND_CONTRACTS.md`](docs/API_AND_CONTRACTS.md), [`docs/AUTH_AND_PERMISSIONS.md`](docs/AUTH_AND_PERMISSIONS.md), [`docs/FRONTEND_AND_UI_ARCHITECTURE.md`](docs/FRONTEND_AND_UI_ARCHITECTURE.md), [`docs/BACKUP_SERVICE.md`](docs/BACKUP_SERVICE.md), and [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+- For documentation changes, follow [`docs/DOC_MAINTENANCE.md`](docs/DOC_MAINTENANCE.md) and run `make check-docs`. Do not treat `docs/archive/` or `.omx/plans/` as current implementation guidance unless you are explicitly doing provenance or plan-history work.
+
 | Working On | Read This |
 |------------|-----------|
 | Any service (lifecycle, startup, adding services/tools) | [`app/services/AGENTS.md`](app/services/AGENTS.md) |
@@ -18,6 +27,7 @@ Detailed guidance lives next to the code it describes. **Always read the relevan
 | Contracts (topic constants, IO models, registry) | [`app/shared/contracts/AGENTS.md`](app/shared/contracts/AGENTS.md) |
 | **Configuration (ConfigAPI vs ConfigManager, process mode)** | [`docs/CONFIG_SERVICE_PATTERN.md`](docs/CONFIG_SERVICE_PATTERN.md) |
 | Tests (structure, markers, mocking patterns) | [`tests/AGENTS.md`](tests/AGENTS.md) |
+| Sherpa PocketTTS (patch queue, language packs, native/WASM proof) | [`tools/voice-runtime/AGENTS.md`](tools/voice-runtime/AGENTS.md) |
 
 ---
 
@@ -35,7 +45,7 @@ Aurora is a **privacy-first, modular voice assistant** for local automation and 
 
 ### Technology Stack
 
-- **Audio**: PyAudio, RealtimeSTT, faster-whisper, OpenWakeWord
+- **Audio**: PyAudio, faster-whisper, OpenWakeWord
 - **TTS**: Piper TTS, RealtimeTTS
 - **LLM**: LangChain, LangGraph, OpenAI, HuggingFace, llama.cpp
 - **Database**: SQLite with sqlite-vec for vector storage
@@ -167,6 +177,23 @@ make check   # Run all quality checks
 make unit    # Run unit tests
 ```
 
+### Commit Discipline
+
+- During substantial multi-step work, commit each coherent, verified slice as soon as it is complete; do not leave an entire session as one unrelated dirty tree.
+- When multiple agents work in parallel, every agent owns its declared files/modules, coordinates before touching shared files, and commits its own coherent verified slice before handing off.
+- Inspect `git status` and the staged diff before every commit. Never absorb, rewrite, or discard unrelated work from another agent or an earlier session.
+- Keep commits purpose-based and reviewable (for example: Python protocol/backend, SDK, UI, packaging, tests/docs) and include the verification evidence in the commit message.
+- Defer pushing until the user requests it and all intended local commits are complete and verified. When a push is requested, push once from a clean tree.
+
+### Parallel Agent Commit Discipline
+
+- Concurrent write agents must use isolated branches/worktrees so they never share a Git index or race a commit. Assign each agent an explicit write scope before it starts.
+- Reserve shared integration files—workspace/package lockfiles, root manifests, generated inventories, central registries, cross-platform Tauri bootstrap files, and CI workflows—for one named integration owner unless the leader explicitly transfers ownership.
+- Every sub-agent must commit each coherent, verified slice before handoff using the Lore Commit Protocol. Do not hand back a large uncommitted working tree unless a genuine blocker prevents a safe commit.
+- Before committing, sub-agents must inspect `git status`, stage only their owned paths, review the staged diff, and run the smallest verification that proves the slice. Never use broad staging that can absorb another lane's edits.
+- Every handoff must report the commit SHA, owned files, verification run, failures or untested gaps, and any follow-up dependency. The integration owner alone rebases/cherry-picks concurrent lane commits and resolves shared-file conflicts.
+- Sub-agents must not push. The leader/integration owner pushes once only when the user requests it and the integrated branch is clean and verified.
+
 ### Testing
 
 ```bash
@@ -175,6 +202,25 @@ make unit              # Unit tests only
 make integration       # Integration tests
 make coverage          # Coverage report
 ```
+
+Mesh pairing, reconnect, revocation, route access, and mobile background claims
+must graduate from unit/integration checks to live service boundaries before
+acceptance. Use `pnpm test:hosted-peer:live` for the hosted browser full
+`main.py` Python stack; do not substitute a mock server for acceptance evidence.
+Use Waydroid for the final local Android packaged WebView/native Rust gate only
+after cheaper suites pass, and rerun it on an integration branch only when that
+branch has a substantial source delta affecting Android native, Rust mesh
+session, SDK transport, pairing, reconnect, revocation, foreground-service, or
+lifecycle behavior. iOS runtime/WebRTC evidence requires macOS/Xcode CI or a
+macOS runner; Linux checks are policy/source guards only.
+
+### Android Device Selection
+
+- Use Waydroid as the default Android target for local development, quick iteration, APK install/launch, logcat, screenshots, and interactive or scripted test runs. It is the fast, GPU-accelerated device on this host.
+- Discover Waydroid from `adb devices -l` instead of assuming its IP. Prefer the device whose description contains `WayDroid`; pass its serial explicitly with `adb -s "$WAYDROID_SERIAL" ...` when more than one device is connected.
+- Use the QEMU Android Emulator only when a task requires a specific API level, Google/Play system image, virtual hardware or sensor behavior, snapshot isolation, clean-device reproducibility, ABI coverage, or parity with emulator-based CI/CD.
+- Do not start QEMU merely because an Android device is needed, and do not leave a QEMU emulator running after a compatibility test. Shut it down when the test finishes so it does not reserve CPU and memory needed by other development runtimes.
+- Before reporting an Android failure, state which device class was tested. Reproduce compatibility-sensitive failures on the CI-equivalent QEMU image before treating a Waydroid-only difference as a release blocker.
 
 See [`tests/AGENTS.md`](tests/AGENTS.md) for test patterns and markers.
 
@@ -492,7 +538,7 @@ make clean                       # Remove temp files
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora** (3585 symbols, 11757 relationships, 293 execution flows).
+This project is indexed by GitNexus as **aurora-mesh-parity-implementation** (29830 symbols, 105580 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
@@ -551,3 +597,27 @@ RETURN caller.name, caller.filePath
 ```
 
 <!-- gitnexus:end -->
+
+## Aurora UI Platform and Voice Contract Memory
+
+- All Aurora UI fixes must preserve the multi-surface contract unless the change is explicitly platform-specific: desktop Tauri local, desktop Tauri thin, web thin, Android, and iOS must route through centralized surface detection rather than ad hoc transport checks.
+- Use `packages/aurora-ui/src/platform-surface.ts` (`getAuroraSurfaceProfile`) as the single source for desktop-local vs desktop-thin vs web vs Android/iOS/mobile behavior. Add new platform capability flags there first, then consume them from pages/components.
+- Runtime role is never selected by an environment variable or compiled into an APK/desktop bundle; the old `VITE_AURORA_RUNTIME_MODE` build-time role assignments must not be reintroduced. A single Android/iOS/desktop client may dynamically act as a thin client managing a remote server, or as a node itself; persist and resolve those `roles` from runtime onboarding/profile state and keep them independent from the physical platform surface and transport mode.
+- Mesh thin clients now use a per-peer session registry. Connect remains a one-home-peer product policy, while mesh-node mode can hold several authorized sessions and must route calls by the request's peer id. Never collapse this back to one mutable peer/recipient field.
+- Mesh authority decisions are Rust-owned. Native surfaces call the Tauri `aurora_mesh_authority_*` commands and web uses `@aurora/mesh-authority-web`; TypeScript owns storage adapters, host handlers, roster/session state, and UI. Do not reintroduce a second TypeScript grant evaluator.
+- Android native mesh sessions must stay native in foreground and background. Backgrounded mobile may answer ping and the bounded `native.get_device_status` tool after Rust authorization; orchestration is deferred with `orchestration_deferred` until foreground. Waydroid proof is local protocol/service evidence only; physical-device Doze, OEM kill, battery, and thermal gates stay separate.
+- Local UI polish uses **one** Next debug server: `pnpm dev:ui:debug` (same as `pnpm dev:web` in this worktree). That launcher sets `NEXT_PUBLIC_AURORA_DEBUG_UI=1` so the Development preview badge, overlay, and device emulator are injected; production builds and plain `next dev` must not load that module. Switch surface/role/tier/admin/viewport at runtime with query params, the in-app Development preview badge, or the `aurora-debug-ui` cookie/sessionStorage. Do not spawn 11 Next processes for chrome comparison. Named `pnpm dev:ui:<preset>` commands remain valid isolated wrappers (random port) that apply the same query string; they must not bake a unique `NEXT_PUBLIC_*` role/surface into the compile. Production clients ignore the override. Query contract for agents: `aurora-surface=web|desktop-local|desktop-thin|android|ios`, `aurora-role=remote-console|mesh-node`, `aurora-tier=none|lightweight-ts|python-full`, `aurora-admin=0|1`, `aurora-viewport=phone|tablet|full`. Compatibility: `aurora-role=python-full` still means mesh-node + python-full. Example: `http://127.0.0.1:3000/?aurora-surface=android&aurora-role=mesh-node&aurora-admin=0&aurora-viewport=phone`. Active override JSON: `GET /__aurora/debug-preset`.
+- Production UI is for end users only. Never show implementation/process wording such as proof, evidence, fixture, assertion, implementation, tested, debug, fallback, provider/consumer/hybrid, route counts, manifest, contract, protocol, transport, runtime, schema, migration, SQLite, IndexedDB, OPFS, sidecar, thin, or similar engineering terms in user-facing labels, empty states, toasts, dialogs, menus, setup text, or errors. Show useful user state, impact, action, remedy, and optional non-sensitive error IDs instead; keep implementation terms in logs, tests, developer docs, and non-rendered redacted support exports only.
+- Voice ownership is split intentionally: desktop-local daemon wakeword/background capture remains owned by `STTCoordinator`; focused push-to-talk and visual waveform capture use WebView/browser microphone capture when available. Thin web wakeword may use focused WebView/Gateway streaming only while the page is focused. Mobile push-to-talk may use focused WebView capture, while durable wake/background behavior requires platform-native adapters.
+- Any new bus method or event must follow the typed contract process: add constants and IO models under `app/shared/contracts/models/`, implement with `@method_contract` and correct `exposure`/`method_type`/permissions, route only via bus/SDK/Gateway boundaries, update SDK descriptors/types, and add tests proving redaction plus route/event behavior. Never introduce literal bus topics.
+
+## Aurora Production UI Copy Contract
+
+- Aurora's production UI is an end-user product surface, not an implementation report, developer console, test harness, or agent handoff.
+- User-facing copy must never use internal verification/process language such as **proof**, **evidence**, **fixture**, **assertion**, **implementation**, **tested**, **debug**, or “what this test proves.”
+- User-facing copy must not expose implementation vocabulary such as **manifest**, **contract**, **schema**, **migration**, **fallback**, **provider/consumer/hybrid role**, **runtime tier**, **sidecar**, **thin shell**, storage-engine names, route counts, internal transport state machines, source-code component names, or WebRTC/HTTP/WSS terminology outside the exact advanced connection fields a user must configure.
+- Present only information useful to the user's current task: what happened, what is affected, whether their data/action is safe, and the next action they can take. A non-sensitive error/reference ID is allowed when it helps support.
+- Translate internal states into product language. Examples: “peer lease expired” becomes “Device offline”; “SQLite/IndexedDB fallback” becomes “Saved on this device” or “Temporary session”; “migration failed” becomes “Local data needs attention”; “provider unavailable” becomes “This device is unavailable.”
+- Advanced settings may show a standardized connection method or endpoint URL only when the user must configure it; even there, avoid implementation diagnostics and explain the practical effect in plain language.
+- Keep technical details in structured logs, non-rendered redacted support exports, developer documentation, and tests—not in the production UI. Do not add a developer-console or implementation-diagnostics screen to the production navigation.
+- Add rendered-copy tests or a production-string lint for new UI work. Tests must fail when forbidden implementation/proof wording reaches onboarding, navigation, status cards, errors, empty states, settings, or dialogs.

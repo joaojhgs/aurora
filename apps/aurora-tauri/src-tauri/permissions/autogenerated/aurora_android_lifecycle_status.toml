@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-lifecycle-status"
+description = "Enables the aurora_android_lifecycle_status command without any pre-configured scope."
+commands.allow = ["aurora_android_lifecycle_status"]
+
+[[permission]]
+identifier = "deny-aurora-android-lifecycle-status"
+description = "Denies the aurora_android_lifecycle_status command without any pre-configured scope."
+commands.deny = ["aurora_android_lifecycle_status"]

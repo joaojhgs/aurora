@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-authority-list-active-grants"
+description = "Enables the aurora_mesh_authority_list_active_grants command without any pre-configured scope."
+commands.allow = ["aurora_mesh_authority_list_active_grants"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-authority-list-active-grants"
+description = "Denies the aurora_mesh_authority_list_active_grants command without any pre-configured scope."
+commands.deny = ["aurora_mesh_authority_list_active_grants"]

@@ -1,0 +1,13 @@
+[[permission]]
+identifier = "aurora-overlay"
+description = "Allow only Aurora overlay window visibility/status and narrow global hotkey registration commands. No shell, filesystem, process, or raw audio access is granted."
+commands.allow = [
+  "aurora_overlay_show",
+  "aurora_overlay_hide",
+  "aurora_overlay_status",
+  "aurora_overlay_set_passthrough",
+  "aurora_overlay_start_drag",
+  "aurora_overlay_move_by",
+  "aurora_overlay_register_hotkey",
+  "aurora_overlay_unregister_hotkey"
+]

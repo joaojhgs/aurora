@@ -5,7 +5,12 @@ Implements semantic versioning comparison with three policies:
 - compatible: major version must match, remote >= local min_version
 - any: any version is accepted
 
-Also provides contract digest comparison for quick schema compatibility checks.
+Contract *digests* are deliberately not compared across peers here. A peer
+running a different Aurora version legitimately produces a different service
+digest, so cross-peer digest equality would reject healthy providers. The
+digest's real job is self-consistency: `_validate_projection_canonical_order`
+recomputes each advertised service digest so a manifest cannot misreport the
+services it carries.
 """
 
 from __future__ import annotations
@@ -79,11 +84,15 @@ def is_compatible(
     remote = parse_semver(remote_version)
 
     if local is None or remote is None:
-        # If we can't parse either version, fall back to string comparison
         if policy == "exact":
+            # Exact matching is a pure equality question, so an unparseable
+            # pair can still be answered honestly by comparing the strings.
             return local_version.strip() == remote_version.strip()
-        # For compatible, accept if we can't parse
-        return True
+        # "compatible" is an ordering question, and an unparseable version
+        # cannot be ordered. Fail closed: previously this returned True, which
+        # let a provider advertising e.g. "latest" bypass min_version gating
+        # entirely in an otherwise fail-closed routing path.
+        return False
 
     if policy == "exact":
         return local == remote
@@ -104,33 +113,3 @@ def is_compatible(
 
     # Unknown policy — be permissive
     return True
-
-
-def check_contract_compatibility(
-    local_digest: str,
-    remote_digest: str,
-    strict: bool = False,
-) -> bool:
-    """Quick compatibility check via contract digest.
-
-    If digests match, contracts are identical (same methods, schemas, etc.).
-    In non-strict mode, mismatched digests are still considered compatible
-    (the caller may decide to proceed with best-effort).
-
-    Args:
-        local_digest: SHA-256 of the local contract
-        remote_digest: SHA-256 of the remote contract
-        strict: If True, digests must match exactly for compatibility
-
-    Returns:
-        True if contracts are compatible
-    """
-    if not local_digest or not remote_digest:
-        # Missing digest — can't verify, allow in non-strict mode
-        return not strict
-
-    if local_digest == remote_digest:
-        return True
-
-    # Digests differ — only fail in strict mode
-    return not strict

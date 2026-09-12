@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-voice-pack-remove"
+description = "Enables the aurora_android_voice_pack_remove command without any pre-configured scope."
+commands.allow = ["aurora_android_voice_pack_remove"]
+
+[[permission]]
+identifier = "deny-aurora-android-voice-pack-remove"
+description = "Denies the aurora_android_voice_pack_remove command without any pre-configured scope."
+commands.deny = ["aurora_android_voice_pack_remove"]

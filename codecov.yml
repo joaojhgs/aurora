@@ -1,0 +1,71 @@
+# Codecov configuration for the Aurora monorepo.
+#
+# Three languages upload separately so a change to one stack cannot mask a
+# regression in another. Statuses are informational: they annotate the PR but
+# never block it, because no suite currently enforces a coverage floor and
+# turning one on is a deliberate decision, not a side effect of adding
+# reporting.
+
+codecov:
+  require_ci_to_pass: false
+
+coverage:
+  precision: 2
+  round: down
+  range: "60...90"
+
+  status:
+    project:
+      default:
+        informational: true
+      python:
+        informational: true
+        flags: [python]
+      typescript:
+        informational: true
+        flags: [typescript]
+      rust:
+        informational: true
+        flags: [rust]
+    patch:
+      default:
+        informational: true
+
+flags:
+  python:
+    paths:
+      - app/
+      - modules/
+    carryforward: true
+  typescript:
+    paths:
+      - packages/aurora-sdk/src/
+      - packages/aurora-ui/src/
+      - packages/aurora-voice-web/src/
+      - apps/aurora-web/app/
+      - apps/aurora-tauri/src/
+    carryforward: true
+  rust:
+    paths:
+      - rust/crates/
+    carryforward: true
+
+# Every workflow is path-filtered, so a PR that touches only Python will not
+# re-upload TypeScript or Rust. Carryforward keeps the last known result for
+# the untouched flags instead of reporting them as a drop to zero.
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "**/tests/**"
+  - "**/test/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/dist/**"
+  - "packages/aurora-sdk/src/generated/**"
+  - "packages/aurora-sdk/src/generated-contracts.ts"
+  - "rust/crates/aurora-contracts/src/generated.rs"

@@ -1,0 +1,17 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-main",
+        "aurora-overlay",
+        "aurora-desktop-updater"
+      ]
+    }
+  },
+  "bundle": {
+    "targets": [
+      "appimage",
+      "deb"
+    ]
+  }
+}

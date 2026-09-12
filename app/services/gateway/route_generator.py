@@ -7,13 +7,16 @@ Uses lazy generation - routes are created when registry changes, not at startup.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
+import secrets
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import BaseModel, ConfigDict, ValidationError, create_model
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.messaging.priority_helpers import get_system_priority
 from app.services.gateway.admin_action import (
     ADMIN_ACTION_DIGEST_HEADER,
     ADMIN_ACTION_ID_HEADER,
@@ -23,9 +26,24 @@ from app.services.gateway.admin_action import (
     AdminActionReceipt,
     admin_action_digest,
 )
+from app.services.gateway.orchestrator_runtime_policy import (
+    remote_data_movement_denial_reason,
+    runtime_dispatch_selector_present,
+    selector_from_mapping,
+)
+from app.shared.config.interface import ConfigAPI
 from app.shared.contracts.models.auth import AuthMethods, StoreAuditEventRequest
+from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.config import ConfigMethods
-from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo
+from app.shared.contracts.models.db import (
+    DBEnsureSessionRequest,
+    DBMethods,
+    DBSaveMessageRequest,
+)
+from app.shared.contracts.models.gateway import GatewayMethods, MethodInfo, RouteExplainRequest
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.mesh.tracing import redacted_copy
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -65,6 +83,7 @@ _ADMIN_ACTION_REQUIRED_TOPICS = {
 _ADMIN_ACTION_EXEMPT_TOPICS = {
     AuthMethods.AUDIT_LOG,
     AuthMethods.LIST_DEVICES,
+    AuthMethods.LIST_PENDING_PAIRINGS,
     AuthMethods.LIST_PRINCIPALS,
     AuthMethods.LIST_TOKENS,
     GatewayMethods.ADMIN_ACTION_DRAFT,
@@ -73,11 +92,229 @@ _ADMIN_ACTION_EXEMPT_TOPICS = {
     GatewayMethods.GET_CAPABILITY_CATALOG,
     GatewayMethods.GET_CAPABILITY_GRAPH,
     GatewayMethods.GET_MESH_STATUS,
+    GatewayMethods.GET_MESH_INVITE_CONFIG,
     GatewayMethods.GET_SUPPORT_BUNDLE,
     GatewayMethods.LIST_EVENTS,
+    # Tooling management read models: contract-level method_type stays "manage"
+    # (RBAC still requires Tooling.manage), but pure reads must not demand a
+    # per-request AdminAction confirmation ceremony.
+    ToolingMethods.GET_SHARING_POLICY,
+    ToolingMethods.GET_POLICY_SUMMARY,
+    ToolingMethods.GET_TOOL_SOURCE_DETAIL,
+    ToolingMethods.GET_ONBOARDING_STATUS,
+    ToolingMethods.LIST_APPROVAL_GRANTS,
+    ToolingMethods.LIST_PENDING_APPROVALS,
+    ToolingMethods.LIST_POLICY_AUDIT_EVENTS,
+    ToolingMethods.LIST_TOOL_SOURCES,
+    ToolingMethods.TEST_SHARING_POLICY,
 }
 
 _admin_action_digest = admin_action_digest
+
+# Provider-local confirmation is intentionally allowed to wait for up to one
+# minute on the device that owns a sensitive feature. The gateway must outlive
+# that window so a deny/allow decision returns as an application response
+# instead of becoming an ambiguous transport timeout.
+_REMOTE_TOOL_APPROVAL_REQUEST_TIMEOUT_SECONDS = 75.0
+_SERVICE_AUTHORIZATION_ERROR_CODES = {
+    "permission_denied",
+    "projection_authority_unknown",
+    "projection_ledger_unavailable",
+    "projection_restart_required",
+    "provider_mesh_tooling_disabled",
+}
+_SERVICE_AUTHENTICATION_ERROR_CODES = {"authentication_required"}
+
+
+def _service_error_status_code(error: str | None) -> int:
+    """Map explicit service authorization failures without hiding real faults."""
+
+    if error in _SERVICE_AUTHENTICATION_ERROR_CODES:
+        return 401
+    if error in _SERVICE_AUTHORIZATION_ERROR_CODES:
+        return 403
+    return 500
+
+
+def _request_timeout_for(topic: str, payload: Any, default_timeout: float) -> float:
+    if (
+        topic == ToolingMethods.EXECUTE_TOOL
+        and isinstance(payload, Mapping)
+        and payload.get("mesh_selector")
+    ):
+        return max(default_timeout, _REMOTE_TOOL_APPROVAL_REQUEST_TIMEOUT_SECONDS)
+    return default_timeout
+
+
+async def _apply_orchestrator_dispatch_default(topic: str, payload: Any) -> Any:
+    if topic != OrchestratorMethods.EXTERNAL_USER_INPUT or not isinstance(payload, dict):
+        return payload
+    if runtime_dispatch_selector_present(topic, payload):
+        return payload
+    try:
+        services = await ConfigAPI().aget_config("services", timeout=5.0)
+    except Exception as exc:
+        log_debug(f"Could not load orchestrator dispatch default: {exc}")
+        return payload
+    orchestrator = services.get("orchestrator", {}) if isinstance(services, dict) else {}
+    routing = orchestrator.get("routing", {}) if isinstance(orchestrator, dict) else {}
+    dispatch_default = routing.get("dispatch_default", {}) if isinstance(routing, dict) else {}
+    if not isinstance(dispatch_default, Mapping) or not dispatch_default.get("enabled", False):
+        return payload
+    selector = selector_from_mapping(dispatch_default)
+    if selector is None:
+        return payload
+    updated = dict(payload)
+    updated["dispatch_selector"] = selector.model_dump(exclude_none=True)
+    return updated
+
+
+def _response_mapping(value: Any) -> Mapping[str, Any] | None:
+    if isinstance(value, Mapping):
+        return value
+    if hasattr(value, "model_dump"):
+        dumped = value.model_dump()
+        return dumped if isinstance(dumped, Mapping) else None
+    return None
+
+
+async def _dispatch_peer_name(
+    bus: MessageBus,
+    *,
+    peer_id: str,
+    principal_id: str,
+) -> str | None:
+    """Resolve a stable peer ID to its current human-readable mesh node name."""
+
+    try:
+        result = await bus.request(
+            GatewayMethods.GET_MESH_STATUS,
+            EmptyInput(),
+            timeout=5.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=principal_id,
+        )
+        if not result.ok:
+            return None
+        status = _response_mapping(result.data)
+        peers = status.get("peers") if status is not None else None
+        if not isinstance(peers, list):
+            return None
+        for peer in peers:
+            peer_data = _response_mapping(peer)
+            if peer_data is None or peer_data.get("peer_id") != peer_id:
+                continue
+            node_name = peer_data.get("node_name")
+            return node_name.strip() if isinstance(node_name, str) and node_name.strip() else None
+    except Exception as exc:
+        log_debug(f"Could not resolve dispatched peer display name for {peer_id}: {exc}")
+    return None
+
+
+async def _persist_dispatched_assistant_turn(
+    bus: MessageBus,
+    *,
+    payload: Mapping[str, Any],
+    response_data: Any,
+    principal_id: str | None,
+) -> None:
+    """Persist a remotely executed chat turn on the device that originated it."""
+
+    response = _response_mapping(response_data)
+    user_text = payload.get("text")
+    assistant_text = response.get("text") if response is not None else None
+    session_id = (
+        (response.get("session_id") if response is not None else None)
+        or payload.get("session_id")
+        or payload.get("request_id")
+        or payload.get("correlation_id")
+    )
+    if (
+        not isinstance(user_text, str)
+        or not isinstance(assistant_text, str)
+        or not isinstance(session_id, str)
+        or not session_id.strip()
+    ):
+        log_warning(
+            "Skipping origin persistence for dispatched assistant turn because "
+            "the response did not include persistable text/session data"
+        )
+        return
+
+    owner_principal_id = principal_id or "system"
+    selector = next(
+        (
+            selector_from_mapping(payload.get(key))
+            for key in ("dispatch_selector", "mesh_selector", "selector")
+            if selector_from_mapping(payload.get(key)) is not None
+        ),
+        None,
+    )
+    dispatch_metadata = {
+        "source_type": "Text",
+        "execution": "remote_dispatch",
+    }
+    if response is not None and isinstance(response.get("metadata"), Mapping):
+        dispatch_metadata.update(response["metadata"])
+        dispatch_metadata["source_type"] = "Text"
+        dispatch_metadata["execution"] = "remote_dispatch"
+    if selector is not None:
+        dispatch_metadata["dispatch_selector"] = selector.model_dump(exclude_none=True)
+        if selector.peer_id:
+            dispatch_metadata["execution_peer_id"] = selector.peer_id
+            peer_name = await _dispatch_peer_name(
+                bus,
+                peer_id=selector.peer_id,
+                principal_id=owner_principal_id,
+            )
+            if peer_name:
+                dispatch_metadata["execution_peer_name"] = peer_name
+
+    ensure_result = await bus.request(
+        DBMethods.ENSURE_SESSION,
+        DBEnsureSessionRequest(
+            principal_id=owner_principal_id,
+            type="chat",
+            session_id=session_id,
+            title=user_text.strip()[:80] or None,
+            activate=True,
+        ),
+        timeout=10.0,
+        priority=get_system_priority(),
+        origin="internal",
+        principal_id=owner_principal_id,
+    )
+    if not ensure_result.ok:
+        raise RuntimeError(ensure_result.error or "DB.EnsureSession failed")
+
+    for role, content in (("user", user_text), ("assistant", assistant_text)):
+        save_result = await bus.request(
+            DBMethods.SAVE_MESSAGE,
+            DBSaveMessageRequest(
+                content=content,
+                role=role,
+                session_id=session_id,
+                principal_id=owner_principal_id,
+                session_type="chat",
+                metadata=dict(dispatch_metadata),
+            ),
+            timeout=10.0,
+            priority=get_system_priority(),
+            origin="internal",
+            principal_id=owner_principal_id,
+        )
+        if not save_result.ok:
+            raise RuntimeError(save_result.error or f"DB.SaveMessage failed for {role} turn")
+        success = (
+            save_result.data.get("success")
+            if isinstance(save_result.data, Mapping)
+            else getattr(save_result.data, "success", False)
+        )
+        if not success:
+            raise RuntimeError(f"DB.SaveMessage did not commit the {role} turn")
+
+    log_info(f"Persisted remotely dispatched assistant turn in origin session {session_id}")
 
 
 def _admin_action_required(topic: str, method_type: str | None = None) -> bool:
@@ -403,6 +640,9 @@ class RouteGenerator:
         self._registry = registry
         self._request_timeout = request_timeout
         self._admin_action_manager = admin_action_manager or AdminActionManager()
+        # Keep socket-level rate-limit buckets stable for this gateway process
+        # without retaining enumerable client addresses in messages or queues.
+        self._transport_source_key = secrets.token_bytes(32)
 
         # Track generated routes per service
         self._service_routes: dict[str, list[str]] = {}
@@ -426,6 +666,19 @@ class RouteGenerator:
             router: FastAPI APIRouter instance
         """
         self._router = router
+
+    def set_bus(self, bus: MessageBus) -> None:
+        """Replace the bus used by existing and future generated handlers."""
+        self._bus = bus
+
+    def _transport_source_id(self, request: Any) -> str | None:
+        """Return an opaque bucket derived only from the trusted peer socket."""
+
+        client = getattr(request, "client", None)
+        host = str(getattr(client, "host", "") or "").strip().casefold()
+        if not host:
+            return None
+        return hmac.digest(self._transport_source_key, host.encode("utf-8"), "sha256").hex()
 
     async def start(self) -> None:
         """Start the route generator.
@@ -521,12 +774,17 @@ class RouteGenerator:
         Returns:
             Async handler function
         """
-        bus = self._bus
         registry = self._registry
         timeout = self._request_timeout
         topic = method_info.bus_topic or f"{module_name}.{method_info.name}"
 
-        async def handler(request: Any = None, principal_id: str | None = None) -> dict[str, Any]:
+        async def handler(
+            request: Any = None,
+            principal_id: str | None = None,
+            effective_perms: list[str] | None = None,
+            identity_source: str | None = None,
+            transport_source_id: str | None = None,
+        ) -> dict[str, Any]:
             """Handle API request by forwarding to service via bus."""
             from fastapi import HTTPException
 
@@ -559,19 +817,57 @@ class RouteGenerator:
                 # Send the request body directly to the bus as a dict
                 # The service will validate it against its own input model
                 payload = request_body if request_body else {}
+                remote_data_reason = remote_data_movement_denial_reason(
+                    topic, payload, effective_perms
+                )
+                if remote_data_reason:
+                    raise HTTPException(status_code=403, detail=remote_data_reason)
+                payload = await _apply_orchestrator_dispatch_default(topic, payload)
+                request_timeout = _request_timeout_for(topic, payload, timeout)
 
                 # Make the bus request
-                log_debug(f"Gateway forwarding to {topic} with payload: {payload}")
-                result = await bus.request(
+                log_debug(
+                    f"Gateway forwarding to {topic} with payload: "
+                    f"{redacted_copy(payload, method_id=topic)}"
+                )
+                result = await self._bus.request(
                     topic,
                     payload,
-                    timeout=timeout,
+                    timeout=request_timeout,
                     origin="external",
                     principal_id=principal_id,
+                    effective_perms=effective_perms,
+                    identity_source=identity_source or "gateway_http",
+                    method_type=method_info.method_type or "use",
+                    transport_source_id=transport_source_id,
+                    correlation_id=payload.get("correlation_id")
+                    if isinstance(payload, dict)
+                    else None,
                 )
-                log_debug(f"Gateway received result: ok={result.ok}, data={result.data}")
+                log_debug(
+                    "Gateway received result: "
+                    f"ok={result.ok}, data={redacted_copy(result.data, method_id=topic)}"
+                )
 
                 if result.ok:
+                    if isinstance(payload, Mapping) and runtime_dispatch_selector_present(
+                        topic, payload
+                    ):
+                        try:
+                            await _persist_dispatched_assistant_turn(
+                                self._bus,
+                                payload=payload,
+                                response_data=result.data,
+                                principal_id=principal_id,
+                            )
+                        except Exception as exc:
+                            # The remote answer already completed successfully. Persistence
+                            # failures must be visible in logs without discarding that answer.
+                            log_error(
+                                "Could not persist remotely dispatched assistant turn "
+                                f"on the origin device: {exc}",
+                                exc_info=True,
+                            )
                     # Return the data
                     if result.data is None:
                         response = {"success": True}
@@ -581,13 +877,19 @@ class RouteGenerator:
                         response = result.data if result.data else {"success": True}
                     else:
                         response = {"data": result.data}
-                    log_debug(f"Gateway returning response: {response}")
+                    log_debug(
+                        f"Gateway returning response: {redacted_copy(response, method_id=topic)}"
+                    )
                     return response
                 else:
                     # Service returned an error
-                    log_error(f"Service error: {result.error}")
+                    status_code = _service_error_status_code(result.error)
+                    if status_code < 500:
+                        log_warning(f"Service request denied: {result.error}")
+                    else:
+                        log_error(f"Service error: {result.error}")
                     raise HTTPException(
-                        status_code=500,
+                        status_code=status_code,
                         detail=result.error or "Service request failed",
                     )
 
@@ -632,15 +934,18 @@ class RouteGenerator:
         # Create request model from schema for input validation
         request_model_name = f"{module_name}_{method_info.name}_Request"
 
-        request_model_cls = _create_model_from_schema(
-            request_model_name,
-            method_info.input_schema,
+        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
+        request_model_cls = (
+            RouteExplainRequest
+            if method_id == GatewayMethods.EXPLAIN_ROUTE
+            else _create_model_from_schema(
+                request_model_name,
+                method_info.input_schema,
+            )
         )
 
         # Rebuild model to ensure it's fully defined
         request_model_cls.model_rebuild()
-        method_id = method_info.bus_topic or f"{module_name}.{method_info.name}"
-        route_bus = self._bus
         admin_action_manager = self._admin_action_manager
 
         # Create handler factory to properly capture the model types
@@ -664,15 +969,17 @@ class RouteGenerator:
             ) -> Any:
                 return _auth
 
-            async def typed_handler(
+            async def dispatch_validated_body(
                 http_request: Request,
                 request_body: req_model,
-                _auth: Any = Security(auth_dependency),  # noqa: B008
-            ) -> dict[str, Any]:  # type: ignore[valid-type]
+                _auth: Any,
+            ) -> dict[str, Any]:
                 from fastapi.responses import JSONResponse
 
                 # Extract principal_id from the resolved Identity
                 pid = getattr(_auth, "principal_id", None) if _auth else None
+                effective_perms = list(getattr(_auth, "effective_perms", []) or []) if _auth else []
+                identity_source = getattr(_auth, "source", None) if _auth else None
 
                 # Use exclude_unset=True to only send fields that were explicitly
                 # provided, allowing the service's model to use its own defaults
@@ -680,7 +987,7 @@ class RouteGenerator:
                 admin_action_receipt = None
                 if _admin_action_required(method_id, method_info.method_type):
                     admin_action_receipt = await _enforce_admin_action(
-                        route_bus,
+                        self._bus,
                         admin_action_manager,
                         topic=method_id,
                         principal_id=pid,
@@ -688,7 +995,19 @@ class RouteGenerator:
                         headers=http_request.headers,
                     )
 
-                result = await inner_handler(payload, principal_id=pid)
+                result = await inner_handler(
+                    payload,
+                    principal_id=pid,
+                    effective_perms=effective_perms,
+                    identity_source=(
+                        "gateway_admin_action" if admin_action_receipt else identity_source
+                    ),
+                    transport_source_id=(
+                        self._transport_source_id(http_request)
+                        if method_id == AuthMethods.PAIRING_START
+                        else None
+                    ),
+                )
                 # Return the raw result dict - don't filter through response model
                 # This preserves all fields from the service response
                 if result is None:
@@ -700,7 +1019,9 @@ class RouteGenerator:
                 else:
                     response_data = {"data": result}
 
-                log_debug(f"typed_handler returning: {response_data}")
+                log_debug(
+                    f"typed_handler returning: {redacted_copy(response_data, method_id=method_id)}"
+                )
                 # Return JSONResponse to ensure proper serialization
                 headers = {}
                 if admin_action_receipt:
@@ -709,12 +1030,52 @@ class RouteGenerator:
                     )
                 return JSONResponse(content=response_data, headers=headers)
 
+            if method_id == GatewayMethods.EXPLAIN_ROUTE:
+
+                async def typed_handler(
+                    http_request: Request,
+                    _auth: Any = Security(auth_dependency),  # noqa: B008
+                ) -> dict[str, Any]:
+                    from fastapi import HTTPException
+
+                    try:
+                        raw_body = await http_request.json()
+                    except Exception:
+                        raw_body = None
+                    if not isinstance(raw_body, dict):
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Invalid route explanation request.",
+                        )
+                    try:
+                        request_body = RouteExplainRequest.model_validate(raw_body)
+                    except ValidationError as exc:
+                        log_warning(
+                            "Invalid ExplainRoute request body rejected before dispatch: "
+                            f"{exc.error_count()} validation error(s)"
+                        )
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Invalid route explanation request.",
+                        ) from None
+                    return await dispatch_validated_body(http_request, request_body, _auth)
+
+            else:
+
+                async def typed_handler(
+                    http_request: Request,
+                    request_body: req_model,
+                    _auth: Any = Security(auth_dependency),  # noqa: B008
+                ) -> dict[str, Any]:  # type: ignore[valid-type]
+                    return await dispatch_validated_body(http_request, request_body, _auth)
+
             # Explicitly set annotations to actual model classes (not strings)
             typed_handler.__annotations__ = {
                 "http_request": Request,
-                "request_body": req_model,
                 "return": dict[str, Any],
             }
+            if method_id != GatewayMethods.EXPLAIN_ROUTE:
+                typed_handler.__annotations__["request_body"] = req_model
             return typed_handler
 
         scopes = list(method_info.required_perms) if method_info.required_perms else []

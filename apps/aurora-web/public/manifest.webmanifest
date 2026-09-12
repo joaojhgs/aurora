@@ -1,0 +1,18 @@
+{
+  "name": "Aurora",
+  "short_name": "Aurora",
+  "description": "Private assistant for trusted devices.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#1f6f68",
+  "icons": [
+    {
+      "src": "/icons/aurora.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

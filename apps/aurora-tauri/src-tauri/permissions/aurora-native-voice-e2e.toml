@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-native-voice-e2e"
+description = "Allow the maintained debug-only desktop native voice test to exercise the tray voice control path."
+commands.allow = ["aurora_native_voice_tray_toggle_e2e"]

@@ -1,0 +1,4 @@
+model_path: models/italian.bin
+tokenizer_file: tokenizers/italian.json
+repo_revision: pockettts-test
+language: italian

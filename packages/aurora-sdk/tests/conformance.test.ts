@@ -137,13 +137,13 @@ describe('SDK transport conformance', () => {
           expect.objectContaining({
             busTopic: 'Gateway.GetDeploymentTopology',
             routePath: '/api/Gateway/GetDeploymentTopology',
-            requiredPermissions: ['Gateway.manage'],
+            requiredPermissions: ['Gateway.use'],
             availableOverHttp: true
           }),
           expect.objectContaining({
             busTopic: 'Gateway.GetWebRTCDiagnostics',
             routePath: '/api/Gateway/GetWebRTCDiagnostics',
-            requiredPermissions: ['Gateway.manage'],
+            requiredPermissions: ['Gateway.use'],
             availableOverHttp: true
           }),
           expect.objectContaining({
@@ -242,6 +242,64 @@ describe('SDK transport conformance', () => {
     }
   })
 
+  it('classifies mesh peer errors from structured fields, not generic message text', async () => {
+    const messageOnly = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { message: 'forbidden unavailable unsupported timeout privacy auth validation' } }
+          }
+        }
+      })
+    })
+    const messageOnlyResult = await messageOnly.requestResult('Gateway.GetRegistry')
+    expect(messageOnlyResult.ok).toBe(false)
+    if (!messageOnlyResult.ok) expect(messageOnlyResult.error.code).toBe('unknown')
+
+    const structuredReason = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { reason_code: 'permission_denied', message: 'access denied' } }
+          }
+        }
+      })
+    })
+    const structuredResult = await structuredReason.requestResult('Gateway.GetRegistry')
+    expect(structuredResult.ok).toBe(false)
+    if (!structuredResult.ok) expect(structuredResult.error.code).toBe('permission')
+
+    const structuredSubstring = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { reason_code: 'not_permission_denied_but_contains_it', message: 'access denied' } }
+          }
+        }
+      })
+    })
+    const substringResult = await structuredSubstring.requestResult('Gateway.GetRegistry')
+    expect(substringResult.ok).toBe(false)
+    if (!substringResult.ok) expect(substringResult.error.code).toBe('unknown')
+
+    const numericStatus = new AuroraClient({
+      transport: new MeshP2PTransport({
+        defaultPeerId: 'peer-conformance',
+        bridge: {
+          async call() {
+            return { error: { message: 'peer rejected request', status: 503 } }
+          }
+        }
+      })
+    })
+    const statusResult = await numericStatus.requestResult('Gateway.GetRegistry')
+    expect(statusResult.ok).toBe(false)
+    if (!statusResult.ok) expect(statusResult.error.code).toBe('unavailable_service')
+  })
+
   it('compares SDK registry fixtures against the generated backend inventory snapshot', () => {
     const generated = describeBackendInventory(backendInventoryFixture)
     const comparison = compareRegistryFixtureToBackendInventory(gatewayRegistryFixture, backendInventoryFixture)
@@ -253,26 +311,41 @@ describe('SDK transport conformance', () => {
       'Orchestrator.ImportModel',
       'Orchestrator.DownloadModel',
       'Orchestrator.BenchmarkModel',
-      'Auth.ListTokens',
-      'Auth.CreateToken',
-      'Auth.UpdateTokenScopes',
-      'Auth.RevokeToken',
       'Auth.ListPendingPairings',
+      'Auth.MeshListPeers',
+      'Auth.MeshGetPeer',
+      'Auth.MeshApprovePeer',
+      'Auth.MeshDenyPeer',
+      'Auth.MeshUpdatePeerPermissions',
+      'Auth.MeshRemovePeer',
       'Auth.ListPrincipals',
       'Auth.CreatePrincipal',
       'Auth.UpdatePrincipal',
       'Auth.DeletePrincipal',
       'Auth.SetPermissions',
       'Auth.PatchPermissions',
+      'Auth.ListTokens',
+      'Auth.CreateToken',
+      'Auth.UpdateTokenScopes',
+      'Auth.RevokeToken',
+      'Auth.ListDevices',
+      'Auth.DeleteDevice',
       'Auth.AuditLog',
+      'Scheduler.ListJobs',
+      'Scheduler.Schedule',
+      'Scheduler.ScheduleAction',
+      'Scheduler.Cancel',
+      'Scheduler.Pause',
+      'Scheduler.Resume',
       'Gateway.GetRegistry',
       'Gateway.GetDeploymentTopology',
       'Gateway.GetWebRTCDiagnostics',
+      'Gateway.GetMeshStatus',
       'Gateway.InternalOnly',
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 16, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 36, issues: [] })
   })
 })
 

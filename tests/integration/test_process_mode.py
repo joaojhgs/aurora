@@ -7,6 +7,7 @@ via Redis/BullMQ message bus.
 import asyncio
 import os
 import subprocess
+import sys
 import time
 from typing import Any
 
@@ -57,10 +58,11 @@ class TestProcessModeServices:
         """Test ConfigService can start in process mode."""
         # Start config service as subprocess
         proc = subprocess.Popen(
-            ["python", "-m", "app.services.config"],
+            [sys.executable, "-m", "app.services.config"],
             env=os.environ,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
         )
 
         try:
@@ -68,7 +70,12 @@ class TestProcessModeServices:
             time.sleep(2)
 
             # Verify service is running
-            assert proc.poll() is None, "Config service should be running"
+            if proc.poll() is not None:
+                stdout, stderr = proc.communicate(timeout=5)
+                pytest.fail(
+                    f"Config service exited with rc={proc.returncode}\n"
+                    f"stdout={stdout}\nstderr={stderr}"
+                )
 
             # Verify Redis connection
             assert redis_client.ping(), "Redis should be accessible"
@@ -84,15 +91,20 @@ class TestProcessModeServices:
     def test_db_service_startup(self, process_mode_env, redis_client):
         """Test DBService can start in process mode."""
         proc = subprocess.Popen(
-            ["python", "-m", "app.services.db"],
+            [sys.executable, "-m", "app.services.db"],
             env=os.environ,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
         )
 
         try:
             time.sleep(2)
-            assert proc.poll() is None, "DB service should be running"
+            if proc.poll() is not None:
+                stdout, stderr = proc.communicate(timeout=5)
+                pytest.fail(
+                    f"DB service exited with rc={proc.returncode}\nstdout={stdout}\nstderr={stderr}"
+                )
             assert redis_client.ping(), "Redis should be accessible"
         finally:
             proc.terminate()
@@ -146,10 +158,11 @@ class TestProcessModeEndToEnd:
         """Test that service failures don't affect other services."""
         # Start a service and verify it can be killed without affecting Redis
         proc = subprocess.Popen(
-            ["python", "-m", "app.services.config"],
+            [sys.executable, "-m", "app.services.config"],
             env=os.environ,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
         )
 
         try:
@@ -166,10 +179,11 @@ class TestProcessModeEndToEnd:
     def test_graceful_shutdown(self, process_mode_env, redis_client):
         """Test services shut down gracefully."""
         proc = subprocess.Popen(
-            ["python", "-m", "app.services.config"],
+            [sys.executable, "-m", "app.services.config"],
             env=os.environ,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            text=True,
         )
 
         try:

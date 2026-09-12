@@ -7,6 +7,7 @@ All services communicate via the message bus for full decoupling.
 
 import asyncio
 import logging
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ from app.services.supervisor import Supervisor
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.contracts.models.tts import TTSMethods, TTSRequest
+from app.shared.contracts.registry import get_contract
 
 config_api = ConfigAPI()
 
@@ -30,8 +32,24 @@ if hasattr(sys.stderr, "reconfigure"):
 logging.getLogger("alsa").setLevel(logging.ERROR)
 
 # Load environment variables
-load_dotenv()
+load_dotenv(os.environ.get("AURORA_ENV_FILE", ".env"))
 config_api.migrate_from_env()
+
+
+async def _publish_startup_greeting(bus) -> None:
+    """Send the startup greeting only when optional TTS is registered."""
+    if get_contract(TTSMethods.REQUEST) is None:
+        log_info("TTS startup greeting skipped because TTS.Request is not registered")
+        return
+    from app.messaging.priority_helpers import get_interactive_priority
+
+    await bus.publish(
+        TTSMethods.REQUEST,
+        TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
+        event=False,
+        priority=get_interactive_priority(),
+        origin="internal",
+    )
 
 
 async def main_async():
@@ -59,7 +77,7 @@ async def main_async():
         # Subscribe to config changes for dynamic gateway control
         # Note: This is normally called in on_start(), but main.py calls start_services() directly
         log_info(">>> Subscribing to config changes...")
-        supervisor._subscribe_to_config_changes()
+        await supervisor._subscribe_to_config_changes()
         log_info("✓ Config change subscription active")
 
         # Start OpenRecall if enabled
@@ -76,15 +94,8 @@ async def main_async():
             open_recall_thread.start()
             log_info("OpenRecall started in background thread")
 
-        # Initial greeting via bus
-        from app.messaging.priority_helpers import get_interactive_priority
-        await supervisor.bus.publish(
-            TTSMethods.REQUEST,
-            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
-            event=False,
-            priority=get_interactive_priority(),
-            origin="internal",
-        )
+        # Initial greeting via bus only when optional TTS is active.
+        await _publish_startup_greeting(supervisor.bus)
 
         # Run supervisor (blocks until shutdown signal)
         await supervisor.run()
@@ -142,7 +153,7 @@ def main_with_ui():
 
             # Subscribe to config changes for dynamic gateway control
             # Note: This is normally called in on_start(), but main.py calls start_services() directly
-            supervisor._subscribe_to_config_changes()
+            supervisor_loop.run_until_complete(supervisor._subscribe_to_config_changes())
             log_info("✓ Config change subscription active")
 
             # Signal that we're ready
@@ -199,21 +210,12 @@ def main_with_ui():
 
     log_info("✓ UI bridge started")
 
-    # Send initial greeting
-    from app.messaging.priority_helpers import get_interactive_priority
+    # Send initial greeting only when optional TTS is registered.
     greeting_future = asyncio.run_coroutine_threadsafe(
-        supervisor.bus.publish(
-            TTSMethods.REQUEST,
-            TTSRequest(text="Olá, meu nome é Jarvis", interrupt=False),
-            event=False,
-            priority=get_interactive_priority(),
-            origin="internal",
-        ),
+        _publish_startup_greeting(supervisor.bus),
         supervisor_loop,
     )
     greeting_future.result(timeout=5.0)
-
-    log_info("✓ Initial greeting sent")
 
     # Show window
     window.show()
@@ -249,7 +251,7 @@ def main_with_ui():
 def main():
     """Main entry point - routes to UI or CLI mode."""
     try:
-        ui_active = config_api.get(ConfigKeys.ui.activate, default=False)
+        ui_active = config_api.get(ConfigKeys.ui.activate, False)
         if ui_active:
             # UI mode - run supervisor in background thread
             main_with_ui()

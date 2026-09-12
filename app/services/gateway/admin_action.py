@@ -7,7 +7,7 @@ import hmac
 import json
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -118,7 +118,7 @@ class AdminActionManager:
     ) -> AdminActionDraftResponse:
         """Create a draft nonce for a method/payload pair."""
         self._prune_expired()
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         expires_at = now + timedelta(seconds=self._ttl_seconds)
         payload = dict(request.payload or {})
         digest = admin_action_digest(request.method_id, principal_id, payload)
@@ -274,7 +274,7 @@ class AdminActionManager:
         *,
         principal_id: str | None,
     ) -> None:
-        if action.expires_at <= datetime.now(UTC):
+        if action.expires_at <= datetime.now(timezone.utc):
             self._pending.pop(action.action_id, None)
             raise _admin_action_error(
                 410,
@@ -289,7 +289,7 @@ class AdminActionManager:
             )
 
     def _prune_expired(self) -> None:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         for action_id, action in list(self._pending.items()):
             if action.expires_at <= now or action.consumed:
                 self._pending.pop(action_id, None)

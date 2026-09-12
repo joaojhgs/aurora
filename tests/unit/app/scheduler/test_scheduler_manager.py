@@ -15,6 +15,12 @@ from app.services.db.models import (
     ScheduleType,
 )
 from app.services.scheduler.scheduler_manager import SchedulerManager
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.scheduler import (
+    SchedulerToolBinding,
+    SchedulerToolExecuteAction,
+)
+from app.shared.contracts.models.tooling import ToolingMethods
 
 
 class TestSchedulerManager:
@@ -278,3 +284,56 @@ class TestSchedulerManager:
 
             # Verify the job was passed to update_job method at least once
             assert mock_db_manager.update_job.called, "update_job was not called"
+
+    @pytest.mark.asyncio
+    async def test_typed_tool_job_executes_through_tooling_bus(self, mock_db_manager):
+        """Typed scheduled tool actions use Tooling.ExecuteTool, not callback imports."""
+        now = datetime.now()
+        action = SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(
+                tool_name="switch_on",
+                local_tool_name="switch_on",
+                global_tool_id="local:local_Tooling:tool:switch_on",
+            ),
+            arguments={"target": "lamp"},
+            mesh_selector=MeshAddressSelector(peer_id="raspi-lab"),
+            caller_peer_id="workstation",
+            caller_principal_id="principal-1",
+            correlation_id="corr-1",
+        ).model_dump(mode="json")
+        typed_job = Job(
+            id="typed-job",
+            name="typed job",
+            schedule_type=ScheduleType.ABSOLUTE,
+            schedule_value=(now - timedelta(minutes=1)).isoformat(),
+            next_run_time=now - timedelta(minutes=1),
+            callback_module="__typed_action__",
+            callback_function="execute_action_spec",
+            action_kind="tooling.execute",
+            action_spec=action,
+            status=JobStatus.PENDING,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_db_manager.update_job = AsyncMock(return_value=True)
+        manager = SchedulerManager()
+        manager.db_service = mock_db_manager
+        manager._running = True
+        manager.bus = AsyncMock()
+        manager.bus.request = AsyncMock(
+            return_value=MagicMock(ok=True, data={"ok": True, "status": "success"}, error=None)
+        )
+        await manager.initialize()
+
+        with patch.object(manager, "_call_job_callback", side_effect=AssertionError):
+            await manager._execute_job(typed_job)
+
+        manager.bus.request.assert_awaited_once()
+        topic, request = manager.bus.request.await_args.args[:2]
+        assert topic == ToolingMethods.EXECUTE_TOOL
+        assert request.tool_name == "switch_on"
+        assert request.arguments == {"target": "lamp"}
+        assert request.mesh_selector.peer_id == "raspi-lab"
+        assert request.caller_peer_id == "workstation"
+        assert typed_job.status == JobStatus.COMPLETED
+        assert typed_job.is_active is False

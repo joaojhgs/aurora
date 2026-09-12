@@ -1,19 +1,22 @@
 """Unit tests for mesh event stream and support-bundle observability."""
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
+from app.messaging.audio_messages import AudioChunk, AudioFormat, AudioTopics
 from app.messaging.bus import Envelope, QueryResult
 from app.messaging.local_bus import LocalBus
+from app.messaging.transcription_messages import TranscriptionResult, TranscriptionType
 from app.services.auth.auth_manager import _audit_event_matches_trace
 from app.services.gateway.service import (
     GatewayService,
     _diagnostic_redacted_copy,
     _event_from_envelope,
+    _live_display_payload,
 )
 from app.shared.contracts.models.aurora import AuroraMethods
 from app.shared.contracts.models.auth import AuthMethods, PairingLifecycleEvent
@@ -32,10 +35,19 @@ from app.shared.contracts.models.gateway import (
     ServiceInfo,
     WebRTCDiagnosticsResponse,
 )
-from app.shared.contracts.models.stt import AudioSessionEvent
-from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
+from app.shared.contracts.models.orchestrator import OrchestratorMethods
+from app.shared.contracts.models.stt import (
+    AudioSessionEvent,
+    STTAudioLevel,
+    STTMethods,
+    TranscriptionMethods,
+    WakeWordMethods,
+)
+from app.shared.contracts.models.tooling import ToolingExecuteToolResponse, ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 from app.shared.contracts.registry import clear_registry, list_modules
 from app.shared.messaging.bus_init import set_bus
+from app.shared.messaging.models.stt_coordinator_models import STTSessionStarted
 
 
 def test_gateway_observability_contracts_are_registered():
@@ -54,10 +66,10 @@ def test_gateway_observability_contracts_are_registered():
     assert methods[GatewayMethods.LIST_EVENTS].exposure == "external"
     assert methods[GatewayMethods.LIST_EVENTS].required_perms == ["Gateway.manage"]
     assert methods[GatewayMethods.GET_SUPPORT_BUNDLE].method_type == "manage"
-    assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.manage"]
-    assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.manage"]
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "manage"
-    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.manage"]
+    assert methods[GatewayMethods.GET_REGISTRY].required_perms == ["Gateway.use"]
+    assert methods[GatewayMethods.GET_DEPLOYMENT_TOPOLOGY].required_perms == ["Gateway.use"]
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].method_type == "use"
+    assert methods[GatewayMethods.GET_WEBRTC_DIAGNOSTICS].required_perms == ["Gateway.use"]
     clear_registry()
 
 
@@ -195,7 +207,7 @@ def test_event_normalization_redacts_payload_and_extracts_correlation():
             payload={"token": "secret-token", "file_path": "/home/user/audio.wav"},
         ),
         correlation_id="corr-1",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
     )
 
     event = _event_from_envelope(envelope)
@@ -213,6 +225,311 @@ def test_event_normalization_redacts_payload_and_extracts_correlation():
     assert event.payload_sha256
 
 
+def test_live_display_payload_allows_chat_text_without_changing_diagnostics():
+    event = _event_from_envelope(
+        Envelope(
+            type="Orchestrator.Response",
+            payload={
+                "text": "Yes, I can hear you.",
+                "session_id": "voice-1",
+                "metadata": {
+                    "source": "stt",
+                    "model": "gpt-5.4-mini",
+                    "api_key": "must-not-leak",
+                },
+            },
+            timestamp=datetime.now(timezone.utc),
+        )
+    )
+
+    live_payload = _live_display_payload(
+        "Orchestrator.Response",
+        {
+            "text": "Yes, I can hear you.",
+            "session_id": "voice-1",
+            "metadata": {
+                "source": "stt",
+                "model": "gpt-5.4-mini",
+                "api_key": "must-not-leak",
+            },
+        },
+    )
+
+    assert event.payload is None
+    dumped = json.dumps(event.redacted_payload)
+    assert "Yes, I can hear you" not in dumped
+    assert "gpt-5.4-mini" not in dumped
+    assert live_payload == {
+        "text": "Yes, I can hear you.",
+        "session_id": "voice-1",
+        "metadata": {"source": "stt", "model": "gpt-5.4-mini"},
+    }
+    assert "must-not-leak" not in json.dumps(live_payload)
+
+
+def test_assistant_delta_event_preserves_correlation_and_safe_live_order_fields():
+    event = _event_from_envelope(
+        Envelope(
+            type=OrchestratorMethods.RESPONSE,
+            payload={
+                "kind": "assistant.delta",
+                "delta": "Hel",
+                "text": "Hel",
+                "session_id": "session-delta",
+                "request_id": "request-delta",
+                "correlation_id": "corr-delta",
+                "metadata": {
+                    "source": "external",
+                    "stream": True,
+                    "model": "gpt-stream",
+                    "token": "must-not-leak",
+                },
+            },
+            correlation_id="corr-delta",
+            timestamp=datetime.now(timezone.utc),
+        )
+    )
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "assistant.delta",
+            "delta": "Hel",
+            "text": "Hel",
+            "session_id": "session-delta",
+            "request_id": "request-delta",
+            "correlation_id": "corr-delta",
+            "metadata": {
+                "source": "external",
+                "stream": True,
+                "model": "gpt-stream",
+                "token": "must-not-leak",
+            },
+        },
+    )
+
+    assert event.kind == "assistant.delta"
+    assert event.category == "assistant"
+    assert event.correlation_id == "corr-delta"
+    assert live_payload == {
+        "kind": "assistant.delta",
+        "text": "Hel",
+        "delta": "Hel",
+        "session_id": "session-delta",
+        "request_id": "request-delta",
+        "correlation_id": "corr-delta",
+        "metadata": {"source": "external", "stream": True, "model": "gpt-stream"},
+    }
+    assert "must-not-leak" not in json.dumps(live_payload)
+
+
+def test_live_assistant_payload_excludes_audio_credentials_tool_args_and_arbitrary_payload():
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "assistant.delta",
+            "delta": "Safe text",
+            "text": "Safe text",
+            "session_id": "session-safe",
+            "request_id": "request-safe",
+            "correlation_id": "corr-safe",
+            "sequence": 1,
+            "audio_data": "raw-audio-must-not-leak",
+            "credentials": {"api_key": "credential-must-not-leak"},
+            "tool_args": {"password": "tool-arg-must-not-leak"},
+            "payload": {"nested": {"secret": "arbitrary-payload-must-not-leak"}},
+            "metadata": {
+                "source": "native",
+                "stream": True,
+                "provider": "local",
+                "authorization": "bearer token-must-not-leak",
+            },
+        },
+    )
+
+    assert live_payload == {
+        "kind": "assistant.delta",
+        "text": "Safe text",
+        "delta": "Safe text",
+        "session_id": "session-safe",
+        "request_id": "request-safe",
+        "correlation_id": "corr-safe",
+        "sequence": 1,
+        "metadata": {"source": "native", "stream": True, "provider": "local"},
+    }
+    dumped = json.dumps(live_payload)
+    assert "raw-audio-must-not-leak" not in dumped
+    assert "credential-must-not-leak" not in dumped
+    assert "tool-arg-must-not-leak" not in dumped
+    assert "arbitrary-payload-must-not-leak" not in dumped
+
+
+def test_live_tts_audio_chunk_payload_excludes_raw_audio_bytes_and_data_aliases():
+    live_payload = _live_display_payload(
+        TTSMethods.AUDIO_CHUNK,
+        {
+            "stream_id": "tts-stream-1",
+            "audio_data": "raw-audio-must-not-leak",
+            "data": "raw-data-must-not-leak",
+            "format": "wav",
+            "reason": "chunk",
+            "correlation_id": "corr-tts-1",
+            "is_final": False,
+            "sequence": 7,
+            "source_sequence": 3,
+            "sample_rate": 24000,
+            "channels": 1,
+            "duration_ms": 12.5,
+        },
+    )
+
+    assert live_payload == {
+        "stream_id": "tts-stream-1",
+        "format": "wav",
+        "reason": "chunk",
+        "correlation_id": "corr-tts-1",
+        "is_final": False,
+        "sequence": 7,
+        "sample_rate": 24000,
+        "channels": 1,
+        "source_sequence": 3,
+        "duration_ms": 12.5,
+    }
+    dumped = json.dumps(live_payload)
+    assert "raw-audio-must-not-leak" not in dumped
+    assert "raw-data-must-not-leak" not in dumped
+    assert "audio_data" not in live_payload
+    assert "data" not in live_payload
+
+
+def test_live_assistant_tool_payload_preserves_safe_query_without_diagnostic_hashing():
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "tool.failed",
+            "session_id": "session-tool",
+            "request_id": "request-tool",
+            "tool": {
+                "tool_call_id": "call-search",
+                "tool_name": "duckduckgo_results_json",
+                "status": "failed",
+                "summary": "Search failed.",
+                "target": "openai",
+                "data_leaves_device": False,
+                "redacted_args_preview": {
+                    "query": "latest news in Egypt",
+                    "api_key": "must-not-leak",
+                },
+                "error_details": {
+                    "error_type": "DuckDuckGoSearchException",
+                    "message": "backend search provider timed out",
+                },
+            },
+        },
+    )
+
+    assert live_payload is not None
+    assert live_payload["tool"]["redacted_args_preview"]["query"] == "latest news in Egypt"
+    assert live_payload["tool"]["redacted_args_preview"]["api_key"]["redacted"] is True
+    assert live_payload["tool"]["error_details"]["error_type"] == "DuckDuckGoSearchException"
+    assert "must-not-leak" not in json.dumps(live_payload)
+
+
+def test_live_assistant_approval_tool_payload_keeps_resume_identifiers():
+    live_payload = _live_display_payload(
+        OrchestratorMethods.RESPONSE,
+        {
+            "kind": "tool.requires_action",
+            "session_id": "session-tool-approval",
+            "request_id": "request-tool-approval",
+            "tool": {
+                "tool_call_id": "call-scheduler",
+                "tool_name": "list_scheduled_tasks_tool",
+                "status": "requires_action",
+                "summary": "Tool requires operator approval before execution.",
+                "target": "openai",
+                "data_leaves_device": False,
+                "pending_id": "aurora-session-1:call-scheduler",
+                "approval_request_id": "approval-scheduler-1",
+                "approval_expires_at": 1783622200.0,
+                "approval_token": "must-not-leak",
+                "redacted_args_preview": {},
+            },
+        },
+    )
+
+    assert live_payload is not None
+    tool = live_payload["tool"]
+    assert tool["pending_id"] == "aurora-session-1:call-scheduler"
+    assert tool["approval_request_id"] == "approval-scheduler-1"
+    assert tool["approval_expires_at"] == 1783622200.0
+    assert "approval_token" not in tool
+    assert "must-not-leak" not in json.dumps(live_payload)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_kind", "expected_severity"),
+    [
+        ("running", "tool.running", "info"),
+        ("failed", "tool.failed", "error"),
+    ],
+)
+def test_tool_running_and_failed_events_are_visible_with_safe_redaction(
+    status, expected_kind, expected_severity
+):
+    event = _event_from_envelope(
+        Envelope(
+            type=ToolingMethods.EXECUTE_TOOL,
+            payload={
+                "status": status,
+                "global_tool_id": "tool:notes.write",
+                "tool_name": "notes.write",
+                "correlation_id": f"corr-tool-{status}",
+                "args_hash": "sha256:args",
+                "redacted_args_preview": {"title": "safe title"},
+                "token": "must-not-leak",
+                "error": "provider failed" if status == "failed" else None,
+            },
+            timestamp=datetime.now(timezone.utc),
+        )
+    )
+    dumped = json.dumps(event.redacted_payload)
+
+    assert event.kind == expected_kind
+    assert event.category == "tool_execution"
+    assert event.status == status
+    assert event.severity == expected_severity
+    assert event.tool_id == "tool:notes.write"
+    assert event.correlation_id == f"corr-tool-{status}"
+    assert event.redacted_payload["redacted_args_preview"]["redacted"] is True
+    assert "must-not-leak" not in dumped
+    assert event.redacted_payload["token"]["redacted"] is True
+
+
+def test_event_normalization_handles_raw_audio_bytes_without_exposing_audio():
+    envelope = Envelope(
+        type=AudioTopics.STREAM_MICROPHONE,
+        payload=AudioChunk(
+            data=b"\xff\x00\x81\xfe raw pcm is not utf8",
+            source="microphone",
+            stream_id="wake-session",
+            sequence=7,
+            format=AudioFormat(sample_rate=16000, channels=1),
+        ),
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    event = _event_from_envelope(envelope)
+
+    assert event.category == "audio"
+    assert event.redacted_payload["data"]["redacted"] is True
+    assert event.redacted_payload["data"]["kind"] == "binary"
+    assert event.redacted_payload["data"]["byte_length"] == len(
+        b"\xff\x00\x81\xfe raw pcm is not utf8"
+    )
+    assert event.payload_sha256
+    assert "raw pcm" not in json.dumps(event.redacted_payload)
+
+
 def test_diagnostic_redaction_omits_personal_content_fields():
     payload = {
         "text": "call my doctor tomorrow",
@@ -227,6 +544,9 @@ def test_diagnostic_redaction_omits_personal_content_fields():
                 "transcription": "wakeword captured speech",
             }
         ),
+        "profile_state_path": "/home/user/.aurora/voices/private.safetensors",
+        "reference_samples": ["my private voice sample"],
+        "voice_clone_payload": {"weights": "private clone bytes"},
     }
 
     redacted = _diagnostic_redacted_copy(payload)
@@ -239,9 +559,32 @@ def test_diagnostic_redaction_omits_personal_content_fields():
     assert "private tool output" not in dumped
     assert "assistant transcript" not in dumped
     assert "wakeword captured speech" not in dumped
+    assert "private.safetensors" not in dumped
+    assert "private voice sample" not in dumped
+    assert "private clone bytes" not in dumped
     assert redacted["safe_status"] == "denied"
     assert redacted["text"]["redacted"] is True
     assert redacted["details"]["response"]["redacted"] is True
+
+
+def test_diagnostic_redaction_omits_clone_and_downloaded_speech_artifacts():
+    payload = {
+        "clone_bundle": b"private-clone-state",
+        "reference_sample": b"private-reference-recording",
+        "safetensors": b"private-speech-weights",
+        "cache_directory": "/home/person/.cache/aurora/speech",
+        "safe_status": "ready",
+    }
+
+    redacted = _diagnostic_redacted_copy(payload)
+    dumped = json.dumps(redacted)
+
+    assert "private-clone-state" not in dumped
+    assert "private-reference-recording" not in dumped
+    assert "private-speech-weights" not in dumped
+    assert "/home/person/.cache/aurora/speech" not in dumped
+    assert all(redacted[key]["redacted"] is True for key in payload if key != "safe_status")
+    assert redacted["safe_status"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -307,6 +650,118 @@ async def test_gateway_capture_republishes_normalized_aurora_event_stream():
     assert service.bus.publish.await_args.kwargs["mesh"] is False
 
 
+@pytest.mark.asyncio
+async def test_gateway_event_capture_ignores_internal_request_reply_envelopes():
+    service = GatewayService()
+    service.bus.publish = AsyncMock()
+
+    await service._capture_gateway_event(
+        Envelope(
+            type="reply.CapabilityCatalogRequest.corr-reply",
+            payload=CapabilityCatalogResponse(
+                providers=[
+                    CapabilityProviderInfo(
+                        provider_id=f"provider-{index}",
+                        peer_id=f"peer-{index}",
+                        service_instance_id=f"service-{index}",
+                        module="Tooling",
+                    )
+                    for index in range(100)
+                ]
+            ),
+            correlation_id="corr-reply",
+        )
+    )
+
+    assert list(service._event_stream) == []
+    service.bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_gateway_event_capture_ignores_request_commands() -> None:
+    """Observability cannot hold a request topic's serial command worker."""
+
+    service = GatewayService()
+    service.bus.publish = AsyncMock()
+
+    await service._capture_gateway_event(
+        Envelope(
+            type=ToolingMethods.EXECUTE_TOOL,
+            payload={"global_tool_id": "peer-tool:lookup"},
+            reply_to="reply.ToolingExecuteToolRequest.corr-command",
+            correlation_id="corr-command",
+        )
+    )
+
+    assert list(service._event_stream) == []
+    service.bus.publish.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_gateway_event_capture_publishes_live_assistant_payload_without_storing_it():
+    service = GatewayService()
+    service.bus.publish = AsyncMock()
+    envelope = Envelope(
+        type="Orchestrator.Response",
+        payload={
+            "text": "Live answer",
+            "session_id": "voice-live",
+            "metadata": {"source": "stt", "model": "gpt-5.4-mini", "token": "secret"},
+        },
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    await service._capture_gateway_event(envelope)
+
+    stored = service._event_stream[0]
+    assert stored.payload is None
+    assert "Live answer" not in json.dumps(stored.redacted_payload)
+    topic, published_event = service.bus.publish.await_args.args
+    assert topic == AuroraMethods.EVENT_STREAM
+    assert published_event.payload == {
+        "text": "Live answer",
+        "session_id": "voice-live",
+        "metadata": {"source": "stt", "model": "gpt-5.4-mini"},
+    }
+    assert "secret" not in json.dumps(published_event.payload)
+
+
+@pytest.mark.asyncio
+async def test_gateway_list_events_filters_topic_kind_and_last_event_id():
+    service = GatewayService()
+    old_event = _event_from_envelope(
+        Envelope(
+            type="Orchestrator.Response",
+            payload={"text": "old", "correlation_id": "corr-stream"},
+            correlation_id="corr-stream",
+        )
+    )
+    old_event.event_id = "old-event"
+    new_event = _event_from_envelope(
+        Envelope(
+            type="Orchestrator.Response",
+            payload={"text": "new", "correlation_id": "corr-stream"},
+            correlation_id="corr-stream",
+        )
+    )
+    new_event.event_id = "new-event"
+    service._event_stream.appendleft(old_event)
+    service._event_stream.appendleft(new_event)
+
+    response = await service.list_events(
+        GatewayListEventsRequest(
+            topics=["Orchestrator.Response"],
+            kinds=["assistant.completed"],
+            correlation_id="corr-stream",
+            last_event_id="old-event",
+        )
+    )
+
+    assert response.total == 1
+    assert response.events[0].event_id == "new-event"
+    assert response.events[0].kind == "assistant.completed"
+
+
 def test_gateway_event_categories_cover_config_and_pairing():
     config_event = _event_from_envelope(
         Envelope(
@@ -327,6 +782,54 @@ def test_gateway_event_categories_cover_config_and_pairing():
     assert config_event.category == "config"
     assert pairing_event.category == "pairing"
     assert "123456" not in json.dumps(pairing_event.redacted_payload)
+
+
+@pytest.mark.parametrize(
+    ("topic", "payload", "expected_kind"),
+    [
+        (
+            STTMethods.SESSION_STARTED,
+            STTSessionStarted(session_id="voice-test", wake_word="manual"),
+            "voice.session.started",
+        ),
+        (
+            STTMethods.AUDIO_LEVEL,
+            STTAudioLevel(
+                session_id="voice-test",
+                stream_id="mic-1",
+                sequence=1,
+                level=12.5,
+                peak=31.0,
+            ),
+            "voice.audio.level",
+        ),
+        (
+            TranscriptionMethods.RESULT,
+            TranscriptionResult(
+                text="turn on the studio lights",
+                transcription_type=TranscriptionType.REALTIME,
+                source="webview",
+                stream_id="voice-test",
+            ),
+            "voice.transcription.partial",
+        ),
+        (
+            TranscriptionMethods.RESULT,
+            TranscriptionResult(
+                text="turn on the studio lights",
+                transcription_type=TranscriptionType.ACCURATE,
+                source="webview",
+                stream_id="voice-test",
+            ),
+            "voice.transcription.final",
+        ),
+    ],
+)
+def test_gateway_voice_events_use_sdk_filterable_kinds(topic, payload, expected_kind):
+    event = _event_from_envelope(Envelope(type=topic, payload=payload))
+
+    assert event.category == "audio"
+    assert event.kind == expected_kind
 
 
 def test_pairing_lifecycle_event_stream_omits_raw_pairing_code():
@@ -376,11 +879,84 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                                 required_perms=["Gateway.manage"],
                             )
                         ],
-                    }
+                    },
+                    {
+                        "module": "STTCoordinator",
+                        "version": "1.0.0",
+                        "summary": "listening",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Listen", bus_topic=STTMethods.LISTEN),
+                            MethodInfo(name="StopListening", bus_topic=STTMethods.STOP_LISTENING),
+                            MethodInfo(name="CapturePrepare", bus_topic=STTMethods.CAPTURE_PREPARE),
+                            MethodInfo(name="CaptureRelease", bus_topic=STTMethods.CAPTURE_RELEASE),
+                        ],
+                    },
+                    {
+                        "module": "TTS",
+                        "version": "1.0.0",
+                        "summary": "tts",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(
+                                name="GetCapabilities", bus_topic=TTSMethods.GET_CAPABILITIES
+                            ),
+                            MethodInfo(name="Request", bus_topic=TTSMethods.REQUEST),
+                            MethodInfo(
+                                name="ListLanguagePacks", bus_topic=TTSMethods.LIST_LANGUAGE_PACKS
+                            ),
+                            MethodInfo(
+                                name="ListVoiceProfiles", bus_topic=TTSMethods.LIST_VOICE_PROFILES
+                            ),
+                            MethodInfo(
+                                name="InstallVoiceProfile",
+                                bus_topic=TTSMethods.INSTALL_VOICE_PROFILE,
+                            ),
+                            MethodInfo(
+                                name="SetDefaultVoice", bus_topic=TTSMethods.SET_DEFAULT_VOICE
+                            ),
+                            MethodInfo(
+                                name="ExportVoiceProfile", bus_topic=TTSMethods.EXPORT_VOICE_PROFILE
+                            ),
+                            MethodInfo(
+                                name="ImportVoiceProfile", bus_topic=TTSMethods.IMPORT_VOICE_PROFILE
+                            ),
+                            MethodInfo(name="Synthesize", bus_topic=TTSMethods.SYNTHESIZE),
+                        ],
+                    },
+                    {
+                        "module": "Transcription",
+                        "version": "1.0.0",
+                        "summary": "transcription",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Control", bus_topic=TranscriptionMethods.CONTROL),
+                            MethodInfo(
+                                name="ProcessAudio",
+                                bus_topic=TranscriptionMethods.PROCESS_AUDIO,
+                            ),
+                            MethodInfo(
+                                name="Transcribe", bus_topic=TranscriptionMethods.TRANSCRIBE
+                            ),
+                        ],
+                    },
+                    {
+                        "module": "WakeWord",
+                        "version": "1.0.0",
+                        "summary": "wake",
+                        "capabilities": ["speech"],
+                        "methods": [
+                            MethodInfo(name="Control", bus_topic=WakeWordMethods.CONTROL),
+                            MethodInfo(name="Detect", bus_topic=WakeWordMethods.DETECT),
+                            MethodInfo(
+                                name="ProcessAudio", bus_topic=WakeWordMethods.PROCESS_AUDIO
+                            ),
+                        ],
+                    },
                 ],
                 "digest": "digest-registry",
-                "service_count": 1,
-                "method_count": 1,
+                "service_count": 5,
+                "method_count": 20,
             }
         ),
         get_services=AsyncMock(
@@ -391,10 +967,25 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                     method_count=1,
                     last_seen="2026-06-20T00:00:00Z",
                     status="healthy",
-                )
+                ),
+                ServiceInfo(
+                    module="STTCoordinator",
+                    version="1.0.0",
+                    method_count=4,
+                    status="healthy",
+                ),
+                ServiceInfo(module="TTS", version="1.0.0", method_count=9, status="healthy"),
+                ServiceInfo(
+                    module="Transcription",
+                    version="1.0.0",
+                    method_count=3,
+                    status="healthy",
+                ),
+                ServiceInfo(module="WakeWord", version="1.0.0", method_count=3, status="healthy"),
             ]
         ),
     )
+    exported_artifact_payload = "portable voice clone state bytes"
     service._get_recent_audit_events = AsyncMock(
         return_value=[
             {
@@ -404,6 +995,7 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
                         "correlation_id": "corr-tool",
                         "token": "raw-token",
                         "model_path": "/models/private.bin",
+                        "voice_clone_payload": exported_artifact_payload,
                     }
                 ),
             }
@@ -464,8 +1056,20 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert bundle.service_health[0].status == "healthy"
     assert bundle.webrtc_diagnostics.started is True
     assert bundle.webrtc_diagnostics.connected_peer_count == 1
-    assert bundle.native_capabilities[0].status == "unavailable"
+    speech_readiness = {item.name: item for item in bundle.native_capabilities}
+    assert set(speech_readiness) == {
+        "Listening readiness",
+        "Wake phrase readiness",
+        "Speech recognition readiness",
+        "Speech playback readiness",
+    }
+    assert {item.status for item in speech_readiness.values()} == {"ready"}
+    assert all(item.source == "Aurora service list" for item in speech_readiness.values())
+    assert all(item.details["available"] is True for item in speech_readiness.values())
+    assert all(item.details["missing_actions"] == 0 for item in speech_readiness.values())
     assert bundle.sidecar_logs[0].status == "metadata_only"
+    assert bundle.mesh_rollout.secrets_redacted is True
+    assert bundle.mesh_rollout.downgrade_status == "not_applicable"
     assert bundle.audit_receipt and bundle.audit_receipt.startswith("support_bundle:")
     assert bundle.audit_error is None
     assert bundle.capability_catalog_summary.providers == 1
@@ -474,7 +1078,18 @@ async def test_support_bundle_redacts_config_and_collects_correlation_ids():
     assert "raw-token" not in dumped
     assert "redis://localhost:6379" not in dumped
     assert "/models/private.bin" not in dumped
+    assert exported_artifact_payload not in dumped
+    readiness_json = json.dumps(
+        [item.model_dump(mode="json") for item in bundle.native_capabilities]
+    )
+    assert "TTS.ImportVoiceProfile" not in readiness_json
+    assert "WakeWord.Detect" not in readiness_json
+    assert "Transcription.Transcribe" not in readiness_json
     assert bundle.secrets_redacted is True
+    assert "raw catalog schemas and projection cursors" in bundle.redaction.omitted_payloads
+    assert "newly hidden tool names" in bundle.redaction.omitted_payloads
+    assert "downloaded speech files and cache paths" in bundle.redaction.omitted_payloads
+    assert "voice clone state files and private samples" in bundle.redaction.omitted_payloads
     audit_request = service.bus.request.await_args.args[1]
     assert service.bus.request.await_args.args[0] == AuthMethods.STORE_AUDIT_EVENT
     assert audit_request.event == "diagnostics.support_bundle.exported"
@@ -498,6 +1113,13 @@ async def test_support_bundle_surfaces_audit_storage_failure_without_raw_payload
     assert bundle.audit_receipt is None
     assert bundle.audit_error == "audit offline"
     assert bundle.secrets_redacted is True
+
+
+def test_downgrade_status_does_not_infer_verification_from_legacy_mode(monkeypatch):
+    monkeypatch.setenv("AURORA_TOOLING_TARGET_MODE", "legacy")
+    monkeypatch.delenv("AURORA_TOOLING_EXPORT_SNAPSHOT", raising=False)
+
+    assert GatewayService._tooling_downgrade_status() == "verification_unavailable"
 
 
 def test_audit_trace_filters_mesh_operator_fields_and_aliases():

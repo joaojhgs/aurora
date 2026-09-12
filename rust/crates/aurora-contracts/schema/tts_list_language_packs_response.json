@@ -1,0 +1,232 @@
+{
+  "$defs": {
+    "TTSLanguagePackDescriptor": {
+      "additionalProperties": false,
+      "description": "Provider-neutral language pack inventory row.",
+      "properties": {
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "installed": {
+          "default": false,
+          "title": "Installed",
+          "type": "boolean"
+        },
+        "installed_voice_count": {
+          "default": 0,
+          "maximum": 256,
+          "minimum": 0,
+          "title": "Installed Voice Count",
+          "type": "integer"
+        },
+        "language": {
+          "maxLength": 255,
+          "minLength": 2,
+          "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
+          "title": "Language",
+          "type": "string",
+          "x-aurora-speech-language-string-normalize": true
+        },
+        "pack_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Pack Id",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "ready": {
+          "default": false,
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "ready_voice_count": {
+          "default": 0,
+          "maximum": 256,
+          "minimum": 0,
+          "title": "Ready Voice Count",
+          "type": "integer"
+        },
+        "revision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "voice_count": {
+          "maximum": 256,
+          "minimum": 0,
+          "title": "Voice Count",
+          "type": "integer"
+        },
+        "voices": {
+          "items": {
+            "$ref": "#/$defs/TTSLanguagePackVoice"
+          },
+          "maxItems": 256,
+          "title": "Voices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "display_name",
+        "language",
+        "pack_id",
+        "revision",
+        "voice_count"
+      ],
+      "title": "TTSLanguagePackDescriptor",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-language-pack-descriptor-invariant": true
+    },
+    "TTSLanguagePackVoice": {
+      "additionalProperties": false,
+      "description": "Redacted voice row available inside a provider-neutral language pack.",
+      "properties": {
+        "active": {
+          "default": false,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "installed": {
+          "default": false,
+          "title": "Installed",
+          "type": "boolean"
+        },
+        "ready": {
+          "default": false,
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "revision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "voice_id": {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "title": "Voice Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display_name",
+        "revision",
+        "voice_id"
+      ],
+      "title": "TTSLanguagePackVoice",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-language-pack-voice-invariant": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Provider-neutral language pack inventory.",
+  "properties": {
+    "capability_revision": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Capability Revision",
+      "type": "integer"
+    },
+    "catalog_error_code": {
+      "anyOf": [
+        {
+          "const": "catalog_unavailable",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Catalog Error Code"
+    },
+    "catalog_status": {
+      "default": "available",
+      "enum": [
+        "available",
+        "unavailable"
+      ],
+      "title": "Catalog Status",
+      "type": "string"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "default_voice_id": {
+      "anyOf": [
+        {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Default Voice Id"
+    },
+    "packs": {
+      "items": {
+        "$ref": "#/$defs/TTSLanguagePackDescriptor"
+      },
+      "maxItems": 256,
+      "title": "Packs",
+      "type": "array"
+    },
+    "stale_default_voice_id": {
+      "anyOf": [
+        {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stale Default Voice Id"
+    }
+  },
+  "title": "TTSListLanguagePacksResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid",
+  "x-aurora-tts-language-pack-list-invariant": true
+}

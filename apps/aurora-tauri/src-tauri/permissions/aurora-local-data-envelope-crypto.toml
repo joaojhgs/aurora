@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-local-data-envelope-crypto"
+description = "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned."
+commands.allow = [
+  "aurora_local_data_envelope_encrypt",
+  "aurora_local_data_envelope_decrypt",
+  "aurora_local_data_envelope_rotate"
+]

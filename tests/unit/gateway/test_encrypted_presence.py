@@ -53,7 +53,12 @@ class TestEncryptedPresenceRoundtrip:
     @pytest.mark.asyncio
     async def test_on_presence_decrypts_sealed_payload(self, room_keys):
         """RTCClient._on_presence correctly decrypts sealed presence."""
-        presence = {"type": "presence", "peer_id": "peer-B", "app_id": "aurora", "room": "r"}
+        presence = {
+            "type": "presence",
+            "peer_id": "peer-B",
+            "app_id": "aurora",
+            "room": "test-room",
+        }
         sealed = aead_seal(room_keys.k_sig, presence)
 
         # Build a minimal mock RTCClient-like context
@@ -61,7 +66,13 @@ class TestEncryptedPresenceRoundtrip:
         client._peer_id = "peer-A"
         client._pcs = {}
         client._keys = room_keys
-        client._settings = SimpleNamespace(webrtc=SimpleNamespace(encrypt_signaling=True))
+        client._settings = SimpleNamespace(
+            webrtc=SimpleNamespace(
+                encrypt_signaling=True,
+                app_id="aurora",
+                room="test-room",
+            )
+        )
         client.connect_to = AsyncMock()
 
         # Import and call _on_presence unbound
@@ -92,9 +103,8 @@ class TestEncryptedPresenceRoundtrip:
         client.connect_to.assert_awaited_once_with("peer-B")
 
     @pytest.mark.asyncio
-    async def test_on_presence_encrypted_mode_plaintext_fallback(self, room_keys):
-        """When encrypt_signaling=True but payload is plaintext JSON,
-        fallback to plaintext parsing (backward compat)."""
+    async def test_on_presence_encrypted_mode_rejects_plaintext(self, room_keys):
+        """Encrypted rooms must not accept forgeable plaintext presence."""
         presence = {"type": "presence", "peer_id": "peer-B", "app_id": "aurora", "room": "r"}
         payload = json.dumps(presence).encode()
 
@@ -102,12 +112,17 @@ class TestEncryptedPresenceRoundtrip:
         client._peer_id = "peer-A"
         client._pcs = {}
         client._keys = room_keys
-        client._settings = SimpleNamespace(webrtc=SimpleNamespace(encrypt_signaling=True))
+        client._settings = SimpleNamespace(
+            webrtc=SimpleNamespace(
+                encrypt_signaling=True,
+                app_id="aurora",
+                room="test-room",
+            )
+        )
         client.connect_to = AsyncMock()
 
         from app.services.gateway.webrtc.rtc_client import RTCClient
 
-        # aead_open will fail on plaintext → fallback to json.loads
         await RTCClient._on_presence(client, payload)
 
-        client.connect_to.assert_awaited_once_with("peer-B")
+        client.connect_to.assert_not_awaited()

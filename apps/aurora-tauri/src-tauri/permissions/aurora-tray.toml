@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-tray"
+description = "Allow the frontend SDK adapter to read system tray availability. Tray menu actions are handled in Rust and do not expose shell/process access."
+commands.allow = ["aurora_tray_status"]

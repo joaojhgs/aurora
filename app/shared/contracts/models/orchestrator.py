@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 
+from app.shared.contracts.models.mesh import MeshAddressSelector
+from app.shared.contracts.models.speech import MAX_JS_SAFE_INTEGER
+from app.shared.contracts.models.tooling import (
+    ToolingApprovalGrantScope,
+    ToolingExecuteToolResponse,
+)
 from app.shared.contracts.registry import IOModel
 
 
@@ -22,6 +28,8 @@ class OrchestratorMethods:
     EXTERNAL_USER_INPUT = f"{OrchestratorModule.NAME}.ExternalUserInput"
     INGEST_CONTEXT = f"{OrchestratorModule.NAME}.IngestContext"
     TOOL_RESULT = f"{OrchestratorModule.NAME}.ToolResult"
+    LIST_PENDING_TOOL_APPROVALS = f"{OrchestratorModule.NAME}.ListPendingToolApprovals"
+    RESUME_TOOL_APPROVAL = f"{OrchestratorModule.NAME}.ResumeToolApproval"
     INTERRUPT = f"{OrchestratorModule.NAME}.Interrupt"
     RESPONSE = f"{OrchestratorModule.NAME}.Response"
     GET_MODEL_RUNTIME = f"{OrchestratorModule.NAME}.GetModelRuntime"
@@ -30,6 +38,10 @@ class OrchestratorMethods:
     IMPORT_MODEL = f"{OrchestratorModule.NAME}.ImportModel"
     DOWNLOAD_MODEL = f"{OrchestratorModule.NAME}.DownloadModel"
     BENCHMARK_MODEL = f"{OrchestratorModule.NAME}.BenchmarkModel"
+    INFER_CHAT = f"{OrchestratorModule.NAME}.InferChat"
+    STREAM_INFER_CHAT = f"{OrchestratorModule.NAME}.StreamInferChat"
+    REMOTE_DISPATCH = f"{OrchestratorModule.NAME}.RemoteDispatch"
+    REMOTE_INFERENCE = f"{OrchestratorModule.NAME}.RemoteInference"
     HEALTH_CHECK = f"{OrchestratorModule.NAME}.HealthCheck"
 
 
@@ -51,17 +63,234 @@ OrchestratorInterruptStatus = Literal[
 class OrchestratorProcessRequest(IOModel):
     """Request to process user input."""
 
-    text: str
-    source: str = "external"
-    session_id: str | None = None
+    text: str = Field(min_length=1, max_length=120_000)
+    source: str = Field(default="external", min_length=1, max_length=64)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    stream: bool = False
+    client_tts_playback: bool | None = None
+    dispatch_selector: MeshAddressSelector | None = None
+    mesh_selector: MeshAddressSelector | None = None
+    selector: MeshAddressSelector | None = None
+    inference_selector: MeshAddressSelector | None = None
+    inference_provider_id: str | None = Field(default=None, min_length=1, max_length=256)
+    inference_model_id: str | None = Field(default=None, min_length=1, max_length=512)
 
 
 class OrchestratorResponse(IOModel):
     """Response from orchestrator."""
 
-    text: str
-    session_id: str | None = None
+    text: str = Field(max_length=120_000)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=64)
+
+
+class OrchestratorChatMessage(IOModel):
+    """Provider-neutral chat message for inference-only mesh calls."""
+
+    role: Literal["system", "user", "assistant", "tool"] = "user"
+    content: str = ""
+    name: str | None = None
+    tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorInferChatRequest(IOModel):
+    """Run a chat-model inference on the receiving Orchestrator runtime.
+
+    The caller may select a peer/provider/model and pass provider-neutral tool
+    schemas for binding, but may not override generation parameters such as
+    context size, max tokens, temperature, or credentials. ``params`` is accepted
+    only as caller metadata for tracing/debugging and must not be used as
+    generation configuration by the receiving peer. External callers need either
+    coarse ``Orchestrator.use`` access or the granular
+    ``Orchestrator.RemoteInference`` capability before selecting an explicit
+    provider/model that can expand cloud catalogs, spend cloud quota, or use
+    non-default local runtime resources.
+    """
+
+    messages: list[OrchestratorChatMessage] = Field(default_factory=list)
+    stream: bool = False
+    model_id: str | None = None
+    provider_id: str | None = None
+    tools: list[dict[str, Any]] = Field(default_factory=list)
+    tool_choice: dict[str, Any] | str | bool | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    mesh_selector: MeshAddressSelector | None = None
+    selector: MeshAddressSelector | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorInferChatResponse(IOModel):
+    """Complete inference-only chat result."""
+
+    text: str = ""
+    message: OrchestratorChatMessage | None = None
+    model_id: str | None = None
+    provider_id: str | None = None
+    finish_reason: str | None = None
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
+class OrchestratorInferChatChunk(IOModel):
+    """Streaming token/tool-call chunk for inference-only mesh calls."""
+
+    delta: str = ""
+    text: str = ""
+    sequence: int = 0
+    is_final: bool = False
+    model_id: str | None = None
+    provider_id: str | None = None
+    finish_reason: str | None = None
+    correlation_id: str | None = None
+    session_id: str | None = None
+    request_id: str | None = None
+    tool_call_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
+AssistantStreamEventKind = Literal[
+    "assistant.delta",
+    "assistant.completed",
+    "assistant.failed",
+    "tool.requested",
+    "tool.running",
+    "tool.completed",
+    "tool.failed",
+    "tool.requires_action",
+]
+
+AssistantToolStreamStatus = Literal[
+    "requested",
+    "running",
+    "completed",
+    "failed",
+    "requires_action",
+]
+
+OrchestratorToolApprovalStatus = Literal[
+    "pending",
+    "approved",
+    "denied",
+    "executed",
+    "failed",
+    "expired",
+]
+
+
+class AssistantToolStreamState(IOModel):
+    """Safe, redacted tool-call state for assistant stream consumers."""
+
+    tool_call_id: str = Field(min_length=1, max_length=256)
+    tool_name: str = Field(min_length=1, max_length=256)
+    display_name: str | None = Field(default=None, min_length=1, max_length=256)
+    status: AssistantToolStreamStatus
+    summary: str = Field(default="", max_length=2_000)
+    risk_class: str | None = Field(default=None, min_length=1, max_length=64)
+    target: str | None = Field(default=None, min_length=1, max_length=256)
+    provider_id: str | None = Field(default=None, min_length=1, max_length=256)
+    data_leaves_device: bool = False
+    redacted_args_preview: dict[str, Any] = Field(default_factory=dict, max_length=32)
+    result_preview: dict[str, Any] | str | None = None
+    error: str | None = Field(default=None, min_length=1, max_length=1_000)
+    error_details: dict[str, Any] | str | None = None
+    policy_decision_id: str | None = Field(default=None, min_length=1, max_length=256)
+    pending_id: str | None = Field(default=None, min_length=1, max_length=256)
+    approval_request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    approval_expires_at: float | None = None
+
+
+class AssistantStreamEvent(IOModel):
+    """Incremental assistant stream event published on Orchestrator.Response."""
+
+    kind: AssistantStreamEventKind
+    text: str = Field(default="", max_length=120_000)
+    delta: str = Field(default="", max_length=16_384)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    message_id: str | None = Field(default=None, min_length=1, max_length=256)
+    sequence: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    is_final: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=64)
+    tool: AssistantToolStreamState | None = None
+
+
+class OrchestratorPendingToolApproval(IOModel):
+    """Backend state for an exact assistant tool call waiting on approval."""
+
+    pending_id: str
+    approval_request_id: str | None = None
+    status: OrchestratorToolApprovalStatus = "pending"
+    run_id: str
+    thread_id: str
+    session_id: str | None = None
+    owner_principal_id: str | None = None
+    owner_peer_id: str | None = None
+    message_id: str
+    tool_call_id: str
+    tool_name: str
+    display_name: str | None = None
+    arguments_preview: dict[str, Any] = Field(default_factory=dict)
+    policy_decision_id: str | None = None
+    correlation_id: str | None = None
+    created_at: float
+    expires_at: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrchestratorListPendingToolApprovalsRequest(IOModel):
+    """List active assistant approval pauses."""
+
+    session_id: str | None = None
+    run_id: str | None = None
+    status: OrchestratorToolApprovalStatus | None = None
+
+
+class OrchestratorListPendingToolApprovalsResponse(IOModel):
+    """Pending assistant approval pauses."""
+
+    approvals: list[OrchestratorPendingToolApproval] = Field(default_factory=list)
+    count: int = 0
+
+
+class OrchestratorResumeToolApprovalRequest(IOModel):
+    """Approve/deny and execute an exact pending assistant tool call."""
+
+    pending_id: str | None = None
+    approval_request_id: str | None = None
+    session_id: str | None = None
+    approve: bool = True
+    grant_scope: ToolingApprovalGrantScope = "once"
+    approver_principal_id: str | None = None
+    expires_at: float | None = None
+    include_future_tools: bool = False
+    reason: str | None = None
+    correlation_id: str | None = None
+
+
+class OrchestratorResumeToolApprovalResponse(IOModel):
+    """Result of resolving a pending assistant approval."""
+
+    ok: bool
+    status: OrchestratorToolApprovalStatus
+    pending: OrchestratorPendingToolApproval | None = None
+    tool_result: ToolingExecuteToolResponse | None = None
+    assistant_text: str | None = None
+    error: str | None = None
+    correlation_id: str | None = None
 
 
 AttachmentContextKind = Literal["text", "url", "file", "image"]
@@ -195,11 +424,12 @@ class OrchestratorInterruptRequest(IOModel):
     """
 
     scopes: list[OrchestratorInterruptScope] = Field(
-        default_factory=lambda: ["generation", "tool_call", "tts_playback", "session"]
+        default_factory=lambda: ["generation", "tool_call", "tts_playback", "session"],
+        max_length=4,
     )
-    session_id: str | None = None
-    request_id: str | None = None
-    reason: str = "user_interrupt"
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    reason: str = Field(default="user_interrupt", min_length=1, max_length=256)
 
 
 class OrchestratorInterruptScopeResult(IOModel):
@@ -207,19 +437,19 @@ class OrchestratorInterruptScopeResult(IOModel):
 
     scope: OrchestratorInterruptScope
     status: OrchestratorInterruptStatus
-    message: str = ""
-    cancelled_count: int = 0
+    message: str = Field(default="", max_length=1_000)
+    cancelled_count: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
 
 
 class OrchestratorInterruptResponse(IOModel):
     """Idempotent response returned by Orchestrator.Interrupt."""
 
-    interrupt_id: str
-    status: str
-    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
-    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
-    session_id: str | None = None
-    request_id: str | None = None
+    interrupt_id: str = Field(min_length=1, max_length=256)
+    status: str = Field(min_length=1, max_length=64)
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list, max_length=4)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list, max_length=4)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
     event_topic: str = OrchestratorEvents.INTERRUPTED
     audit_event: str = "orchestrator.interrupt.requested"
     idempotent: bool = True
@@ -229,14 +459,14 @@ class OrchestratorInterruptResponse(IOModel):
 class OrchestratorInterruptedEvent(IOModel):
     """Event emitted after an interrupt request is handled."""
 
-    interrupt_id: str
-    status: str
-    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list)
-    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list)
-    session_id: str | None = None
-    request_id: str | None = None
-    reason: str = "user_interrupt"
-    principal_id: str | None = None
+    interrupt_id: str = Field(min_length=1, max_length=256)
+    status: str = Field(min_length=1, max_length=64)
+    requested_scopes: list[OrchestratorInterruptScope] = Field(default_factory=list, max_length=4)
+    results: list[OrchestratorInterruptScopeResult] = Field(default_factory=list, max_length=4)
+    session_id: str | None = Field(default=None, min_length=1, max_length=256)
+    request_id: str | None = Field(default=None, min_length=1, max_length=256)
+    reason: str = Field(default="user_interrupt", min_length=1, max_length=256)
+    principal_id: str | None = Field(default=None, min_length=1, max_length=256)
     audit_event: str = "orchestrator.interrupt.requested"
     secrets_redacted: bool = True
 
@@ -272,6 +502,24 @@ class ModelRuntimeProgressInfo(IOModel):
     updated_at: str | None = None
 
 
+class ModelRuntimeModelInfo(IOModel):
+    """One model exposed by a runtime provider catalog."""
+
+    model_id: str
+    display_name: str | None = None
+    provider_id: str | None = None
+    provider_kind: str | None = None
+    upstream_provider_type: str | None = None
+    source: str | None = None
+    context_window: int | None = None
+    generation_limit: int | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    default: bool = False
+    available: bool | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    secrets_redacted: bool = True
+
+
 class ModelRuntimeProviderInfo(IOModel):
     """One model provider/runtime candidate known to the backend."""
 
@@ -279,16 +527,23 @@ class ModelRuntimeProviderInfo(IOModel):
     display_name: str
     backend_kind: str
     provider_type: str
+    provider_kind: str | None = None
+    upstream_provider_type: str | None = None
+    provider_peer_id: str | None = None
+    provider_service_instance_id: str | None = None
     enabled: bool = True
     selected: bool = False
     health: str = "unknown"
     health_reason: str | None = None
     model_id: str | None = None
+    default_model_id: str | None = None
     source: str | None = None
     license: str | None = None
     context_window: int | None = None
     generation_limit: int | None = None
     hardware: dict[str, Any] = Field(default_factory=dict)
+    models: list[ModelRuntimeModelInfo] = Field(default_factory=list)
+    model_catalog: dict[str, Any] = Field(default_factory=dict)
     model_files: list[ModelRuntimeFileInfo] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
     benchmark: ModelRuntimeBenchmarkInfo = Field(default_factory=ModelRuntimeBenchmarkInfo)
@@ -313,6 +568,14 @@ class ModelRuntimeCatalogRequest(IOModel):
 
     include_unavailable: bool = True
     include_operations: bool = True
+    include_remote: bool = False
+    include_cloud_models: bool = False
+    dispatch_selector: MeshAddressSelector | None = None
+    catalog_selector: MeshAddressSelector | None = None
+    remote_catalog_selector: MeshAddressSelector | None = None
+    # Deprecated compatibility alias. New callers must use catalog_selector so
+    # MeshBus does not confuse catalog aggregation with transport dispatch.
+    mesh_selector: MeshAddressSelector | None = None
 
 
 class ModelRuntimeCatalogResponse(IOModel):

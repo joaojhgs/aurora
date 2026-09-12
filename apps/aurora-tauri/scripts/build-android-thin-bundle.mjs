@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+
+process.env.AURORA_TAURI_ANDROID_CLIENT_SOURCE_CONFIG_PATH ??=
+  process.env.AURORA_TAURI_ANDROID_THIN_SOURCE_CONFIG_PATH
+process.env.AURORA_TAURI_ANDROID_CLIENT_BUILD_PROVENANCE_PATH ??=
+  process.env.AURORA_TAURI_ANDROID_THIN_BUILD_PROVENANCE_PATH
+
+await import('./build-android-client-bundle.mjs')

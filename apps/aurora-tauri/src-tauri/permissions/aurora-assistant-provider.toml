@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-assistant-provider"
+description = "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript."
+commands.allow = [
+  "aurora_assistant_provider_status",
+  "aurora_assistant_provider_configure",
+  "aurora_assistant_provider_complete"
+]

@@ -1,8 +1,6 @@
 """Entry point for running Auth service in process mode."""
 
-import asyncio
 import sys
-from contextlib import suppress
 from pathlib import Path
 
 # Ensure project root is on sys.path before any `app.*` imports (process-mode entrypoint).
@@ -13,12 +11,18 @@ from app.helpers.aurora_logger import log_error, log_info  # noqa: E402
 from app.messaging import register_all_service_topics  # noqa: E402
 from app.services.auth.service import AuthService  # noqa: E402
 from app.shared.messaging.bus_init import initialize_bus_for_service  # noqa: E402
+from app.shared.services.process_launcher import (  # noqa: E402
+    ShutdownSignalWaiter,
+    run_standalone_service,
+)
 
 
 async def main() -> None:
     service_name = "AuthService"
     log_info(f"Starting {service_name} as standalone process...")
     bus = None
+    svc = None
+    shutdown_waiter = ShutdownSignalWaiter(service_name)
     try:
         register_all_service_topics()
         bus = initialize_bus_for_service("Auth")
@@ -28,25 +32,24 @@ async def main() -> None:
         await svc.start()
 
         log_info(f"{service_name} started successfully")
-        try:
-            await asyncio.Event().wait()
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            log_info(f"Received shutdown signal for {service_name}")
-
-        await svc.stop()
-        await bus.stop()
-        log_info(f"{service_name} stopped")
+        await shutdown_waiter.wait()
     except Exception as e:
         log_error(f"Error running {service_name}: {e}", exc_info=True)
-        if bus is not None:
-            with suppress(Exception):
-                await bus.stop()
         raise SystemExit(1) from e
+    finally:
+        shutdown_waiter.close()
+        try:
+            if svc is not None:
+                await svc.stop()
+        finally:
+            if bus is not None:
+                await bus.stop()
+            log_info(f"{service_name} stopped")
 
 
 def run() -> None:
     """Synchronous entry point for console scripts."""
-    asyncio.run(main())
+    run_standalone_service(main)
 
 
 if __name__ == "__main__":

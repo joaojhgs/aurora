@@ -7,12 +7,18 @@ export default async function Page() {
   const route = snapshot.routes.find((candidate) => candidate.item.id === 'assistant')
   return (
     <>
-      {route ? <AssistantClientPage route={route} cancellationRoute={snapshot.assistantCancellationRoute ?? undefined} /> : null}
+      {route ? (
+        <AssistantClientPage
+          route={route}
+          cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
+          voiceRoutes={snapshot.assistantVoiceRoutes}
+        />
+      ) : null}
       {!route ? (
         <AuroraRoutePage
           routeId="assistant"
           title="Assistant"
-          description="Assistant route evidence is unavailable from the SDK shell snapshot."
+          description="The assistant is unavailable until Aurora confirms this device can start a conversation."
         />
       ) : null}
     </>

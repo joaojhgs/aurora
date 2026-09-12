@@ -1,0 +1,124 @@
+name: SDK Backend Contract Conformance
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "scripts/generate_backend_inventory.py"
+      - "scripts/generate_rust_contracts.py"
+      - "scripts/check_sdk_backend_conformance.py"
+      - "scripts/sdk_zod_codegen.py"
+      - "packages/aurora-sdk/**"
+      - "packages/aurora-mesh-authority-web/**"
+      - "rust/crates/aurora-contracts/**"
+      - "tests/fixtures/local_speech/runtime/contracts/**"
+      - "modules/ui-mock-reference/lib/aurora/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".github/workflows/sdk-backend-contract-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  sdk-backend-contract-conformance:
+    name: Generate inventory and validate SDK contract fixtures
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install backend inventory dependencies
+        run: |
+          uv pip install --system -e '.[gateway,service-auth,service-db,service-scheduler,service-tooling,service-orchestrator]'
+
+      - name: Generate backend inventory and Gateway OpenAPI evidence
+        run: |
+          mkdir -p .artifacts/sdk-backend-conformance
+          python scripts/generate_backend_inventory.py \
+            --fail-on-ui-fixture-errors \
+            --sdk-schema-output packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+            --sdk-zod-output packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+            --sdk-manifest-output packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+            --sdk-tooling-provider-output packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+            --output .artifacts/sdk-backend-conformance/backend-inventory.json
+
+      - name: Verify generated SDK contract artifacts are current
+        run: |
+          python scripts/generate_rust_contracts.py
+          python scripts/generate_rust_contracts.py --check
+          git diff --exit-code -- \
+            packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+            packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+            packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+            packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+            rust/crates/aurora-contracts/src/generated.rs \
+            rust/crates/aurora-contracts/schema \
+            tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json
+
+      - name: Check SDK/backend contract conformance
+        run: |
+          python scripts/check_sdk_backend_conformance.py \
+            --inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+            --sdk-types packages/aurora-sdk/src/types.ts \
+            --evidence-dir .artifacts/sdk-backend-conformance \
+            --enforce-nonfatal-finding-budget
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust for browser mesh authority
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser mesh toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build browser mesh authority for SDK conformance
+        run: pnpm --filter @aurora/mesh-authority-web build
+
+      - name: Typecheck SDK generated contract surface
+        run: pnpm --filter @aurora/client typecheck
+
+      - name: Build SDK package
+        run: pnpm --filter @aurora/client build
+
+      - name: Run SDK transport and security/privacy conformance tests
+        run: pnpm --filter @aurora/client test
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-backend-contract-conformance
+          path: .artifacts/sdk-backend-conformance/
+          if-no-files-found: error

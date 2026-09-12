@@ -1,0 +1,95 @@
+{
+  "asset_sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+  "asset_size_bytes": 1807522,
+  "format": "onnx",
+  "inventory_method": "recursive ONNX scan with subgraph traversal and model IR/opset metadata",
+  "metadata": {
+    "ir_version": 8,
+    "model_domain": "",
+    "model_version": 0,
+    "opset_imports": [
+      {
+        "domain": "ai.onnx",
+        "version": 16
+      },
+      {
+        "domain": "ai.onnx.ml",
+        "version": 3
+      },
+      {
+        "domain": "ai.onnx.training",
+        "version": 1
+      },
+      {
+        "domain": "com.ms.internal.nhwc",
+        "version": 1
+      },
+      {
+        "domain": "ai.onnx.preview.training",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft.experimental",
+        "version": 1
+      },
+      {
+        "domain": "com.microsoft.nchwc",
+        "version": 1
+      },
+      {
+        "domain": "org.pytorch.aten",
+        "version": 1
+      }
+    ],
+    "producer_name": "pytorch",
+    "producer_version": "1.12.0"
+  },
+  "operator_inventory": {
+    "node_count": 250,
+    "operator_counts": {
+      "Add": 14,
+      "Cast": 2,
+      "Concat": 18,
+      "ConstantOfShape": 4,
+      "Conv": 36,
+      "Equal": 7,
+      "Gather": 14,
+      "Identity": 6,
+      "If": 9,
+      "LSTM": 8,
+      "Log": 2,
+      "Mul": 2,
+      "Neg": 2,
+      "Pad": 2,
+      "Pow": 4,
+      "ReduceMean": 6,
+      "Relu": 26,
+      "Reshape": 2,
+      "Shape": 14,
+      "Sigmoid": 2,
+      "Slice": 28,
+      "Sqrt": 2,
+      "Squeeze": 16,
+      "Transpose": 10,
+      "Unsqueeze": 14
+    },
+    "status": "extracted",
+    "top_level_inputs": [
+      "input",
+      "sr",
+      "h",
+      "c"
+    ],
+    "top_level_outputs": [
+      "output",
+      "hn",
+      "cn"
+    ]
+  },
+  "schema_version": 1,
+  "source_asset": "models/silero-vad-v4.0.onnx"
+}

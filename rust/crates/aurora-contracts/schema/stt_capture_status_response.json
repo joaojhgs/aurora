@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Redacted microphone ownership status.",
+  "properties": {
+    "audio_input_available": {
+      "title": "Audio Input Available",
+      "type": "boolean"
+    },
+    "can_restart_python_capture": {
+      "title": "Can Restart Python Capture",
+      "type": "boolean"
+    },
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "lease_expires_at": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lease Expires At"
+    },
+    "native_lease_active": {
+      "default": false,
+      "title": "Native Lease Active",
+      "type": "boolean"
+    },
+    "owner": {
+      "enum": [
+        "native",
+        "none",
+        "python"
+      ],
+      "title": "Owner",
+      "type": "string"
+    },
+    "python_capture_active": {
+      "title": "Python Capture Active",
+      "type": "boolean"
+    },
+    "redacted": {
+      "default": true,
+      "title": "Redacted",
+      "type": "boolean"
+    },
+    "service_running": {
+      "title": "Service Running",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "audio_input_available",
+    "can_restart_python_capture",
+    "generation",
+    "owner",
+    "python_capture_active",
+    "service_running"
+  ],
+  "title": "STTCaptureStatusResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

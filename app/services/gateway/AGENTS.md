@@ -209,6 +209,22 @@ JSON-RPC over DataChannels:
 4. Forward to bus via `bus.request()` or `bus.publish()`
 5. Return result via DataChannel
 
+### Thin-runtime and native parity notes
+
+- Thin clients keep a per-stable-peer session registry. Requests must route by
+  the named peer id; do not add logic that falls back to the last sender or a
+  mutable default recipient.
+- Signaling room membership is observation only. A per-session allowlist decides
+  which signaling peer may drive an established session, and forged envelopes
+  must not reconnect, retire, or pollute another peer's session.
+- Native shells use the Rust mesh authority and native mesh session for
+  background-safe work. Gateway/Python still enforces its own Auth/ACL boundary
+  for server-side calls; do not bypass Gateway auth because a caller came from a
+  native session.
+- Budget shedding is not peer loss. The `mesh_peer_standby_v1` signal means
+  "going away, keep my credential" and must not trigger stale eviction or
+  re-pairing.
+
 ---
 
 ## Mesh Networking
@@ -233,6 +249,26 @@ JSON-RPC over DataChannels:
 3. `RoutingTable.resolve(topic)` uses `get_best_provider()` (lowest_latency, round_robin, random)
 4. `MeshBus` routes commands to remote via `PeerBridge`, events with `mesh=True` forwarded
 
+### Multi-Peer Authority Invariants
+
+- Session, manifest, ACK, lease, pending work, and authority state are scoped
+  by stable peer identity. Never reuse one peer's ACK, connection epoch,
+  `auth_grant_revision`, or manifest revision for another peer.
+- Provider manifests are recipient-specific authority projections. A peer is
+  eligible only after the structured ACK matches the active protocol/tier,
+  projection digest, registry/export revisions, and auth-grant revision.
+- Stale ACKs may request the bounded retransmission of that peer's pending
+  manifest; they must never activate the provider. Authority loss, revocation,
+  disconnect, or revision drift emits/records provider unavailability and
+  blocks dispatch before a handler runs.
+- `WebRtcPeerRuntime` owns the per-peer session registry and
+  `WebRtcMeshBridgeRouter` selects the bridge for the resolved peer. A
+  `WebRtcMeshPeerBridge` remains bound to exactly one `remotePeerId`.
+- Reconnect must prove the credential against the fresh channel binding and
+  stable/signaling peer identities. Rejoin, reverse pairing, and revocation
+  tests must prove that unrelated peers remain connected and authorized only
+  by their own state.
+
 ### DB Persistence
 
 PeerRegistry callbacks (`on_peer_registered`, `on_peer_removed`, `on_peer_status_changed`) persist state via `AuthMethods.MESH_UPSERT_PEER` and `AuthMethods.MESH_UPDATE_PEER_CONNECTION` bus calls.
@@ -247,7 +283,7 @@ Key settings classes:
 - `MQTTSettings` -- broker, port, topic_root, TLS, encrypt_signaling
 - `PermissionSettings` -- default permissions for new devices/users
 - `MeshConfig` -- enabled, node_name, services, ping interval
-- `MeshServiceConfig` -- per-service: share, max_concurrent, allowed_peers, prefer, fallback, min_version
+- `MeshServicePolicy` -- per-service export/routing policy loaded from mesh_sharing and mesh_routing
 
 ### token_secret Generation
 

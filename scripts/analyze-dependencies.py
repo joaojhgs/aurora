@@ -48,7 +48,6 @@ IMPORT_TO_PACKAGE = {
     "duckduckgo_search": "duckduckgo-search",
     "openwakeword": "openwakeword",
     "faster_whisper": "faster-whisper",
-    "RealtimeSTT": "RealtimeSTT",
     "realtimetts": "realtimetts",
     "piper_tts": "piper-tts",
     "piper_phonemize": "piper-phonemize",
@@ -466,7 +465,9 @@ def main():
             output_str += f"{pkg}: {', '.join(services)}\n"
 
     if args.output:
-        with open(args.output, "w") as f:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
             f.write(output_str)
     else:
         print(output_str)

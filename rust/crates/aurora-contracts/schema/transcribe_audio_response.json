@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Transcription result (for external API).",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "duration_ms": {
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "model_used": {
+      "title": "Model Used",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "duration_ms",
+    "model_used",
+    "text"
+  ],
+  "title": "TranscribeAudioResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

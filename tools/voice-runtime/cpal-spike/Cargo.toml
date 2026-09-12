@@ -1,0 +1,9 @@
+[package]
+name = "aurora-cpal-spike"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+publish = false
+
+[dependencies]
+cpal = { version = "=0.17.3", default-features = true }

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Empty output model for fire-and-forget methods.",
+  "properties": {},
+  "title": "EmptyOutput",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

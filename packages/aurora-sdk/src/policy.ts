@@ -32,24 +32,29 @@ export function evaluateRoutePolicy(input: RoutePolicyInput): RoutePolicyEvaluat
   const provider = findSelectedCandidate(input.route)
   const privacyClass = input.privacyClass ?? classifyPayloadPrivacy(input.payload, policy, catalogAction)
   const dataClasses = unique([privacyClass, ...(input.dataClasses ?? [])])
+  const localTarget = isLocalTarget(input.route, catalogAction)
+  const routeBlockers = localTarget
+    ? input.route.blockers.filter((blocker) => !isSelectorBlocker(blocker.code))
+    : input.route.blockers
   const securityBlockers = [
-    ...input.route.security_privacy_blockers,
-    ...input.route.blockers.filter((blocker) => blocker.security_privacy)
+    ...input.route.security_privacy_blockers.filter((blocker) => !(localTarget && isSelectorBlocker(blocker.code))),
+    ...routeBlockers.filter((blocker) => blocker.security_privacy)
   ]
-  const policyBlockers = collectPolicyBlockers(input, policy, catalogAction, privacyClass)
+  const policyBlockers = collectPolicyBlockers(input, policy, catalogAction, privacyClass, localTarget)
   const blockers = uniqueBlockers([
-    ...input.route.blockers,
+    ...routeBlockers,
     ...securityBlockers,
     ...policyBlockers
   ])
   const selectedTarget = input.route.selected_target || (provider ? provider.provider_kind : 'none')
   const fallbackBlocked = isFallbackBlocked(input.route, input.allowCloudFallback ?? false)
-  const missingSelector = !input.route.selector_valid || blockers.some((blocker) => isSelectorBlocker(blocker.code))
+  const selectorSatisfied = input.route.selector_valid || localTarget
+  const missingSelector = !selectorSatisfied || blockers.some((blocker) => isSelectorBlocker(blocker.code))
   const explicitSelectorRequired = Boolean(policy?.explicit_selector_required || policy?.selector_required || missingSelector)
   const approval = evaluateApproval(input, policy, catalogAction)
   const allowed =
     blockers.length === 0 &&
-    input.route.selector_valid &&
+    selectorSatisfied &&
     !fallbackBlocked &&
     approval.status !== 'required' &&
     approval.status !== 'expired' &&
@@ -65,7 +70,12 @@ export function evaluateRoutePolicy(input: RoutePolicyInput): RoutePolicyEvaluat
     allowed,
     availability: availabilityForPolicy(decision, input.route, catalogAction),
     reasonCode: reasonCodeFor(decision, input.route, blockers, approval.status),
-    repairPath: repairPathFor({ blockers, approvalStatus: approval.status, explicitSelectorRequired, fallbackBlocked }),
+    repairPath: repairPathFor({
+      blockers,
+      approvalStatus: approval.status,
+      selectorBlocksExecution: explicitSelectorRequired && !localTarget,
+      fallbackBlocked
+    }),
     privacyClass,
     dataClasses,
     explicitSelectorRequired,
@@ -178,7 +188,8 @@ function collectPolicyBlockers(
   input: RoutePolicyInput,
   policy: CapabilityPolicyDecisionInfo | null | undefined,
   action: CapabilityActionInfo | null,
-  privacyClass: PrivacyClass
+  privacyClass: PrivacyClass,
+  localTarget: boolean
 ): RouteBlockerInfo[] {
   const providerId = input.route.selected_provider_id ?? action?.provider_id ?? null
   const peerId = input.route.selected_peer_id ?? action?.peer_id ?? null
@@ -189,7 +200,7 @@ function collectPolicyBlockers(
   if (policy?.local_only && isRemoteTarget(input.route, action)) {
     blockers.push(blocker('local_only', 'Policy allows this capability only on the local node.', providerId, peerId, true))
   }
-  if ((policy?.explicit_selector_required || policy?.selector_required) && !hasSelector(input)) {
+  if ((policy?.explicit_selector_required || policy?.selector_required) && !hasSelector(input) && !localTarget) {
     blockers.push(blocker('explicit_selector_required', 'Select the target peer/resource before execution.', providerId, peerId, true))
   }
   if (policy?.consent_required && !input.consentGranted) {
@@ -331,12 +342,14 @@ function reasonCodeFor(
 function repairPathFor(input: {
   blockers: RouteBlockerInfo[]
   approvalStatus: RoutePolicyEvaluation['approval']['status']
-  explicitSelectorRequired: boolean
+  selectorBlocksExecution: boolean
   fallbackBlocked: boolean
 }): string | null {
   if (input.approvalStatus === 'required' || input.approvalStatus === 'expired') return 'request user approval'
   if (input.approvalStatus === 'rejected') return 'choose a different approval scope or target'
-  if (input.explicitSelectorRequired) return 'choose an explicit peer/provider/resource selector'
+  if (input.selectorBlocksExecution || input.blockers.some((blocker) => isSelectorBlocker(blocker.code))) {
+    return 'choose an explicit peer/provider/resource selector'
+  }
   if (input.fallbackBlocked) return 'choose an eligible non-cloud provider'
   const first = input.blockers[0]
   if (!first) return null
@@ -346,6 +359,12 @@ function repairPathFor(input: {
 
 function isFallbackBlocked(route: RouteExplainResponse, allowCloudFallback: boolean): boolean {
   return !allowCloudFallback && ['cloud', 'cloud-fallback', 'fallback-cloud'].includes(route.fallback_behavior)
+}
+
+function isLocalTarget(route: RouteExplainResponse, action: CapabilityActionInfo | null): boolean {
+  if (route.selected_target === 'local') return true
+  if (route.selected_target && route.selected_target !== 'none') return false
+  return Boolean(route.selected_provider_id && action?.provider_kind === 'local' && route.selected_provider_id === action.provider_id)
 }
 
 function isRemoteTarget(route: RouteExplainResponse, action: CapabilityActionInfo | null): boolean {

@@ -1,0 +1,41 @@
+services:
+  webrtc-interop-mqtt:
+    image: eclipse-mosquitto:2
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        cat > /tmp/mosquitto.conf <<'MOSQ'
+        allow_anonymous true
+        listener 9001 0.0.0.0
+        protocol websockets
+        MOSQ
+        exec mosquitto -c /tmp/mosquitto.conf
+    ports:
+      - "127.0.0.1:9001:9001"
+  webrtc-interop-turn:
+    image: coturn/coturn:4.6
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - |
+        cat > /tmp/turnserver.conf <<'TURN'
+        listening-port=3478
+        fingerprint
+        lt-cred-mech
+        user=interop:interop
+        realm=aurora-interop.test
+        allow-loopback-peers
+        cli-ip=127.0.0.1
+        cli-password=interop-cli
+        no-tls
+        no-dtls
+        verbose
+        TURN
+        exec turnserver -c /tmp/turnserver.conf
+    ports:
+      # Deliberately not loopback-bound. The stun lane always dials
+      # stun:<host-ipv4>:3478 and the turn lane does the same for Firefox, so
+      # coturn has to answer off-loopback or ICE never gathers candidates and
+      # the DataChannel never authorizes. Access still requires lt-cred-mech
+      # credentials, and the stack is ephemeral CI-only.
+      - "3478:3478/udp"
+      - "3478:3478/tcp"

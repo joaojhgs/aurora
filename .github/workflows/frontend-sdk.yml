@@ -1,0 +1,147 @@
+name: Frontend and SDK
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "apps/aurora-web/**"
+      - "apps/aurora-tauri/**"
+      - "packages/**"
+      - "tests/e2e/browser_persistence/**"
+      - "scripts/run_browser_storage_gate.mjs"
+      - "scripts/run_browser_storage_gate.test.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/frontend-sdk.yml"
+  pull_request:
+    paths:
+      - "apps/aurora-web/**"
+      - "apps/aurora-tauri/**"
+      - "packages/**"
+      - "tests/e2e/browser_persistence/**"
+      - "scripts/run_browser_storage_gate.mjs"
+      - "scripts/run_browser_storage_gate.test.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/frontend-sdk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-sdk:
+    name: SDK, shared UI, and web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust for browser voice runtime
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned browser voice toolchain
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.126
+          fallback: none
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser runtimes
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Build, test, and typecheck browser mesh authority
+        run: |
+          pnpm --filter @aurora/mesh-authority-web build
+          pnpm --filter @aurora/mesh-authority-web test
+          pnpm --filter @aurora/mesh-authority-web typecheck
+
+      - name: Build, test, and typecheck SDK
+        run: |
+          pnpm --filter @aurora/client build
+          pnpm --filter @aurora/client test:coverage
+          pnpm --filter @aurora/client test:resilience
+          pnpm --filter @aurora/client typecheck
+
+      # The suite asserts on build output (dist/voice-worker.js and the
+      # generated WASM core), which is why every test:browser:* script in this
+      # package prefixes the build. The Rust wasm target and wasm-bindgen are
+      # installed above.
+      - name: Test browser voice runtime
+        run: |
+          pnpm --filter @aurora/voice-web build
+          pnpm --filter @aurora/voice-web test:coverage
+
+      - name: Test, typecheck, and build shared UI
+        run: |
+          pnpm --filter @aurora/ui test:coverage
+          pnpm --filter @aurora/ui test:accessibility
+          pnpm --filter @aurora/ui typecheck
+
+      - name: Run consolidated browser storage E2E gate
+        env:
+          BROWSER_STORAGE_REPORT_ROOT: reports/browser-storage
+        run: pnpm test:web-persistence
+
+      - name: Test, typecheck, and build web app
+        run: |
+          pnpm --filter @aurora/web test:coverage
+          pnpm --filter @aurora/web typecheck
+          pnpm --filter @aurora/web build
+
+      - name: Test, typecheck, and build Tauri frontend
+        run: |
+          pnpm --filter @aurora/tauri-ui test:coverage
+          pnpm --filter @aurora/tauri-ui test:ci-regression-gates
+          pnpm --filter @aurora/tauri-ui typecheck
+          pnpm --filter @aurora/tauri-ui build
+
+      # Runs even when a suite above failed, so a red build still reports the
+      # coverage of everything that did run instead of going dark.
+      - name: Upload TypeScript coverage
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: >-
+            ./packages/aurora-sdk/coverage/lcov.info,
+            ./packages/aurora-voice-web/coverage/lcov.info,
+            ./packages/aurora-ui/coverage/lcov.info,
+            ./apps/aurora-web/coverage/lcov.info,
+            ./apps/aurora-tauri/coverage/lcov.info
+          flags: typescript
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload UI and SDK test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sdk-reports
+          path: |
+            packages/aurora-ui/reports/
+            reports/browser-storage/
+            apps/aurora-tauri/reports/
+            apps/aurora-tauri/test-results/
+            apps/aurora-tauri/playwright-report/
+          if-no-files-found: ignore

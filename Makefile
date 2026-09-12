@@ -5,8 +5,10 @@
 DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 # Match Tiltfile `project_name` so `make docker-process-up` and `tilt up` use the same project/images
 AURORA_COMPOSE_PROJECT ?= aurora-process
+DEP_ANALYSIS_DIR ?= .artifacts/dependency-analysis
+RUST_TOOLCHAIN ?= 1.88.0
 
-.PHONY: help setup lint test format check check-config-generated coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check check-docs check-tracked-artifacts check-config-generated check-sdk-backend-contracts check-rust-voice coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -15,8 +17,12 @@ help:
 	@echo "make setup       - Set up development environment"
 	@echo "make lint        - Run linting on all files (ruff)"
 	@echo "make format      - Run auto-formatting (ruff)"
-	@echo "make check       - Run all checks (lint + typing)"
+	@echo "make check       - Run all checks (lint + format + docs + contracts + Rust voice)"
 	@echo "make check-config-generated - Verify generated config artifacts are current"
+	@echo "make check-sdk-backend-contracts - Regenerate and verify SDK backend contracts"
+	@echo "make check-rust-voice - Run Rust voice fmt, clippy, native, and browser WASM tests"
+	@echo "make check-docs   - Validate documentation links and hygiene"
+	@echo "make check-tracked-artifacts - Reject generated artifacts tracked by Git"
 	@echo "make test        - Run all tests"
 	@echo "make unit        - Run unit tests only"
 	@echo "make integration - Run integration tests only"
@@ -77,27 +83,39 @@ check:
 	@echo "Running all code quality checks..."
 	ruff check app tests scripts
 	ruff format --check app tests scripts
+	$(MAKE) check-docs
+	$(MAKE) check-tracked-artifacts
+	$(MAKE) check-sdk-backend-contracts
+	$(MAKE) check-rust-voice
 	# mypy --explicit-package-bases app tests scripts
+
+check-docs:
+	@echo "Checking documentation links and hygiene..."
+	@uv run python scripts/check_docs.py
+
+check-tracked-artifacts:
+	@echo "Checking tracked-file artifact policy..."
+	@uv run python scripts/check_tracked_artifacts.py
 
 # Run all tests
 test:
 	@echo "Running all tests..."
-	pytest
+	uv run pytest
 
 # Run unit tests only
 unit:
 	@echo "Running unit tests..."
-	pytest tests/unit
+	uv run pytest tests/unit
 
 # Run integration tests only
 integration:
 	@echo "Running integration tests..."
-	pytest tests/integration
+	uv run pytest tests/integration
 
 # Run tests with coverage
 coverage:
 	@echo "Running tests with coverage report..."
-	pytest --cov=app --cov-report=term --cov-report=html
+	uv run pytest --cov=app --cov-report=term --cov-report=html
 
 # Clean temporary files
 clean:
@@ -119,6 +137,47 @@ check-config-generated:
 	@echo "Checking generated config artifacts are current..."
 	@uv run --extra dev python scripts/generate_config_artifacts.py --check
 	@echo "Generated config artifacts are current."
+
+check-sdk-backend-contracts:
+	@echo "Regenerating and checking SDK backend contract artifacts..."
+	@mkdir -p .artifacts/sdk-backend-conformance
+	@uv run --extra gateway --extra service-auth --extra service-db --extra service-scheduler --extra service-tooling --extra service-orchestrator python scripts/generate_backend_inventory.py \
+		--fail-on-ui-fixture-errors \
+		--sdk-schema-output packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+		--sdk-zod-output packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+		--sdk-manifest-output packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+		--sdk-tooling-provider-output packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+		--output .artifacts/sdk-backend-conformance/backend-inventory.json
+	@uv run python scripts/generate_rust_contracts.py
+	@uv run python scripts/generate_rust_contracts.py --check
+	@uv run python scripts/check_sdk_backend_conformance.py \
+		--inventory .artifacts/sdk-backend-conformance/backend-inventory.json \
+		--sdk-types packages/aurora-sdk/src/types.ts \
+		--evidence-dir .artifacts/sdk-backend-conformance \
+		--enforce-nonfatal-finding-budget
+	@git diff --exit-code -- \
+		packages/aurora-sdk/src/generated/backend-contracts.schema.json \
+		packages/aurora-sdk/src/generated/backend-contracts.zod.ts \
+		packages/aurora-sdk/src/generated/backend-contracts.manifest.json \
+		packages/aurora-sdk/src/generated/tooling-local-provider-v1.json \
+		rust/crates/aurora-contracts/src/generated.rs \
+		rust/crates/aurora-contracts/schema \
+		tests/fixtures/local_speech/runtime/contracts/backend_contract_parse_vectors.json
+	@cargo +1.88.0 check --manifest-path rust/Cargo.toml -p aurora-contracts
+	@echo "SDK and Rust backend contract artifacts are current."
+
+check-rust-voice:
+	@echo "Checking the Rust voice runtime and browser WASM core..."
+	@command -v wasm-bindgen-test-runner >/dev/null 2>&1 || \
+		(echo "wasm-bindgen-test-runner 0.2.126 is required"; exit 1)
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path rust/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) clippy --manifest-path rust/Cargo.toml --locked --workspace --all-targets -- -D warnings
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path rust/Cargo.toml --locked --workspace
+	@cd rust && cargo +$(RUST_TOOLCHAIN) test --locked -p aurora-voice-wasm --target wasm32-unknown-unknown
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path tools/voice-runtime/ios-audio-spike/native/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path tools/voice-runtime/ios-audio-spike/native/Cargo.toml --locked
+	@cargo +$(RUST_TOOLCHAIN) fmt --manifest-path tools/voice-runtime/android-audio-spike/native/Cargo.toml --all --check
+	@cargo +$(RUST_TOOLCHAIN) test --manifest-path tools/voice-runtime/android-audio-spike/native/Cargo.toml --locked
 
 
 # Docker Process Mode Commands
@@ -221,7 +280,8 @@ docker-orchestrator-build:
 # Dependency Analysis Commands
 analyze-deps:
 	@echo "Analyzing dependencies across all services..."
-	@python scripts/analyze-dependencies.py --all --output docs/dependency-analysis/service-dependencies.json
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@python scripts/analyze-dependencies.py --all --output $(DEP_ANALYSIS_DIR)/service-dependencies.json
 
 analyze-deps-service:
 	@echo "Usage: make analyze-deps-service SERVICE=<service-name>"
@@ -234,7 +294,8 @@ analyze-deps-service:
 
 analyze-deps-compare:
 	@echo "Comparing actual usage with pyproject.toml..."
-	@python scripts/analyze-dependencies.py --all --compare pyproject.toml --output docs/dependency-analysis/comparison.json
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@python scripts/analyze-dependencies.py --all --compare pyproject.toml --output $(DEP_ANALYSIS_DIR)/comparison.json
 
 install-analysis-tools:
 	@echo "Installing dependency analysis tools..."
@@ -242,14 +303,16 @@ install-analysis-tools:
 
 generate-dependency-tree:
 	@echo "Generating dependency tree..."
-	@pipdeptree --all > docs/dependency-analysis/dependency-tree.txt
-	@pipdeptree --json > docs/dependency-analysis/dependency-tree.json
-	@echo "Dependency tree saved to docs/dependency-analysis/"
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@pipdeptree --all > $(DEP_ANALYSIS_DIR)/dependency-tree.txt
+	@pipdeptree --json > $(DEP_ANALYSIS_DIR)/dependency-tree.json
+	@echo "Dependency tree saved to $(DEP_ANALYSIS_DIR)/"
 
 audit-dependencies:
 	@echo "Auditing dependencies for security issues..."
-	@pip-audit --format json --output docs/dependency-analysis/security-audit.json || true
-	@pip-audit --format text > docs/dependency-analysis/security-audit.txt || true
+	@mkdir -p $(DEP_ANALYSIS_DIR)
+	@pip-audit --format json --output $(DEP_ANALYSIS_DIR)/security-audit.json || true
+	@pip-audit --format text > $(DEP_ANALYSIS_DIR)/security-audit.txt || true
 
 # Docker Hub configuration
 DOCKER_REGISTRY ?= docker.io

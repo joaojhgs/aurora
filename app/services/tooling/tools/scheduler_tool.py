@@ -1,7 +1,7 @@
 import asyncio
 import random
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
@@ -9,6 +9,32 @@ from app.helpers.aurora_logger import log_error, log_info
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.scheduler.cron_service import get_cron_service
+from app.shared.contracts.models.scheduler import (
+    SchedulerMethods,
+    SchedulerOrchestratorUserInputAction,
+    SchedulerScheduleActionRequest,
+    SchedulerToolBinding,
+    SchedulerToolExecuteAction,
+    SchedulerTtsSpeakAction,
+)
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
+
+_TTS_SCHEDULE_ACTIONS = frozenset(
+    {
+        "speak",
+        "say",
+        "reminder",
+        "greeting",
+        "daily_greeting",
+        "break_reminder",
+        "water_reminder",
+        "motivational",
+        "motivational_message",
+        "time_announcement",
+        "hourly_time_announcement",
+    }
+)
 
 
 @tool()
@@ -50,7 +76,8 @@ async def schedule_task_tool(
             - "water_reminder": Remind to drink water
             - "motivational": Deliver a motivational message
             - "time_announcement": Announce the current time
-            - "callback": Call a custom function (advanced usage)
+            - "orchestrator": Send a local scheduler-origin user input to Orchestrator
+            - "tooling": Schedule another Tooling tool by name and typed arguments
         bus: MessageBus instance for communication (injected by ToolingService)
         message: The message to speak or remind about (optional for some actions like "greeting", "break_reminder")
         **kwargs: Additional arguments for the action
@@ -71,13 +98,9 @@ async def schedule_task_tool(
         schedule_task_tool("15min check", "*/15 * * * *", "time_announcement")  # Every 15 minutes
     """
     try:
-        # Get the scheduler service
-        cron = get_cron_service()
+        action_spec = _get_action_spec_for_action(action, message, **kwargs)
 
-        # Determine callback and arguments based on action
-        callback, callback_args = _get_callback_for_action(action, message, **kwargs)
-
-        if not callback:
+        if not action_spec:
             available_actions = [
                 "speak",
                 "say",
@@ -90,22 +113,40 @@ async def schedule_task_tool(
                 "motivational_message",
                 "time_announcement",
                 "hourly_time_announcement",
-                "callback",
+                "orchestrator",
+                "tooling",
             ]
             return f"Error: Unknown action '{action}'. Available actions: {', '.join(available_actions)}"
 
-        # Schedule the task using the text parser
-        job_id = await cron.schedule_from_text(
-            name=task_name,
-            schedule_text=schedule_time,
-            callback=callback,
-            callback_args=callback_args,
+        # Always create new schedule rows through Scheduler.ScheduleAction. This
+        # keeps scheduler firebacks typed and bus-routed instead of persisting
+        # arbitrary Python import strings.
+        if not bus:
+            return "Error: Message bus is required to schedule typed actions."
+
+        result = await bus.request(
+            SchedulerMethods.SCHEDULE_ACTION,
+            SchedulerScheduleActionRequest(
+                name=task_name,
+                schedule=schedule_time,
+                action_spec=action_spec,
+                source="tooling.schedule_task_tool",
+                privacy_class="personal",
+            ),
+            priority=get_interactive_priority(),
+            origin="internal",
+            timeout=10.0,
         )
+        data = result.data if result.ok else None
+        if hasattr(data, "model_dump"):
+            data = data.model_dump(mode="json")
+        data = data if isinstance(data, dict) else {}
+        job_id = data.get("job_id")
 
         if job_id:
             return f"Task '{task_name}' scheduled successfully (ID: {job_id[:8]}...) for: {schedule_time}"
-        else:
-            return f"Failed to schedule task '{task_name}'. Please check the schedule format."
+        reason = data.get("reason") or result.error or "Please check the schedule format."
+        return f"Failed to schedule task '{task_name}': {reason}"
 
     except Exception as e:
         return f"Error scheduling task: {e}"
@@ -483,61 +524,139 @@ async def motivational_message(bus: MessageBus, **kwargs) -> dict[str, Any]:
         return {"success": False, "message": f"Failed to deliver motivational message: {e}"}
 
 
-def _get_callback_for_action(
-    action: str, message: str = None, **kwargs
-) -> tuple[str, dict[str, Any]]:
-    """
-    Get the appropriate callback function and arguments for the given action.
-
-    Returns:
-        Tuple of (callback_string, callback_args)
-    """
+def _get_action_spec_for_action(action: str, message: str | None = None, **kwargs):
+    """Translate user-friendly scheduler tool actions into typed action specs."""
     action = action.lower().strip()
 
     if action in ["speak", "say"]:
-        # Use the local speak_reminder callback
-        return "app.tooling.tools.scheduler_tool.speak_reminder", {
-            "message": message or "Scheduled reminder"
-        }
+        return SchedulerTtsSpeakAction(text=message or "Scheduled reminder")
 
-    elif action == "reminder":
-        # Use the local speak_reminder callback with reminder prefix
+    if action == "reminder":
         reminder_text = f"Reminder: {message}" if message else "Scheduled reminder"
-        return "app.tooling.tools.scheduler_tool.speak_reminder", {"message": reminder_text}
+        return SchedulerTtsSpeakAction(text=reminder_text)
 
-    elif action in ["greeting", "daily_greeting"]:
-        # Use the local daily_greeting callback
-        return "app.tooling.tools.scheduler_tool.daily_greeting", {}
+    if action in ["greeting", "daily_greeting"]:
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name="scheduler_daily_greeting_tool"),
+        )
 
-    elif action == "break_reminder":
-        # Use the local break_reminder callback
-        callback_args = {"message": message} if message else {}
-        return "app.tooling.tools.scheduler_tool.break_reminder", callback_args
+    if action == "break_reminder":
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name="scheduler_break_reminder_tool"),
+            arguments={"message": message} if message else {},
+        )
 
-    elif action == "water_reminder":
-        # Use the local water_reminder callback
-        callback_args = {"message": message} if message else {}
-        return "app.tooling.tools.scheduler_tool.water_reminder", callback_args
+    if action == "water_reminder":
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name="scheduler_water_reminder_tool"),
+            arguments={"message": message} if message else {},
+        )
 
-    elif action in ["motivational", "motivational_message"]:
-        # Use the local motivational_message callback
-        callback_args = {"message": message} if message else {}
-        return "app.tooling.tools.scheduler_tool.motivational_message", callback_args
+    if action in ["motivational", "motivational_message"]:
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name="scheduler_motivational_message_tool"),
+            arguments={"message": message} if message else {},
+        )
 
-    elif action in ["time_announcement", "hourly_time_announcement"]:
-        # Use the local hourly_time_announcement callback
-        return "app.tooling.tools.scheduler_tool.hourly_time_announcement", {}
+    if action in ["time_announcement", "hourly_time_announcement"]:
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name="scheduler_hourly_time_announcement_tool"),
+        )
 
-    elif action == "callback":
-        # Advanced usage - user can specify custom callback
-        callback = kwargs.get("callback")
-        if not callback:
-            return None, None
-        callback_args = kwargs.get("callback_args", {})
-        return callback, callback_args
+    if action == "orchestrator":
+        text = message or str(kwargs.get("text") or "")
+        return SchedulerOrchestratorUserInputAction(text=text, source="scheduler_tool")
 
-    else:
-        return None, None
+    if action in {"tool", "tooling"}:
+        tool_name = str(kwargs.get("tool_name") or kwargs.get("name") or "").strip()
+        if not tool_name:
+            return None
+        arguments = kwargs.get("arguments") if isinstance(kwargs.get("arguments"), dict) else {}
+        return SchedulerToolExecuteAction(
+            binding=SchedulerToolBinding(tool_name=tool_name),
+            arguments=arguments,
+        )
+
+    return None
+
+
+@tool
+async def scheduler_daily_greeting_tool(bus: MessageBus | None = None) -> str:
+    """Deliver a scheduled daily greeting through TTS."""
+
+    result = await daily_greeting(bus)
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+@tool
+async def scheduler_break_reminder_tool(
+    message: str | None = None,
+    bus: MessageBus | None = None,
+) -> str:
+    """Deliver a scheduled break reminder through TTS."""
+
+    result = await break_reminder(bus, message=message) if message else await break_reminder(bus)
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+@tool
+async def scheduler_water_reminder_tool(
+    message: str | None = None,
+    bus: MessageBus | None = None,
+) -> str:
+    """Deliver a scheduled water reminder through TTS."""
+
+    result = await water_reminder(bus, message=message) if message else await water_reminder(bus)
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+@tool
+async def scheduler_motivational_message_tool(
+    message: str | None = None,
+    bus: MessageBus | None = None,
+) -> str:
+    """Deliver a scheduled motivational message through TTS."""
+
+    result = (
+        await motivational_message(bus, message=message)
+        if message
+        else await motivational_message(bus)
+    )
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+@tool
+async def scheduler_hourly_time_announcement_tool(bus: MessageBus | None = None) -> str:
+    """Deliver a scheduled time announcement through TTS."""
+
+    result = await hourly_time_announcement(bus)
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+schedule_task_tool.metadata = {
+    **(schedule_task_tool.metadata or {}),
+    "required_permissions": [ToolingMethods.EXECUTE_TOOL],
+    "conditional_required_permissions": [
+        {
+            "argument": "action",
+            "values": sorted(_TTS_SCHEDULE_ACTIONS),
+            "permissions": [TTSMethods.REQUEST],
+            "casefold": True,
+        }
+    ],
+}
+
+for _tts_scheduler_tool in (
+    scheduler_daily_greeting_tool,
+    scheduler_break_reminder_tool,
+    scheduler_water_reminder_tool,
+    scheduler_motivational_message_tool,
+    scheduler_hourly_time_announcement_tool,
+):
+    _tts_scheduler_tool.metadata = {
+        **(_tts_scheduler_tool.metadata or {}),
+        "required_permissions": [ToolingMethods.EXECUTE_TOOL, TTSMethods.REQUEST],
+    }
 
 
 # Convenience function for sync usage (though the tools are async)

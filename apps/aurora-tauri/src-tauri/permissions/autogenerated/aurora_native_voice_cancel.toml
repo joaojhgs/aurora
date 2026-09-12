@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-voice-cancel"
+description = "Enables the aurora_native_voice_cancel command without any pre-configured scope."
+commands.allow = ["aurora_native_voice_cancel"]
+
+[[permission]]
+identifier = "deny-aurora-native-voice-cancel"
+description = "Denies the aurora_native_voice_cancel command without any pre-configured scope."
+commands.deny = ["aurora_native_voice_cancel"]

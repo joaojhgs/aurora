@@ -5,9 +5,15 @@ import {
   type AuroraEventSubscription,
   type AuroraStreamRequest
 } from './events.js'
-import { cloneFixture, defaultMockAuroraFixtures, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
-import type { DBRAGSearchRemoteRequest } from './memory.js'
-import type { AuthTokenCreateRequest, AuthTokenListResponse, AuthTokenRevokeRequest, AuthTokenScopeUpdateRequest, AuroraEvent, AuroraTransportEnvelope } from './types.js'
+import { cloneFixture, defaultMockAuroraFixtures, memoryLocalSearchFixture, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
+import type { DBRAGSearchRemoteRequest, DBRAGSearchRequest } from './memory.js'
+import type {
+  AuthTokenCreateRequest,
+  AuthTokenRevokeRequest,
+  AuthTokenScopeUpdateRequest,
+  AuroraEvent,
+  AuroraTransportEnvelope
+} from './types.js'
 import type {
   AttachmentContextIngestRequest,
   AttachmentContextIngestResponse,
@@ -37,7 +43,7 @@ export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
   private readonly handlers = new Map<string, MockHandler>()
   private readonly eventHandlers = new Map<string, MockEventRegistration>()
-  private tokens: AuthTokenListResponse['tokens'] = []
+  private tokens: MockAuroraFixtureSet['tokens'] = { tokens: [] }
 
   constructor(options: MockAuroraTransportOptions = {}) {
     const fixtures = options.fixtures === false ? null : options.fixtures ?? defaultMockAuroraFixtures
@@ -49,22 +55,160 @@ export class MockAuroraTransport implements AuroraTransport {
   }
 
   registerFixtures(fixtures: MockAuroraFixtureSet): this {
-    this.tokens = cloneFixture(fixtures.tokens).tokens
+    this.tokens = cloneFixture(fixtures.tokens)
     return this
       .register('Gateway.GetRegistry', () => cloneFixture(fixtures.registry))
       .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
       .register('Gateway.GetDeploymentTopology', () => cloneFixture(fixtures.deploymentTopology))
       .register('Gateway.GetWebRTCDiagnostics', () => cloneFixture(fixtures.webrtcDiagnostics))
+      .register('Gateway.GetMeshStatus', () => cloneFixture(fixtures.meshStatus))
+      .register('Gateway.GetMeshInviteConfig', () => cloneFixture(fixtures.meshInviteConfig))
       .register('Gateway.GetCapabilityCatalog', () => cloneFixture(fixtures.capabilityCatalog))
       .register('Gateway.ExplainRoute', () => cloneFixture(fixtures.routeExplain))
-      .register('Gateway.AdminActionDraft', (request) => mockAdminActionDraft(request.payload))
-      .register('Gateway.AdminActionConfirm', (request) => mockAdminActionConfirm(request.payload))
+      .register('Backup.List', () => cloneFixture(fixtures.backups))
+      .register('Scheduler.ListJobs', () => cloneFixture(fixtures.schedulerJobs))
+      .register('Scheduler.Schedule', () => mockSchedulerAction('schedule', 'job-mock-created'))
+      .register('Scheduler.Cancel', (request) => mockSchedulerAction('cancel', schedulerJobId(request.payload)))
+      .register('Scheduler.Pause', (request) => mockSchedulerAction('pause', schedulerJobId(request.payload)))
+      .register('Scheduler.Resume', (request) => mockSchedulerAction('resume', schedulerJobId(request.payload)))
+      .register('Gateway.GetSupportBundle', () => cloneFixture(fixtures.supportBundle))
+      .register('Gateway.AdminActionDraft', (request) => {
+        const payload = request.payload as { method_id?: string; affected_resources?: string[] } | undefined
+        return {
+          action_id: 'mock-admin-action',
+          nonce: 'mock-nonce',
+          digest: 'mock-digest',
+          method_id: payload?.method_id ?? 'Gateway.GetSupportBundle',
+          affected_resources: payload?.affected_resources ?? ['diagnostics.support_bundle'],
+          required_phrase: 'CONFIRM',
+          required_reason: true,
+          required_reauth: true,
+          expires_at: '2026-06-19T00:10:00Z',
+          expires_in_seconds: 300,
+          confirmation_headers: {
+            action_id: 'X-Aurora-AdminAction-Id',
+            confirmation_token: 'X-Aurora-AdminAction-Token',
+            digest: 'X-Aurora-AdminAction-Digest'
+          }
+        }
+      })
+      .register('Gateway.AdminActionConfirm', () => ({
+        action_id: 'mock-admin-action',
+        confirmation_token: 'mock-confirmation-token',
+        digest: 'mock-digest',
+        confirmed: true,
+        expires_at: '2026-06-19T00:10:00Z',
+        audit_receipt: 'aar-mock-admin-action',
+        confirmation_headers: {
+          action_id: 'X-Aurora-AdminAction-Id',
+          confirmation_token: 'X-Aurora-AdminAction-Token',
+          digest: 'X-Aurora-AdminAction-Digest'
+        }
+      }))
       .register('Native.GetCapabilityManifest', () => cloneFixture(fixtures.nativeManifest))
-      .register('Auth.ListTokens', (request) => mockListTokens(this.tokens, request.payload))
-      .register('Auth.CreateToken', (request) => mockCreateToken(this.tokens, request.payload))
-      .register('Auth.UpdateTokenScopes', (request) => mockUpdateTokenScopes(this.tokens, request.payload))
-      .register('Auth.RevokeToken', (request) => mockRevokeToken(this.tokens, request.payload))
       .register('Tooling.GetToolCatalog', () => cloneFixture(fixtures.toolCatalog))
+      .register('Tooling.GetStats', () => ({
+        total_tools: fixtures.toolCatalog.tools.length,
+        mcp_tools_loaded: fixtures.toolingMcpStatus.servers.reduce((count, server) => count + (typeof server.tool_count === 'number' ? server.tool_count : 0), 0),
+        core_tools: fixtures.toolCatalog.tools.filter((tool) => (tool as { provider_kind?: string }).provider_kind === 'local' || tool.provider_id === 'local:Tooling').length,
+        plugin_tools: fixtures.toolCatalog.tools.filter((tool) => (tool as { provider_kind?: string }).provider_kind === 'plugin').length
+      }))
+      .register('Tooling.GetMCPStatus', () => cloneFixture(fixtures.toolingMcpStatus))
+      .register('Tooling.ReloadMCPTools', () => ({}))
+      .register('Tooling.GetSharingPolicy', () => ({ policy: cloneFixture(fixtures.toolingSharingPolicy) }))
+      .register('Tooling.GetPolicySummary', () => ({
+        policy: cloneFixture(fixtures.toolingSharingPolicy),
+        policy_mode: fixtures.toolingSharingPolicy.policy_mode,
+        default_approval_mode: fixtures.toolingSharingPolicy.default_approval_mode,
+        default_share: fixtures.toolingSharingPolicy.default_share,
+        active_grant_count: fixtures.toolingApprovalGrants.grants.filter((grant) => grant.active).length,
+        pending_approval_count: 1,
+        blocked_source_count: 1,
+        blocked_tool_count: (fixtures.toolCatalog as { blocked_count?: number }).blocked_count ?? 0,
+        source_count: 4,
+        tool_count: fixtures.toolCatalog.tools.length,
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListToolSources', () => ({
+        sources: [
+          { source_id: 'local:core', source: 'core', display_name: 'Core tools', provider_peer_id: 'local', provider_service_instance_id: 'local:Tooling', provider_kind: 'local', trust_tier: 'trusted', status: 'active', tool_count: 2, blocked_tool_count: 0, pending_approval_count: 0, active_grant_count: 1, stale_grant_count: 0, unreviewed_tool_count: 0, cache_status: 'local', include_future_tools_grants: 0, secrets_redacted: true },
+          { source_id: 'local:mcp:mail', source: 'mcp', display_name: 'Mail MCP', provider_peer_id: 'local', provider_service_instance_id: 'mcp-mail', provider_kind: 'local', trust_tier: 'untrusted', status: 'active', tool_count: 1, blocked_tool_count: 1, pending_approval_count: 1, active_grant_count: 0, stale_grant_count: 1, unreviewed_tool_count: 1, cache_status: 'hit', catalog_epoch: 3, catalog_hash: 'hash-mcp-mail', secrets_redacted: true },
+          { source_id: 'mesh:peer-garage:tooling-garage', source: 'mesh_peer', display_name: 'Mesh peer garage', provider_peer_id: 'peer-garage', provider_service_instance_id: 'tooling-garage', provider_kind: 'mesh_peer', trust_tier: 'untrusted', status: 'needs-review', tool_count: 1, blocked_tool_count: 0, pending_approval_count: 0, active_grant_count: 1, stale_grant_count: 1, unreviewed_tool_count: 1, cache_status: 'hit', catalog_epoch: 7, catalog_hash: 'hash-peer-garage', secrets_redacted: true },
+          { source_id: 'blocked:mcp-mail', source: 'blocked', display_name: 'Blocked MCP tools', provider_peer_id: 'local', provider_service_instance_id: 'mcp-mail', provider_kind: 'local', trust_tier: 'blocked', status: 'blocked', tool_count: 0, blocked_tool_count: 1, pending_approval_count: 0, active_grant_count: 0, stale_grant_count: 0, unreviewed_tool_count: 0, cache_status: 'blocked', secrets_redacted: true }
+        ],
+        count: 4,
+        generated_at: fixtures.toolCatalog.generated_at,
+        secrets_redacted: true
+      }))
+      .register('Tooling.GetToolSourceDetail', (request) => ({
+        source: { source_id: ((request.payload as { source_id?: string })?.source_id ?? 'local:core'), source: 'core', display_name: 'Core tools', provider_peer_id: 'local', provider_service_instance_id: 'local:Tooling', provider_kind: 'local', trust_tier: 'trusted', status: 'active', tool_count: fixtures.toolCatalog.tools.length, cache_status: 'local', secrets_redacted: true },
+        tools: cloneFixture(fixtures.toolCatalog.tools),
+        blocked_tools: cloneFixture((fixtures.toolCatalog as { blocked_tools?: unknown[] }).blocked_tools ?? []),
+        grants: cloneFixture(fixtures.toolingApprovalGrants.grants),
+        pending_approvals: [],
+        policy_rules: cloneFixture(fixtures.toolingSharingPolicy.rules),
+        found: true,
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListPendingApprovals', () => ({ approvals: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.ListPolicyAuditEvents', () => ({ events: [{ event: 'tooling.policy.set', correlation_id: 'corr-policy', details: { secrets_redacted: true }, secrets_redacted: true }], total: 1, secrets_redacted: true }))
+      .register('Tooling.GetOnboardingStatus', () => ({ capabilities: [], secrets_redacted: true }))
+      .register('Tooling.SetPolicyMode', (request) => ({ ok: true, policy: cloneFixture(fixtures.toolingSharingPolicy), correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.UpsertSourcePolicy', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearSourcePolicy', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.UpsertToolPolicyOverride', (request) => ({ ok: true, grant: null, correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.ClearToolPolicyOverride', (request) => ({ ok: true, cleared: true, revoked_grant_ids: [], correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.TestMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.CreateMCPSource', () => ({ ok: false, source_id: 'local:mcp:default', created: false, error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.TestPluginSource', () => ({ ok: false, source_id: 'local:plugin:default', error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.CreatePluginSource', () => ({ ok: false, source_id: 'local:plugin:default', created: false, error: 'unsupported_in_mock', secrets_redacted: true }))
+      .register('Tooling.SetSharingPolicy', (request) => ({ ok: true, policy: cloneFixture((request.payload as { policy?: unknown })?.policy ?? fixtures.toolingSharingPolicy), correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.TestSharingPolicy', (request) => ({
+        ok: true,
+        policy_decision: { allowed: true, share: true, approval_required: true, approval_mode: 'ask_each_time', decision_id: 'policy-test-fixture', token_ttl_seconds: 300 },
+        args_hash: 'sha256:mock-test-args',
+        resource_selector_hash: 'sha256:mock-resource',
+        route_decision_id: 'route-mock-tooling',
+        correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? 'corr-mock-test-policy',
+        provider_peer_id: 'local-peer',
+        provider_service_instance_id: 'tooling-local',
+        global_tool_id: (request.payload as { tool_name?: string })?.tool_name ?? 'tool:mock',
+        local_tool_name: (request.payload as { tool_name?: string })?.tool_name ?? 'mock.tool',
+        display_args_preview: {},
+        argument_visibility: {},
+        secrets_redacted: true
+      }))
+      .register('Tooling.ListApprovalGrants', () => cloneFixture(fixtures.toolingApprovalGrants))
+      .register('Tooling.CreateApprovalGrant', (request) => ({
+        ok: true,
+        grant: {
+          ...(request.payload as Record<string, unknown>),
+          grant_id: 'grant-mock-created',
+          active: true,
+          created_at: 1781840700,
+          revoked_at: null
+        },
+        correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null
+      }))
+      .register('Tooling.RevokeApprovalGrant', (request) => ({ ok: true, grant_id: (request.payload as { grant_id?: string })?.grant_id ?? 'grant-mock', correlation_id: (request.payload as { correlation_id?: string | null })?.correlation_id ?? null }))
+      .register('Tooling.EvaluateApprovalGrant', () => ({ ok: true, grant: cloneFixture(fixtures.toolingApprovalGrants.grants[0]), reason: null, correlation_id: 'corr-mock-grant-eval' }))
+      .register('Config.Get', () => cloneFixture(fixtures.configGet))
+      .register('Config.Validate', () => cloneFixture(fixtures.configValidate))
+      .register('Config.GetSchemaMetadata', () => cloneFixture(fixtures.configSchemaMetadata))
+      .register('Config.PreviewDiff', () => cloneFixture(fixtures.configDiffPreview))
+      .register('Config.GetVersionHistory', () => cloneFixture(fixtures.configVersionHistory))
+      .register('Config.PreviewReloadImpact', () => cloneFixture(fixtures.configReloadImpact))
+      .register('Config.Set', () => cloneFixture(fixtures.configSet))
+      .register('Config.CommitChangeSet', () => ({
+        success: true,
+        revision: 8,
+        version_id: 'cfgv-change-set-001',
+        changed_paths: ['services.gateway.api.port'],
+        transaction_id: 'cfgtx-change-set-001',
+        error: null,
+        error_code: null
+      }))
+      .register('Config.Rollback', () => cloneFixture(fixtures.configRollback))
       .register('Orchestrator.GetModelCatalog', () => cloneFixture(fixtures.modelRuntimeCatalog))
       .register('Orchestrator.GetModelRuntime', () => ({
         generated_at: fixtures.modelRuntimeCatalog.generated_at,
@@ -78,8 +222,10 @@ export class MockAuroraTransport implements AuroraTransport {
       }))
       .register('Orchestrator.IngestContext', (request) => mockIngestContext(request.payload))
       .register('DB.GetMessages', () => cloneFixture(fixtures.memoryMessages))
+      .register('DB.GetMessagesForDate', () => cloneFixture(fixtures.memoryMessages))
       .register('DB.RAGListNamespaces', () => cloneFixture(fixtures.memoryNamespaces))
       .register('DB.RAGSearchRemote', (request) => memorySearchFixture(request.payload as DBRAGSearchRemoteRequest))
+      .register('DB.RAGSearch', (request) => memoryLocalSearchFixture(request.payload as DBRAGSearchRequest))
       .register('DB.RAGExportNamespace', () => cloneFixture(fixtures.memoryExport))
       .register('DB.RAGImportNamespace', () => cloneFixture(fixtures.memoryImport))
       .register('DB.RAGDelete', () => ({ success: true }))
@@ -90,13 +236,34 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.DeletePrincipal', () => ({ success: true }))
       .register('Auth.SetPermissions', () => ({ success: true }))
       .register('Auth.PatchPermissions', () => ({ success: true }))
+      .register('Auth.ListTokens', (request) => mockListTokens(this.tokens, request.payload))
+      .register('Auth.CreateToken', (request) => mockCreateToken(this.tokens, request.payload))
+      .register('Auth.UpdateTokenScopes', (request) => mockUpdateTokenScopes(this.tokens, request.payload))
+      .register('Auth.RevokeToken', (request) => mockRevokeToken(this.tokens, request.payload))
+      .register('Auth.ListDevices', (request) => mockListDevices(fixtures.devices, request.payload))
+      .register('Auth.DeleteDevice', () => ({ success: true }))
       .register('Auth.AuditLog', () => cloneFixture(fixtures.auditLog))
+      .register('Auth.ListPendingPairings', () => cloneFixture(fixtures.pendingPairings))
+      .register('Auth.MeshListPeers', () => cloneFixture(fixtures.meshPeers))
+      .register('Auth.MeshGetPeer', (request) => mockMeshPeer(fixtures.meshPeers, request.payload))
+      .register('Auth.MeshApprovePeer', () => ({ success: true, message: 'peer approved' }))
+      .register('Auth.MeshDenyPeer', () => ({ success: true, message: 'peer denied' }))
+      .register('Auth.MeshUpdatePeerPermissions', () => ({ success: true, message: 'permissions updated' }))
+      .register('Auth.MeshRemovePeer', () => ({ success: true, message: 'peer removed' }))
+      .register('Orchestrator.ListPendingToolApprovals', () => cloneFixture(fixtures.pendingToolApprovals))
+      .register('Transcription.Transcribe', () => ({
+        text: 'hello Aurora',
+        confidence: null,
+        language: 'en',
+        duration_ms: 500,
+        model_used: 'demo-focused'
+      }))
       .register('Orchestrator.ExternalUserInput', (request) => ({
-        text: `Mock Aurora response to "${mockPromptText(request.payload)}"`,
+        text: `Sample reply: I heard “${mockPromptText(request.payload)}”.`,
         session_id: mockSessionId(request.payload),
         metadata: {
-          model: 'mock-local',
-          provider: 'mock-orchestrator'
+          model: 'Aurora',
+          provider: 'sample-data'
         }
       }))
   }
@@ -134,6 +301,10 @@ export class MockAuroraTransport implements AuroraTransport {
   stream<TPayload = unknown>(stream: string, registration: MockEventRegistration<TPayload>): this {
     this.eventHandlers.set(stream, registration as MockEventRegistration)
     return this
+  }
+
+  hasStream(stream: string): boolean {
+    return this.eventHandlers.has(stream) || this.eventHandlers.has('*')
   }
 
   failStream(stream: string, code: AuroraErrorCode, message: string): this {
@@ -185,117 +356,6 @@ export class MockAuroraTransport implements AuroraTransport {
   }
 }
 
-function mockAdminActionDraft(payload: unknown) {
-  const methodId = methodIdFromPayload(payload)
-  const actionId = `aa-${methodId.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-  return {
-    action_id: actionId,
-    nonce: `nonce-${actionId}`,
-    digest: `digest-${actionId}`,
-    method_id: methodId,
-    affected_resources: Array.isArray((payload as { affected_resources?: unknown })?.affected_resources)
-      ? (payload as { affected_resources: string[] }).affected_resources
-      : [],
-    required_phrase: methodId.split('.').pop() ?? methodId,
-    required_reason: true,
-    required_reauth: false,
-    expires_at: '2030-01-01T00:00:00Z',
-    expires_in_seconds: 300,
-    confirmation_headers: adminActionHeaders()
-  }
-}
-
-function mockAdminActionConfirm(payload: unknown) {
-  const actionId = typeof (payload as { action_id?: unknown })?.action_id === 'string'
-    ? (payload as { action_id: string }).action_id
-    : 'aa-mock'
-  return {
-    action_id: actionId,
-    confirmation_token: `confirm-${actionId}`,
-    digest: typeof (payload as { digest?: unknown })?.digest === 'string'
-      ? (payload as { digest: string }).digest
-      : `digest-${actionId}`,
-    confirmed: true,
-    expires_at: '2030-01-01T00:00:00Z',
-    audit_receipt: `audit-${actionId}`,
-    confirmation_headers: adminActionHeaders()
-  }
-}
-
-function adminActionHeaders() {
-  return {
-    action_id: 'X-Aurora-AdminAction-Id',
-    confirmation_token: 'X-Aurora-AdminAction-Token',
-    digest: 'X-Aurora-AdminAction-Digest'
-  }
-}
-
-function methodIdFromPayload(payload: unknown): string {
-  if (typeof payload === 'object' && payload !== null) {
-    const methodId = (payload as { method_id?: unknown }).method_id
-    if (typeof methodId === 'string' && methodId.trim()) return methodId
-  }
-  return 'Gateway.AdminAction'
-}
-
-function mockListTokens(tokens: AuthTokenListResponse['tokens'], payload: unknown): AuthTokenListResponse {
-  const principalId = typeof (payload as { principal_id?: unknown })?.principal_id === 'string'
-    ? (payload as { principal_id: string }).principal_id
-    : null
-  const deviceId = typeof (payload as { device_id?: unknown })?.device_id === 'string'
-    ? (payload as { device_id: string }).device_id
-    : null
-  return {
-    tokens: tokens
-      .filter((token) => !principalId || token.user_id === principalId)
-      .filter((token) => !deviceId || token.device_id === deviceId)
-      .map((token) => ({ ...token, scopes: [...token.scopes] }))
-  }
-}
-
-function mockCreateToken(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
-  const request = payload as Partial<AuthTokenCreateRequest>
-  const principalId = typeof request.principal_id === 'string' && request.principal_id.trim()
-    ? request.principal_id.trim()
-    : 'mock-principal'
-  const id = `token-created-${tokens.length + 1}`
-  const prefix = `mk_${String(tokens.length + 1).padStart(4, '0')}`
-  const expiresAt = '2030-01-01T00:00:00Z'
-  const scopes = Array.isArray(request.scopes) && request.scopes.length > 0 ? [...request.scopes] : ['Gateway.use']
-  tokens.unshift({
-    id,
-    prefix,
-    device_id: request.device_id ?? null,
-    user_id: principalId,
-    scopes,
-    created_at: '2026-06-25T00:00:00Z',
-    expires_at: expiresAt
-  })
-  return {
-    token: `mock-created-token-value-${prefix}`,
-    id,
-    prefix,
-    scopes,
-    expires_at: expiresAt
-  }
-}
-
-function mockUpdateTokenScopes(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
-  const request = payload as Partial<AuthTokenScopeUpdateRequest>
-  const token = tokens.find((candidate) => candidate.id === request.token_id)
-  if (!token || !Array.isArray(request.scopes)) return { success: false }
-  token.scopes = [...request.scopes]
-  return { success: true }
-}
-
-function mockRevokeToken(tokens: AuthTokenListResponse['tokens'], payload: unknown) {
-  const request = payload as Partial<AuthTokenRevokeRequest>
-  const index = tokens.findIndex((candidate) => candidate.id === request.token_id)
-  if (index < 0) return { success: false }
-  tokens.splice(index, 1)
-  return { success: true }
-}
-
 function mockPromptText(payload: unknown): string {
   if (typeof payload !== 'object' || payload === null) return 'prompt'
   const text = (payload as { text?: unknown }).text
@@ -308,6 +368,25 @@ function mockSessionId(payload: unknown): string {
     if (typeof sessionId === 'string' && sessionId.trim()) return sessionId
   }
   return 'mock-assistant-session'
+}
+
+function schedulerJobId(payload: unknown): string {
+  if (typeof payload === 'object' && payload !== null) {
+    const jobId = (payload as { job_id?: unknown }).job_id
+    if (typeof jobId === 'string' || typeof jobId === 'number') return String(jobId)
+  }
+  return 'job-mock'
+}
+
+function mockSchedulerAction(action: string, jobId: string) {
+  return {
+    ok: true,
+    status: 'ok',
+    job_id: jobId,
+    action,
+    reason: null,
+    audit_event: `audit:scheduler:${action}:${jobId}`
+  }
 }
 
 function mockPrincipal(
@@ -346,6 +425,89 @@ function mockUpdatePrincipal(
     ...cloneFixture(principal),
     username: typeof request.username === 'string' ? request.username : principal.username,
     is_admin: typeof request.is_admin === 'boolean' ? request.is_admin : principal.is_admin
+  }
+}
+
+function mockMeshPeer(
+  peers: { peers: Array<{ peer_id: string }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { peer_id?: unknown } : {}
+  const peer = peers.peers.find((candidate) => candidate.peer_id === request.peer_id)
+  return { peer: peer ? cloneFixture(peer) : null }
+}
+
+function mockListTokens(
+  tokens: { tokens: Array<{ device_id?: string | null; user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null
+    ? payload as { device_id?: unknown; principal_id?: unknown }
+    : {}
+  const deviceId = typeof request.device_id === 'string' ? request.device_id : null
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    tokens: cloneFixture(tokens.tokens).filter((token) => {
+      if (deviceId && token.device_id !== deviceId) return false
+      if (principalId && token.user_id !== principalId) return false
+      return true
+    })
+  }
+}
+
+function mockCreateToken(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenCreateRequest>
+  const principalId = typeof request.principal_id === 'string' && request.principal_id.trim()
+    ? request.principal_id.trim()
+    : 'mock-principal'
+  const id = `token-created-${tokens.tokens.length + 1}`
+  const prefix = `mk_${String(tokens.tokens.length + 1).padStart(4, '0')}`
+  const expiresAt = '2030-01-01T00:00:00Z'
+  const scopes = Array.isArray(request.scopes) && request.scopes.length > 0
+    ? [...request.scopes]
+    : ['Gateway.use']
+  tokens.tokens.unshift({
+    id,
+    prefix,
+    device_id: request.device_id ?? null,
+    user_id: principalId,
+    scopes,
+    created_at: '2026-06-25T00:00:00Z',
+    expires_at: expiresAt
+  })
+  return {
+    token: `mock-created-token-value-${prefix}`,
+    id,
+    prefix,
+    scopes,
+    expires_at: expiresAt
+  }
+}
+
+function mockUpdateTokenScopes(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenScopeUpdateRequest>
+  const token = tokens.tokens.find((candidate) => candidate.id === request.token_id)
+  if (!token || !Array.isArray(request.scopes)) return { success: false }
+  token.scopes = [...request.scopes]
+  return { success: true }
+}
+
+function mockRevokeToken(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenRevokeRequest>
+  const index = tokens.tokens.findIndex((candidate) => candidate.id === request.token_id)
+  if (index < 0) return { success: false }
+  tokens.tokens.splice(index, 1)
+  return { success: true }
+}
+
+function mockListDevices(
+  devices: { devices: Array<{ user_id?: string | null }> },
+  payload: unknown
+) {
+  const request = typeof payload === 'object' && payload !== null ? payload as { principal_id?: unknown } : {}
+  const principalId = typeof request.principal_id === 'string' ? request.principal_id : null
+  return {
+    devices: cloneFixture(devices.devices).filter((device) => !principalId || device.user_id === principalId)
   }
 }
 

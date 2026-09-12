@@ -9,6 +9,7 @@ export {
   gatewayBuiltinRoutesFixture,
   gatewayRegistryFixture,
   gatewayServicesFixture,
+  mockShareableRegistryFixture,
   nativeCapabilityManifestFixture,
   routeExplainFixture,
   toolCatalogFixture,

@@ -48,11 +48,11 @@ class MeshAnnouncer:
             self._task = None
 
     async def _announce_loop(self) -> None:
-        """Continuously re-announce manifest at the configured interval."""
+        """Continuously refresh room presence and the connected-peer manifest."""
         while True:
             try:
                 await asyncio.sleep(self._interval)
-                await self._rtc_client.reannounce_manifest()
+                await self._announce_once()
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -61,6 +61,14 @@ class MeshAnnouncer:
     async def announce_now(self) -> None:
         """Trigger an immediate re-announcement (e.g., after config reload)."""
         try:
-            await self._rtc_client.reannounce_manifest()
+            await self._announce_once()
         except Exception as e:
             log_warning(f"MeshAnnouncer: Immediate announce failed: {e}")
+
+    async def _announce_once(self) -> None:
+        """Refresh late-join discovery without blocking established-peer updates."""
+        try:
+            await self._rtc_client.refresh_presence()
+        except Exception as e:
+            log_warning(f"MeshAnnouncer: Presence refresh failed: {e}")
+        await self._rtc_client.reannounce_manifest()

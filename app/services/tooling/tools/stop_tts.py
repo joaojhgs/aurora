@@ -2,6 +2,7 @@ from langchain_core.tools import tool
 
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
+from app.shared.contracts.models.tooling import ToolingMethods
 from app.shared.contracts.models.tts import TTSMethods
 from app.shared.messaging.models.tts_models import TTSStop
 
@@ -24,3 +25,9 @@ async def stop_tts_tool(bus: MessageBus | None = None):
         origin="internal",
     )
     return "END"
+
+
+stop_tts_tool.metadata = {
+    **(stop_tts_tool.metadata or {}),
+    "required_permissions": [ToolingMethods.EXECUTE_TOOL, TTSMethods.STOP],
+}

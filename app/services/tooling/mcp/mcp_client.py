@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
+from app.services.tooling.identity import source_tool_identity, stamp_tool
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
 from app.shared.config.models import Mcp, Tooling
@@ -92,7 +93,7 @@ class MCPClientManager:
 
                     # Load tools from all servers
                     log_debug("Loading tools from MCP servers...")
-                    await self._load_tools()
+                    await self._load_tools(tuple(client_config))
                     log_debug("Tool loading completed")
             except TimeoutError:
                 log_error("MCP client initialization timed out after 30 seconds")
@@ -204,16 +205,40 @@ class MCPClientManager:
 
         return config
 
-    async def _load_tools(self) -> None:
-        """Load tools from all configured MCP servers."""
+    async def _load_tools(self, stable_server_ids: tuple[str, ...]) -> None:
+        """Load and stamp tools per configured stable MCP server identity."""
         if not self._client:
             return
 
         try:
             log_debug("Attempting to get tools from MCP client...")
-            # Get tools from all servers
-            tools = await self._client.get_tools()
-            self._tools = tools or []
+            loaded_tools: list[BaseTool] = []
+            for stable_server_id in stable_server_ids:
+                try:
+                    tools = await self._client.get_tools(server_name=stable_server_id)
+                except TypeError:
+                    if len(stable_server_ids) != 1:
+                        raise RuntimeError(
+                            "MCP adapter cannot prove per-server tool origin for multiple servers"
+                        ) from None
+                    tools = await self._client.get_tools()
+                for tool in tools or []:
+                    provider_tool_id = vars(tool).get("_aurora_provider_tool_id")
+                    if isinstance(provider_tool_id, str) and provider_tool_id.strip():
+                        identity = source_tool_identity(
+                            source_kind="mcp",
+                            stable_source_id=stable_server_id,
+                            provider_tool_id=provider_tool_id,
+                            share_group_id=f"mcp:{stable_server_id}",
+                            share_group_label=stable_server_id,
+                        )
+                        stamp_tool(tool, identity)
+                    object.__setattr__(tool, "_is_mcp_tool", True)
+                    object.__setattr__(tool, "_aurora_loader_source", "mcp")
+                    object.__setattr__(tool, "_aurora_mcp_server_id", stable_server_id)
+                    object.__setattr__(tool, "_aurora_stable_source_id", stable_server_id)
+                    loaded_tools.append(tool)
+            self._tools = loaded_tools
 
             log_debug(f"Loaded {len(self._tools)} tools from MCP servers")
             for tool in self._tools:

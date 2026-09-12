@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-inbound-verifier-set"
+description = "Enables the aurora_inbound_verifier_set command without any pre-configured scope."
+commands.allow = ["aurora_inbound_verifier_set"]
+
+[[permission]]
+identifier = "deny-aurora-inbound-verifier-set"
+description = "Denies the aurora_inbound_verifier_set command without any pre-configured scope."
+commands.deny = ["aurora_inbound_verifier_set"]

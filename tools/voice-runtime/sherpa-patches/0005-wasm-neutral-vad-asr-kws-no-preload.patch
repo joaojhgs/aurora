@@ -1,0 +1,133 @@
+--- a/wasm/vad-asr/CMakeLists.txt
++++ b/wasm/vad-asr/CMakeLists.txt
+@@ -1,2 +1,8 @@
+-if(NOT $ENV{SHERPA_ONNX_IS_USING_BUILD_WASM_SH})
+-  message(FATAL_ERROR "Please use ./build-wasm-simd-vad.sh to build for wasm VAD")
++set(_aurora_wasm_engine_neutral "$ENV{AURORA_SHERPA_WASM_ENGINE_NEUTRAL}")
++if(NOT _aurora_wasm_engine_neutral STREQUAL "1")
++  if(NOT $ENV{SHERPA_ONNX_IS_USING_BUILD_WASM_SH})
++    message(FATAL_ERROR "Please use ./build-wasm-simd-vad.sh to build for wasm VAD")
++  endif()
++  if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/silero_vad.onnx" OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/tokens.txt")
++    message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++  endif()
+@@ -5,2 +11,9 @@ endif()
+-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/silero_vad.onnx" OR NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/tokens.txt")
+-  message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++set(_aurora_wasm_vad_helper "")
++set(_aurora_wasm_asr_helper "")
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++  set(_aurora_wasm_vad_helper "${CMAKE_CURRENT_BINARY_DIR}/sherpa-onnx-vad.esm.js")
++  set(_aurora_wasm_asr_helper "${CMAKE_CURRENT_BINARY_DIR}/sherpa-onnx-asr.esm.js")
++  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/sherpa-onnx-vad.js" "${_aurora_wasm_vad_helper}" COPYONLY)
++  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/sherpa-onnx-asr.js" "${_aurora_wasm_asr_helper}" COPYONLY)
++  file(APPEND "${_aurora_wasm_vad_helper}" "\nexport { createVad };\n")
++  file(APPEND "${_aurora_wasm_asr_helper}" "\nexport { OfflineRecognizer };\n")
+@@ -56,2 +69,7 @@ string(APPEND MY_FLAGS " -sEXPORTED_FUNCTIONS=[_CopyHeap,_malloc,_free,${all_exp
+-string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
+-string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++  string(APPEND MY_FLAGS " -sMODULARIZE=1 -sEXPORT_ES6=1 -sINCOMING_MODULE_JS_API=locateFile,noInitialRun,print,printErr ")
++  string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','FS'] ")
++else()
++  string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
++  string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
++endif()
+@@ -74,10 +92,20 @@ install(TARGETS sherpa-onnx-wasm-main-vad-asr DESTINATION bin/wasm/vad-asr)
+-install(
+-  FILES
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.js"
+-    "index.html"
+-    "app-vad-asr.js"
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.wasm"
+-    "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.data"
+-  DESTINATION
+-    bin/wasm/vad-asr
+-)
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++  install(
++    FILES
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.js"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.wasm"
++    DESTINATION bin/wasm/vad-asr
++  )
++  install(FILES "${_aurora_wasm_vad_helper}" DESTINATION bin/wasm/vad-asr RENAME "sherpa-onnx-vad.js")
++  install(FILES "${_aurora_wasm_asr_helper}" DESTINATION bin/wasm/vad-asr RENAME "sherpa-onnx-asr.js")
++else()
++  install(
++    FILES
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.js"
++      "index.html"
++      "app-vad-asr.js"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.wasm"
++      "$<TARGET_FILE_DIR:sherpa-onnx-wasm-main-vad-asr>/sherpa-onnx-wasm-main-vad-asr.data"
++    DESTINATION bin/wasm/vad-asr
++  )
++endif()
+--- a/wasm/kws/CMakeLists.txt
++++ b/wasm/kws/CMakeLists.txt
+@@ -1,2 +1,9 @@
+-if(NOT $ENV{SHERPA_ONNX_IS_USING_BUILD_WASM_SH})
+-    message(FATAL_ERROR "Please use ./build-wasm-simd-kws.sh to build for wasm KWS")
++set(_aurora_wasm_engine_neutral "$ENV{AURORA_SHERPA_WASM_ENGINE_NEUTRAL}")
++if(NOT _aurora_wasm_engine_neutral STREQUAL "1")
++    if(NOT $ENV{SHERPA_ONNX_IS_USING_BUILD_WASM_SH})
++        message(FATAL_ERROR "Please use ./build-wasm-simd-kws.sh to build for wasm KWS")
++    endif()
++    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
++        message(WARNING "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx does not exist")
++        message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++    endif()
+@@ -5,3 +12,5 @@ endif()
+-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+-    message(WARNING "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx does not exist")
+-    message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
++set(_aurora_wasm_kws_helper "")
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++    set(_aurora_wasm_kws_helper "${CMAKE_CURRENT_BINARY_DIR}/sherpa-onnx-kws.esm.js")
++    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/sherpa-onnx-kws.js" "${_aurora_wasm_kws_helper}" COPYONLY)
++    file(APPEND "${_aurora_wasm_kws_helper}" "\nexport { createKws };\n")
+@@ -36,2 +45,7 @@ string(APPEND MY_FLAGS " -sEXPORTED_FUNCTIONS=[_CopyHeap,_malloc,_free,${all_exp
+-string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
+-string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++    string(APPEND MY_FLAGS " -sMODULARIZE=1 -sEXPORT_ES6=1 -sINCOMING_MODULE_JS_API=locateFile,noInitialRun,print,printErr ")
++    string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64','FS'] ")
++else()
++    string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
++    string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
++endif()
+@@ -49,11 +63,22 @@ install(TARGETS sherpa-onnx-wasm-kws-main DESTINATION bin/wasm)
+-install(
+-        FILES
+-        "sherpa-onnx-kws.js"
+-        "app.js"
+-        "index.html"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.js"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.wasm"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.data"
+-        DESTINATION
+-        bin/wasm
+-)
++if(_aurora_wasm_engine_neutral STREQUAL "1")
++    install(
++            FILES
++            "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.js"
++            "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.wasm"
++            DESTINATION
++            bin/wasm
++    )
++    install(FILES "${_aurora_wasm_kws_helper}" DESTINATION bin/wasm RENAME "sherpa-onnx-kws.js")
++else()
++    install(
++            FILES
++            "sherpa-onnx-kws.js"
++            "app.js"
++            "index.html"
++            "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.js"
++            "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.wasm"
++            "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.data"
++            DESTINATION
++            bin/wasm
++    )
++endif()

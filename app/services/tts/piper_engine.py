@@ -1,14 +1,14 @@
 import os
-import subprocess
-import tempfile
-import wave
 from queue import Queue
-from typing import Optional
 
 import pyaudio
 from RealtimeTTS import BaseEngine
 
-from app.helpers.aurora_logger import log_debug, log_error, log_warning
+from app.helpers.aurora_logger import log_error
+from app.services.tts.providers.piper import (
+    PiperVoiceConfig,
+    synthesize_piper_cli,
+)
 
 
 # This is a custom PiperEngine class definition to override the default
@@ -53,36 +53,20 @@ class PiperEngine(BaseEngine):
 
         Args:
             piper_path (Optional[str]): Full path to the piper executable.
-                                        If not provided, checks the PIPER_PATH environment variable.
-                                        If that's not set, defaults to 'piper.exe'.
+                                        If not provided, defaults to 'piper'.
             voice (Optional[PiperVoice]): A PiperVoice instance with the model and optional config.
             debug (bool): Enable debug logging.
-            sample_rate (Optional[int]): Sample rate for audio stream. If None, will be loaded from config.
+            sample_rate (Optional[int]): Sample rate for audio stream.
         """
-        # If piper_path is None, check environment variable or default to 'piper'.
-        if piper_path is None:
-            import os
-
-            env_path = os.getenv("AURORA_PIPER_PATH")
-            self.piper_path = env_path if env_path else "piper"
-        else:
-            self.piper_path = piper_path
+        self.piper_path = piper_path or "piper"
 
         self.voice = voice
         self.debug = debug
         self.queue = Queue()
 
-        # Cache sample rate to avoid repeated config requests during playback
-        if sample_rate is None:
-            import os
+        self._sample_rate = sample_rate if sample_rate is not None else 24000
 
-            # Use environment variable or default
-            env_rate = os.getenv("AURORA_TTS_SAMPLE_RATE")
-            self._sample_rate = int(env_rate) if env_rate else 24000
-        else:
-            self._sample_rate = sample_rate
-
-        # Cache hardware acceleration setting using environment variables (no config requests)
+        # Cache hardware acceleration setting using the shared helper.
         from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 
         self._use_cuda = get_use_hardware_acceleration("tts")
@@ -119,91 +103,29 @@ class PiperEngine(BaseEngine):
             log_error("No voice set. Please provide a PiperVoice configuration.")
             return False
 
-        # Create a unique temporary WAV file.
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav_file:
-            output_wav_path = tmp_wav_file.name
-
-        # Build the argument list for Piper (no shell piping).
-        # If piper_path is on the PATH, you can use just "piper". Otherwise, use the full path.
-        # Use absolute path for model file to avoid Piper's voice name validation
-        model_file_abs = (
-            os.path.abspath(self.voice.model_file)
-            if not os.path.isabs(self.voice.model_file)
-            else self.voice.model_file
-        )
-
-        # Verify model file exists before calling Piper
-        if not os.path.exists(model_file_abs):
-            log_error(f"Piper model file not found: {model_file_abs}")
-            return False
-
-        cmd_list = [self.piper_path, "-m", model_file_abs, "-f", output_wav_path]
-
-        # If a JSON config file is available, add it.
-        if self.voice.config_file:
-            config_file_abs = (
-                os.path.abspath(self.voice.config_file)
-                if not os.path.isabs(self.voice.config_file)
-                else self.voice.config_file
-            )
-            if not os.path.exists(config_file_abs):
-                log_warning(
-                    f"Piper config file not found: {config_file_abs}, continuing without it"
-                )
-            else:
-                cmd_list.extend(["-c", config_file_abs])
-
-        # If CUDA is set for TTS (use cached value to avoid config requests)
-        if self._use_cuda == "cuda":
-            cmd_list.extend(["--cuda"])
-
-        # Debug: show the exact command (helpful for troubleshooting)
-        if self.debug:
-            log_debug(f"Running Piper with args: {cmd_list}")
-
         try:
-            # Pass the text via STDIN directly to Piper.
-            subprocess.run(
-                cmd_list,
-                input=text.encode("utf-8"),
-                capture_output=True,
-                check=True,  # Raises CalledProcessError on non-zero exit
-                shell=False,  # No shell means no special quoting issues
+            audio_data, sample_rate = synthesize_piper_cli(
+                piper_path=self.piper_path,
+                voice=PiperVoiceConfig(
+                    voice_id="active",
+                    model_file=self.voice.model_file,
+                    config_file=self.voice.config_file,
+                ),
+                text=text,
+                use_cuda=self._use_cuda == "cuda",
+                debug=self.debug,
             )
-
-            # Open the synthesized WAV file and (optionally) validate audio properties.
-            with wave.open(output_wav_path, "rb") as wf:
-                # If you require specific WAV properties, check them:
-                if (
-                    wf.getnchannels() != 1
-                    or wf.getframerate() != self._sample_rate
-                    or wf.getsampwidth() != 2
-                ):
-                    log_warning(
-                        f"Unexpected WAV properties: "
-                        f"Channels={wf.getnchannels()}, "
-                        f"Rate={wf.getframerate()}, "
-                        f"Width={wf.getsampwidth()}"
-                    )
-                    return False
-
-                # Read audio data and put it into the queue.
-                audio_data = wf.readframes(wf.getnframes())
-                self.queue.put(audio_data)
-
+            if sample_rate != self._sample_rate:
+                log_error(
+                    f"Unexpected Piper sample rate: expected={self._sample_rate}, actual={sample_rate}"
+                )
+                return False
+            self.queue.put(audio_data)
             return True
 
-        except FileNotFoundError:
-            log_error(f"Error: Piper executable not found at '{self.piper_path}'.")
+        except Exception as e:
+            log_error(str(e))
             return False
-        except subprocess.CalledProcessError as e:
-            # Piper returned an error code; show the stderr output for troubleshooting.
-            log_error(f"Error running Piper: {e.stderr.decode('utf-8', errors='replace')}")
-            return False
-        finally:
-            # Clean up the temporary WAV file after reading it.
-            if os.path.isfile(output_wav_path):
-                os.remove(output_wav_path)
 
     def set_voice(self, voice: PiperVoice):
         """

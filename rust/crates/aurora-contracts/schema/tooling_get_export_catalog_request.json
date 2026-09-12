@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Authenticated recipient projection request.\n\nRecipient identity is deliberately absent: the RPC envelope is the only\nauthority.  The last committed values are refresh hints, never selectors.",
+  "properties": {
+    "cursor": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cursor"
+    },
+    "last_projection_digest": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Projection Digest"
+    },
+    "last_projection_revision": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Projection Revision"
+    },
+    "page_size": {
+      "default": 100,
+      "maximum": 256,
+      "minimum": 1,
+      "title": "Page Size",
+      "type": "integer"
+    },
+    "protocol_tier": {
+      "const": "projection_v1",
+      "default": "projection_v1",
+      "title": "Protocol Tier",
+      "type": "string"
+    }
+  },
+  "title": "ToolingGetExportCatalogRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

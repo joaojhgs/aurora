@@ -1,0 +1,8 @@
+[[permission]]
+identifier = "aurora-inbound-verifier-storage"
+description = "Allow desktop mesh-node runtimes to store, retrieve, and delete exact SDK-scoped inbound verifier records in the platform keychain. This is not a generic secure-storage namespace and does not grant outbound bearer-token or reconnect-proof access."
+commands.allow = [
+  "aurora_inbound_verifier_get",
+  "aurora_inbound_verifier_set",
+  "aurora_inbound_verifier_delete"
+]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-native-plugin-payload"
+description = "Enables the aurora_android_native_plugin_payload command without any pre-configured scope."
+commands.allow = ["aurora_android_native_plugin_payload"]
+
+[[permission]]
+identifier = "deny-aurora-android-native-plugin-payload"
+description = "Denies the aurora_android_native_plugin_payload command without any pre-configured scope."
+commands.deny = ["aurora_android_native_plugin_payload"]

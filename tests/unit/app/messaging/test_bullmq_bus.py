@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.messaging.bullmq_bus import BullMQBus
+from app.messaging.bus import QueryResult
 
 
 class SampleMessage(BaseModel):
@@ -29,15 +30,53 @@ class SampleResponse(BaseModel):
 class FakeRedis:
     """Minimal Redis async client for BullMQ event fanout tests."""
 
-    def __init__(self, subscribers=None):
+    def __init__(self, subscribers=None, *, fail_sadd: bool = False, pubsub=None):
         self.subscribers = subscribers or set()
         self.published = []
+        self.added = []
+        self.removed = []
+        self.fail_sadd = fail_sadd
+        self._pubsub = pubsub
 
     async def smembers(self, key):
         return self.subscribers
 
+    async def sadd(self, key, value):
+        if self.fail_sadd:
+            raise RuntimeError("sadd failed")
+        self.added.append((key, value))
+        return 1
+
+    async def srem(self, key, value):
+        self.removed.append((key, value))
+        return 1
+
     async def publish(self, topic, payload):
         self.published.append((topic, payload))
+
+    def pubsub(self):
+        return self._pubsub
+
+
+class FakePubSub:
+    """Minimal Redis pubsub object for event readiness tests."""
+
+    def __init__(self, *, fail_psubscribe: bool = False):
+        self.patterns = []
+        self.channels = []
+        self.fail_psubscribe = fail_psubscribe
+
+    async def psubscribe(self, topic):
+        if self.fail_psubscribe:
+            raise RuntimeError("psubscribe failed")
+        self.patterns.append(topic)
+
+    async def subscribe(self, topic):
+        self.channels.append(topic)
+
+    async def listen(self):
+        if False:
+            yield None
 
 
 @pytest.fixture
@@ -113,7 +152,7 @@ class TestBullMQBusInterface:
         bus._available = True
         bus._Queue = mock_bullmq["Queue"]
         bus._Worker = mock_bullmq["Worker"]
-        bus._async_register_event_queue = AsyncMock()
+        bus._register_event_queue_ready = AsyncMock()
 
         handler = AsyncMock()
         bus.subscribe("Config.Updated", handler)
@@ -122,14 +161,221 @@ class TestBullMQBusInterface:
         await bus.start()
 
         assert "Config.Updated" in bus._event_worker_queues
+        bus._register_event_queue_ready.assert_awaited_once()
         mock_bullmq["Worker"].assert_called()
+
+    async def test_start_rolls_back_started_flag_on_event_readiness_failure(self, mock_bullmq):
+        """start() must not report running when pre-start event readiness fails."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._register_event_queue_ready = AsyncMock(side_effect=RuntimeError("sadd failed"))
+
+        handler = AsyncMock()
+        bus.subscribe("AuroraTest.Bullmq.Start.Fail", handler, event=True)
+
+        with pytest.raises(RuntimeError, match="sadd failed"):
+            await bus.start()
+
+        assert bus._started is False
 
     async def test_validation_disabled_direct_topic_uses_command_queue(self):
         """Validation-disabled concrete topics are commands, not event fanout."""
         bus = BullMQBus(validate_topics=False)
 
         assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.Ping") is False
-        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.*") is True
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.*") is False
+        assert bus._is_event_topic("AuroraTest.Bullmq.Dynamic.Ping", event=True) is True
+        assert bus._is_event_topic("reply.SampleMessage.123", event=True) is False
+
+    async def test_validation_disabled_explicit_event_registers_fanout(self, mock_bullmq):
+        """Explicit event subscriptions use fanout even when contract validation is disabled."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._register_event_queue_ready = AsyncMock()
+
+        await bus.start()
+
+        handler = AsyncMock()
+        bus.subscribe("AuroraTest.Bullmq.Dynamic.Event", handler, event=True)
+
+        assert "AuroraTest.Bullmq.Dynamic.Event" in bus._event_handlers
+        assert "AuroraTest.Bullmq.Dynamic.Event" not in bus._handlers
+        assert "AuroraTest.Bullmq.Dynamic.Event" in bus._event_worker_queues
+        mock_bullmq["Worker"].assert_called()
+
+    async def test_subscribe_event_awaits_exact_registration(self, mock_bullmq):
+        """subscribe_event waits until the exact event queue is registered in Redis."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._redis = FakeRedis()
+        await bus.start()
+
+        handler = AsyncMock()
+        await bus.subscribe_event("AuroraTest.Bullmq.Dynamic.Ready", handler)
+
+        queue_name = bus._event_worker_queues["AuroraTest.Bullmq.Dynamic.Ready"]
+        assert bus._redis.added == [
+            ("aurora:event-subscribers:AuroraTest.Bullmq.Dynamic.Ready", queue_name)
+        ]
+        assert handler in bus._event_handlers["AuroraTest.Bullmq.Dynamic.Ready"]
+
+    async def test_subscribe_event_exact_failure_cleans_up_handler_and_ready_state(
+        self, mock_bullmq
+    ):
+        """Failed exact event readiness removes the appended handler and queue state."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._redis = FakeRedis(fail_sadd=True)
+        await bus.start()
+
+        handler = AsyncMock()
+        with pytest.raises(RuntimeError, match="sadd failed"):
+            await bus.subscribe_event("AuroraTest.Bullmq.Dynamic.Fail", handler)
+
+        assert "AuroraTest.Bullmq.Dynamic.Fail" not in bus._event_handlers
+        assert "AuroraTest.Bullmq.Dynamic.Fail" not in bus._event_worker_queues
+        assert not any(
+            name.startswith("event.AuroraTest.Bullmq.Dynamic.Fail") for name in bus._workers
+        )
+
+    async def test_subscribe_event_wildcard_failure_cleans_up_handler_and_ready_state(
+        self, mock_bullmq
+    ):
+        """Failed wildcard pub/sub readiness removes handler and pattern state."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        bus._redis = FakeRedis(pubsub=FakePubSub(fail_psubscribe=True))
+        await bus.start()
+
+        handler = AsyncMock()
+        with pytest.raises(RuntimeError, match="psubscribe failed"):
+            await bus.subscribe_event("AuroraTest.Bullmq.Dynamic.*", handler)
+
+        assert "AuroraTest.Bullmq.Dynamic.*" not in bus._event_wildcard_patterns
+        assert "AuroraTest.Bullmq.Dynamic.*" not in bus._event_patterns
+
+    async def test_subscribe_event_waits_for_pending_sync_wildcard_readiness(self, mock_bullmq):
+        """Awaited wildcard subscriptions do not treat pending sync psubscribe as ready."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        await bus.start()
+        ready_to_complete = asyncio.Event()
+
+        async def slow_subscribe(topic: str, *, pattern: bool) -> None:
+            await ready_to_complete.wait()
+
+        bus._subscribe_event_topic_ready = AsyncMock(side_effect=slow_subscribe)
+        first_handler = AsyncMock()
+        second_handler = AsyncMock()
+
+        bus.subscribe("AuroraTest.Bullmq.Pending.*", first_handler, event=True)
+        await asyncio.sleep(0)
+
+        assert "AuroraTest.Bullmq.Pending.*" in bus._event_pattern_tasks
+        assert "AuroraTest.Bullmq.Pending.*" not in bus._event_patterns
+
+        subscribe_task = asyncio.create_task(
+            bus.subscribe_event("AuroraTest.Bullmq.Pending.*", second_handler)
+        )
+        await asyncio.sleep(0)
+
+        assert not subscribe_task.done()
+
+        ready_to_complete.set()
+        await subscribe_task
+
+        assert "AuroraTest.Bullmq.Pending.*" in bus._event_patterns
+        assert bus._subscribe_event_topic_ready.await_count == 1
+
+    async def test_concurrent_subscribe_event_wildcards_share_readiness(self, mock_bullmq):
+        """Concurrent awaited wildcard subscriptions perform one psubscribe."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        await bus.start()
+        readiness_started = asyncio.Event()
+        release_readiness = asyncio.Event()
+        subscribe_calls = 0
+
+        async def slow_subscribe(topic: str, *, pattern: bool) -> None:
+            nonlocal subscribe_calls
+            subscribe_calls += 1
+            readiness_started.set()
+            await release_readiness.wait()
+
+        bus._subscribe_event_topic_ready = AsyncMock(side_effect=slow_subscribe)
+        first_handler = AsyncMock()
+        second_handler = AsyncMock()
+
+        first_task = asyncio.create_task(
+            bus.subscribe_event("AuroraTest.Bullmq.Concurrent.*", first_handler)
+        )
+        await readiness_started.wait()
+        second_task = asyncio.create_task(
+            bus.subscribe_event("AuroraTest.Bullmq.Concurrent.*", second_handler)
+        )
+        await asyncio.sleep(0)
+
+        assert subscribe_calls == 1
+        assert not first_task.done()
+        assert not second_task.done()
+
+        release_readiness.set()
+        await asyncio.gather(first_task, second_task)
+
+        assert "AuroraTest.Bullmq.Concurrent.*" in bus._event_patterns
+        assert subscribe_calls == 1
+
+    async def test_concurrent_subscribe_event_wildcard_failure_does_not_clear_success(
+        self, mock_bullmq
+    ):
+        """A failed wildcard waiter does not remove another waiter's ready state."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+        await bus.start()
+        calls = 0
+
+        async def fail_then_succeed(topic: str, *, pattern: bool) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("psubscribe failed")
+
+        bus._subscribe_event_topic_ready = AsyncMock(side_effect=fail_then_succeed)
+        first_handler = AsyncMock()
+        second_handler = AsyncMock()
+
+        results = await asyncio.gather(
+            bus.subscribe_event("AuroraTest.Bullmq.Recover.*", first_handler),
+            bus.subscribe_event("AuroraTest.Bullmq.Recover.*", second_handler),
+            return_exceptions=True,
+        )
+
+        assert [type(result) for result in results].count(RuntimeError) == 1
+        assert any(result is None for result in results)
+        assert "AuroraTest.Bullmq.Recover.*" in bus._event_patterns
+        handlers = bus._event_wildcard_patterns["AuroraTest.Bullmq.Recover.*"]
+        if isinstance(results[0], RuntimeError):
+            assert first_handler not in handlers
+            assert second_handler in handlers
+        else:
+            assert second_handler not in handlers
+            assert first_handler in handlers
 
     async def test_subscribe_direct_topic(self, mock_bullmq):
         """Test subscribing to a direct topic (no wildcards)."""
@@ -154,7 +400,7 @@ class TestBullMQBusInterface:
         bus._Worker = mock_bullmq["Worker"]
 
         handler = AsyncMock()
-        bus.subscribe("Config.Updated", handler)
+        bus.subscribe("Config.Updated", handler, event=True)
 
         assert "Config.Updated" in bus._event_handlers
         assert handler in bus._event_handlers["Config.Updated"]
@@ -229,6 +475,8 @@ class TestBullMQBusInterface:
 
         assert bus._stats["published"] == 1
         assert mock_bullmq["queue_instance"].add.call_count == 2
+        assert len(bus._redis.published) == 1
+        assert bus._redis.published[0][0] == "Config.Updated"
 
     async def test_publish_with_reply_to(self, mock_bullmq):
         """Test publishing with reply_to parameter."""
@@ -244,11 +492,13 @@ class TestBullMQBusInterface:
             message,
             event=False,
             reply_to="reply.TTS.123",
+            transport_source_id="opaque-http-source",
         )
 
         call_args = mock_bullmq["queue_instance"].add.call_args
         job_data = call_args[0][1]
         assert job_data["reply_to"] == "reply.TTS.123"
+        assert job_data["transport_source_id"] == "opaque-http-source"
 
     async def test_publish_with_correlation_id(self, mock_bullmq):
         """Reply jobs must carry correlation_id for request/response matching."""
@@ -311,6 +561,32 @@ class TestBullMQBusInterface:
         assert reply_workers == []
         mock_bullmq["worker_instance"].close.assert_called()
 
+    async def test_request_preserves_projected_method_set_authority(self, mock_bullmq):
+        """Tooling projection evidence must survive request-to-publish forwarding."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        result = await bus.request(
+            "Tooling.GetExportCatalog",
+            SampleMessage(content="projection"),
+            timeout=0.01,
+            projected_method_topics=[
+                "Tooling.ExecuteTool",
+                "Tooling.GetExportCatalog",
+            ],
+            projected_method_set_digest="projection-digest",
+        )
+
+        assert result.ok is False
+        job_data = mock_bullmq["queue_instance"].add.await_args.args[1]
+        assert job_data["projected_method_topics"] == [
+            "Tooling.ExecuteTool",
+            "Tooling.GetExportCatalog",
+        ]
+        assert job_data["projected_method_set_digest"] == "projection-digest"
+
     async def test_request_teardown_skips_when_handlers_remain(self, mock_bullmq):
         """Do not close worker if another handler is still subscribed to the reply topic."""
         bus = BullMQBus(validate_topics=False)
@@ -350,6 +626,24 @@ class TestBullMQBusInterface:
 
         assert topic not in bus._queues
         mock_bullmq["queue_instance"].close.assert_called()
+
+    async def test_event_flag_on_reply_topic_uses_direct_queue(self, mock_bullmq):
+        """Service-style event=True replies must reach request()'s direct Worker."""
+        bus = BullMQBus(validate_topics=False)
+        bus._available = True
+        bus._Queue = mock_bullmq["Queue"]
+        bus._Worker = mock_bullmq["Worker"]
+
+        await bus.publish(
+            "reply.SampleMessage.service-style",
+            QueryResult(ok=True, data={"ok": True}),
+            event=True,
+            correlation_id="service-style",
+        )
+
+        mock_bullmq["queue_instance"].add.assert_awaited_once()
+        job_data = mock_bullmq["queue_instance"].add.await_args.args[1]
+        assert job_data["correlation_id"] == "service-style"
 
     async def test_multiple_requests_do_not_accumulate_reply_workers(self, mock_bullmq):
         """Each timed-out request must drop its reply.* worker."""

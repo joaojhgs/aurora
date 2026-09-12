@@ -142,7 +142,7 @@ def install_python_dependencies(sys_info, mode):
             "pip",
             "install",
             "-e",
-            ".[runtime,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+            ".[runtime,openai,embeddings-local,ui,google,jira,github,slack,brave-search]",
         ]
     elif mode == "all-cuda":
         install_cmd = [
@@ -150,7 +150,7 @@ def install_python_dependencies(sys_info, mode):
             "pip",
             "install",
             "-e",
-            ".[runtime,cuda,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+            ".[runtime,cuda,openai,embeddings-local,ui,google,jira,github,slack,brave-search]",
         ]
     elif mode == "all-rocm":
         install_cmd = [
@@ -158,7 +158,7 @@ def install_python_dependencies(sys_info, mode):
             "pip",
             "install",
             "-e",
-            ".[runtime,rocm,openai,embeddings-local,ui,google,jira,github,slack,brave-search,openrecall]",
+            ".[runtime,rocm,openai,embeddings-local,ui,google,jira,github,slack,brave-search]",
         ]
     elif mode == "dev-cpu":
         install_cmd = ["uv", "pip", "install", "-e", ".[runtime,dev,test,build,container]"]

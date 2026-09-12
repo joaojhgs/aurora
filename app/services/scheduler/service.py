@@ -9,8 +9,11 @@ This service:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
+
+from pydantic import TypeAdapter
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.messaging import Envelope
@@ -21,6 +24,7 @@ from app.shared.contracts.models.common import EmptyOutput
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.scheduler import (
     SchedulerActionResponse,
+    SchedulerActionSpec,
     SchedulerActionSupport,
     SchedulerCancelJobRequest,
     SchedulerJobCompletedEvent,
@@ -30,9 +34,20 @@ from app.shared.contracts.models.scheduler import (
     SchedulerListJobsResponse,
     SchedulerMethods,
     SchedulerModule,
+    SchedulerOrchestratorUserInputAction,
     SchedulerPauseJobRequest,
     SchedulerResumeJobRequest,
+    SchedulerScheduleActionRequest,
+    SchedulerScheduleActionResponse,
     SchedulerScheduleJobRequest,
+    SchedulerToolBinding,
+    SchedulerToolExecuteAction,
+    SchedulerTtsSpeakAction,
+)
+from app.shared.contracts.models.tooling import (
+    ToolingEvaluateApprovalGrantRequest,
+    ToolingMethods,
+    ToolingPrepareExecutionRequest,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.services.base_service import BaseService
@@ -75,6 +90,50 @@ class SchedulerService(BaseService):
         self._jobs: dict = {}
         # Store instance globally for callback access
         _scheduler_service_instance = self
+
+    def _externalish_envelope(self, envelope: Envelope | None) -> bool:
+        """Return true when caller identity must come from the bus envelope only."""
+
+        if envelope is None:
+            return False
+        identity_source = getattr(envelope, "identity_source", None)
+        origin = getattr(envelope, "origin", "internal")
+        return origin == "external" or identity_source in {
+            "gateway_http",
+            "webrtc_rpc",
+            "mesh_peer",
+        }
+
+    def _request_with_authoritative_identity(self, request: Any, envelope: Envelope | None) -> Any:
+        """Replace spoofable caller fields with authenticated bus-envelope identity.
+
+        External transports may still provide owner fields as a requested scope, but
+        caller identity is authoritative only from the envelope.  Owner defaults are
+        derived from that caller; mismatched requested owners are later denied by
+        the normal ownership-scope checks.
+        """
+
+        if not self._externalish_envelope(envelope):
+            return request
+
+        caller_peer_id = getattr(envelope, "caller_peer_id", None) or DEFAULT_SCHEDULER_OWNER_PEER
+        caller_principal_id = getattr(envelope, "principal_id", None)
+        updates: dict[str, Any] = {
+            "caller_peer_id": caller_peer_id,
+            "caller_principal_id": caller_principal_id,
+            "delegated_permissions": [
+                str(permission) for permission in (getattr(envelope, "effective_perms", None) or [])
+            ],
+        }
+        if getattr(request, "owner_peer_id", None) is None and caller_peer_id:
+            updates["owner_peer_id"] = caller_peer_id
+        if getattr(request, "owner_principal_id", None) is None and caller_principal_id:
+            updates["owner_principal_id"] = caller_principal_id
+        if getattr(request, "correlation_id", None) is None:
+            correlation_id = getattr(envelope, "correlation_id", None)
+            if correlation_id:
+                updates["correlation_id"] = correlation_id
+        return request.model_copy(update=updates) if hasattr(request, "model_copy") else request
 
     def _target_peer_id(self, selector: MeshAddressSelector | None) -> str | None:
         if selector is None:
@@ -314,6 +373,283 @@ class SchedulerService(BaseService):
         # Just log the reload event
         log_debug(f"Scheduler service reloaded for section: {config_section}")
 
+    def _legacy_action_to_spec(
+        self, action: str, cmd: SchedulerScheduleJobRequest
+    ) -> SchedulerActionSpec | None:
+        """Translate legacy action strings into typed scheduler actions."""
+        if action.startswith("tts:speak:"):
+            return SchedulerTtsSpeakAction(text=action[len("tts:speak:") :])
+        if action.startswith("orchestrator:"):
+            return SchedulerOrchestratorUserInputAction(
+                text=action[len("orchestrator:") :],
+                source="scheduler",
+            )
+        if action.startswith("tooling:") or action.startswith("tool:"):
+            _, tool_name = action.split(":", 1)
+            tool_name = tool_name.strip()
+            if not tool_name:
+                return None
+            return SchedulerToolExecuteAction(
+                binding=SchedulerToolBinding(tool_name=tool_name),
+                arguments={},
+                mesh_selector=cmd.target_selector,
+                confirmed=bool(cmd.delegated_approval_token),
+                approval_token=cmd.delegated_approval_token,
+                policy_decision_id=cmd.policy_decision_id,
+                caller_peer_id=cmd.caller_peer_id,
+                caller_principal_id=cmd.caller_principal_id or cmd.owner_principal_id,
+                correlation_id=cmd.correlation_id,
+            )
+        return None
+
+    @staticmethod
+    def _stable_sha256(payload: dict[str, Any]) -> str:
+        """Return a deterministic hash for typed scheduler binding payloads."""
+
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        ).hexdigest()
+
+    def _schedule_binding_id(
+        self, request: SchedulerScheduleActionRequest, action: SchedulerActionSpec
+    ) -> str:
+        """Stable pre-persistence ID used to bind durable approval grants to one schedule."""
+
+        payload = {
+            "name": request.name,
+            "schedule": request.schedule,
+            "namespace": request.namespace or DEFAULT_SCHEDULER_NAMESPACE,
+            "owner_peer_id": request.owner_peer_id or DEFAULT_SCHEDULER_OWNER_PEER,
+            "owner_principal_id": request.owner_principal_id or DEFAULT_SCHEDULER_OWNER_PRINCIPAL,
+            "target_selector": (
+                request.target_selector.model_dump(mode="json")
+                if request.target_selector is not None
+                else None
+            ),
+            "action_spec": self._action_hash_payload(action),
+        }
+        return f"schedule:{self._stable_sha256(payload)[:32]}"
+
+    @classmethod
+    def _action_hash_payload(cls, action: SchedulerActionSpec) -> dict[str, Any]:
+        """Canonical action data for scheduled action tamper/binding checks."""
+
+        action_data = (
+            action.model_dump(mode="json") if hasattr(action, "model_dump") else dict(action)
+        )
+        action_data.pop("approval_token", None)
+        action_data.pop("scheduled_action_hash", None)
+        return action_data
+
+    def _scheduled_action_hash(self, action: SchedulerActionSpec) -> str:
+        """Hash the scheduled action shape without volatile approval token material."""
+
+        return self._stable_sha256(self._action_hash_payload(action))
+
+    async def _prepare_typed_action(
+        self,
+        request: SchedulerScheduleActionRequest,
+        scheduler_context: dict[str, Any],
+    ) -> tuple[
+        bool, SchedulerActionSpec | None, SchedulerToolBinding | None, str | None, str | None
+    ]:
+        """Validate and normalize a typed scheduled action before persistence."""
+        try:
+            action = TypeAdapter(SchedulerActionSpec).validate_python(
+                request.action_spec.model_dump(mode="json")
+                if hasattr(request.action_spec, "model_dump")
+                else request.action_spec
+            )
+        except Exception as error:
+            return False, None, None, "invalid_action_spec", str(error)
+
+        if isinstance(action, SchedulerToolExecuteAction):
+            schedule_id = action.schedule_id or self._schedule_binding_id(request, action)
+            scheduled_action_hash = action.scheduled_action_hash or self._scheduled_action_hash(
+                action.model_copy(update={"schedule_id": schedule_id})
+            )
+            prepare = ToolingPrepareExecutionRequest(
+                tool_name=action.binding.tool_name,
+                arguments=action.arguments,
+                expected_args_schema_hash=action.binding.args_schema_hash,
+                mesh_selector=action.mesh_selector or request.target_selector,
+                resource_selector=action.resource_selector,
+                confirmed=action.confirmed,
+                approval_token=action.approval_token or request.delegated_approval_token,
+                correlation_id=action.correlation_id or request.correlation_id,
+                caller_peer_id=scheduler_context.get("caller_peer_id"),
+                caller_principal_id=scheduler_context.get("caller_principal_id")
+                or scheduler_context.get("owner_principal_id"),
+                caller_permissions=scheduler_context.get("delegated_permissions") or [],
+                schedule_id=schedule_id,
+                scheduled_action_hash=scheduled_action_hash,
+            )
+            result = await self.bus.request(
+                ToolingMethods.PREPARE_EXECUTION,
+                prepare,
+                priority=get_system_priority(),
+                origin="system",
+                timeout=10.0,
+                correlation_id=request.correlation_id,
+            )
+            if not result.ok:
+                return False, action, None, "prepare_failed", result.error
+            data = result.data or {}
+            if isinstance(data, dict) and data.get("ok") is False:
+                decision = data.get("policy_decision") or {}
+                return (
+                    False,
+                    action,
+                    None,
+                    decision.get("reason") or "prepare_denied",
+                    data.get("error"),
+                )
+            decision = data.get("policy_decision") if isinstance(data, dict) else None
+            if isinstance(decision, dict) and decision.get("approval_required"):
+                grant_result = await self.bus.request(
+                    ToolingMethods.EVALUATE_APPROVAL_GRANT,
+                    ToolingEvaluateApprovalGrantRequest(**prepare.model_dump(mode="json")),
+                    priority=get_system_priority(),
+                    origin="system",
+                    timeout=10.0,
+                    correlation_id=request.correlation_id,
+                )
+                grant_data = grant_result.data if grant_result.ok else {}
+                if not grant_result.ok or not (
+                    isinstance(grant_data, dict) and grant_data.get("ok")
+                ):
+                    return (
+                        False,
+                        action,
+                        None,
+                        "approval_required",
+                        "approval-required scheduled tool action needs a durable grant",
+                    )
+
+            binding = SchedulerToolBinding(
+                tool_name=action.binding.tool_name,
+                local_tool_name=data.get("local_tool_name") or action.binding.local_tool_name,
+                global_tool_id=data.get("global_tool_id") or action.binding.global_tool_id,
+                provider_peer_id=data.get("provider_peer_id") or action.binding.provider_peer_id,
+                provider_service_instance_id=(
+                    data.get("provider_service_instance_id")
+                    or action.binding.provider_service_instance_id
+                ),
+                args_schema_hash=data.get("args_schema_hash") or action.binding.args_schema_hash,
+                catalog_generated_at=action.binding.catalog_generated_at,
+            )
+            normalized = action.model_copy(
+                update={
+                    "binding": binding,
+                    "mesh_selector": action.mesh_selector or request.target_selector,
+                    "caller_peer_id": scheduler_context.get("caller_peer_id"),
+                    "caller_principal_id": scheduler_context.get("caller_principal_id"),
+                    "policy_decision_id": data.get("policy_decision", {}).get("decision_id")
+                    if isinstance(data.get("policy_decision"), dict)
+                    else action.policy_decision_id,
+                    "correlation_id": data.get("correlation_id") or action.correlation_id,
+                    "schedule_id": schedule_id,
+                    "scheduled_action_hash": scheduled_action_hash,
+                }
+            )
+            scheduler_context["policy_decision_id"] = normalized.policy_decision_id
+            scheduler_context["target_peer_id"] = self._target_peer_id(normalized.mesh_selector)
+            return True, normalized, binding, None, None
+
+        return True, action, None, None, None
+
+    @method_contract(
+        method_id=SchedulerMethods.SCHEDULE_ACTION,
+        summary="Schedule a typed bus action",
+        input_model=SchedulerScheduleActionRequest,
+        output_model=SchedulerScheduleActionResponse,
+        exposure="both",
+        method_type="manage",
+        required_perms=["Scheduler.manage"],
+        callable_feature_ids=["job_scheduling"],
+    )
+    async def schedule_action(
+        self, request: SchedulerScheduleActionRequest, envelope: Envelope | None = None
+    ) -> SchedulerScheduleActionResponse:
+        """Schedule a typed action after validation/preparation."""
+        request = self._request_with_authoritative_identity(request, envelope)
+        scheduler_context = {
+            "namespace": request.namespace or DEFAULT_SCHEDULER_NAMESPACE,
+            "owner_peer_id": request.owner_peer_id or DEFAULT_SCHEDULER_OWNER_PEER,
+            "owner_principal_id": request.owner_principal_id or DEFAULT_SCHEDULER_OWNER_PRINCIPAL,
+            "target_peer_id": self._target_peer_id(request.target_selector),
+            "target_resource_namespace": self._target_resource_namespace(request.target_selector),
+            "delegated_permissions": request.delegated_permissions,
+            "policy_decision_id": None,
+            "delegated_approval_token": request.delegated_approval_token,
+            "correlation_id": request.correlation_id,
+            "caller_peer_id": request.caller_peer_id,
+            "caller_principal_id": request.caller_principal_id,
+            "privacy_class": request.privacy_class or DEFAULT_SCHEDULER_PRIVACY_CLASS,
+            "source": request.source or "scheduler",
+        }
+        if not self._scope_allows_schedule(scheduler_context):
+            return SchedulerScheduleActionResponse(
+                ok=False,
+                status="denied",
+                reason="owner_scope_mismatch",
+                correlation_id=request.correlation_id,
+            )
+
+        ok, action, binding, reason, detail = await self._prepare_typed_action(
+            request, scheduler_context
+        )
+        if not ok or not action:
+            await self._audit_scheduler_event(
+                "scheduler.schedule.denied",
+                scheduler_context,
+                status="denied",
+                reason=reason or detail or "invalid_action",
+            )
+            return SchedulerScheduleActionResponse(
+                ok=False,
+                status="denied" if reason and "denied" in reason else "invalid",
+                reason=detail or reason,
+                correlation_id=request.correlation_id,
+            )
+
+        job_id = await self.cron_service.schedule_from_text(
+            name=request.name,
+            schedule_text=request.schedule,
+            callback="__typed_action__.execute_action_spec",
+            callback_args={"scheduler_context": scheduler_context},
+            action_kind=getattr(action, "kind", None),
+            action_spec=action.model_dump(mode="json"),
+            action_spec_version=1,
+            prepared_binding=binding.model_dump(mode="json") if binding else None,
+            policy_decision_id=scheduler_context.get("policy_decision_id"),
+            is_active=request.enabled,
+        )
+        if not job_id:
+            return SchedulerScheduleActionResponse(
+                ok=False,
+                status="failed",
+                reason="scheduler_create_failed",
+                prepared_tool=binding,
+                policy_decision_id=scheduler_context.get("policy_decision_id"),
+                correlation_id=request.correlation_id,
+            )
+
+        await self._audit_scheduler_event(
+            "scheduler.schedule.created",
+            scheduler_context,
+            status="allowed",
+            job_id=str(job_id),
+        )
+        return SchedulerScheduleActionResponse(
+            ok=True,
+            job_id=str(job_id),
+            status="scheduled",
+            prepared_tool=binding,
+            policy_decision_id=scheduler_context.get("policy_decision_id"),
+            correlation_id=request.correlation_id,
+        )
+
     @method_contract(
         method_id=SchedulerMethods.SCHEDULE,
         summary="Schedule a new job",
@@ -322,10 +658,14 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.SCHEDULE],
+        callable_feature_ids=["job_scheduling"],
     )
-    async def schedule_job(self, cmd: SchedulerScheduleJobRequest) -> EmptyOutput:
-        """Handle schedule job command."""
+    async def schedule_job(
+        self, cmd: SchedulerScheduleJobRequest, envelope: Envelope | None = None
+    ) -> EmptyOutput:
+        """Handle legacy schedule command by adapting to ScheduleAction."""
         try:
+            cmd = self._request_with_authoritative_identity(cmd, envelope)
             scheduler_context = self._scheduler_context_from_schedule(cmd)
             if not self._scope_allows_schedule(scheduler_context):
                 log_warning(f"Denied schedule for job '{cmd.name}' outside caller ownership scope")
@@ -334,6 +674,16 @@ class SchedulerService(BaseService):
                     scheduler_context,
                     status="denied",
                     reason="owner_scope_mismatch",
+                )
+                return EmptyOutput()
+
+            action_spec = self._legacy_action_to_spec(cmd.action, cmd)
+            if not action_spec:
+                await self._audit_scheduler_event(
+                    "scheduler.schedule.denied",
+                    scheduler_context,
+                    status="denied",
+                    reason="unknown_legacy_action",
                 )
                 return EmptyOutput()
 
@@ -352,54 +702,32 @@ class SchedulerService(BaseService):
                 )
                 return EmptyOutput()
 
-            log_info(
-                f"Scheduling job: {cmd.name} ({cmd.schedule}) "
-                f"namespace={scheduler_context['namespace']}"
+            response = await self.schedule_action(
+                SchedulerScheduleActionRequest(
+                    name=cmd.name,
+                    schedule=cmd.schedule,
+                    action_spec=action_spec,
+                    enabled=cmd.enabled,
+                    timezone=cmd.timezone,
+                    source=cmd.source,
+                    privacy_class=cmd.privacy_class,
+                    namespace=cmd.namespace,
+                    owner_peer_id=cmd.owner_peer_id or cmd.caller_peer_id,
+                    owner_principal_id=cmd.owner_principal_id or cmd.caller_principal_id,
+                    target_selector=cmd.target_selector,
+                    delegated_permissions=cmd.delegated_permissions,
+                    delegated_approval_token=cmd.delegated_approval_token,
+                    correlation_id=cmd.correlation_id,
+                    caller_peer_id=cmd.caller_peer_id,
+                    caller_principal_id=cmd.caller_principal_id,
+                ),
+                envelope=envelope,
             )
-
-            # Schedule using CronService with a proper callback function
-            # The callback will be called by scheduler_manager with job_id, job_name from callback_args
-            job_id = await self.cron_service.schedule_from_text(
-                text=cmd.schedule,
-                callback="app.scheduler.service.fire_scheduled_job",  # Module.function string
-                job_name=cmd.name,
-                callback_args={
-                    "job_name": cmd.name,
-                    "action": cmd.action,
-                    "scheduler_context": scheduler_context,
-                },
-            )
-
-            if job_id:
-                # Store job for tracking
-                self._jobs[job_id] = cmd
-                log_debug(f"Job '{cmd.name}' scheduled successfully with ID: {job_id}")
-                await self._audit_scheduler_event(
-                    "scheduler.schedule.created",
-                    scheduler_context,
-                    status="allowed",
-                    job_id=str(job_id),
-                )
-
-                # Store in database via DBService
-                from app.shared.contracts.models.db import DBMethods, DBStoreCronJobRequest
-
-                await self.bus.publish(
-                    DBMethods.SAVE_CRON_JOB,
-                    DBStoreCronJobRequest(
-                        name=cmd.name, schedule=cmd.schedule, action=cmd.action, enabled=cmd.enabled
-                    ),
-                    event=False,  # Command
-                    origin="internal",
-                )
+            if response.ok and response.job_id:
+                self._jobs[response.job_id] = cmd
+                log_debug(f"Job '{cmd.name}' scheduled successfully with ID: {response.job_id}")
             else:
                 log_warning(f"Failed to schedule job '{cmd.name}'")
-                await self._audit_scheduler_event(
-                    "scheduler.schedule.denied",
-                    scheduler_context,
-                    status="failed",
-                    reason="scheduler_create_failed",
-                )
 
             return EmptyOutput()
 
@@ -415,10 +743,14 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.CANCEL],
+        callable_feature_ids=["job_lifecycle"],
     )
-    async def cancel_job(self, cmd: SchedulerCancelJobRequest) -> EmptyOutput:
+    async def cancel_job(
+        self, cmd: SchedulerCancelJobRequest, envelope: Envelope | None = None
+    ) -> EmptyOutput:
         """Handle cancel job command."""
         try:
+            cmd = self._request_with_authoritative_identity(cmd, envelope)
             log_info(f"Canceling job: {cmd.job_id}")
 
             # Cancel job via CronService
@@ -483,9 +815,13 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.PAUSE],
+        callable_feature_ids=["job_lifecycle"],
     )
-    async def pause_job(self, cmd: SchedulerPauseJobRequest) -> SchedulerActionResponse:
+    async def pause_job(
+        self, cmd: SchedulerPauseJobRequest, envelope: Envelope | None = None
+    ) -> SchedulerActionResponse:
         """Return an audited unsupported response for pause semantics."""
+        cmd = self._request_with_authoritative_identity(cmd, envelope)
         job_id_str = str(cmd.job_id)
         try:
             log_info(f"Pause requested for job: {cmd.job_id}")
@@ -545,9 +881,13 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="manage",
         required_perms=[SchedulerMethods.RESUME],
+        callable_feature_ids=["job_lifecycle"],
     )
-    async def resume_job(self, cmd: SchedulerResumeJobRequest) -> SchedulerActionResponse:
+    async def resume_job(
+        self, cmd: SchedulerResumeJobRequest, envelope: Envelope | None = None
+    ) -> SchedulerActionResponse:
         """Return an audited unsupported response for resume semantics."""
+        cmd = self._request_with_authoritative_identity(cmd, envelope)
         job_id_str = str(cmd.job_id)
         try:
             log_info(f"Resume requested for job: {cmd.job_id}")
@@ -607,8 +947,11 @@ class SchedulerService(BaseService):
         exposure="both",
         method_type="use",
         required_perms=[SchedulerMethods.LIST_JOBS],
+        callable_feature_ids=["job_discovery"],
     )
-    async def list_jobs(self, query: SchedulerListJobsRequest) -> SchedulerListJobsResponse:
+    async def list_jobs(
+        self, query: SchedulerListJobsRequest, envelope: Envelope | None = None
+    ) -> SchedulerListJobsResponse:
         """List all scheduled jobs.
 
         Args:
@@ -618,6 +961,7 @@ class SchedulerService(BaseService):
             Response with list of scheduled jobs
         """
         try:
+            query = self._request_with_authoritative_identity(query, envelope)
             log_debug(
                 f"Listing scheduled jobs (enabled_only={query.enabled_only}, "
                 f"limit={query.limit}, offset={query.offset})"
@@ -648,6 +992,12 @@ class SchedulerService(BaseService):
                     schedule=job.schedule_value,
                     action=(job.callback_args or {}).get("action", job.callback_function),
                     enabled=job.is_active,
+                    action_kind=job.action_kind,
+                    prepared_binding=(
+                        SchedulerToolBinding.model_validate(job.prepared_binding)
+                        if job.prepared_binding
+                        else None
+                    ),
                     next_run=job.next_run_time.isoformat() if job.next_run_time else None,
                     last_run=job.last_run_time.isoformat() if job.last_run_time else None,
                     status=job.status.value if hasattr(job.status, "value") else str(job.status),
@@ -747,6 +1097,10 @@ class SchedulerService(BaseService):
                     job_name=job_name,
                     action=action,
                     scheduled_time=datetime.utcnow().isoformat(),
+                    action_kind=context.get("action_kind"),
+                    provider_peer_id=context.get("provider_peer_id"),
+                    provider_service_instance_id=context.get("provider_service_instance_id"),
+                    global_tool_id=context.get("global_tool_id"),
                     namespace=context["namespace"],
                     owner_peer_id=context["owner_peer_id"],
                     owner_principal_id=context["owner_principal_id"],
@@ -800,6 +1154,13 @@ class SchedulerService(BaseService):
                                     job_name=job_name,
                                     success=False,
                                     error=reason,
+                                    action_kind=context.get("action_kind"),
+                                    provider_peer_id=context.get("provider_peer_id"),
+                                    provider_service_instance_id=context.get(
+                                        "provider_service_instance_id"
+                                    ),
+                                    global_tool_id=context.get("global_tool_id"),
+                                    result_summary=reason,
                                     namespace=context["namespace"],
                                     owner_peer_id=context["owner_peer_id"],
                                     owner_principal_id=context["owner_principal_id"],
@@ -851,6 +1212,11 @@ class SchedulerService(BaseService):
                     job_id=job_id,
                     job_name=job_name,
                     success=True,
+                    action_kind=context.get("action_kind"),
+                    provider_peer_id=context.get("provider_peer_id"),
+                    provider_service_instance_id=context.get("provider_service_instance_id"),
+                    global_tool_id=context.get("global_tool_id"),
+                    result_summary="completed",
                     namespace=context["namespace"],
                     owner_peer_id=context["owner_peer_id"],
                     owner_principal_id=context["owner_principal_id"],
@@ -882,6 +1248,11 @@ class SchedulerService(BaseService):
                     job_name=job_name,
                     success=False,
                     error=str(e),
+                    action_kind=context.get("action_kind"),
+                    provider_peer_id=context.get("provider_peer_id"),
+                    provider_service_instance_id=context.get("provider_service_instance_id"),
+                    global_tool_id=context.get("global_tool_id"),
+                    result_summary=str(e),
                     namespace=context.get("namespace", DEFAULT_SCHEDULER_NAMESPACE),
                     owner_peer_id=context.get("owner_peer_id", DEFAULT_SCHEDULER_OWNER_PEER),
                     owner_principal_id=context.get(

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-open-deep-link"
+description = "Enables the aurora_native_open_deep_link command without any pre-configured scope."
+commands.allow = ["aurora_native_open_deep_link"]
+
+[[permission]]
+identifier = "deny-aurora-native-open-deep-link"
+description = "Denies the aurora_native_open_deep_link command without any pre-configured scope."
+commands.deny = ["aurora_native_open_deep_link"]

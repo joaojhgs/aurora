@@ -1,0 +1,203 @@
+{
+  "$defs": {
+    "MeshAddressSelector": {
+      "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "service_instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Instance Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Id"
+        }
+      },
+      "title": "MeshAddressSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Start an ordered text-to-speech streaming session.\n\nStream sessions accept text fragments through ``TTSStreamChunkRequest`` and\npublish synthesized audio fragments as ``TTSAudioChunkEvent`` events.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "format": {
+      "default": "wav",
+      "title": "Format",
+      "type": "string"
+    },
+    "interrupt": {
+      "default": true,
+      "title": "Interrupt",
+      "type": "boolean"
+    },
+    "language": {
+      "anyOf": [
+        {
+          "maxLength": 255,
+          "minLength": 2,
+          "pattern": "^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language",
+      "x-aurora-speech-language-string-normalize": true
+    },
+    "mesh_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshAddressSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "play_on_server": {
+      "default": true,
+      "title": "Play On Server",
+      "type": "boolean"
+    },
+    "sample_rate": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 192000,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Rate"
+    },
+    "speed": {
+      "default": 1.0,
+      "title": "Speed",
+      "type": "number"
+    },
+    "stream_id": {
+      "title": "Stream Id",
+      "type": "string"
+    },
+    "voice": {
+      "anyOf": [
+        {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Voice"
+    }
+  },
+  "required": [
+    "stream_id"
+  ],
+  "title": "TTSStreamStartRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

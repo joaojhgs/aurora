@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "MeshAddressSelector": {
+      "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "service_instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Instance Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Id"
+        }
+      },
+      "title": "MeshAddressSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Seal a clone prompt upload after full validation.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "final_sequence": {
+      "maximum": 42,
+      "minimum": 0,
+      "title": "Final Sequence",
+      "type": "integer"
+    },
+    "final_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Sha256",
+      "type": "string"
+    },
+    "mesh_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshAddressSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "operation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Operation Id",
+      "type": "string",
+      "x-aurora-tts-operation-id": true
+    },
+    "upload_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Upload Id",
+      "type": "string",
+      "x-aurora-string-non-blank": true
+    }
+  },
+  "required": [
+    "final_sequence",
+    "final_sha256",
+    "operation_id",
+    "upload_id"
+  ],
+  "title": "TTSVoiceImportEndRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

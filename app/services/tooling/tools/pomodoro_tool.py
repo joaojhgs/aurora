@@ -8,6 +8,14 @@ from app.helpers.aurora_logger import log_error
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
 from app.services.scheduler.cron_service import get_cron_service
+from app.shared.contracts.models.scheduler import (
+    SchedulerMethods,
+    SchedulerScheduleActionRequest,
+    SchedulerToolBinding,
+    SchedulerToolExecuteAction,
+)
+from app.shared.contracts.models.tooling import ToolingMethods
+from app.shared.contracts.models.tts import TTSMethods
 
 # Simple in-memory storage for current Pomodoro session
 _current_session = {
@@ -22,6 +30,59 @@ _current_session = {
 def _format_absolute_time(target_time: datetime) -> str:
     """Format datetime for CronService absolute scheduling."""
     return target_time.replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+
+
+async def _schedule_pomodoro_transition(
+    bus: MessageBus | None,
+    *,
+    name: str,
+    absolute_time: str,
+    transition: str,
+) -> str | None:
+    """Schedule the next Pomodoro transition through Scheduler.ScheduleAction."""
+
+    if not bus:
+        return None
+    result = await bus.request(
+        SchedulerMethods.SCHEDULE_ACTION,
+        SchedulerScheduleActionRequest(
+            name=name,
+            schedule=absolute_time,
+            action_spec=SchedulerToolExecuteAction(
+                binding=SchedulerToolBinding(tool_name="pomodoro_transition_tool"),
+                arguments={"transition": transition},
+            ),
+            source="tooling.pomodoro",
+            privacy_class="personal",
+        ),
+        priority=get_interactive_priority(),
+        origin="internal",
+        timeout=10.0,
+    )
+    data = result.data if result.ok else None
+    if hasattr(data, "model_dump"):
+        data = data.model_dump(mode="json")
+    if isinstance(data, dict):
+        return data.get("job_id")
+    return None
+
+
+async def _publish_pomodoro_tts(bus: MessageBus | None, message: str) -> None:
+    """Publish Pomodoro speech through the TTS bus contract."""
+
+    if not bus:
+        log_error("Bus not provided to pomodoro transition; cannot publish TTS")
+        return
+    from app.shared.contracts.models.tts import TTSMethods
+    from app.shared.messaging.models.tts_models import TTSRequest
+
+    await bus.publish(
+        TTSMethods.REQUEST,
+        TTSRequest(text=message, interrupt=False),
+        event=False,
+        priority=get_interactive_priority(),
+        origin="internal",
+    )
 
 
 @tool
@@ -66,17 +127,24 @@ async def start_pomodoro_tool(
             }
         )
 
-        # Schedule the first work session end
-        cron = get_cron_service()
+        if not bus:
+            return "❌ Message bus is required to schedule Pomodoro transitions."
+
+        # Schedule the first work session end through typed Scheduler/Tooling action.
         work_end_time = (_current_session["start_time"] or datetime.now()) + timedelta(
             minutes=work_minutes
         )
-        await cron.schedule_absolute(
+        job_id = await _schedule_pomodoro_transition(
+            bus,
             name="pomodoro_work_end",
             absolute_time=_format_absolute_time(work_end_time),
-            callback="app.tooling.tools.pomodoro_tool.work_session_end",
-            callback_args={},
+            transition="work_session_end",
         )
+        if not job_id:
+            _current_session.update(
+                {"active": False, "type": None, "cycle": 0, "total_cycles": 0, "start_time": None}
+            )
+            return "❌ Failed to schedule the first Pomodoro transition."
 
         return f"🍅 Pomodoro started! Work session: {work_minutes} minutes (Cycle 1/{cycles_before_long_break})"
 
@@ -183,14 +251,28 @@ Remaining: {remaining_str}"""
         return f"❌ Error getting status: {e}"
 
 
-# Callback functions for scheduler
-def work_session_end(**kwargs) -> dict[str, Any]:
-    """Called when a work session ends"""
+@tool
+async def pomodoro_transition_tool(
+    transition: str,
+    bus: MessageBus | None = None,
+) -> str:
+    """Run a scheduled Pomodoro transition and schedule the next typed transition."""
+
+    if transition == "work_session_end":
+        result = await _work_session_end(bus)
+    elif transition == "break_session_end":
+        result = await _break_session_end(bus)
+    else:
+        result = {"success": False, "message": f"Unknown Pomodoro transition: {transition}"}
+    return str(result.get("message") if isinstance(result, dict) else result)
+
+
+async def _work_session_end(bus: MessageBus | None = None) -> dict[str, Any]:
+    """Called when a work session ends."""
     try:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
 
-        bus = kwargs.get("bus")
         cycle = _current_session["cycle"]
         cycles_before_long_break = _current_session.get("cycles_before_long_break", 4)
 
@@ -212,49 +294,16 @@ def work_session_end(**kwargs) -> dict[str, Any]:
             message = f"Trabalho concluído! Hora de uma pausa de {break_minutes} minutos. Ciclo {cycle} de {cycles_before_long_break}."
             _current_session.update({"type": "short_break", "start_time": datetime.now()})
 
-        # Send TTS via bus
-        if bus:
-            from app.shared.contracts.models.tts import TTSMethods
-            from app.shared.messaging.models.tts_models import TTSRequest
+        await _publish_pomodoro_tts(bus, message)
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSMethods.REQUEST,
-                    TTSRequest(text=message, interrupt=False),
-                    event=False,
-                    priority=get_interactive_priority(),
-                    origin="internal",
-                )
-            )
-        else:
-            from app.services.tts.tts_engine import play
-
-            play(message)
-
-        # Schedule break end
-        async def schedule_break_end():
-            cron = get_cron_service()
-            break_start = _current_session.get("start_time") or datetime.now()
-            break_end_time = break_start + timedelta(minutes=break_minutes)
-            await cron.schedule_absolute(
-                name="pomodoro_break_end",
-                absolute_time=_format_absolute_time(break_end_time),
-                callback="app.tooling.tools.pomodoro_tool.break_session_end",
-                callback_args={},
-            )
-
-        # Run async scheduling in background
-        import threading
-
-        def run_async():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(schedule_break_end())
-            loop.close()
-
-        thread = threading.Thread(target=run_async)
-        thread.daemon = True
-        thread.start()
+        break_start = _current_session.get("start_time") or datetime.now()
+        break_end_time = break_start + timedelta(minutes=break_minutes)
+        await _schedule_pomodoro_transition(
+            bus,
+            name="pomodoro_break_end",
+            absolute_time=_format_absolute_time(break_end_time),
+            transition="break_session_end",
+        )
 
         return {"success": True, "message": f"Work session {cycle} completed, break started"}
 
@@ -263,13 +312,12 @@ def work_session_end(**kwargs) -> dict[str, Any]:
         return {"success": False, "message": str(e)}
 
 
-def break_session_end(**kwargs) -> dict[str, Any]:
-    """Called when a break session ends"""
+async def _break_session_end(bus: MessageBus | None = None) -> dict[str, Any]:
+    """Called when a break session ends."""
     try:
         if not _current_session["active"]:
             return {"success": False, "message": "No active session"}
 
-        bus = kwargs.get("bus")
         session_type = _current_session["type"]
         work_minutes = _current_session.get("work_minutes", 25)
 
@@ -281,52 +329,42 @@ def break_session_end(**kwargs) -> dict[str, Any]:
             message = f"Pausa terminada! Hora de trabalhar novamente por {work_minutes} minutos. Ciclo {cycle}!"
             _current_session.update({"type": "work", "cycle": cycle, "start_time": datetime.now()})
 
-        # Send TTS via bus
-        if bus:
-            from app.shared.contracts.models.tts import TTSMethods
-            from app.shared.messaging.models.tts_models import TTSRequest
+        await _publish_pomodoro_tts(bus, message)
 
-            asyncio.create_task(
-                bus.publish(
-                    TTSMethods.REQUEST,
-                    TTSRequest(text=message, interrupt=False),
-                    event=False,
-                    priority=get_interactive_priority(),
-                    origin="internal",
-                )
-            )
-        else:
-            from app.services.tts.tts_engine import play
-
-            play(message)
-
-        # Schedule next work session end
-        async def schedule_work_end():
-            cron = get_cron_service()
-            work_start = _current_session.get("start_time") or datetime.now()
-            work_end_time = work_start + timedelta(minutes=work_minutes)
-            await cron.schedule_absolute(
-                name="pomodoro_work_end",
-                absolute_time=_format_absolute_time(work_end_time),
-                callback="app.tooling.tools.pomodoro_tool.work_session_end",
-                callback_args={},
-            )
-
-        # Run async scheduling in background
-        import threading
-
-        def run_async():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(schedule_work_end())
-            loop.close()
-
-        thread = threading.Thread(target=run_async)
-        thread.daemon = True
-        thread.start()
+        work_start = _current_session.get("start_time") or datetime.now()
+        work_end_time = work_start + timedelta(minutes=work_minutes)
+        await _schedule_pomodoro_transition(
+            bus,
+            name="pomodoro_work_end",
+            absolute_time=_format_absolute_time(work_end_time),
+            transition="work_session_end",
+        )
 
         return {"success": True, "message": "Break ended, work session started"}
 
     except Exception as e:
         log_error(f"Error in break_session_end: {e}")
         return {"success": False, "message": str(e)}
+
+
+for _tts_pomodoro_tool in (start_pomodoro_tool, pomodoro_transition_tool):
+    _tts_pomodoro_tool.metadata = {
+        **(_tts_pomodoro_tool.metadata or {}),
+        "required_permissions": [ToolingMethods.EXECUTE_TOOL, TTSMethods.REQUEST],
+    }
+
+
+# Legacy callback compatibility for existing rows only. New rows are created via
+# typed Scheduler.ScheduleAction and execute pomodoro_transition_tool.
+def work_session_end(**kwargs) -> dict[str, Any]:
+    """Legacy callback wrapper for existing scheduler rows."""
+
+    bus = kwargs.get("bus")
+    return asyncio.run(_work_session_end(bus))
+
+
+def break_session_end(**kwargs) -> dict[str, Any]:
+    """Legacy callback wrapper for existing scheduler rows."""
+
+    bus = kwargs.get("bus")
+    return asyncio.run(_break_session_end(bus))

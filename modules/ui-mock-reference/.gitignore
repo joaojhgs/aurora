@@ -15,3 +15,13 @@ node_modules
 .DS_Store
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+# design-sync (Claude Design)
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+# the root .gitignore's unanchored `config.json*` (for an unrelated local
+# secrets file) would otherwise also swallow this durable, committed file
+!.design-sync/config.json

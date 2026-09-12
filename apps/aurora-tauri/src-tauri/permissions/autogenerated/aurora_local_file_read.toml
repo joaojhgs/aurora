@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-local-file-read"
+description = "Enables the aurora_local_file_read command without any pre-configured scope."
+commands.allow = ["aurora_local_file_read"]
+
+[[permission]]
+identifier = "deny-aurora-local-file-read"
+description = "Denies the aurora_local_file_read command without any pre-configured scope."
+commands.deny = ["aurora_local_file_read"]

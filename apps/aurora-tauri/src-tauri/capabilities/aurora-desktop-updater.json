@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aurora-desktop-updater",
+  "description": "Desktop-only Aurora signed updater capability. Kept outside the shared shell capability so iOS builds do not validate the desktop-only updater plugin permission.",
+  "windows": ["main"],
+  "permissions": ["updater:default"]
+}

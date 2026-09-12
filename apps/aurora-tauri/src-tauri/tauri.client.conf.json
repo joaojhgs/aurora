@@ -1,0 +1,18 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm build:frontend:desktop-client"
+  },
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-thin"
+      ],
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https: wss:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:"
+    }
+  },
+  "bundle": {
+    "externalBin": [],
+    "resources": {},
+    "longDescription": "Aurora desktop client packages the official Tauri 2 shell without Python service resources. Gateway and signaling endpoints are configured at runtime during onboarding and are not compiled into the artifact."
+  }
+}

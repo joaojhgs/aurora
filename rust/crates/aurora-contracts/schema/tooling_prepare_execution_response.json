@@ -1,0 +1,300 @@
+{
+  "$defs": {
+    "ToolingPolicyDecision": {
+      "description": "Result of evaluating Tooling sharing and approval policy.",
+      "properties": {
+        "allowed": {
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "approval_mode": {
+          "enum": [
+            "allow_once",
+            "allow_until_expiry",
+            "approve_all_for_peer",
+            "approve_all_for_session",
+            "approve_all_local_safe",
+            "ask_each_time",
+            "deny_all",
+            "dry_run_only"
+          ],
+          "title": "Approval Mode",
+          "type": "string"
+        },
+        "approval_required": {
+          "title": "Approval Required",
+          "type": "boolean"
+        },
+        "auto_approved_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Approved Reason"
+        },
+        "decision_id": {
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "effective_default": {
+          "anyOf": [
+            {
+              "enum": [
+                "allow_once",
+                "allow_until_expiry",
+                "approve_all_for_peer",
+                "approve_all_for_session",
+                "approve_all_local_safe",
+                "ask_each_time",
+                "deny_all",
+                "dry_run_only"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective Default"
+        },
+        "grant_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Id"
+        },
+        "grant_scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "always",
+                "deny_always",
+                "deny_once",
+                "once",
+                "scheduled_execution",
+                "session",
+                "until_expiry"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Scope"
+        },
+        "policy_rule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Rule Id"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "share": {
+          "title": "Share",
+          "type": "boolean"
+        },
+        "token_ttl_seconds": {
+          "default": 300,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Token Ttl Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "allowed",
+        "approval_mode",
+        "approval_required",
+        "decision_id",
+        "share"
+      ],
+      "title": "ToolingPolicyDecision",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Execution preparation details.",
+  "properties": {
+    "args_hash": {
+      "title": "Args Hash",
+      "type": "string"
+    },
+    "args_schema_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Args Schema Hash"
+    },
+    "argument_visibility": {
+      "additionalProperties": {
+        "enum": [
+          "display",
+          "hash_only",
+          "raw_never",
+          "secret",
+          "support_bundle_redacted"
+        ],
+        "type": "string"
+      },
+      "title": "Argument Visibility",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "capability_class": {
+      "default": "read",
+      "enum": [
+        "admin",
+        "device",
+        "execute",
+        "network",
+        "read",
+        "secrets",
+        "write"
+      ],
+      "title": "Capability Class",
+      "type": "string"
+    },
+    "correlation_id": {
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "display_args_preview": {
+      "additionalProperties": {
+        "x-aurora-json-value": true
+      },
+      "title": "Display Args Preview",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "global_tool_id": {
+      "title": "Global Tool Id",
+      "type": "string"
+    },
+    "local_tool_name": {
+      "title": "Local Tool Name",
+      "type": "string"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "policy_decision": {
+      "$ref": "#/$defs/ToolingPolicyDecision"
+    },
+    "provider_peer_id": {
+      "title": "Provider Peer Id",
+      "type": "string"
+    },
+    "provider_service_instance_id": {
+      "title": "Provider Service Instance Id",
+      "type": "string"
+    },
+    "resource_scope": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Resource Scope",
+      "type": "array"
+    },
+    "resource_selector_hash": {
+      "title": "Resource Selector Hash",
+      "type": "string"
+    },
+    "route_decision_id": {
+      "title": "Route Decision Id",
+      "type": "string"
+    },
+    "secrets_redacted": {
+      "default": true,
+      "title": "Secrets Redacted",
+      "type": "boolean"
+    },
+    "source": {
+      "default": "unknown",
+      "enum": [
+        "core",
+        "mcp",
+        "mesh_peer",
+        "plugin",
+        "unknown"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "source_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Id"
+    },
+    "trust_tier": {
+      "default": "untrusted",
+      "enum": [
+        "blocked",
+        "trusted",
+        "untrusted"
+      ],
+      "title": "Trust Tier",
+      "type": "string"
+    }
+  },
+  "required": [
+    "args_hash",
+    "correlation_id",
+    "global_tool_id",
+    "local_tool_name",
+    "ok",
+    "policy_decision",
+    "provider_peer_id",
+    "provider_service_instance_id",
+    "resource_selector_hash",
+    "route_decision_id"
+  ],
+  "title": "ToolingPrepareExecutionResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

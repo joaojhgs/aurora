@@ -1,0 +1,337 @@
+{
+  "$defs": {
+    "MeshAddressSelector": {
+      "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "service_instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Instance Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Id"
+        }
+      },
+      "title": "MeshAddressSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "ToolingResourceSelector": {
+      "description": "Explicit resource selector for safety-sensitive tool execution.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "resource_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "resource_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Type"
+        }
+      },
+      "title": "ToolingResourceSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request a policy decision and argument binding before execution.",
+  "properties": {
+    "approval_token": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Token"
+    },
+    "arguments": {
+      "additionalProperties": {
+        "x-aurora-json-value": true
+      },
+      "title": "Arguments",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "caller_device_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caller Device Id"
+    },
+    "caller_peer_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caller Peer Id"
+    },
+    "caller_permissions": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caller Permissions"
+    },
+    "caller_principal_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caller Principal Id"
+    },
+    "confirmed": {
+      "default": false,
+      "title": "Confirmed",
+      "type": "boolean"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "dry_run": {
+      "default": false,
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "expected_args_schema_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Args Schema Hash"
+    },
+    "mesh_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshAddressSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resource_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ToolingResourceSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "schedule_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Schedule Id"
+    },
+    "scheduled_action_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scheduled Action Hash"
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "arguments",
+    "tool_name"
+  ],
+  "title": "ToolingPrepareExecutionRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

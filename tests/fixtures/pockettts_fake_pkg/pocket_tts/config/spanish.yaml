@@ -1,0 +1,4 @@
+model_path: models/spanish.bin
+tokenizer_file: tokenizers/spanish.json
+repo_revision: pockettts-test
+language: spanish

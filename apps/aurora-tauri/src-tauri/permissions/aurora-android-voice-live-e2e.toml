@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-android-voice-live-e2e"
+description = "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue."
+commands.allow = ["aurora_android_voice_live_test_inject_pcm"]

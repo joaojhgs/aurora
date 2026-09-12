@@ -1,0 +1,34 @@
+{
+  "fixtures": [
+    {
+      "audio_sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "bucket": "clean-near-field",
+      "duration_ms": 5000,
+      "fixture_id": "stt-en-clean-0001",
+      "language": "en",
+      "reference_text": "Aurora starts a local voice session on this device.",
+      "smoke_hypotheses": {
+        "fixture-smoke:auto": "Aurora starts a local voice session on this device.",
+        "fixture-smoke:fixed": "Aurora starts a local voice session on this device."
+      }
+    },
+    {
+      "audio_sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "bucket": "household-noise",
+      "duration_ms": 5000,
+      "fixture_id": "stt-pt-noise-0001",
+      "language": "pt",
+      "reference_text": "Aurora inicia uma sessão de voz local neste dispositivo.",
+      "smoke_hypotheses": {
+        "fixture-smoke:auto": "Aurora inicia uma sessão de voz local neste dispositivo.",
+        "fixture-smoke:fixed": "Aurora inicia uma sessão de voz local neste dispositivo."
+      }
+    }
+  ],
+  "manifest_version": "aurora.local_speech.stt.fixtures.v0.1",
+  "redaction": {
+    "approved_fixture_ids_only_in_reports": true,
+    "audio_paths_private": true,
+    "reference_text_private": true
+  }
+}

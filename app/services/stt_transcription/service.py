@@ -15,18 +15,19 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import io
 import os
 import threading
 import time
+import uuid
 import wave
 from collections import deque
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 import numpy as np
-import webrtcvad
-from faster_whisper import WhisperModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
@@ -44,8 +45,9 @@ from app.messaging import (
 )
 from app.shared.config.interface import ConfigAPI
 from app.shared.config.keys import ConfigKeys
-from app.shared.config.models import AccurateModel, RealtimeModel, Stt, Transcription
+from app.shared.config.models import AccurateModel, RealtimeModel, Stt, System, Transcription
 from app.shared.contracts.models.common import EmptyInput, EmptyOutput
+from app.shared.contracts.models.speech_runtime import SpeechStreamLimitsV1
 from app.shared.contracts.models.stt import (
     AudioSessionEvent,
     AudioSessionMethods,
@@ -57,12 +59,59 @@ from app.shared.contracts.models.stt import (
     TranscribeAudioResponse,
     TranscriptionMethods,
     TranscriptionModule,
+    TranscriptionStreamAdmission,
+    TranscriptionStreamCancelRequest,
+    TranscriptionStreamChunkRequest,
+    TranscriptionStreamEndRequest,
+    TranscriptionStreamResult,
+    TranscriptionStreamStartRequest,
+    TranscriptionStreamStatus,
+    TranscriptionStreamStatusRequest,
 )
 from app.shared.contracts.registry import method_contract
 from app.shared.path_utils import ensure_path_writable_or_tmp
 from app.shared.services.base_service import BaseService
+from app.shared.speech_language_policy import (
+    SpeechLanguagePolicy,
+    resolve_speech_language_policy,
+)
 
 config_api = ConfigAPI()
+_MAX_ACTIVE_SPEECH_STREAMS = 4
+
+
+def _stream_owner(envelope: Envelope | None) -> tuple[str | None, str | None]:
+    """Return immutable authenticated identity, excluding per-request tracing IDs."""
+    if envelope is None:
+        return (None, None)
+    return (
+        envelope.caller_peer_id if envelope.caller_peer_id else None,
+        envelope.principal_id if envelope.principal_id else None,
+    )
+
+
+def _stream_owner_matches(
+    owner: tuple[str | None, str | None] | None,
+    envelope: Envelope | None,
+) -> bool:
+    """Keep every stream operation bound to its authenticated transport owner."""
+    if owner is None:
+        return False
+    return owner == _stream_owner(envelope)
+
+
+def _create_vad(mode: int) -> Any:
+    """Create the optional WebRTC VAD runtime when transcription starts."""
+    import webrtcvad
+
+    return webrtcvad.Vad(mode)
+
+
+def _create_whisper_model(*args: Any, **kwargs: Any) -> Any:
+    """Create the optional Faster Whisper runtime when model loading starts."""
+    from faster_whisper import WhisperModel
+
+    return WhisperModel(*args, **kwargs)
 
 
 class VADMode(Enum):
@@ -86,7 +135,7 @@ class TranscriptionService(BaseService):
     - Emit TranscriptionResult events
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize transcription service."""
         super().__init__(
             module=TranscriptionModule.NAME,
@@ -96,11 +145,32 @@ class TranscriptionService(BaseService):
         self._running = False
         self._transcribing = False
         self._paused = False
+        self._speech_streams: dict[str, TranscriptionStreamAdmission] = {}
+        self._speech_stream_next_sequence: dict[str, int] = {}
+        self._speech_stream_terminal: dict[str, TranscriptionStreamStatus] = {}
+        self._speech_stream_results: dict[str, TranscriptionStreamResult] = {}
+        self._speech_stream_payload_digests: dict[str, dict[int, str]] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None]] = {}
+        self._speech_stream_audio: dict[str, bytearray] = {}
+        self._speech_stream_input_bytes: dict[str, int] = {}
+        self._speech_stream_started_at: dict[str, float] = {}
+        self._speech_stream_last_activity: dict[str, float] = {}
+        self._speech_stream_formats: dict[str, AudioFormat] = {}
+        self._speech_stream_lock = asyncio.Lock()
 
         # Models
-        self._realtime_model: WhisperModel | None = None
-        self._accurate_model: WhisperModel | None = None
+        self._realtime_model: Any | None = None
+        self._accurate_model: Any | None = None
         self._model_lock = threading.Lock()
+        self._model_cache_dir = ""
+        self._model_status: dict[str, str] = {
+            "realtime": "unavailable",
+            "accurate": "unavailable",
+        }
+        self._model_status_message: dict[str, str] = {
+            "realtime": "not_loaded",
+            "accurate": "not_loaded",
+        }
 
         # Audio buffering
         self._audio_buffer: deque[tuple[bytes, str, str]] = deque(
@@ -114,18 +184,31 @@ class TranscriptionService(BaseService):
         self._current_stream_id: str = "default"  # Default stream ID
 
         # VAD for speech detection
-        self._vad: webrtcvad.Vad | None = None
+        self._vad: Any | None = None
         self._vad_mode = VADMode.MEDIUM
-        self._speech_segments: deque[bytes] = deque(maxlen=100)
+        # Active utterance audio must not be capped to a short rolling window.
+        # The coordinator bounds listening with session_timeout_s, so this
+        # remains memory-safe while preserving long-form requests for the
+        # accurate final transcription.
+        self._speech_segments: deque[bytes] = deque()
+        self._speech_segment_bytes = 0
         self._in_speech = False
         self._silence_chunks = 0
         self._min_silence_chunks = 10  # ~200ms of silence to end segment
+        self._last_realtime_partial_at = 0.0
+        self._last_realtime_partial_text = ""
+        self._partial_interval_seconds = 1.0
+        self._partial_min_audio_length_ms = 700
+        self._max_speech_duration_s = 30
 
         # Configuration (will be loaded in on_start)
         self._language = ""
+        self._language_policy = resolve_speech_language_policy("en", "auto")
         self._realtime_enabled = True
         self._accurate_enabled = True
         self._min_audio_length_ms = 500  # Minimum audio length to transcribe
+        self._default_sample_rate = 16000
+        self._default_channels = 1
 
         # Processing thread
         self._process_thread: threading.Thread | None = None
@@ -141,22 +224,7 @@ class TranscriptionService(BaseService):
             log_warning("Transcription service already running")
             return
 
-        # Load configuration (async)
-        stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-        self._language = stt_cfg.language or ""
-        transcription_cfg = stt_cfg.transcription or Transcription()
-
-        realtime_model = transcription_cfg.realtime_model
-        if realtime_model is not None and realtime_model.enabled is not None:
-            self._realtime_enabled = realtime_model.enabled
-        else:
-            self._realtime_enabled = True
-
-        accurate_model = transcription_cfg.accurate_model
-        if accurate_model is not None and accurate_model.enabled is not None:
-            self._accurate_enabled = accurate_model.enabled
-        else:
-            self._accurate_enabled = True
+        await self._load_config()
 
         log_info("Starting transcription service...")
         self._running = True
@@ -170,11 +238,12 @@ class TranscriptionService(BaseService):
         # Initialize VAD
         self._initialize_vad()
 
-        # Load models
+        # Load models. Missing optional model packages, offline first-run
+        # downloads, or unavailable devices must not kill the service process.
         await self._load_models()
 
         # Subscribe to audio stream
-        self.bus.subscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
 
         # Start processing thread
         self._start_processing_thread()
@@ -191,6 +260,18 @@ class TranscriptionService(BaseService):
         self._running = False
         self._transcribing = False
         self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        async with self._speech_stream_lock:
+            self._speech_streams.clear()
+            self._speech_stream_next_sequence.clear()
+            self._speech_stream_terminal.clear()
+            self._speech_stream_results.clear()
+            self._speech_stream_payload_digests.clear()
+            self._speech_stream_owners.clear()
+            self._speech_stream_audio.clear()
+            self._speech_stream_input_bytes.clear()
+            self._speech_stream_started_at.clear()
+            self._speech_stream_last_activity.clear()
+            self._speech_stream_formats.clear()
 
         # Wait for processing thread to finish
         if self._process_thread and self._process_thread.is_alive():
@@ -209,7 +290,7 @@ class TranscriptionService(BaseService):
 
     def _ensure_huggingface_cache_env(self) -> None:
         """Point HF hub/xet at a writable tree (bind-mounted ./data is often root-owned)."""
-        hf_home = os.environ.get("HF_HOME", "/app/data/huggingface")
+        hf_home = os.environ.get("HF_HOME") or self._default_app_data_cache_dir("huggingface")
         writable = ensure_path_writable_or_tmp(hf_home, tmp_leaf="huggingface")
         os.environ["HF_HOME"] = writable
         hub = os.path.join(writable, "hub")
@@ -223,6 +304,31 @@ class TranscriptionService(BaseService):
                 writable,
             )
 
+    def _default_app_data_cache_dir(self, *parts: str) -> str:
+        """Return a durable app-data cache path for model downloads."""
+        from app.shared.path_utils import get_data_dir
+
+        return str(get_data_dir().joinpath("models", *parts))
+
+    def _inference_ready(self) -> bool:
+        """Return true when at least one enabled transcription model is callable."""
+        realtime_ready = self._realtime_enabled and self._realtime_model is not None
+        accurate_ready = self._accurate_enabled and self._accurate_model is not None
+        return realtime_ready or accurate_ready
+
+    def _refresh_callable_capabilities(self) -> None:
+        """Advertise model-dependent transcription only when inference is ready."""
+        capabilities = ["vad"]
+        if self._inference_ready():
+            capabilities.extend(["audio_transcription", "whisper"])
+        self._capabilities = capabilities
+
+    async def _republish_readiness(self) -> None:
+        """Refresh gateway discovery after inference readiness changes."""
+        self._refresh_callable_capabilities()
+        if getattr(self, "_runtime_state", None) == "active":
+            await self._publish_service_announcement()
+
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
 
@@ -231,37 +337,106 @@ class TranscriptionService(BaseService):
         """
         log_info(f"Reloading TranscriptionService configuration: section={config_section}")
         # Reload transcription models if config changed
-        if config_section is None or config_section in ("services", "services.stt"):
+        if config_section is None or config_section in ("system", "services", "services.stt"):
             log_info("Reloading transcription models due to config change...")
-            if self._realtime_model:
-                del self._realtime_model
-                self._realtime_model = None
-            if self._accurate_model:
-                del self._accurate_model
-                self._accurate_model = None
-            # Reload config and models
-            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-            self._language = stt_cfg.language or ""
-            transcription_cfg = stt_cfg.transcription or Transcription()
-
-            realtime_model = transcription_cfg.realtime_model
-            if realtime_model is not None and realtime_model.enabled is not None:
-                self._realtime_enabled = realtime_model.enabled
-            else:
-                self._realtime_enabled = True
-
-            accurate_model = transcription_cfg.accurate_model
-            if accurate_model is not None and accurate_model.enabled is not None:
-                self._accurate_enabled = accurate_model.enabled
-            else:
-                self._accurate_enabled = True
-            await self._load_models()
+            (
+                language,
+                policy,
+                transcription_cfg,
+                realtime_enabled,
+                accurate_enabled,
+            ) = await self._read_runtime_config()
+            new_realtime, new_accurate = await self._create_models(
+                transcription_cfg,
+                realtime_enabled=realtime_enabled,
+                accurate_enabled=accurate_enabled,
+            )
+            old_realtime, old_accurate = self._realtime_model, self._accurate_model
+            self._language = language
+            self._language_policy = policy
+            self._realtime_enabled = realtime_enabled
+            self._accurate_enabled = accurate_enabled
+            self._max_speech_duration_s = int(
+                self._cfg_value(transcription_cfg, "max_speech_duration_s") or 30
+            )
+            self._realtime_model = new_realtime
+            self._accurate_model = new_accurate
+            if old_realtime and old_realtime is not new_realtime:
+                del old_realtime
+            if old_accurate and old_accurate is not new_accurate:
+                del old_accurate
+            await self._republish_readiness()
         log_info("TranscriptionService configuration reloaded")
+
+    async def _load_config(self) -> None:
+        """Load canonical speech and STT configuration."""
+
+        (
+            language,
+            policy,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        ) = await self._read_runtime_config()
+        self._language = language
+        self._language_policy = policy
+        self._realtime_enabled = realtime_enabled
+        self._accurate_enabled = accurate_enabled
+        self._max_speech_duration_s = int(
+            self._cfg_value(transcription_cfg, "max_speech_duration_s") or 30
+        )
+
+    async def _read_runtime_config(
+        self,
+    ) -> tuple[str, SpeechLanguagePolicy, Any, bool, bool]:
+        """Read runtime config without mutating live models."""
+
+        stt_raw = await config_api.aget(ConfigKeys.services.stt, default={})
+        if isinstance(stt_raw, Stt):
+            stt_cfg = stt_raw
+        else:
+            try:
+                stt_cfg = Stt.model_validate(stt_raw or {})
+            except Exception:
+                stt_cfg = Stt()
+        system_cfg = await config_api.aget(ConfigKeys.system, System)
+        if not isinstance(system_cfg, System):
+            system_cfg = System()
+        policy = resolve_speech_language_policy(
+            system_cfg.primary_language,
+            system_cfg.voice_language,
+        )
+        transcription_cfg = (
+            stt_raw.get("transcription")
+            if isinstance(stt_raw, dict) and isinstance(stt_raw.get("transcription"), dict)
+            else stt_cfg.transcription or Transcription()
+        )
+
+        realtime_model = self._cfg_value(transcription_cfg, "realtime_model")
+        realtime_enabled = (
+            self._cfg_value(realtime_model, "enabled")
+            if realtime_model is not None and self._cfg_value(realtime_model, "enabled") is not None
+            else True
+        )
+
+        accurate_model = self._cfg_value(transcription_cfg, "accurate_model")
+        accurate_enabled = (
+            self._cfg_value(accurate_model, "enabled")
+            if accurate_model is not None and self._cfg_value(accurate_model, "enabled") is not None
+            else True
+        )
+        return (
+            policy.stt_language or "",
+            policy,
+            transcription_cfg,
+            realtime_enabled,
+            accurate_enabled,
+        )
 
     def _initialize_vad(self) -> None:
         """Initialize Voice Activity Detection."""
         try:
-            self._vad = webrtcvad.Vad(self._vad_mode.value)
+            self._vad = _create_vad(self._vad_mode.value)
             log_info(f"VAD initialized (mode: {self._vad_mode.name})")
         except Exception as e:
             log_error(f"Failed to initialize VAD: {e}")
@@ -271,60 +446,149 @@ class TranscriptionService(BaseService):
         """Load Faster Whisper models."""
         log_info("Loading transcription models...")
 
+        _, _, transcription_cfg, _, _ = await self._read_runtime_config()
+        new_realtime, new_accurate = await self._create_models(
+            transcription_cfg or Transcription(),
+            realtime_enabled=self._realtime_enabled,
+            accurate_enabled=self._accurate_enabled,
+        )
+        self._realtime_model = new_realtime
+        self._accurate_model = new_accurate
+        self._refresh_callable_capabilities()
+
+    def _set_model_status(self, model_role: str, status: str, message: str) -> None:
+        """Record model readiness without exposing local paths in status messages."""
+        self._model_status[model_role] = status
+        self._model_status_message[model_role] = self._redact_status_message(message)
+
+    def _redact_status_message(self, message: str) -> str:
+        """Keep readiness messages bounded and free of selected model IDs/paths."""
+        allowed = {
+            "disabled",
+            "model_ready",
+            "not_loaded",
+            "not_selected",
+            "preparing_model",
+            "previous_model_retained",
+        }
+        if message in allowed:
+            return message
+        if message.endswith("Error") or message.endswith("Exception"):
+            return message
+        return "model_unavailable"
+
+    def _safe_exception_type(self, exc: BaseException) -> str:
+        """Return exception class only; exception text may contain paths/model IDs."""
+        return type(exc).__name__
+
+    def _model_ready(self, model_role: str) -> bool:
+        """Return whether a realtime or accurate model is loaded and ready."""
+        return self._model_status.get(model_role) == "ready"
+
+    async def _create_models(
+        self,
+        transcription_cfg: Any,
+        *,
+        realtime_enabled: bool,
+        accurate_enabled: bool,
+    ) -> tuple[Any | None, Any | None]:
+        """Create Faster Whisper models without mutating live service state."""
+
+        raw_realtime = self._cfg_value(transcription_cfg, "realtime_model")
+        realtime_model_cfg = raw_realtime or RealtimeModel()
+        accurate_model_cfg = self._cfg_value(transcription_cfg, "accurate_model") or AccurateModel()
+
+        accurate_model_size = self._model_size_or_path(accurate_model_cfg)
+        realtime_model_size = self._model_size_or_path(realtime_model_cfg)
+        realtime_device = self._cfg_value(realtime_model_cfg, "device")
+        accurate_device = self._cfg_value(accurate_model_cfg, "device")
+        accurate_compute_type = self._cfg_value(accurate_model_cfg, "compute_type") or "int8"
+        realtime_compute_type = self._cfg_value(realtime_model_cfg, "compute_type") or "int8"
+
+        # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
+        if raw_realtime is not None:
+            legacy_device = get_use_hardware_acceleration("stt")
+            realtime_device = realtime_device or legacy_device
+            accurate_device = accurate_device or legacy_device
+        # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
+        from app.shared.path_utils import ensure_path_writable_or_tmp
+
+        _hf = os.environ.get("HF_HOME") or self._default_app_data_cache_dir("huggingface")
+        _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
+            _hf, "whisper"
+        )
+        download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
+        self._model_cache_dir = download_root
+
+        realtime_model = self._load_one_model(
+            role="realtime",
+            enabled=realtime_enabled,
+            model_size=realtime_model_size,
+            device=realtime_device,
+            compute_type=realtime_compute_type,
+            download_root=download_root,
+        )
+        accurate_model = self._load_one_model(
+            role="accurate",
+            enabled=accurate_enabled,
+            model_size=accurate_model_size,
+            device=accurate_device,
+            compute_type=accurate_compute_type,
+            download_root=download_root,
+        )
+        return realtime_model, accurate_model
+
+    def _cfg_value(self, cfg: Any, key: str) -> Any:
+        """Read generated Pydantic configs or raw dict-like test/config values."""
+        if isinstance(cfg, dict):
+            return cfg.get(key)
+        return getattr(cfg, key, None)
+
+    def _model_size_or_path(self, cfg: Any) -> str | None:
+        """Accept Faster Whisper presets, Hugging Face IDs, and local paths."""
+        selected = self._cfg_value(cfg, "model_size_or_path") or self._cfg_value(cfg, "model_size")
+        if not isinstance(selected, str) or not selected.strip():
+            return None
+        return selected.strip()
+
+    def _load_one_model(
+        self,
+        *,
+        role: str,
+        enabled: bool,
+        model_size: str | None,
+        device: str | None,
+        compute_type: str,
+        download_root: str,
+    ) -> Any | None:
+        """Load one Faster Whisper model, downloading to cache when needed."""
+        if not enabled:
+            self._set_model_status(role, "unavailable", "disabled")
+            return None
+        if model_size is None:
+            self._set_model_status(role, "unavailable", "not_selected")
+            return None
         try:
-            # Get model configuration
-            stt_cfg = await config_api.aget(ConfigKeys.services.stt, Stt)
-            transcription_cfg = stt_cfg.transcription or Transcription()
-            raw_realtime = transcription_cfg.realtime_model
-            realtime_model_cfg = raw_realtime or RealtimeModel()
-            accurate_model_cfg = transcription_cfg.accurate_model or AccurateModel()
-
-            accurate_model_size = accurate_model_cfg.model_size or "base"
-            realtime_model_size = realtime_model_cfg.model_size or "tiny"
-            realtime_device = realtime_model_cfg.device
-            accurate_device = accurate_model_cfg.device
-            accurate_compute_type = accurate_model_cfg.compute_type or "int8"
-            realtime_compute_type = realtime_model_cfg.compute_type or "int8"
-
-            # Fallback to legacy hardware_acceleration when realtime_model block exists (matches dict truthiness)
-            if raw_realtime is not None:
-                legacy_device = get_use_hardware_acceleration("stt")
-                realtime_device = realtime_device or legacy_device
-                accurate_device = accurate_device or legacy_device
-            # Never use cwd-relative paths: Tilt sets working_dir to /app/host (often not writable).
-            from app.shared.path_utils import ensure_path_writable_or_tmp
-
-            _hf = os.environ.get("HF_HOME", "/app/data/huggingface")
-            _preferred = os.environ.get("AURORA_STT_WHISPER_DOWNLOAD_ROOT") or os.path.join(
-                _hf, "whisper"
+            self._set_model_status(role, "downloading", "preparing_model")
+            log_info("Loading %s transcription model on %s", role, device)
+            model = _create_whisper_model(
+                model_size,
+                device=device,
+                compute_type=compute_type,
+                download_root=download_root,
             )
-            download_root = ensure_path_writable_or_tmp(_preferred, tmp_leaf="faster-whisper")
-
-            # Load realtime model (fast, lower accuracy)
-            if self._realtime_enabled:
-                log_info(f"Loading realtime model ({realtime_model_size}) on {realtime_device}...")
-                self._realtime_model = WhisperModel(
-                    realtime_model_size,
-                    device=realtime_device,
-                    compute_type=realtime_compute_type,
-                    download_root=download_root,
-                )
-                log_info(f"Realtime model loaded ({realtime_model_size})")
-
-            # Load accurate model (slower, higher accuracy)
-            if self._accurate_enabled:
-                log_info(f"Loading accurate model ({accurate_model_size}) on {accurate_device}...")
-                self._accurate_model = WhisperModel(
-                    accurate_model_size,
-                    device=accurate_device,
-                    compute_type=accurate_compute_type,
-                    download_root=download_root,
-                )
-                log_info(f"Accurate model loaded ({accurate_model_size})")
-
+            self._set_model_status(role, "ready", "model_ready")
+            log_info("%s transcription model ready", role.capitalize())
+            return model
         except Exception as e:
-            log_error(f"Failed to load models: {e}", exc_info=True)
-            raise
+            self._set_model_status(role, "unavailable", self._safe_exception_type(e))
+            self._refresh_callable_capabilities()
+            log_warning(
+                "%s transcription model unavailable; service remains active: %s",
+                role.capitalize(),
+                self._safe_exception_type(e),
+            )
+            return None
 
     def _start_processing_thread(self) -> None:
         """Start the audio processing thread."""
@@ -374,6 +638,10 @@ class TranscriptionService(BaseService):
                 stream_id = self._current_stream_id
                 source = self._current_source
 
+        self._process_audio_item(audio_data, stream_id, source)
+
+    def _process_audio_item(self, audio_data: bytes, stream_id: str, source: str) -> None:
+        """Process one audio item for VAD segmentation."""
         # Check for stream switch
         if stream_id != self._current_stream_id:
             # If we have pending speech, transcribe it now (flush)
@@ -395,19 +663,72 @@ class TranscriptionService(BaseService):
         if is_speech:
             # Add to speech segment
             self._speech_segments.append(audio_data)
+            self._speech_segment_bytes += len(audio_data)
             self._in_speech = True
             self._silence_chunks = 0
+            if source == "external" and self._external_segment_limit_reached():
+                self._transcribe_segment()
+                self._reset_speech_state()
+                return
+            self._emit_realtime_partial_if_due()
         else:
             if self._in_speech:
                 # We're in speech but this chunk is silence
                 self._silence_chunks += 1
                 self._speech_segments.append(audio_data)  # Include trailing silence
+                self._speech_segment_bytes += len(audio_data)
 
                 # Check if we've accumulated enough silence to end segment
                 if self._silence_chunks >= self._min_silence_chunks:
                     # End of speech segment
                     self._transcribe_segment()
                     self._reset_speech_state()
+
+    def _flush_pending_audio(self) -> None:
+        """Drain queued audio and force transcription of the current speech segment."""
+        with self._buffer_lock:
+            pending_items = list(self._audio_buffer)
+            self._audio_buffer.clear()
+
+        fallback_audio: list[bytes] = []
+        fallback_peak = 0.0
+        for item in pending_items:
+            if isinstance(item, tuple):
+                audio_data, stream_id, source = item
+            else:
+                audio_data = item
+                stream_id = self._current_stream_id
+                source = self._current_source
+            fallback_audio.append(audio_data)
+            fallback_peak = max(fallback_peak, self._audio_peak_percent(audio_data))
+            self._process_audio_item(audio_data, stream_id, source)
+
+        if self._speech_segments:
+            log_info("Flushing pending speech segment for manual stop")
+            self._transcribe_segment()
+            self._reset_speech_state()
+        elif fallback_audio and fallback_peak >= 1.0:
+            segment_data = b"".join(fallback_audio)
+            duration_ms = len(segment_data) / 32
+            if duration_ms >= self._min_audio_length_ms:
+                log_info(
+                    "Flushing buffered audio for manual stop "
+                    f"({duration_ms:.0f}ms, peak={fallback_peak:.1f}%)"
+                )
+                self._speech_segments.append(segment_data)
+                self._speech_segment_bytes += len(segment_data)
+                self._transcribe_segment()
+                self._reset_speech_state()
+
+    def _audio_peak_percent(self, audio_data: bytes) -> float:
+        sample_count = len(audio_data) // 2
+        if sample_count <= 0:
+            return 0.0
+        samples = memoryview(audio_data[: sample_count * 2]).cast("h")
+        if len(samples) == 0:
+            return 0.0
+        peak = max(abs(int(sample)) for sample in samples)
+        return min(100.0, (peak / 32768.0) * 100.0)
 
     def _detect_speech(self, audio_data: bytes) -> bool:
         """Detect if audio chunk contains speech using VAD.
@@ -439,6 +760,27 @@ class TranscriptionService(BaseService):
         except Exception as e:
             log_debug(f"VAD error: {e}")
             return True  # Assume speech on error
+
+    def _emit_realtime_partial_if_due(self) -> None:
+        """Emit fast interim transcription while speech is still in progress.
+
+        The accurate model still owns the final message after VAD/silence. This
+        gives the UI live textbox updates without waiting for end-of-speech.
+        """
+        if not self._realtime_enabled or not self._realtime_model or not self._speech_segments:
+            return
+        now = time.time()
+        if now - self._last_realtime_partial_at < self._partial_interval_seconds:
+            return
+        segment_data = b"".join(self._speech_segments)
+        duration_ms = len(segment_data) / 32
+        if duration_ms < self._partial_min_audio_length_ms:
+            return
+        self._last_realtime_partial_at = now
+        audio_np = self._bytes_to_numpy(segment_data)
+        self._transcribe_with_model(
+            audio_np, self._realtime_model, TranscriptionType.REALTIME, duration_ms
+        )
 
     def _transcribe_segment(self) -> None:
         """Transcribe accumulated speech segment."""
@@ -488,13 +830,34 @@ class TranscriptionService(BaseService):
 
         return audio_float32
 
+    def _stream_audio_to_numpy(self, audio_data: bytes, audio_format: AudioFormat) -> np.ndarray:
+        """Decode admitted PCM and normalize it for the configured model input."""
+        if audio_format.encoding != AudioEncoding.PCM_S16LE or audio_format.bits_per_sample != 16:
+            raise ValueError("speech stream requires pcm_s16le audio")
+        samples = np.frombuffer(audio_data, dtype=np.int16)
+        if audio_format.channels > 1:
+            if samples.size % audio_format.channels:
+                raise ValueError("speech stream frame is not aligned to channel count")
+            samples = samples.reshape(-1, audio_format.channels).mean(axis=1).astype(np.int16)
+        audio = samples.astype(np.float32) / 32768.0
+        if audio_format.sample_rate == self._default_sample_rate or audio.size == 0:
+            return audio
+        target_length = max(
+            1, round(audio.size * self._default_sample_rate / audio_format.sample_rate)
+        )
+        return np.interp(
+            np.linspace(0, audio.size - 1, target_length),
+            np.arange(audio.size),
+            audio,
+        ).astype(np.float32)
+
     def _transcribe_with_model(
         self,
         audio: np.ndarray,
-        model: WhisperModel,
+        model: Any,
         transcription_type: TranscriptionType,
         duration_ms: float,
-    ) -> None:
+    ) -> bool:
         """Transcribe audio with specified model.
 
         Args:
@@ -523,11 +886,12 @@ class TranscriptionService(BaseService):
 
             if not text:
                 log_debug(f"Empty transcription from {transcription_type.value} model")
-                return
+                return False
 
             elapsed_ms = (time.time() - start_time) * 1000
             log_info(
-                f"{transcription_type.value.capitalize()} transcription: '{text}' ({elapsed_ms:.0f}ms)"
+                f"{transcription_type.value.capitalize()} transcription: "
+                f"text_chars={len(text)} elapsed_ms={elapsed_ms:.0f}"
             )
 
             # Emit result
@@ -541,10 +905,20 @@ class TranscriptionService(BaseService):
             )
 
             self._transcriptions_done += 1
+            return True
 
         except Exception as e:
-            log_error(f"Transcription error ({transcription_type.value}): {e}", exc_info=True)
-            self._emit_error(error_message=str(e), error_type="transcription_failed")
+            log_error(
+                "Transcription error (%s): %s",
+                transcription_type.value,
+                self._safe_exception_type(e),
+                exc_info=True,
+            )
+            self._emit_error(
+                error_message="Transcription failed",
+                error_type="transcription_failed",
+            )
+            return False
 
     def _emit_result(
         self,
@@ -623,8 +997,19 @@ class TranscriptionService(BaseService):
     def _reset_speech_state(self) -> None:
         """Reset speech detection state after transcribing segment."""
         self._speech_segments.clear()
+        self._speech_segment_bytes = 0
         self._in_speech = False
         self._silence_chunks = 0
+
+    def _external_segment_limit_reached(self) -> bool:
+        """Return whether a remotely fed utterance reached its configured ceiling."""
+        audio_format = self._audio_format
+        if audio_format is None:
+            bytes_per_second = self._default_sample_rate * self._default_channels * 2
+        else:
+            bytes_per_sample = max(1, audio_format.bits_per_sample // 8)
+            bytes_per_second = audio_format.sample_rate * audio_format.channels * bytes_per_sample
+        return self._speech_segment_bytes >= bytes_per_second * self._max_speech_duration_s
 
     async def _process_audio_data(
         self,
@@ -648,11 +1033,20 @@ class TranscriptionService(BaseService):
         self._current_stream_id = stream_id
         self._current_source = source
 
-        # Store audio format if provided and not yet set
-        if audio_format and self._audio_format is None:
-            self._audio_format = audio_format
+        # Store audio format if provided and not yet set. The coordinator only
+        # used to send format on process-start chunk zero, which meant a paused
+        # transcription service could miss it and then treat all later chunks as
+        # speech forever. Infer the standard coordinator format when missing so
+        # VAD can end the utterance and final transcription can run.
+        if self._audio_format is None:
+            self._audio_format = audio_format or AudioFormat(
+                sample_rate=self._default_sample_rate,
+                channels=self._default_channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+            )
             log_info(
-                f"Audio format set: {audio_format.sample_rate}Hz, {audio_format.channels}ch, {audio_format.bits_per_sample}bits"
+                f"Audio format set: {self._audio_format.sample_rate}Hz, {self._audio_format.channels}ch, {self._audio_format.bits_per_sample}bits"
             )
 
         # Add to buffer with metadata
@@ -680,6 +1074,8 @@ class TranscriptionService(BaseService):
         output_model=EmptyOutput,
         exposure="both",
         method_type="use",
+        required_perms=[TranscriptionMethods.PROCESS_AUDIO],
+        callable_feature_ids=["audio_transcription"],
     )
     async def _on_external_audio(self, chunk: STTAudioChunk) -> EmptyOutput:
         """Handle audio chunks from external API/WebRTC calls.
@@ -691,6 +1087,8 @@ class TranscriptionService(BaseService):
             EmptyOutput on success
         """
         await self._validate_streaming_audio_session(chunk)
+        if not self._inference_ready():
+            raise RuntimeError("Transcription model unavailable")
 
         # Convert STT format to internal AudioFormat
         # Derive bits_per_sample and encoding from format string
@@ -806,7 +1204,7 @@ class TranscriptionService(BaseService):
                 payload=payload,
             ),
             event=True,
-            mesh=True,
+            mesh=False,
             origin="internal",
         )
 
@@ -830,14 +1228,19 @@ class TranscriptionService(BaseService):
 
         if action == "pause":
             self._paused = True
+        elif action == "flush":
+            await asyncio.to_thread(self._flush_pending_audio)
         elif action == "resume":
             self._paused = False
             # Clear audio buffers when resuming to avoid processing stale audio
             with self._buffer_lock:
                 self._audio_buffer.clear()
                 self._speech_segments.clear()
+                self._speech_segment_bytes = 0
             self._in_speech = False
             self._silence_chunks = 0
+            self._last_realtime_partial_at = 0.0
+            self._last_realtime_partial_text = ""
             log_info("Cleared audio buffers on resume")
         elif action == "set_language":
             if data.language:
@@ -845,9 +1248,11 @@ class TranscriptionService(BaseService):
                 log_info(f"Language set to: {self._language}")
         elif action == "enable_realtime" and data.enabled is not None:
             self._realtime_enabled = data.enabled
+            await self._republish_readiness()
             log_info(f"Realtime transcription: {'enabled' if data.enabled else 'disabled'}")
         elif action == "enable_accurate" and data.enabled is not None:
             self._accurate_enabled = data.enabled
+            await self._republish_readiness()
             log_info(f"Accurate transcription: {'enabled' if data.enabled else 'disabled'}")
 
         return EmptyOutput()
@@ -946,12 +1351,580 @@ class TranscriptionService(BaseService):
             raise ValueError(f"Unsupported audio format: {format}")
 
     @method_contract(
+        method_id=TranscriptionMethods.STREAM_START,
+        summary="Admit an owner-scoped streaming transcription session",
+        input_model=TranscriptionStreamStartRequest,
+        output_model=TranscriptionStreamAdmission,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_START],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def start_speech_stream(
+        self,
+        request: TranscriptionStreamStartRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamAdmission:
+        """Start a bounded stream without moving microphone ownership."""
+        owner = _stream_owner(envelope)
+        async with self._speech_stream_lock:
+            for existing in self._speech_streams.values():
+                if (
+                    existing.operation_id == request.operation_id
+                    and existing.attempt_id == request.attempt_id
+                ):
+                    if existing.generation == request.generation and _stream_owner_matches(
+                        self._speech_stream_owners.get(existing.session_id or ""), envelope
+                    ):
+                        return existing
+                    return TranscriptionStreamAdmission(
+                        operation_id=request.operation_id,
+                        attempt_id=request.attempt_id,
+                        generation=request.generation,
+                        status="rejected",
+                        reason_code="session_conflict",
+                        capability_revision=request.capability_revision,
+                    )
+            if len(self._speech_streams) >= _MAX_ACTIVE_SPEECH_STREAMS:
+                return TranscriptionStreamAdmission(
+                    operation_id=request.operation_id,
+                    attempt_id=request.attempt_id,
+                    generation=request.generation,
+                    status="rejected",
+                    reason_code="busy",
+                    capability_revision=request.capability_revision,
+                )
+            session_id = f"stt-session-{uuid.uuid4().hex}"
+            started_at = time.monotonic()
+            admission = TranscriptionStreamAdmission(
+                session_id=session_id,
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="admitted",
+                reason_code="admitted",
+                capability_revision=request.capability_revision,
+            )
+            self._speech_streams[session_id] = admission
+            self._speech_stream_next_sequence[session_id] = 0
+            self._speech_stream_payload_digests[session_id] = {}
+            self._speech_stream_owners[session_id] = owner
+            self._speech_stream_audio[session_id] = bytearray()
+            self._speech_stream_input_bytes[session_id] = 0
+            self._speech_stream_started_at[session_id] = started_at
+            self._speech_stream_last_activity[session_id] = started_at
+            self._speech_stream_formats[session_id] = AudioFormat(
+                sample_rate=request.sample_rate,
+                channels=request.channels,
+                encoding=AudioEncoding.PCM_S16LE,
+                bits_per_sample=16,
+            )
+        return admission
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_CHUNK,
+        summary="Accept one ordered audio frame for a transcription session",
+        input_model=TranscriptionStreamChunkRequest,
+        output_model=TranscriptionStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_CHUNK],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def push_speech_stream_chunk(
+        self,
+        request: TranscriptionStreamChunkRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamStatus:
+        async with self._speech_stream_lock:
+            admission = self._speech_streams.get(request.session_id)
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            expected = self._speech_stream_next_sequence.get(request.session_id, 0)
+            digest = hashlib.sha256(request.audio_data).hexdigest()
+            previous_digest = self._speech_stream_payload_digests.get(request.session_id, {}).get(
+                request.sequence
+            )
+            owner = self._speech_stream_owners.get(request.session_id)
+        if admission is None:
+            if terminal is not None:
+                if not _stream_owner_matches(owner, envelope):
+                    return TranscriptionStreamStatus(
+                        session_id=request.session_id,
+                        state="failed",
+                        next_sequence=0,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="session_conflict",
+                    )
+                return terminal
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
+            )
+        if not _stream_owner_matches(owner, envelope):
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
+            )
+        if request.attempt_id != admission.attempt_id or request.generation != admission.generation:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="session_conflict",
+            )
+        # The first frame is sequence zero.  Duplicates are idempotent, gaps
+        # are terminal; the stream never silently reorders audio.
+        if request.sequence < expected:
+            if previous_digest != digest:
+                return TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="invalid_sequence",
+                )
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="active",
+                next_sequence=expected,
+                credits=min(8, admission.accepted_limits.max_queue),
+                lease_remaining_ms=admission.accepted_limits.idle_lease_ms,
+                accepted_chunks=expected,
+            )
+        if request.sequence != expected:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=expected,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="invalid_sequence",
+            )
+        limits = admission.accepted_limits
+        stream_format = self._speech_stream_formats.get(request.session_id)
+        now = time.monotonic()
+        async with self._speech_stream_lock:
+            input_bytes = self._speech_stream_input_bytes.get(request.session_id, 0)
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        if (
+            now - last_activity > limits.idle_lease_ms / 1000
+            or now - started_at > limits.max_active_ms / 1000
+        ):
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                timed_out = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=expected,
+                )
+                self._speech_stream_results[request.session_id] = timed_out
+                self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                )
+            return self._speech_stream_terminal[request.session_id]
+        reason = (
+            "resource_exhausted"
+            if len(request.audio_data) > limits.max_chunk_bytes
+            or input_bytes + len(request.audio_data) > limits.max_input_bytes
+            else None
+        )
+        if reason is not None:
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_input_bytes.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="failed",
+                    reason_code=reason,
+                    input_count=input_bytes,
+                )
+                terminal_status = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=expected,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome=reason,
+                    accepted_chunks=expected,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = terminal_status
+            return terminal_status
+        await self._process_audio_data(
+            request.audio_data,
+            stream_format,
+            stream_id=request.session_id,
+            source="speech_session",
+        )
+        # Admission objects are intentionally kept as immutable control-plane
+        # facts.  Sequence progress is stored separately on the instance.
+        async with self._speech_stream_lock:
+            self._speech_stream_next_sequence[request.session_id] = expected + 1
+            self._speech_stream_payload_digests[request.session_id][request.sequence] = digest
+            self._speech_stream_audio[request.session_id].extend(request.audio_data)
+            self._speech_stream_input_bytes[request.session_id] = input_bytes + len(
+                request.audio_data
+            )
+            self._speech_stream_last_activity[request.session_id] = now
+        return TranscriptionStreamStatus(
+            session_id=request.session_id,
+            state="active",
+            next_sequence=expected + 1,
+            credits=min(8, limits.max_queue)
+            if input_bytes + len(request.audio_data) < limits.max_input_bytes
+            else 0,
+            lease_remaining_ms=max(0, int(limits.idle_lease_ms - (time.monotonic() - now) * 1000)),
+            accepted_chunks=expected + 1,
+        )
+
+    async def _transcribe_stream_audio(
+        self, audio_data: bytes, audio_format: AudioFormat, stream_id: str
+    ) -> int:
+        """Run one terminal engine pass for an admitted stream."""
+        model = self._accurate_model if self._accurate_enabled else self._realtime_model
+        transcription_type = (
+            TranscriptionType.ACCURATE if self._accurate_enabled else TranscriptionType.REALTIME
+        )
+        if model is None or not audio_data:
+            return 0
+        duration_ms = (
+            len(audio_data)
+            / (audio_format.sample_rate * audio_format.channels * audio_format.bytes_per_sample)
+            * 1000
+        )
+        self._current_stream_id = stream_id
+        self._current_source = "speech_session"
+        return int(
+            await asyncio.to_thread(
+                self._transcribe_with_model,
+                self._stream_audio_to_numpy(audio_data, audio_format),
+                model,
+                transcription_type,
+                duration_ms,
+            )
+            or 0
+        )
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_END,
+        summary="Finish a streaming transcription session",
+        input_model=TranscriptionStreamEndRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_END],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def end_speech_stream(
+        self,
+        request: TranscriptionStreamEndRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_streams.get(request.session_id)
+            next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+            if admission is None:
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="outcome_unknown"
+                )
+                self._speech_stream_results[request.session_id] = result
+                return result
+            now = time.monotonic()
+            started_at = self._speech_stream_started_at.get(request.session_id, now)
+            last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+            if (
+                now - started_at > admission.accepted_limits.max_active_ms / 1000
+                or now - last_activity > admission.accepted_limits.idle_lease_ms / 1000
+            ):
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                self._speech_stream_formats.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                return result
+            if request.final_sequence is not None and request.final_sequence != next_sequence - 1:
+                return TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="failed",
+                    reason_code="invalid_sequence",
+                    input_count=next_sequence,
+                )
+            audio_data = bytes(self._speech_stream_audio.pop(request.session_id, bytearray()))
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            stream_format = self._speech_stream_formats.pop(request.session_id, None)
+            self._speech_streams.pop(request.session_id, None)
+            self._speech_stream_next_sequence.pop(request.session_id, None)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            self._speech_stream_last_activity.pop(request.session_id, None)
+            self._speech_stream_started_at.pop(request.session_id, None)
+
+        output_count = (
+            await self._transcribe_stream_audio(audio_data, stream_format, request.session_id)
+            if stream_format is not None
+            else 0
+        )
+        state = "completed" if output_count else "failed"
+        reason_code = "completed" if state == "completed" else "model_unavailable"
+        result = TranscriptionStreamResult(
+            session_id=request.session_id,
+            state=state,
+            reason_code=reason_code,
+            final_sequence=request.final_sequence,
+            input_count=input_count,
+            output_count=output_count,
+        )
+        async with self._speech_stream_lock:
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state=state,
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="completed" if state == "completed" else "failed",
+                accepted_chunks=next_sequence,
+            )
+        return result
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_CANCEL,
+        summary="Cancel a streaming transcription session",
+        input_model=TranscriptionStreamCancelRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_CANCEL],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def cancel_speech_stream(
+        self,
+        request: TranscriptionStreamCancelRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            existing = self._speech_stream_results.get(request.session_id)
+            if existing is not None:
+                return existing
+            admission = self._speech_streams.pop(request.session_id, None)
+            next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
+            self._speech_stream_payload_digests.pop(request.session_id, None)
+            input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+            self._speech_stream_audio.pop(request.session_id, None)
+            self._speech_stream_last_activity.pop(request.session_id, None)
+            self._speech_stream_formats.pop(request.session_id, None)
+            result = TranscriptionStreamResult(
+                session_id=request.session_id,
+                state=request.reason if admission is not None else "failed",
+                reason_code=request.reason if admission is not None else "outcome_unknown",
+                input_count=input_count,
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state=request.reason if admission is not None else "failed",
+                next_sequence=next_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome=request.reason if admission is not None else "outcome_unknown",
+            )
+        return result
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_STATUS,
+        summary="Read streaming transcription session status",
+        input_model=TranscriptionStreamStatusRequest,
+        output_model=TranscriptionStreamStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_STATUS],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def speech_stream_status(
+        self,
+        request: TranscriptionStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamStatus:
+        async with self._speech_stream_lock:
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            admission = self._speech_streams.get(request.session_id)
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=0,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="session_conflict",
+                )
+        if terminal is not None:
+            return terminal
+        if admission is None:
+            return TranscriptionStreamStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
+            )
+        limits = admission.accepted_limits
+        now = time.monotonic()
+        started_at = self._speech_stream_started_at.get(request.session_id, now)
+        last_activity = self._speech_stream_last_activity.get(request.session_id, now)
+        next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+        lease_remaining_ms = max(0, int(limits.idle_lease_ms - (now - last_activity) * 1000))
+        expired = lease_remaining_ms == 0 or now - started_at > limits.max_active_ms / 1000
+        if not expired:
+            # Status is the authenticated protocol heartbeat. Refresh the
+            # idle lease only while the absolute lease remains valid.
+            async with self._speech_stream_lock:
+                if request.session_id in self._speech_streams:
+                    self._speech_stream_last_activity[request.session_id] = now
+            lease_remaining_ms = limits.idle_lease_ms
+        if expired:
+            async with self._speech_stream_lock:
+                self._speech_streams.pop(request.session_id, None)
+                self._speech_stream_next_sequence.pop(request.session_id, None)
+                self._speech_stream_payload_digests.pop(request.session_id, None)
+                input_count = self._speech_stream_input_bytes.pop(request.session_id, 0)
+                self._speech_stream_audio.pop(request.session_id, None)
+                self._speech_stream_started_at.pop(request.session_id, None)
+                self._speech_stream_last_activity.pop(request.session_id, None)
+                self._speech_stream_formats.pop(request.session_id, None)
+                result = TranscriptionStreamResult(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    reason_code="timed_out",
+                    input_count=input_count,
+                )
+                status = TranscriptionStreamStatus(
+                    session_id=request.session_id,
+                    state="timed_out",
+                    next_sequence=next_sequence,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="timed_out",
+                    accepted_chunks=next_sequence,
+                )
+                self._speech_stream_results[request.session_id] = result
+                self._speech_stream_terminal[request.session_id] = status
+            return status
+        return TranscriptionStreamStatus(
+            session_id=request.session_id,
+            state="admitted",
+            next_sequence=next_sequence,
+            credits=(
+                min(8, limits.max_queue)
+                if self._speech_stream_input_bytes.get(request.session_id, 0)
+                < limits.max_input_bytes
+                else 0
+            ),
+            lease_remaining_ms=lease_remaining_ms,
+            accepted_chunks=next_sequence,
+        )
+
+    @method_contract(
+        method_id=TranscriptionMethods.STREAM_RESULT,
+        summary="Return terminal transcription stream metadata",
+        input_model=TranscriptionStreamStatusRequest,
+        output_model=TranscriptionStreamResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TranscriptionMethods.STREAM_RESULT],
+        callable_feature_ids=["audio_transcription"],
+    )
+    async def speech_stream_result(
+        self,
+        request: TranscriptionStreamStatusRequest,
+        envelope: Envelope | None = None,
+    ) -> TranscriptionStreamResult:
+        async with self._speech_stream_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_matches(owner, envelope):
+                return TranscriptionStreamResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            result = self._speech_stream_results.get(request.session_id)
+        if result is not None:
+            return result
+        return TranscriptionStreamResult(
+            session_id=request.session_id,
+            state="failed",
+            reason_code="outcome_unknown",
+        )
+
+    @method_contract(
         method_id=TranscriptionMethods.TRANSCRIBE,
         summary="Transcribe complete audio file and return result",
         input_model=TranscribeAudioRequest,
         output_model=TranscribeAudioResponse,
         exposure="both",
         method_type="use",
+        required_perms=[TranscriptionMethods.TRANSCRIBE],
+        callable_feature_ids=["audio_transcription"],
     )
     async def transcribe_audio(self, request: TranscribeAudioRequest) -> TranscribeAudioResponse:
         """Transcribe complete audio and return result immediately.
@@ -993,13 +1966,19 @@ class TranscriptionService(BaseService):
 
             # Select model
             if request.model == "accurate":
-                if self._accurate_model is None:
-                    raise RuntimeError("Accurate model not loaded")
+                if not self._accurate_enabled or self._accurate_model is None:
+                    raise RuntimeError(
+                        "Accurate model unavailable: "
+                        f"{self._model_status_message.get('accurate', 'not_loaded')}"
+                    )
                 model = self._accurate_model
                 beam_size = 5
             else:
-                if self._realtime_model is None:
-                    raise RuntimeError("Realtime model not loaded")
+                if not self._realtime_enabled or self._realtime_model is None:
+                    raise RuntimeError(
+                        "Realtime model unavailable: "
+                        f"{self._model_status_message.get('realtime', 'not_loaded')}"
+                    )
                 model = self._realtime_model
                 beam_size = 1
 
@@ -1036,8 +2015,10 @@ class TranscriptionService(BaseService):
             )
 
         except Exception as e:
-            log_error(f"Transcription error: {e}", exc_info=True)
-            raise
+            log_error("Transcription error: %s", self._safe_exception_type(e), exc_info=True)
+            if isinstance(e, ValueError) and str(e).startswith("Invalid base64 audio data"):
+                raise
+            raise RuntimeError("Transcription failed") from e
 
 
 # Export service

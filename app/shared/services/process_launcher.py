@@ -7,6 +7,7 @@ enabling true microservices architecture with process isolation.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import multiprocessing
 import os
 import signal
@@ -19,6 +20,71 @@ from datetime import datetime
 from typing import Any
 
 from app.helpers.aurora_logger import log_error, log_info
+
+
+class ShutdownSignalWaiter:
+    """Installed SIGINT/SIGTERM waiter for standalone service shutdown."""
+
+    def __init__(self, service_name: str) -> None:
+        self._service_name = service_name
+        self._loop = asyncio.get_running_loop()
+        self._shutdown_requested = asyncio.Event()
+        self._installed_on_loop: list[signal.Signals] = []
+        self._previous_handlers: dict[signal.Signals, Any] = {}
+        self._install()
+
+    async def wait(self) -> None:
+        """Wait for an installed shutdown signal handler to fire."""
+        await self._shutdown_requested.wait()
+
+    def close(self) -> None:
+        """Remove loop handlers and restore fallback signal handlers."""
+        for shutdown_signal in self._installed_on_loop:
+            with contextlib.suppress(NotImplementedError, RuntimeError):
+                self._loop.remove_signal_handler(shutdown_signal)
+        self._installed_on_loop.clear()
+
+        for shutdown_signal, previous_handler in self._previous_handlers.items():
+            signal.signal(shutdown_signal, previous_handler)
+        self._previous_handlers.clear()
+
+    def _request_shutdown(self, signum: int) -> None:
+        signal_name = signal.Signals(signum).name
+        log_info(f"Received {signal_name}; stopping {self._service_name}")
+        self._shutdown_requested.set()
+
+    def _install(self) -> None:
+        for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
+            with contextlib.suppress(NotImplementedError, RuntimeError):
+                self._loop.add_signal_handler(
+                    shutdown_signal,
+                    self._request_shutdown,
+                    shutdown_signal,
+                )
+                self._installed_on_loop.append(shutdown_signal)
+                continue
+
+            self._previous_handlers[shutdown_signal] = signal.getsignal(shutdown_signal)
+            signal.signal(
+                shutdown_signal,
+                lambda signum, _frame: self._request_shutdown(signum),
+            )
+
+
+async def wait_for_shutdown_signal(service_name: str) -> None:
+    """Wait until SIGINT or SIGTERM requests standalone service shutdown."""
+    waiter = ShutdownSignalWaiter(service_name)
+
+    try:
+        await waiter.wait()
+    finally:
+        waiter.close()
+
+
+def run_standalone_service(main_coro: Any) -> None:
+    """Run a standalone service coroutine with normal Ctrl+C semantics."""
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(main_coro())
 
 
 def run_service_process(service_module_path: str, service_name: str) -> None:
@@ -34,7 +100,7 @@ def run_service_process(service_module_path: str, service_name: str) -> None:
 
         module = importlib.import_module(f"{service_module_path}.__main__")
         if hasattr(module, "main"):
-            asyncio.run(module.main())
+            run_standalone_service(module.main)
         else:
             raise AttributeError(f"Module {service_module_path} has no 'main' function")
     except Exception as e:

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Wake word detection result (for external API).",
+  "properties": {
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "detected": {
+      "title": "Detected",
+      "type": "boolean"
+    },
+    "wake_word": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wake Word"
+    }
+  },
+  "required": [
+    "detected"
+  ],
+  "title": "WakeWordDetectResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

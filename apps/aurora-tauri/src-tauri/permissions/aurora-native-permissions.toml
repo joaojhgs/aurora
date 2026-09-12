@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "aurora-native-permissions"
+description = "Allow the frontend SDK adapter to read the Aurora desktop native permission and capability status without granting denied OS surfaces."
+commands.allow = ["aurora_native_permission_status"]

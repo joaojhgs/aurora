@@ -1,0 +1,18 @@
+[[permission]]
+identifier = "aurora-native-webrtc"
+description = "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
+commands.allow = [
+  "aurora_native_webrtc_create",
+  "aurora_native_webrtc_create_offer",
+  "aurora_native_webrtc_create_answer",
+  "aurora_native_webrtc_set_local_description",
+  "aurora_native_webrtc_set_remote_description",
+  "aurora_native_webrtc_add_ice_candidate",
+  "aurora_native_webrtc_create_data_channel",
+  "aurora_native_webrtc_data_channel_send",
+  "aurora_native_webrtc_data_channel_close",
+  "aurora_native_webrtc_set_data_channel_buffered_amount_low_threshold",
+  "aurora_native_webrtc_get_stats",
+  "aurora_native_webrtc_measure_rtt",
+  "aurora_native_webrtc_close"
+]

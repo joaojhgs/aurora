@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-ios-native-plugin-manifest"
+description = "Enables the aurora_ios_native_plugin_manifest command without any pre-configured scope."
+commands.allow = ["aurora_ios_native_plugin_manifest"]
+
+[[permission]]
+identifier = "deny-aurora-ios-native-plugin-manifest"
+description = "Denies the aurora_ios_native_plugin_manifest command without any pre-configured scope."
+commands.deny = ["aurora_ios_native_plugin_manifest"]

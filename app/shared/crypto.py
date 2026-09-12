@@ -52,7 +52,7 @@ def seal_str(key: bytes, plaintext: str) -> str:
 
 
 def open_str(key: bytes, stored: str) -> str:
-    """Decrypt a stored string, or return as-is if legacy plaintext.
+    """Decrypt a stored string, passing through only unprefixed legacy plaintext.
 
     Args:
         key: 32-byte AES key (from derive_mesh_inbound_key).
@@ -68,5 +68,5 @@ def open_str(key: bytes, stored: str) -> str:
         nonce, ct = payload[:12], payload[12:]
         pt = AESGCM(key).decrypt(nonce, ct, None)
         return pt.decode()
-    except Exception:
-        return stored
+    except Exception as exc:
+        raise ValueError("Invalid encrypted value") from exc

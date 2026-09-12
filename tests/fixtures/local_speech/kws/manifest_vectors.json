@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "sherpa-en-hey-aurora",
+      "engine": "sherpa-onnx",
+      "language": "en",
+      "phrase": "hey aurora",
+      "custom_keyword_mode": "keyword_file_no_retrain",
+      "expected_supported": true
+    },
+    {
+      "id": "sherpa-pt-unsupported",
+      "engine": "sherpa-onnx",
+      "language": "pt",
+      "phrase": "ola aurora",
+      "custom_keyword_mode": "keyword_file_no_retrain",
+      "expected_supported": false,
+      "failure_boundary": "before_listening"
+    },
+    {
+      "id": "openwakeword-trained-pack-python-only",
+      "engine": "openwakeword",
+      "language": "pt",
+      "custom_keyword_mode": "trained_model_import",
+      "expected_python_import": "candidate",
+      "expected_typescript_import": "absent_until_frame_score_parity"
+    }
+  ]
+}

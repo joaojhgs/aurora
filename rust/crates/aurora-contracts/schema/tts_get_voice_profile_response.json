@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "SpeechStorageSummary": {
+      "additionalProperties": false,
+      "description": "Redacted bounded storage summary for management surfaces.",
+      "properties": {
+        "artifact_count": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Artifact Count",
+          "type": "integer"
+        },
+        "bytes_used": {
+          "default": 0,
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Bytes Used",
+          "type": "integer"
+        }
+      },
+      "title": "SpeechStorageSummary",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid"
+    },
+    "TTSVoiceProfileDescriptor": {
+      "additionalProperties": false,
+      "description": "Management-only redacted voice profile descriptor.",
+      "properties": {
+        "active": {
+          "default": false,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "allowed_peer_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Allowed Peer Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "compatible_language_pack_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Compatible Language Pack Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "compatible_selection_group": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compatible Selection Group"
+        },
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "installed": {
+          "default": false,
+          "title": "Installed",
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "cloned",
+            "standard"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "ready": {
+          "default": false,
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "retained_source": {
+          "default": false,
+          "title": "Retained Source",
+          "type": "boolean"
+        },
+        "revision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "storage": {
+          "$ref": "#/$defs/SpeechStorageSummary"
+        },
+        "visibility": {
+          "default": "private",
+          "enum": [
+            "allowed_peers",
+            "private"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "voice_id": {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "title": "Voice Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display_name",
+        "kind",
+        "revision",
+        "voice_id"
+      ],
+      "title": "TTSVoiceProfileDescriptor",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-profile-descriptor-invariant": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Administrative voice profile response.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "found": {
+      "title": "Found",
+      "type": "boolean"
+    },
+    "profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TTSVoiceProfileDescriptor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "found"
+  ],
+  "title": "TTSGetVoiceProfileResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid",
+  "x-aurora-tts-get-profile-response-invariant": true
+}

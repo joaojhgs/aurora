@@ -142,12 +142,16 @@ class TestRAGServiceStores:
         store = combined._get_store(("main", "memories"))
         assert store is mock_memories
 
-        # Test tools namespace routing
+        # Test legacy and canonical tools namespace routing
         store = combined._get_store(("tools",))
+        assert store is mock_tools
+        store = combined._get_store(("main", "tools"))
         assert store is mock_tools
 
         # Test default routing
         store = combined._get_store(("unknown",))
+        assert store is mock_memories  # Defaults to memories
+        store = combined._get_store(("other", "tools"))
         assert store is mock_memories  # Defaults to memories
 
     def test_combined_store_delegation(self):
@@ -170,9 +174,15 @@ class TestRAGServiceStores:
         combined.delete(("main", "memories"), "key1")
         mock_memories.delete.assert_called_once_with(("main", "memories"), "key1")
 
-        # Test search delegation
-        combined.search(("tools",), query="test", limit=5)
-        mock_tools.search.assert_called_once_with(("tools",), query="test", limit=5, offset=0)
+        # Test legacy and canonical tools search delegation
+        combined.search(("tools",), query="legacy", limit=5)
+        mock_tools.search.assert_called_once_with(("tools",), query="legacy", limit=5, offset=0)
+        mock_tools.search.reset_mock()
+
+        combined.search(("main", "tools"), query="canonical", limit=5)
+        mock_tools.search.assert_called_once_with(
+            ("main", "tools"), query="canonical", limit=5, offset=0
+        )
 
         # Test retrieve_items delegation
         combined.retrieve_items(("main", "memories"), limit=10, offset=0)

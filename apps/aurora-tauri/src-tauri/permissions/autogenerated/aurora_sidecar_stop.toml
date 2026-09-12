@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-sidecar-stop"
+description = "Enables the aurora_sidecar_stop command without any pre-configured scope."
+commands.allow = ["aurora_sidecar_stop"]
+
+[[permission]]
+identifier = "deny-aurora-sidecar-stop"
+description = "Denies the aurora_sidecar_stop command without any pre-configured scope."
+commands.deny = ["aurora_sidecar_stop"]

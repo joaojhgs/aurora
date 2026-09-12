@@ -1,0 +1,260 @@
+{
+  "$defs": {
+    "MeshAddressSelector": {
+      "description": "Explicit mesh target selector for safety-sensitive remote calls.\n\nThe selector is optional on bus payloads so transparent module routing\nremains backward compatible. When present, routing treats peer/provider\nfields as binding hints and validates them before falling back to module\nselection.",
+      "properties": {
+        "data_scope": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Scope"
+        },
+        "hardware_target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hardware Target"
+        },
+        "peer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peer Id"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "resource_namespace": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource Namespace"
+        },
+        "service_instance_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Instance Id"
+        },
+        "tool_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "x-aurora-string-non-blank": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Id"
+        }
+      },
+      "title": "MeshAddressSelector",
+      "type": "object",
+      "x-aurora-extra-behavior": "strip"
+    },
+    "TTSCloneVoiceStateBundle": {
+      "additionalProperties": false,
+      "description": "Portable cloned voice-state bundle containing derived state only.",
+      "properties": {
+        "artifact_data_base64": {
+          "maxLength": 2796204,
+          "title": "Artifact Data Base64",
+          "type": "string"
+        },
+        "artifact_format": {
+          "const": "safetensors",
+          "default": "safetensors",
+          "title": "Artifact Format",
+          "type": "string"
+        },
+        "artifact_revision": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Artifact Revision",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "artifact_size_bytes": {
+          "exclusiveMinimum": 0,
+          "maximum": 2097152,
+          "title": "Artifact Size Bytes",
+          "type": "integer"
+        },
+        "bundle_type": {
+          "const": "aurora-cloned-tts-voice-state",
+          "default": "aurora-cloned-tts-voice-state",
+          "title": "Bundle Type",
+          "type": "string"
+        },
+        "compatibility_group": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Compatibility Group",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "language_bundle": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Language Bundle",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "runtime_target": {
+          "maxLength": 96,
+          "minLength": 1,
+          "title": "Runtime Target",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "voice_id": {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "title": "Voice Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_data_base64",
+        "artifact_revision",
+        "artifact_sha256",
+        "artifact_size_bytes",
+        "compatibility_group",
+        "display_name",
+        "language_bundle",
+        "runtime_target",
+        "voice_id"
+      ],
+      "title": "TTSCloneVoiceStateBundle",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-clone-state-bundle-invariant": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Import a manager-authorized cloned voice state bundle.",
+  "properties": {
+    "bundle": {
+      "$ref": "#/$defs/TTSCloneVoiceStateBundle"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "mesh_selector": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeshAddressSelector"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "operation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Operation Id",
+      "type": "string",
+      "x-aurora-string-non-blank": true,
+      "x-aurora-tts-operation-id": true
+    }
+  },
+  "required": [
+    "bundle",
+    "operation_id"
+  ],
+  "title": "TTSImportVoiceProfileRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

@@ -12,6 +12,7 @@ import aiosqlite
 from app.helpers.aurora_logger import log_debug, log_error, log_info
 from app.services.db.migration_manager import MigrationManager
 from app.services.db.models import CronJob
+from app.services.db.sqlite_connection import database_connection
 
 
 class SchedulerDatabaseService:
@@ -44,8 +45,8 @@ class SchedulerDatabaseService:
     async def add_job(self, job: CronJob) -> bool:
         """Add a new job to the database"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
+            async with database_connection(self.db_path) as db:
+                job_dict = await self._filter_existing_columns(db, job.to_dict())
                 placeholders = ", ".join(["?" for _ in job_dict])
                 columns = ", ".join(job_dict.keys())
                 values = list(job_dict.values())
@@ -70,8 +71,8 @@ class SchedulerDatabaseService:
         """Update job in database"""
         try:
             job.updated_at = datetime.now()
-            async with aiosqlite.connect(self.db_path) as db:
-                job_dict = job.to_dict()
+            async with database_connection(self.db_path) as db:
+                job_dict = await self._filter_existing_columns(db, job.to_dict())
                 set_clause = ", ".join([f"{k} = ?" for k in job_dict if k != "id"])
                 values = [v for k, v in job_dict.items() if k != "id"] + [job.id]
 
@@ -91,10 +92,27 @@ class SchedulerDatabaseService:
             log_error(f"Error updating job: {e}")
             return False
 
+    async def _filter_existing_columns(
+        self, db: aiosqlite.Connection, values: dict[str, object]
+    ) -> dict[str, object]:
+        """Filter serialized CronJob values to columns available in this DB.
+
+        Some older unit fixtures create a minimal `cron_jobs` table manually. Real
+        databases receive typed-action columns through migrations; this keeps legacy
+        fixtures readable without preventing typed fields from being persisted when
+        the migrated columns exist.
+        """
+        cursor = await db.execute("PRAGMA table_info(cron_jobs)")
+        rows = await cursor.fetchall()
+        columns = {row[1] for row in rows}
+        if not columns:
+            return values
+        return {key: value for key, value in values.items() if key in columns}
+
     async def get_job(self, job_id: str) -> CronJob | None:
         """Get a job by ID"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM cron_jobs WHERE id = ?", (job_id,))
                 row = await cursor.fetchone()
@@ -110,7 +128,7 @@ class SchedulerDatabaseService:
     async def get_all_jobs(self) -> list[CronJob]:
         """Get all jobs"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute("SELECT * FROM cron_jobs ORDER BY created_at DESC")
                 rows = await cursor.fetchall()
@@ -124,7 +142,7 @@ class SchedulerDatabaseService:
     async def get_active_jobs(self) -> list[CronJob]:
         """Get all active jobs"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -147,7 +165,7 @@ class SchedulerDatabaseService:
             now = datetime.now()
             now_iso = now.isoformat()
 
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -175,7 +193,7 @@ class SchedulerDatabaseService:
     async def delete_job(self, job_id: str) -> bool:
         """Delete a job"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 await db.execute("DELETE FROM cron_jobs WHERE id = ?", (job_id,))
                 await db.commit()
 
@@ -189,7 +207,7 @@ class SchedulerDatabaseService:
     async def deactivate_job(self, job_id: str) -> bool:
         """Deactivate a job"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 await db.execute(
                     """
                     UPDATE cron_jobs
@@ -210,7 +228,7 @@ class SchedulerDatabaseService:
     async def get_job_history(self, limit: int = 50) -> list[CronJob]:
         """Get job execution history"""
         try:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
                     """
@@ -235,7 +253,7 @@ class SchedulerDatabaseService:
             cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             cutoff_date = cutoff_date.replace(day=cutoff_date.day - days_to_keep)
 
-            async with aiosqlite.connect(self.db_path) as db:
+            async with database_connection(self.db_path) as db:
                 cursor = await db.execute(
                     """
                     DELETE FROM cron_jobs

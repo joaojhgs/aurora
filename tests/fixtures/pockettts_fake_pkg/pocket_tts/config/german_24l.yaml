@@ -1,0 +1,4 @@
+model_path: models/german_24l.bin
+tokenizer_file: tokenizers/german_24l.json
+repo_revision: pockettts-test
+language: german

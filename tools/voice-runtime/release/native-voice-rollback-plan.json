@@ -1,0 +1,157 @@
+{
+  "policyId": "RAC-54-native-voice-release-rollback",
+  "version": 1,
+  "scope": {
+    "kind": "policy-gate-only",
+    "claimBoundary": "static-policy-only",
+    "runtimeProof": false,
+    "runtimeExecutionEvidence": false,
+    "runtimeE2eEvidenceClaimed": false,
+    "externalEvidenceRequired": true,
+    "reportClaim": "Validates static rollback policy structure and release-readiness invariants only; it does not prove rollback execution on a live runtime."
+  },
+  "capabilityGroups": [
+    {
+      "id": "web-local-speech",
+      "surface": "web",
+      "capabilities": ["focused-web-speech-capture", "focused-web-playback"],
+      "rollbackIntent": "withdraw local speech readiness, cancel active capture/playback, and keep remote-only paths fail-closed unless authorized"
+    },
+    {
+      "id": "desktop-native-ptt-background",
+      "surface": "desktop",
+      "capabilities": ["native-push-to-talk", "background-capture", "desktop-playback"],
+      "rollbackIntent": "withdraw desktop native readiness before stopping native capture, model, or playback resources"
+    },
+    {
+      "id": "android-native-ptt-foreground-background-system-assistant",
+      "surface": "android",
+      "capabilities": ["native-push-to-talk", "foreground-capture", "background-capture", "system-assistant"],
+      "rollbackIntent": "withdraw affected Android readiness while preserving native push-to-talk when only mobile background behavior is withdrawn"
+    },
+    {
+      "id": "ios-native-ptt-background",
+      "surface": "ios",
+      "capabilities": ["native-push-to-talk", "background-capture", "ios-playback"],
+      "rollbackIntent": "withdraw affected iOS readiness while preserving native push-to-talk when only mobile background behavior is withdrawn"
+    },
+    {
+      "id": "native-provider-hosting",
+      "surface": "native-provider",
+      "capabilities": ["local-provider-hosting", "authorized-remote-route-hosting"],
+      "rollbackIntent": "withdraw provider readiness before host shutdown and restore only permitted local Python and authorized remote routes"
+    }
+  ],
+  "rollbackSequence": [
+    {
+      "id": "withdraw-readiness",
+      "operation": "withdraw-readiness",
+      "appliesTo": ["web-local-speech", "desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background", "native-provider-hosting"],
+      "requiredBefore": ["stop-native-provider-hosting", "stop-background-capture", "stop-model-hosting", "stop-playback"]
+    },
+    {
+      "id": "cancel-capture",
+      "operation": "cancel-capture",
+      "appliesTo": ["web-local-speech", "desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background"]
+    },
+    {
+      "id": "release-capture",
+      "operation": "release-capture",
+      "appliesTo": ["web-local-speech", "desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background"]
+    },
+    {
+      "id": "cancel-model",
+      "operation": "cancel-model",
+      "appliesTo": ["desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background", "native-provider-hosting"]
+    },
+    {
+      "id": "release-model",
+      "operation": "release-model",
+      "appliesTo": ["desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background", "native-provider-hosting"]
+    },
+    {
+      "id": "cancel-playback",
+      "operation": "cancel-playback",
+      "appliesTo": ["web-local-speech", "desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background"]
+    },
+    {
+      "id": "release-playback",
+      "operation": "release-playback",
+      "appliesTo": ["web-local-speech", "desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background"]
+    },
+    {
+      "id": "stop-background-capture",
+      "operation": "stop-background-capture",
+      "appliesTo": ["desktop-native-ptt-background", "android-native-ptt-foreground-background-system-assistant", "ios-native-ptt-background"]
+    },
+    {
+      "id": "stop-model-hosting",
+      "operation": "stop-model-hosting",
+      "appliesTo": ["native-provider-hosting"]
+    },
+    {
+      "id": "stop-native-provider-hosting",
+      "operation": "stop-native-provider-hosting",
+      "appliesTo": ["native-provider-hosting"]
+    },
+    {
+      "id": "restore-permitted-routes",
+      "operation": "restore-permitted-routes",
+      "appliesTo": ["native-provider-hosting"]
+    }
+  ],
+  "statePreservation": {
+    "roles": {
+      "source": "saved-profile-state",
+      "preservePersistedDynamicRoles": true,
+      "forbiddenSources": ["env", "build", "apk", "platform", "transport", "sidecar", "tier"]
+    },
+    "preserve": [
+      "runtime-profiles",
+      "active-profile-id",
+      "inactive-profile-ids",
+      "peer-http-credentials",
+      "peer-reconnect-credentials",
+      "room-secret-references",
+      "stable-peer-ids",
+      "voice-profiles",
+      "cloned-private-voice-profiles",
+      "voice-profile-metadata",
+      "voice-sources",
+      "voice-embeddings",
+      "model-pack-rollback-slots"
+    ],
+    "modelPacks": {
+      "preserveUnless": ["corrupt", "revoked", "user_requested", "build_output_only"]
+    }
+  },
+  "routeRecovery": {
+    "restorePermittedPython": true,
+    "restoreAuthorizedRemoteRoutes": true,
+    "webrtcOnlyFailClosed": true,
+    "externalOnlyCapabilities": false,
+    "retainNativePttWhenOnlyMobileBackgroundWithdrawn": true
+  },
+  "routePolicy": {
+    "webrtcPreferredHttpOnlyWhenGatewayAvailable": true,
+    "pureWebRemoteSpeechOnlyWhenAuthorized": true,
+    "webrtcOnlyFailClosed": true,
+    "desktopLocalRemainsSeparate": true,
+    "retainNativePttWhenOnlyMobileBackgroundWithdrawn": true,
+    "externalOnlyCapabilities": false
+  },
+  "rejectedOperations": [
+    "delete-user-data",
+    "wipe-profile",
+    "reset-roles",
+    "clear-peer-http-credentials",
+    "purge-model-packs",
+    "remove-cloned-private-voice-profiles",
+    "erase-voice-embeddings",
+    "destroy-stable-peer-ids",
+    "drop-room-secret-references",
+    "rewrite-runtime-profiles",
+    "enable-external-only-capabilities",
+    "downgrade-webrtc-open"
+  ]
+}

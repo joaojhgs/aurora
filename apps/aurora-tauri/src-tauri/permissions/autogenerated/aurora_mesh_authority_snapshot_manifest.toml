@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-authority-snapshot-manifest"
+description = "Enables the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope."
+commands.allow = ["aurora_mesh_authority_snapshot_manifest"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-authority-snapshot-manifest"
+description = "Denies the aurora_mesh_authority_snapshot_manifest command without any pre-configured scope."
+commands.deny = ["aurora_mesh_authority_snapshot_manifest"]

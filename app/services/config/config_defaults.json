@@ -2,10 +2,24 @@
   "ui": {
     "activate": false,
     "dark_mode": false,
-    "debug": false
+    "debug": false,
+    "assistant": {
+      "automatic_tts_readback": false
+    },
+    "desktop_overlay": {
+      "enabled": true,
+      "voice_overlay_enabled": true,
+      "text_hotkey": "CommandOrControl+K",
+      "close_behavior": "hide_to_tray",
+      "auto_close_delay_ms": 1200,
+      "visible_on_all_workspaces": true,
+      "persist_positions": true
+    }
   },
   "system": {
-    "models_dir": "voice_models/"
+    "models_dir": "voice_models/",
+    "primary_language": "en",
+    "voice_language": "auto"
   },
   "services": {
     "gateway": {
@@ -40,6 +54,7 @@
         "password": "",
         "encrypt_signaling": true,
         "enable_app_layer_e2ee": false,
+        "legacy_event_broadcast": true,
         "stun_servers": [
           "stun:stun.l.google.com:19302"
         ],
@@ -61,13 +76,19 @@
       "pairing_code_expiry_minutes": 5,
       "pairing_max_attempts_per_ip": 5,
       "default_pairing_permissions": [],
+      "mesh_peer_orphan_pruning_enabled": true,
+      "mesh_peer_orphan_retention_seconds": 2592000,
+      "mesh_peer_orphan_prune_max_rows": 256,
       "webrtc_auth_timeout_seconds": 10.0,
       "webrtc_pairing_timeout_seconds": 300.0,
       "audit_enabled": true,
       "audit_retention_days": 90
     },
     "tts": {
-      "enabled": false,
+      "enabled": true,
+      "provider": "piper",
+      "fallback_provider": null,
+      "default_voice_id": null,
       "mesh_sharing": {
         "share": false,
         "max_concurrent": 10,
@@ -76,18 +97,78 @@
         "fallback": "local",
         "min_version": null,
         "required_capabilities": [],
+        "require_explicit_selector": false,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
+        "prefer": "local",
+        "fallback": "local",
+        "allowed_provider_peer_ids": null,
+        "min_version": null,
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
         "require_explicit_selector": false
       },
       "hardware_acceleration": false,
-      "model_file_path": "voice_models/en_US-lessac-medium.onnx",
-      "model_config_file_path": "voice_models/en_US-lessac-medium.onnx.txt",
+      "providers": {
+        "piper": {
+          "model_file_path": null,
+          "model_config_file_path": null,
+          "model_sample_rate": 22050,
+          "executable_path": "",
+          "cache_dir": "voice_models/piper"
+        },
+        "pockettts": {
+          "quality_tier": "compact",
+          "custom_config_path": null,
+          "cache_dir": "voice_models/pockettts",
+          "voice_state_dir": "voice_models/pockettts/voices",
+          "device": "cpu",
+          "initialization_timeout_s": 120.0,
+          "request_timeout_s": 120.0,
+          "max_concurrent_requests": 1,
+          "preload_model": false,
+          "preload_voice_ids": [],
+          "temperature": null,
+          "lsd_decode_steps": 1,
+          "noise_clamp": null,
+          "eos_threshold": -4.0,
+          "quantize": false
+        }
+      },
+      "voice_registry": {
+        "manifest_path": "voice_models/voices.manifest.json",
+        "asset_base_url": null,
+        "trusted_manifest_sha256": null,
+        "trusted_manifest_public_keys": [],
+        "trusted_manifest_signature": null,
+        "cache_dir": "voice_models/voice-pack",
+        "verify_sha256": true,
+        "standard_pack_enabled": true,
+        "cloning_enabled": true,
+        "retain_clone_source": false,
+        "clone_min_duration_s": 6.0,
+        "clone_max_duration_s": 15.0,
+        "clone_max_source_bytes": 20971520,
+        "clone_max_wire_bytes": 2097152,
+        "accepted_import_formats": [
+          "wav",
+          "mp3",
+          "mp4",
+          "m4a",
+          "webm"
+        ]
+      },
+      "model_file_path": null,
+      "model_config_file_path": null,
       "model_sample_rate": 22050,
       "piper_path": ""
     },
     "stt": {
-      "language": "en",
+      "language": "",
       "coordinator": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -96,9 +177,20 @@
           "fallback": "local",
           "min_version": null,
           "required_capabilities": [],
+          "require_explicit_selector": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "mesh_routing": {
+          "prefer": "local",
+          "fallback": "local",
+          "allowed_provider_peer_ids": null,
+          "min_version": null,
+          "required_provider_feature_ids": [],
+          "required_provider_capability_tags": [],
           "require_explicit_selector": false
         },
-        "session_timeout_s": 10.0,
+        "session_timeout_s": 30.0,
         "multi_turn_enabled": false,
         "pause_tts_on_listen": true,
         "ambient_transcription": {
@@ -117,7 +209,7 @@
         }
       },
       "wakeword": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -126,6 +218,17 @@
           "fallback": "local",
           "min_version": null,
           "required_capabilities": [],
+          "require_explicit_selector": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "mesh_routing": {
+          "prefer": "local",
+          "fallback": "local",
+          "allowed_provider_peer_ids": null,
+          "min_version": null,
+          "required_provider_feature_ids": [],
+          "required_provider_capability_tags": [],
           "require_explicit_selector": false
         },
         "backend": "oww",
@@ -134,7 +237,7 @@
         "inference_framework": "onnx"
       },
       "transcription": {
-        "enabled": false,
+        "enabled": true,
         "mesh_sharing": {
           "share": false,
           "max_concurrent": 10,
@@ -143,6 +246,17 @@
           "fallback": "local",
           "min_version": null,
           "required_capabilities": [],
+          "require_explicit_selector": false,
+          "unshared_feature_ids": [],
+          "unshared_method_ids": []
+        },
+        "mesh_routing": {
+          "prefer": "local",
+          "fallback": "local",
+          "allowed_provider_peer_ids": null,
+          "min_version": null,
+          "required_provider_feature_ids": [],
+          "required_provider_capability_tags": [],
           "require_explicit_selector": false
         },
         "vad_enabled": true,
@@ -151,13 +265,15 @@
         "max_speech_duration_s": 30,
         "realtime_model": {
           "enabled": true,
-          "model_size": "tiny",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         },
         "accurate_model": {
           "enabled": true,
-          "model_size": "base",
+          "model_size": null,
+          "model_size_or_path": null,
           "device": "cpu",
           "compute_type": "int8"
         }
@@ -174,6 +290,17 @@
         "fallback": "local",
         "min_version": null,
         "required_capabilities": [],
+        "require_explicit_selector": false,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
+        "prefer": "local",
+        "fallback": "local",
+        "allowed_provider_peer_ids": null,
+        "min_version": null,
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
         "require_explicit_selector": false
       },
       "hardware_acceleration": false,
@@ -223,6 +350,24 @@
               "chat_format": "chatml-function-calling"
             }
           }
+        },
+        "remote_peer": {
+          "resource_namespace": "inference",
+          "timeout_s": 60
+        },
+        "mesh_peer": {
+          "resource_namespace": "inference",
+          "timeout_s": 60
+        }
+      },
+      "routing": {
+        "dispatch_default": {
+          "enabled": false
+        },
+        "inference_default": {
+          "provider": "configured",
+          "resource_namespace": "inference",
+          "timeout_s": 60
         }
       }
     },
@@ -236,6 +381,17 @@
         "fallback": "local",
         "min_version": null,
         "required_capabilities": [],
+        "require_explicit_selector": false,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
+        "prefer": "local",
+        "fallback": "local",
+        "allowed_provider_peer_ids": null,
+        "min_version": null,
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
         "require_explicit_selector": false
       },
       "embeddings": {
@@ -252,11 +408,23 @@
         "fallback": "local",
         "min_version": null,
         "required_capabilities": [],
+        "require_explicit_selector": false,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
+        "prefer": "local",
+        "fallback": "local",
+        "allowed_provider_peer_ids": null,
+        "min_version": null,
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
         "require_explicit_selector": false
       },
       "approval_policy": {
         "default_share": true,
         "default_approval_mode": "approve_all_local_safe",
+        "policy_mode": "enforce",
         "default_token_ttl_seconds": 300,
         "rules": []
       },
@@ -313,6 +481,17 @@
         "fallback": "local",
         "min_version": null,
         "required_capabilities": [],
+        "require_explicit_selector": false,
+        "unshared_feature_ids": [],
+        "unshared_method_ids": []
+      },
+      "mesh_routing": {
+        "prefer": "local",
+        "fallback": "local",
+        "allowed_provider_peer_ids": null,
+        "min_version": null,
+        "required_provider_feature_ids": [],
+        "required_provider_capability_tags": [],
         "require_explicit_selector": false
       }
     },

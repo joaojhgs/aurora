@@ -1,0 +1,4 @@
+model_path: models/english_2026-04.bin
+tokenizer_file: tokenizers/english_2026-04.json
+repo_revision: pockettts-test
+language: english

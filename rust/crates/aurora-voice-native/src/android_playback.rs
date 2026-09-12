@@ -1,0 +1,415 @@
+//! Android-native TTS playback handoff shared by the Rust runtime and Kotlin AudioTrack host.
+
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+use aurora_voice_core::{
+    AudioOutput, AudioPlaybackContext, AudioPlaybackReceipt, Generation, TimestampMicros,
+    TransitionReason, VoiceCoreError,
+};
+use aurora_voice_engine::TtsSynthesisResult;
+use tokio::time::{sleep, Duration};
+
+const DEFAULT_CAPACITY_CHUNKS: usize = 16;
+const MAX_CAPACITY_CHUNKS: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AndroidPcmPlaybackChunk {
+    pub samples: Vec<i16>,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub sequence: u64,
+    pub final_chunk: bool,
+}
+
+#[derive(Debug, Default)]
+struct Inner {
+    queue: VecDeque<AndroidPcmPlaybackChunk>,
+    active_generation: Option<Generation>,
+    final_sequence: Option<u64>,
+    last_drained: Option<(u64, bool)>,
+    completed_generation: Option<Generation>,
+    failure_code: Option<String>,
+    closed: bool,
+}
+
+/// Bounded TTS playback handoff. Kotlin drains chunks and owns AudioTrack.
+#[derive(Debug, Clone)]
+pub struct AndroidAudioOutput {
+    capacity_chunks: usize,
+    inner: Arc<Mutex<Inner>>,
+}
+
+impl AndroidAudioOutput {
+    pub fn new(capacity_chunks: usize) -> Self {
+        Self {
+            capacity_chunks: if capacity_chunks == 0 {
+                DEFAULT_CAPACITY_CHUNKS
+            } else {
+                capacity_chunks.min(MAX_CAPACITY_CHUNKS)
+            },
+            inner: Arc::new(Mutex::new(Inner::default())),
+        }
+    }
+
+    pub fn drain_chunk(&self) -> Option<AndroidPcmPlaybackChunk> {
+        let mut inner = self.inner.lock().ok()?;
+        let chunk = inner.queue.pop_front();
+        if let Some(chunk) = &chunk {
+            inner.last_drained = Some((chunk.sequence, chunk.final_chunk));
+        }
+        chunk
+    }
+
+    /// Acknowledge that the most recently drained chunk reached AudioTrack.
+    pub fn acknowledge_drained(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            let Some((sequence, final_chunk)) = inner.last_drained.take() else {
+                return;
+            };
+            if final_chunk && inner.final_sequence == Some(sequence) {
+                inner.completed_generation = inner.active_generation;
+                inner.active_generation = None;
+                inner.final_sequence = None;
+            }
+        }
+    }
+
+    /// Report that the Android playback host could not deliver queued audio.
+    ///
+    /// The failure remains sticky for this output instance so the active or
+    /// next playback call terminates instead of accepting audio that cannot be
+    /// heard. The owning voice session is then rebuilt by the Android service.
+    pub fn fail_playback(&self, code: impl Into<String>) {
+        if let Ok(mut inner) = self.inner.lock() {
+            if inner.closed {
+                return;
+            }
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+            inner.failure_code = Some(code.into());
+        }
+    }
+
+    pub fn queued_chunks(&self) -> usize {
+        self.inner.lock().map_or(0, |inner| inner.queue.len())
+    }
+
+    pub fn close(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+            inner.failure_code = None;
+            inner.closed = true;
+        }
+    }
+}
+
+impl Default for AndroidAudioOutput {
+    fn default() -> Self {
+        Self::new(DEFAULT_CAPACITY_CHUNKS)
+    }
+}
+
+#[async_trait(?Send)]
+impl AudioOutput for AndroidAudioOutput {
+    async fn play(
+        &mut self,
+        context: AudioPlaybackContext,
+        audio: TtsSynthesisResult,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+        let mut sample_count = 0_u64;
+        for chunk in audio.chunks() {
+            if chunk.channels() != 1 || chunk.samples().is_empty() {
+                return Err(VoiceCoreError::Engine(
+                    aurora_voice_core::EngineError::InvalidRequest,
+                ));
+            }
+            sample_count = sample_count.saturating_add(chunk.samples().len() as u64);
+        }
+        let final_sequence = audio.chunks().last().map(|chunk| chunk.sequence());
+        if cancellation() {
+            return Err(VoiceCoreError::Cancelled);
+        }
+        {
+            let mut inner = self
+                .inner
+                .lock()
+                .map_err(|_| VoiceCoreError::LockPoisoned)?;
+            if let Some(code) = inner.failure_code.clone() {
+                return Err(VoiceCoreError::TransportFault { code });
+            }
+            if inner.closed {
+                return Err(VoiceCoreError::BufferClosed);
+            }
+            if inner.active_generation.is_some() {
+                return Err(VoiceCoreError::OwnerAlreadyActive);
+            }
+            inner.queue.clear();
+            inner.active_generation = Some(context.generation);
+            inner.completed_generation = None;
+            inner.last_drained = None;
+            inner.final_sequence = None;
+        }
+        for chunk in audio.chunks() {
+            let playback_chunk = AndroidPcmPlaybackChunk {
+                samples: chunk.samples().to_vec(),
+                sample_rate_hz: chunk.sample_rate_hz(),
+                channels: chunk.channels(),
+                sequence: chunk.sequence(),
+                final_chunk: chunk.final_chunk(),
+            };
+            loop {
+                if cancellation() {
+                    self.stop(context.generation, TransitionReason::Cancel)
+                        .await?;
+                    return Err(VoiceCoreError::Cancelled);
+                }
+                let queued = {
+                    let mut inner = self
+                        .inner
+                        .lock()
+                        .map_err(|_| VoiceCoreError::LockPoisoned)?;
+                    if let Some(code) = inner.failure_code.clone() {
+                        return Err(VoiceCoreError::TransportFault { code });
+                    }
+                    if inner.closed {
+                        return Err(VoiceCoreError::BufferClosed);
+                    }
+                    if inner.active_generation != Some(context.generation) {
+                        return Err(VoiceCoreError::OwnerMismatch);
+                    }
+                    if inner.queue.len() >= self.capacity_chunks {
+                        false
+                    } else {
+                        if playback_chunk.final_chunk {
+                            inner.final_sequence = Some(playback_chunk.sequence);
+                        }
+                        inner.queue.push_back(playback_chunk.clone());
+                        true
+                    }
+                };
+                if queued {
+                    break;
+                }
+                sleep(Duration::from_millis(5)).await;
+            }
+        }
+        loop {
+            if cancellation() {
+                self.stop(context.generation, TransitionReason::Cancel)
+                    .await?;
+                return Err(VoiceCoreError::Cancelled);
+            }
+            let (completed, closed, failure_code) = {
+                let inner = self
+                    .inner
+                    .lock()
+                    .map_err(|_| VoiceCoreError::LockPoisoned)?;
+                (
+                    inner.completed_generation == Some(context.generation),
+                    inner.closed,
+                    inner.failure_code.clone(),
+                )
+            };
+            if let Some(code) = failure_code {
+                return Err(VoiceCoreError::TransportFault { code });
+            }
+            if completed {
+                break;
+            }
+            if closed || final_sequence.is_none() {
+                return Err(VoiceCoreError::BufferClosed);
+            }
+            sleep(Duration::from_millis(5)).await;
+        }
+        Ok(AudioPlaybackReceipt::new(
+            context,
+            audio.chunk_count(),
+            sample_count,
+            TimestampMicros(
+                context
+                    .started_at
+                    .0
+                    .saturating_add(sample_count.saturating_mul(1_000_000) / 16_000),
+            ),
+        ))
+    }
+
+    async fn stop(
+        &mut self,
+        generation: Generation,
+        _reason: TransitionReason,
+    ) -> Result<(), VoiceCoreError> {
+        let mut inner = self
+            .inner
+            .lock()
+            .map_err(|_| VoiceCoreError::LockPoisoned)?;
+        if inner.active_generation == Some(generation) {
+            inner.queue.clear();
+            inner.active_generation = None;
+            inner.final_sequence = None;
+            inner.last_drained = None;
+            inner.completed_generation = None;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aurora_voice_core::{
+        BoundTtsSynthesisRequest, RouteRevision, RouteTtsBinding, RouteTtsSynthesisRequest,
+        TtsSynthesisConfig,
+    };
+    use aurora_voice_engine::TtsAudioChunk;
+
+    fn audio_with_chunks(chunk_count: usize) -> TtsSynthesisResult {
+        let route = RouteTtsBinding::new("gateway", "voice-group", 16_000, 1).expect("route");
+        let request = BoundTtsSynthesisRequest::new_route(
+            RouteTtsSynthesisRequest::new(route, None, 2).expect("request"),
+            "hello",
+            TtsSynthesisConfig::new("default", "voice-group", 16_000, 256, None).expect("config"),
+        )
+        .expect("bound request");
+        let chunks = (0..chunk_count)
+            .map(|index| {
+                TtsAudioChunk::new(
+                    &request,
+                    index as u64 + 1,
+                    16_000,
+                    1,
+                    vec![index as i16 + 1; 256],
+                    index + 1 == chunk_count,
+                )
+                .expect("chunk")
+            })
+            .collect();
+        TtsSynthesisResult::new(&request, chunks, false).expect("result")
+    }
+
+    fn audio() -> TtsSynthesisResult {
+        let route = RouteTtsBinding::new("gateway", "voice-group", 16_000, 1).expect("route");
+        let request = BoundTtsSynthesisRequest::new_route(
+            RouteTtsSynthesisRequest::new(route, None, 2).expect("request"),
+            "hello",
+            TtsSynthesisConfig::new("default", "voice-group", 16_000, 256, None).expect("config"),
+        )
+        .expect("bound request");
+        let chunk = TtsAudioChunk::new(&request, 1, 16_000, 1, vec![1, -1], true).expect("chunk");
+        TtsSynthesisResult::new(&request, vec![chunk], false).expect("result")
+    }
+
+    #[tokio::test]
+    async fn playback_handoff_is_bounded_and_preserves_chunk_metadata() {
+        let mut output = AndroidAudioOutput::new(1);
+        let drain = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, audio(), &|| false));
+        tokio::select! {
+            result = &mut play => panic!("play completed before AudioTrack acknowledgement: {result:?}"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+        }
+        assert_eq!(drain.drain_chunk().expect("chunk").samples, vec![1, -1]);
+        drain.acknowledge_drained();
+        let receipt = play.await.expect("play");
+        assert_eq!(receipt.sample_count, 2);
+    }
+
+    #[tokio::test]
+    async fn playback_cancellation_does_not_leave_audio_queued() {
+        let mut output = AndroidAudioOutput::new(1);
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let error = output
+            .play(context, audio(), &|| true)
+            .await
+            .expect_err("cancel");
+        assert_eq!(error, VoiceCoreError::Cancelled);
+        assert!(output.drain_chunk().is_none());
+    }
+
+    #[tokio::test]
+    async fn playback_streams_replies_larger_than_bounded_handoff() {
+        let mut output = AndroidAudioOutput::new(1);
+        let drain = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, audio_with_chunks(3), &|| false));
+
+        for expected_sequence in 1..=3 {
+            let chunk = loop {
+                if let Some(chunk) = drain.drain_chunk() {
+                    break chunk;
+                }
+                tokio::select! {
+                    result = &mut play => {
+                        panic!("play completed before all chunks were acknowledged: {result:?}")
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {}
+                }
+            };
+            assert_eq!(chunk.sequence, expected_sequence);
+            assert!(drain.queued_chunks() <= 1);
+            drain.acknowledge_drained();
+        }
+
+        let receipt = play.await.expect("play");
+        assert_eq!(receipt.chunk_count, 3);
+        assert_eq!(receipt.sample_count, 768);
+    }
+
+    #[tokio::test]
+    async fn playback_host_failure_faults_without_acknowledging_unplayed_audio() {
+        let mut output = AndroidAudioOutput::new(1);
+        let host = output.clone();
+        let context = AudioPlaybackContext {
+            generation: Generation(2),
+            route_revision: RouteRevision(1),
+            started_at: TimestampMicros(100),
+        };
+        let mut play = Box::pin(output.play(context, audio(), &|| false));
+
+        let chunk = loop {
+            if let Some(chunk) = host.drain_chunk() {
+                break chunk;
+            }
+            tokio::select! {
+                result = &mut play => {
+                    panic!("play completed before the host drained audio: {result:?}")
+                }
+                _ = tokio::time::sleep(Duration::from_millis(1)) => {}
+            }
+        };
+        assert!(chunk.final_chunk);
+
+        host.fail_playback("android_audio_track_write_failed");
+
+        assert_eq!(
+            play.await.expect_err("unplayed audio must fail the turn"),
+            VoiceCoreError::TransportFault {
+                code: "android_audio_track_write_failed".to_owned(),
+            },
+        );
+        assert!(host.drain_chunk().is_none());
+    }
+}

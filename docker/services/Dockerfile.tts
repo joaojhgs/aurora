@@ -10,6 +10,7 @@ ENV AURORA_ENV=production
 ENV AURORA_ARCHITECTURE_MODE=processes
 ENV REDIS_URL=redis://redis:6379
 ENV UV_LINK_MODE=copy
+ENV HF_HOME=/app/voice_models/pockettts/huggingface
 
 RUN apt-get update && apt-get install -y \
     portaudio19-dev \
@@ -34,18 +35,22 @@ COPY --chown=aurora:aurora docker/services/constraints-tts-cpu.txt /tmp/constrai
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv export --frozen --no-dev --no-emit-project --format requirements.txt \
       --extra service-tts --extra mode-processes \
-      --no-emit-package torch --no-emit-package torchaudio --no-emit-package torchvision \
+      --prune torch --prune torchaudio --prune torchvision \
       > /tmp/requirements.txt && \
     if [ "$TTS_HARDWARE" = "cuda" ]; then \
-      uv pip install --system -r /tmp/requirements.txt \
-        && uv pip install --system \
+      uv pip install --system \
           torch==2.6.0+cu124 torchaudio==2.6.0+cu124 torchvision==0.21.0+cu124 \
-          --extra-index-url=https://download.pytorch.org/whl/cu124; \
+          --extra-index-url=https://download.pytorch.org/whl/cu124 \
+        && uv pip install --system -r /tmp/requirements.txt \
+          --extra-index-url=https://download.pytorch.org/whl/cu124 \
+          --index-strategy unsafe-best-match; \
     elif [ "$TTS_HARDWARE" = "rocm" ]; then \
-      uv pip install --system -r /tmp/requirements.txt \
-        && uv pip install --system \
-          torch==2.6.0+rocm6.0 torchaudio==2.6.0+rocm6.0 \
-          --extra-index-url=https://download.pytorch.org/whl/rocm6.0; \
+      uv pip install --system \
+          torch==2.6.0+rocm6.2.4 torchaudio==2.6.0+rocm6.2.4 torchvision==0.21.0+rocm6.2.4 \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4 \
+        && uv pip install --system -r /tmp/requirements.txt \
+          --extra-index-url=https://download.pytorch.org/whl/rocm6.2.4 \
+          --index-strategy unsafe-best-match; \
     else \
       uv pip install --system \
         torch==2.6.0+cpu torchaudio==2.6.0+cpu torchvision==0.21.0+cpu \
@@ -60,7 +65,14 @@ COPY --chown=aurora:aurora app/ app/
 COPY --chown=aurora:aurora modules/ modules/
 RUN uv pip install --system --no-deps -e .
 
-RUN mkdir -p /app/data /app/logs /app/cache /app/config && \
+RUN mkdir -p \
+      /app/data \
+      /app/logs \
+      /app/cache \
+      /app/config \
+      /app/voice_models/pockettts/huggingface \
+      /app/voice_models/pockettts/voices \
+      /app/voice_models/voice-pack && \
     chown -R aurora:aurora /app
 
 USER aurora

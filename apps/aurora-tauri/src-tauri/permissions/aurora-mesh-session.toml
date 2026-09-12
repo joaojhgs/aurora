@@ -1,0 +1,10 @@
+[[permission]]
+identifier = "aurora-mesh-session"
+description = "Allow the thin shell to tell the native session dispatcher which stable peer a data channel carries and whether the surface is awake, and to read what the dispatcher has answered. Frames the dispatcher owns are answered in Rust without the webview, so this boundary carries bindings and lifecycle only. No grant, permission set or credential crosses it: every authorization question still goes to the mesh authority."
+commands.allow = [
+  "aurora_mesh_session_bind",
+  "aurora_mesh_session_unbind",
+  "aurora_mesh_session_set_lifecycle",
+  "aurora_mesh_session_finish_resume",
+  "aurora_mesh_session_snapshot"
+]

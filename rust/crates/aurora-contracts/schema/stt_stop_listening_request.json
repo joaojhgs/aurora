@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request to stop listening.",
+  "properties": {
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    }
+  },
+  "title": "STTStopListeningRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

@@ -1,0 +1,24 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-thin",
+        {
+          "identifier": "aurora-desktop-live-webdriver",
+          "description": "Debug-only capability used by the maintained desktop live test runner. It grants no application IPC commands and is excluded from production configurations.",
+          "windows": [
+            "main"
+          ],
+          "platforms": [
+            "macOS",
+            "linux",
+            "windows"
+          ],
+          "permissions": [
+            "wdio-webdriver:default"
+          ]
+        }
+      ]
+    }
+  }
+}

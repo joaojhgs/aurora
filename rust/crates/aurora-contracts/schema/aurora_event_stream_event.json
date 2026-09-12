@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Normalized event visible to SDK/UI event subscribers.\n\n``redacted_payload`` is the only payload persisted in Gateway history and\nsupport bundles. ``payload`` is optional and is only populated for live,\ninteractive streams that need display text (for example assistant chat and\nSTT transcript projection); it must never carry raw audio, credentials, or\ntool arguments.",
+  "properties": {
+    "action": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Action",
+      "type": "string"
+    },
+    "category": {
+      "default": "unknown",
+      "enum": [
+        "admin_action",
+        "assistant",
+        "audio",
+        "audit",
+        "capability",
+        "config",
+        "data",
+        "pairing",
+        "peer",
+        "route",
+        "scheduler",
+        "service",
+        "tool_approval",
+        "tool_execution",
+        "tool_progress",
+        "unknown"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "event_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "kind": {
+      "default": "",
+      "maxLength": 128,
+      "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Kind",
+      "type": "string"
+    },
+    "payload": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "x-aurora-json-value": true
+          },
+          "maxProperties": 64,
+          "type": "object",
+          "x-aurora-extra-behavior": "preserve"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Payload"
+    },
+    "payload_sha256": {
+      "default": "",
+      "maxLength": 64,
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "policy_decision_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Policy Decision Id"
+    },
+    "principal_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Principal Id"
+    },
+    "provider_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Id"
+    },
+    "redacted_payload": {
+      "additionalProperties": {
+        "x-aurora-json-value": true
+      },
+      "maxProperties": 64,
+      "title": "Redacted Payload",
+      "type": "object",
+      "x-aurora-extra-behavior": "preserve"
+    },
+    "resource_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resource Id"
+    },
+    "route": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Route"
+    },
+    "severity": {
+      "default": "info",
+      "enum": [
+        "error",
+        "info",
+        "warning"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "source_peer_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Peer Id"
+    },
+    "status": {
+      "default": "",
+      "maxLength": 128,
+      "title": "Status",
+      "type": "string"
+    },
+    "target_peer_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Peer Id"
+    },
+    "timestamp": {
+      "maxLength": 64,
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "tool_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Id"
+    },
+    "topic": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Topic",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "topic"
+  ],
+  "title": "AuroraEventStreamEvent",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

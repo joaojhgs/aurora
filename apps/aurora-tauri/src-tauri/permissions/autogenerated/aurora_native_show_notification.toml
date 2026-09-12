@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-show-notification"
+description = "Enables the aurora_native_show_notification command without any pre-configured scope."
+commands.allow = ["aurora_native_show_notification"]
+
+[[permission]]
+identifier = "deny-aurora-native-show-notification"
+description = "Denies the aurora_native_show_notification command without any pre-configured scope."
+commands.deny = ["aurora_native_show_notification"]

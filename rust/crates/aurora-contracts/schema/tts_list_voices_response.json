@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "TTSVoiceDescriptor": {
+      "additionalProperties": false,
+      "description": "Use-safe redacted voice descriptor.",
+      "properties": {
+        "attribution_label": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attribution Label"
+        },
+        "compatible_language_pack_ids": {
+          "items": {
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Compatible Language Pack Ids",
+          "type": "array",
+          "x-aurora-bounded-nonblank-string-set-normalize": true
+        },
+        "display_name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "kind": {
+          "enum": [
+            "cloned",
+            "standard"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "preview_available": {
+          "default": false,
+          "title": "Preview Available",
+          "type": "boolean"
+        },
+        "ready": {
+          "default": false,
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "revision": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string",
+          "x-aurora-string-non-blank": true
+        },
+        "selection_mode": {
+          "default": "active_only",
+          "enum": [
+            "active_only",
+            "in_model_speaker",
+            "shared_model_state"
+          ],
+          "title": "Selection Mode",
+          "type": "string"
+        },
+        "visible_scope": {
+          "default": "local",
+          "enum": [
+            "allowed_peers",
+            "local",
+            "public"
+          ],
+          "title": "Visible Scope",
+          "type": "string"
+        },
+        "voice_id": {
+          "pattern": "^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$",
+          "title": "Voice Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "display_name",
+        "kind",
+        "revision",
+        "voice_id"
+      ],
+      "title": "TTSVoiceDescriptor",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid",
+      "x-aurora-tts-voice-descriptor-invariant": true
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Use-safe voice list.",
+  "properties": {
+    "capability_revision": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Capability Revision",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "voices": {
+      "items": {
+        "$ref": "#/$defs/TTSVoiceDescriptor"
+      },
+      "maxItems": 256,
+      "title": "Voices",
+      "type": "array"
+    }
+  },
+  "title": "TTSListVoicesResponse",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid",
+  "x-aurora-tts-voice-list-invariant": true
+}

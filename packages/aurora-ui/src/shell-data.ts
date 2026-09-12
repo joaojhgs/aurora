@@ -1,22 +1,40 @@
 import type {
   AuroraClient,
-  AuroraError,
+  AndroidAssistantRoleStatus,
+  AndroidFallbackEntrypoint,
+  AndroidNativeReleaseStatus,
   AvailabilityState,
   CapabilityExplanation,
   CapabilityGraph,
   CapabilityProviderCandidate,
-  NativeCapabilityManifest
+  NativeCapabilityManifest,
+  NativeEntrypoint,
+  NativeDeviceMatrixRow,
+  NativeMobileIntegration,
+  NativePlatformIntegration,
+  NativePlatformLimitation,
+  NativeReleaseGate
 } from '@aurora/client'
 import {
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
+  auroraEmbeddedNavItems,
   auroraNavSections,
   navItemSnapshot,
   type AuroraNavItem,
   type AuroraNavItemSnapshot
 } from './nav'
+import {
+  isBrowserWebRtcConfigured,
+  isBrowserWebRtcConnected,
+  type BrowserWebRtcSnapshot,
+} from './web-thin-runtime'
+import { safeErrorCopy } from './product-copy'
+import { findForbiddenProductionCopyTerms } from './product-copy-forbidden-terms'
 
 export type ShellLoadState = 'loading' | 'ready' | 'error'
+export type ShellConnectionState = 'unknown' | 'connected' | 'offline'
+export type ShellCapabilityFreshness = 'pending' | 'fresh' | 'stale'
 
 export interface RouteAvailability {
   item: AuroraNavItemSnapshot
@@ -44,6 +62,11 @@ export interface RepairAction {
 
 export interface RouteProviderCandidate {
   id: string
+  providerId?: string
+  providerKind?: string
+  peerId?: string | null
+  nodeName?: string | null
+  serviceInstanceId?: string | null
   label: string
   state: AvailabilityState
   selectable: boolean
@@ -53,8 +76,12 @@ export interface RouteProviderCandidate {
 
 export interface AuroraShellSnapshot {
   loadState: ShellLoadState
+  connectionState: ShellConnectionState
+  capabilityFreshness: ShellCapabilityFreshness
   nodeName: string
   localPeerId: string | null
+  /** Aurora version reported by the connected server, when it provides one. */
+  serverVersion?: string | null
   transportKind: string
   evidenceSource: string
   generatedAt: string | null
@@ -64,8 +91,18 @@ export interface AuroraShellSnapshot {
   blockedCount: number
   nativePlatform: string
   nativeAvailable: boolean
-  nativePermissions: Array<{ name: string; granted: boolean }>
-  nativeCapabilities: Array<{ name: string; enabled: boolean }>
+  nativePermissions: Array<{ name: string; granted: boolean; nativeState: string | null }>
+  nativeCapabilities: Array<{ name: string; enabled: boolean; nativeState: string | null }>
+  nativeMobileIntegrations: NativeMobileIntegration[]
+  nativePlatformLimitations: NativePlatformLimitation[]
+  nativeAssistantRole: AndroidAssistantRoleStatus | null
+  nativeFallbackEntrypoints: AndroidFallbackEntrypoint[]
+  nativeEntrypoints: NativeEntrypoint[]
+  nativeRelease: AndroidNativeReleaseStatus | null
+  nativePlatformIntegrations: NativePlatformIntegration[]
+  nativeReleaseGates: NativeReleaseGate[]
+  nativeDeviceMatrix: NativeDeviceMatrixRow[]
+  nativePolicyNotes: string[]
   routes: RouteAvailability[]
   assistantCancellationRoute: RouteAvailability | null
   assistantVoiceRoutes: AssistantVoiceRoutes
@@ -82,8 +119,11 @@ export interface AssistantVoiceRoutes {
 
 export const loadingShellSnapshot: AuroraShellSnapshot = {
   loadState: 'loading',
+  connectionState: 'unknown',
+  capabilityFreshness: 'pending',
   nodeName: 'Loading Aurora',
   localPeerId: null,
+  serverVersion: null,
   transportKind: 'pending',
   evidenceSource: 'pending SDK request',
   generatedAt: null,
@@ -95,17 +135,32 @@ export const loadingShellSnapshot: AuroraShellSnapshot = {
   nativeAvailable: false,
   nativePermissions: [],
   nativeCapabilities: [],
+  nativeMobileIntegrations: [],
+  nativePlatformLimitations: [],
+  nativeAssistantRole: null,
+  nativeFallbackEntrypoints: [],
+  nativeEntrypoints: [],
+  nativeRelease: null,
+  nativePlatformIntegrations: [],
+  nativeReleaseGates: [],
+  nativeDeviceMatrix: [],
+  nativePolicyNotes: [],
   routes: [],
   assistantCancellationRoute: null,
   assistantVoiceRoutes: emptyAssistantVoiceRoutes(),
   error: null
 }
 
-export async function buildShellSnapshot(client: AuroraClient): Promise<AuroraShellSnapshot> {
+export async function buildShellSnapshot(
+  client: AuroraClient,
+  options: {
+    nativeManifest?: (() => Promise<NativeCapabilityManifest>) | undefined
+  } = {}
+): Promise<AuroraShellSnapshot> {
   try {
     const [graph, native] = await Promise.all([
       client.capabilities.getGraph({ include_unavailable: true, include_internal: true }),
-      client.native.getManifest().catch(() => null)
+      (options.nativeManifest?.() ?? client.native.getManifest()).catch(() => null)
     ])
     return snapshotFromGraph(client.transport.kind, graph, native)
   } catch (error) {
@@ -118,9 +173,7 @@ export function snapshotFromGraph(
   graph: CapabilityGraph,
   native: NativeCapabilityManifest | null
 ): AuroraShellSnapshot {
-  const routes = auroraNavSections.flatMap((section) =>
-    section.items.map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
-  )
+  const routes = allShellRouteItems().map((item) => routeAvailability(item, graph.explain(featureIdForNavItem(item)), native))
   const assistantCancellationRoute = routeAvailability(
     auroraAssistantCancellationItem,
     graph.explain(featureIdForNavItem(auroraAssistantCancellationItem)),
@@ -129,10 +182,13 @@ export function snapshotFromGraph(
   const assistantVoiceRoutes = assistantVoiceRoutesFromGraph(graph, native)
   return {
     loadState: 'ready',
-    nodeName: graph.localNodeName || 'Aurora node',
+    connectionState: 'connected',
+    capabilityFreshness: 'fresh',
+    nodeName: graph.localNodeName || 'This device',
     localPeerId: graph.localPeerId,
+    serverVersion: graph.serverVersion ?? null,
     transportKind,
-    evidenceSource: transportKind === 'mock' ? 'SDK mock transport fixture' : 'AuroraClient backend response',
+    evidenceSource: transportKind === 'mock' ? 'Local transport' : 'Aurora service response',
     generatedAt: graph.generatedAt,
     secretsRedacted: graph.secretsRedacted,
     routeCount: routes.length,
@@ -140,8 +196,18 @@ export function snapshotFromGraph(
     blockedCount: routes.filter((route) => route.disabled).length,
     nativePlatform: native?.platform ?? 'not available',
     nativeAvailable: native !== null,
-    nativePermissions: nativePermissionEntries(native?.permissions),
-    nativeCapabilities: nativeCapabilityEntries(native?.capabilities),
+    nativePermissions: nativePermissionEntries(native?.permissions, native?.permissionStates),
+    nativeCapabilities: nativeCapabilityEntries(native?.capabilities, native?.capabilityStates),
+    nativeMobileIntegrations: native?.mobileIntegrations ?? [],
+    nativePlatformLimitations: native?.platformLimitations ?? [],
+    nativeAssistantRole: native?.assistantRole ?? null,
+    nativeFallbackEntrypoints: native?.fallbackEntrypoints ?? [],
+    nativeEntrypoints: native?.entrypoints ?? [],
+    nativeRelease: native?.release ?? null,
+    nativePlatformIntegrations: [...(native?.platformIntegrations ?? [])],
+    nativeReleaseGates: [...(native?.releaseGates ?? [])],
+    nativeDeviceMatrix: [...(native?.deviceMatrix ?? [])],
+    nativePolicyNotes: [...(native?.policyNotes ?? [])],
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes,
@@ -149,33 +215,36 @@ export function snapshotFromGraph(
   }
 }
 
+
+function allShellRouteItems(): AuroraNavItem[] {
+  return [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems]
+}
+
 export function errorShellSnapshot(transportKind: string, error: unknown): AuroraShellSnapshot {
-  const routes = auroraNavSections.flatMap((section) =>
-    section.items.map((item) => ({
-      item: navItemSnapshot(item),
-      state: 'unsupported' as const,
-      explanation: 'Capability state could not be loaded from AuroraClient.',
-      providerLabel: 'No backend evidence',
-        blockers: ['sdk_error'],
-        repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
-        candidateProviders: [],
-        evidenceSources: ['AuroraClient error'],
-        selectorRequired: false,
-        approvalRequired: false,
-        routeable: false,
-        disabled: true,
-        requiresAdminAction: item.methodType === 'manage'
-      }))
-  )
+  const routes = allShellRouteItems().map((item) => ({
+    item: navItemSnapshot(item),
+    state: 'unsupported' as const,
+    explanation: 'Aurora could not load this feature.',
+    providerLabel: pendingFeatureLabel(item),
+    blockers: ['sdk_error'],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
+    candidateProviders: [],
+    evidenceSources: ['Aurora service error'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: item.methodType === 'manage'
+  }))
   const assistantCancellationRoute: RouteAvailability = {
     item: navItemSnapshot(auroraAssistantCancellationItem),
     state: 'unsupported',
-    explanation: 'Capability state could not be loaded from AuroraClient.',
-    providerLabel: 'No backend evidence',
+    explanation: 'Aurora could not load this feature.',
+    providerLabel: pendingFeatureLabel(auroraAssistantCancellationItem),
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
     candidateProviders: [],
-    evidenceSources: ['AuroraClient error'],
+    evidenceSources: ['Aurora service error'],
     selectorRequired: false,
     approvalRequired: false,
     routeable: false,
@@ -186,15 +255,103 @@ export function errorShellSnapshot(transportKind: string, error: unknown): Auror
   return {
     ...loadingShellSnapshot,
     loadState: 'error',
+    capabilityFreshness: 'stale',
     nodeName: 'Aurora unavailable',
     transportKind,
-    evidenceSource: 'AuroraClient error',
+    evidenceSource: 'Aurora service error',
     routeCount: routes.length,
     blockedCount: routes.length,
-    error: errorMessage(error),
+    error: shellErrorMessage(error),
     routes,
     assistantCancellationRoute,
     assistantVoiceRoutes
+  }
+}
+
+/**
+ * Keep the last redacted capability graph visible while a configured thin peer
+ * is offline. Routes are deliberately made stale/non-callable, but provider
+ * identities remain visible so an outage is not misrepresented as an empty
+ * deployment or disabled WebRTC runtime.
+ */
+export function retainThinShellSnapshot(
+  current: AuroraShellSnapshot,
+  next: AuroraShellSnapshot,
+  peer: BrowserWebRtcSnapshot | null | undefined,
+): AuroraShellSnapshot {
+  if (next.loadState !== 'error' || !isBrowserWebRtcConfigured(peer)) return next
+
+  const hasLastKnownGraph =
+    current.routes.length > 0
+    && (
+      current.loadState === 'ready'
+      || current.routes.some((route) => route.candidateProviders.length > 0)
+    )
+  const base = hasLastKnownGraph ? current : next
+  const peerLabel = safePeerDisplayName(peer)
+  const peerConnected = isBrowserWebRtcConnected(peer)
+  const retainRoute = (route: RouteAvailability): RouteAvailability => {
+    if (route.item.id === 'settings') return route
+    return {
+    ...route,
+    state: 'stale',
+    explanation: peerConnected
+      ? `Saved feature choices remain visible while ${peerLabel} refreshes.`
+      : hasLastKnownGraph
+        ? `Saved feature choices remain visible while ${peerLabel} is offline.`
+        : `${peerLabel} is offline. Choices will appear when an approved Aurora device reconnects.`,
+    blockers: sortedUnique([
+      ...route.blockers,
+      peerConnected ? 'thin_peer_capability_refresh_failed' : 'thin_peer_offline',
+    ]),
+    candidateProviders: route.candidateProviders.map((candidate) => ({
+      ...candidate,
+      state: 'stale' as const,
+      selectable: false,
+      label: safeDisplayCopy(candidate.label, 'Connected Aurora device'),
+      reason: peerConnected
+        ? `Saved choice; ${peerLabel} is refreshing.`
+        : `Saved choice; ${peerLabel} is offline.`,
+      requiredAction: candidate.requiredAction ? safeRouteReason(candidate.requiredAction) : null,
+    })),
+    routeable: false,
+    disabled: true,
+    }
+  }
+  const routes = base.routes.map(retainRoute)
+  const assistantCancellationRoute = base.assistantCancellationRoute
+    ? retainRoute(base.assistantCancellationRoute)
+    : null
+  const assistantVoiceRoutes: AssistantVoiceRoutes = {
+    transcription: retainRoute(base.assistantVoiceRoutes.transcription),
+    wakeProcess: retainRoute(base.assistantVoiceRoutes.wakeProcess),
+    wakeControl: retainRoute(base.assistantVoiceRoutes.wakeControl),
+    ttsSynthesize: retainRoute(base.assistantVoiceRoutes.ttsSynthesize),
+    ttsStop: retainRoute(base.assistantVoiceRoutes.ttsStop),
+  }
+
+  return {
+    ...base,
+    loadState: 'error',
+    connectionState: peerConnected ? 'connected' : 'offline',
+    capabilityFreshness: 'stale',
+    nodeName: peerLabel,
+    transportKind: 'mesh',
+    evidenceSource: hasLastKnownGraph
+      ? 'Last saved device state'
+      : peerConnected
+        ? 'Active device connection'
+        : 'Saved device connection',
+    secretsRedacted: true,
+    routeCount: routes.length,
+    availableCount: 0,
+    blockedCount: routes.length,
+    routes,
+    assistantCancellationRoute,
+    assistantVoiceRoutes,
+    // Keep the sanitized capability failure visible while treating the
+    // authenticated peer session as a separate, still-connected signal.
+    error: peerConnected ? next.error : null,
   }
 }
 
@@ -236,7 +393,7 @@ function emptyAssistantVoiceRoutes(): AssistantVoiceRoutes {
 }
 
 function errorAssistantVoiceRoutes(): AssistantVoiceRoutes {
-  return unsupportedAssistantVoiceRoutes('AuroraClient error')
+  return unsupportedAssistantVoiceRoutes('Aurora service error')
 }
 
 function unsupportedAssistantVoiceRoutes(evidence: string): AssistantVoiceRoutes {
@@ -253,10 +410,10 @@ function unsupportedVoiceRoute(item: AuroraNavItem, evidence: string): RouteAvai
   return {
     item: navItemSnapshot(item),
     state: item.fallbackState,
-    explanation: 'Voice capability state could not be loaded from AuroraClient.',
-    providerLabel: `${item.expectedTask} pending`,
+    explanation: 'Voice setup could not be loaded.',
+    providerLabel: pendingFeatureLabel(item),
     blockers: ['sdk_error'],
-    repairActions: [repairAction('retry', 'Retry SDK request', '/', true, 'The shell needs a fresh AuroraClient response.')],
+    repairActions: [repairAction('retry', 'Try again', '/', true, 'Aurora needs a fresh response.')],
     candidateProviders: [],
     evidenceSources: [evidence],
     selectorRequired: false,
@@ -272,8 +429,9 @@ function routeAvailability(
   explanation: CapabilityExplanation,
   native: NativeCapabilityManifest | null
 ): RouteAvailability {
+  if (item.id === 'settings') return localSettingsRouteAvailability(item)
   if (item.capabilityModule === 'Native') return nativeRouteAvailability(item, native)
-  const state = graphStateForItem(item, explanation)
+  const state = graphStateForExplanation(explanation, item.fallbackState)
   const blockers = sortedUnique([
     explanation.disabledReason,
     ...explanation.providerCandidates.flatMap((provider) => provider.disabledReasons),
@@ -298,29 +456,68 @@ function routeAvailability(
   }
 }
 
+/**
+ * Settings is a locally owned shell page. Nav visibility is gated by
+ * `shouldShowForSurface(..., 'localSettings')`; when shown, the route stays
+ * available for members even if the connected Aurora denies Config reads.
+ */
+function localSettingsRouteAvailability(item: AuroraNavItem): RouteAvailability {
+  return {
+    item: navItemSnapshot(item),
+    state: 'available-local',
+    explanation: 'Settings for this device and connection.',
+    providerLabel: 'This device',
+    blockers: [],
+    repairActions: [repairAction('open-settings', 'Open Settings', item.href, true, `${item.label} is available on this device.`)],
+    candidateProviders: [],
+    evidenceSources: ['local-shell'],
+    selectorRequired: false,
+    approvalRequired: false,
+    routeable: true,
+    disabled: false,
+    requiresAdminAction: false
+  }
+}
+
 function routeExplanation(state: AvailabilityState, explanation: CapabilityExplanation): string {
   if (explanation.providerCandidates.length === 0) {
-    return 'No executable capability catalog entry exists yet; the route stays visible with a repair task.'
+    return 'This feature is not available yet. Review setup to finish it.'
   }
-  if (state === 'available-local') return 'Backend catalog reports a local provider that can serve this route.'
-  if (state === 'available-remote') return 'Backend catalog reports a remote provider; target identity must remain visible.'
-  if (state === 'degraded') return 'The route is partially usable with backend-reported limitations.'
-  if (state === 'pending') return 'The route is waiting on pairing, approval, consent, or an in-flight backend correlation.'
-  if (state === 'denied') return 'Backend policy denied this route for the current principal or peer.'
-  if (state === 'stale') return 'Provider evidence is stale and cannot be used for execution.'
-  if (state === 'privacy-blocked') return 'A selector, consent, privacy indicator, or approval is required before use.'
-  return 'The route is unsupported in this backend or deployment mode.'
+  if (state === 'available-local') return 'This device can handle this.'
+  if (state === 'available-remote') return 'An approved Aurora device can handle this.'
+  if (state === 'degraded') return 'This is available with limited behavior.'
+  if (state === 'pending') return 'Waiting for approval or setup to finish.'
+  if (state === 'denied') return 'Access is needed before this can be used.'
+  if (state === 'stale') return 'Device information is out of date. Reconnect and try again.'
+  if (state === 'privacy-blocked') return 'Review access before using this.'
+  return 'This feature is not available here yet.'
 }
 
 function providerLabel(explanation: CapabilityExplanation, item: AuroraNavItem): string {
   const provider = explanation.selectedProvider ?? explanation.providerCandidates[0]
-  if (!provider) return `${item.expectedTask} pending`
-  return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
+  if (!provider) return pendingFeatureLabel(item)
+  return safeDisplayCopy(providerSourceLabel(provider), providerFallbackLabel(provider))
 }
 
-function graphStateForItem(item: AuroraNavItem, explanation: CapabilityExplanation): AvailabilityState {
-  if (explanation.providerCandidates.length === 0) return item.fallbackState
-  return explanation.state
+function graphStateForExplanation(
+  explanation: CapabilityExplanation,
+  fallbackState: AvailabilityState
+): AvailabilityState {
+  if (explanation.providerCandidates.length > 0) return explanation.state
+  return nonAvailableStateForMissingEvidence(explanation.state, fallbackState)
+}
+
+function nonAvailableStateForMissingEvidence(
+  state: AvailabilityState,
+  fallbackState: AvailabilityState
+): AvailabilityState {
+  if (isAvailableRouteState(state)) return 'unsupported'
+  if (state === 'unsupported' && fallbackState === 'privacy-blocked') return 'privacy-blocked'
+  return state
+}
+
+function isAvailableRouteState(state: AvailabilityState): boolean {
+  return ['available-local', 'available-remote', 'degraded'].includes(state)
 }
 
 function featureIdForNavItem(item: AuroraNavItem): string {
@@ -355,7 +552,7 @@ function nativeRouteAvailability(
     providerCandidates: [],
     alternateProviders: [],
     disabledReason: blockers[0] ?? null,
-    nextRepairAction: state === 'privacy-blocked' ? 'grant required native permission' : 'enable native capability in manifest',
+    nextRepairAction: state === 'privacy-blocked' ? 'grant required device access' : 'enable device feature',
     selectorRequired: false,
     approvalRequired: false,
     routeable: state === 'available-local',
@@ -371,18 +568,18 @@ function nativeRouteAvailability(
     item: navItemSnapshot(item),
     state,
     explanation: native
-      ? 'SDK native manifest reports platform capabilities and permission gates.'
-      : 'No native manifest was reported by the SDK for this deployment mode.',
-    providerLabel: native ? `native:${native.platform}` : `${item.expectedTask} pending`,
+      ? 'Device features and access are available from this app.'
+      : 'Device features are not available here yet.',
+    providerLabel: native ? 'This device' : pendingFeatureLabel(item),
     blockers,
     repairActions: repairActionsFor(item, base, blockers),
     candidateProviders: enabledCapabilities.map((capability) => ({
       id: `native:${native?.platform}:${capability}`,
-      label: `native:${native?.platform} / ${capability}`,
+      label: safeDisplayCopy(capability, 'This device'),
       state,
       selectable: state === 'available-local',
-      reason: missingPermissions.join(', ') || 'native-manifest',
-      requiredAction: state === 'available-local' ? null : 'grant required native permission'
+      reason: safeRouteReason(missingPermissions.join(', '), 'Review device access before using this.'),
+      requiredAction: state === 'available-local' ? null : 'Review device access'
     })),
     evidenceSources: native ? ['native-manifest'] : [],
     selectorRequired: false,
@@ -396,11 +593,16 @@ function nativeRouteAvailability(
 function candidateForRoute(candidate: CapabilityProviderCandidate): RouteProviderCandidate {
   return {
     id: candidate.id,
-    label: `${candidate.providerIdentity} / ${candidate.module}.${candidate.method}`,
+    providerId: candidate.providerId,
+    providerKind: candidate.providerKind,
+    peerId: candidate.peerId,
+    nodeName: candidate.nodeName ?? null,
+    serviceInstanceId: candidate.serviceInstanceId,
+    label: safeDisplayCopy(providerSourceLabel(candidate), providerFallbackLabel(candidate)),
     state: candidate.availability,
     selectable: candidate.selectable,
-    reason: candidate.disabledReasons.join(', ') || candidate.routeability,
-    requiredAction: candidate.requiredAction
+    reason: safeRouteReason(candidate.disabledReasons.join(', ') || candidate.routeability),
+    requiredAction: candidate.requiredAction ? safeRouteReason(candidate.requiredAction, 'Review setup') : null
   }
 }
 
@@ -421,29 +623,29 @@ function repairActionsFor(
   const repairText = (explanation.nextRepairAction ?? '').toLowerCase()
 
   if (blockerText.includes('auth') || blockerText.includes('permission') || explanation.requiredPermissions.length > 0) {
-    add(repairAction('authenticate', 'Authenticate', '/onboarding', Boolean(item.adminGated), 'Current principal or session lacks required backend permission evidence.'))
-    add(repairAction('grant-permission', 'Grant permission', '/admin/access', !Boolean(item.adminGated), 'Required permissions must be granted through admin access controls.'))
+    add(repairAction('authenticate', 'Sign in', '/onboarding', Boolean(item.adminGated), 'Sign in or review access for this feature.'))
+    add(repairAction('grant-permission', 'Review access', '/admin/access', !Boolean(item.adminGated), 'An administrator can update access for this feature.'))
   }
   if (blockerText.includes('peer') || blockerText.includes('pair') || blockerText.includes('stale')) {
-    add(repairAction('pair', 'Pair or reconnect peer', '/admin/pairing', false, 'Peer trust or freshness must be restored before this feature can run.'))
+    add(repairAction('pair', 'Reconnect device', '/admin/pairing', false, 'Reconnect an approved Aurora device before using this.'))
   }
   if (blockerText.includes('service') || blockerText.includes('provider') || blockerText.includes('capability_not_advertised')) {
-    add(repairAction('start-service', 'Start service', '/admin/services', Boolean(item.adminGated), 'The required service/provider is not currently advertised as executable.'))
+    add(repairAction('start-service', 'Turn on feature', '/admin/services', Boolean(item.adminGated), 'Turn on the needed Aurora feature before continuing.'))
   }
   if (explanation.selectorRequired || repairText.includes('selector') || repairText.includes('route')) {
-    add(repairAction('configure-route', 'Configure route', '/mesh', false, 'A backend-accepted selector or route policy is required.'))
+    add(repairAction('configure-route', 'Choose device', '/mesh', false, 'Choose which approved device should handle this.'))
   }
   if (blockerText.includes('native') || item.capabilityModule === 'Native') {
-    add(repairAction('grant-native', 'Grant native permission', '/settings/native', false, 'Native manifest or platform permission evidence is missing.'))
+    add(repairAction('grant-native', 'Review device access', '/settings/native', false, 'Review device access before using this.'))
   }
   if (item.id === 'plugins' || item.id === 'tools' || blockerText.includes('plugin')) {
-    add(repairAction('install-plugin', 'Install plugin', '/admin/plugins', Boolean(item.adminGated), 'Plugin/tool catalog support must be installed and enabled.'))
+    add(repairAction('install-plugin', 'Add tool', '/admin/plugins', Boolean(item.adminGated), 'Add or turn on the tool before using this.'))
   }
   if (actions.length === 0 && explanation.nextRepairAction) {
-    add(repairAction('inspect', 'Inspect blocker', item.href, true, explanation.nextRepairAction))
+    add(repairAction('inspect', 'Review setup', item.href, true, safeRouteReason(explanation.nextRepairAction)))
   }
   if (actions.length === 0) {
-    add(repairAction('wait', 'Await backend contract', item.href, true, `${item.expectedTask} owns this production wiring.`))
+    add(repairAction('wait', 'Review setup', item.href, true, `${item.label} needs more setup before it can be used.`))
   }
   return actions
 }
@@ -462,23 +664,83 @@ function sortedUnique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].sort()
 }
 
-function nativePermissionEntries(values: Record<string, boolean> | undefined): Array<{ name: string; granted: boolean }> {
+function nativePermissionEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; granted: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, granted]) => ({ name, granted }))
+    .map(([name, granted]) => ({ name, granted, nativeState: states?.[name] ?? null }))
 }
 
-function nativeCapabilityEntries(values: Record<string, boolean> | undefined): Array<{ name: string; enabled: boolean }> {
+function nativeCapabilityEntries(
+  values: Record<string, boolean> | undefined,
+  states: Record<string, string> | undefined
+): Array<{ name: string; enabled: boolean; nativeState: string | null }> {
   return Object.entries(values ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, enabled]) => ({ name, enabled }))
+    .map(([name, enabled]) => ({ name, enabled, nativeState: states?.[name] ?? null }))
 }
 
 function nullToPending(value: string | null): string {
   return value ?? 'pending'
 }
 
-function errorMessage(error: unknown): string {
-  const maybe = error as Partial<AuroraError>
-  return maybe.message ?? (error instanceof Error ? error.message : 'Unknown SDK error')
+function shellErrorMessage(error: unknown): string {
+  return safeErrorCopy(error).title
+}
+
+function pendingFeatureLabel(item: AuroraNavItem): string {
+  return `${item.label} needs setup`
+}
+
+function providerSourceLabel(provider: Pick<CapabilityProviderCandidate, 'providerIdentity' | 'module' | 'method'>): string {
+  return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
+}
+
+function providerFallbackLabel(provider: Pick<CapabilityProviderCandidate, 'providerKind' | 'nodeName' | 'peerId' | 'providerIdentity'>): string {
+  if (provider.providerKind === 'local') return 'This device'
+  if (provider.nodeName?.trim()) return safeDisplayCopy(provider.nodeName, 'Connected Aurora device')
+  if (provider.peerId) return 'Connected Aurora device'
+  return safeDisplayCopy(provider.providerIdentity, 'Aurora source')
+}
+
+function safeDisplayCopy(value: string | null | undefined, fallback: string): string {
+  const compact = compactDisplayText(value)
+  if (!compact) return fallback
+  return findForbiddenProductionCopyTerms(compact).length > 0 ? fallback : compact
+}
+
+function safeRouteReason(value: string | null | undefined, fallback = 'Review setup before continuing.'): string {
+  const compact = compactDisplayText(value)
+  if (!compact) return fallback
+  if (findForbiddenProductionCopyTerms(compact).length === 0) return compact
+  const normalized = compact.toLowerCase()
+  if (/\b(auth|permission|denied|forbidden|unauthorized)\b/u.test(normalized)) {
+    return 'Review access before using this.'
+  }
+  if (/\b(peer|pair|stale|offline|freshness)\b/u.test(normalized)) {
+    return 'Reconnect an approved Aurora device before using this.'
+  }
+  if (/\b(selector|selection|choose|choice|route)\b/u.test(normalized)) {
+    return 'Choose which approved device should handle this.'
+  }
+  if (/\b(native|microphone|camera|notification|biometric)\b/u.test(normalized)) {
+    return 'Review device access before using this.'
+  }
+  if (/\b(service|provider|capability|catalog|contract)\b/u.test(normalized)) {
+    return 'Turn on the needed Aurora feature before continuing.'
+  }
+  return fallback
+}
+
+function compactDisplayText(value: string | null | undefined): string {
+  return value?.trim().replace(/\s+/gu, ' ') ?? ''
+}
+
+function safePeerDisplayName(peer: BrowserWebRtcSnapshot): string {
+  return safeDisplayCopy(
+    peer.nodeName,
+    safeDisplayCopy(peer.expectedStablePeerId, 'Invited Aurora device')
+  )
 }

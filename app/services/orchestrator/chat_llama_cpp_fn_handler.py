@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 from collections.abc import Iterator
 from typing import (
@@ -9,20 +10,29 @@ from typing import (
 
 import jinja2
 from jinja2.sandbox import ImmutableSandboxedEnvironment
-from llama_cpp_cuda import (
-    llama,
-    llama_grammar as llama_grammar,
-    llama_types as llama_types,
-)
-from llama_cpp_cuda.llama_chat_format import (
-    _convert_completion_to_chat,
-    _convert_completion_to_chat_function,
-    _convert_text_completion_logprobs_to_chat,
-    _grammar_for_response_format,
-    register_chat_completion_handler,
-)
 
 from app.helpers.aurora_logger import log_debug, log_warning
+from app.services.orchestrator.llama_cpp_compat import load_llama_cpp_backend
+
+_llama_cpp_backend = load_llama_cpp_backend()
+llama = _llama_cpp_backend.llama
+llama_grammar = _llama_cpp_backend.llama_grammar
+llama_types = _llama_cpp_backend.llama_types
+_chat_format = importlib.import_module(f"{_llama_cpp_backend.__name__}.llama_chat_format")
+_convert_completion_to_chat = _chat_format._convert_completion_to_chat
+_convert_completion_to_chat_function = _chat_format._convert_completion_to_chat_function
+_convert_text_completion_logprobs_to_chat = _chat_format._convert_text_completion_logprobs_to_chat
+_grammar_for_response_format = _chat_format._grammar_for_response_format
+register_chat_completion_handler = _chat_format.register_chat_completion_handler
+
+
+def _text_log_shape(value: object) -> str:
+    """Return non-content metadata suitable for privacy-preserving logs."""
+    text = str(value)
+    unsupported_control = any(
+        not character.isprintable() and character not in "\n\r\t" for character in text
+    )
+    return f"bytes={len(text.encode('utf-8'))}, unsupported_control={unsupported_control}"
 
 
 @register_chat_completion_handler("function-calling")
@@ -266,11 +276,13 @@ def function_calling_handler(
         for i, message in enumerate(messages):
             log_debug(f"Message {i}, role: {message.get('role')}")
             if "content" in message and message["content"]:
-                log_debug(f"Content: {message['content'][:100]}...")
+                log_debug(f"Content: {_text_log_shape(message['content'])}")
             if "tool_calls" in message:
-                log_debug(f"Tool calls: {message['tool_calls']}")
+                tool_calls = message["tool_calls"]
+                tool_call_count = len(tool_calls) if isinstance(tool_calls, list) else 1
+                log_debug(f"Tool calls: count={tool_call_count}")
         log_debug("===== END MESSAGES =====")
-        log_debug(f"Tool choice auto prompt: {prompt[:200]}...")
+        log_debug(f"Tool choice auto prompt: {_text_log_shape(prompt)}")
 
     completion_or_chunks = llama.create_completion(
         prompt=prompt,
@@ -298,7 +310,7 @@ def function_calling_handler(
     completion: llama_types.CreateCompletionResponse = completion_or_chunks  # type: ignore
     text = completion["choices"][0]["text"]
     if llama.verbose:
-        log_debug(f"Initial choice text: '{text}'")
+        log_debug(f"Initial choice text: {_text_log_shape(text)}")
     if "message" in text:
         if llama.verbose:
             log_debug("Model chose to respond with message")
@@ -328,7 +340,9 @@ def function_calling_handler(
         )
 
         if not stream and llama.verbose:
-            log_debug(f"Message completion: {completion_result['choices'][0]['text']}")
+            log_debug(
+                f"Message completion: {_text_log_shape(completion_result['choices'][0]['text'])}"
+            )
 
         return _convert_completion_to_chat(
             completion_result,
@@ -386,13 +400,18 @@ def function_calling_handler(
             completions_tool_name.append(tool_name)
 
             if llama.verbose:
-                log_debug(f"Tool completion: {completion_or_chunks['choices'][0]['text'][:100]}...")
+                log_debug(
+                    "Tool completion: "
+                    f"{_text_log_shape(completion_or_chunks['choices'][0]['text'])}"
+                )
 
             prompt += completion_or_chunks["choices"][0]["text"]
             prompt += "\n"
 
             if llama.verbose:
-                log_debug(f"Checking for additional tool calls with prompt: {prompt[-100:]}")
+                log_debug(
+                    f"Checking for additional tool calls with prompt: {_text_log_shape(prompt)}"
+                )
             response = llama.create_completion(
                 prompt=prompt,
                 temperature=temperature,
@@ -419,12 +438,12 @@ def function_calling_handler(
             response = cast(llama_types.CreateCompletionResponse, response)
 
             if llama.verbose:
-                log_debug(f"Follow-up response: {response['choices'][0]['text']}")
+                log_debug(f"Follow-up response: {_text_log_shape(response['choices'][0]['text'])}")
 
             try:
                 text_response = response["choices"][0]["text"]
                 if llama.verbose:
-                    log_debug(f"Full follow-up text: '{text_response}'")
+                    log_debug(f"Full follow-up text: {_text_log_shape(text_response)}")
                 if text_response.startswith("functions."):
                     tool_name = text_response[len("functions.") :]
                     if llama.verbose:
@@ -444,7 +463,7 @@ def function_calling_handler(
                     tool = None
                 else:
                     if llama.verbose:
-                        log_debug(f"Unexpected response format: '{text_response}'")
+                        log_debug(f"Unexpected response format: {_text_log_shape(text_response)}")
                     tool = None
             except Exception as e:
                 if llama.verbose:

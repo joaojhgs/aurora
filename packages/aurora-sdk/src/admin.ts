@@ -1,7 +1,7 @@
 import { AuroraError, type AuroraErrorCode } from './errors.js'
 import { GATEWAY_METHODS, TOOLING_METHODS, routePath } from './descriptors.js'
 import type { AuroraResponse, AuroraTransport } from './transport.js'
-import type { AuditReceipt, JsonObject, JsonValue } from './types.js'
+import type { AuditReceipt, JsonObject, JsonValue, ToolingApprovalGrantScope } from './types.js'
 
 export interface AdminActionHeaderNames {
   action_id: string
@@ -46,6 +46,16 @@ export interface AdminActionConfirmResponse {
   expires_at: string
   audit_receipt: string
   confirmation_headers: AdminActionHeaderNames
+}
+
+export interface AdminActionCancelResponse {
+  action_id: string
+  method_id: string
+  cancelled: true
+  backend_persisted: false
+  reason: string | null
+  cancelled_at: string
+  secrets_redacted: true
 }
 
 export interface AdminActionSubmitOptions {
@@ -103,6 +113,9 @@ export interface ToolApprovalConfirmRequest {
   approval_request_id: string
   approver_principal_id: string
   approve?: boolean
+  grant_scope?: ToolingApprovalGrantScope
+  expires_at?: number | null
+  include_future_tools?: boolean
   reason?: string | null
   correlation_id?: string | null
 }
@@ -178,6 +191,21 @@ export class AdminActionClient {
       request,
       { path: routePath('Gateway', 'AdminActionConfirm') }
     )
+  }
+
+  cancel(
+    draft: AdminActionDraftResponse,
+    input: { reason?: string; now?: string } = {}
+  ): AdminActionCancelResponse {
+    return {
+      action_id: draft.action_id,
+      method_id: draft.method_id,
+      cancelled: true,
+      backend_persisted: false,
+      reason: input.reason ?? null,
+      cancelled_at: input.now ?? new Date().toISOString(),
+      secrets_redacted: true
+    }
   }
 
   headers(confirmation: AdminActionConfirmResponse): Record<string, string> {
