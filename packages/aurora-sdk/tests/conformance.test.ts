@@ -325,6 +325,8 @@ describe('SDK transport conformance', () => {
       'Auth.SetPermissions',
       'Auth.PatchPermissions',
       'Auth.ListTokens',
+      'Auth.CreateToken',
+      'Auth.UpdateTokenScopes',
       'Auth.RevokeToken',
       'Auth.ListDevices',
       'Auth.DeleteDevice',
@@ -343,7 +345,7 @@ describe('SDK transport conformance', () => {
       'Orchestrator.IngestContext'
     ])
     expect(generated.gatewayBuiltins.map((route) => route.routePath)).toEqual(['/api/registry', '/api/admin/peers'])
-    expect(comparison).toEqual({ ok: true, checked: 34, issues: [] })
+    expect(comparison).toEqual({ ok: true, checked: 36, issues: [] })
   })
 })
 

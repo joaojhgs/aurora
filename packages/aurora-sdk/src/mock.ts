@@ -7,7 +7,13 @@ import {
 } from './events.js'
 import { cloneFixture, defaultMockAuroraFixtures, memoryLocalSearchFixture, memorySearchFixture, type MockAuroraFixtureSet } from './fixtures.js'
 import type { DBRAGSearchRemoteRequest, DBRAGSearchRequest } from './memory.js'
-import type { AuroraEvent, AuroraTransportEnvelope } from './types.js'
+import type {
+  AuthTokenCreateRequest,
+  AuthTokenRevokeRequest,
+  AuthTokenScopeUpdateRequest,
+  AuroraEvent,
+  AuroraTransportEnvelope
+} from './types.js'
 import type {
   AttachmentContextIngestRequest,
   AttachmentContextIngestResponse,
@@ -37,6 +43,7 @@ export class MockAuroraTransport implements AuroraTransport {
   readonly kind = 'mock'
   private readonly handlers = new Map<string, MockHandler>()
   private readonly eventHandlers = new Map<string, MockEventRegistration>()
+  private tokens: MockAuroraFixtureSet['tokens'] = { tokens: [] }
 
   constructor(options: MockAuroraTransportOptions = {}) {
     const fixtures = options.fixtures === false ? null : options.fixtures ?? defaultMockAuroraFixtures
@@ -48,6 +55,7 @@ export class MockAuroraTransport implements AuroraTransport {
   }
 
   registerFixtures(fixtures: MockAuroraFixtureSet): this {
+    this.tokens = cloneFixture(fixtures.tokens)
     return this
       .register('Gateway.GetRegistry', () => cloneFixture(fixtures.registry))
       .register('Gateway.GetServices', () => cloneFixture(fixtures.services))
@@ -228,8 +236,10 @@ export class MockAuroraTransport implements AuroraTransport {
       .register('Auth.DeletePrincipal', () => ({ success: true }))
       .register('Auth.SetPermissions', () => ({ success: true }))
       .register('Auth.PatchPermissions', () => ({ success: true }))
-      .register('Auth.ListTokens', (request) => mockListTokens(fixtures.tokens, request.payload))
-      .register('Auth.RevokeToken', () => ({ success: true }))
+      .register('Auth.ListTokens', (request) => mockListTokens(this.tokens, request.payload))
+      .register('Auth.CreateToken', (request) => mockCreateToken(this.tokens, request.payload))
+      .register('Auth.UpdateTokenScopes', (request) => mockUpdateTokenScopes(this.tokens, request.payload))
+      .register('Auth.RevokeToken', (request) => mockRevokeToken(this.tokens, request.payload))
       .register('Auth.ListDevices', (request) => mockListDevices(fixtures.devices, request.payload))
       .register('Auth.DeleteDevice', () => ({ success: true }))
       .register('Auth.AuditLog', () => cloneFixture(fixtures.auditLog))
@@ -443,6 +453,51 @@ function mockListTokens(
       return true
     })
   }
+}
+
+function mockCreateToken(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenCreateRequest>
+  const principalId = typeof request.principal_id === 'string' && request.principal_id.trim()
+    ? request.principal_id.trim()
+    : 'mock-principal'
+  const id = `token-created-${tokens.tokens.length + 1}`
+  const prefix = `mk_${String(tokens.tokens.length + 1).padStart(4, '0')}`
+  const expiresAt = '2030-01-01T00:00:00Z'
+  const scopes = Array.isArray(request.scopes) && request.scopes.length > 0
+    ? [...request.scopes]
+    : ['Gateway.use']
+  tokens.tokens.unshift({
+    id,
+    prefix,
+    device_id: request.device_id ?? null,
+    user_id: principalId,
+    scopes,
+    created_at: '2026-06-25T00:00:00Z',
+    expires_at: expiresAt
+  })
+  return {
+    token: `mock-created-token-value-${prefix}`,
+    id,
+    prefix,
+    scopes,
+    expires_at: expiresAt
+  }
+}
+
+function mockUpdateTokenScopes(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenScopeUpdateRequest>
+  const token = tokens.tokens.find((candidate) => candidate.id === request.token_id)
+  if (!token || !Array.isArray(request.scopes)) return { success: false }
+  token.scopes = [...request.scopes]
+  return { success: true }
+}
+
+function mockRevokeToken(tokens: MockAuroraFixtureSet['tokens'], payload: unknown) {
+  const request = payload as Partial<AuthTokenRevokeRequest>
+  const index = tokens.tokens.findIndex((candidate) => candidate.id === request.token_id)
+  if (index < 0) return { success: false }
+  tokens.tokens.splice(index, 1)
+  return { success: true }
 }
 
 function mockListDevices(

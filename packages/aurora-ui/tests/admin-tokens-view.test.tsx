@@ -18,11 +18,15 @@ describe('AdminTokensView', () => {
     expect(snapshot.tokens.map((token) => token.prefix)).toContain('aur_stu')
     expect(snapshot.tokens.some((token) => token.revokeAction?.methodId === 'Auth.RevokeToken')).toBe(true)
     expect(snapshot.tokens.some((token) => token.rotateAction?.requiresAdminAction)).toBe(true)
+    expect(snapshot.createState).toBe('available-local')
+    expect(snapshot.tokens.every((token) => token.updateState === 'available-local')).toBe(true)
     expect(markup).toContain('Tokens')
     expect(markup).toContain('API tokens issued to principals, with their granted scopes.')
     expect(markup).toContain('Principal')
     expect(markup).toContain('Scopes')
     expect(markup).toContain('Expires')
+    expect(markup).toContain('Create token')
+    expect(markup).toContain('Edit scopes')
     expect(markup).toContain('Revoke')
     expect(markup).not.toContain('Create token unavailable')
     expect(markup).not.toContain('Auth.CreateToken is not exposed')
@@ -74,7 +78,7 @@ describe('AdminTokensView', () => {
     expect(markup).not.toContain('secret-token-should-not-render')
   })
 
-  it('purges one-time reveal secrets after dismissal and never stores them in AdminAction payloads', async () => {
+  it('shows a newly created secret once, purges it after dismissal, and never stores it in AdminAction payloads', async () => {
     const snapshot = await buildAdminTokensSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const secret = 'new-token-secret-value'
     const revealedSnapshot: AdminTokensSnapshot = {
@@ -87,7 +91,9 @@ describe('AdminTokensView', () => {
       }
     }
     const revealMarkup = renderToStaticMarkup(<AdminTokensView snapshot={revealedSnapshot} />)
-    expect(revealMarkup).not.toContain(secret)
+    expect(revealMarkup).toContain('Copy this token now')
+    expect(revealMarkup).toContain(secret)
+    expect(revealMarkup).toContain('Dismiss secret')
 
     const dismissedSnapshot = dismissOneTimeTokenReveal(revealedSnapshot)
     const dismissedMarkup = renderToStaticMarkup(<AdminTokensView snapshot={dismissedSnapshot} />)
@@ -100,7 +106,7 @@ describe('AdminTokensView', () => {
 
   it('renders token loading, empty, denied, degraded, and unavailable states', async () => {
     const loadingMarkup = renderToStaticMarkup(<AdminTokensView snapshot={loadingSnapshot()} />)
-    expect(loadingMarkup).toContain('Tokens')
+    expect(loadingMarkup).toContain('Loading protected token records from Aurora')
 
     const emptyTransport = new MockAuroraTransport()
     emptyTransport.register('Auth.ListTokens', () => ({ tokens: [] }))
@@ -109,16 +115,24 @@ describe('AdminTokensView', () => {
 
     const deniedTransport = new MockAuroraTransport().fail('Auth.ListTokens', 'permission', 'token access denied')
     const deniedSnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: deniedTransport }))
-    expect(renderToStaticMarkup(<AdminTokensView snapshot={deniedSnapshot} />)).toContain('Tokens')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={deniedSnapshot} />)).toContain('cannot access token administration')
 
     const degradedTransport = new MockAuroraTransport().fail('Gateway.GetCapabilityCatalog', 'transport_loss', 'token capability catalog unavailable')
     const degradedSnapshot = await buildAdminTokensSnapshot(new Aurora({ transport: degradedTransport }))
-    expect(renderToStaticMarkup(<AdminTokensView snapshot={degradedSnapshot} />)).toContain('Tokens')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={degradedSnapshot} />)).toContain('partially available')
 
     const unavailableSnapshot = await buildAdminTokensSnapshot(
       new Aurora({ transport: MockAuroraTransport.empty().lose('Auth.ListTokens').lose('Gateway.GetCapabilityCatalog') })
     )
-    expect(renderToStaticMarkup(<AdminTokensView snapshot={unavailableSnapshot} />)).toContain('No tokens to show')
+    const unavailableMarkup = renderToStaticMarkup(<AdminTokensView snapshot={unavailableSnapshot} />)
+    expect(unavailableMarkup).toContain('currently unavailable')
+    expect(unavailableMarkup).toContain('No tokens to show')
+  })
+
+  it('renders optimistic and rollback mutation feedback', async () => {
+    const snapshot = await buildAdminTokensSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={snapshot} mutationState="optimistic" />)).toContain('Applying token change')
+    expect(renderToStaticMarkup(<AdminTokensView snapshot={snapshot} mutationState="rollback-error" mutationError="Token update failed" />)).toContain('Token update failed')
   })
 })
 

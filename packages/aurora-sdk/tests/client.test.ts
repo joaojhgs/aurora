@@ -1357,8 +1357,8 @@ describe('AuroraClient', () => {
     expect(manifest.totals).toEqual(
       expect.objectContaining({
         services: 4,
-        methods: 34,
-        externalMethods: 33,
+        methods: 36,
+        externalMethods: 35,
         internalMethods: 1,
         gatewayBuiltins: 2,
         capabilityActions: 1
@@ -7187,7 +7187,7 @@ describe('descriptors', () => {
 
     expect(comparison).toEqual({
       ok: true,
-      checked: 34,
+      checked: 36,
       issues: []
     })
 
@@ -7198,7 +7198,7 @@ describe('descriptors', () => {
 
     expect(mockShareableComparison).toEqual({
       ok: false,
-      checked: 40,
+      checked: 42,
       issues: [
         expect.objectContaining({ busTopic: 'TTS.Speak', field: 'missing' }),
         expect.objectContaining({ busTopic: 'DB.RAGSearch', field: 'missing' }),

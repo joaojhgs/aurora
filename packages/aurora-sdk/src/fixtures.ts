@@ -506,6 +506,30 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           output_schema: null
         },
         {
+          name: 'CreateToken',
+          summary: 'Create a token for a principal',
+          bus_topic: 'Auth.CreateToken',
+          exposure: 'both',
+          input_model: 'TokenCreateRequest',
+          output_model: 'TokenCreateResponse',
+          required_perms: [],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
+          name: 'UpdateTokenScopes',
+          summary: 'Update token scopes',
+          bus_topic: 'Auth.UpdateTokenScopes',
+          exposure: 'both',
+          input_model: 'TokenScopeUpdateRequest',
+          output_model: 'TokenScopeUpdateResponse',
+          required_perms: [],
+          method_type: 'manage',
+          input_schema: null,
+          output_schema: null
+        },
+        {
           name: 'RevokeToken',
           summary: 'Revoke a token',
           bus_topic: 'Auth.RevokeToken',
@@ -1536,6 +1560,28 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
       summary: 'List token/session evidence through Auth.'
     }),
     action({
+      action_id: 'auth-create-token',
+      module: 'Auth',
+      method: 'CreateToken',
+      topic: 'Auth.CreateToken',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'credential', approval_required: true },
+      summary: 'Create a scoped token through AdminAction.'
+    }),
+    action({
+      action_id: 'auth-update-token-scopes',
+      module: 'Auth',
+      method: 'UpdateTokenScopes',
+      topic: 'Auth.UpdateTokenScopes',
+      provider_id: 'local:Auth',
+      service_instance_id: 'auth-local',
+      selector: { peer_id: 'local-peer', module: 'Auth' },
+      policy: { ...basePolicy, required_permissions: ['Auth.manage'], operation_class: 'admin-critical', safety_class: 'credential', approval_required: true },
+      summary: 'Update token scopes through AdminAction.'
+    }),
+    action({
       action_id: 'auth-revoke-token',
       module: 'Auth',
       method: 'RevokeToken',
@@ -1646,6 +1692,8 @@ export const capabilityGraphCatalogFixture: CapabilityCatalogResponse = {
     'Auth.SetPermissions': ['auth-set-permissions'],
     'Auth.PatchPermissions': ['auth-patch-permissions'],
     'Auth.ListTokens': ['auth-list-tokens'],
+    'Auth.CreateToken': ['auth-create-token'],
+    'Auth.UpdateTokenScopes': ['auth-update-token-scopes'],
     'Auth.RevokeToken': ['auth-revoke-token'],
     'Auth.ListDevices': ['auth-list-devices'],
     'Auth.DeleteDevice': ['auth-delete-device'],
@@ -2923,6 +2971,52 @@ export const backendInventoryFixture: BackendInventory = {
       },
       source: 'live_registry',
       source_file: 'app/services/auth/service.py:636'
+    },
+    {
+      module: 'Auth',
+      name: 'CreateToken',
+      summary: 'Create a token for a principal',
+      bus_topic: 'Auth.CreateToken',
+      routePath: '/api/Auth/CreateToken',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: [],
+      input_model: 'TokenCreateRequest',
+      output_model: 'TokenCreateResponse',
+      input_schema: {
+        title: 'TokenCreateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenCreateResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:909'
+    },
+    {
+      module: 'Auth',
+      name: 'UpdateTokenScopes',
+      summary: 'Update token scopes',
+      bus_topic: 'Auth.UpdateTokenScopes',
+      routePath: '/api/Auth/UpdateTokenScopes',
+      route_kind: 'dynamic',
+      exposure: 'both',
+      method_type: 'manage',
+      required_perms: [],
+      input_model: 'TokenScopeUpdateRequest',
+      output_model: 'TokenScopeUpdateResponse',
+      input_schema: {
+        title: 'TokenScopeUpdateRequest',
+        type: 'object'
+      },
+      output_schema: {
+        title: 'TokenScopeUpdateResponse',
+        type: 'object'
+      },
+      source: 'live_registry',
+      source_file: 'app/services/auth/service.py:942'
     },
     {
       module: 'Auth',
