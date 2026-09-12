@@ -34,6 +34,10 @@ pub mod ids {
     pub const TTS_STREAM_START: &str = "TTS.StreamStart";
     pub const TTS_STREAM_CHUNK: &str = "TTS.StreamChunk";
     pub const TTS_STREAM_END: &str = "TTS.StreamEnd";
+    pub const TTS_STREAM_PREPARE_V1: &str = "TTS.StreamPrepareV1";
+    pub const TTS_STREAM_STATUS: &str = "TTS.StreamStatus";
+    pub const TTS_STREAM_CANCEL: &str = "TTS.StreamCancel";
+    pub const TTS_STREAM_RESULT: &str = "TTS.StreamResult";
     pub const TTS_SYNTHESIZE: &str = "TTS.Synthesize";
     pub const STT_COORDINATOR_LISTEN: &str = "STTCoordinator.Listen";
     pub const STT_COORDINATOR_STOP_LISTENING: &str = "STTCoordinator.StopListening";
@@ -42,8 +46,27 @@ pub mod ids {
     pub const STT_COORDINATOR_CAPTURE_STATUS: &str = "STTCoordinator.CaptureStatus";
     pub const WAKE_WORD_PROCESS_AUDIO: &str = "WakeWord.ProcessAudio";
     pub const WAKE_WORD_DETECT: &str = "WakeWord.Detect";
+    pub const WAKE_WORD_STREAM_START: &str = "WakeWord.StreamStart";
+    pub const WAKE_WORD_STREAM_CHUNK: &str = "WakeWord.StreamChunk";
+    pub const WAKE_WORD_STREAM_END: &str = "WakeWord.StreamEnd";
+    pub const WAKE_WORD_STREAM_CANCEL: &str = "WakeWord.StreamCancel";
+    pub const WAKE_WORD_STREAM_STATUS: &str = "WakeWord.StreamStatus";
+    pub const WAKE_WORD_STREAM_RESULT: &str = "WakeWord.StreamResult";
     pub const TRANSCRIPTION_PROCESS_AUDIO: &str = "Transcription.ProcessAudio";
     pub const TRANSCRIPTION_TRANSCRIBE: &str = "Transcription.Transcribe";
+    pub const TRANSCRIPTION_STREAM_START: &str = "Transcription.StreamStart";
+    pub const TRANSCRIPTION_STREAM_CHUNK: &str = "Transcription.StreamChunk";
+    pub const TRANSCRIPTION_STREAM_END: &str = "Transcription.StreamEnd";
+    pub const TRANSCRIPTION_STREAM_CANCEL: &str = "Transcription.StreamCancel";
+    pub const TRANSCRIPTION_STREAM_STATUS: &str = "Transcription.StreamStatus";
+    pub const TRANSCRIPTION_STREAM_RESULT: &str = "Transcription.StreamResult";
+    pub const VAD_DETECT: &str = "VAD.Detect";
+    pub const VAD_STREAM_START: &str = "VAD.StreamStart";
+    pub const VAD_STREAM_CHUNK: &str = "VAD.StreamChunk";
+    pub const VAD_STREAM_END: &str = "VAD.StreamEnd";
+    pub const VAD_STREAM_CANCEL: &str = "VAD.StreamCancel";
+    pub const VAD_STREAM_STATUS: &str = "VAD.StreamStatus";
+    pub const VAD_STREAM_RESULT: &str = "VAD.StreamResult";
     pub const ORCHESTRATOR_RESPONSE: &str = "Orchestrator.Response";
     pub const ORCHESTRATOR_INTERRUPTED: &str = "Orchestrator.Interrupted";
     pub const TTS_AUDIO_CHUNK: &str = "TTS.AudioChunk";
@@ -243,6 +266,30 @@ pub mod models {
         typify::import_types!(schema = "schema/tts_stream_end_request.json");
     }
     pub use tts_stream_end_request::TtsStreamEndRequest;
+    pub mod tts_stream_prepare_request {
+        typify::import_types!(schema = "schema/tts_stream_prepare_request.json");
+    }
+    pub use tts_stream_prepare_request::TtsStreamPrepareRequest;
+    pub mod tts_stream_prepare_response {
+        typify::import_types!(schema = "schema/tts_stream_prepare_response.json");
+    }
+    pub use tts_stream_prepare_response::TtsStreamPrepareResponse;
+    pub mod tts_stream_session_cancel_request {
+        typify::import_types!(schema = "schema/tts_stream_session_cancel_request.json");
+    }
+    pub use tts_stream_session_cancel_request::TtsStreamSessionCancelRequest;
+    pub mod tts_stream_session_result {
+        typify::import_types!(schema = "schema/tts_stream_session_result.json");
+    }
+    pub use tts_stream_session_result::TtsStreamSessionResult;
+    pub mod tts_stream_session_status {
+        typify::import_types!(schema = "schema/tts_stream_session_status.json");
+    }
+    pub use tts_stream_session_status::TtsStreamSessionStatus;
+    pub mod tts_stream_session_status_request {
+        typify::import_types!(schema = "schema/tts_stream_session_status_request.json");
+    }
+    pub use tts_stream_session_status_request::TtsStreamSessionStatusRequest;
     pub mod tts_stream_start_request {
         typify::import_types!(schema = "schema/tts_stream_start_request.json");
     }
@@ -335,6 +382,78 @@ pub mod models {
         typify::import_types!(schema = "schema/transcribe_audio_response.json");
     }
     pub use transcribe_audio_response::TranscribeAudioResponse;
+    pub mod transcription_stream_admission {
+        typify::import_types!(schema = "schema/transcription_stream_admission.json");
+    }
+    pub use transcription_stream_admission::TranscriptionStreamAdmission;
+    pub mod transcription_stream_cancel_request {
+        typify::import_types!(schema = "schema/transcription_stream_cancel_request.json");
+    }
+    pub use transcription_stream_cancel_request::TranscriptionStreamCancelRequest;
+    pub mod transcription_stream_chunk_request {
+        typify::import_types!(schema = "schema/transcription_stream_chunk_request.json");
+    }
+    pub use transcription_stream_chunk_request::TranscriptionStreamChunkRequest;
+    pub mod transcription_stream_end_request {
+        typify::import_types!(schema = "schema/transcription_stream_end_request.json");
+    }
+    pub use transcription_stream_end_request::TranscriptionStreamEndRequest;
+    pub mod transcription_stream_result {
+        typify::import_types!(schema = "schema/transcription_stream_result.json");
+    }
+    pub use transcription_stream_result::TranscriptionStreamResult;
+    pub mod transcription_stream_start_request {
+        typify::import_types!(schema = "schema/transcription_stream_start_request.json");
+    }
+    pub use transcription_stream_start_request::TranscriptionStreamStartRequest;
+    pub mod transcription_stream_status {
+        typify::import_types!(schema = "schema/transcription_stream_status.json");
+    }
+    pub use transcription_stream_status::TranscriptionStreamStatus;
+    pub mod transcription_stream_status_request {
+        typify::import_types!(schema = "schema/transcription_stream_status_request.json");
+    }
+    pub use transcription_stream_status_request::TranscriptionStreamStatusRequest;
+    pub mod vad_detect_request {
+        typify::import_types!(schema = "schema/vad_detect_request.json");
+    }
+    pub use vad_detect_request::VadDetectRequest;
+    pub mod vad_detect_response {
+        typify::import_types!(schema = "schema/vad_detect_response.json");
+    }
+    pub use vad_detect_response::VadDetectResponse;
+    pub mod vad_stream_admission {
+        typify::import_types!(schema = "schema/vad_stream_admission.json");
+    }
+    pub use vad_stream_admission::VadStreamAdmission;
+    pub mod vad_stream_cancel_request {
+        typify::import_types!(schema = "schema/vad_stream_cancel_request.json");
+    }
+    pub use vad_stream_cancel_request::VadStreamCancelRequest;
+    pub mod vad_stream_chunk_request {
+        typify::import_types!(schema = "schema/vad_stream_chunk_request.json");
+    }
+    pub use vad_stream_chunk_request::VadStreamChunkRequest;
+    pub mod vad_stream_end_request {
+        typify::import_types!(schema = "schema/vad_stream_end_request.json");
+    }
+    pub use vad_stream_end_request::VadStreamEndRequest;
+    pub mod vad_stream_result {
+        typify::import_types!(schema = "schema/vad_stream_result.json");
+    }
+    pub use vad_stream_result::VadStreamResult;
+    pub mod vad_stream_start_request {
+        typify::import_types!(schema = "schema/vad_stream_start_request.json");
+    }
+    pub use vad_stream_start_request::VadStreamStartRequest;
+    pub mod vad_stream_status {
+        typify::import_types!(schema = "schema/vad_stream_status.json");
+    }
+    pub use vad_stream_status::VadStreamStatus;
+    pub mod vad_stream_status_request {
+        typify::import_types!(schema = "schema/vad_stream_status_request.json");
+    }
+    pub use vad_stream_status_request::VadStreamStatusRequest;
     pub mod wake_word_detect_request {
         typify::import_types!(schema = "schema/wake_word_detect_request.json");
     }
@@ -343,6 +462,38 @@ pub mod models {
         typify::import_types!(schema = "schema/wake_word_detect_response.json");
     }
     pub use wake_word_detect_response::WakeWordDetectResponse;
+    pub mod wake_word_stream_admission {
+        typify::import_types!(schema = "schema/wake_word_stream_admission.json");
+    }
+    pub use wake_word_stream_admission::WakeWordStreamAdmission;
+    pub mod wake_word_stream_cancel_request {
+        typify::import_types!(schema = "schema/wake_word_stream_cancel_request.json");
+    }
+    pub use wake_word_stream_cancel_request::WakeWordStreamCancelRequest;
+    pub mod wake_word_stream_chunk_request {
+        typify::import_types!(schema = "schema/wake_word_stream_chunk_request.json");
+    }
+    pub use wake_word_stream_chunk_request::WakeWordStreamChunkRequest;
+    pub mod wake_word_stream_end_request {
+        typify::import_types!(schema = "schema/wake_word_stream_end_request.json");
+    }
+    pub use wake_word_stream_end_request::WakeWordStreamEndRequest;
+    pub mod wake_word_stream_result {
+        typify::import_types!(schema = "schema/wake_word_stream_result.json");
+    }
+    pub use wake_word_stream_result::WakeWordStreamResult;
+    pub mod wake_word_stream_start_request {
+        typify::import_types!(schema = "schema/wake_word_stream_start_request.json");
+    }
+    pub use wake_word_stream_start_request::WakeWordStreamStartRequest;
+    pub mod wake_word_stream_status {
+        typify::import_types!(schema = "schema/wake_word_stream_status.json");
+    }
+    pub use wake_word_stream_status::WakeWordStreamStatus;
+    pub mod wake_word_stream_status_request {
+        typify::import_types!(schema = "schema/wake_word_stream_status_request.json");
+    }
+    pub use wake_word_stream_status_request::WakeWordStreamStatusRequest;
 }
 
 pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
@@ -503,7 +654,7 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         method_id: "TTS.AudioChunk",
         direction: "event",
         model_name: "TTSAudioChunkEvent",
-        schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+        schema_hash: "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
         schema_json: include_str!("../schema/tts_audio_chunk_event.json"),
     },
     SchemaDescriptor {
@@ -715,11 +866,27 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         schema_json: include_str!("../schema/tts_set_default_voice_response.json"),
     },
     SchemaDescriptor {
+        schema_id: "TTS.StreamCancel.input.TTSStreamSessionCancelRequest",
+        method_id: "TTS.StreamCancel",
+        direction: "input",
+        model_name: "TTSStreamSessionCancelRequest",
+        schema_hash: "d2547255ec4592f0300368b3d0e30e7c6ad594e283ba47616f3667b00a4d96c5",
+        schema_json: include_str!("../schema/tts_stream_session_cancel_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamCancel.output.TTSStreamSessionResult",
+        method_id: "TTS.StreamCancel",
+        direction: "output",
+        model_name: "TTSStreamSessionResult",
+        schema_hash: "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a",
+        schema_json: include_str!("../schema/tts_stream_session_result.json"),
+    },
+    SchemaDescriptor {
         schema_id: "TTS.StreamChunk.input.TTSStreamChunkRequest",
         method_id: "TTS.StreamChunk",
         direction: "input",
         model_name: "TTSStreamChunkRequest",
-        schema_hash: "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d",
+        schema_hash: "63c0fadd38998b9632b3f78acd4c9f4400dd1ea87372acd652139ab3161de86b",
         schema_json: include_str!("../schema/tts_stream_chunk_request.json"),
     },
     SchemaDescriptor {
@@ -747,6 +914,38 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         schema_json: include_str!("../schema/empty_output.json"),
     },
     SchemaDescriptor {
+        schema_id: "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest",
+        method_id: "TTS.StreamPrepareV1",
+        direction: "input",
+        model_name: "TTSStreamPrepareRequest",
+        schema_hash: "282ded6d85d901ef1d7e4bb09e41be051421c689cc826abf2625508d004c1efb",
+        schema_json: include_str!("../schema/tts_stream_prepare_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse",
+        method_id: "TTS.StreamPrepareV1",
+        direction: "output",
+        model_name: "TTSStreamPrepareResponse",
+        schema_hash: "22a0dbaa2750ba5cc4a6a23bd0f0e92ba892bb1f5313f0860bf54691cb6eca76",
+        schema_json: include_str!("../schema/tts_stream_prepare_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamResult.input.TTSStreamSessionStatusRequest",
+        method_id: "TTS.StreamResult",
+        direction: "input",
+        model_name: "TTSStreamSessionStatusRequest",
+        schema_hash: "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a",
+        schema_json: include_str!("../schema/tts_stream_session_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamResult.output.TTSStreamSessionResult",
+        method_id: "TTS.StreamResult",
+        direction: "output",
+        model_name: "TTSStreamSessionResult",
+        schema_hash: "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a",
+        schema_json: include_str!("../schema/tts_stream_session_result.json"),
+    },
+    SchemaDescriptor {
         schema_id: "TTS.StreamStart.input.TTSStreamStartRequest",
         method_id: "TTS.StreamStart",
         direction: "input",
@@ -761,6 +960,22 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "EmptyOutput",
         schema_hash: "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b",
         schema_json: include_str!("../schema/empty_output.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamStatus.input.TTSStreamSessionStatusRequest",
+        method_id: "TTS.StreamStatus",
+        direction: "input",
+        model_name: "TTSStreamSessionStatusRequest",
+        schema_hash: "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a",
+        schema_json: include_str!("../schema/tts_stream_session_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "TTS.StreamStatus.output.TTSStreamSessionStatus",
+        method_id: "TTS.StreamStatus",
+        direction: "output",
+        model_name: "TTSStreamSessionStatus",
+        schema_hash: "4bba07a6a2efe5f9ce796becd9756b62cf0bdcd44cf97c9b18b236346bf9d358",
+        schema_json: include_str!("../schema/tts_stream_session_status.json"),
     },
     SchemaDescriptor {
         schema_id: "TTS.Synthesize.input.TTSSynthesizeRequest",
@@ -939,6 +1154,102 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         schema_json: include_str!("../schema/empty_output.json"),
     },
     SchemaDescriptor {
+        schema_id: "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest",
+        method_id: "Transcription.StreamCancel",
+        direction: "input",
+        model_name: "TranscriptionStreamCancelRequest",
+        schema_hash: "49e5b1490922b2edf733807fca52beb6d81cec4ee29aa362c16c3efc441d7ee7",
+        schema_json: include_str!("../schema/transcription_stream_cancel_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamCancel.output.TranscriptionStreamResult",
+        method_id: "Transcription.StreamCancel",
+        direction: "output",
+        model_name: "TranscriptionStreamResult",
+        schema_hash: "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb",
+        schema_json: include_str!("../schema/transcription_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest",
+        method_id: "Transcription.StreamChunk",
+        direction: "input",
+        model_name: "TranscriptionStreamChunkRequest",
+        schema_hash: "686ca9ef3ad6f06bdd707e842832fd1a57a11773d5bbffc2ecaf76ff8263c17a",
+        schema_json: include_str!("../schema/transcription_stream_chunk_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamChunk.output.TranscriptionStreamStatus",
+        method_id: "Transcription.StreamChunk",
+        direction: "output",
+        model_name: "TranscriptionStreamStatus",
+        schema_hash: "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a",
+        schema_json: include_str!("../schema/transcription_stream_status.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamEnd.input.TranscriptionStreamEndRequest",
+        method_id: "Transcription.StreamEnd",
+        direction: "input",
+        model_name: "TranscriptionStreamEndRequest",
+        schema_hash: "4f701b56625d2694823e5d4ae9bad7e74159fea247fc67bdb1c213fbe5acc115",
+        schema_json: include_str!("../schema/transcription_stream_end_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamEnd.output.TranscriptionStreamResult",
+        method_id: "Transcription.StreamEnd",
+        direction: "output",
+        model_name: "TranscriptionStreamResult",
+        schema_hash: "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb",
+        schema_json: include_str!("../schema/transcription_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamResult.input.TranscriptionStreamStatusRequest",
+        method_id: "Transcription.StreamResult",
+        direction: "input",
+        model_name: "TranscriptionStreamStatusRequest",
+        schema_hash: "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0",
+        schema_json: include_str!("../schema/transcription_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamResult.output.TranscriptionStreamResult",
+        method_id: "Transcription.StreamResult",
+        direction: "output",
+        model_name: "TranscriptionStreamResult",
+        schema_hash: "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb",
+        schema_json: include_str!("../schema/transcription_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamStart.input.TranscriptionStreamStartRequest",
+        method_id: "Transcription.StreamStart",
+        direction: "input",
+        model_name: "TranscriptionStreamStartRequest",
+        schema_hash: "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696",
+        schema_json: include_str!("../schema/transcription_stream_start_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamStart.output.TranscriptionStreamAdmission",
+        method_id: "Transcription.StreamStart",
+        direction: "output",
+        model_name: "TranscriptionStreamAdmission",
+        schema_hash: "d86ef01934340de3aac53b956228364ac5a3f7f107035a04fc177032ac497f14",
+        schema_json: include_str!("../schema/transcription_stream_admission.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest",
+        method_id: "Transcription.StreamStatus",
+        direction: "input",
+        model_name: "TranscriptionStreamStatusRequest",
+        schema_hash: "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0",
+        schema_json: include_str!("../schema/transcription_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Transcription.StreamStatus.output.TranscriptionStreamStatus",
+        method_id: "Transcription.StreamStatus",
+        direction: "output",
+        model_name: "TranscriptionStreamStatus",
+        schema_hash: "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a",
+        schema_json: include_str!("../schema/transcription_stream_status.json"),
+    },
+    SchemaDescriptor {
         schema_id: "Transcription.Transcribe.input.TranscribeAudioRequest",
         method_id: "Transcription.Transcribe",
         direction: "input",
@@ -953,6 +1264,118 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "TranscribeAudioResponse",
         schema_hash: "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f",
         schema_json: include_str!("../schema/transcribe_audio_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.Detect.input.VADDetectRequest",
+        method_id: "VAD.Detect",
+        direction: "input",
+        model_name: "VADDetectRequest",
+        schema_hash: "88f2a4d7d2e1a60baaf210ffa419f9f0d542ee1d7d139058752e201cba478672",
+        schema_json: include_str!("../schema/vad_detect_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.Detect.output.VADDetectResponse",
+        method_id: "VAD.Detect",
+        direction: "output",
+        model_name: "VADDetectResponse",
+        schema_hash: "b6151884e74c650c774a2717da6a6fe0191296b884fd5156abaf7219a5aeef2d",
+        schema_json: include_str!("../schema/vad_detect_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamCancel.input.VADStreamCancelRequest",
+        method_id: "VAD.StreamCancel",
+        direction: "input",
+        model_name: "VADStreamCancelRequest",
+        schema_hash: "58ae598986603ceac5717ac77d7ccc8c7d16d5db9e70e10c23083322c36b711b",
+        schema_json: include_str!("../schema/vad_stream_cancel_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamCancel.output.VADStreamResult",
+        method_id: "VAD.StreamCancel",
+        direction: "output",
+        model_name: "VADStreamResult",
+        schema_hash: "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609",
+        schema_json: include_str!("../schema/vad_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamChunk.input.VADStreamChunkRequest",
+        method_id: "VAD.StreamChunk",
+        direction: "input",
+        model_name: "VADStreamChunkRequest",
+        schema_hash: "2c7f7e22740cd057cc24c1dc235b7c5410cdd3dd862ce67d94dd0aa76d57f2d9",
+        schema_json: include_str!("../schema/vad_stream_chunk_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamChunk.output.VADStreamStatus",
+        method_id: "VAD.StreamChunk",
+        direction: "output",
+        model_name: "VADStreamStatus",
+        schema_hash: "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2",
+        schema_json: include_str!("../schema/vad_stream_status.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamEnd.input.VADStreamEndRequest",
+        method_id: "VAD.StreamEnd",
+        direction: "input",
+        model_name: "VADStreamEndRequest",
+        schema_hash: "16e1307b8a09eeb52e539951403911ecf8280c867317facefca7b0fe625f8495",
+        schema_json: include_str!("../schema/vad_stream_end_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamEnd.output.VADStreamResult",
+        method_id: "VAD.StreamEnd",
+        direction: "output",
+        model_name: "VADStreamResult",
+        schema_hash: "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609",
+        schema_json: include_str!("../schema/vad_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamResult.input.VADStreamStatusRequest",
+        method_id: "VAD.StreamResult",
+        direction: "input",
+        model_name: "VADStreamStatusRequest",
+        schema_hash: "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7",
+        schema_json: include_str!("../schema/vad_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamResult.output.VADStreamResult",
+        method_id: "VAD.StreamResult",
+        direction: "output",
+        model_name: "VADStreamResult",
+        schema_hash: "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609",
+        schema_json: include_str!("../schema/vad_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamStart.input.VADStreamStartRequest",
+        method_id: "VAD.StreamStart",
+        direction: "input",
+        model_name: "VADStreamStartRequest",
+        schema_hash: "089979ca0d75b026ec99ba0d47218b17c9146b21c8429d803897d9561fd8f3b4",
+        schema_json: include_str!("../schema/vad_stream_start_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamStart.output.VADStreamAdmission",
+        method_id: "VAD.StreamStart",
+        direction: "output",
+        model_name: "VADStreamAdmission",
+        schema_hash: "60e1c96e83ae3ce9ce0e51aef34338b148b9458f3dee7967840fde41e1caa364",
+        schema_json: include_str!("../schema/vad_stream_admission.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamStatus.input.VADStreamStatusRequest",
+        method_id: "VAD.StreamStatus",
+        direction: "input",
+        model_name: "VADStreamStatusRequest",
+        schema_hash: "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7",
+        schema_json: include_str!("../schema/vad_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "VAD.StreamStatus.output.VADStreamStatus",
+        method_id: "VAD.StreamStatus",
+        direction: "output",
+        model_name: "VADStreamStatus",
+        schema_hash: "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2",
+        schema_json: include_str!("../schema/vad_stream_status.json"),
     },
     SchemaDescriptor {
         schema_id: "WakeWord.Detect.input.WakeWordDetectRequest",
@@ -985,6 +1408,102 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "EmptyOutput",
         schema_hash: "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b",
         schema_json: include_str!("../schema/empty_output.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest",
+        method_id: "WakeWord.StreamCancel",
+        direction: "input",
+        model_name: "WakeWordStreamCancelRequest",
+        schema_hash: "19e5598793300b8492a3459d1a4149bc97a1e8b032aaa02e3ac2ad9d87f57fb5",
+        schema_json: include_str!("../schema/wake_word_stream_cancel_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamCancel.output.WakeWordStreamResult",
+        method_id: "WakeWord.StreamCancel",
+        direction: "output",
+        model_name: "WakeWordStreamResult",
+        schema_hash: "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97",
+        schema_json: include_str!("../schema/wake_word_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest",
+        method_id: "WakeWord.StreamChunk",
+        direction: "input",
+        model_name: "WakeWordStreamChunkRequest",
+        schema_hash: "5dc178412e11695ddcacf456b1300868c97031367a87f857235d9f62f5412e16",
+        schema_json: include_str!("../schema/wake_word_stream_chunk_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamChunk.output.WakeWordStreamStatus",
+        method_id: "WakeWord.StreamChunk",
+        direction: "output",
+        model_name: "WakeWordStreamStatus",
+        schema_hash: "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4",
+        schema_json: include_str!("../schema/wake_word_stream_status.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamEnd.input.WakeWordStreamEndRequest",
+        method_id: "WakeWord.StreamEnd",
+        direction: "input",
+        model_name: "WakeWordStreamEndRequest",
+        schema_hash: "f1f02f2e8054551e35e3b333acdde696197f235bc725916fd5909a78917e55dd",
+        schema_json: include_str!("../schema/wake_word_stream_end_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamEnd.output.WakeWordStreamResult",
+        method_id: "WakeWord.StreamEnd",
+        direction: "output",
+        model_name: "WakeWordStreamResult",
+        schema_hash: "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97",
+        schema_json: include_str!("../schema/wake_word_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamResult.input.WakeWordStreamStatusRequest",
+        method_id: "WakeWord.StreamResult",
+        direction: "input",
+        model_name: "WakeWordStreamStatusRequest",
+        schema_hash: "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47",
+        schema_json: include_str!("../schema/wake_word_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamResult.output.WakeWordStreamResult",
+        method_id: "WakeWord.StreamResult",
+        direction: "output",
+        model_name: "WakeWordStreamResult",
+        schema_hash: "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97",
+        schema_json: include_str!("../schema/wake_word_stream_result.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamStart.input.WakeWordStreamStartRequest",
+        method_id: "WakeWord.StreamStart",
+        direction: "input",
+        model_name: "WakeWordStreamStartRequest",
+        schema_hash: "028976fa6b8ce81b3350638bad2dacbea351c4979b720d97bc0df3179f740637",
+        schema_json: include_str!("../schema/wake_word_stream_start_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamStart.output.WakeWordStreamAdmission",
+        method_id: "WakeWord.StreamStart",
+        direction: "output",
+        model_name: "WakeWordStreamAdmission",
+        schema_hash: "bbf1328e6d9d1d3df0806129873a8441454eef8a9f1fa5cff829f29c0f60d64b",
+        schema_json: include_str!("../schema/wake_word_stream_admission.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest",
+        method_id: "WakeWord.StreamStatus",
+        direction: "input",
+        model_name: "WakeWordStreamStatusRequest",
+        schema_hash: "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47",
+        schema_json: include_str!("../schema/wake_word_stream_status_request.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "WakeWord.StreamStatus.output.WakeWordStreamStatus",
+        method_id: "WakeWord.StreamStatus",
+        direction: "output",
+        model_name: "WakeWordStreamStatus",
+        schema_hash: "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4",
+        schema_json: include_str!("../schema/wake_word_stream_status.json"),
     },
 ];
 
@@ -1578,6 +2097,90 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         },
     },
     MethodDescriptor {
+        method_id: "TTS.StreamPrepareV1",
+        bus_topic: "TTS.StreamPrepareV1",
+        module: "TTS",
+        name: "StreamPrepareV1",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/TTS/StreamPrepareV1",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.StreamPrepareV1"],
+        callable_feature_ids: &["speech_streaming"],
+        input_schema_id: "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest",
+        output_schema_id: "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.StreamStatus",
+        bus_topic: "TTS.StreamStatus",
+        module: "TTS",
+        name: "StreamStatus",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/TTS/StreamStatus",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.StreamStatus"],
+        callable_feature_ids: &["speech_streaming"],
+        input_schema_id: "TTS.StreamStatus.input.TTSStreamSessionStatusRequest",
+        output_schema_id: "TTS.StreamStatus.output.TTSStreamSessionStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.StreamCancel",
+        bus_topic: "TTS.StreamCancel",
+        module: "TTS",
+        name: "StreamCancel",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/TTS/StreamCancel",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.StreamCancel"],
+        callable_feature_ids: &["speech_streaming"],
+        input_schema_id: "TTS.StreamCancel.input.TTSStreamSessionCancelRequest",
+        output_schema_id: "TTS.StreamCancel.output.TTSStreamSessionResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "TTS.StreamResult",
+        bus_topic: "TTS.StreamResult",
+        module: "TTS",
+        name: "StreamResult",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/TTS/StreamResult",
+        route_kind: "dynamic",
+        required_permissions: &["TTS.StreamResult"],
+        callable_feature_ids: &["speech_streaming"],
+        input_schema_id: "TTS.StreamResult.input.TTSStreamSessionStatusRequest",
+        output_schema_id: "TTS.StreamResult.output.TTSStreamSessionResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
         method_id: "TTS.Synthesize",
         bus_topic: "TTS.Synthesize",
         module: "TTS",
@@ -1746,6 +2349,132 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
         },
     },
     MethodDescriptor {
+        method_id: "WakeWord.StreamStart",
+        bus_topic: "WakeWord.StreamStart",
+        module: "WakeWord",
+        name: "StreamStart",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamStart",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamStart"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamStart.input.WakeWordStreamStartRequest",
+        output_schema_id: "WakeWord.StreamStart.output.WakeWordStreamAdmission",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "WakeWord.StreamChunk",
+        bus_topic: "WakeWord.StreamChunk",
+        module: "WakeWord",
+        name: "StreamChunk",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamChunk",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamChunk"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest",
+        output_schema_id: "WakeWord.StreamChunk.output.WakeWordStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "WakeWord.StreamEnd",
+        bus_topic: "WakeWord.StreamEnd",
+        module: "WakeWord",
+        name: "StreamEnd",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamEnd",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamEnd"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamEnd.input.WakeWordStreamEndRequest",
+        output_schema_id: "WakeWord.StreamEnd.output.WakeWordStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "WakeWord.StreamCancel",
+        bus_topic: "WakeWord.StreamCancel",
+        module: "WakeWord",
+        name: "StreamCancel",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamCancel",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamCancel"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest",
+        output_schema_id: "WakeWord.StreamCancel.output.WakeWordStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "WakeWord.StreamStatus",
+        bus_topic: "WakeWord.StreamStatus",
+        module: "WakeWord",
+        name: "StreamStatus",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamStatus",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamStatus"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest",
+        output_schema_id: "WakeWord.StreamStatus.output.WakeWordStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "WakeWord.StreamResult",
+        bus_topic: "WakeWord.StreamResult",
+        module: "WakeWord",
+        name: "StreamResult",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/WakeWord/StreamResult",
+        route_kind: "dynamic",
+        required_permissions: &["WakeWord.StreamResult"],
+        callable_feature_ids: &["wake_word_detection"],
+        input_schema_id: "WakeWord.StreamResult.input.WakeWordStreamStatusRequest",
+        output_schema_id: "WakeWord.StreamResult.output.WakeWordStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
         method_id: "Transcription.ProcessAudio",
         bus_topic: "Transcription.ProcessAudio",
         module: "Transcription",
@@ -1787,6 +2516,279 @@ pub static METHOD_DESCRIPTORS: &[MethodDescriptor] = &[
             event_topic: None,
         },
     },
+    MethodDescriptor {
+        method_id: "Transcription.StreamStart",
+        bus_topic: "Transcription.StreamStart",
+        module: "Transcription",
+        name: "StreamStart",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamStart",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamStart"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamStart.input.TranscriptionStreamStartRequest",
+        output_schema_id: "Transcription.StreamStart.output.TranscriptionStreamAdmission",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Transcription.StreamChunk",
+        bus_topic: "Transcription.StreamChunk",
+        module: "Transcription",
+        name: "StreamChunk",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamChunk",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamChunk"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest",
+        output_schema_id: "Transcription.StreamChunk.output.TranscriptionStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Transcription.StreamEnd",
+        bus_topic: "Transcription.StreamEnd",
+        module: "Transcription",
+        name: "StreamEnd",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamEnd",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamEnd"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamEnd.input.TranscriptionStreamEndRequest",
+        output_schema_id: "Transcription.StreamEnd.output.TranscriptionStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Transcription.StreamCancel",
+        bus_topic: "Transcription.StreamCancel",
+        module: "Transcription",
+        name: "StreamCancel",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamCancel",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamCancel"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest",
+        output_schema_id: "Transcription.StreamCancel.output.TranscriptionStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Transcription.StreamStatus",
+        bus_topic: "Transcription.StreamStatus",
+        module: "Transcription",
+        name: "StreamStatus",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamStatus",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamStatus"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest",
+        output_schema_id: "Transcription.StreamStatus.output.TranscriptionStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "Transcription.StreamResult",
+        bus_topic: "Transcription.StreamResult",
+        module: "Transcription",
+        name: "StreamResult",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/Transcription/StreamResult",
+        route_kind: "dynamic",
+        required_permissions: &["Transcription.StreamResult"],
+        callable_feature_ids: &["audio_transcription"],
+        input_schema_id: "Transcription.StreamResult.input.TranscriptionStreamStatusRequest",
+        output_schema_id: "Transcription.StreamResult.output.TranscriptionStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.Detect",
+        bus_topic: "VAD.Detect",
+        module: "VAD",
+        name: "Detect",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/Detect",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.Detect"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.Detect.input.VADDetectRequest",
+        output_schema_id: "VAD.Detect.output.VADDetectResponse",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamStart",
+        bus_topic: "VAD.StreamStart",
+        module: "VAD",
+        name: "StreamStart",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamStart",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamStart"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamStart.input.VADStreamStartRequest",
+        output_schema_id: "VAD.StreamStart.output.VADStreamAdmission",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamChunk",
+        bus_topic: "VAD.StreamChunk",
+        module: "VAD",
+        name: "StreamChunk",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamChunk",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamChunk"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamChunk.input.VADStreamChunkRequest",
+        output_schema_id: "VAD.StreamChunk.output.VADStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamEnd",
+        bus_topic: "VAD.StreamEnd",
+        module: "VAD",
+        name: "StreamEnd",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamEnd",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamEnd"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamEnd.input.VADStreamEndRequest",
+        output_schema_id: "VAD.StreamEnd.output.VADStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamCancel",
+        bus_topic: "VAD.StreamCancel",
+        module: "VAD",
+        name: "StreamCancel",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamCancel",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamCancel"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamCancel.input.VADStreamCancelRequest",
+        output_schema_id: "VAD.StreamCancel.output.VADStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamStatus",
+        bus_topic: "VAD.StreamStatus",
+        module: "VAD",
+        name: "StreamStatus",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamStatus",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamStatus"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamStatus.input.VADStreamStatusRequest",
+        output_schema_id: "VAD.StreamStatus.output.VADStreamStatus",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
+    MethodDescriptor {
+        method_id: "VAD.StreamResult",
+        bus_topic: "VAD.StreamResult",
+        module: "VAD",
+        name: "StreamResult",
+        method_type: "use",
+        exposure: "both",
+        route_path: "/api/VAD/StreamResult",
+        route_kind: "dynamic",
+        required_permissions: &["VAD.StreamResult"],
+        callable_feature_ids: &["vad_detection"],
+        input_schema_id: "VAD.StreamResult.input.VADStreamStatusRequest",
+        output_schema_id: "VAD.StreamResult.output.VADStreamResult",
+        streaming: StreamingDescriptor {
+            rpc_kind: "unary",
+            request_stream: false,
+            response_stream: false,
+            ordered_command_group: None,
+            event_topic: None,
+        },
+    },
 ];
 
 pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[
@@ -1819,7 +2821,7 @@ pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[
         module: "TTS",
         name: "AudioChunk",
         schema_id: "TTS.AudioChunk.event.TTSAudioChunkEvent",
-        schema_hash: "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+        schema_hash: "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
         required_permissions: &["TTS.use"],
         bounded: true,
         authorized: true,
@@ -1923,12 +2925,20 @@ pub fn normalize_generated_contract(
         "TTS.Request.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest" => serde_json::from_value::<models::tts_set_default_voice_request::TtsSetDefaultVoiceRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse" => serde_json::from_value::<models::tts_set_default_voice_response::TtsSetDefaultVoiceResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamCancel.input.TTSStreamSessionCancelRequest" => serde_json::from_value::<models::tts_stream_session_cancel_request::TtsStreamSessionCancelRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamCancel.output.TTSStreamSessionResult" => serde_json::from_value::<models::tts_stream_session_result::TtsStreamSessionResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamChunk.input.TTSStreamChunkRequest" => serde_json::from_value::<models::tts_stream_chunk_request::TtsStreamChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamChunk.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamEnd.input.TTSStreamEndRequest" => serde_json::from_value::<models::tts_stream_end_request::TtsStreamEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamEnd.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest" => serde_json::from_value::<models::tts_stream_prepare_request::TtsStreamPrepareRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse" => serde_json::from_value::<models::tts_stream_prepare_response::TtsStreamPrepareResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamResult.input.TTSStreamSessionStatusRequest" => serde_json::from_value::<models::tts_stream_session_status_request::TtsStreamSessionStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamResult.output.TTSStreamSessionResult" => serde_json::from_value::<models::tts_stream_session_result::TtsStreamSessionResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamStart.input.TTSStreamStartRequest" => serde_json::from_value::<models::tts_stream_start_request::TtsStreamStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.StreamStart.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamStatus.input.TTSStreamSessionStatusRequest" => serde_json::from_value::<models::tts_stream_session_status_request::TtsStreamSessionStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "TTS.StreamStatus.output.TTSStreamSessionStatus" => serde_json::from_value::<models::tts_stream_session_status::TtsStreamSessionStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.Synthesize.input.TTSSynthesizeRequest" => serde_json::from_value::<models::tts_synthesize_request::TtsSynthesizeRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.Synthesize.output.TTSSynthesizeResponse" => serde_json::from_value::<models::tts_synthesize_response::TtsSynthesizeResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest" => serde_json::from_value::<models::tts_update_voice_profile_request::TtsUpdateVoiceProfileRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
@@ -1951,12 +2961,50 @@ pub fn normalize_generated_contract(
         "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse" => serde_json::from_value::<models::tooling_prepare_execution_response::ToolingPrepareExecutionResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Transcription.ProcessAudio.input.STTAudioChunk" => serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Transcription.ProcessAudio.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest" => serde_json::from_value::<models::transcription_stream_cancel_request::TranscriptionStreamCancelRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamCancel.output.TranscriptionStreamResult" => serde_json::from_value::<models::transcription_stream_result::TranscriptionStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest" => serde_json::from_value::<models::transcription_stream_chunk_request::TranscriptionStreamChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamChunk.output.TranscriptionStreamStatus" => serde_json::from_value::<models::transcription_stream_status::TranscriptionStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamEnd.input.TranscriptionStreamEndRequest" => serde_json::from_value::<models::transcription_stream_end_request::TranscriptionStreamEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamEnd.output.TranscriptionStreamResult" => serde_json::from_value::<models::transcription_stream_result::TranscriptionStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamResult.input.TranscriptionStreamStatusRequest" => serde_json::from_value::<models::transcription_stream_status_request::TranscriptionStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamResult.output.TranscriptionStreamResult" => serde_json::from_value::<models::transcription_stream_result::TranscriptionStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamStart.input.TranscriptionStreamStartRequest" => serde_json::from_value::<models::transcription_stream_start_request::TranscriptionStreamStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamStart.output.TranscriptionStreamAdmission" => serde_json::from_value::<models::transcription_stream_admission::TranscriptionStreamAdmission>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest" => serde_json::from_value::<models::transcription_stream_status_request::TranscriptionStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Transcription.StreamStatus.output.TranscriptionStreamStatus" => serde_json::from_value::<models::transcription_stream_status::TranscriptionStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Transcription.Transcribe.input.TranscribeAudioRequest" => serde_json::from_value::<models::transcribe_audio_request::TranscribeAudioRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Transcription.Transcribe.output.TranscribeAudioResponse" => serde_json::from_value::<models::transcribe_audio_response::TranscribeAudioResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.Detect.input.VADDetectRequest" => serde_json::from_value::<models::vad_detect_request::VadDetectRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.Detect.output.VADDetectResponse" => serde_json::from_value::<models::vad_detect_response::VadDetectResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamCancel.input.VADStreamCancelRequest" => serde_json::from_value::<models::vad_stream_cancel_request::VadStreamCancelRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamCancel.output.VADStreamResult" => serde_json::from_value::<models::vad_stream_result::VadStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamChunk.input.VADStreamChunkRequest" => serde_json::from_value::<models::vad_stream_chunk_request::VadStreamChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamChunk.output.VADStreamStatus" => serde_json::from_value::<models::vad_stream_status::VadStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamEnd.input.VADStreamEndRequest" => serde_json::from_value::<models::vad_stream_end_request::VadStreamEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamEnd.output.VADStreamResult" => serde_json::from_value::<models::vad_stream_result::VadStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamResult.input.VADStreamStatusRequest" => serde_json::from_value::<models::vad_stream_status_request::VadStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamResult.output.VADStreamResult" => serde_json::from_value::<models::vad_stream_result::VadStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamStart.input.VADStreamStartRequest" => serde_json::from_value::<models::vad_stream_start_request::VadStreamStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamStart.output.VADStreamAdmission" => serde_json::from_value::<models::vad_stream_admission::VadStreamAdmission>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamStatus.input.VADStreamStatusRequest" => serde_json::from_value::<models::vad_stream_status_request::VadStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "VAD.StreamStatus.output.VADStreamStatus" => serde_json::from_value::<models::vad_stream_status::VadStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "WakeWord.Detect.input.WakeWordDetectRequest" => serde_json::from_value::<models::wake_word_detect_request::WakeWordDetectRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "WakeWord.Detect.output.WakeWordDetectResponse" => serde_json::from_value::<models::wake_word_detect_response::WakeWordDetectResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "WakeWord.ProcessAudio.input.STTAudioChunk" => serde_json::from_value::<models::stt_audio_chunk::SttAudioChunk>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "WakeWord.ProcessAudio.output.EmptyOutput" => serde_json::from_value::<models::empty_output::EmptyOutput>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest" => serde_json::from_value::<models::wake_word_stream_cancel_request::WakeWordStreamCancelRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamCancel.output.WakeWordStreamResult" => serde_json::from_value::<models::wake_word_stream_result::WakeWordStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest" => serde_json::from_value::<models::wake_word_stream_chunk_request::WakeWordStreamChunkRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamChunk.output.WakeWordStreamStatus" => serde_json::from_value::<models::wake_word_stream_status::WakeWordStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamEnd.input.WakeWordStreamEndRequest" => serde_json::from_value::<models::wake_word_stream_end_request::WakeWordStreamEndRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamEnd.output.WakeWordStreamResult" => serde_json::from_value::<models::wake_word_stream_result::WakeWordStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamResult.input.WakeWordStreamStatusRequest" => serde_json::from_value::<models::wake_word_stream_status_request::WakeWordStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamResult.output.WakeWordStreamResult" => serde_json::from_value::<models::wake_word_stream_result::WakeWordStreamResult>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamStart.input.WakeWordStreamStartRequest" => serde_json::from_value::<models::wake_word_stream_start_request::WakeWordStreamStartRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamStart.output.WakeWordStreamAdmission" => serde_json::from_value::<models::wake_word_stream_admission::WakeWordStreamAdmission>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest" => serde_json::from_value::<models::wake_word_stream_status_request::WakeWordStreamStatusRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "WakeWord.StreamStatus.output.WakeWordStreamStatus" => serde_json::from_value::<models::wake_word_stream_status::WakeWordStreamStatus>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         _ => Err(ContractParseError::UnknownSchema(schema_id.to_owned())),
     }
 }

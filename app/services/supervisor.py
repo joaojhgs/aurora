@@ -345,6 +345,7 @@ class Supervisor(BaseService):
             services.append(("WakeWordService", "app.services.stt_wakeword"))
         if await self._get_config_bool(ConfigKeys.services.stt.transcription.enabled, default=True):
             services.append(("TranscriptionService", "app.services.stt_transcription"))
+        services.append(("VADService", "app.services.vad"))
         if await self._get_config_bool(ConfigKeys.services.stt.coordinator.enabled, default=True):
             services.append(("STTCoordinatorService", "app.services.stt_coordinator"))
 
@@ -397,6 +398,9 @@ class Supervisor(BaseService):
                 from app.services.stt_transcription import TranscriptionService
 
                 first_phase.append(TranscriptionService())
+            from app.services.vad import VADService
+
+            first_phase.append(VADService())
 
             if first_phase:
                 log_info("Starting enabled Wake Word and Transcription services...")

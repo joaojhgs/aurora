@@ -204,6 +204,16 @@ enum LocalDataRepositoryOperation {
         profile_id: String,
         local_node_id: String,
     },
+    #[serde(rename = "conversations.listMessageCounts")]
+    ConversationsListMessageCounts {
+        profile_id: String,
+        local_node_id: String,
+    },
+    #[serde(rename = "conversations.listFirstUserMessages")]
+    ConversationsListFirstUserMessages {
+        profile_id: String,
+        local_node_id: String,
+    },
     #[serde(rename = "conversations.listMessages")]
     ConversationsListMessages {
         profile_id: String,
@@ -910,6 +920,75 @@ fn run_repository_operation(
                  ORDER BY updated_at_ms DESC, id ASC",
                 &[json!(profile_id), json!(local_node_id)],
             )?.into_iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>()?))
+        }
+        LocalDataRepositoryOperation::ConversationsListMessageCounts {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            let rows = conn.query(
+                "SELECT m.conversation_id, COUNT(*) AS count
+                 FROM aurora_messages m
+                 INNER JOIN aurora_conversations c ON c.id = m.conversation_id
+                 WHERE c.profile_id = ? AND c.local_node_id = ?
+                 GROUP BY m.conversation_id",
+                &[json!(profile_id), json!(local_node_id)],
+            )?;
+            let mut result = serde_json::Map::new();
+            for row in rows {
+                result.insert(
+                    row_string(&row, "conversation_id")?,
+                    json!(row_i64(&row, "count")?),
+                );
+            }
+            Ok(Value::Object(result))
+        }
+        LocalDataRepositoryOperation::ConversationsListFirstUserMessages {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            let rows = conn.query(
+                "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
+                 FROM aurora_messages m
+                 INNER JOIN aurora_conversations c ON c.id = m.conversation_id
+                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.role = ?
+                   AND NOT EXISTS (
+                     SELECT 1 FROM aurora_messages earlier
+                     WHERE earlier.conversation_id = m.conversation_id
+                       AND earlier.role = ?
+                       AND (earlier.sequence < m.sequence OR (earlier.sequence = m.sequence AND earlier.id < m.id))
+                   )
+                 ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC",
+                &[
+                    json!(profile_id),
+                    json!(local_node_id),
+                    json!("user"),
+                    json!("user"),
+                ],
+            )?;
+            let mut result = serde_json::Map::new();
+            for row in rows {
+                let message = message_from_row(row)?;
+                let conversation_id = message
+                    .get("conversationId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        local_data_error("conversation message is missing conversationId")
+                    })?;
+                result.insert(conversation_id.to_string(), message);
+            }
+            Ok(Value::Object(result))
         }
         LocalDataRepositoryOperation::ConversationsDeleteConversation { conversation_id } => {
             validate_id(&conversation_id, "conversation.id")?;

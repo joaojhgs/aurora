@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
 
-from app.messaging.bus import Envelope
+from app.messaging.bus import Envelope, QueryResult
 from app.services.auth.auth_manager import (
     AUTH_DB_REQUEST_TIMEOUT_SECONDS,
+    AuthManager,
     MeshPairingDeniedError,
 )
 from app.services.auth.service import AuthService
@@ -24,8 +26,11 @@ from app.shared.contracts.models.auth import (
     StoreAuditEventRequest,
     TokenCreateRequest,
     TokenListRequest,
+    TokenRevokeRequest,
+    TokenScopeUpdateRequest,
     WhoAmIRequest,
 )
+from app.shared.contracts.models.db import DBMethods
 from app.shared.contracts.models.mesh import MeshPeerGetRequest
 from app.shared.models.db import Token, User
 
@@ -367,6 +372,185 @@ async def test_auth_list_apis_normalize_permissions_and_token_scopes() -> None:
     service.manager.list_principals.assert_awaited_once()
     service.manager.list_tokens.assert_awaited_once_with(principal_id=None, device_id=None)
     service.manager.create_token_for_principal.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_token_contract_handlers_forward_filters_and_return_typed_failures() -> None:
+    service = AuthService()
+    listed_token = Token(
+        id="tok-user-1",
+        token_hash="hash",
+        prefix="tok-user",
+        user_id="user-1",
+        device_id="device-1",
+        scopes=["TTS.Request"],
+        created_at=datetime(2026, 1, 1),
+        expires_at=datetime(2026, 2, 1),
+    )
+    service._manager = SimpleNamespace(
+        list_tokens=AsyncMock(return_value=[listed_token]),
+        create_token_for_principal=AsyncMock(return_value=None),
+        update_token_scopes=AsyncMock(return_value=False),
+        revoke_token=AsyncMock(side_effect=[True, False]),
+    )
+
+    listed = await service.handle_list_tokens(
+        TokenListRequest(principal_id="user-1", device_id="device-1")
+    )
+    created = await service.handle_create_token(
+        TokenCreateRequest(principal_id="missing-principal", scopes=["TTS.Request"])
+    )
+    updated = await service.handle_update_token_scopes(
+        TokenScopeUpdateRequest(token_id="missing-token", scopes=["TTS.Request"])
+    )
+    revoked = await service.handle_revoke_token(TokenRevokeRequest(token_id="tok-user-1"))
+    missing_revoke = await service.handle_revoke_token(TokenRevokeRequest(token_id="missing-token"))
+
+    assert listed.tokens[0].id == "tok-user-1"
+    assert listed.tokens[0].user_id == "user-1"
+    assert created == {"error": "Failed to create token"}
+    assert updated.success is False
+    assert revoked.success is True
+    assert missing_revoke.success is False
+    service.manager.list_tokens.assert_awaited_once_with(
+        principal_id="user-1",
+        device_id="device-1",
+    )
+    service.manager.create_token_for_principal.assert_awaited_once_with(
+        principal_id="missing-principal",
+        device_id=None,
+        scopes=["TTS.Request"],
+        expires_in_days=365,
+    )
+    service.manager.update_token_scopes.assert_awaited_once_with(
+        "missing-token",
+        ["TTS.Request"],
+    )
+    assert service.manager.revoke_token.await_args_list[0].args == ("tok-user-1",)
+    assert service.manager.revoke_token.await_args_list[1].args == ("missing-token",)
+
+
+@pytest.mark.asyncio
+async def test_token_manager_contracts_filter_mutate_and_lose_auth_after_revoke() -> None:
+    user = User(
+        id="user-1",
+        username="operator",
+        password_hash="hash",
+        permissions=["TTS.*", "Config.manage"],
+        is_admin=False,
+        created_at=datetime(2026, 1, 1),
+    )
+    other_user = User(
+        id="user-2",
+        username="other",
+        password_hash="hash",
+        permissions=["TTS.*"],
+        is_admin=False,
+        created_at=datetime(2026, 1, 1),
+    )
+    tokens: dict[str, Token] = {
+        "other-token": Token(
+            id="other-token",
+            token_hash="other-hash",
+            prefix="other",
+            user_id="user-2",
+            device_id="device-2",
+            scopes=["TTS.Request"],
+            created_at=datetime(2026, 1, 1),
+            expires_at=datetime.now() + timedelta(days=1),
+        )
+    }
+
+    def ok(data=None) -> QueryResult:
+        return QueryResult(ok=True, data=data or {})
+
+    def router(topic, payload, **_kwargs):
+        if topic == DBMethods.GET_USER_BY_ID:
+            found = {"user-1": user, "user-2": other_user}.get(payload.user_id)
+            return ok({"user": found.to_dict() if found else None})
+        if topic == DBMethods.CREATE_TOKEN:
+            tokens[payload.id] = Token(
+                id=payload.id,
+                token_hash=payload.token_hash,
+                prefix=payload.prefix,
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                scopes=payload.scopes,
+                created_at=(
+                    datetime.fromisoformat(payload.created_at)
+                    if payload.created_at
+                    else datetime.now()
+                ),
+                expires_at=datetime.fromisoformat(payload.expires_at),
+            )
+            return ok({"success": True})
+        if topic == DBMethods.LIST_TOKENS:
+            rows = [
+                token.to_dict()
+                for token in tokens.values()
+                if (payload.user_id is None or token.user_id == payload.user_id)
+                and (payload.device_id is None or token.device_id == payload.device_id)
+            ]
+            return ok({"tokens": rows})
+        if topic == DBMethods.GET_TOKEN_BY_ID:
+            token = tokens.get(payload.token_id)
+            return ok({"token": token.to_dict() if token else None})
+        if topic == DBMethods.UPDATE_TOKEN_SCOPES:
+            token = tokens.get(payload.token_id)
+            if token is None:
+                return ok({"success": False})
+            token.scopes = payload.scopes
+            return ok({"success": True})
+        if topic == DBMethods.REVOKE_TOKEN:
+            return ok({"success": tokens.pop(payload.token_id, None) is not None})
+        if topic == DBMethods.GET_TOKEN_BY_HASH:
+            token = next(
+                (row for row in tokens.values() if row.token_hash == payload.token_hash),
+                None,
+            )
+            return ok({"token": token.to_dict() if token else None})
+        return ok()
+
+    bus = AsyncMock()
+    bus.request = AsyncMock(side_effect=router)
+    manager = AuthManager(bus=bus)
+
+    created = await manager.create_token_for_principal(
+        "user-1",
+        device_id="device-1",
+        scopes=["TTS.Request"],
+        expires_in_days=30,
+    )
+    assert created is not None
+    token, raw_token = created
+    assert token.user_id == "user-1"
+    assert token.scopes == ["TTS.Request"]
+
+    assert await manager.create_token_for_principal("missing-principal") is None
+
+    user_tokens = await manager.list_tokens(principal_id="user-1")
+    assert [row.id for row in user_tokens] == [token.id]
+    assert await manager.update_token_scopes("missing-token", ["TTS.Request"]) is False
+    assert await manager.revoke_token(token.id) is True
+    assert await manager.revoke_token("missing-token") is False
+    assert await manager.authenticate_token(raw_token) is None
+
+    create_calls = [
+        call for call in bus.request.await_args_list if call.args[0] == DBMethods.CREATE_TOKEN
+    ]
+    assert len(create_calls) == 1
+    assert create_calls[0].args[1].user_id == "user-1"
+    list_calls = [
+        call for call in bus.request.await_args_list if call.args[0] == DBMethods.LIST_TOKENS
+    ]
+    assert list_calls[0].args[1].user_id == "user-1"
+    revoke_calls = [
+        call for call in bus.request.await_args_list if call.args[0] == DBMethods.REVOKE_TOKEN
+    ]
+    assert [call.args[1].token_id for call in revoke_calls] == [token.id, "missing-token"]
+    assert hashlib.sha256(raw_token.encode()).hexdigest() not in {
+        row.token_hash for row in tokens.values()
+    }
 
 
 @pytest.mark.asyncio

@@ -221,6 +221,15 @@ jobs:
           fi
           cp "${VOICE_APKS[0]}" apps/aurora-tauri/reports/android-native-voice-live.apk
 
+      - name: Upload Android local native voice live APK
+        if: inputs.release_version == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-android-native-voice-live-debug-apk
+          path: apps/aurora-tauri/reports/android-native-voice-live.apk
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build Android client arm64 release APK
         if: inputs.release_version != ''
         run: pnpm --filter @aurora/tauri-ui android:build:client:apk:arm64:release

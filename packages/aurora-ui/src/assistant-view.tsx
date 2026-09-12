@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from 'react'
 import { CheckCircle2, ChevronDown, Copy, Cpu, FileText, History, Image as ImageIcon, Laptop, LoaderCircle, MessageSquarePlus, Mic, Network, Paperclip, Radio, RotateCcw, ArrowUp, ShieldAlert, StopCircle, Volume2, WifiOff, Wrench, XCircle, X } from 'lucide-react'
 import type {
   AttachmentContextIngestResponse,
@@ -31,7 +31,6 @@ import {
   type ConversationMessageRecord,
   type ConversationRecord,
   type EnvelopeCryptoPort,
-  type LocalConversationSummary,
   type LocalDataScope,
   type LocalDataSession,
 } from '@aurora/client/local-data'
@@ -79,6 +78,7 @@ import type { AuroraSurfaceProfile } from './platform-surface'
 import type { NativeDesktopVoicePhase, NativeDesktopVoicePort, NativeDesktopVoiceStatus, NativeDesktopVoiceStopReason, NativeDesktopVoiceTrigger } from './native-desktop-voice'
 import type { NativeMobileVoiceBackgroundResult, NativeMobileVoicePort } from './native-mobile-voice'
 import type { AuroraBrowserSpeechPacksRuntimeStatus } from './browser-speech-pack'
+import { assistantStreamTextStore } from './assistant-stream-store'
 import {
   createLightweightAssistantOrchestrator,
   isLightweightLocalAssistantAvailable,
@@ -463,6 +463,7 @@ export function AssistantView({
     setSpeakingMessageIdState(next)
   }
   const activePendingIdRef = useRef<string | null>(null)
+  const lastStreamEventIdRef = useRef<string | null>(null)
   const cancelledPendingIdsRef = useRef<Set<string>>(new Set())
   const localConfirmationOrchestratorsRef = useRef<Map<string, LightweightOrchestrator>>(new Map())
   const localAssistantAvailable = localAssistant !== null && isLightweightLocalAssistantAvailable(localAssistant)
@@ -861,6 +862,7 @@ export function AssistantView({
       if (activeSessionId) {
         const messages = await loadLocalAssistantConversationMessages(history, activeSessionId)
         if (sessionLoadGenerationRef.current !== generation) return
+        setLocalConversationRows((current) => updateLocalConversationRowTitle(current, activeSessionId, messages))
         setSession({ sessionId: activeSessionId, messages })
       } else {
         setSession(emptyAssistantSession())
@@ -1332,6 +1334,7 @@ export function AssistantView({
     setLastError(null)
     setLastPrompt(null)
     setStreamState(idleAssistantStreamState())
+    lastStreamEventIdRef.current = null
     voiceTranscriptPreviewRef.current = ''
     setVoiceCaptureStatus('idle')
     setText('')
@@ -1364,6 +1367,7 @@ export function AssistantView({
     try {
       await activateLocalAssistantConversation(localHistory, sessionId)
       const messages = await loadLocalAssistantConversationMessages(localHistory, sessionId)
+      setLocalConversationRows((current) => updateLocalConversationRowTitle(current, sessionId, messages))
       resetConversationUi({ sessionId, messages })
       setMobileHistoryOpen(false)
       window.setTimeout(() => textAreaRef.current?.focus(), 0)
@@ -1388,7 +1392,8 @@ export function AssistantView({
   async function refreshLocalSessionIndex() {
     if (!localHistory) return
     try {
-      setLocalConversationRows(await loadLocalAssistantConversationRows(localHistory))
+      const rows = await loadLocalAssistantConversationRows(localHistory)
+      setLocalConversationRows(updateLocalConversationRowTitle(rows, session.sessionId, session.messages))
       setSessionIndexError(null)
     } catch {
       setSessionIndexError('Saved chats could not be refreshed. Your data was not changed.')
@@ -1484,7 +1489,9 @@ export function AssistantView({
     setText('')
     setLastPrompt(prompt)
     setLastError(null)
+    lastStreamEventIdRef.current = replayFrom
     setStreamState({ status: 'streaming', lastEventId: replayFrom, message: replayFrom ? 'Replaying from last known event.' : null })
+    assistantStreamTextStore.begin(pendingMessage.id)
     setSession((current) => ({
       ...current,
       sessionId: current.sessionId ?? turnSessionId,
@@ -1592,6 +1599,7 @@ export function AssistantView({
         markAssistantTurnFailed(pendingMessage.id, productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
       }
     } finally {
+      assistantStreamTextStore.clear(pendingMessage.id)
       if (abortRef.current === abort) abortRef.current = null
       if (activePendingIdRef.current === pendingMessage.id) activePendingIdRef.current = null
       setActiveAssistantPendingId((current) => current === pendingMessage.id ? null : current)
@@ -1616,7 +1624,7 @@ export function AssistantView({
         loadLocalAssistantConversationMessages(localHistory, result.conversationId),
         loadLocalAssistantConversationRows(localHistory),
       ])
-      setLocalConversationRows(rows)
+      setLocalConversationRows(updateLocalConversationRowTitle(rows, result.conversationId, messages))
       setSession({ sessionId: result.conversationId, messages })
       setSessionIndexError(null)
       return true
@@ -1767,7 +1775,7 @@ export function AssistantView({
     setLastError(failureCopy)
     setStreamState((current) => ({
       status: 'lost',
-      lastEventId: current.lastEventId,
+      lastEventId: lastStreamEventIdRef.current,
       message: failureCopy
     }))
     setSession((current) => ({
@@ -1776,13 +1784,19 @@ export function AssistantView({
         message.id === pendingId
           ? {
               ...message,
-              text: message.text.trim() && message.text !== 'Waiting for Aurora...' ? message.text : failureCopy,
+              text: (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, pendingId)
+                return effectiveMessage.text.trim() && effectiveMessage.text !== 'Waiting for Aurora...'
+                  ? effectiveMessage.text
+                  : failureCopy
+              })(),
               status: 'failed',
               error: failureCopy
             }
           : message
       )
     }))
+    assistantStreamTextStore.clear(pendingId)
   }
 
   async function ingestPendingAttachments(): Promise<'ready' | 'blocked'> {
@@ -1902,7 +1916,10 @@ export function AssistantView({
   function applyAssistantStreamUpdate(update: AssistantStreamUpdate, pendingId: string) {
     if (cancelledPendingIdsRef.current.has(pendingId)) return
     if (update.eventId) {
-      setStreamState((current) => ({ ...current, lastEventId: update.eventId }))
+      lastStreamEventIdRef.current = update.eventId
+      if (update.kind !== 'delta') {
+        setStreamState((current) => ({ ...current, lastEventId: update.eventId }))
+      }
     }
     if (update.modelLabel) setModelLabel(update.modelLabel)
     const updateProviderLabel = metadataStringValue(update.metadata ?? {}, 'provider_label') ?? metadataStringValue(update.metadata ?? {}, 'provider')
@@ -1912,22 +1929,26 @@ export function AssistantView({
       setLastError(failureCopy)
       setStreamState((current) => ({
         status: 'lost',
-        lastEventId: current.lastEventId,
+        lastEventId: lastStreamEventIdRef.current,
         message: 'The answer was interrupted. Replay will continue from the last saved update when available.'
       }))
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
           message.id === pendingId
-            ? {
-                ...message,
-                text: message.text.trim() ? message.text : failureCopy,
-                status: 'failed',
-                error: failureCopy
-              }
+            ? (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, pendingId)
+                return {
+                  ...effectiveMessage,
+                  text: effectiveMessage.text.trim() ? effectiveMessage.text : failureCopy,
+                  status: 'failed' as const,
+                  error: failureCopy
+                }
+              })()
             : message
         )
       }))
+      assistantStreamTextStore.clear(pendingId)
       return
     }
     if (update.kind === 'tool') {
@@ -1935,7 +1956,7 @@ export function AssistantView({
         ...current,
         sessionId: usesLocalConversationHistory ? current.sessionId : update.sessionId ?? current.sessionId,
         messages: current.messages.map((message) =>
-          message.id === pendingId ? applyAssistantToolUpdate(message, update) : message
+          message.id === pendingId ? applyAssistantToolUpdate(assistantMessageWithStreamingText(message, pendingId), update) : message
         )
       }))
       setStreamState((current) => ({ ...current, status: 'streaming', message: 'Aurora needs your approval before continuing.' }))
@@ -1951,7 +1972,7 @@ export function AssistantView({
       setSession((current) => ({
         ...current,
         messages: current.messages.map((message) =>
-          message.id === pendingId ? applyAssistantAudioChunkUpdate(message, update) : message
+          message.id === pendingId ? applyAssistantAudioChunkUpdate(assistantMessageWithStreamingText(message, pendingId), update) : message
         )
       }))
       setStreamState((current) => ({
@@ -1973,21 +1994,25 @@ export function AssistantView({
         ...current,
         messages: current.messages.map((message) =>
           message.id === pendingId
-            ? {
-                ...message,
-                text: failureCopy,
-                status: 'failed',
-                error: failureCopy
-              }
+            ? (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, pendingId)
+                return {
+                  ...effectiveMessage,
+                  text: effectiveMessage.text.trim() ? effectiveMessage.text : failureCopy,
+                  status: 'failed' as const,
+                  error: failureCopy
+                }
+              })()
             : message
         )
       }))
+      assistantStreamTextStore.clear(pendingId)
       return
     }
     if (update.kind === 'fallback') {
       setStreamState((current) => ({
         status: 'fallback',
-        lastEventId: update.eventId ?? current.lastEventId,
+        lastEventId: update.eventId ?? lastStreamEventIdRef.current,
         message: 'Aurora continued with a complete response.'
       }))
     }
@@ -2002,17 +2027,19 @@ export function AssistantView({
       lastAssistantMessageIdRef.current = finalAssistantId
       setSession((current) => {
         const existing = current.messages.find((message) => message.id === finalAssistantId)
-        const baseMessage: AssistantUiMessage = existing ?? {
-          id: finalAssistantId,
-          role: 'assistant',
-          text: '',
-          createdAt: new Date().toISOString(),
-          status: 'streaming',
-          modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
-          providerLabel: runtimeProviderLabel ?? route.providerLabel,
-          routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
-          executionPeerId: selectedExecution.executionPeerId
-        }
+        const baseMessage: AssistantUiMessage = existing
+          ? assistantMessageWithStreamingText(existing, finalAssistantId)
+          : {
+              id: finalAssistantId,
+              role: 'assistant',
+              text: '',
+              createdAt: new Date().toISOString(),
+              status: 'streaming',
+              modelLabel: modelLabel ?? runtimeHealth?.selectedModel ?? null,
+              providerLabel: runtimeProviderLabel ?? route.providerLabel,
+              routeLabel: selectedExecution.mode === 'local' ? localExecutionMessageLabel : selectedExecution.label,
+              executionPeerId: selectedExecution.executionPeerId
+            }
         const terminalMessage = applyAssistantTerminalUpdate({
           ...baseMessage,
           modelLabel: update.modelLabel ?? baseMessage.modelLabel,
@@ -2030,18 +2057,14 @@ export function AssistantView({
             : [...current.messages, terminalMessage]
         }
       })
+      assistantStreamTextStore.clear(finalAssistantId)
       if (update.kind === 'completed') {
       setStreamState((current) => ({ ...current, status: 'idle', message: 'Aurora finished responding.' }))
       }
       return
     }
     if (update.kind === 'delta') {
-      setSession((current) => ({
-        ...current,
-        messages: current.messages.map((message) =>
-          message.id === pendingId ? applyAssistantStreamDelta(message, update) : message
-        )
-      }))
+      assistantStreamTextStore.append(pendingId, update.textDelta)
     }
   }
 
@@ -2423,11 +2446,12 @@ export function AssistantView({
     setSession((current) => {
       let changed = false
       const messages = current.messages.map((message) => {
-        if ((message.status === 'streaming' || message.status === 'sending') && hasSubstantiveAssistantText(message)) {
+        const effectiveMessage = assistantMessageWithStreamingText(message, message.id)
+        if ((effectiveMessage.status === 'streaming' || effectiveMessage.status === 'sending') && hasSubstantiveAssistantText(effectiveMessage)) {
           changed = true
           if (message.id === voicePendingAssistantIdRef.current) settledVoicePending = true
           if (message.id === activePendingIdRef.current) settledActivePending = true
-          return { ...message, status: 'sent' as const }
+          return { ...effectiveMessage, status: 'sent' as const }
         }
         return message
       })
@@ -2727,10 +2751,14 @@ export function AssistantView({
         ...current,
         messages: current.messages.map((message) =>
           message.status === 'streaming' || message.status === 'sending'
-            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            ? (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, message.id)
+                return { ...effectiveMessage, status: 'cancelled' as const, text: effectiveMessage.text.trim() ? effectiveMessage.text : 'Stopped by user.' }
+              })()
             : message
         )
       }))
+      if (pendingId) assistantStreamTextStore.clear(pendingId)
       return
     }
     const result = await client.assistant.cancel({
@@ -2743,10 +2771,14 @@ export function AssistantView({
         ...current,
         messages: current.messages.map((message) =>
           message.status === 'streaming' || message.status === 'sending'
-            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            ? (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, message.id)
+                return { ...effectiveMessage, status: 'cancelled' as const, text: effectiveMessage.text.trim() ? effectiveMessage.text : 'Stopped by user.' }
+              })()
             : message
         )
       }))
+      if (pendingId) assistantStreamTextStore.clear(pendingId)
       return
     }
     setLastError(productAssistantErrorCopy(result.error))
@@ -2795,10 +2827,14 @@ export function AssistantView({
         ...current,
         messages: current.messages.map((message) =>
           message.status === 'streaming' || message.status === 'sending'
-            ? { ...message, status: 'cancelled', text: message.text.trim() ? message.text : 'Stopped by user.' }
+            ? (() => {
+                const effectiveMessage = assistantMessageWithStreamingText(message, message.id)
+                return { ...effectiveMessage, status: 'cancelled' as const, text: effectiveMessage.text.trim() ? effectiveMessage.text : 'Stopped by user.' }
+              })()
             : message
         )
       }))
+      if (pendingId) assistantStreamTextStore.clear(pendingId)
       setVoiceCaptureStatus('idle')
       setStreamState((current) => ({ ...current, status: 'cancelled', message: 'Aurora stopped listening.' }))
       return
@@ -3704,6 +3740,17 @@ export function AssistantView({
     textAreaRef.current?.focus()
   }
 
+  const stableReadAssistantMessageAloud = useStableEvent((message: AssistantUiMessage): void => {
+    void readAssistantMessageAloud(message)
+  })
+  const stableResolveAssistantToolApproval = useStableEvent((
+    tool: AssistantToolCallCard,
+    approve: boolean,
+    grantScope: AssistantApprovalGrantScope,
+  ): void => {
+    void resolveAssistantToolApproval(tool, approve, grantScope)
+  })
+
   return (
     <section className="aui-assistant" aria-labelledby="assistant-title">
       <h1 id="assistant-title" className="aui-sr-only">Text chat with Aurora</h1>
@@ -3760,8 +3807,8 @@ export function AssistantView({
                       <MessageScrollerItem key={message.id} messageId={message.id}>
                         <ChatBubble
                           message={message}
-                          onReadAloud={readAssistantMessageAloud}
-                          onResolveToolApproval={resolveAssistantToolApproval}
+                          onReadAloud={stableReadAssistantMessageAloud}
+                          onResolveToolApproval={stableResolveAssistantToolApproval}
                           speakingMessageId={speakingMessageIdState}
                           executionPeerLabels={executionPeerLabels}
                         />
@@ -5268,6 +5315,11 @@ export function applyAssistantStreamDelta(message: AssistantUiMessage, update: A
   }
 }
 
+function assistantMessageWithStreamingText(message: AssistantUiMessage, messageId: string): AssistantUiMessage {
+  const streamingText = assistantStreamTextStore.getSnapshot(messageId)
+  return streamingText === null ? message : { ...message, text: streamingText }
+}
+
 export function applyAssistantToolUpdate(
   message: AssistantUiMessage,
   update: AssistantStreamUpdate,
@@ -6710,18 +6762,40 @@ async function loadLocalAssistantConversationRows(
   history: LocalAssistantHistoryDependencies,
 ): Promise<AssistantConversationRow[]> {
   const conversations = createLocalConversations(history.localData)
-  const summaries = await conversations.listConversations({
-    scope: history.scope,
-    includeArchived: false,
-    limit: 100,
-  })
+  const [summaries, firstUserMessages] = await Promise.all([
+    conversations.listConversations({
+      scope: history.scope,
+      includeArchived: false,
+      limit: 100,
+    }),
+    history.localData.conversations.listFirstUserMessages(),
+  ])
   return await Promise.all(summaries.map(async (summary) => ({
     id: summary.record.id,
-    title: await localAssistantConversationTitle(history, conversations, summary),
+    title: await localAssistantConversationTitle(history, summary.record, firstUserMessages[summary.record.id]),
     route: 'This device',
     updated: `${formatSessionActivity(new Date(summary.record.updatedAtMs).toISOString())} · ${summary.messageCount} ${summary.messageCount === 1 ? 'message' : 'messages'}`,
     active: false,
   })))
+}
+
+function updateLocalConversationRowTitle(
+  rows: AssistantConversationRow[],
+  conversationId: string | null,
+  messages: readonly AssistantUiMessage[],
+): AssistantConversationRow[] {
+  if (!conversationId) return rows
+  const title = localAssistantConversationTitleFromMessages(messages)
+  return rows.map((row) => row.id === conversationId && row.title === 'New chat'
+    ? { ...row, title }
+    : row)
+}
+
+function localAssistantConversationTitleFromMessages(
+  messages: readonly AssistantUiMessage[],
+): string {
+  const firstPrompt = messages.find((message) => message.role === 'user' && message.text.trim())
+  return firstPrompt ? conciseConversationTitle(firstPrompt.text) : 'New chat'
 }
 
 async function activateLocalAssistantConversation(
@@ -6756,32 +6830,28 @@ async function activateLocalAssistantConversation(
 
 async function localAssistantConversationTitle(
   history: LocalAssistantHistoryDependencies,
-  conversations: ReturnType<typeof createLocalConversations>,
-  summary: LocalConversationSummary,
+  record: ConversationRecord,
+  firstUserMessage?: ConversationMessageRecord,
 ): Promise<string> {
-  if (summary.record.titleEnvelope) {
+  if (record.titleEnvelope) {
     const title = await decryptLocalAssistantText(history, {
-      envelope: summary.record.titleEnvelope,
+      envelope: record.titleEnvelope,
       table: 'aurora_conversations',
-      recordId: summary.record.id,
+      recordId: record.id,
       field: 'title_envelope_json',
     })
     if (title.trim()) return conciseConversationTitle(title)
   }
-  const messages = await conversations.listMessages({
-    scope: history.scope,
-    conversationId: summary.record.id,
-    limit: 64,
-  })
-  const firstPrompt = messages.find((message) => message.role === 'user' && message.contentEnvelope)
-  if (!firstPrompt?.contentEnvelope) return 'New chat'
-  const prompt = await decryptLocalAssistantText(history, {
-    envelope: firstPrompt.contentEnvelope,
-    table: 'aurora_messages',
-    recordId: firstPrompt.id,
-    field: 'content_envelope_json',
-  })
-  return conciseConversationTitle(prompt)
+  if (firstUserMessage?.contentEnvelope) {
+    const prompt = await decryptLocalAssistantText(history, {
+      envelope: firstUserMessage.contentEnvelope,
+      table: 'aurora_messages',
+      recordId: firstUserMessage.id,
+      field: 'content_envelope_json',
+    })
+    if (prompt.trim()) return conciseConversationTitle(prompt)
+  }
+  return 'New chat'
 }
 
 async function loadLocalAssistantConversationMessages(
@@ -7096,7 +7166,7 @@ function attachmentStateForUi(status: AttachmentTrayStatus): 'idle' | 'uploading
   return 'error'
 }
 
-function ChatBubble({
+const ChatBubble = memo(function ChatBubble({
   message,
   onReadAloud,
   onResolveToolApproval,
@@ -7110,17 +7180,23 @@ function ChatBubble({
   executionPeerLabels?: ReadonlyMap<string, string>
 }) {
   const [copied, setCopied] = useState(false)
-  const assistant = message.role === 'assistant'
-  const runtimeLabel = assistantMessageRuntimeLabel(message, executionPeerLabels)
-  const align = message.role === 'user' ? 'end' : 'start'
-  const variant = message.role === 'user' ? 'tinted' : assistant ? 'outline' : 'muted'
-  const isSpeaking = speakingMessageId === message.id
-  const hasMessageText = message.text.trim().length > 0
-  const hasToolCards = (message.toolCalls?.length ?? 0) > 0
-  const isToolOnlyMessage = hasToolCards && (message.role === 'tool' || (assistant && isAssistantToolOnlyText(message.text)))
-  const toolCards = message.toolCalls?.length ? (
+  const streamingText = useSyncExternalStore(
+    (listener) => assistantStreamTextStore.subscribe(message.id, listener),
+    () => assistantStreamTextStore.getSnapshot(message.id),
+    () => null
+  )
+  const renderedMessage = streamingText === null ? message : { ...message, text: streamingText }
+  const assistant = renderedMessage.role === 'assistant'
+  const runtimeLabel = assistantMessageRuntimeLabel(renderedMessage, executionPeerLabels)
+  const align = renderedMessage.role === 'user' ? 'end' : 'start'
+  const variant = renderedMessage.role === 'user' ? 'tinted' : assistant ? 'outline' : 'muted'
+  const isSpeaking = speakingMessageId === renderedMessage.id
+  const hasMessageText = renderedMessage.text.trim().length > 0
+  const hasToolCards = (renderedMessage.toolCalls?.length ?? 0) > 0
+  const isToolOnlyMessage = hasToolCards && (renderedMessage.role === 'tool' || (assistant && isAssistantToolOnlyText(renderedMessage.text)))
+  const toolCards = renderedMessage.toolCalls?.length ? (
     <div className="aui-assistant-tool-cards" aria-label="Assistant tool call cards">
-      {message.toolCalls.map((tool) => (
+      {renderedMessage.toolCalls.map((tool) => (
         <AssistantToolCallCardView
           key={tool.id}
           tool={tool}
@@ -7131,14 +7207,14 @@ function ChatBubble({
   ) : null
   function copyMessageText() {
     if (typeof navigator !== 'undefined') {
-      void navigator.clipboard?.writeText(message.text)
+      void navigator.clipboard?.writeText(renderedMessage.text)
     }
     setCopied(true)
     if (typeof window !== 'undefined') window.setTimeout(() => setCopied(false), 1100)
   }
   if (isToolOnlyMessage && toolCards) {
     return (
-      <Message align="start" className={`aui-chat-message aui-chat-tool aui-chat-${message.status}`}>
+      <Message align="start" className={`aui-chat-message aui-chat-tool aui-chat-${renderedMessage.status}`}>
         <MessageContent className="aui-chat-message-content">
           {toolCards}
         </MessageContent>
@@ -7146,20 +7222,20 @@ function ChatBubble({
     )
   }
   return (
-    <Message align={align} className={`aui-chat-message aui-chat-${message.role} aui-chat-${message.status}`}>
+    <Message align={align} className={`aui-chat-message aui-chat-${renderedMessage.role} aui-chat-${renderedMessage.status}`}>
       <MessageContent className="aui-chat-message-content">
         <MessageHeader className="aui-chat-message-header">
           <strong>{assistant ? 'Aurora' : messageRoleLabel(message.role)}</strong>
-          {assistant ? <span className="aui-chat-runtime">{runtimeLabel}</span> : <span>{message.status}</span>}
-          {assistant ? <span className="aui-sr-only">Aurora · {message.status}</span> : null}
+          {assistant ? <span className="aui-chat-runtime">{runtimeLabel}</span> : <span>{renderedMessage.status}</span>}
+          {assistant ? <span className="aui-sr-only">Aurora · {renderedMessage.status}</span> : null}
         </MessageHeader>
         {assistant ? toolCards : null}
         {hasMessageText ? (
           <Bubble align={align} variant={variant} className="aui-chat-bubble-wrap">
             <BubbleContent className="aui-chat-bubble">
-              <p>{message.text}</p>
-              {message.sources?.length ? (
-                <div className="aui-message-sources"><span>Sources:</span>{message.sources.map((source) => <code key={source}>{source}</code>)}</div>
+              <p>{renderedMessage.text}</p>
+              {renderedMessage.sources?.length ? (
+                <div className="aui-message-sources"><span>Sources:</span>{renderedMessage.sources.map((source) => <code key={source}>{source}</code>)}</div>
               ) : null}
             </BubbleContent>
           </Bubble>
@@ -7174,8 +7250,8 @@ function ChatBubble({
               type="button"
               variant="ghost"
               size="xs"
-              onClick={() => onReadAloud?.(message)}
-              disabled={!message.text.trim() || message.status === 'streaming'}
+              onClick={() => onReadAloud?.(renderedMessage)}
+              disabled={!renderedMessage.text.trim() || renderedMessage.status === 'streaming'}
               className="aui-message-action-button"
               data-speaking={isSpeaking ? 'true' : undefined}
               aria-pressed={isSpeaking}
@@ -7188,7 +7264,7 @@ function ChatBubble({
       </MessageContent>
     </Message>
   )
-}
+})
 
 function isAssistantToolOnlyText(value: string): boolean {
   const normalized = value.replace(/\s+/gu, ' ').trim().toLowerCase()
@@ -7665,4 +7741,12 @@ function isAssistantUiMessage(value: unknown): value is AssistantUiMessage {
       message.status === 'failed' ||
       message.status === 'cancelled')
   )
+}
+
+function useStableEvent<Args extends readonly unknown[], Result>(
+  handler: (...args: Args) => Result,
+): (...args: Args) => Result {
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
+  return useMemo(() => (...args: Args) => handlerRef.current(...args), [])
 }

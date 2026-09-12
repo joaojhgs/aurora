@@ -605,6 +605,13 @@ fn assert_decision(
         expected_strings(expected, "grantedMethodIds"),
         "{name}: grantedMethodIds diverged"
     );
+    if expected.get("grantedToolContractIds").is_some() {
+        assert_eq!(
+            decision.granted_tool_contract_ids,
+            expected_strings(expected, "grantedToolContractIds"),
+            "{name}: grantedToolContractIds diverged"
+        );
+    }
 }
 
 #[tokio::test]
@@ -740,6 +747,13 @@ async fn manifest_snapshots_match() {
             expected_strings(expected, "grantedPermissions"),
             "{name}: grantedPermissions diverged"
         );
+        if expected.get("grantedToolContractIds").is_some() {
+            assert_eq!(
+                snapshot.granted_tool_contract_ids,
+                expected_strings(expected, "grantedToolContractIds"),
+                "{name}: grantedToolContractIds diverged"
+            );
+        }
         assert_eq!(
             snapshot.auth_grant_revision,
             expected_i64(expected, "authGrantRevision").expect("authGrantRevision"),

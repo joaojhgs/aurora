@@ -1,0 +1,185 @@
+{
+  "$defs": {
+    "SpeechStreamLimitsV1": {
+      "additionalProperties": false,
+      "description": "Negotiated bounds for one admitted streaming session.",
+      "properties": {
+        "heartbeat_ms": {
+          "default": 5000,
+          "exclusiveMinimum": 0,
+          "maximum": 5000,
+          "title": "Heartbeat Ms",
+          "type": "integer"
+        },
+        "idle_lease_ms": {
+          "default": 15000,
+          "exclusiveMinimum": 0,
+          "maximum": 300000,
+          "title": "Idle Lease Ms",
+          "type": "integer"
+        },
+        "max_active_ms": {
+          "default": 300000,
+          "exclusiveMinimum": 0,
+          "maximum": 300000,
+          "title": "Max Active Ms",
+          "type": "integer"
+        },
+        "max_chunk_bytes": {
+          "default": 65536,
+          "exclusiveMinimum": 0,
+          "maximum": 65536,
+          "title": "Max Chunk Bytes",
+          "type": "integer"
+        },
+        "max_input_bytes": {
+          "default": 4194304,
+          "exclusiveMinimum": 0,
+          "maximum": 4194304,
+          "title": "Max Input Bytes",
+          "type": "integer"
+        },
+        "max_queue": {
+          "default": 4,
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Max Queue",
+          "type": "integer"
+        },
+        "max_text_bytes": {
+          "default": 4096,
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "title": "Max Text Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "SpeechStreamLimitsV1",
+      "type": "object",
+      "x-aurora-extra-behavior": "forbid"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "VAD stream admission acknowledgement.",
+  "properties": {
+    "accepted_format": {
+      "anyOf": [
+        {
+          "maxLength": 32,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Accepted Format"
+    },
+    "accepted_limits": {
+      "$ref": "#/$defs/SpeechStreamLimitsV1",
+      "default": {
+        "heartbeat_ms": 5000,
+        "idle_lease_ms": 15000,
+        "max_active_ms": 300000,
+        "max_chunk_bytes": 65536,
+        "max_input_bytes": 4194304,
+        "max_queue": 4,
+        "max_text_bytes": 4096
+      }
+    },
+    "attempt_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "capability_revision": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Capability Revision",
+      "type": "integer"
+    },
+    "credits": {
+      "default": 8,
+      "maximum": 8,
+      "minimum": 0,
+      "title": "Credits",
+      "type": "integer"
+    },
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "lease_remaining_ms": {
+      "default": 15000,
+      "maximum": 300000,
+      "minimum": 0,
+      "title": "Lease Remaining Ms",
+      "type": "integer"
+    },
+    "next_sequence": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Next Sequence",
+      "type": "integer"
+    },
+    "operation_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema": {
+      "const": "speech.stage-session-admission.v1",
+      "default": "speech.stage-session-admission.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "status": {
+      "enum": [
+        "admitted",
+        "rejected"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "capability_revision",
+    "generation",
+    "operation_id",
+    "reason_code",
+    "status"
+  ],
+  "title": "VADStreamAdmission",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

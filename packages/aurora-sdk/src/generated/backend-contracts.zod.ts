@@ -544,7 +544,8 @@ export const TTSAudioChunkEventTTSAudioChunkEventSchema = z.object({
   "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
   "source_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
   "stream_id": z.string(),
-  "text": z.string().nullable().prefault(null).meta({"default":null}).optional()
+  "text": z.string().nullable().prefault(null).meta({"default":null}).optional(),
+  "text_digest": z.string().refine((value) => codePointLength(value) >= 64, { message: 'string must contain at least 64 Unicode code points' }).meta({"minLength":64}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64}).nullable().prefault(null).meta({"default":null}).optional()
 }).superRefine((value, ctx) => validateTtsAudioChunkEventInvariant(value, ctx)).meta({"x-aurora-extra-behavior":"strip","x-aurora-tts-audio-chunk-event-invariant":true})
 export type TTSAudioChunkEventTTSAudioChunkEvent = z.infer<typeof TTSAudioChunkEventTTSAudioChunkEventSchema>
 
@@ -1041,6 +1042,25 @@ export const TTSSetDefaultVoiceOutputTTSSetDefaultVoiceResponseSchema = z.strict
 }).meta({"x-aurora-extra-behavior":"forbid"})
 export type TTSSetDefaultVoiceOutputTTSSetDefaultVoiceResponse = z.infer<typeof TTSSetDefaultVoiceOutputTTSSetDefaultVoiceResponseSchema>
 
+export const TTSStreamCancelInputTTSStreamSessionCancelRequestSchema = z.strictObject({
+  "reason": z.enum(["canceled", "interrupted", "revoked", "timed_out"]).prefault("canceled").meta({"default":"canceled"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamCancelInputTTSStreamSessionCancelRequest = z.infer<typeof TTSStreamCancelInputTTSStreamSessionCancelRequestSchema>
+
+export const TTSStreamCancelOutputTTSStreamSessionResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("tts").prefault("tts").meta({"default":"tts"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamCancelOutputTTSStreamSessionResult = z.infer<typeof TTSStreamCancelOutputTTSStreamSessionResultSchema>
+
 const TTSStreamChunkInputTTSStreamChunkRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1052,12 +1072,15 @@ const TTSStreamChunkInputTTSStreamChunkRequestSchemaMeshAddressSelectorSchemaDef
 }).meta({"x-aurora-extra-behavior":"strip"}))
 
 export const TTSStreamChunkInputTTSStreamChunkRequestSchema = z.object({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
   "correlation_id": z.string().nullable().prefault(null).meta({"default":null}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
   "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
   "mesh_selector": TTSStreamChunkInputTTSStreamChunkRequestSchemaMeshAddressSelectorSchemaDef.nullable().prefault(null).meta({"default":null}).optional(),
   "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).nullable().prefault(null).meta({"default":null}).optional(),
   "stream_id": z.string(),
-  "text": z.string()
+  "text": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 4096, { message: 'string must contain at most 4096 Unicode code points' }).meta({"maxLength":4096})
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type TTSStreamChunkInputTTSStreamChunkRequest = z.infer<typeof TTSStreamChunkInputTTSStreamChunkRequestSchema>
 
@@ -1090,6 +1113,75 @@ export const TTSStreamEndOutputEmptyOutputSchema = z.object({
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type TTSStreamEndOutputEmptyOutput = z.infer<typeof TTSStreamEndOutputEmptyOutputSchema>
 
+export const TTSStreamPrepareV1InputTTSStreamPrepareRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "config_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "consent_revision": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "exact_selector": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "experimental_remote": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "interrupt": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "language": z.preprocess((value) => normalizeSpeechLanguageValue(value, false, true), z.string().refine((value) => codePointLength(value) >= 2, { message: 'string must contain at least 2 Unicode code points' }).meta({"minLength":2}).refine((value) => codePointLength(value) <= 255, { message: 'string must contain at most 255 Unicode code points' }).meta({"maxLength":255}).regex(new RegExp("^(?:[a-z]{2,8}(?:-[a-z0-9]{1,8})*|[ix](?:-[a-z0-9]{1,8})+)$")).nullable().prefault(null)).meta({"default":null,"x-aurora-speech-language-string-normalize":true}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).superRefine((value, ctx) => { const trimmed = value.trim(); if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed)) ctx.addIssue({ code: 'custom', message: 'operation_id must be a non-blank portable identifier' });}).overwrite((value) => value.trim()).meta({"x-aurora-tts-operation-id":true}),
+  "play_on_server": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "remaining_deadline_ms": z.number().finite().multipleOf(1).gt(0).max(60000).prefault(60000).meta({"default":60000}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "route_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "schema": z.literal("speech-stage-admission.v1").prefault("speech-stage-admission.v1").meta({"default":"speech-stage-admission.v1"}).optional(),
+  "stage": z.literal("tts").prefault("tts").meta({"default":"tts"}).optional(),
+  "target_peer_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "target_resource_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "voice": z.string().regex(new RegExp("^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$")).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamPrepareV1InputTTSStreamPrepareRequest = z.infer<typeof TTSStreamPrepareV1InputTTSStreamPrepareRequestSchema>
+
+const TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchemaSpeechStreamLimitsV1SchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "heartbeat_ms": z.number().finite().multipleOf(1).gt(0).max(5000).prefault(5000).meta({"default":5000}).optional(),
+  "idle_lease_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "max_active_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(300000).meta({"default":300000}).optional(),
+  "max_chunk_bytes": z.number().finite().multipleOf(1).gt(0).max(65536).prefault(65536).meta({"default":65536}).optional(),
+  "max_input_bytes": z.number().finite().multipleOf(1).gt(0).max(4194304).prefault(4194304).meta({"default":4194304}).optional(),
+  "max_queue": z.number().finite().multipleOf(1).min(0).max(4).prefault(4).meta({"default":4}).optional(),
+  "max_text_bytes": z.number().finite().multipleOf(1).gt(0).max(4096).prefault(4096).meta({"default":4096}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"}))
+
+export const TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchema = z.strictObject({
+  "accepted_format": z.string().refine((value) => codePointLength(value) <= 32, { message: 'string must contain at most 32 Unicode code points' }).meta({"maxLength":32}).nullable().prefault(null).meta({"default":null}).optional(),
+  "accepted_limits": TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchemaSpeechStreamLimitsV1SchemaDef.prefault({"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}).meta({"default":{"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}}).optional(),
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8).prefault(8).meta({"default":8}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).superRefine((value, ctx) => { const trimmed = value.trim(); if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed)) ctx.addIssue({ code: 'custom', message: 'operation_id must be a non-blank portable identifier' });}).overwrite((value) => value.trim()).meta({"x-aurora-tts-operation-id":true}),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "schema": z.literal("speech.stage-session-admission.v1").prefault("speech.stage-session-admission.v1").meta({"default":"speech.stage-session-admission.v1"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["admitted", "rejected"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamPrepareV1OutputTTSStreamPrepareResponse = z.infer<typeof TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchema>
+
+export const TTSStreamResultInputTTSStreamSessionStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamResultInputTTSStreamSessionStatusRequest = z.infer<typeof TTSStreamResultInputTTSStreamSessionStatusRequestSchema>
+
+export const TTSStreamResultOutputTTSStreamSessionResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("tts").prefault("tts").meta({"default":"tts"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamResultOutputTTSStreamSessionResult = z.infer<typeof TTSStreamResultOutputTTSStreamSessionResultSchema>
+
 const TTSStreamStartInputTTSStreamStartRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1118,6 +1210,23 @@ export const TTSStreamStartOutputEmptyOutputSchema = z.object({
 
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type TTSStreamStartOutputEmptyOutput = z.infer<typeof TTSStreamStartOutputEmptyOutputSchema>
+
+export const TTSStreamStatusInputTTSStreamSessionStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamStatusInputTTSStreamSessionStatusRequest = z.infer<typeof TTSStreamStatusInputTTSStreamSessionStatusRequestSchema>
+
+export const TTSStreamStatusOutputTTSStreamSessionStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TTSStreamStatusOutputTTSStreamSessionStatus = z.infer<typeof TTSStreamStatusOutputTTSStreamSessionStatusSchema>
 
 const TTSSynthesizeInputTTSSynthesizeRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1688,6 +1797,153 @@ export const TranscriptionProcessAudioOutputEmptyOutputSchema = z.object({
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type TranscriptionProcessAudioOutputEmptyOutput = z.infer<typeof TranscriptionProcessAudioOutputEmptyOutputSchema>
 
+export const TranscriptionStreamCancelInputTranscriptionStreamCancelRequestSchema = z.strictObject({
+  "reason": z.enum(["canceled", "interrupted", "revoked", "timed_out"]).prefault("canceled").meta({"default":"canceled"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamCancelInputTranscriptionStreamCancelRequest = z.infer<typeof TranscriptionStreamCancelInputTranscriptionStreamCancelRequestSchema>
+
+export const TranscriptionStreamCancelOutputTranscriptionStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("stt").prefault("stt").meta({"default":"stt"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamCancelOutputTranscriptionStreamResult = z.infer<typeof TranscriptionStreamCancelOutputTranscriptionStreamResultSchema>
+
+export const TranscriptionStreamChunkInputTranscriptionStreamChunkRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "audio_data": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 65536, { message: 'string must contain at most 65536 Unicode code points' }).meta({"maxLength":65536}).meta({"format":"binary"}),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "payload_kind": z.literal("audio").prefault("audio").meta({"default":"audio"}).optional(),
+  "payload_size_bytes": z.number().finite().multipleOf(1).gt(0).max(65536),
+  "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamChunkInputTranscriptionStreamChunkRequest = z.infer<typeof TranscriptionStreamChunkInputTranscriptionStreamChunkRequestSchema>
+
+export const TranscriptionStreamChunkOutputTranscriptionStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamChunkOutputTranscriptionStreamStatus = z.infer<typeof TranscriptionStreamChunkOutputTranscriptionStreamStatusSchema>
+
+export const TranscriptionStreamEndInputTranscriptionStreamEndRequestSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamEndInputTranscriptionStreamEndRequest = z.infer<typeof TranscriptionStreamEndInputTranscriptionStreamEndRequestSchema>
+
+export const TranscriptionStreamEndOutputTranscriptionStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("stt").prefault("stt").meta({"default":"stt"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamEndOutputTranscriptionStreamResult = z.infer<typeof TranscriptionStreamEndOutputTranscriptionStreamResultSchema>
+
+export const TranscriptionStreamResultInputTranscriptionStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamResultInputTranscriptionStreamStatusRequest = z.infer<typeof TranscriptionStreamResultInputTranscriptionStreamStatusRequestSchema>
+
+export const TranscriptionStreamResultOutputTranscriptionStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("stt").prefault("stt").meta({"default":"stt"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamResultOutputTranscriptionStreamResult = z.infer<typeof TranscriptionStreamResultOutputTranscriptionStreamResultSchema>
+
+export const TranscriptionStreamStartInputTranscriptionStreamStartRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "channels": z.number().finite().multipleOf(1).min(1).max(8).prefault(1).meta({"default":1}).optional(),
+  "config_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "consent_revision": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "encoding": z.literal("pcm_s16le").prefault("pcm_s16le").meta({"default":"pcm_s16le"}).optional(),
+  "exact_selector": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "experimental_remote": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "remaining_deadline_ms": z.number().finite().multipleOf(1).gt(0).max(60000).prefault(60000).meta({"default":60000}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "route_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "sample_rate": z.number().finite().multipleOf(1).min(8000).max(192000).prefault(16000).meta({"default":16000}).optional(),
+  "schema": z.literal("speech-stage-admission.v1").prefault("speech-stage-admission.v1").meta({"default":"speech-stage-admission.v1"}).optional(),
+  "stage": z.literal("stt").prefault("stt").meta({"default":"stt"}).optional(),
+  "target_peer_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "target_resource_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamStartInputTranscriptionStreamStartRequest = z.infer<typeof TranscriptionStreamStartInputTranscriptionStreamStartRequestSchema>
+
+const TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "heartbeat_ms": z.number().finite().multipleOf(1).gt(0).max(5000).prefault(5000).meta({"default":5000}).optional(),
+  "idle_lease_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "max_active_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(300000).meta({"default":300000}).optional(),
+  "max_chunk_bytes": z.number().finite().multipleOf(1).gt(0).max(65536).prefault(65536).meta({"default":65536}).optional(),
+  "max_input_bytes": z.number().finite().multipleOf(1).gt(0).max(4194304).prefault(4194304).meta({"default":4194304}).optional(),
+  "max_queue": z.number().finite().multipleOf(1).min(0).max(4).prefault(4).meta({"default":4}).optional(),
+  "max_text_bytes": z.number().finite().multipleOf(1).gt(0).max(4096).prefault(4096).meta({"default":4096}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"}))
+
+export const TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchema = z.strictObject({
+  "accepted_format": z.string().refine((value) => codePointLength(value) <= 32, { message: 'string must contain at most 32 Unicode code points' }).meta({"maxLength":32}).nullable().prefault(null).meta({"default":null}).optional(),
+  "accepted_limits": TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef.prefault({"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}).meta({"default":{"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}}).optional(),
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8).prefault(8).meta({"default":8}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "schema": z.literal("speech.stage-session-admission.v1").prefault("speech.stage-session-admission.v1").meta({"default":"speech.stage-session-admission.v1"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["admitted", "rejected"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamStartOutputTranscriptionStreamAdmission = z.infer<typeof TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchema>
+
+export const TranscriptionStreamStatusInputTranscriptionStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamStatusInputTranscriptionStreamStatusRequest = z.infer<typeof TranscriptionStreamStatusInputTranscriptionStreamStatusRequestSchema>
+
+export const TranscriptionStreamStatusOutputTranscriptionStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type TranscriptionStreamStatusOutputTranscriptionStreamStatus = z.infer<typeof TranscriptionStreamStatusOutputTranscriptionStreamStatusSchema>
+
 const TranscriptionTranscribeInputTranscribeAudioRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1718,6 +1974,166 @@ export const TranscriptionTranscribeOutputTranscribeAudioResponseSchema = z.obje
   "text": z.string()
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type TranscriptionTranscribeOutputTranscribeAudioResponse = z.infer<typeof TranscriptionTranscribeOutputTranscribeAudioResponseSchema>
+
+export const VADDetectInputVADDetectRequestSchema = z.strictObject({
+  "audio_data": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 65536, { message: 'string must contain at most 65536 Unicode code points' }).meta({"maxLength":65536}).meta({"format":"binary"}),
+  "channels": z.number().finite().multipleOf(1).min(1).max(8).prefault(1).meta({"default":1}).optional(),
+  "format": z.enum(["pcm_s16le", "raw", "wav"]).prefault("pcm_s16le").meta({"default":"pcm_s16le"}).optional(),
+  "sample_rate": z.number().finite().multipleOf(1).gt(0).max(192000).prefault(16000).meta({"default":16000}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADDetectInputVADDetectRequest = z.infer<typeof VADDetectInputVADDetectRequestSchema>
+
+export const VADDetectOutputVADDetectResponseSchema = z.strictObject({
+  "confidence": z.number().finite().min(0.0).max(1.0).nullable().prefault(null).meta({"default":null}).optional(),
+  "duration_ms": z.number().finite().min(0.0).prefault(0.0).meta({"default":0.0}).optional(),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "speech": z.boolean()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADDetectOutputVADDetectResponse = z.infer<typeof VADDetectOutputVADDetectResponseSchema>
+
+export const VADStreamCancelInputVADStreamCancelRequestSchema = z.strictObject({
+  "reason": z.enum(["canceled", "interrupted", "revoked", "timed_out"]).prefault("canceled").meta({"default":"canceled"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamCancelInputVADStreamCancelRequest = z.infer<typeof VADStreamCancelInputVADStreamCancelRequestSchema>
+
+export const VADStreamCancelOutputVADStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("vad").prefault("vad").meta({"default":"vad"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamCancelOutputVADStreamResult = z.infer<typeof VADStreamCancelOutputVADStreamResultSchema>
+
+export const VADStreamChunkInputVADStreamChunkRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "audio_data": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 65536, { message: 'string must contain at most 65536 Unicode code points' }).meta({"maxLength":65536}).meta({"format":"binary"}),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "payload_kind": z.literal("audio").prefault("audio").meta({"default":"audio"}).optional(),
+  "payload_size_bytes": z.number().finite().multipleOf(1).gt(0).max(65536),
+  "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamChunkInputVADStreamChunkRequest = z.infer<typeof VADStreamChunkInputVADStreamChunkRequestSchema>
+
+export const VADStreamChunkOutputVADStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamChunkOutputVADStreamStatus = z.infer<typeof VADStreamChunkOutputVADStreamStatusSchema>
+
+export const VADStreamEndInputVADStreamEndRequestSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamEndInputVADStreamEndRequest = z.infer<typeof VADStreamEndInputVADStreamEndRequestSchema>
+
+export const VADStreamEndOutputVADStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("vad").prefault("vad").meta({"default":"vad"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamEndOutputVADStreamResult = z.infer<typeof VADStreamEndOutputVADStreamResultSchema>
+
+export const VADStreamResultInputVADStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamResultInputVADStreamStatusRequest = z.infer<typeof VADStreamResultInputVADStreamStatusRequestSchema>
+
+export const VADStreamResultOutputVADStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("vad").prefault("vad").meta({"default":"vad"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamResultOutputVADStreamResult = z.infer<typeof VADStreamResultOutputVADStreamResultSchema>
+
+export const VADStreamStartInputVADStreamStartRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "config_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "consent_revision": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "exact_selector": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "experimental_remote": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "remaining_deadline_ms": z.number().finite().multipleOf(1).gt(0).max(60000).prefault(60000).meta({"default":60000}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "route_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "schema": z.literal("speech-stage-admission.v1").prefault("speech-stage-admission.v1").meta({"default":"speech-stage-admission.v1"}).optional(),
+  "stage": z.literal("vad").prefault("vad").meta({"default":"vad"}).optional(),
+  "target_peer_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "target_resource_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamStartInputVADStreamStartRequest = z.infer<typeof VADStreamStartInputVADStreamStartRequestSchema>
+
+const VADStreamStartOutputVADStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "heartbeat_ms": z.number().finite().multipleOf(1).gt(0).max(5000).prefault(5000).meta({"default":5000}).optional(),
+  "idle_lease_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "max_active_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(300000).meta({"default":300000}).optional(),
+  "max_chunk_bytes": z.number().finite().multipleOf(1).gt(0).max(65536).prefault(65536).meta({"default":65536}).optional(),
+  "max_input_bytes": z.number().finite().multipleOf(1).gt(0).max(4194304).prefault(4194304).meta({"default":4194304}).optional(),
+  "max_queue": z.number().finite().multipleOf(1).min(0).max(4).prefault(4).meta({"default":4}).optional(),
+  "max_text_bytes": z.number().finite().multipleOf(1).gt(0).max(4096).prefault(4096).meta({"default":4096}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"}))
+
+export const VADStreamStartOutputVADStreamAdmissionSchema = z.strictObject({
+  "accepted_format": z.string().refine((value) => codePointLength(value) <= 32, { message: 'string must contain at most 32 Unicode code points' }).meta({"maxLength":32}).nullable().prefault(null).meta({"default":null}).optional(),
+  "accepted_limits": VADStreamStartOutputVADStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef.prefault({"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}).meta({"default":{"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}}).optional(),
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8).prefault(8).meta({"default":8}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "schema": z.literal("speech.stage-session-admission.v1").prefault("speech.stage-session-admission.v1").meta({"default":"speech.stage-session-admission.v1"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["admitted", "rejected"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamStartOutputVADStreamAdmission = z.infer<typeof VADStreamStartOutputVADStreamAdmissionSchema>
+
+export const VADStreamStatusInputVADStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamStatusInputVADStreamStatusRequest = z.infer<typeof VADStreamStatusInputVADStreamStatusRequestSchema>
+
+export const VADStreamStatusOutputVADStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type VADStreamStatusOutputVADStreamStatus = z.infer<typeof VADStreamStatusOutputVADStreamStatusSchema>
 
 const WakeWordDetectInputWakeWordDetectRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -1780,6 +2196,150 @@ export const WakeWordProcessAudioOutputEmptyOutputSchema = z.object({
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type WakeWordProcessAudioOutputEmptyOutput = z.infer<typeof WakeWordProcessAudioOutputEmptyOutputSchema>
 
+export const WakeWordStreamCancelInputWakeWordStreamCancelRequestSchema = z.strictObject({
+  "reason": z.enum(["canceled", "interrupted", "revoked", "timed_out"]).prefault("canceled").meta({"default":"canceled"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamCancelInputWakeWordStreamCancelRequest = z.infer<typeof WakeWordStreamCancelInputWakeWordStreamCancelRequestSchema>
+
+export const WakeWordStreamCancelOutputWakeWordStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("kws").prefault("kws").meta({"default":"kws"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamCancelOutputWakeWordStreamResult = z.infer<typeof WakeWordStreamCancelOutputWakeWordStreamResultSchema>
+
+export const WakeWordStreamChunkInputWakeWordStreamChunkRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "audio_data": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 65536, { message: 'string must contain at most 65536 Unicode code points' }).meta({"maxLength":65536}).meta({"format":"binary"}),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "is_final": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "payload_kind": z.literal("audio").prefault("audio").meta({"default":"audio"}).optional(),
+  "payload_size_bytes": z.number().finite().multipleOf(1).gt(0).max(65536),
+  "sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamChunkInputWakeWordStreamChunkRequest = z.infer<typeof WakeWordStreamChunkInputWakeWordStreamChunkRequestSchema>
+
+export const WakeWordStreamChunkOutputWakeWordStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamChunkOutputWakeWordStreamStatus = z.infer<typeof WakeWordStreamChunkOutputWakeWordStreamStatusSchema>
+
+export const WakeWordStreamEndInputWakeWordStreamEndRequestSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamEndInputWakeWordStreamEndRequest = z.infer<typeof WakeWordStreamEndInputWakeWordStreamEndRequestSchema>
+
+export const WakeWordStreamEndOutputWakeWordStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("kws").prefault("kws").meta({"default":"kws"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamEndOutputWakeWordStreamResult = z.infer<typeof WakeWordStreamEndOutputWakeWordStreamResultSchema>
+
+export const WakeWordStreamResultInputWakeWordStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamResultInputWakeWordStreamStatusRequest = z.infer<typeof WakeWordStreamResultInputWakeWordStreamStatusRequestSchema>
+
+export const WakeWordStreamResultOutputWakeWordStreamResultSchema = z.strictObject({
+  "final_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).nullable().prefault(null).meta({"default":null}).optional(),
+  "input_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "output_count": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "redacted": z.literal(true).prefault(true).meta({"default":true}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "stage": z.literal("kws").prefault("kws").meta({"default":"kws"}).optional(),
+  "state": z.enum(["canceled", "completed", "failed", "interrupted", "revoked", "timed_out"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamResultOutputWakeWordStreamResult = z.infer<typeof WakeWordStreamResultOutputWakeWordStreamResultSchema>
+
+export const WakeWordStreamStartInputWakeWordStreamStartRequestSchema = z.strictObject({
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "config_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "consent_revision": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).nullable().prefault(null).meta({"default":null}).optional(),
+  "exact_selector": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "experimental_remote": z.boolean().prefault(false).meta({"default":false}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "mode": z.literal("streaming").prefault("streaming").meta({"default":"streaming"}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "remaining_deadline_ms": z.number().finite().multipleOf(1).gt(0).max(60000).prefault(60000).meta({"default":60000}).optional(),
+  "request_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "route_revision": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}),
+  "schema": z.literal("speech-stage-admission.v1").prefault("speech-stage-admission.v1").meta({"default":"speech-stage-admission.v1"}).optional(),
+  "stage": z.literal("kws").prefault("kws").meta({"default":"kws"}).optional(),
+  "target_peer_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "target_resource_id": z.string().refine((value) => codePointLength(value) <= 256, { message: 'string must contain at most 256 Unicode code points' }).meta({"maxLength":256}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamStartInputWakeWordStreamStartRequest = z.infer<typeof WakeWordStreamStartInputWakeWordStreamStartRequestSchema>
+
+const WakeWordStreamStartOutputWakeWordStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.strictObject({
+  "heartbeat_ms": z.number().finite().multipleOf(1).gt(0).max(5000).prefault(5000).meta({"default":5000}).optional(),
+  "idle_lease_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "max_active_ms": z.number().finite().multipleOf(1).gt(0).max(300000).prefault(300000).meta({"default":300000}).optional(),
+  "max_chunk_bytes": z.number().finite().multipleOf(1).gt(0).max(65536).prefault(65536).meta({"default":65536}).optional(),
+  "max_input_bytes": z.number().finite().multipleOf(1).gt(0).max(4194304).prefault(4194304).meta({"default":4194304}).optional(),
+  "max_queue": z.number().finite().multipleOf(1).min(0).max(4).prefault(4).meta({"default":4}).optional(),
+  "max_text_bytes": z.number().finite().multipleOf(1).gt(0).max(4096).prefault(4096).meta({"default":4096}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"}))
+
+export const WakeWordStreamStartOutputWakeWordStreamAdmissionSchema = z.strictObject({
+  "accepted_format": z.string().refine((value) => codePointLength(value) <= 32, { message: 'string must contain at most 32 Unicode code points' }).meta({"maxLength":32}).nullable().prefault(null).meta({"default":null}).optional(),
+  "accepted_limits": WakeWordStreamStartOutputWakeWordStreamAdmissionSchemaSpeechStreamLimitsV1SchemaDef.prefault({"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}).meta({"default":{"heartbeat_ms":5000,"idle_lease_ms":15000,"max_active_ms":300000,"max_chunk_bytes":65536,"max_input_bytes":4194304,"max_queue":4,"max_text_bytes":4096}}).optional(),
+  "attempt_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "capability_revision": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8).prefault(8).meta({"default":8}).optional(),
+  "generation": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000).prefault(15000).meta({"default":15000}).optional(),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "operation_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "reason_code": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 80, { message: 'string must contain at most 80 Unicode code points' }).meta({"maxLength":80}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "schema": z.literal("speech.stage-session-admission.v1").prefault("speech.stage-session-admission.v1").meta({"default":"speech.stage-session-admission.v1"}).optional(),
+  "session_id": z.string().refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["admitted", "rejected"])
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamStartOutputWakeWordStreamAdmission = z.infer<typeof WakeWordStreamStartOutputWakeWordStreamAdmissionSchema>
+
+export const WakeWordStreamStatusInputWakeWordStreamStatusRequestSchema = z.strictObject({
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"))
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamStatusInputWakeWordStreamStatusRequest = z.infer<typeof WakeWordStreamStatusInputWakeWordStreamStatusRequestSchema>
+
+export const WakeWordStreamStatusOutputWakeWordStreamStatusSchema = z.strictObject({
+  "accepted_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "credits": z.number().finite().multipleOf(1).min(0).max(8),
+  "dropped_chunks": z.number().finite().multipleOf(1).min(0).max(9007199254740991).prefault(0).meta({"default":0}).optional(),
+  "lease_remaining_ms": z.number().finite().multipleOf(1).min(0).max(300000),
+  "next_sequence": z.number().finite().multipleOf(1).min(0).max(9007199254740991),
+  "session_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")),
+  "state": z.enum(["active", "admitted", "canceled", "completed", "failed", "finishing", "interrupted", "prepared", "revoked", "timed_out"]),
+  "terminal_outcome": z.enum(["canceled", "completed", "consent_required", "failed", "interrupted", "invalid_sequence", "outcome_unknown", "resource_exhausted", "revoked", "session_conflict", "timed_out", "unsupported_protocol"]).nullable().prefault(null).meta({"default":null}).optional()
+}).meta({"x-aurora-extra-behavior":"forbid"})
+export type WakeWordStreamStatusOutputWakeWordStreamStatus = z.infer<typeof WakeWordStreamStatusOutputWakeWordStreamStatusSchema>
+
 export const backendContractSchemas = {
   AuroraEventStreamEnvelopeAuroraEventStreamEventSchema,
   GatewayExplainRouteInputRouteExplainRequestSchema,
@@ -1827,12 +2387,20 @@ export const backendContractSchemas = {
   TTSRequestOutputEmptyOutputSchema,
   TTSSetDefaultVoiceInputTTSSetDefaultVoiceRequestSchema,
   TTSSetDefaultVoiceOutputTTSSetDefaultVoiceResponseSchema,
+  TTSStreamCancelInputTTSStreamSessionCancelRequestSchema,
+  TTSStreamCancelOutputTTSStreamSessionResultSchema,
   TTSStreamChunkInputTTSStreamChunkRequestSchema,
   TTSStreamChunkOutputEmptyOutputSchema,
   TTSStreamEndInputTTSStreamEndRequestSchema,
   TTSStreamEndOutputEmptyOutputSchema,
+  TTSStreamPrepareV1InputTTSStreamPrepareRequestSchema,
+  TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchema,
+  TTSStreamResultInputTTSStreamSessionStatusRequestSchema,
+  TTSStreamResultOutputTTSStreamSessionResultSchema,
   TTSStreamStartInputTTSStreamStartRequestSchema,
   TTSStreamStartOutputEmptyOutputSchema,
+  TTSStreamStatusInputTTSStreamSessionStatusRequestSchema,
+  TTSStreamStatusOutputTTSStreamSessionStatusSchema,
   TTSSynthesizeInputTTSSynthesizeRequestSchema,
   TTSSynthesizeOutputTTSSynthesizeResponseSchema,
   TTSUpdateVoiceProfileInputTTSUpdateVoiceProfileRequestSchema,
@@ -1855,12 +2423,50 @@ export const backendContractSchemas = {
   ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
   TranscriptionProcessAudioInputSTTAudioChunkSchema,
   TranscriptionProcessAudioOutputEmptyOutputSchema,
+  TranscriptionStreamCancelInputTranscriptionStreamCancelRequestSchema,
+  TranscriptionStreamCancelOutputTranscriptionStreamResultSchema,
+  TranscriptionStreamChunkInputTranscriptionStreamChunkRequestSchema,
+  TranscriptionStreamChunkOutputTranscriptionStreamStatusSchema,
+  TranscriptionStreamEndInputTranscriptionStreamEndRequestSchema,
+  TranscriptionStreamEndOutputTranscriptionStreamResultSchema,
+  TranscriptionStreamResultInputTranscriptionStreamStatusRequestSchema,
+  TranscriptionStreamResultOutputTranscriptionStreamResultSchema,
+  TranscriptionStreamStartInputTranscriptionStreamStartRequestSchema,
+  TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchema,
+  TranscriptionStreamStatusInputTranscriptionStreamStatusRequestSchema,
+  TranscriptionStreamStatusOutputTranscriptionStreamStatusSchema,
   TranscriptionTranscribeInputTranscribeAudioRequestSchema,
   TranscriptionTranscribeOutputTranscribeAudioResponseSchema,
+  VADDetectInputVADDetectRequestSchema,
+  VADDetectOutputVADDetectResponseSchema,
+  VADStreamCancelInputVADStreamCancelRequestSchema,
+  VADStreamCancelOutputVADStreamResultSchema,
+  VADStreamChunkInputVADStreamChunkRequestSchema,
+  VADStreamChunkOutputVADStreamStatusSchema,
+  VADStreamEndInputVADStreamEndRequestSchema,
+  VADStreamEndOutputVADStreamResultSchema,
+  VADStreamResultInputVADStreamStatusRequestSchema,
+  VADStreamResultOutputVADStreamResultSchema,
+  VADStreamStartInputVADStreamStartRequestSchema,
+  VADStreamStartOutputVADStreamAdmissionSchema,
+  VADStreamStatusInputVADStreamStatusRequestSchema,
+  VADStreamStatusOutputVADStreamStatusSchema,
   WakeWordDetectInputWakeWordDetectRequestSchema,
   WakeWordDetectOutputWakeWordDetectResponseSchema,
   WakeWordProcessAudioInputSTTAudioChunkSchema,
   WakeWordProcessAudioOutputEmptyOutputSchema,
+  WakeWordStreamCancelInputWakeWordStreamCancelRequestSchema,
+  WakeWordStreamCancelOutputWakeWordStreamResultSchema,
+  WakeWordStreamChunkInputWakeWordStreamChunkRequestSchema,
+  WakeWordStreamChunkOutputWakeWordStreamStatusSchema,
+  WakeWordStreamEndInputWakeWordStreamEndRequestSchema,
+  WakeWordStreamEndOutputWakeWordStreamResultSchema,
+  WakeWordStreamResultInputWakeWordStreamStatusRequestSchema,
+  WakeWordStreamResultOutputWakeWordStreamResultSchema,
+  WakeWordStreamStartInputWakeWordStreamStartRequestSchema,
+  WakeWordStreamStartOutputWakeWordStreamAdmissionSchema,
+  WakeWordStreamStatusInputWakeWordStreamStatusRequestSchema,
+  WakeWordStreamStatusOutputWakeWordStreamStatusSchema,
 } as const
 
 export const backendContractSchemaById = {
@@ -1910,12 +2516,20 @@ export const backendContractSchemaById = {
   "TTS.Request.output.EmptyOutput": TTSRequestOutputEmptyOutputSchema,
   "TTS.SetDefaultVoice.input.TTSSetDefaultVoiceRequest": TTSSetDefaultVoiceInputTTSSetDefaultVoiceRequestSchema,
   "TTS.SetDefaultVoice.output.TTSSetDefaultVoiceResponse": TTSSetDefaultVoiceOutputTTSSetDefaultVoiceResponseSchema,
+  "TTS.StreamCancel.input.TTSStreamSessionCancelRequest": TTSStreamCancelInputTTSStreamSessionCancelRequestSchema,
+  "TTS.StreamCancel.output.TTSStreamSessionResult": TTSStreamCancelOutputTTSStreamSessionResultSchema,
   "TTS.StreamChunk.input.TTSStreamChunkRequest": TTSStreamChunkInputTTSStreamChunkRequestSchema,
   "TTS.StreamChunk.output.EmptyOutput": TTSStreamChunkOutputEmptyOutputSchema,
   "TTS.StreamEnd.input.TTSStreamEndRequest": TTSStreamEndInputTTSStreamEndRequestSchema,
   "TTS.StreamEnd.output.EmptyOutput": TTSStreamEndOutputEmptyOutputSchema,
+  "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest": TTSStreamPrepareV1InputTTSStreamPrepareRequestSchema,
+  "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse": TTSStreamPrepareV1OutputTTSStreamPrepareResponseSchema,
+  "TTS.StreamResult.input.TTSStreamSessionStatusRequest": TTSStreamResultInputTTSStreamSessionStatusRequestSchema,
+  "TTS.StreamResult.output.TTSStreamSessionResult": TTSStreamResultOutputTTSStreamSessionResultSchema,
   "TTS.StreamStart.input.TTSStreamStartRequest": TTSStreamStartInputTTSStreamStartRequestSchema,
   "TTS.StreamStart.output.EmptyOutput": TTSStreamStartOutputEmptyOutputSchema,
+  "TTS.StreamStatus.input.TTSStreamSessionStatusRequest": TTSStreamStatusInputTTSStreamSessionStatusRequestSchema,
+  "TTS.StreamStatus.output.TTSStreamSessionStatus": TTSStreamStatusOutputTTSStreamSessionStatusSchema,
   "TTS.Synthesize.input.TTSSynthesizeRequest": TTSSynthesizeInputTTSSynthesizeRequestSchema,
   "TTS.Synthesize.output.TTSSynthesizeResponse": TTSSynthesizeOutputTTSSynthesizeResponseSchema,
   "TTS.UpdateVoiceProfile.input.TTSUpdateVoiceProfileRequest": TTSUpdateVoiceProfileInputTTSUpdateVoiceProfileRequestSchema,
@@ -1938,12 +2552,50 @@ export const backendContractSchemaById = {
   "Tooling.PrepareExecution.output.ToolingPrepareExecutionResponse": ToolingPrepareExecutionOutputToolingPrepareExecutionResponseSchema,
   "Transcription.ProcessAudio.input.STTAudioChunk": TranscriptionProcessAudioInputSTTAudioChunkSchema,
   "Transcription.ProcessAudio.output.EmptyOutput": TranscriptionProcessAudioOutputEmptyOutputSchema,
+  "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest": TranscriptionStreamCancelInputTranscriptionStreamCancelRequestSchema,
+  "Transcription.StreamCancel.output.TranscriptionStreamResult": TranscriptionStreamCancelOutputTranscriptionStreamResultSchema,
+  "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest": TranscriptionStreamChunkInputTranscriptionStreamChunkRequestSchema,
+  "Transcription.StreamChunk.output.TranscriptionStreamStatus": TranscriptionStreamChunkOutputTranscriptionStreamStatusSchema,
+  "Transcription.StreamEnd.input.TranscriptionStreamEndRequest": TranscriptionStreamEndInputTranscriptionStreamEndRequestSchema,
+  "Transcription.StreamEnd.output.TranscriptionStreamResult": TranscriptionStreamEndOutputTranscriptionStreamResultSchema,
+  "Transcription.StreamResult.input.TranscriptionStreamStatusRequest": TranscriptionStreamResultInputTranscriptionStreamStatusRequestSchema,
+  "Transcription.StreamResult.output.TranscriptionStreamResult": TranscriptionStreamResultOutputTranscriptionStreamResultSchema,
+  "Transcription.StreamStart.input.TranscriptionStreamStartRequest": TranscriptionStreamStartInputTranscriptionStreamStartRequestSchema,
+  "Transcription.StreamStart.output.TranscriptionStreamAdmission": TranscriptionStreamStartOutputTranscriptionStreamAdmissionSchema,
+  "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest": TranscriptionStreamStatusInputTranscriptionStreamStatusRequestSchema,
+  "Transcription.StreamStatus.output.TranscriptionStreamStatus": TranscriptionStreamStatusOutputTranscriptionStreamStatusSchema,
   "Transcription.Transcribe.input.TranscribeAudioRequest": TranscriptionTranscribeInputTranscribeAudioRequestSchema,
   "Transcription.Transcribe.output.TranscribeAudioResponse": TranscriptionTranscribeOutputTranscribeAudioResponseSchema,
+  "VAD.Detect.input.VADDetectRequest": VADDetectInputVADDetectRequestSchema,
+  "VAD.Detect.output.VADDetectResponse": VADDetectOutputVADDetectResponseSchema,
+  "VAD.StreamCancel.input.VADStreamCancelRequest": VADStreamCancelInputVADStreamCancelRequestSchema,
+  "VAD.StreamCancel.output.VADStreamResult": VADStreamCancelOutputVADStreamResultSchema,
+  "VAD.StreamChunk.input.VADStreamChunkRequest": VADStreamChunkInputVADStreamChunkRequestSchema,
+  "VAD.StreamChunk.output.VADStreamStatus": VADStreamChunkOutputVADStreamStatusSchema,
+  "VAD.StreamEnd.input.VADStreamEndRequest": VADStreamEndInputVADStreamEndRequestSchema,
+  "VAD.StreamEnd.output.VADStreamResult": VADStreamEndOutputVADStreamResultSchema,
+  "VAD.StreamResult.input.VADStreamStatusRequest": VADStreamResultInputVADStreamStatusRequestSchema,
+  "VAD.StreamResult.output.VADStreamResult": VADStreamResultOutputVADStreamResultSchema,
+  "VAD.StreamStart.input.VADStreamStartRequest": VADStreamStartInputVADStreamStartRequestSchema,
+  "VAD.StreamStart.output.VADStreamAdmission": VADStreamStartOutputVADStreamAdmissionSchema,
+  "VAD.StreamStatus.input.VADStreamStatusRequest": VADStreamStatusInputVADStreamStatusRequestSchema,
+  "VAD.StreamStatus.output.VADStreamStatus": VADStreamStatusOutputVADStreamStatusSchema,
   "WakeWord.Detect.input.WakeWordDetectRequest": WakeWordDetectInputWakeWordDetectRequestSchema,
   "WakeWord.Detect.output.WakeWordDetectResponse": WakeWordDetectOutputWakeWordDetectResponseSchema,
   "WakeWord.ProcessAudio.input.STTAudioChunk": WakeWordProcessAudioInputSTTAudioChunkSchema,
   "WakeWord.ProcessAudio.output.EmptyOutput": WakeWordProcessAudioOutputEmptyOutputSchema,
+  "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest": WakeWordStreamCancelInputWakeWordStreamCancelRequestSchema,
+  "WakeWord.StreamCancel.output.WakeWordStreamResult": WakeWordStreamCancelOutputWakeWordStreamResultSchema,
+  "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest": WakeWordStreamChunkInputWakeWordStreamChunkRequestSchema,
+  "WakeWord.StreamChunk.output.WakeWordStreamStatus": WakeWordStreamChunkOutputWakeWordStreamStatusSchema,
+  "WakeWord.StreamEnd.input.WakeWordStreamEndRequest": WakeWordStreamEndInputWakeWordStreamEndRequestSchema,
+  "WakeWord.StreamEnd.output.WakeWordStreamResult": WakeWordStreamEndOutputWakeWordStreamResultSchema,
+  "WakeWord.StreamResult.input.WakeWordStreamStatusRequest": WakeWordStreamResultInputWakeWordStreamStatusRequestSchema,
+  "WakeWord.StreamResult.output.WakeWordStreamResult": WakeWordStreamResultOutputWakeWordStreamResultSchema,
+  "WakeWord.StreamStart.input.WakeWordStreamStartRequest": WakeWordStreamStartInputWakeWordStreamStartRequestSchema,
+  "WakeWord.StreamStart.output.WakeWordStreamAdmission": WakeWordStreamStartOutputWakeWordStreamAdmissionSchema,
+  "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest": WakeWordStreamStatusInputWakeWordStreamStatusRequestSchema,
+  "WakeWord.StreamStatus.output.WakeWordStreamStatus": WakeWordStreamStatusOutputWakeWordStreamStatusSchema,
 } as const
 
 export const backendContractMethodDescriptors = [
@@ -3239,7 +3891,11 @@ export const backendContractMethodDescriptors = [
         "method_ids": [
           "TTS.StreamStart",
           "TTS.StreamChunk",
-          "TTS.StreamEnd"
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
         ]
       }
     ],
@@ -3283,7 +3939,11 @@ export const backendContractMethodDescriptors = [
         "method_ids": [
           "TTS.StreamStart",
           "TTS.StreamChunk",
-          "TTS.StreamEnd"
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
         ]
       }
     ],
@@ -3299,7 +3959,7 @@ export const backendContractMethodDescriptors = [
     "speech_constraints": null,
     "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest",
     "output_schema_id": "TTS.StreamChunk.output.EmptyOutput",
-    "input_schema_hash": "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d",
+    "input_schema_hash": "63c0fadd38998b9632b3f78acd4c9f4400dd1ea87372acd652139ab3161de86b",
     "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"
   },
   {
@@ -3327,7 +3987,11 @@ export const backendContractMethodDescriptors = [
         "method_ids": [
           "TTS.StreamStart",
           "TTS.StreamChunk",
-          "TTS.StreamEnd"
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
         ]
       }
     ],
@@ -3345,6 +4009,198 @@ export const backendContractMethodDescriptors = [
     "output_schema_id": "TTS.StreamEnd.output.EmptyOutput",
     "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61",
     "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"
+  },
+  {
+    "method_id": "TTS.StreamPrepareV1",
+    "module": "TTS",
+    "name": "StreamPrepareV1",
+    "topic": "TTS.StreamPrepareV1",
+    "bus_topic": "TTS.StreamPrepareV1",
+    "route_path": "/api/TTS/StreamPrepareV1",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "TTS.StreamPrepareV1"
+    ],
+    "callable_feature_ids": [
+      "speech_streaming"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TTSStreamPrepareRequest",
+    "output_model": "TTSStreamPrepareResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest",
+    "output_schema_id": "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse",
+    "input_schema_hash": "282ded6d85d901ef1d7e4bb09e41be051421c689cc826abf2625508d004c1efb",
+    "output_schema_hash": "22a0dbaa2750ba5cc4a6a23bd0f0e92ba892bb1f5313f0860bf54691cb6eca76"
+  },
+  {
+    "method_id": "TTS.StreamStatus",
+    "module": "TTS",
+    "name": "StreamStatus",
+    "topic": "TTS.StreamStatus",
+    "bus_topic": "TTS.StreamStatus",
+    "route_path": "/api/TTS/StreamStatus",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "TTS.StreamStatus"
+    ],
+    "callable_feature_ids": [
+      "speech_streaming"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TTSStreamSessionStatusRequest",
+    "output_model": "TTSStreamSessionStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.StreamStatus.input.TTSStreamSessionStatusRequest",
+    "output_schema_id": "TTS.StreamStatus.output.TTSStreamSessionStatus",
+    "input_schema_hash": "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a",
+    "output_schema_hash": "4bba07a6a2efe5f9ce796becd9756b62cf0bdcd44cf97c9b18b236346bf9d358"
+  },
+  {
+    "method_id": "TTS.StreamCancel",
+    "module": "TTS",
+    "name": "StreamCancel",
+    "topic": "TTS.StreamCancel",
+    "bus_topic": "TTS.StreamCancel",
+    "route_path": "/api/TTS/StreamCancel",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "TTS.StreamCancel"
+    ],
+    "callable_feature_ids": [
+      "speech_streaming"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TTSStreamSessionCancelRequest",
+    "output_model": "TTSStreamSessionResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.StreamCancel.input.TTSStreamSessionCancelRequest",
+    "output_schema_id": "TTS.StreamCancel.output.TTSStreamSessionResult",
+    "input_schema_hash": "d2547255ec4592f0300368b3d0e30e7c6ad594e283ba47616f3667b00a4d96c5",
+    "output_schema_hash": "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a"
+  },
+  {
+    "method_id": "TTS.StreamResult",
+    "module": "TTS",
+    "name": "StreamResult",
+    "topic": "TTS.StreamResult",
+    "bus_topic": "TTS.StreamResult",
+    "route_path": "/api/TTS/StreamResult",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "TTS.StreamResult"
+    ],
+    "callable_feature_ids": [
+      "speech_streaming"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "speech_streaming",
+        "module": "TTS",
+        "label": "Speech Streaming",
+        "summary": "Start, stream, and end ordered text-to-speech audio streams.",
+        "method_ids": [
+          "TTS.StreamStart",
+          "TTS.StreamChunk",
+          "TTS.StreamEnd",
+          "TTS.StreamPrepareV1",
+          "TTS.StreamStatus",
+          "TTS.StreamCancel",
+          "TTS.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TTSStreamSessionStatusRequest",
+    "output_model": "TTSStreamSessionResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "TTS.StreamResult.input.TTSStreamSessionStatusRequest",
+    "output_schema_id": "TTS.StreamResult.output.TTSStreamSessionResult",
+    "input_schema_hash": "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a",
+    "output_schema_hash": "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a"
   },
   {
     "method_id": "TTS.Synthesize",
@@ -3642,7 +4498,13 @@ export const backendContractMethodDescriptors = [
         "summary": "Detect wake words in submitted or streamed audio.",
         "method_ids": [
           "WakeWord.ProcessAudio",
-          "WakeWord.Detect"
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
         ]
       }
     ],
@@ -3685,7 +4547,13 @@ export const backendContractMethodDescriptors = [
         "summary": "Detect wake words in submitted or streamed audio.",
         "method_ids": [
           "WakeWord.ProcessAudio",
-          "WakeWord.Detect"
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
         ]
       }
     ],
@@ -3703,6 +4571,300 @@ export const backendContractMethodDescriptors = [
     "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse",
     "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735",
     "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"
+  },
+  {
+    "method_id": "WakeWord.StreamStart",
+    "module": "WakeWord",
+    "name": "StreamStart",
+    "topic": "WakeWord.StreamStart",
+    "bus_topic": "WakeWord.StreamStart",
+    "route_path": "/api/WakeWord/StreamStart",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamStart"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamStartRequest",
+    "output_model": "WakeWordStreamAdmission",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamStart.input.WakeWordStreamStartRequest",
+    "output_schema_id": "WakeWord.StreamStart.output.WakeWordStreamAdmission",
+    "input_schema_hash": "028976fa6b8ce81b3350638bad2dacbea351c4979b720d97bc0df3179f740637",
+    "output_schema_hash": "bbf1328e6d9d1d3df0806129873a8441454eef8a9f1fa5cff829f29c0f60d64b"
+  },
+  {
+    "method_id": "WakeWord.StreamChunk",
+    "module": "WakeWord",
+    "name": "StreamChunk",
+    "topic": "WakeWord.StreamChunk",
+    "bus_topic": "WakeWord.StreamChunk",
+    "route_path": "/api/WakeWord/StreamChunk",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamChunk"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamChunkRequest",
+    "output_model": "WakeWordStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest",
+    "output_schema_id": "WakeWord.StreamChunk.output.WakeWordStreamStatus",
+    "input_schema_hash": "5dc178412e11695ddcacf456b1300868c97031367a87f857235d9f62f5412e16",
+    "output_schema_hash": "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4"
+  },
+  {
+    "method_id": "WakeWord.StreamEnd",
+    "module": "WakeWord",
+    "name": "StreamEnd",
+    "topic": "WakeWord.StreamEnd",
+    "bus_topic": "WakeWord.StreamEnd",
+    "route_path": "/api/WakeWord/StreamEnd",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamEnd"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamEndRequest",
+    "output_model": "WakeWordStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamEnd.input.WakeWordStreamEndRequest",
+    "output_schema_id": "WakeWord.StreamEnd.output.WakeWordStreamResult",
+    "input_schema_hash": "f1f02f2e8054551e35e3b333acdde696197f235bc725916fd5909a78917e55dd",
+    "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"
+  },
+  {
+    "method_id": "WakeWord.StreamCancel",
+    "module": "WakeWord",
+    "name": "StreamCancel",
+    "topic": "WakeWord.StreamCancel",
+    "bus_topic": "WakeWord.StreamCancel",
+    "route_path": "/api/WakeWord/StreamCancel",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamCancel"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamCancelRequest",
+    "output_model": "WakeWordStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest",
+    "output_schema_id": "WakeWord.StreamCancel.output.WakeWordStreamResult",
+    "input_schema_hash": "19e5598793300b8492a3459d1a4149bc97a1e8b032aaa02e3ac2ad9d87f57fb5",
+    "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"
+  },
+  {
+    "method_id": "WakeWord.StreamStatus",
+    "module": "WakeWord",
+    "name": "StreamStatus",
+    "topic": "WakeWord.StreamStatus",
+    "bus_topic": "WakeWord.StreamStatus",
+    "route_path": "/api/WakeWord/StreamStatus",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamStatus"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamStatusRequest",
+    "output_model": "WakeWordStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest",
+    "output_schema_id": "WakeWord.StreamStatus.output.WakeWordStreamStatus",
+    "input_schema_hash": "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47",
+    "output_schema_hash": "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4"
+  },
+  {
+    "method_id": "WakeWord.StreamResult",
+    "module": "WakeWord",
+    "name": "StreamResult",
+    "topic": "WakeWord.StreamResult",
+    "bus_topic": "WakeWord.StreamResult",
+    "route_path": "/api/WakeWord/StreamResult",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "WakeWord.StreamResult"
+    ],
+    "callable_feature_ids": [
+      "wake_word_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "wake_word_detection",
+        "module": "WakeWord",
+        "label": "Wake Word Detection",
+        "summary": "Detect wake words in submitted or streamed audio.",
+        "method_ids": [
+          "WakeWord.ProcessAudio",
+          "WakeWord.Detect",
+          "WakeWord.StreamStart",
+          "WakeWord.StreamChunk",
+          "WakeWord.StreamEnd",
+          "WakeWord.StreamCancel",
+          "WakeWord.StreamStatus",
+          "WakeWord.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "WakeWordStreamStatusRequest",
+    "output_model": "WakeWordStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "WakeWord.StreamResult.input.WakeWordStreamStatusRequest",
+    "output_schema_id": "WakeWord.StreamResult.output.WakeWordStreamResult",
+    "input_schema_hash": "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47",
+    "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"
   },
   {
     "method_id": "Transcription.ProcessAudio",
@@ -3728,7 +4890,13 @@ export const backendContractMethodDescriptors = [
         "summary": "Transcribe submitted or streamed audio.",
         "method_ids": [
           "Transcription.ProcessAudio",
-          "Transcription.Transcribe"
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
         ]
       }
     ],
@@ -3771,7 +4939,13 @@ export const backendContractMethodDescriptors = [
         "summary": "Transcribe submitted or streamed audio.",
         "method_ids": [
           "Transcription.ProcessAudio",
-          "Transcription.Transcribe"
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
         ]
       }
     ],
@@ -3789,6 +4963,636 @@ export const backendContractMethodDescriptors = [
     "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse",
     "input_schema_hash": "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa",
     "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"
+  },
+  {
+    "method_id": "Transcription.StreamStart",
+    "module": "Transcription",
+    "name": "StreamStart",
+    "topic": "Transcription.StreamStart",
+    "bus_topic": "Transcription.StreamStart",
+    "route_path": "/api/Transcription/StreamStart",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamStart"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamStartRequest",
+    "output_model": "TranscriptionStreamAdmission",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest",
+    "output_schema_id": "Transcription.StreamStart.output.TranscriptionStreamAdmission",
+    "input_schema_hash": "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696",
+    "output_schema_hash": "d86ef01934340de3aac53b956228364ac5a3f7f107035a04fc177032ac497f14"
+  },
+  {
+    "method_id": "Transcription.StreamChunk",
+    "module": "Transcription",
+    "name": "StreamChunk",
+    "topic": "Transcription.StreamChunk",
+    "bus_topic": "Transcription.StreamChunk",
+    "route_path": "/api/Transcription/StreamChunk",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamChunk"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamChunkRequest",
+    "output_model": "TranscriptionStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest",
+    "output_schema_id": "Transcription.StreamChunk.output.TranscriptionStreamStatus",
+    "input_schema_hash": "686ca9ef3ad6f06bdd707e842832fd1a57a11773d5bbffc2ecaf76ff8263c17a",
+    "output_schema_hash": "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a"
+  },
+  {
+    "method_id": "Transcription.StreamEnd",
+    "module": "Transcription",
+    "name": "StreamEnd",
+    "topic": "Transcription.StreamEnd",
+    "bus_topic": "Transcription.StreamEnd",
+    "route_path": "/api/Transcription/StreamEnd",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamEnd"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamEndRequest",
+    "output_model": "TranscriptionStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamEnd.input.TranscriptionStreamEndRequest",
+    "output_schema_id": "Transcription.StreamEnd.output.TranscriptionStreamResult",
+    "input_schema_hash": "4f701b56625d2694823e5d4ae9bad7e74159fea247fc67bdb1c213fbe5acc115",
+    "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"
+  },
+  {
+    "method_id": "Transcription.StreamCancel",
+    "module": "Transcription",
+    "name": "StreamCancel",
+    "topic": "Transcription.StreamCancel",
+    "bus_topic": "Transcription.StreamCancel",
+    "route_path": "/api/Transcription/StreamCancel",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamCancel"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamCancelRequest",
+    "output_model": "TranscriptionStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest",
+    "output_schema_id": "Transcription.StreamCancel.output.TranscriptionStreamResult",
+    "input_schema_hash": "49e5b1490922b2edf733807fca52beb6d81cec4ee29aa362c16c3efc441d7ee7",
+    "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"
+  },
+  {
+    "method_id": "Transcription.StreamStatus",
+    "module": "Transcription",
+    "name": "StreamStatus",
+    "topic": "Transcription.StreamStatus",
+    "bus_topic": "Transcription.StreamStatus",
+    "route_path": "/api/Transcription/StreamStatus",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamStatus"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamStatusRequest",
+    "output_model": "TranscriptionStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest",
+    "output_schema_id": "Transcription.StreamStatus.output.TranscriptionStreamStatus",
+    "input_schema_hash": "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0",
+    "output_schema_hash": "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a"
+  },
+  {
+    "method_id": "Transcription.StreamResult",
+    "module": "Transcription",
+    "name": "StreamResult",
+    "topic": "Transcription.StreamResult",
+    "bus_topic": "Transcription.StreamResult",
+    "route_path": "/api/Transcription/StreamResult",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "Transcription.StreamResult"
+    ],
+    "callable_feature_ids": [
+      "audio_transcription"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "audio_transcription",
+        "module": "Transcription",
+        "label": "Audio Transcription",
+        "summary": "Transcribe submitted or streamed audio.",
+        "method_ids": [
+          "Transcription.ProcessAudio",
+          "Transcription.Transcribe",
+          "Transcription.StreamStart",
+          "Transcription.StreamChunk",
+          "Transcription.StreamEnd",
+          "Transcription.StreamCancel",
+          "Transcription.StreamStatus",
+          "Transcription.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "TranscriptionStreamStatusRequest",
+    "output_model": "TranscriptionStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "Transcription.StreamResult.input.TranscriptionStreamStatusRequest",
+    "output_schema_id": "Transcription.StreamResult.output.TranscriptionStreamResult",
+    "input_schema_hash": "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0",
+    "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"
+  },
+  {
+    "method_id": "VAD.Detect",
+    "module": "VAD",
+    "name": "Detect",
+    "topic": "VAD.Detect",
+    "bus_topic": "VAD.Detect",
+    "route_path": "/api/VAD/Detect",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.Detect"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADDetectRequest",
+    "output_model": "VADDetectResponse",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.Detect.input.VADDetectRequest",
+    "output_schema_id": "VAD.Detect.output.VADDetectResponse",
+    "input_schema_hash": "88f2a4d7d2e1a60baaf210ffa419f9f0d542ee1d7d139058752e201cba478672",
+    "output_schema_hash": "b6151884e74c650c774a2717da6a6fe0191296b884fd5156abaf7219a5aeef2d"
+  },
+  {
+    "method_id": "VAD.StreamStart",
+    "module": "VAD",
+    "name": "StreamStart",
+    "topic": "VAD.StreamStart",
+    "bus_topic": "VAD.StreamStart",
+    "route_path": "/api/VAD/StreamStart",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamStart"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamStartRequest",
+    "output_model": "VADStreamAdmission",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamStart.input.VADStreamStartRequest",
+    "output_schema_id": "VAD.StreamStart.output.VADStreamAdmission",
+    "input_schema_hash": "089979ca0d75b026ec99ba0d47218b17c9146b21c8429d803897d9561fd8f3b4",
+    "output_schema_hash": "60e1c96e83ae3ce9ce0e51aef34338b148b9458f3dee7967840fde41e1caa364"
+  },
+  {
+    "method_id": "VAD.StreamChunk",
+    "module": "VAD",
+    "name": "StreamChunk",
+    "topic": "VAD.StreamChunk",
+    "bus_topic": "VAD.StreamChunk",
+    "route_path": "/api/VAD/StreamChunk",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamChunk"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamChunkRequest",
+    "output_model": "VADStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamChunk.input.VADStreamChunkRequest",
+    "output_schema_id": "VAD.StreamChunk.output.VADStreamStatus",
+    "input_schema_hash": "2c7f7e22740cd057cc24c1dc235b7c5410cdd3dd862ce67d94dd0aa76d57f2d9",
+    "output_schema_hash": "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2"
+  },
+  {
+    "method_id": "VAD.StreamEnd",
+    "module": "VAD",
+    "name": "StreamEnd",
+    "topic": "VAD.StreamEnd",
+    "bus_topic": "VAD.StreamEnd",
+    "route_path": "/api/VAD/StreamEnd",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamEnd"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamEndRequest",
+    "output_model": "VADStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamEnd.input.VADStreamEndRequest",
+    "output_schema_id": "VAD.StreamEnd.output.VADStreamResult",
+    "input_schema_hash": "16e1307b8a09eeb52e539951403911ecf8280c867317facefca7b0fe625f8495",
+    "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"
+  },
+  {
+    "method_id": "VAD.StreamCancel",
+    "module": "VAD",
+    "name": "StreamCancel",
+    "topic": "VAD.StreamCancel",
+    "bus_topic": "VAD.StreamCancel",
+    "route_path": "/api/VAD/StreamCancel",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamCancel"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamCancelRequest",
+    "output_model": "VADStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamCancel.input.VADStreamCancelRequest",
+    "output_schema_id": "VAD.StreamCancel.output.VADStreamResult",
+    "input_schema_hash": "58ae598986603ceac5717ac77d7ccc8c7d16d5db9e70e10c23083322c36b711b",
+    "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"
+  },
+  {
+    "method_id": "VAD.StreamStatus",
+    "module": "VAD",
+    "name": "StreamStatus",
+    "topic": "VAD.StreamStatus",
+    "bus_topic": "VAD.StreamStatus",
+    "route_path": "/api/VAD/StreamStatus",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamStatus"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamStatusRequest",
+    "output_model": "VADStreamStatus",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamStatus.input.VADStreamStatusRequest",
+    "output_schema_id": "VAD.StreamStatus.output.VADStreamStatus",
+    "input_schema_hash": "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7",
+    "output_schema_hash": "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2"
+  },
+  {
+    "method_id": "VAD.StreamResult",
+    "module": "VAD",
+    "name": "StreamResult",
+    "topic": "VAD.StreamResult",
+    "bus_topic": "VAD.StreamResult",
+    "route_path": "/api/VAD/StreamResult",
+    "route_kind": "dynamic",
+    "exposure": "both",
+    "method_type": "use",
+    "required_perms": [
+      "VAD.StreamResult"
+    ],
+    "callable_feature_ids": [
+      "vad_detection"
+    ],
+    "callable_features": [
+      {
+        "feature_id": "vad_detection",
+        "module": "VAD",
+        "label": "Voice Activity Detection",
+        "summary": "Detect speech activity in submitted or explicitly admitted audio.",
+        "method_ids": [
+          "VAD.Detect",
+          "VAD.StreamStart",
+          "VAD.StreamChunk",
+          "VAD.StreamEnd",
+          "VAD.StreamCancel",
+          "VAD.StreamStatus",
+          "VAD.StreamResult"
+        ]
+      }
+    ],
+    "input_model": "VADStreamStatusRequest",
+    "output_model": "VADStreamResult",
+    "streaming": {
+      "rpc_kind": "unary",
+      "ordered_command_group": null,
+      "request_stream": false,
+      "response_stream": false,
+      "event_topic": null
+    },
+    "speech_constraints": null,
+    "input_schema_id": "VAD.StreamResult.input.VADStreamStatusRequest",
+    "output_schema_id": "VAD.StreamResult.output.VADStreamResult",
+    "input_schema_hash": "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7",
+    "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"
   }
 ] as const
 
@@ -3818,19 +5622,42 @@ export const backendContractMethodDescriptorById = {
   "TTS.ExportVoiceProfile": {"method_id": "TTS.ExportVoiceProfile", "module": "TTS", "name": "ExportVoiceProfile", "topic": "TTS.ExportVoiceProfile", "bus_topic": "TTS.ExportVoiceProfile", "route_path": "/api/TTS/ExportVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSExportVoiceProfileRequest", "output_model": "TTSExportVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest", "output_schema_id": "TTS.ExportVoiceProfile.output.TTSExportVoiceProfileResponse", "input_schema_hash": "b4fd7de973c58b3873d3e47fb541a8462301310a17c50c89b2ff21b21c350b8c", "output_schema_hash": "ca22940aa58eb0409ec785cb446fb3d71ce8eeb8bf64940306263ec10f2c5549"},
   "TTS.ImportVoiceProfile": {"method_id": "TTS.ImportVoiceProfile", "module": "TTS", "name": "ImportVoiceProfile", "topic": "TTS.ImportVoiceProfile", "bus_topic": "TTS.ImportVoiceProfile", "route_path": "/api/TTS/ImportVoiceProfile", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["TTS.manage"], "callable_feature_ids": ["speech_voice_management"], "callable_features": [{"feature_id": "speech_voice_management", "module": "TTS", "label": "Voice Profile Management", "summary": "Administer local TTS voice profiles and bounded voice imports.", "method_ids": ["TTS.ListLanguagePacks", "TTS.ListVoiceProfiles", "TTS.GetVoiceProfile", "TTS.UpdateVoiceProfile", "TTS.InstallVoiceProfile", "TTS.RemoveVoiceProfile", "TTS.SetDefaultVoice", "TTS.VoiceImportStart", "TTS.VoiceImportChunk", "TTS.VoiceImportEnd", "TTS.VoiceImportAbort", "TTS.CreateVoiceProfile", "TTS.DeleteVoiceProfile", "TTS.ExportVoiceProfile", "TTS.ImportVoiceProfile"]}], "input_model": "TTSImportVoiceProfileRequest", "output_model": "TTSImportVoiceProfileResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.ImportVoiceProfile.input.TTSImportVoiceProfileRequest", "output_schema_id": "TTS.ImportVoiceProfile.output.TTSImportVoiceProfileResponse", "input_schema_hash": "01387ef937b920bbf6430506b48134f7e90af5f36fdeb60eb186896da5025fb3", "output_schema_hash": "ec268dd6219a7881a94f2b87637711a3b2d4b20dd7942cb65ee37caaa4d985fc"},
   "TTS.Request": {"method_id": "TTS.Request", "module": "TTS", "name": "Request", "topic": "TTS.Request", "bus_topic": "TTS.Request", "route_path": "/api/TTS/Request", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Request"], "callable_feature_ids": ["speech_playback"], "callable_features": [{"feature_id": "speech_playback", "module": "TTS", "label": "Speech Playback", "summary": "Play synthesized speech on the provider.", "method_ids": ["TTS.Request"]}], "input_model": "TTSRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Request.input.TTSRequest", "output_schema_id": "TTS.Request.output.EmptyOutput", "input_schema_hash": "847bdcf850fb47d40ef76f6e827fbd24282ed9464bd2d847b4f46d94aa45d29a", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamStart": {"method_id": "TTS.StreamStart", "module": "TTS", "name": "StreamStart", "topic": "TTS.StreamStart", "bus_topic": "TTS.StreamStart", "route_path": "/api/TTS/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStart"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamStartRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest", "output_schema_id": "TTS.StreamStart.output.EmptyOutput", "input_schema_hash": "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamChunk": {"method_id": "TTS.StreamChunk", "module": "TTS", "name": "StreamChunk", "topic": "TTS.StreamChunk", "bus_topic": "TTS.StreamChunk", "route_path": "/api/TTS/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamChunk"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamChunkRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest", "output_schema_id": "TTS.StreamChunk.output.EmptyOutput", "input_schema_hash": "0c0d3bc9834efb039133fa4cc21f200ce4eee0b13727e8a39cf63697c899399d", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "TTS.StreamEnd": {"method_id": "TTS.StreamEnd", "module": "TTS", "name": "StreamEnd", "topic": "TTS.StreamEnd", "bus_topic": "TTS.StreamEnd", "route_path": "/api/TTS/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamEnd"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd"]}], "input_model": "TTSStreamEndRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamEnd.input.TTSStreamEndRequest", "output_schema_id": "TTS.StreamEnd.output.EmptyOutput", "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamStart": {"method_id": "TTS.StreamStart", "module": "TTS", "name": "StreamStart", "topic": "TTS.StreamStart", "bus_topic": "TTS.StreamStart", "route_path": "/api/TTS/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStart"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamStartRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamStart.input.TTSStreamStartRequest", "output_schema_id": "TTS.StreamStart.output.EmptyOutput", "input_schema_hash": "00bb387df534190b9026e472cff6d6c1deeed67429a309bfdc731cbb13f8d498", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamChunk": {"method_id": "TTS.StreamChunk", "module": "TTS", "name": "StreamChunk", "topic": "TTS.StreamChunk", "bus_topic": "TTS.StreamChunk", "route_path": "/api/TTS/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamChunk"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamChunkRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest", "output_schema_id": "TTS.StreamChunk.output.EmptyOutput", "input_schema_hash": "63c0fadd38998b9632b3f78acd4c9f4400dd1ea87372acd652139ab3161de86b", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamEnd": {"method_id": "TTS.StreamEnd", "module": "TTS", "name": "StreamEnd", "topic": "TTS.StreamEnd", "bus_topic": "TTS.StreamEnd", "route_path": "/api/TTS/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamEnd"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamEndRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": "tts_text_stream", "request_stream": false, "response_stream": false, "event_topic": "TTS.AudioChunk"}, "speech_constraints": null, "input_schema_id": "TTS.StreamEnd.input.TTSStreamEndRequest", "output_schema_id": "TTS.StreamEnd.output.EmptyOutput", "input_schema_hash": "059faba0be794cfba1e8e30ed272273132ba9440fcf014566c097499f8d7fb61", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "TTS.StreamPrepareV1": {"method_id": "TTS.StreamPrepareV1", "module": "TTS", "name": "StreamPrepareV1", "topic": "TTS.StreamPrepareV1", "bus_topic": "TTS.StreamPrepareV1", "route_path": "/api/TTS/StreamPrepareV1", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamPrepareV1"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamPrepareRequest", "output_model": "TTSStreamPrepareResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest", "output_schema_id": "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse", "input_schema_hash": "282ded6d85d901ef1d7e4bb09e41be051421c689cc826abf2625508d004c1efb", "output_schema_hash": "22a0dbaa2750ba5cc4a6a23bd0f0e92ba892bb1f5313f0860bf54691cb6eca76"},
+  "TTS.StreamStatus": {"method_id": "TTS.StreamStatus", "module": "TTS", "name": "StreamStatus", "topic": "TTS.StreamStatus", "bus_topic": "TTS.StreamStatus", "route_path": "/api/TTS/StreamStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamStatus"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamSessionStatusRequest", "output_model": "TTSStreamSessionStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.StreamStatus.input.TTSStreamSessionStatusRequest", "output_schema_id": "TTS.StreamStatus.output.TTSStreamSessionStatus", "input_schema_hash": "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a", "output_schema_hash": "4bba07a6a2efe5f9ce796becd9756b62cf0bdcd44cf97c9b18b236346bf9d358"},
+  "TTS.StreamCancel": {"method_id": "TTS.StreamCancel", "module": "TTS", "name": "StreamCancel", "topic": "TTS.StreamCancel", "bus_topic": "TTS.StreamCancel", "route_path": "/api/TTS/StreamCancel", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamCancel"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamSessionCancelRequest", "output_model": "TTSStreamSessionResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.StreamCancel.input.TTSStreamSessionCancelRequest", "output_schema_id": "TTS.StreamCancel.output.TTSStreamSessionResult", "input_schema_hash": "d2547255ec4592f0300368b3d0e30e7c6ad594e283ba47616f3667b00a4d96c5", "output_schema_hash": "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a"},
+  "TTS.StreamResult": {"method_id": "TTS.StreamResult", "module": "TTS", "name": "StreamResult", "topic": "TTS.StreamResult", "bus_topic": "TTS.StreamResult", "route_path": "/api/TTS/StreamResult", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.StreamResult"], "callable_feature_ids": ["speech_streaming"], "callable_features": [{"feature_id": "speech_streaming", "module": "TTS", "label": "Speech Streaming", "summary": "Start, stream, and end ordered text-to-speech audio streams.", "method_ids": ["TTS.StreamStart", "TTS.StreamChunk", "TTS.StreamEnd", "TTS.StreamPrepareV1", "TTS.StreamStatus", "TTS.StreamCancel", "TTS.StreamResult"]}], "input_model": "TTSStreamSessionStatusRequest", "output_model": "TTSStreamSessionResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.StreamResult.input.TTSStreamSessionStatusRequest", "output_schema_id": "TTS.StreamResult.output.TTSStreamSessionResult", "input_schema_hash": "d058555de161251f06246fd29e71fcbccab542df9695387f73a658621af2ff3a", "output_schema_hash": "01bfa825849923a6e1ba99a6ab92402249dd585e36ed54f767f9f67f6637a61a"},
   "TTS.Synthesize": {"method_id": "TTS.Synthesize", "module": "TTS", "name": "Synthesize", "topic": "TTS.Synthesize", "bus_topic": "TTS.Synthesize", "route_path": "/api/TTS/Synthesize", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["TTS.Synthesize"], "callable_feature_ids": ["speech_synthesis"], "callable_features": [{"feature_id": "speech_synthesis", "module": "TTS", "label": "Speech Synthesis", "summary": "Return synthesized audio data without provider playback.", "method_ids": ["TTS.Synthesize"]}], "input_model": "TTSSynthesizeRequest", "output_model": "TTSSynthesizeResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest", "output_schema_id": "TTS.Synthesize.output.TTSSynthesizeResponse", "input_schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25", "output_schema_hash": "65e6311d9a20d865d39d56b774eedd48af949d792c84f5930a348b6ee223f793"},
   "STTCoordinator.Listen": {"method_id": "STTCoordinator.Listen", "module": "STTCoordinator", "name": "Listen", "topic": "STTCoordinator.Listen", "bus_topic": "STTCoordinator.Listen", "route_path": "/api/STTCoordinator/Listen", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTListenRequest", "output_model": "STTListenResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.Listen.input.STTListenRequest", "output_schema_id": "STTCoordinator.Listen.output.STTListenResponse", "input_schema_hash": "8130cc5cdde9469f9cb249bb59a515c018fe8c33037309f02b74a83f1194a46f", "output_schema_hash": "3b629fc8dc429740afab14c2f35a2b31317e94a8f38631ab115f14944f2aaf30"},
   "STTCoordinator.StopListening": {"method_id": "STTCoordinator.StopListening", "module": "STTCoordinator", "name": "StopListening", "topic": "STTCoordinator.StopListening", "bus_topic": "STTCoordinator.StopListening", "route_path": "/api/STTCoordinator/StopListening", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["STTCoordinator.use"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTStopListeningRequest", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.StopListening.input.STTStopListeningRequest", "output_schema_id": "STTCoordinator.StopListening.output.EmptyOutput", "input_schema_hash": "297d48be1b7ec76f082f8d3999cb5dfa0f53b28107333fc5b887a470ce30cafd", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
   "STTCoordinator.CapturePrepare": {"method_id": "STTCoordinator.CapturePrepare", "module": "STTCoordinator", "name": "CapturePrepare", "topic": "STTCoordinator.CapturePrepare", "bus_topic": "STTCoordinator.CapturePrepare", "route_path": "/api/STTCoordinator/CapturePrepare", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCapturePrepareRequest", "output_model": "STTCapturePrepareResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CapturePrepare.input.STTCapturePrepareRequest", "output_schema_id": "STTCoordinator.CapturePrepare.output.STTCapturePrepareResponse", "input_schema_hash": "69ebc92cfe9fed08689a9ba2c622cddf99158b2c9b9fabfb0030155863269886", "output_schema_hash": "36b41e14c1b1007c202c90e2c3bb9934cbc296a15168278b399b54a96b2d8cbb"},
   "STTCoordinator.CaptureRelease": {"method_id": "STTCoordinator.CaptureRelease", "module": "STTCoordinator", "name": "CaptureRelease", "topic": "STTCoordinator.CaptureRelease", "bus_topic": "STTCoordinator.CaptureRelease", "route_path": "/api/STTCoordinator/CaptureRelease", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCaptureReleaseRequest", "output_model": "STTCaptureReleaseResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureRelease.input.STTCaptureReleaseRequest", "output_schema_id": "STTCoordinator.CaptureRelease.output.STTCaptureReleaseResponse", "input_schema_hash": "f36c2517b38b47b7ed5a3b1366227eaa8b2f7972b5c6fd55b593bf7997cd123e", "output_schema_hash": "2134b34784696f59c4d7f179b637c533d7b4e0f33a9164a97c5c33f0713f986a"},
   "STTCoordinator.CaptureStatus": {"method_id": "STTCoordinator.CaptureStatus", "module": "STTCoordinator", "name": "CaptureStatus", "topic": "STTCoordinator.CaptureStatus", "bus_topic": "STTCoordinator.CaptureStatus", "route_path": "/api/STTCoordinator/CaptureStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "manage", "required_perms": ["STTCoordinator.manage"], "callable_feature_ids": ["listening_session_control"], "callable_features": [{"feature_id": "listening_session_control", "module": "STTCoordinator", "label": "Listening Session Control", "summary": "Control listening sessions and exclusive native microphone ownership.", "method_ids": ["STTCoordinator.Listen", "STTCoordinator.StopListening", "STTCoordinator.CapturePrepare", "STTCoordinator.CaptureRelease", "STTCoordinator.CaptureStatus"]}], "input_model": "STTCaptureStatusRequest", "output_model": "STTCaptureStatusResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "STTCoordinator.CaptureStatus.input.STTCaptureStatusRequest", "output_schema_id": "STTCoordinator.CaptureStatus.output.STTCaptureStatusResponse", "input_schema_hash": "0e594cd836f4c80e0da3e223280b2ccfed962813acf3296c4b4a0d02f2e29f7a", "output_schema_hash": "8703ae4586bc390c5bd5aa8a53f3015333d97d4c5049fce4e49a0ce0f33a2339"},
-  "WakeWord.ProcessAudio": {"method_id": "WakeWord.ProcessAudio", "module": "WakeWord", "name": "ProcessAudio", "topic": "WakeWord.ProcessAudio", "bus_topic": "WakeWord.ProcessAudio", "route_path": "/api/WakeWord/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.ProcessAudio"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.ProcessAudio.input.STTAudioChunk", "output_schema_id": "WakeWord.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect"]}], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
-  "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
-  "Transcription.Transcribe": {"method_id": "Transcription.Transcribe", "module": "Transcription", "name": "Transcribe", "topic": "Transcription.Transcribe", "bus_topic": "Transcription.Transcribe", "route_path": "/api/Transcription/Transcribe", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.Transcribe"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe"]}], "input_model": "TranscribeAudioRequest", "output_model": "TranscribeAudioResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest", "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse", "input_schema_hash": "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa", "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"},
+  "WakeWord.ProcessAudio": {"method_id": "WakeWord.ProcessAudio", "module": "WakeWord", "name": "ProcessAudio", "topic": "WakeWord.ProcessAudio", "bus_topic": "WakeWord.ProcessAudio", "route_path": "/api/WakeWord/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.ProcessAudio"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.ProcessAudio.input.STTAudioChunk", "output_schema_id": "WakeWord.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "WakeWord.Detect": {"method_id": "WakeWord.Detect", "module": "WakeWord", "name": "Detect", "topic": "WakeWord.Detect", "bus_topic": "WakeWord.Detect", "route_path": "/api/WakeWord/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.Detect"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordDetectRequest", "output_model": "WakeWordDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.Detect.input.WakeWordDetectRequest", "output_schema_id": "WakeWord.Detect.output.WakeWordDetectResponse", "input_schema_hash": "6d84e293fe9bf90a30317d78b1e8043cb52d45e13e8fce5ceb84e63185984735", "output_schema_hash": "c9675c0beade1d9158903798837dc11ae51429775bf4368ceb4783bdfdb793cf"},
+  "WakeWord.StreamStart": {"method_id": "WakeWord.StreamStart", "module": "WakeWord", "name": "StreamStart", "topic": "WakeWord.StreamStart", "bus_topic": "WakeWord.StreamStart", "route_path": "/api/WakeWord/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamStart"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamStartRequest", "output_model": "WakeWordStreamAdmission", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamStart.input.WakeWordStreamStartRequest", "output_schema_id": "WakeWord.StreamStart.output.WakeWordStreamAdmission", "input_schema_hash": "028976fa6b8ce81b3350638bad2dacbea351c4979b720d97bc0df3179f740637", "output_schema_hash": "bbf1328e6d9d1d3df0806129873a8441454eef8a9f1fa5cff829f29c0f60d64b"},
+  "WakeWord.StreamChunk": {"method_id": "WakeWord.StreamChunk", "module": "WakeWord", "name": "StreamChunk", "topic": "WakeWord.StreamChunk", "bus_topic": "WakeWord.StreamChunk", "route_path": "/api/WakeWord/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamChunk"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamChunkRequest", "output_model": "WakeWordStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest", "output_schema_id": "WakeWord.StreamChunk.output.WakeWordStreamStatus", "input_schema_hash": "5dc178412e11695ddcacf456b1300868c97031367a87f857235d9f62f5412e16", "output_schema_hash": "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4"},
+  "WakeWord.StreamEnd": {"method_id": "WakeWord.StreamEnd", "module": "WakeWord", "name": "StreamEnd", "topic": "WakeWord.StreamEnd", "bus_topic": "WakeWord.StreamEnd", "route_path": "/api/WakeWord/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamEnd"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamEndRequest", "output_model": "WakeWordStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamEnd.input.WakeWordStreamEndRequest", "output_schema_id": "WakeWord.StreamEnd.output.WakeWordStreamResult", "input_schema_hash": "f1f02f2e8054551e35e3b333acdde696197f235bc725916fd5909a78917e55dd", "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"},
+  "WakeWord.StreamCancel": {"method_id": "WakeWord.StreamCancel", "module": "WakeWord", "name": "StreamCancel", "topic": "WakeWord.StreamCancel", "bus_topic": "WakeWord.StreamCancel", "route_path": "/api/WakeWord/StreamCancel", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamCancel"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamCancelRequest", "output_model": "WakeWordStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest", "output_schema_id": "WakeWord.StreamCancel.output.WakeWordStreamResult", "input_schema_hash": "19e5598793300b8492a3459d1a4149bc97a1e8b032aaa02e3ac2ad9d87f57fb5", "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"},
+  "WakeWord.StreamStatus": {"method_id": "WakeWord.StreamStatus", "module": "WakeWord", "name": "StreamStatus", "topic": "WakeWord.StreamStatus", "bus_topic": "WakeWord.StreamStatus", "route_path": "/api/WakeWord/StreamStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamStatus"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamStatusRequest", "output_model": "WakeWordStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest", "output_schema_id": "WakeWord.StreamStatus.output.WakeWordStreamStatus", "input_schema_hash": "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47", "output_schema_hash": "72c6ff0bd81029894dfed56170a7d9ce31fea41f64205fa7247188da51950ce4"},
+  "WakeWord.StreamResult": {"method_id": "WakeWord.StreamResult", "module": "WakeWord", "name": "StreamResult", "topic": "WakeWord.StreamResult", "bus_topic": "WakeWord.StreamResult", "route_path": "/api/WakeWord/StreamResult", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["WakeWord.StreamResult"], "callable_feature_ids": ["wake_word_detection"], "callable_features": [{"feature_id": "wake_word_detection", "module": "WakeWord", "label": "Wake Word Detection", "summary": "Detect wake words in submitted or streamed audio.", "method_ids": ["WakeWord.ProcessAudio", "WakeWord.Detect", "WakeWord.StreamStart", "WakeWord.StreamChunk", "WakeWord.StreamEnd", "WakeWord.StreamCancel", "WakeWord.StreamStatus", "WakeWord.StreamResult"]}], "input_model": "WakeWordStreamStatusRequest", "output_model": "WakeWordStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "WakeWord.StreamResult.input.WakeWordStreamStatusRequest", "output_schema_id": "WakeWord.StreamResult.output.WakeWordStreamResult", "input_schema_hash": "74d942293bd270507dd4e1e34afe71ff2f60ad98089f3d23550d620360ee7a47", "output_schema_hash": "154c08e1d7e37ac887be55a6f902a408baa5f58e379d6af79041c808ea61ce97"},
+  "Transcription.ProcessAudio": {"method_id": "Transcription.ProcessAudio", "module": "Transcription", "name": "ProcessAudio", "topic": "Transcription.ProcessAudio", "bus_topic": "Transcription.ProcessAudio", "route_path": "/api/Transcription/ProcessAudio", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.ProcessAudio"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "STTAudioChunk", "output_model": "EmptyOutput", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.ProcessAudio.input.STTAudioChunk", "output_schema_id": "Transcription.ProcessAudio.output.EmptyOutput", "input_schema_hash": "3670479489138802e7d52d4b7d5623c52b363cd4166db2ee7916f6449a10233e", "output_schema_hash": "d752bd45e4fd44c7a57678a37407a5fc08f6330355fef98e81c5fa20f89bf06b"},
+  "Transcription.Transcribe": {"method_id": "Transcription.Transcribe", "module": "Transcription", "name": "Transcribe", "topic": "Transcription.Transcribe", "bus_topic": "Transcription.Transcribe", "route_path": "/api/Transcription/Transcribe", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.Transcribe"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscribeAudioRequest", "output_model": "TranscribeAudioResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest", "output_schema_id": "Transcription.Transcribe.output.TranscribeAudioResponse", "input_schema_hash": "3628310e0ac6d0b784ae6197b91dcc55fe1e9b3b5b33d08bffd45f5baac983fa", "output_schema_hash": "b7ac3e6f267b25a27363d98499342a6364bdb49530363ed96918d544a92fce5f"},
+  "Transcription.StreamStart": {"method_id": "Transcription.StreamStart", "module": "Transcription", "name": "StreamStart", "topic": "Transcription.StreamStart", "bus_topic": "Transcription.StreamStart", "route_path": "/api/Transcription/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamStart"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamStartRequest", "output_model": "TranscriptionStreamAdmission", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest", "output_schema_id": "Transcription.StreamStart.output.TranscriptionStreamAdmission", "input_schema_hash": "d3bbb6597242906b59d4e53cb5379f751965788c83e02405a567a7cd22356696", "output_schema_hash": "d86ef01934340de3aac53b956228364ac5a3f7f107035a04fc177032ac497f14"},
+  "Transcription.StreamChunk": {"method_id": "Transcription.StreamChunk", "module": "Transcription", "name": "StreamChunk", "topic": "Transcription.StreamChunk", "bus_topic": "Transcription.StreamChunk", "route_path": "/api/Transcription/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamChunk"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamChunkRequest", "output_model": "TranscriptionStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest", "output_schema_id": "Transcription.StreamChunk.output.TranscriptionStreamStatus", "input_schema_hash": "686ca9ef3ad6f06bdd707e842832fd1a57a11773d5bbffc2ecaf76ff8263c17a", "output_schema_hash": "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a"},
+  "Transcription.StreamEnd": {"method_id": "Transcription.StreamEnd", "module": "Transcription", "name": "StreamEnd", "topic": "Transcription.StreamEnd", "bus_topic": "Transcription.StreamEnd", "route_path": "/api/Transcription/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamEnd"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamEndRequest", "output_model": "TranscriptionStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamEnd.input.TranscriptionStreamEndRequest", "output_schema_id": "Transcription.StreamEnd.output.TranscriptionStreamResult", "input_schema_hash": "4f701b56625d2694823e5d4ae9bad7e74159fea247fc67bdb1c213fbe5acc115", "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"},
+  "Transcription.StreamCancel": {"method_id": "Transcription.StreamCancel", "module": "Transcription", "name": "StreamCancel", "topic": "Transcription.StreamCancel", "bus_topic": "Transcription.StreamCancel", "route_path": "/api/Transcription/StreamCancel", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamCancel"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamCancelRequest", "output_model": "TranscriptionStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest", "output_schema_id": "Transcription.StreamCancel.output.TranscriptionStreamResult", "input_schema_hash": "49e5b1490922b2edf733807fca52beb6d81cec4ee29aa362c16c3efc441d7ee7", "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"},
+  "Transcription.StreamStatus": {"method_id": "Transcription.StreamStatus", "module": "Transcription", "name": "StreamStatus", "topic": "Transcription.StreamStatus", "bus_topic": "Transcription.StreamStatus", "route_path": "/api/Transcription/StreamStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamStatus"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamStatusRequest", "output_model": "TranscriptionStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest", "output_schema_id": "Transcription.StreamStatus.output.TranscriptionStreamStatus", "input_schema_hash": "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0", "output_schema_hash": "6984234c33f5dc96b91bfa1d85474cdef6ac5cfbbd43410d8e063eff028cfc7a"},
+  "Transcription.StreamResult": {"method_id": "Transcription.StreamResult", "module": "Transcription", "name": "StreamResult", "topic": "Transcription.StreamResult", "bus_topic": "Transcription.StreamResult", "route_path": "/api/Transcription/StreamResult", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["Transcription.StreamResult"], "callable_feature_ids": ["audio_transcription"], "callable_features": [{"feature_id": "audio_transcription", "module": "Transcription", "label": "Audio Transcription", "summary": "Transcribe submitted or streamed audio.", "method_ids": ["Transcription.ProcessAudio", "Transcription.Transcribe", "Transcription.StreamStart", "Transcription.StreamChunk", "Transcription.StreamEnd", "Transcription.StreamCancel", "Transcription.StreamStatus", "Transcription.StreamResult"]}], "input_model": "TranscriptionStreamStatusRequest", "output_model": "TranscriptionStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "Transcription.StreamResult.input.TranscriptionStreamStatusRequest", "output_schema_id": "Transcription.StreamResult.output.TranscriptionStreamResult", "input_schema_hash": "67a9f2a7fe2918c52d36f28851ef0ead4c70c46a3c5a450fea7c0f91a5b890f0", "output_schema_hash": "abe9f16161dc4e5c6d1f0e6f1bb8cc977da9145f4dde1b656cf29ceeac908efb"},
+  "VAD.Detect": {"method_id": "VAD.Detect", "module": "VAD", "name": "Detect", "topic": "VAD.Detect", "bus_topic": "VAD.Detect", "route_path": "/api/VAD/Detect", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.Detect"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADDetectRequest", "output_model": "VADDetectResponse", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.Detect.input.VADDetectRequest", "output_schema_id": "VAD.Detect.output.VADDetectResponse", "input_schema_hash": "88f2a4d7d2e1a60baaf210ffa419f9f0d542ee1d7d139058752e201cba478672", "output_schema_hash": "b6151884e74c650c774a2717da6a6fe0191296b884fd5156abaf7219a5aeef2d"},
+  "VAD.StreamStart": {"method_id": "VAD.StreamStart", "module": "VAD", "name": "StreamStart", "topic": "VAD.StreamStart", "bus_topic": "VAD.StreamStart", "route_path": "/api/VAD/StreamStart", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamStart"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamStartRequest", "output_model": "VADStreamAdmission", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamStart.input.VADStreamStartRequest", "output_schema_id": "VAD.StreamStart.output.VADStreamAdmission", "input_schema_hash": "089979ca0d75b026ec99ba0d47218b17c9146b21c8429d803897d9561fd8f3b4", "output_schema_hash": "60e1c96e83ae3ce9ce0e51aef34338b148b9458f3dee7967840fde41e1caa364"},
+  "VAD.StreamChunk": {"method_id": "VAD.StreamChunk", "module": "VAD", "name": "StreamChunk", "topic": "VAD.StreamChunk", "bus_topic": "VAD.StreamChunk", "route_path": "/api/VAD/StreamChunk", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamChunk"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamChunkRequest", "output_model": "VADStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamChunk.input.VADStreamChunkRequest", "output_schema_id": "VAD.StreamChunk.output.VADStreamStatus", "input_schema_hash": "2c7f7e22740cd057cc24c1dc235b7c5410cdd3dd862ce67d94dd0aa76d57f2d9", "output_schema_hash": "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2"},
+  "VAD.StreamEnd": {"method_id": "VAD.StreamEnd", "module": "VAD", "name": "StreamEnd", "topic": "VAD.StreamEnd", "bus_topic": "VAD.StreamEnd", "route_path": "/api/VAD/StreamEnd", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamEnd"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamEndRequest", "output_model": "VADStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamEnd.input.VADStreamEndRequest", "output_schema_id": "VAD.StreamEnd.output.VADStreamResult", "input_schema_hash": "16e1307b8a09eeb52e539951403911ecf8280c867317facefca7b0fe625f8495", "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"},
+  "VAD.StreamCancel": {"method_id": "VAD.StreamCancel", "module": "VAD", "name": "StreamCancel", "topic": "VAD.StreamCancel", "bus_topic": "VAD.StreamCancel", "route_path": "/api/VAD/StreamCancel", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamCancel"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamCancelRequest", "output_model": "VADStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamCancel.input.VADStreamCancelRequest", "output_schema_id": "VAD.StreamCancel.output.VADStreamResult", "input_schema_hash": "58ae598986603ceac5717ac77d7ccc8c7d16d5db9e70e10c23083322c36b711b", "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"},
+  "VAD.StreamStatus": {"method_id": "VAD.StreamStatus", "module": "VAD", "name": "StreamStatus", "topic": "VAD.StreamStatus", "bus_topic": "VAD.StreamStatus", "route_path": "/api/VAD/StreamStatus", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamStatus"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamStatusRequest", "output_model": "VADStreamStatus", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamStatus.input.VADStreamStatusRequest", "output_schema_id": "VAD.StreamStatus.output.VADStreamStatus", "input_schema_hash": "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7", "output_schema_hash": "1496068fe4f70af6a75ee71ab46590b84cf8cd49f3ca2d6d0c36f62900dc9fa2"},
+  "VAD.StreamResult": {"method_id": "VAD.StreamResult", "module": "VAD", "name": "StreamResult", "topic": "VAD.StreamResult", "bus_topic": "VAD.StreamResult", "route_path": "/api/VAD/StreamResult", "route_kind": "dynamic", "exposure": "both", "method_type": "use", "required_perms": ["VAD.StreamResult"], "callable_feature_ids": ["vad_detection"], "callable_features": [{"feature_id": "vad_detection", "module": "VAD", "label": "Voice Activity Detection", "summary": "Detect speech activity in submitted or explicitly admitted audio.", "method_ids": ["VAD.Detect", "VAD.StreamStart", "VAD.StreamChunk", "VAD.StreamEnd", "VAD.StreamCancel", "VAD.StreamStatus", "VAD.StreamResult"]}], "input_model": "VADStreamStatusRequest", "output_model": "VADStreamResult", "streaming": {"rpc_kind": "unary", "ordered_command_group": null, "request_stream": false, "response_stream": false, "event_topic": null}, "speech_constraints": null, "input_schema_id": "VAD.StreamResult.input.VADStreamStatusRequest", "output_schema_id": "VAD.StreamResult.output.VADStreamResult", "input_schema_hash": "6114f7ad363bc634e61256e1ebe6eb2aa41a3a03518dbb0e14b447456716fad7", "output_schema_hash": "c3f2e8fdd50742b584d35f01b0031895bc733bad1bea7fe5022434e0c8290609"},
 } as const
 
 export const backendContractEventDescriptors = [
@@ -3875,7 +5702,7 @@ export const backendContractEventDescriptors = [
     "topic": "TTS.AudioChunk",
     "model": "TTSAudioChunkEvent",
     "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
-    "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6",
+    "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
     "required_permission": "TTS.use",
     "required_perms": [
       "TTS.use"
@@ -3890,7 +5717,7 @@ export const backendContractEventDescriptors = [
 export const backendContractEventDescriptorByTopic = {
   "Orchestrator.Response": {"event_topic": "Orchestrator.Response", "module": "Orchestrator", "name": "Response", "topic": "Orchestrator.Response", "model": "AssistantStreamEvent", "schema_id": "Orchestrator.Response.event.AssistantStreamEvent", "schema_hash": "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_stream", "remote_raw_audio_route": false},
   "Orchestrator.Interrupted": {"event_topic": "Orchestrator.Interrupted", "module": "Orchestrator", "name": "Interrupted", "topic": "Orchestrator.Interrupted", "model": "OrchestratorInterruptedEvent", "schema_id": "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent", "schema_hash": "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_interrupt", "remote_raw_audio_route": false},
-  "TTS.AudioChunk": {"event_topic": "TTS.AudioChunk", "module": "TTS", "name": "AudioChunk", "topic": "TTS.AudioChunk", "model": "TTSAudioChunkEvent", "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent", "schema_hash": "8f2a4c111920f068e5dae7ac8c6ea4dd031f7f50989af157d3c68fa5989760a6", "required_permission": "TTS.use", "required_perms": ["TTS.use"], "bounded": true, "authorized": true, "ordered_event_group": "tts_text_stream", "remote_raw_audio_route": false},
+  "TTS.AudioChunk": {"event_topic": "TTS.AudioChunk", "module": "TTS", "name": "AudioChunk", "topic": "TTS.AudioChunk", "model": "TTSAudioChunkEvent", "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent", "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542", "required_permission": "TTS.use", "required_perms": ["TTS.use"], "bounded": true, "authorized": true, "ordered_event_group": "tts_text_stream", "remote_raw_audio_route": false},
 } as const
 
 export const backendContractEnvelopeDescriptors = [

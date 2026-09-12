@@ -2,7 +2,7 @@
   "artifact": "aurora-rust-contract-parse-vectors",
   "generator_format_version": "aurora-rust-contract-codegen-v1",
   "schema_artifact": "aurora-sdk-backend-contracts",
-  "schema_content_hash": "9228e42a213ce1382c2b7341eddf63400e3ecbf5c302d1854f8fe63d62a6acef",
+  "schema_content_hash": "8c327ed401c447c8b63d9e81a7136fbbf830185ebba9c602898b729549aa4362",
   "vectors": [
     {
       "accepted": true,
@@ -3780,6 +3780,339 @@
       "accepted": true,
       "direction": "input",
       "input": {
+        "reason": "canceled",
+        "session_id": "tts-session-1"
+      },
+      "method_id": "TTS.StreamCancel",
+      "model_name": "TTSStreamSessionCancelRequest",
+      "normalized": {
+        "reason": "canceled",
+        "session_id": "tts-session-1"
+      },
+      "normalized_hash": "601e504177c6a0357ef9691e50843d9019c3354dfac1c38c951f03364921eb05",
+      "schema_id": "TTS.StreamCancel.input.TTSStreamSessionCancelRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "final_sequence": 0,
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "tts-session-1",
+        "stage": "tts",
+        "state": "completed"
+      },
+      "method_id": "TTS.StreamCancel",
+      "model_name": "TTSStreamSessionResult",
+      "normalized": {
+        "final_sequence": 0,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "tts-session-1",
+        "stage": "tts",
+        "state": "completed"
+      },
+      "normalized_hash": "13d55d9fdc7993fef1f3b504d434a02e4391df557057a23aeac42beb273eb224",
+      "schema_id": "TTS.StreamCancel.output.TTSStreamSessionResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "generation": 0,
+        "sequence": 0,
+        "session_id": "tts-session-1",
+        "stream_id": "tts-session-1",
+        "text": "hello"
+      },
+      "method_id": "TTS.StreamChunk",
+      "model_name": "TTSStreamChunkRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "correlation_id": null,
+        "generation": 0,
+        "is_final": false,
+        "mesh_selector": null,
+        "sequence": 0,
+        "session_id": "tts-session-1",
+        "stream_id": "tts-session-1",
+        "text": "hello"
+      },
+      "normalized_hash": "5a30ed0bf25cc7d38eabfa34b2a0ba64842b187e26eece6b3d5fdabe57847eab",
+      "schema_id": "TTS.StreamChunk.input.TTSStreamChunkRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "final_sequence": 0,
+        "stream_id": "tts-session-1"
+      },
+      "method_id": "TTS.StreamEnd",
+      "model_name": "TTSStreamEndRequest",
+      "normalized": {
+        "correlation_id": null,
+        "final_sequence": 0,
+        "mesh_selector": null,
+        "reason": "completed",
+        "stream_id": "tts-session-1"
+      },
+      "normalized_hash": "f1986a7ef0627c4cd7f2f744cfb6242589ed9293113871bc2e510157c5e2d519",
+      "schema_id": "TTS.StreamEnd.input.TTSStreamEndRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "interrupt": false,
+        "language": "en-US",
+        "operation_id": "tts-operation-1",
+        "play_on_server": false,
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "marker_paths": [
+        "$.properties.language:x-aurora-speech-language-string-normalize",
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "exact_selector": false,
+        "experimental_remote": false,
+        "generation": 0,
+        "interrupt": false,
+        "language": "en-us",
+        "mode": "streaming",
+        "operation_id": "tts-operation-1",
+        "play_on_server": false,
+        "remaining_deadline_ms": 60000,
+        "request_id": "request-1",
+        "route_revision": "route-1",
+        "schema": "speech-stage-admission.v1",
+        "stage": "tts"
+      },
+      "normalized_hash": "0ea431253818d7a62b84dfd61e3f78f963e1c2c585139d4799a0a395089cc853",
+      "schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "interrupt": false,
+        "language": "en-US",
+        "operation_id": " bad id ",
+        "play_on_server": false,
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareRequest",
+      "schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "interrupt": false,
+        "language": "en-US",
+        "operation_id": " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
+        "play_on_server": false,
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareRequest",
+      "schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest"
+    },
+    {
+      "accepted": false,
+      "case_index": 2,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "interrupt": false,
+        "language": "en--US",
+        "operation_id": "tts-operation-1",
+        "play_on_server": false,
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "issue_category": "speech_language",
+      "issue_path": "$.language",
+      "marker_paths": [
+        "$.properties.language:x-aurora-speech-language-string-normalize"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareRequest",
+      "schema_id": "TTS.StreamPrepareV1.input.TTSStreamPrepareRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": "tts-operation-1",
+        "reason_code": "admitted",
+        "session_id": "tts-session-1",
+        "status": "admitted"
+      },
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareResponse",
+      "normalized": {
+        "accepted_limits": {
+          "heartbeat_ms": 5000,
+          "idle_lease_ms": 15000,
+          "max_active_ms": 300000,
+          "max_chunk_bytes": 65536,
+          "max_input_bytes": 4194304,
+          "max_queue": 4,
+          "max_text_bytes": 4096
+        },
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "credits": 8,
+        "generation": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "operation_id": "tts-operation-1",
+        "reason_code": "admitted",
+        "schema": "speech.stage-session-admission.v1",
+        "session_id": "tts-session-1",
+        "status": "admitted"
+      },
+      "normalized_hash": "cd2b23de0525ee3997b3327569b30aaf3fa930000c062698f85e6ec7d39ee806",
+      "schema_id": "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 0,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": " bad id ",
+        "reason_code": "admitted",
+        "session_id": "tts-session-1",
+        "status": "admitted"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareResponse",
+      "schema_id": "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse"
+    },
+    {
+      "accepted": false,
+      "case_index": 1,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
+        "reason_code": "admitted",
+        "session_id": "tts-session-1",
+        "status": "admitted"
+      },
+      "issue_category": "tts_operation_id",
+      "issue_path": "$.operation_id",
+      "marker_paths": [
+        "$.properties.operation_id:x-aurora-tts-operation-id"
+      ],
+      "method_id": "TTS.StreamPrepareV1",
+      "model_name": "TTSStreamPrepareResponse",
+      "schema_id": "TTS.StreamPrepareV1.output.TTSStreamPrepareResponse"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "tts-session-1"
+      },
+      "method_id": "TTS.StreamResult",
+      "model_name": "TTSStreamSessionStatusRequest",
+      "normalized": {
+        "session_id": "tts-session-1"
+      },
+      "normalized_hash": "e2ddb88314c1825502219cbd829bc987bb3bf95d76d4e687cf6b5736b542ec67",
+      "schema_id": "TTS.StreamResult.input.TTSStreamSessionStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "final_sequence": 0,
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "tts-session-1",
+        "stage": "tts",
+        "state": "completed"
+      },
+      "method_id": "TTS.StreamResult",
+      "model_name": "TTSStreamSessionResult",
+      "normalized": {
+        "final_sequence": 0,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "tts-session-1",
+        "stage": "tts",
+        "state": "completed"
+      },
+      "normalized_hash": "13d55d9fdc7993fef1f3b504d434a02e4391df557057a23aeac42beb273eb224",
+      "schema_id": "TTS.StreamResult.output.TTSStreamSessionResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
         "language": " EN ",
         "stream_id": "stream-1"
       },
@@ -3815,6 +4148,45 @@
       "method_id": "TTS.StreamStart",
       "model_name": "TTSStreamStartRequest",
       "schema_id": "TTS.StreamStart.input.TTSStreamStartRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "tts-session-1"
+      },
+      "method_id": "TTS.StreamStatus",
+      "model_name": "TTSStreamSessionStatusRequest",
+      "normalized": {
+        "session_id": "tts-session-1"
+      },
+      "normalized_hash": "e2ddb88314c1825502219cbd829bc987bb3bf95d76d4e687cf6b5736b542ec67",
+      "schema_id": "TTS.StreamStatus.input.TTSStreamSessionStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "tts-session-1",
+        "state": "admitted"
+      },
+      "method_id": "TTS.StreamStatus",
+      "model_name": "TTSStreamSessionStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "tts-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "3e26057c57cdf4c88e0699b8fc05cb976d5a50d9a86e084ac1e5fa2c2c71d693",
+      "schema_id": "TTS.StreamStatus.output.TTSStreamSessionStatus"
     },
     {
       "accepted": true,
@@ -6685,6 +7057,299 @@
       "accepted": true,
       "direction": "input",
       "input": {
+        "reason": "canceled",
+        "session_id": "stt-session-1"
+      },
+      "method_id": "Transcription.StreamCancel",
+      "model_name": "TranscriptionStreamCancelRequest",
+      "normalized": {
+        "reason": "canceled",
+        "session_id": "stt-session-1"
+      },
+      "normalized_hash": "66bc5d8c8ff2762c2598e0547dcddaa2423c8b6104639a5726abca1caac51938",
+      "schema_id": "Transcription.StreamCancel.input.TranscriptionStreamCancelRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "method_id": "Transcription.StreamCancel",
+      "model_name": "TranscriptionStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "normalized_hash": "bd8702c795acf4ccb57252bc4c4e3be2c4c7bd614f043f27080a40d5f25eccd5",
+      "schema_id": "Transcription.StreamCancel.output.TranscriptionStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "stt-session-1"
+      },
+      "method_id": "Transcription.StreamChunk",
+      "model_name": "TranscriptionStreamChunkRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "is_final": false,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "stt-session-1"
+      },
+      "normalized_hash": "2a047d5a5dfc49d9bbddbfa277db5ce911091f3c7ab7680bdd49edee0f894047",
+      "schema_id": "Transcription.StreamChunk.input.TranscriptionStreamChunkRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "stt-session-1",
+        "state": "admitted"
+      },
+      "method_id": "Transcription.StreamChunk",
+      "model_name": "TranscriptionStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "stt-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "ec219bdc01bcd0608241caccd7c583caf1f5e20aba6ee9f392a18aeb42e77567",
+      "schema_id": "Transcription.StreamChunk.output.TranscriptionStreamStatus"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "final_sequence": 0,
+        "session_id": "stt-session-1"
+      },
+      "method_id": "Transcription.StreamEnd",
+      "model_name": "TranscriptionStreamEndRequest",
+      "normalized": {
+        "final_sequence": 0,
+        "session_id": "stt-session-1"
+      },
+      "normalized_hash": "eb29c89c377fe7deedc9e439a6779a80addd529411fd2817326dcf89c4be0b82",
+      "schema_id": "Transcription.StreamEnd.input.TranscriptionStreamEndRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "method_id": "Transcription.StreamEnd",
+      "model_name": "TranscriptionStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "normalized_hash": "bd8702c795acf4ccb57252bc4c4e3be2c4c7bd614f043f27080a40d5f25eccd5",
+      "schema_id": "Transcription.StreamEnd.output.TranscriptionStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "stt-session-1"
+      },
+      "method_id": "Transcription.StreamResult",
+      "model_name": "TranscriptionStreamStatusRequest",
+      "normalized": {
+        "session_id": "stt-session-1"
+      },
+      "normalized_hash": "841d595f0bc4cf7b1abb41dcd80dd095d2aff68ecd973cf30a52d313fdf48306",
+      "schema_id": "Transcription.StreamResult.input.TranscriptionStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "method_id": "Transcription.StreamResult",
+      "model_name": "TranscriptionStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "stt-session-1",
+        "stage": "stt",
+        "state": "completed"
+      },
+      "normalized_hash": "bd8702c795acf4ccb57252bc4c4e3be2c4c7bd614f043f27080a40d5f25eccd5",
+      "schema_id": "Transcription.StreamResult.output.TranscriptionStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "operation_id": "stt-operation-1",
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "method_id": "Transcription.StreamStart",
+      "model_name": "TranscriptionStreamStartRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "channels": 1,
+        "config_revision": 1,
+        "consent_revision": null,
+        "encoding": "pcm_s16le",
+        "exact_selector": false,
+        "experimental_remote": false,
+        "generation": 0,
+        "mode": "streaming",
+        "operation_id": "stt-operation-1",
+        "remaining_deadline_ms": 60000,
+        "request_id": "request-1",
+        "route_revision": "route-1",
+        "sample_rate": 16000,
+        "schema": "speech-stage-admission.v1",
+        "stage": "stt",
+        "target_peer_id": null,
+        "target_resource_id": null
+      },
+      "normalized_hash": "f2a344f58c8e21b256520a832ff55ed0bb32e6502a329cd29b57f03ff61717d5",
+      "schema_id": "Transcription.StreamStart.input.TranscriptionStreamStartRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": "stt-operation-1",
+        "reason_code": "admitted",
+        "session_id": "stt-session-1",
+        "status": "admitted"
+      },
+      "method_id": "Transcription.StreamStart",
+      "model_name": "TranscriptionStreamAdmission",
+      "normalized": {
+        "accepted_format": null,
+        "accepted_limits": {
+          "heartbeat_ms": 5000,
+          "idle_lease_ms": 15000,
+          "max_active_ms": 300000,
+          "max_chunk_bytes": 65536,
+          "max_input_bytes": 4194304,
+          "max_queue": 4,
+          "max_text_bytes": 4096
+        },
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "credits": 8,
+        "generation": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "operation_id": "stt-operation-1",
+        "reason_code": "admitted",
+        "schema": "speech.stage-session-admission.v1",
+        "session_id": "stt-session-1",
+        "status": "admitted"
+      },
+      "normalized_hash": "46d20c127b11a036acbd7fc185acb67c19395733d8ddfdd73d2f660dbf5a1d45",
+      "schema_id": "Transcription.StreamStart.output.TranscriptionStreamAdmission"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "stt-session-1"
+      },
+      "method_id": "Transcription.StreamStatus",
+      "model_name": "TranscriptionStreamStatusRequest",
+      "normalized": {
+        "session_id": "stt-session-1"
+      },
+      "normalized_hash": "841d595f0bc4cf7b1abb41dcd80dd095d2aff68ecd973cf30a52d313fdf48306",
+      "schema_id": "Transcription.StreamStatus.input.TranscriptionStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "stt-session-1",
+        "state": "admitted"
+      },
+      "method_id": "Transcription.StreamStatus",
+      "model_name": "TranscriptionStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "stt-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "ec219bdc01bcd0608241caccd7c583caf1f5e20aba6ee9f392a18aeb42e77567",
+      "schema_id": "Transcription.StreamStatus.output.TranscriptionStreamStatus"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
         "audio_data": "AA==",
         "auto_language_candidates": [
           " EN ",
@@ -6775,6 +7440,625 @@
       "method_id": "Transcription.Transcribe",
       "model_name": "TranscribeAudioRequest",
       "schema_id": "Transcription.Transcribe.input.TranscribeAudioRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "audio_data": "AA==",
+        "channels": 1,
+        "format": "pcm_s16le",
+        "sample_rate": 16000
+      },
+      "method_id": "VAD.Detect",
+      "model_name": "VADDetectRequest",
+      "normalized": {
+        "audio_data": "AA==",
+        "channels": 1,
+        "format": "pcm_s16le",
+        "sample_rate": 16000
+      },
+      "normalized_hash": "b79fd648be4882dad50c932db285f7e03937843c71d7bc6fb5c25823aa711661",
+      "schema_id": "VAD.Detect.input.VADDetectRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "confidence": 0.0,
+        "duration_ms": 0.03125,
+        "speech": false
+      },
+      "method_id": "VAD.Detect",
+      "model_name": "VADDetectResponse",
+      "normalized": {
+        "confidence": 0.0,
+        "duration_ms": 0.03125,
+        "redacted": true,
+        "speech": false
+      },
+      "normalized_hash": "ad1173e8ec12f8a8c2e51c627a7fe16753807bc1cd1451b324e262dc6abff650",
+      "schema_id": "VAD.Detect.output.VADDetectResponse"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "reason": "canceled",
+        "session_id": "vad-session-1"
+      },
+      "method_id": "VAD.StreamCancel",
+      "model_name": "VADStreamCancelRequest",
+      "normalized": {
+        "reason": "canceled",
+        "session_id": "vad-session-1"
+      },
+      "normalized_hash": "9b97b32de480ab786722b3c882be848cbca9637d3a50969cb3e43c3c2553f8c3",
+      "schema_id": "VAD.StreamCancel.input.VADStreamCancelRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "method_id": "VAD.StreamCancel",
+      "model_name": "VADStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "normalized_hash": "b5bc6cb9a1af000567b4591ff224f7c00b6392239d52f6191e9c2eb444f604d8",
+      "schema_id": "VAD.StreamCancel.output.VADStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "vad-session-1"
+      },
+      "method_id": "VAD.StreamChunk",
+      "model_name": "VADStreamChunkRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "is_final": false,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "vad-session-1"
+      },
+      "normalized_hash": "b55ddcec66a45ad3186d41ee1195544c3c5b6992d4cb0f9c6658c5c5a77401f4",
+      "schema_id": "VAD.StreamChunk.input.VADStreamChunkRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "vad-session-1",
+        "state": "admitted"
+      },
+      "method_id": "VAD.StreamChunk",
+      "model_name": "VADStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "vad-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "baa46acb429d484403971c473675af9d5e401b8175b7920bb3f1dce0d4145726",
+      "schema_id": "VAD.StreamChunk.output.VADStreamStatus"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "final_sequence": 0,
+        "session_id": "vad-session-1"
+      },
+      "method_id": "VAD.StreamEnd",
+      "model_name": "VADStreamEndRequest",
+      "normalized": {
+        "final_sequence": 0,
+        "session_id": "vad-session-1"
+      },
+      "normalized_hash": "abcb4aac11af9356dff0c8d891ce2cdeeebafb0df84b1cb37a7ba6856af688dd",
+      "schema_id": "VAD.StreamEnd.input.VADStreamEndRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "method_id": "VAD.StreamEnd",
+      "model_name": "VADStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "normalized_hash": "b5bc6cb9a1af000567b4591ff224f7c00b6392239d52f6191e9c2eb444f604d8",
+      "schema_id": "VAD.StreamEnd.output.VADStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "vad-session-1"
+      },
+      "method_id": "VAD.StreamResult",
+      "model_name": "VADStreamStatusRequest",
+      "normalized": {
+        "session_id": "vad-session-1"
+      },
+      "normalized_hash": "bc297b7ed7ca99610e42c7673035e793310bd426bfdfc4e53d7036896aeb450c",
+      "schema_id": "VAD.StreamResult.input.VADStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "method_id": "VAD.StreamResult",
+      "model_name": "VADStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "vad-session-1",
+        "stage": "vad",
+        "state": "completed"
+      },
+      "normalized_hash": "b5bc6cb9a1af000567b4591ff224f7c00b6392239d52f6191e9c2eb444f604d8",
+      "schema_id": "VAD.StreamResult.output.VADStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "operation_id": "vad-operation-1",
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "method_id": "VAD.StreamStart",
+      "model_name": "VADStreamStartRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "consent_revision": null,
+        "exact_selector": false,
+        "experimental_remote": false,
+        "generation": 0,
+        "mode": "streaming",
+        "operation_id": "vad-operation-1",
+        "remaining_deadline_ms": 60000,
+        "request_id": "request-1",
+        "route_revision": "route-1",
+        "schema": "speech-stage-admission.v1",
+        "stage": "vad",
+        "target_peer_id": null,
+        "target_resource_id": null
+      },
+      "normalized_hash": "b0af674adea6c287715f17edb92b565239bc4be612a18f39415233c404ed74cb",
+      "schema_id": "VAD.StreamStart.input.VADStreamStartRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": "vad-operation-1",
+        "reason_code": "admitted",
+        "session_id": "vad-session-1",
+        "status": "admitted"
+      },
+      "method_id": "VAD.StreamStart",
+      "model_name": "VADStreamAdmission",
+      "normalized": {
+        "accepted_format": null,
+        "accepted_limits": {
+          "heartbeat_ms": 5000,
+          "idle_lease_ms": 15000,
+          "max_active_ms": 300000,
+          "max_chunk_bytes": 65536,
+          "max_input_bytes": 4194304,
+          "max_queue": 4,
+          "max_text_bytes": 4096
+        },
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "credits": 8,
+        "generation": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "operation_id": "vad-operation-1",
+        "reason_code": "admitted",
+        "schema": "speech.stage-session-admission.v1",
+        "session_id": "vad-session-1",
+        "status": "admitted"
+      },
+      "normalized_hash": "b42010d6828fed52d1cbcd5cd3cffde9c52025eb7835a4b26aad3ce42c1d7605",
+      "schema_id": "VAD.StreamStart.output.VADStreamAdmission"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "vad-session-1"
+      },
+      "method_id": "VAD.StreamStatus",
+      "model_name": "VADStreamStatusRequest",
+      "normalized": {
+        "session_id": "vad-session-1"
+      },
+      "normalized_hash": "bc297b7ed7ca99610e42c7673035e793310bd426bfdfc4e53d7036896aeb450c",
+      "schema_id": "VAD.StreamStatus.input.VADStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "vad-session-1",
+        "state": "admitted"
+      },
+      "method_id": "VAD.StreamStatus",
+      "model_name": "VADStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "vad-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "baa46acb429d484403971c473675af9d5e401b8175b7920bb3f1dce0d4145726",
+      "schema_id": "VAD.StreamStatus.output.VADStreamStatus"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "reason": "canceled",
+        "session_id": "kws-session-1"
+      },
+      "method_id": "WakeWord.StreamCancel",
+      "model_name": "WakeWordStreamCancelRequest",
+      "normalized": {
+        "reason": "canceled",
+        "session_id": "kws-session-1"
+      },
+      "normalized_hash": "4e7934a0c01c65bae617f94323d566626bdd73104ecec7a438416eed5ba66d55",
+      "schema_id": "WakeWord.StreamCancel.input.WakeWordStreamCancelRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "method_id": "WakeWord.StreamCancel",
+      "model_name": "WakeWordStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "normalized_hash": "84d50a79003267b083b78e0e473112b74cef2d0fb917274391a6a283076577ad",
+      "schema_id": "WakeWord.StreamCancel.output.WakeWordStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "kws-session-1"
+      },
+      "method_id": "WakeWord.StreamChunk",
+      "model_name": "WakeWordStreamChunkRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "audio_data": "AA==",
+        "generation": 0,
+        "is_final": false,
+        "payload_kind": "audio",
+        "payload_size_bytes": 4,
+        "sequence": 0,
+        "session_id": "kws-session-1"
+      },
+      "normalized_hash": "cf9dbcfd14d0935ebba4bd30f45f18045cc0a4f1efab16a4426276ffa252797d",
+      "schema_id": "WakeWord.StreamChunk.input.WakeWordStreamChunkRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "kws-session-1",
+        "state": "admitted"
+      },
+      "method_id": "WakeWord.StreamChunk",
+      "model_name": "WakeWordStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "kws-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "6d85bf94dee0433f4ec990163f24ae4f8c7b7d2caea0acb7b177dd711fa9be38",
+      "schema_id": "WakeWord.StreamChunk.output.WakeWordStreamStatus"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "final_sequence": 0,
+        "session_id": "kws-session-1"
+      },
+      "method_id": "WakeWord.StreamEnd",
+      "model_name": "WakeWordStreamEndRequest",
+      "normalized": {
+        "final_sequence": 0,
+        "session_id": "kws-session-1"
+      },
+      "normalized_hash": "9ec717b215c5dfff2e2c3908b8b7aea07997ea993d80b626c07481747efe7942",
+      "schema_id": "WakeWord.StreamEnd.input.WakeWordStreamEndRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "method_id": "WakeWord.StreamEnd",
+      "model_name": "WakeWordStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "normalized_hash": "84d50a79003267b083b78e0e473112b74cef2d0fb917274391a6a283076577ad",
+      "schema_id": "WakeWord.StreamEnd.output.WakeWordStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "kws-session-1"
+      },
+      "method_id": "WakeWord.StreamResult",
+      "model_name": "WakeWordStreamStatusRequest",
+      "normalized": {
+        "session_id": "kws-session-1"
+      },
+      "normalized_hash": "d806c6c45f715ed19ef68749d6da8066a66a13ba8fcd198b85120967d9876be4",
+      "schema_id": "WakeWord.StreamResult.input.WakeWordStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "mode": "streaming",
+        "reason_code": "completed",
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "method_id": "WakeWord.StreamResult",
+      "model_name": "WakeWordStreamResult",
+      "normalized": {
+        "final_sequence": null,
+        "input_count": 0,
+        "mode": "streaming",
+        "output_count": 0,
+        "reason_code": "completed",
+        "redacted": true,
+        "session_id": "kws-session-1",
+        "stage": "kws",
+        "state": "completed"
+      },
+      "normalized_hash": "84d50a79003267b083b78e0e473112b74cef2d0fb917274391a6a283076577ad",
+      "schema_id": "WakeWord.StreamResult.output.WakeWordStreamResult"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "generation": 0,
+        "operation_id": "kws-operation-1",
+        "request_id": "request-1",
+        "route_revision": "route-1"
+      },
+      "method_id": "WakeWord.StreamStart",
+      "model_name": "WakeWordStreamStartRequest",
+      "normalized": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "config_revision": 1,
+        "consent_revision": null,
+        "exact_selector": false,
+        "experimental_remote": false,
+        "generation": 0,
+        "mode": "streaming",
+        "operation_id": "kws-operation-1",
+        "remaining_deadline_ms": 60000,
+        "request_id": "request-1",
+        "route_revision": "route-1",
+        "schema": "speech-stage-admission.v1",
+        "stage": "kws",
+        "target_peer_id": null,
+        "target_resource_id": null
+      },
+      "normalized_hash": "86452d25fee13c79fc66a95ce1ae202746fcfddeb3e6f667b8649a3d9b677ea9",
+      "schema_id": "WakeWord.StreamStart.input.WakeWordStreamStartRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "generation": 0,
+        "operation_id": "kws-operation-1",
+        "reason_code": "admitted",
+        "session_id": "kws-session-1",
+        "status": "admitted"
+      },
+      "method_id": "WakeWord.StreamStart",
+      "model_name": "WakeWordStreamAdmission",
+      "normalized": {
+        "accepted_format": null,
+        "accepted_limits": {
+          "heartbeat_ms": 5000,
+          "idle_lease_ms": 15000,
+          "max_active_ms": 300000,
+          "max_chunk_bytes": 65536,
+          "max_input_bytes": 4194304,
+          "max_queue": 4,
+          "max_text_bytes": 4096
+        },
+        "attempt_id": "attempt-1",
+        "capability_revision": 1,
+        "credits": 8,
+        "generation": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "operation_id": "kws-operation-1",
+        "reason_code": "admitted",
+        "schema": "speech.stage-session-admission.v1",
+        "session_id": "kws-session-1",
+        "status": "admitted"
+      },
+      "normalized_hash": "209e4e5db5d0b8e20bbd23800c229109f4c5735bd805e3792937c025102c141c",
+      "schema_id": "WakeWord.StreamStart.output.WakeWordStreamAdmission"
+    },
+    {
+      "accepted": true,
+      "direction": "input",
+      "input": {
+        "session_id": "kws-session-1"
+      },
+      "method_id": "WakeWord.StreamStatus",
+      "model_name": "WakeWordStreamStatusRequest",
+      "normalized": {
+        "session_id": "kws-session-1"
+      },
+      "normalized_hash": "d806c6c45f715ed19ef68749d6da8066a66a13ba8fcd198b85120967d9876be4",
+      "schema_id": "WakeWord.StreamStatus.input.WakeWordStreamStatusRequest"
+    },
+    {
+      "accepted": true,
+      "direction": "output",
+      "input": {
+        "credits": 8,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "kws-session-1",
+        "state": "admitted"
+      },
+      "method_id": "WakeWord.StreamStatus",
+      "model_name": "WakeWordStreamStatus",
+      "normalized": {
+        "accepted_chunks": 0,
+        "credits": 8,
+        "dropped_chunks": 0,
+        "lease_remaining_ms": 15000,
+        "next_sequence": 0,
+        "session_id": "kws-session-1",
+        "state": "admitted",
+        "terminal_outcome": null
+      },
+      "normalized_hash": "6d85bf94dee0433f4ec990163f24ae4f8c7b7d2caea0acb7b177dd711fa9be38",
+      "schema_id": "WakeWord.StreamStatus.output.WakeWordStreamStatus"
     }
   ]
 }

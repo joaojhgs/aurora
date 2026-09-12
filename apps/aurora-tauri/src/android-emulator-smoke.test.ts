@@ -3,9 +3,21 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // @ts-expect-error The Node-executed .mjs harness intentionally has no TS build output.
-import { invokeNativePluginPayload } from '../scripts/android-emulator-smoke.mjs'
+import { extractWebviewConsoleErrors, invokeNativePluginPayload } from '../scripts/android-emulator-smoke.mjs'
 
 describe('Android emulator native payload probe', () => {
+  it('extracts only Tauri WebView error records from filtered logcat output', () => {
+    const output = [
+      '09-11 00:00:01.000  123  456 E Tauri/Console: Error: frontend failed',
+      '09-11 00:00:02.000  123  456 W Tauri/Console: warning is allowed',
+      '09-11 00:00:03.000  123  456 E OtherTag: unrelated system error',
+    ].join('\n')
+
+    expect(extractWebviewConsoleErrors(output)).toEqual([
+      '09-11 00:00:01.000  123  456 E Tauri/Console: Error: frontend failed',
+    ])
+  })
+
   it('reads the manifest through the packaged Tauri command boundary', async () => {
     const send = vi.fn().mockResolvedValue({
       result: {

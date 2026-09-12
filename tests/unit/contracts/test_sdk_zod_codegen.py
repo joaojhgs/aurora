@@ -397,9 +397,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert schema["tooling_provider_allowlist"] == (
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
-    assert len(schema["allowlist"]) == 38
-    assert len(schema["schemas"]) == 80
-    assert len(schema["method_descriptors"]) == 38
+    assert len(schema["allowlist"]) == 61
+    assert len(schema["schemas"]) == 126
+    assert len(schema["method_descriptors"]) == 61
     assert len(schema["event_descriptors"]) == 3
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4

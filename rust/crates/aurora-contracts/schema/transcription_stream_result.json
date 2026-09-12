@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "STT stream terminal result metadata.",
+  "properties": {
+    "final_sequence": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Sequence"
+    },
+    "input_count": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Input Count",
+      "type": "integer"
+    },
+    "mode": {
+      "const": "streaming",
+      "default": "streaming",
+      "title": "Mode",
+      "type": "string"
+    },
+    "output_count": {
+      "default": 0,
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Output Count",
+      "type": "integer"
+    },
+    "reason_code": {
+      "maxLength": 80,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "redacted": {
+      "const": true,
+      "default": true,
+      "title": "Redacted",
+      "type": "boolean"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "stage": {
+      "const": "stt",
+      "default": "stt",
+      "title": "Stage",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "canceled",
+        "completed",
+        "failed",
+        "interrupted",
+        "revoked",
+        "timed_out"
+      ],
+      "title": "State",
+      "type": "string"
+    }
+  },
+  "required": [
+    "reason_code",
+    "session_id",
+    "state"
+  ],
+  "title": "TranscriptionStreamResult",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

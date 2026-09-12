@@ -5,6 +5,7 @@
     "STTCoordinator",
     "WakeWord",
     "Transcription",
+    "VAD",
     "DB",
     "TTS",
     "Tooling",
@@ -758,7 +759,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 990
+        "line": 1070
       },
       "exposure": "both",
       "method_type": "use",
@@ -775,11 +776,137 @@
     },
     {
       "module": "Transcription",
+      "bus_topic": "Transcription.StreamStart",
+      "handler": "start_speech_stream",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1353
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamStart"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.StreamChunk",
+      "handler": "push_speech_stream_chunk",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1424
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamChunk"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.StreamEnd",
+      "handler": "end_speech_stream",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1638
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamEnd"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.StreamCancel",
+      "handler": "cancel_speech_stream",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1746
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamCancel"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.StreamStatus",
+      "handler": "speech_stream_status",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1794
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamStatus"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
+      "bus_topic": "Transcription.StreamResult",
+      "handler": "speech_stream_result",
+      "source": {
+        "file": "app/services/stt_transcription/service.py",
+        "line": 1889
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "Transcription.StreamResult"
+      ],
+      "module_capabilities": [
+        "audio_transcription",
+        "vad",
+        "whisper"
+      ],
+      "proposed_feature_id": "audio_transcription",
+      "permission_status": "protected"
+    },
+    {
+      "module": "Transcription",
       "bus_topic": "Transcription.Transcribe",
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1273
+        "line": 1919
       },
       "exposure": "both",
       "method_type": "use",
@@ -800,7 +927,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 818
+        "line": 871
       },
       "exposure": "both",
       "method_type": "use",
@@ -817,11 +944,137 @@
     },
     {
       "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamStart",
+      "handler": "start_speech_stream",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 910
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamStart"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamChunk",
+      "handler": "push_speech_stream_chunk",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 983
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamChunk"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamEnd",
+      "handler": "end_speech_stream",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 1171
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamEnd"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamCancel",
+      "handler": "cancel_speech_stream",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 1255
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamCancel"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamStatus",
+      "handler": "speech_stream_status",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 1303
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamStatus"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
+      "bus_topic": "WakeWord.StreamResult",
+      "handler": "speech_stream_result",
+      "source": {
+        "file": "app/services/stt_wakeword/service.py",
+        "line": 1397
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "WakeWord.StreamResult"
+      ],
+      "module_capabilities": [
+        "wake_word_detection",
+        "openwakeword",
+        "porcupine"
+      ],
+      "proposed_feature_id": "wake_word_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "WakeWord",
       "bus_topic": "WakeWord.Detect",
       "handler": "detect_wake_word",
       "source": {
         "file": "app/services/stt_wakeword/service.py",
-        "line": 1007
+        "line": 1577
       },
       "exposure": "both",
       "method_type": "use",
@@ -1661,7 +1914,7 @@
       "handler": "get_capabilities",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1433
+        "line": 1478
       },
       "exposure": "both",
       "method_type": "use",
@@ -1681,7 +1934,7 @@
       "handler": "list_voices",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1514
+        "line": 1559
       },
       "exposure": "both",
       "method_type": "use",
@@ -1701,7 +1954,7 @@
       "handler": "list_language_packs",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1539
+        "line": 1584
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1721,7 +1974,7 @@
       "handler": "list_voice_profiles",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1569
+        "line": 1614
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1741,7 +1994,7 @@
       "handler": "get_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1596
+        "line": 1641
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1761,7 +2014,7 @@
       "handler": "update_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1622
+        "line": 1667
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1781,7 +2034,7 @@
       "handler": "install_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1755
+        "line": 1800
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1801,7 +2054,7 @@
       "handler": "remove_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1971
+        "line": 2016
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1821,7 +2074,7 @@
       "handler": "set_default_voice",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2091
+        "line": 2136
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1841,7 +2094,7 @@
       "handler": "voice_import_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2190
+        "line": 2235
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1861,7 +2114,7 @@
       "handler": "voice_import_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2254
+        "line": 2299
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1881,7 +2134,7 @@
       "handler": "voice_import_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2337
+        "line": 2382
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1901,7 +2154,7 @@
       "handler": "voice_import_abort",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2396
+        "line": 2441
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1921,7 +2174,7 @@
       "handler": "create_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2445
+        "line": 2490
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1941,7 +2194,7 @@
       "handler": "delete_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2576
+        "line": 2621
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1961,7 +2214,7 @@
       "handler": "export_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2651
+        "line": 2696
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1981,7 +2234,7 @@
       "handler": "import_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2783
+        "line": 2828
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2001,7 +2254,7 @@
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2903
+        "line": 2948
       },
       "exposure": "both",
       "method_type": "use",
@@ -2021,7 +2274,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2958
+        "line": 3003
       },
       "exposure": "both",
       "method_type": "use",
@@ -2037,11 +2290,91 @@
     },
     {
       "module": "TTS",
+      "bus_topic": "TTS.StreamPrepareV1",
+      "handler": "prepare_speech_stream",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 3096
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamPrepareV1"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamStatus",
+      "handler": "speech_stream_status",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 3180
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamStatus"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamCancel",
+      "handler": "cancel_speech_stream",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 3267
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamCancel"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
+      "bus_topic": "TTS.StreamResult",
+      "handler": "speech_stream_result",
+      "source": {
+        "file": "app/services/tts/service.py",
+        "line": 3318
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "TTS.StreamResult"
+      ],
+      "module_capabilities": [
+        "speech_synthesis",
+        "audio_playback"
+      ],
+      "proposed_feature_id": "speech_streaming",
+      "permission_status": "protected"
+    },
+    {
+      "module": "TTS",
       "bus_topic": "TTS.StreamChunk",
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3026
+        "line": 3344
       },
       "exposure": "both",
       "method_type": "use",
@@ -2061,7 +2394,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3076
+        "line": 3468
       },
       "exposure": "both",
       "method_type": "use",
@@ -2081,7 +2414,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3500
+        "line": 3927
       },
       "exposure": "both",
       "method_type": "use",
@@ -2093,6 +2426,146 @@
         "audio_playback"
       ],
       "proposed_feature_id": "speech_synthesis",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.Detect",
+      "handler": "detect",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 100
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.Detect"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamStart",
+      "handler": "start_stream",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 120
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamStart"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamChunk",
+      "handler": "push_stream_chunk",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 179
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamChunk"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamEnd",
+      "handler": "end_stream",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 298
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamEnd"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamCancel",
+      "handler": "cancel_stream",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 383
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamCancel"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamStatus",
+      "handler": "stream_status",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 426
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamStatus"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
+      "permission_status": "protected"
+    },
+    {
+      "module": "VAD",
+      "bus_topic": "VAD.StreamResult",
+      "handler": "stream_result",
+      "source": {
+        "file": "app/services/vad/service.py",
+        "line": 506
+      },
+      "exposure": "both",
+      "method_type": "use",
+      "required_perms": [
+        "VAD.StreamResult"
+      ],
+      "module_capabilities": [
+        "vad_detection",
+        "audio_segmentation"
+      ],
+      "proposed_feature_id": "vad_detection",
       "permission_status": "protected"
     }
   ],

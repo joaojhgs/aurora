@@ -63,7 +63,7 @@ export function AuroraOwlLoader({ owlSrc, stageId, progressPct, detail }: Aurora
         <div style={ringSpinStyle(132, 34, 'reverse')} />
         <div style={chargeStyle} />
         <div style={floatWrapStyle}>
-          <img src={owlSrc} alt="Aurora owl" style={owlImageStyle} />
+          <img src={owlSrc} alt="Aurora owl" style={owlImageStyle} decoding="async" fetchPriority="low" />
           <div style={eyeBaseStyle(42)} />
           <div style={eyeBaseStyle(57.8)} />
           <div style={scanWrapStyle}>

@@ -1,3 +1,5 @@
+import { AURORA_NODE_CONFIG_STORAGE_KEY } from '@aurora/client/node-config'
+
 export const BROWSER_PEER_VAULT_VERSION = 1
 export const BROWSER_PEER_VAULT_DATABASE_NAME = 'aurora-web-thin-v1'
 export const BROWSER_PEER_VAULT_OBJECT_STORE_NAME = 'vault'
@@ -6,6 +8,7 @@ export const BROWSER_PEER_PROFILE_KEY = 'aurora.webThin.profile.v1'
 export const BROWSER_PEER_MESH_PROFILES_KEY = 'aurora.webThin.meshProfiles.v1'
 export const BROWSER_PEER_THIN_PROFILE_DOCUMENT_KEY = 'aurora.webThin.connectionProfiles.v1'
 export const BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY = 'aurora.runtimeProfiles.v2'
+export const BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY = AURORA_NODE_CONFIG_STORAGE_KEY
 export const BROWSER_PEER_STABLE_PEER_KEY = 'aurora.webThin.localStablePeerId.v1'
 export const BROWSER_PEER_CREDENTIAL_PREFIX = 'credential:'
 export const BROWSER_PEER_ROOM_PREFIX = 'room:'
@@ -25,6 +28,7 @@ export function clearBrowserPeerProfileMetadata(options: {
     BROWSER_PEER_MESH_PROFILES_KEY,
     BROWSER_PEER_THIN_PROFILE_DOCUMENT_KEY,
     BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY,
+    BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY,
     BROWSER_PEER_STABLE_PEER_KEY,
   ]) {
     browserPeerVolatileMetadata.delete(`${origin}|${key}`)

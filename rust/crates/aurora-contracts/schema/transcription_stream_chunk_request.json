@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Ordered audio frame for an admitted STT stream.",
+  "properties": {
+    "attempt_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "audio_data": {
+      "format": "binary",
+      "maxLength": 65536,
+      "minLength": 1,
+      "title": "Audio Data",
+      "type": "string"
+    },
+    "generation": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Generation",
+      "type": "integer"
+    },
+    "is_final": {
+      "default": false,
+      "title": "Is Final",
+      "type": "boolean"
+    },
+    "payload_kind": {
+      "const": "audio",
+      "default": "audio",
+      "title": "Payload Kind",
+      "type": "string"
+    },
+    "payload_size_bytes": {
+      "exclusiveMinimum": 0,
+      "maximum": 65536,
+      "title": "Payload Size Bytes",
+      "type": "integer"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "session_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "title": "Session Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "audio_data",
+    "generation",
+    "payload_size_bytes",
+    "sequence",
+    "session_id"
+  ],
+  "title": "TranscriptionStreamChunkRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

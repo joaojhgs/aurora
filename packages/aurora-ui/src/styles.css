@@ -10634,6 +10634,22 @@ body { font-size:14px;line-height:1.45 }
 .aui-activity-list strong { font-size:0.86rem;line-height:1.2 }
 .aui-activity-list span { font-size:0.74rem }
 .aui-activity-list time { font-size:0.7rem }
+
+@media (min-width: 1101px) {
+  .aui-main-column > .flex > .aui-activity {
+    width: 280px !important;
+    flex-basis: 280px !important;
+    margin-right: 0;
+    transform: translateX(0);
+    transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease !important;
+    will-change: transform;
+  }
+  .aui-shell[data-activity-collapsed="true"] .aui-main-column > .flex > .aui-activity {
+    margin-right: -280px;
+    transform: translateX(100%);
+    pointer-events: none;
+  }
+}
 .aui-conversation-rail { flex:0 0 16rem;width:16rem }
 .aui-conversation-rail header { padding:0.75rem }
 .aui-conversation-rail header button { min-height:2rem;border-radius:0.5rem;padding:0.4rem 0.7rem;background:#24282d;font-size:0.92rem }

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bounded finite VAD input; it never grants continuous hosting.",
+  "properties": {
+    "audio_data": {
+      "format": "binary",
+      "maxLength": 65536,
+      "minLength": 1,
+      "title": "Audio Data",
+      "type": "string"
+    },
+    "channels": {
+      "default": 1,
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Channels",
+      "type": "integer"
+    },
+    "format": {
+      "default": "pcm_s16le",
+      "enum": [
+        "pcm_s16le",
+        "raw",
+        "wav"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "sample_rate": {
+      "default": 16000,
+      "exclusiveMinimum": 0,
+      "maximum": 192000,
+      "title": "Sample Rate",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "audio_data"
+  ],
+  "title": "VADDetectRequest",
+  "type": "object",
+  "x-aurora-extra-behavior": "forbid"
+}

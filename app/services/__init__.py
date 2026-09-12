@@ -23,6 +23,7 @@ _LAZY_SUBMODULES = frozenset(
         "stt_wakeword",
         "tooling",
         "tts",
+        "vad",
     }
 )
 

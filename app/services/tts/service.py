@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 import wave
 from collections.abc import AsyncIterator
@@ -69,6 +70,7 @@ from app.shared.contracts.models.speech import (
     normalize_exact_speech_language,
     validate_logical_voice_id,
 )
+from app.shared.contracts.models.speech_runtime import SpeechStreamLimitsV1
 from app.shared.contracts.models.tts import (
     VOICE_IMPORT_MAX_DURATION_MS,
     VOICE_STATE_TRANSFER_MAX_BYTES,
@@ -108,6 +110,12 @@ from app.shared.contracts.models.tts import (
     TTSStopRequest,
     TTSStreamChunkRequest,
     TTSStreamEndRequest,
+    TTSStreamPrepareRequest,
+    TTSStreamPrepareResponse,
+    TTSStreamSessionCancelRequest,
+    TTSStreamSessionResult,
+    TTSStreamSessionStatus,
+    TTSStreamSessionStatusRequest,
     TTSStreamStartRequest,
     TTSSynthesizeRequest,
     TTSSynthesizeResponse,
@@ -140,6 +148,7 @@ config_api = ConfigAPI()
 _GLOBAL_TTS_STREAM_CLEAR = object()
 _MAX_VOICE_IMPORT_SESSIONS = 64
 _MAX_VOICE_IMPORT_SESSIONS_PER_OWNER = 8
+_MAX_ACTIVE_SPEECH_STREAMS = 4
 
 
 def _text_log_metadata(text: str) -> str:
@@ -187,6 +196,7 @@ class _TTSStreamState:
     voice: str | None
     speed: float
     play_on_server: bool
+    language: str | None = None
     correlation_id: str | None = None
     caller_peer_id: str | None = None
     principal_id: str | None = None
@@ -198,6 +208,10 @@ class _TTSStreamState:
     emitted_sample_rate: int = 0
     draining: bool = False
     provider_request_ids: set[str] = field(default_factory=set)
+    accepted_text_by_sequence: dict[int, str] = field(default_factory=dict)
+    accepted_text_bytes: int = 0
+    last_activity_monotonic: float = field(default_factory=time.monotonic)
+    started_monotonic: float = field(default_factory=time.monotonic)
 
 
 @dataclass
@@ -259,14 +273,34 @@ def _stream_update_allowed(
     envelope: Envelope | None,
     correlation_id: str | None = None,
 ) -> bool:
-    """Return whether an incoming envelope may mutate an existing stream."""
-    if _envelope_caller_peer_id(envelope) != state.caller_peer_id:
-        return False
-    if _envelope_principal_id(envelope) != state.principal_id:
-        return False
-    if state.correlation_id is None:
-        return True
-    return (correlation_id or _envelope_correlation_id(envelope)) == state.correlation_id
+    """Return whether an authenticated caller may mutate an existing stream.
+
+    Correlation IDs identify individual request/reply exchanges.  LocalBus and
+    BullMQ intentionally mint a new one for every request, so they cannot be
+    part of stream ownership.
+    """
+    return (
+        _envelope_caller_peer_id(envelope) == state.caller_peer_id
+        and _envelope_principal_id(envelope) == state.principal_id
+    )
+
+
+def _stream_owner_values(envelope: Envelope | None) -> tuple[str | None, str | None]:
+    """Return immutable authenticated identity, excluding tracing IDs."""
+    if envelope is None:
+        return (None, None)
+    return (
+        _envelope_caller_peer_id(envelope),
+        _envelope_principal_id(envelope),
+    )
+
+
+def _stream_owner_values_allowed(
+    owner: tuple[str | None, str | None] | None,
+    envelope: Envelope | None,
+) -> bool:
+    """Keep terminal metadata bound to the owner that admitted the stream."""
+    return owner is not None and owner == _stream_owner_values(envelope)
 
 
 def _stream_matches_owner(
@@ -489,6 +523,11 @@ class TTSService(BaseService):
         self._current_request_id: str | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stream_states: dict[str, _TTSStreamState] = {}
+        self._speech_stream_admissions: dict[str, TTSStreamPrepareResponse] = {}
+        self._speech_stream_results: dict[str, TTSStreamSessionResult] = {}
+        self._speech_stream_terminal: dict[str, TTSStreamSessionStatus] = {}
+        self._speech_stream_owners: dict[str, tuple[str | None, str | None]] = {}
+        self._speech_stream_output_counts: dict[str, int] = {}
         self._stream_state_lock = asyncio.Lock()
         self._voice_management_lock = asyncio.Lock()
         self._voice_revision = 0
@@ -920,6 +959,12 @@ class TTSService(BaseService):
         log_info("Stopping TTS service...")
         await self._stop_playback("service_stopped")
         await self._clear_tts_streams("service_stopped")
+        async with self._stream_state_lock:
+            self._speech_stream_admissions.clear()
+            self._speech_stream_results.clear()
+            self._speech_stream_terminal.clear()
+            self._speech_stream_owners.clear()
+            self._speech_stream_output_counts.clear()
         async with self._voice_management_lock:
             self._voice_import_sessions.clear()
             self._voice_operation_results.clear()
@@ -2978,9 +3023,33 @@ class TTSService(BaseService):
             correlation_id = request.correlation_id or _envelope_correlation_id(envelope)
             async with self._stream_state_lock:
                 existing = self._stream_states.get(request.stream_id)
+                prepared = self._speech_stream_admissions.get(request.stream_id)
+                externally_routed = (
+                    caller_peer_id is not None
+                    or principal_id is not None
+                    or request.mesh_selector is not None
+                )
+                if externally_routed and prepared is None:
+                    raise ValueError("externally routed TTS streams require StreamPrepareV1")
                 if existing is not None and not _stream_update_allowed(
                     existing, envelope, correlation_id
                 ):
+                    return EmptyOutput()
+                if prepared is not None:
+                    if (
+                        existing is None
+                        or request.interrupt
+                        or request.play_on_server
+                        or request.format != existing.audio_format
+                        or request.sample_rate != existing.requested_sample_rate
+                        or request.voice != existing.voice
+                        or request.language != existing.language
+                        or request.speed != existing.speed
+                    ):
+                        return EmptyOutput()
+                    # The prepare call already owns the state.  A legacy
+                    # start is only a compatibility acknowledgement and must
+                    # not replace its owner/session binding.
                     return EmptyOutput()
 
             if request.interrupt:
@@ -3006,6 +3075,7 @@ class TTSService(BaseService):
                     requested_sample_rate=request.sample_rate,
                     voice=request.voice,
                     speed=request.speed,
+                    language=request.language,
                     play_on_server=request.play_on_server,
                     correlation_id=correlation_id,
                     caller_peer_id=caller_peer_id,
@@ -3024,6 +3094,254 @@ class TTSService(BaseService):
             return EmptyOutput()
 
     @method_contract(
+        method_id=TTSMethods.STREAM_PREPARE,
+        summary="Admit an owner-scoped speech-session-v1 TTS stream",
+        input_model=TTSStreamPrepareRequest,
+        output_model=TTSStreamPrepareResponse,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_PREPARE],
+        callable_feature_ids=["speech_streaming"],
+    )
+    async def prepare_speech_stream(
+        self, request: TTSStreamPrepareRequest, envelope: Envelope | None = None
+    ) -> TTSStreamPrepareResponse:
+        """Create the typed TTS admission before legacy stream frames are used."""
+        if request.play_on_server or request.interrupt:
+            return TTSStreamPrepareResponse(
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="rejected",
+                reason_code="caller_playback_required",
+                capability_revision=request.capability_revision,
+            )
+        caller_peer_id = _envelope_caller_peer_id(envelope)
+        principal_id = _envelope_principal_id(envelope)
+        correlation_id = _envelope_correlation_id(envelope)
+        async with self._stream_state_lock:
+            for existing_session_id, existing in self._speech_stream_admissions.items():
+                if (
+                    existing.operation_id == request.operation_id
+                    and existing.attempt_id == request.attempt_id
+                ):
+                    state = self._stream_states.get(existing_session_id)
+                    if (
+                        existing.generation == request.generation
+                        and state is not None
+                        and _stream_update_allowed(state, envelope)
+                    ):
+                        return existing
+                    return TTSStreamPrepareResponse(
+                        operation_id=request.operation_id,
+                        attempt_id=request.attempt_id,
+                        generation=request.generation,
+                        status="rejected",
+                        reason_code="session_conflict",
+                        capability_revision=request.capability_revision,
+                    )
+            if len(self._speech_stream_admissions) >= _MAX_ACTIVE_SPEECH_STREAMS:
+                return TTSStreamPrepareResponse(
+                    operation_id=request.operation_id,
+                    attempt_id=request.attempt_id,
+                    generation=request.generation,
+                    status="rejected",
+                    reason_code="busy",
+                    capability_revision=request.capability_revision,
+                )
+
+            session_id = f"tts-session-{uuid.uuid4().hex}"
+            admission = TTSStreamPrepareResponse(
+                session_id=session_id,
+                operation_id=request.operation_id,
+                attempt_id=request.attempt_id,
+                generation=request.generation,
+                status="admitted",
+                reason_code="admitted",
+                capability_revision=request.capability_revision,
+            )
+            self._speech_stream_admissions[session_id] = admission
+            self._stream_states[session_id] = _TTSStreamState(
+                stream_id=session_id,
+                audio_format="wav",
+                requested_sample_rate=None,
+                voice=request.voice,
+                speed=1.0,
+                language=request.language,
+                play_on_server=False,
+                correlation_id=correlation_id,
+                caller_peer_id=caller_peer_id,
+                principal_id=principal_id,
+            )
+            self._speech_stream_owners[session_id] = _stream_owner_values(envelope)
+            self._speech_stream_output_counts[session_id] = 0
+        return admission
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_STATUS,
+        summary="Read an owner-scoped speech-session-v1 TTS stream status",
+        input_model=TTSStreamSessionStatusRequest,
+        output_model=TTSStreamSessionStatus,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_STATUS],
+        callable_feature_ids=["speech_streaming"],
+    )
+    async def speech_stream_status(
+        self, request: TTSStreamSessionStatusRequest, envelope: Envelope | None = None
+    ) -> TTSStreamSessionStatus:
+        async with self._stream_state_lock:
+            terminal = self._speech_stream_terminal.get(request.session_id)
+            admission = self._speech_stream_admissions.get(request.session_id)
+            state = self._stream_states.get(request.session_id)
+            owner = self._speech_stream_owners.get(request.session_id)
+            if (
+                state is None
+                and owner is not None
+                and not _stream_owner_values_allowed(owner, envelope)
+            ):
+                return TTSStreamSessionStatus(
+                    session_id=request.session_id,
+                    state="failed",
+                    next_sequence=0,
+                    credits=0,
+                    lease_remaining_ms=0,
+                    terminal_outcome="session_conflict",
+                )
+            owner_ok = state is not None and _stream_update_allowed(state, envelope)
+        if terminal is not None:
+            return terminal
+        if admission is None or not owner_ok:
+            return TTSStreamSessionStatus(
+                session_id=request.session_id,
+                state="failed",
+                next_sequence=0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="failed",
+            )
+        limits = admission.accepted_limits
+        now = time.monotonic()
+        lease_remaining_ms = max(
+            0, int(limits.idle_lease_ms - (now - state.last_activity_monotonic) * 1000)
+        )
+        expired = (
+            lease_remaining_ms == 0 or now - state.started_monotonic > limits.max_active_ms / 1000
+        )
+        if not expired:
+            # Status is the authenticated protocol heartbeat. Refresh only
+            # while the absolute lease remains valid.
+            async with self._stream_state_lock:
+                current = self._stream_states.get(request.session_id)
+                if current is state:
+                    state.last_activity_monotonic = now
+            lease_remaining_ms = limits.idle_lease_ms
+        if expired:
+            await self._clear_tts_streams(
+                "timed_out",
+                caller_peer_id=state.caller_peer_id,
+                principal_id=state.principal_id,
+                stream_id=request.session_id,
+                require_correlation=False,
+            )
+            return TTSStreamSessionStatus(
+                session_id=request.session_id,
+                state="timed_out",
+                next_sequence=state.next_text_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="timed_out",
+            )
+        return TTSStreamSessionStatus(
+            session_id=request.session_id,
+            state="active" if state is not None and state.next_text_sequence > 0 else "admitted",
+            next_sequence=state.next_text_sequence if state is not None else 0,
+            credits=max(
+                0,
+                limits.max_queue,
+            ),
+            lease_remaining_ms=lease_remaining_ms,
+            accepted_chunks=state.next_text_sequence,
+        )
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_CANCEL,
+        summary="Cancel an owner-scoped speech-session-v1 TTS stream",
+        input_model=TTSStreamSessionCancelRequest,
+        output_model=TTSStreamSessionResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_CANCEL],
+        callable_feature_ids=["speech_streaming"],
+    )
+    async def cancel_speech_stream(
+        self, request: TTSStreamSessionCancelRequest, envelope: Envelope | None = None
+    ) -> TTSStreamSessionResult:
+        async with self._stream_state_lock:
+            admission = self._speech_stream_admissions.get(request.session_id)
+            state = self._stream_states.get(request.session_id)
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_values_allowed(owner, envelope):
+                return TTSStreamSessionResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            if admission is None:
+                return self._speech_stream_results.get(
+                    request.session_id,
+                    TTSStreamSessionResult(
+                        session_id=request.session_id, state="failed", reason_code="outcome_unknown"
+                    ),
+                )
+            if state is None or not _stream_update_allowed(state, envelope):
+                return TTSStreamSessionResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            self._speech_stream_admissions.pop(request.session_id, None)
+            self._stream_states.pop(request.session_id, None)
+            result = TTSStreamSessionResult(
+                session_id=request.session_id,
+                state=request.reason,
+                reason_code=request.reason,
+                input_count=state.next_text_sequence if state is not None else 0,
+            )
+            self._speech_stream_results[request.session_id] = result
+            self._speech_stream_terminal[request.session_id] = TTSStreamSessionStatus(
+                session_id=request.session_id,
+                state=request.reason,
+                next_sequence=state.next_text_sequence,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome=request.reason,
+            )
+        return result
+
+    @method_contract(
+        method_id=TTSMethods.STREAM_RESULT,
+        summary="Return the terminal metadata for an admitted TTS stream",
+        input_model=TTSStreamSessionStatusRequest,
+        output_model=TTSStreamSessionResult,
+        exposure="both",
+        method_type="use",
+        required_perms=[TTSMethods.STREAM_RESULT],
+        callable_feature_ids=["speech_streaming"],
+    )
+    async def speech_stream_result(
+        self, request: TTSStreamSessionStatusRequest, envelope: Envelope | None = None
+    ) -> TTSStreamSessionResult:
+        async with self._stream_state_lock:
+            owner = self._speech_stream_owners.get(request.session_id)
+            if owner is not None and not _stream_owner_values_allowed(owner, envelope):
+                return TTSStreamSessionResult(
+                    session_id=request.session_id, state="failed", reason_code="session_conflict"
+                )
+            return self._speech_stream_results.get(
+                request.session_id,
+                TTSStreamSessionResult(
+                    session_id=request.session_id, state="failed", reason_code="outcome_unknown"
+                ),
+            )
+
+    @method_contract(
         method_id=TTSMethods.STREAM_CHUNK,
         summary="Process an ordered text chunk for a TTS audio stream",
         input_model=TTSStreamChunkRequest,
@@ -3040,25 +3358,99 @@ class TTSService(BaseService):
         try:
             correlation_id = request.correlation_id or _envelope_correlation_id(envelope)
             async with self._stream_state_lock:
+                admission = self._speech_stream_admissions.get(request.stream_id)
+                externally_routed = (
+                    _envelope_caller_peer_id(envelope) is not None
+                    or _envelope_principal_id(envelope) is not None
+                    or request.mesh_selector is not None
+                )
+                if externally_routed and admission is None:
+                    raise ValueError("externally routed TTS streams require StreamPrepareV1")
+                if admission is not None:
+                    if request.session_id != request.stream_id:
+                        return EmptyOutput()
+                    if request.attempt_id != admission.attempt_id:
+                        return EmptyOutput()
+                    if request.generation != admission.generation:
+                        return EmptyOutput()
                 state = self._stream_states.get(request.stream_id)
                 if state is None:
                     raise ValueError(f"Unknown TTS stream_id: {request.stream_id}")
                 if not _stream_update_allowed(state, envelope, correlation_id):
                     return EmptyOutput()
+                now = time.monotonic()
+                limits = (
+                    admission.accepted_limits if admission is not None else SpeechStreamLimitsV1()
+                )
+                if (
+                    now - state.last_activity_monotonic > limits.idle_lease_ms / 1000
+                    or now - state.started_monotonic > limits.max_active_ms / 1000
+                ):
+                    self._stream_states.pop(request.stream_id, None)
+                    self._speech_stream_admissions.pop(request.stream_id, None)
+                    self._speech_stream_results[request.stream_id] = TTSStreamSessionResult(
+                        session_id=request.stream_id,
+                        state="timed_out",
+                        reason_code="timed_out",
+                        input_count=state.next_text_sequence,
+                        output_count=self._speech_stream_output_counts.pop(request.stream_id, 0),
+                    )
+                    self._speech_stream_terminal[request.stream_id] = TTSStreamSessionStatus(
+                        session_id=request.stream_id,
+                        state="timed_out",
+                        next_sequence=state.next_text_sequence,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="timed_out",
+                    )
+                    return EmptyOutput()
                 if correlation_id is not None and state.correlation_id is None:
                     state.correlation_id = correlation_id
                 if request.sequence < state.next_text_sequence:
+                    previous = state.accepted_text_by_sequence.get(request.sequence)
+                    if previous is not None and previous != request.text:
+                        return EmptyOutput()
                     log_debug(
                         f"Ignoring duplicate TTS stream chunk: stream_id={request.stream_id} "
                         f"sequence={request.sequence}"
                     )
                     return EmptyOutput()
+                text_bytes = len(request.text.encode("utf-8"))
+                if (
+                    state.accepted_text_bytes + text_bytes > limits.max_text_bytes
+                    or len(state.pending) >= limits.max_queue
+                ):
+                    self._stream_states.pop(request.stream_id, None)
+                    self._speech_stream_admissions.pop(request.stream_id, None)
+                    result = TTSStreamSessionResult(
+                        session_id=request.stream_id,
+                        state="failed",
+                        reason_code="resource_exhausted",
+                        input_count=state.next_text_sequence,
+                        output_count=self._speech_stream_output_counts.pop(request.stream_id, 0),
+                    )
+                    self._speech_stream_results[request.stream_id] = result
+                    self._speech_stream_terminal[request.stream_id] = TTSStreamSessionStatus(
+                        session_id=request.stream_id,
+                        state="failed",
+                        next_sequence=state.next_text_sequence,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="resource_exhausted",
+                    )
+                    return EmptyOutput()
                 state.pending[request.sequence] = request.text
+                state.accepted_text_by_sequence[request.sequence] = request.text
+                state.accepted_text_bytes += text_bytes
+                state.last_activity_monotonic = now
                 if request.is_final:
                     state.final_text_sequence = request.sequence
                     state.end_reason = "completed"
 
             await self._drain_stream(request.stream_id)
+            await self._record_prepared_completion(
+                request.stream_id, request.sequence if request.is_final else None
+            )
             return EmptyOutput()
         except Exception as e:
             log_error(
@@ -3093,7 +3485,41 @@ class TTSService(BaseService):
                 state = self._stream_states.get(request.stream_id)
                 if state is None:
                     return EmptyOutput()
+                if (
+                    _envelope_caller_peer_id(envelope) is not None
+                    or _envelope_principal_id(envelope) is not None
+                    or request.mesh_selector is not None
+                ) and request.stream_id not in self._speech_stream_admissions:
+                    return EmptyOutput()
                 if not _stream_update_allowed(state, envelope, correlation_id):
+                    return EmptyOutput()
+                admission = self._speech_stream_admissions.get(request.stream_id)
+                limits = (
+                    admission.accepted_limits if admission is not None else SpeechStreamLimitsV1()
+                )
+                now = time.monotonic()
+                if (
+                    now - state.last_activity_monotonic > limits.idle_lease_ms / 1000
+                    or now - state.started_monotonic > limits.max_active_ms / 1000
+                ):
+                    self._stream_states.pop(request.stream_id, None)
+                    self._speech_stream_admissions.pop(request.stream_id, None)
+                    result = TTSStreamSessionResult(
+                        session_id=request.stream_id,
+                        state="timed_out",
+                        reason_code="timed_out",
+                        input_count=state.next_text_sequence,
+                        output_count=self._speech_stream_output_counts.pop(request.stream_id, 0),
+                    )
+                    self._speech_stream_results[request.stream_id] = result
+                    self._speech_stream_terminal[request.stream_id] = TTSStreamSessionStatus(
+                        session_id=request.stream_id,
+                        state="timed_out",
+                        next_sequence=state.next_text_sequence,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome="timed_out",
+                    )
                     return EmptyOutput()
                 state.final_text_sequence = (
                     request.final_sequence
@@ -3105,6 +3531,7 @@ class TTSService(BaseService):
                     state.correlation_id = correlation_id
 
             await self._drain_stream(request.stream_id)
+            await self._record_prepared_completion(request.stream_id, request.final_sequence)
             return EmptyOutput()
         except Exception as e:
             log_error(f"Error ending TTS stream: error={_safe_tts_error(e)}")
@@ -3653,6 +4080,10 @@ class TTSService(BaseService):
                             audio_sequence = state.next_audio_sequence
                             state.next_audio_sequence += 1
                             state.emitted_sample_rate = sample_rate
+                            if stream_id in self._speech_stream_admissions:
+                                self._speech_stream_output_counts[stream_id] = (
+                                    self._speech_stream_output_counts.get(stream_id, 0) + 1
+                                )
                         await self._publish_audio_chunk(
                             TTSAudioChunkEvent(
                                 stream_id=stream_id,
@@ -3662,7 +4093,8 @@ class TTSService(BaseService):
                                 sample_rate=sample_rate,
                                 channels=1,
                                 duration_ms=duration_ms,
-                                text=text,
+                                text=None,
+                                text_digest=hashlib.sha256(text.encode("utf-8")).hexdigest(),
                                 source_sequence=text_sequence,
                                 is_final=False,
                                 correlation_id=correlation_id,
@@ -3797,6 +4229,37 @@ class TTSService(BaseService):
             and state.next_text_sequence > state.final_text_sequence
         )
 
+    async def _record_prepared_completion(
+        self, stream_id: str, final_sequence: int | None = None
+    ) -> None:
+        """Persist a result once the legacy TTS stream has fully drained."""
+        async with self._stream_state_lock:
+            admission = self._speech_stream_admissions.get(stream_id)
+            if (
+                admission is None
+                or stream_id in self._stream_states
+                or stream_id in self._speech_stream_results
+            ):
+                return
+            result = TTSStreamSessionResult(
+                session_id=stream_id,
+                state="completed",
+                reason_code="completed",
+                final_sequence=final_sequence,
+                input_count=final_sequence + 1 if final_sequence is not None else 0,
+                output_count=self._speech_stream_output_counts.pop(stream_id, 0),
+            )
+            self._speech_stream_admissions.pop(stream_id, None)
+            self._speech_stream_results[stream_id] = result
+            self._speech_stream_terminal[stream_id] = TTSStreamSessionStatus(
+                session_id=stream_id,
+                state="completed",
+                next_sequence=final_sequence + 1 if final_sequence is not None else 0,
+                credits=0,
+                lease_remaining_ms=0,
+                terminal_outcome="completed",
+            )
+
     def _build_final_audio_chunk_event(self, state: _TTSStreamState) -> TTSAudioChunkEvent:
         """Build the terminal empty audio chunk for a completed stream."""
         return TTSAudioChunkEvent(
@@ -3881,6 +4344,56 @@ class TTSService(BaseService):
                 ]
                 for state in states:
                     self._stream_states.pop(state.stream_id, None)
+            for state in states:
+                if state.stream_id in self._speech_stream_admissions:
+                    terminal_reason = (
+                        reason
+                        if reason
+                        in {
+                            "completed",
+                            "canceled",
+                            "timed_out",
+                            "revoked",
+                            "interrupted",
+                            "failed",
+                            "outcome_unknown",
+                            "invalid_sequence",
+                            "resource_exhausted",
+                            "session_conflict",
+                            "unsupported_protocol",
+                            "consent_required",
+                        }
+                        else "interrupted"
+                    )
+                    self._speech_stream_admissions.pop(state.stream_id, None)
+                    terminal_state = (
+                        terminal_reason
+                        if terminal_reason
+                        in {
+                            "completed",
+                            "canceled",
+                            "timed_out",
+                            "revoked",
+                            "interrupted",
+                            "failed",
+                        }
+                        else "failed"
+                    )
+                    self._speech_stream_results[state.stream_id] = TTSStreamSessionResult(
+                        session_id=state.stream_id,
+                        state=terminal_state,
+                        reason_code=terminal_reason,
+                        input_count=state.next_text_sequence,
+                        output_count=self._speech_stream_output_counts.pop(state.stream_id, 0),
+                    )
+                    self._speech_stream_terminal[state.stream_id] = TTSStreamSessionStatus(
+                        session_id=state.stream_id,
+                        state=terminal_state,
+                        next_sequence=state.next_text_sequence,
+                        credits=0,
+                        lease_remaining_ms=0,
+                        terminal_outcome=terminal_reason,
+                    )
 
         for state in states:
             await self._cancel_stream_provider_requests(state)

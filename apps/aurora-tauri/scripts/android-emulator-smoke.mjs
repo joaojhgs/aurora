@@ -14,6 +14,14 @@ const NATIVE_PAYLOAD_LOGCAT_ARGS = [
   'RustStdoutStderr:I',
   '*:S',
 ]
+const WEBVIEW_CONSOLE_ERROR_LOGCAT_ARGS = [
+  'logcat',
+  '-d',
+  '-t',
+  '2000',
+  'Tauri/Console:E',
+  '*:S',
+]
 
 const DEFAULT_DEVICE_WAIT_TIMEOUT_MS = 30_000
 const DEFAULT_INSTALL_TIMEOUT_MS = 5 * 60_000
@@ -323,13 +331,17 @@ export async function invokeNativePluginPayload(client) {
 }
 
 function assertNoWebviewConsoleErrors() {
-  const output = adbOutput(['logcat', '-d', '-t', '2000'])
-  const errors = output
-    .split(/\r?\n/)
-    .filter((line) => /\sE\s+Tauri\/Console:/.test(line))
+  const output = adbOutput(WEBVIEW_CONSOLE_ERROR_LOGCAT_ARGS)
+  const errors = extractWebviewConsoleErrors(output)
   if (errors.length > 0) {
     throw new Error(`Android WebView reported console errors:\n${errors.join('\n')}`)
   }
+}
+
+export function extractWebviewConsoleErrors(output) {
+  return output
+    .split(/\r?\n/)
+    .filter((line) => /\sE\s+Tauri\/Console:/.test(line))
 }
 
 function hasAuroraReadyText(bodyText) {

@@ -50,6 +50,7 @@ describe('browser sqlite worker client backend', () => {
     await session.localAudit.appendAudit(auditFixture())
 
     await expect(session.conversations.listConversations()).resolves.toEqual([conversationFixture()])
+    await expect(session.conversations.listFirstUserMessages()).resolves.toEqual({ 'conversation-1': messageFixture() })
     await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([messageFixture()])
     await expect(session.memory.listMemoryItems('notes')).resolves.toEqual([memoryFixture()])
     await expect(session.localTools.listLocalToolStates()).resolves.toEqual([localToolStateFixture()])
@@ -261,6 +262,8 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
         return await session.conversations.deleteConversation(operation.conversationId)
       case 'conversations.listConversations':
         return await session.conversations.listConversations()
+      case 'conversations.listFirstUserMessages':
+        return await session.conversations.listFirstUserMessages()
       case 'conversations.listMessages':
         return await session.conversations.listMessages(operation.conversationId)
       case 'memory.upsertMemoryItem':

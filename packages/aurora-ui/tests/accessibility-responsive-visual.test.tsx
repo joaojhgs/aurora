@@ -60,21 +60,23 @@ const viewports: Viewport[] = [
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
   // These baselines include the shared Spoken replies navigation entry. Admin
-  // renders also use product labels for voice and local-data actions.
+  // renders also use product labels for voice and local-data actions. They are
+  // generated from the current shell markup after removing the hidden global
+  // readiness announcement and inline activity-rail width transition.
   assistant: {
-    desktop: 'f1eddf71aaa5',
-    tablet: '4441d75ae496',
-    mobile: 'ff31bd0409c0'
+    desktop: 'ec5766aacdcb',
+    tablet: '8af8f8a41bdd',
+    mobile: '344cf65083a9'
   },
   admin: {
-    desktop: '24025ef61432',
-    tablet: '63fb3e19321f',
-    mobile: '8fa72942a9cb'
+    desktop: '2379f0c9b1ab',
+    tablet: 'e341a95b4769',
+    mobile: '579a6ee3949f'
   },
   'native-settings': {
-    desktop: '7cfcbf2b64b8',
-    tablet: '3279246fdb5d',
-    mobile: '63f0cc9eb618'
+    desktop: 'ef9c447525ab',
+    tablet: '76c7a77a4473',
+    mobile: '0735f0c09b99'
   }
 }
 

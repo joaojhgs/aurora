@@ -180,6 +180,10 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "TTS.StreamStart",
     "TTS.StreamChunk",
     "TTS.StreamEnd",
+    "TTS.StreamPrepareV1",
+    "TTS.StreamStatus",
+    "TTS.StreamCancel",
+    "TTS.StreamResult",
     "TTS.Synthesize",
     "STTCoordinator.Listen",
     "STTCoordinator.StopListening",
@@ -188,8 +192,27 @@ SDK_CONTRACT_ALLOWLIST: tuple[str, ...] = (
     "STTCoordinator.CaptureStatus",
     "WakeWord.ProcessAudio",
     "WakeWord.Detect",
+    "WakeWord.StreamStart",
+    "WakeWord.StreamChunk",
+    "WakeWord.StreamEnd",
+    "WakeWord.StreamCancel",
+    "WakeWord.StreamStatus",
+    "WakeWord.StreamResult",
     "Transcription.ProcessAudio",
     "Transcription.Transcribe",
+    "Transcription.StreamStart",
+    "Transcription.StreamChunk",
+    "Transcription.StreamEnd",
+    "Transcription.StreamCancel",
+    "Transcription.StreamStatus",
+    "Transcription.StreamResult",
+    "VAD.Detect",
+    "VAD.StreamStart",
+    "VAD.StreamChunk",
+    "VAD.StreamEnd",
+    "VAD.StreamCancel",
+    "VAD.StreamStatus",
+    "VAD.StreamResult",
 )
 TOOLING_PROVIDER_PEER_ID = "aurora-sdk-local-provider-v1"
 TOOLING_PROVIDER_SERVICE_INSTANCE_ID = f"local:{quote(TOOLING_PROVIDER_PEER_ID, safe='')}:Tooling"
@@ -213,6 +236,7 @@ SERVICE_CLASSES: tuple[tuple[str, str, str], ...] = (
     ("STTCoordinator", "app.services.stt_coordinator.service", "STTCoordinatorService"),
     ("WakeWord", "app.services.stt_wakeword.service", "WakeWordService"),
     ("Transcription", "app.services.stt_transcription.service", "TranscriptionService"),
+    ("VAD", "app.services.vad.service", "VADService"),
     ("TTS", "app.services.tts.service", "TTSService"),
     ("Orchestrator", "app.services.orchestrator.service", "OrchestratorService"),
     ("Gateway", "app.services.gateway.service", "GatewayService"),
@@ -594,6 +618,37 @@ def _assert_named_model_invariant(marker: str):
     return verifier
 
 
+def _assert_stream_admission_schema(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    """Keep the inherited admission validator visible in generated SDK schemas."""
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    properties = model_schema.get("properties", {}) if isinstance(model_schema, dict) else {}
+    if not {"status", "session_id"}.issubset(properties):
+        raise ValueError(f"{entry.error_context()}: incomplete speech stream admission schema")
+
+
+def _assert_stream_status_schema(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    """Ensure terminal status validation has a bounded state/reason shape."""
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    properties = model_schema.get("properties", {}) if isinstance(model_schema, dict) else {}
+    if not {"state", "terminal_outcome"}.issubset(properties):
+        raise ValueError(f"{entry.error_context()}: incomplete speech stream status schema")
+
+
+def _assert_stream_frame_schema(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    """Ensure audio frame bounds survive the Python-to-SDK schema projection."""
+    model_schema = _resolve_schema_pointer(schema, entry.model_pointer)
+    properties = model_schema.get("properties", {}) if isinstance(model_schema, dict) else {}
+    if not {"sequence", "payload_size_bytes", "audio_data"}.issubset(properties):
+        raise ValueError(f"{entry.error_context()}: incomplete speech stream frame schema")
+
+
+def _assert_bounded_utf8_text_schema(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
+    """Ensure text chunks retain their UTF-8 byte-size bound in SDK schemas."""
+    for field_schema in _validator_field_schemas(entry, schema):
+        if not any(option.get("maxLength") == 4096 for option in _string_options(field_schema)):
+            raise ValueError(f"{entry.error_context()}: missing maxLength=4096 text bound")
+
+
 def _assert_all(*verifiers: Any):
     def verifier(entry: ValidatorDiscovery, schema: dict[str, Any]) -> None:
         for assert_extension in verifiers:
@@ -612,6 +667,23 @@ def _assert_language_field(entry: ValidatorDiscovery, schema: dict[str, Any]) ->
 
 
 VALIDATOR_EXTENSION_VERIFIERS = {
+    ("SpeechStreamAdmissionV1", "_validate_session_reference"): _assert_stream_admission_schema,
+    ("TTSStreamPrepareResponse", "_validate_session_reference"): _assert_stream_admission_schema,
+    (
+        "TranscriptionStreamAdmission",
+        "_validate_session_reference",
+    ): _assert_stream_admission_schema,
+    ("WakeWordStreamAdmission", "_validate_session_reference"): _assert_stream_admission_schema,
+    ("VADStreamAdmission", "_validate_session_reference"): _assert_stream_admission_schema,
+    ("SpeechStreamStatusV1", "_terminal_requires_reason"): _assert_stream_status_schema,
+    ("TTSStreamSessionStatus", "_terminal_requires_reason"): _assert_stream_status_schema,
+    ("TranscriptionStreamStatus", "_terminal_requires_reason"): _assert_stream_status_schema,
+    ("WakeWordStreamStatus", "_terminal_requires_reason"): _assert_stream_status_schema,
+    ("VADStreamStatus", "_terminal_requires_reason"): _assert_stream_status_schema,
+    ("TranscriptionStreamChunkRequest", "_bind_payload_size"): _assert_stream_frame_schema,
+    ("WakeWordStreamChunkRequest", "_bind_payload_size"): _assert_stream_frame_schema,
+    ("VADStreamChunkRequest", "_bind_payload_size"): _assert_stream_frame_schema,
+    ("TTSStreamChunkRequest", "_validate_text_size"): _assert_bounded_utf8_text_schema,
     ("MeshAddressSelector", "_non_blank"): _assert_mesh_non_blank,
     ("ToolingToolInfo", "_bounded_unique_legacy_ids"): _assert_tooling_legacy_ids,
     ("ToolingGetExportCatalogResponse", "_lowercase_digest"): _assert_lowercase_digest,
@@ -661,6 +733,7 @@ for _model, _validator in (
     ("TTSRequest", "_normalize_language"),
     ("TTSSynthesizeRequest", "_normalize_language"),
     ("TTSStreamStartRequest", "_normalize_language"),
+    ("TTSStreamPrepareRequest", "_normalize_prepare_language"),
     ("TTSListVoicesRequest", "_normalize_language"),
     ("TTSLanguagePackDescriptor", "_normalize_language"),
     ("TTSListLanguagePacksRequest", "_normalize_language"),
@@ -689,6 +762,7 @@ for _model, _validator in (
     ("TTSRequest", "_validate_voice_id"),
     ("TTSSynthesizeRequest", "_validate_voice_id"),
     ("TTSStreamStartRequest", "_validate_voice_id"),
+    ("TTSStreamPrepareRequest", "_validate_prepare_voice"),
     ("TTSVoiceDescriptor", "_validate_voice_id"),
     ("TTSLanguagePackVoice", "_validate_voice_id"),
     ("TTSVoiceProfileDescriptor", "_validate_voice_id"),
@@ -1836,6 +1910,206 @@ def _positive_fixture(model_name: str) -> Any | None:
             "is_final": False,
             "reason": None,
             "correlation_id": "corr-tts-1",
+        },
+        "TTSStreamChunkRequest": {
+            "stream_id": "tts-session-1",
+            "sequence": 0,
+            "text": "hello",
+            "session_id": "tts-session-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+        },
+        "TTSStreamEndRequest": {"stream_id": "tts-session-1", "final_sequence": 0},
+        "TTSStreamPrepareRequest": {
+            "operation_id": "tts-operation-1",
+            "attempt_id": "attempt-1",
+            "request_id": "request-1",
+            "generation": 0,
+            "config_revision": 1,
+            "route_revision": "route-1",
+            "capability_revision": 1,
+            "play_on_server": False,
+            "interrupt": False,
+            "language": "en-US",
+        },
+        "TTSStreamPrepareResponse": {
+            "session_id": "tts-session-1",
+            "operation_id": "tts-operation-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "status": "admitted",
+            "reason_code": "admitted",
+            "capability_revision": 1,
+        },
+        "TTSStreamSessionCancelRequest": {
+            "session_id": "tts-session-1",
+            "reason": "canceled",
+        },
+        "TTSStreamSessionEndRequest": {"session_id": "tts-session-1", "final_sequence": 0},
+        "TTSStreamSessionStatusRequest": {"session_id": "tts-session-1"},
+        "TTSStreamSessionStatus": {
+            "session_id": "tts-session-1",
+            "state": "admitted",
+            "next_sequence": 0,
+            "credits": 8,
+            "lease_remaining_ms": 15_000,
+        },
+        "TTSStreamSessionResult": {
+            "session_id": "tts-session-1",
+            "stage": "tts",
+            "mode": "streaming",
+            "state": "completed",
+            "reason_code": "completed",
+            "final_sequence": 0,
+        },
+        "TranscriptionStreamStartRequest": {
+            "operation_id": "stt-operation-1",
+            "attempt_id": "attempt-1",
+            "request_id": "request-1",
+            "generation": 0,
+            "config_revision": 1,
+            "route_revision": "route-1",
+            "capability_revision": 1,
+        },
+        "TranscriptionStreamChunkRequest": {
+            "session_id": "stt-session-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "sequence": 0,
+            "payload_kind": "audio",
+            "payload_size_bytes": 4,
+            "audio_data": "AA==",
+        },
+        "TranscriptionStreamEndRequest": {"session_id": "stt-session-1", "final_sequence": 0},
+        "TranscriptionStreamCancelRequest": {
+            "session_id": "stt-session-1",
+            "reason": "canceled",
+        },
+        "TranscriptionStreamStatusRequest": {"session_id": "stt-session-1"},
+        "TranscriptionStreamAdmission": {
+            "session_id": "stt-session-1",
+            "operation_id": "stt-operation-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "status": "admitted",
+            "reason_code": "admitted",
+            "capability_revision": 1,
+        },
+        "TranscriptionStreamStatus": {
+            "session_id": "stt-session-1",
+            "state": "admitted",
+            "next_sequence": 0,
+            "credits": 8,
+            "lease_remaining_ms": 15_000,
+        },
+        "TranscriptionStreamResult": {
+            "session_id": "stt-session-1",
+            "stage": "stt",
+            "mode": "streaming",
+            "state": "completed",
+            "reason_code": "completed",
+        },
+        "WakeWordStreamStartRequest": {
+            "operation_id": "kws-operation-1",
+            "attempt_id": "attempt-1",
+            "request_id": "request-1",
+            "generation": 0,
+            "config_revision": 1,
+            "route_revision": "route-1",
+            "capability_revision": 1,
+        },
+        "WakeWordStreamChunkRequest": {
+            "session_id": "kws-session-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "sequence": 0,
+            "payload_kind": "audio",
+            "payload_size_bytes": 4,
+            "audio_data": "AA==",
+        },
+        "WakeWordStreamEndRequest": {"session_id": "kws-session-1", "final_sequence": 0},
+        "WakeWordStreamCancelRequest": {
+            "session_id": "kws-session-1",
+            "reason": "canceled",
+        },
+        "WakeWordStreamStatusRequest": {"session_id": "kws-session-1"},
+        "WakeWordStreamAdmission": {
+            "session_id": "kws-session-1",
+            "operation_id": "kws-operation-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "status": "admitted",
+            "reason_code": "admitted",
+            "capability_revision": 1,
+        },
+        "WakeWordStreamStatus": {
+            "session_id": "kws-session-1",
+            "state": "admitted",
+            "next_sequence": 0,
+            "credits": 8,
+            "lease_remaining_ms": 15_000,
+        },
+        "WakeWordStreamResult": {
+            "session_id": "kws-session-1",
+            "stage": "kws",
+            "mode": "streaming",
+            "state": "completed",
+            "reason_code": "completed",
+        },
+        "VADDetectRequest": {
+            "audio_data": "AA==",
+            "sample_rate": 16_000,
+            "channels": 1,
+            "format": "pcm_s16le",
+        },
+        "VADDetectResponse": {
+            "speech": False,
+            "confidence": 0.0,
+            "duration_ms": 0.03125,
+        },
+        "VADStreamStartRequest": {
+            "operation_id": "vad-operation-1",
+            "attempt_id": "attempt-1",
+            "request_id": "request-1",
+            "generation": 0,
+            "config_revision": 1,
+            "route_revision": "route-1",
+            "capability_revision": 1,
+        },
+        "VADStreamChunkRequest": {
+            "session_id": "vad-session-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "sequence": 0,
+            "payload_kind": "audio",
+            "payload_size_bytes": 4,
+            "audio_data": "AA==",
+        },
+        "VADStreamEndRequest": {"session_id": "vad-session-1", "final_sequence": 0},
+        "VADStreamCancelRequest": {"session_id": "vad-session-1", "reason": "canceled"},
+        "VADStreamStatusRequest": {"session_id": "vad-session-1"},
+        "VADStreamAdmission": {
+            "session_id": "vad-session-1",
+            "operation_id": "vad-operation-1",
+            "attempt_id": "attempt-1",
+            "generation": 0,
+            "status": "admitted",
+            "reason_code": "admitted",
+            "capability_revision": 1,
+        },
+        "VADStreamStatus": {
+            "session_id": "vad-session-1",
+            "state": "admitted",
+            "next_sequence": 0,
+            "credits": 8,
+            "lease_remaining_ms": 15_000,
+        },
+        "VADStreamResult": {
+            "session_id": "vad-session-1",
+            "stage": "vad",
+            "mode": "streaming",
+            "state": "completed",
+            "reason_code": "completed",
         },
         "TTSListLanguagePacksResponse": {
             "packs": [

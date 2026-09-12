@@ -22,6 +22,8 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
   | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'conversations.listFirstUserMessages'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
@@ -57,6 +59,7 @@ describe('Tauri local data adapter', () => {
     await session.localAudit.appendAudit(auditFixture())
 
     await expect(session.conversations.listConversations()).resolves.toEqual([conversationFixture()])
+    await expect(session.conversations.listFirstUserMessages()).resolves.toEqual({ 'conversation-1': messageFixture() })
     await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([messageFixture()])
     await expect(session.memory.listMemoryItems('notes')).resolves.toEqual([memoryFixture()])
     await expect(session.localTools.listLocalToolStates()).resolves.toEqual([localToolStateFixture()])
@@ -66,6 +69,7 @@ describe('Tauri local data adapter', () => {
 
     expect(bridge.calls.map((call) => call.command)).toEqual([
       'aurora_local_data_open',
+      'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation',
@@ -390,6 +394,26 @@ class FakeTauriLocalDataBridge {
       case 'conversations.listConversations':
         this.assertScope(operation)
         return this.conversations.filter((record) => record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+      case 'conversations.listMessageCounts': {
+        this.assertScope(operation)
+        const counts: Record<string, number> = {}
+        for (const record of this.messages) {
+          if (this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) {
+            counts[record.conversationId] = (counts[record.conversationId] ?? 0) + 1
+          }
+        }
+        return counts
+      }
+      case 'conversations.listFirstUserMessages': {
+        this.assertScope(operation)
+        const firstByConversation = new Map<string, ConversationMessageRecord>()
+        for (const record of this.messages) {
+          if (record.role !== 'user' || !this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) continue
+          const current = firstByConversation.get(record.conversationId)
+          if (current === undefined || record.sequence < current.sequence || (record.sequence === current.sequence && record.id < current.id)) firstByConversation.set(record.conversationId, record)
+        }
+        return Object.fromEntries(firstByConversation)
+      }
       case 'conversations.listMessages':
         this.assertScope(operation)
         if (!this.conversations.some((record) => record.id === operation.conversationId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)) return []

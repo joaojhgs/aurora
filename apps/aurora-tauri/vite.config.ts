@@ -12,6 +12,17 @@ const leaderRepoRoot = repoRoot.includes(omxWorktreeMarker)
   : repoRoot
 const webviewTarget = process.env.VITE_AURORA_WEBVIEW_TARGET?.trim()
 
+/** Keep optional route/tooling payloads out of the initial WebView parse path. */
+export function auroraManualChunk(moduleId: string): string | undefined {
+  const id = moduleId.replaceAll('\\', '/').toLowerCase()
+  if (id.includes('@sqlite.org/sqlite-wasm') || id.includes('/browser-sqlite-worker')) return 'sqlite-wasm'
+  if (id.includes('@assistant-ui/react-markdown') || id.includes('remark-gfm') || id.includes('/react-markdown/') || id.includes('/unified/') || id.includes('/micromark/')) return 'markdown'
+  if (id.includes('react-shiki') || id.includes('react-syntax-highlighter') || id.includes('/shiki/')) return 'syntax-highlight'
+  if (id.includes('/qrcode/')) return 'qrcode'
+  if (id.includes('/beautiful-mermaid/') || id.includes('/mermaid/') || id.includes('/parse-diff/') || id.includes('/heat-graph/') || id.includes('/node_modules/diff/')) return 'visualization'
+  return undefined
+}
+
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   clearScreen: false,
@@ -41,6 +52,11 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    target: webviewTarget || undefined
+    target: webviewTarget || undefined,
+    rollupOptions: {
+      output: {
+        manualChunks: auroraManualChunk
+      }
+    }
   }
 }))

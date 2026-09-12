@@ -46,6 +46,8 @@ TASK_DOC_RE = re.compile(r"(?:^|[/_-])(?:PER-\d+|QA-\d{2,})(?:[/_.-]|$)", re.IGN
 ALLOWED_DOCS_JSON_ARTIFACTS = {
     Path("docs/security/mesh-security-surface-inventory.json"),
     Path("docs/security/mesh-security-surface-inventory.schema.json"),
+    # This is a revision-bound acceptance record, not a generated run report.
+    Path("docs/security/native-speech-routing-acceptance.v1.json"),
 }
 
 
