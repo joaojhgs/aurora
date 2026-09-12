@@ -306,6 +306,12 @@ def create_gateway_app(
         async def event_generator():
             await bus.subscribe_event(AuroraMethods.EVENT_STREAM, on_event)
             try:
+                # Flush an SSE comment as soon as the subscription is ready.
+                # Some mobile WebViews otherwise keep an authenticated fetch
+                # response buffered until the first data frame, which delays
+                # correlated assistant deltas even though the HTTP response
+                # has already reached the client.
+                yield ": aurora-event-stream\n\n"
                 if backfill or last_event_id or replay_from:
                     async for event in _stream_backfill_events(
                         bus,

@@ -14,15 +14,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'pnpm dev -- --host 127.0.0.1',
+    command: 'pnpm --filter @aurora/voice-web build:typescript && pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 1420',
     url: 'http://127.0.0.1:1420',
-    // Always start the route-crawl dev server from the current source tree;
-    // reusing a local Vite server made repeated CI-gate runs order-dependent.
+    // Exercise the production chunks. Repeated full-page navigation against
+    // Vite's source-module server exhausts Chromium's request resources before
+    // the later admin routes load, which made this gate order-dependent.
     reuseExistingServer: false,
     env: {
       ...process.env,
       VITE_AURORA_GATEWAY_URL: '',
     },
-    timeout: 120_000,
+    timeout: 180_000,
   },
 })
