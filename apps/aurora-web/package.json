@@ -32,7 +32,7 @@
     "@aurora/client": "workspace:*",
     "@aurora/mesh-authority-web": "workspace:*",
     "@aurora/ui": "workspace:*",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "react": "^19",
     "react-dom": "^19"
   },
