@@ -121,7 +121,7 @@ jobs:
       # coverage of everything that did run instead of going dark.
       - name: Upload TypeScript coverage
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: >-
             ./packages/aurora-sdk/coverage/lcov.info,

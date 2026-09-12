@@ -113,7 +113,7 @@ jobs:
       # left a hole in the coverage history exactly when it was most useful.
       - name: Upload coverage reports
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: ./unit-coverage.xml,./integration-coverage.xml,./process-coverage.xml,./e2e-coverage.xml
           flags: python
