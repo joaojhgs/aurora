@@ -81,7 +81,7 @@ jobs:
           --jobs 2
 
       - name: Upload patched static runtime
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: .artifacts/sherpa-onnx/native-runtime-build/runtime/${{ matrix.target }}
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload desktop client prepare proof
         if: matrix.bundle_mode == 'desktop-client'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-client-prepare-proof
           path: |
@@ -213,7 +213,7 @@ jobs:
 
       - name: Upload sidecar prepare report
         if: matrix.bundle_mode == 'desktop-local'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-sidecar-prepare-report-desktop-local-minimal
           path: apps/aurora-tauri/reports/sidecar-prepare.json
@@ -225,7 +225,7 @@ jobs:
 
       - name: Upload packaged sidecar runtime smoke report
         if: always() && matrix.bundle_mode == 'desktop-local'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-sidecar-runtime-smoke
           path: apps/aurora-tauri/reports/sidecar-runtime-smoke.json
@@ -247,14 +247,14 @@ jobs:
         run: pnpm --filter @aurora/tauri-ui verify:bundle:desktop-client
 
       - name: Upload Linux desktop package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-${{ matrix.upload_suffix }}-linux
           path: apps/aurora-tauri/src-tauri/target/release/bundle/**
           if-no-files-found: error
 
       - name: Upload Linux RPM package report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-${{ matrix.upload_suffix }}-rpm-report
           path: apps/aurora-tauri/reports/rpm-package-${{ matrix.bundle_mode }}.json
@@ -262,7 +262,7 @@ jobs:
 
       - name: Upload desktop client artifact proof
         if: matrix.bundle_mode == 'desktop-client'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-client-artifact-proof
           path: apps/aurora-tauri/reports/desktop-client-bundle-proof.json
@@ -280,7 +280,7 @@ jobs:
 
       - name: Upload Tauri dev smoke report
         if: always() && matrix.smoke_local
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-dev-smoke-report
           path: apps/aurora-tauri/reports/tauri-dev-smoke.json
@@ -291,7 +291,7 @@ jobs:
 
       - name: Upload EventStream smoke report
         if: always() && matrix.smoke_local
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-eventstream-smoke-report
           path: apps/aurora-tauri/reports/eventstream-smoke.json
@@ -377,7 +377,7 @@ jobs:
 
       - name: Upload desktop live E2E report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-client-live-e2e
           path: reports/desktop-live-e2e/
@@ -462,7 +462,7 @@ jobs:
 
       - name: Upload macOS desktop live STUN E2E report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-client-live-e2e-macos-stun
           path: reports/desktop-live-e2e-macos-stun/
@@ -556,7 +556,7 @@ jobs:
         run: pnpm --filter @aurora/tauri-ui build:bundle:desktop-client
 
       - name: Upload desktop client package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-client-${{ matrix.artifact_suffix }}
           path: apps/aurora-tauri/src-tauri/target/release/bundle/**
@@ -615,7 +615,7 @@ jobs:
           jq -e '.secretsRedacted == true' apps/aurora-tauri/reports/sidecar-prepare.json
 
       - name: Upload sidecar profile report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-sidecar-prepare-report-${{ matrix.profile }}
           path: apps/aurora-tauri/reports/sidecar-prepare.json
