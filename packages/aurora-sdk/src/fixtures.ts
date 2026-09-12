@@ -512,7 +512,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'both',
           input_model: 'TokenCreateRequest',
           output_model: 'TokenCreateResponse',
-          required_perms: ['Auth.manage'],
+          required_perms: [],
           method_type: 'manage',
           input_schema: null,
           output_schema: null
@@ -524,7 +524,7 @@ export const gatewayRegistryFixture: GetRegistryResponse = {
           exposure: 'both',
           input_model: 'TokenScopeUpdateRequest',
           output_model: 'TokenScopeUpdateResponse',
-          required_perms: ['Auth.manage'],
+          required_perms: [],
           method_type: 'manage',
           input_schema: null,
           output_schema: null
@@ -2981,7 +2981,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'both',
       method_type: 'manage',
-      required_perms: ['Auth.manage'],
+      required_perms: [],
       input_model: 'TokenCreateRequest',
       output_model: 'TokenCreateResponse',
       input_schema: {
@@ -3004,7 +3004,7 @@ export const backendInventoryFixture: BackendInventory = {
       route_kind: 'dynamic',
       exposure: 'both',
       method_type: 'manage',
-      required_perms: ['Auth.manage'],
+      required_perms: [],
       input_model: 'TokenScopeUpdateRequest',
       output_model: 'TokenScopeUpdateResponse',
       input_schema: {
