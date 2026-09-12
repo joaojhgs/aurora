@@ -37,6 +37,27 @@ describe('WebRTC interop transport request policy', () => {
     ).toEqual(requests.slice(4))
   })
 
+  it('allows only static assets from an explicitly trusted Tauri origin', () => {
+    const requests = [
+      {
+        url: 'http://tauri.localhost/assets/aurora-owl.png',
+        kind: 'http' as const,
+      },
+      { url: 'http://tauri.localhost/favicon.ico', kind: 'http' as const },
+      { url: 'http://tauri.localhost/api/rpc', kind: 'http' as const },
+      { url: 'https://tauri.localhost/assets/app.js', kind: 'http' as const },
+    ]
+
+    expect(
+      forbiddenInteropTransportRequests(
+        requests,
+        'http://127.0.0.1:34615/',
+        'ws://127.0.0.1:9001/mqtt',
+        { allowedStaticAssetOrigins: ['http://tauri.localhost'] },
+      ),
+    ).toEqual(requests.slice(2))
+  })
+
   it('retries transient status request failures while the peer stays usable', async () => {
     let currentTime = 0
     const request = vi

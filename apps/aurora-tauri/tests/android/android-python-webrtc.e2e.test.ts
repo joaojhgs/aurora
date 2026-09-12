@@ -208,6 +208,7 @@ describe('Android thin-shell WebRTC interoperability', () => {
           networkRequests,
           resources.deviceHarnessUrl,
           ready.brokerUrl,
+          { allowedStaticAssetOrigins: ['http://tauri.localhost'] },
         )
 
         assertInteropBrowserResult(browserResult, {

@@ -563,8 +563,14 @@ export function forbiddenInteropTransportRequests<
   requests: T[],
   harnessBaseUrl: string,
   brokerUrl: string,
+  options: { allowedStaticAssetOrigins?: readonly string[] } = {},
 ): T[] {
   const harness = new URL(harnessBaseUrl)
+  const allowedStaticAssetOrigins = new Set(
+    (options.allowedStaticAssetOrigins ?? []).map((origin) =>
+      new URL(origin).origin,
+    ),
+  )
   return requests.filter((request) => {
     if (request.url.startsWith(`blob:${harness.origin}/`)) return false
     try {
@@ -573,8 +579,14 @@ export function forbiddenInteropTransportRequests<
         url.origin === 'http://ipc.localhost' &&
         decodeURIComponent(url.pathname) ===
           '/plugin:__TAURI_CHANNEL__|fetch'
+      const isAllowedStaticAsset =
+        allowedStaticAssetOrigins.has(url.origin) &&
+        (url.pathname === '/' ||
+          url.pathname === '/favicon.ico' ||
+          url.pathname.startsWith('/assets/'))
       return !(
         isTauriChannelRequest ||
+        isAllowedStaticAsset ||
         (url.hostname === harness.hostname && url.port === harness.port) ||
         request.url.startsWith(brokerUrl)
       )
