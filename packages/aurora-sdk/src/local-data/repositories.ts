@@ -5,7 +5,10 @@ import type {
   LocalAuditRecord,
   LocalDataRecordCollections,
   LocalToolStateRecord,
-  PeerGrantMetadataRecord
+  PeerGrantMetadataRecord,
+  TranscriptLifecycle,
+  TranscriptSegmentRecord,
+  TranscriptSessionRecord
 } from './records.zod.js'
 import type { LocalDataScope } from './provenance.js'
 
@@ -56,12 +59,45 @@ export interface LocalAuditRepository {
   listAudit(): Promise<LocalAuditRecord[]>
 }
 
+export interface TranscriptRepository {
+  createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord>
+  startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord>
+  appendSegment(record: TranscriptSegmentRecord): Promise<TranscriptAppendResult>
+  getSession(sessionId: string): Promise<TranscriptSessionRecord | null>
+  listSessions(): Promise<TranscriptSessionRecord[]>
+  listSegments(sessionId: string): Promise<TranscriptSegmentRecord[]>
+  finalizeSession(sessionId: string, lifecycle: Exclude<TranscriptLifecycle, 'active'>, endedAtMs: number, terminalReason: string): Promise<TranscriptSessionRecord>
+  recoverActiveSessions(nowMs: number, terminalReason?: string): Promise<TranscriptRecoveryResult>
+  deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult>
+  deleteExpiredSessions(nowMs: number, limit: number): Promise<TranscriptRetentionResult>
+}
+
+export interface TranscriptAppendResult {
+  readonly appended: boolean
+  readonly record: TranscriptSegmentRecord
+}
+
+export interface TranscriptRecoveryResult {
+  readonly interrupted: number
+}
+
+export interface DeleteTranscriptSessionResult {
+  readonly deleted: boolean
+  readonly deletedSegments: number
+}
+
+export interface TranscriptRetentionResult {
+  readonly deletedSessions: number
+  readonly deletedSegments: number
+}
+
 export interface LocalDataRepositories {
   readonly conversations: ConversationRepository
   readonly memory: LightweightMemoryRepository
   readonly localTools: LocalToolStateRepository
   readonly peerGrants: PeerGrantMetadataRepository
   readonly localAudit: LocalAuditRepository
+  readonly transcripts: TranscriptRepository
 }
 
 export interface MutableLocalDataCollections extends LocalDataRecordCollections {
@@ -80,7 +116,9 @@ export function emptyLocalDataCollections(): MutableLocalDataCollections {
     memoryItems: [],
     localToolStates: [],
     peerGrantMetadata: [],
-    localAudit: []
+    localAudit: [],
+    transcriptSessions: [],
+    transcriptSegments: []
   }
 }
 
@@ -91,6 +129,8 @@ export function cloneLocalDataCollections(collections: LocalDataRecordCollection
     memoryItems: collections.memoryItems.map((record) => structuredClone(record)),
     localToolStates: collections.localToolStates.map((record) => structuredClone(record)),
     peerGrantMetadata: collections.peerGrantMetadata.map((record) => structuredClone(record)),
-    localAudit: collections.localAudit.map((record) => structuredClone(record))
+    localAudit: collections.localAudit.map((record) => structuredClone(record)),
+    transcriptSessions: (collections.transcriptSessions ?? []).map((record) => structuredClone(record)),
+    transcriptSegments: (collections.transcriptSegments ?? []).map((record) => structuredClone(record))
   }
 }

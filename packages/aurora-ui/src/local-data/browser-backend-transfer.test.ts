@@ -369,6 +369,7 @@ class DurableFakeSession implements LocalDataSession {
   readonly localTools: LocalDataSession['localTools']
   readonly peerGrants: LocalDataSession['peerGrants']
   readonly localAudit: LocalDataSession['localAudit']
+  readonly transcripts: LocalDataSession['transcripts']
 
   constructor(
     private readonly kind: BrowserTransferableBackendKind,
@@ -390,10 +391,15 @@ class DurableFakeSession implements LocalDataSession {
     this.localTools = inner.localTools
     this.peerGrants = inner.peerGrants
     this.localAudit = inner.localAudit
+    this.transcripts = inner.transcripts
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     return await this.inner.transaction(work)
+  }
+
+  async recoverActiveTranscripts(nowMs: number, terminalReason?: string): Promise<Awaited<ReturnType<LocalDataSession['recoverActiveTranscripts']>>> {
+    return await this.inner.recoverActiveTranscripts(nowMs, terminalReason)
   }
 
   async exportV1(): Promise<LocalDataExportV1> {

@@ -627,6 +627,16 @@
         "peerGrantMetadata": {
           "pattern": "^[a-f0-9]{64}$",
           "type": "string"
+        },
+        "transcriptSegments": {
+          "default": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "transcriptSessions": {
+          "default": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
         }
       },
       "required": [
@@ -635,7 +645,9 @@
         "memoryItems",
         "localToolStates",
         "peerGrantMetadata",
-        "localAudit"
+        "localAudit",
+        "transcriptSessions",
+        "transcriptSegments"
       ],
       "type": "object"
     },
@@ -708,6 +720,16 @@
             "peerGrantMetadata": {
               "pattern": "^[a-f0-9]{64}$",
               "type": "string"
+            },
+            "transcriptSegments": {
+              "default": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            "transcriptSessions": {
+              "default": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
             }
           },
           "required": [
@@ -716,7 +738,9 @@
             "memoryItems",
             "localToolStates",
             "peerGrantMetadata",
-            "localAudit"
+            "localAudit",
+            "transcriptSessions",
+            "transcriptSegments"
           ],
           "type": "object"
         },
@@ -778,6 +802,18 @@
               "maximum": 50000,
               "minimum": 0,
               "type": "integer"
+            },
+            "transcriptSegments": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transcriptSessions": {
+              "default": 0,
+              "maximum": 5000,
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
@@ -786,7 +822,9 @@
             "memoryItems",
             "localToolStates",
             "peerGrantMetadata",
-            "localAudit"
+            "localAudit",
+            "transcriptSessions",
+            "transcriptSegments"
           ],
           "type": "object"
         },
@@ -1566,6 +1604,306 @@
               },
               "maxItems": 50000,
               "type": "array"
+            },
+            "transcriptSegments": {
+              "default": [],
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence": {
+                    "anyOf": [
+                      {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "endAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                    "type": "string"
+                  },
+                  "sequence": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "sessionId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                    "type": "string"
+                  },
+                  "speakerId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "speakerLabel": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "startAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "textEnvelope": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "AES-GCM-256",
+                        "type": "string"
+                      },
+                      "ciphertextAndTagB64Url": {
+                        "maxLength": 2097152,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "createdAtMs": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "keyId": {
+                        "maxLength": 256,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "nonceB64Url": {
+                        "maxLength": 256,
+                        "pattern": "^[A-Za-z0-9_-]+$",
+                        "type": "string"
+                      },
+                      "version": {
+                        "const": 1,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "algorithm",
+                      "keyId",
+                      "nonceB64Url",
+                      "ciphertextAndTagB64Url",
+                      "createdAtMs"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "id",
+                  "sessionId",
+                  "sequence",
+                  "startAtMs",
+                  "endAtMs",
+                  "textEnvelope",
+                  "confidence",
+                  "speakerId",
+                  "speakerLabel",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              },
+              "maxItems": 100000,
+              "type": "array"
+            },
+            "transcriptSessions": {
+              "default": [],
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "captureMode": {
+                    "enum": [
+                      "ambient",
+                      "notification"
+                    ],
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "diarizationState": {
+                    "enum": [
+                      "not_requested",
+                      "pending",
+                      "available",
+                      "unavailable"
+                    ],
+                    "type": "string"
+                  },
+                  "endedAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expiresAtMs": {
+                    "anyOf": [
+                      {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                    "type": "string"
+                  },
+                  "language": {
+                    "anyOf": [
+                      {
+                        "maxLength": 64,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifecycle": {
+                    "enum": [
+                      "active",
+                      "completed",
+                      "interrupted",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "localNodeId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                    "type": "string"
+                  },
+                  "modelProvenance": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "modelId": {
+                        "anyOf": [
+                          {
+                            "maxLength": 256,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "provider": {
+                        "anyOf": [
+                          {
+                            "maxLength": 256,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "version": {
+                        "anyOf": [
+                          {
+                            "maxLength": 256,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "modelId",
+                      "version"
+                    ],
+                    "type": "object"
+                  },
+                  "profileId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                    "type": "string"
+                  },
+                  "startedAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "terminalReason": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "profileId",
+                  "localNodeId",
+                  "captureMode",
+                  "createdAtMs",
+                  "startedAtMs",
+                  "endedAtMs",
+                  "lifecycle",
+                  "terminalReason",
+                  "expiresAtMs",
+                  "language",
+                  "modelProvenance",
+                  "diarizationState"
+                ],
+                "type": "object"
+              },
+              "maxItems": 5000,
+              "type": "array"
             }
           },
           "required": [
@@ -1574,7 +1912,9 @@
             "memoryItems",
             "localToolStates",
             "peerGrantMetadata",
-            "localAudit"
+            "localAudit",
+            "transcriptSessions",
+            "transcriptSegments"
           ],
           "type": "object"
         },
@@ -2427,6 +2767,306 @@
           },
           "maxItems": 50000,
           "type": "array"
+        },
+        "transcriptSegments": {
+          "default": [],
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "confidence": {
+                "anyOf": [
+                  {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "endAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                "type": "string"
+              },
+              "sequence": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sessionId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                "type": "string"
+              },
+              "speakerId": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "speakerLabel": {
+                "anyOf": [
+                  {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "startAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "textEnvelope": {
+                "additionalProperties": false,
+                "properties": {
+                  "algorithm": {
+                    "const": "AES-GCM-256",
+                    "type": "string"
+                  },
+                  "ciphertextAndTagB64Url": {
+                    "maxLength": 2097152,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "createdAtMs": {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "keyId": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "nonceB64Url": {
+                    "maxLength": 256,
+                    "pattern": "^[A-Za-z0-9_-]+$",
+                    "type": "string"
+                  },
+                  "version": {
+                    "const": 1,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "version",
+                  "algorithm",
+                  "keyId",
+                  "nonceB64Url",
+                  "ciphertextAndTagB64Url",
+                  "createdAtMs"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "sessionId",
+              "sequence",
+              "startAtMs",
+              "endAtMs",
+              "textEnvelope",
+              "confidence",
+              "speakerId",
+              "speakerLabel",
+              "createdAtMs"
+            ],
+            "type": "object"
+          },
+          "maxItems": 100000,
+          "type": "array"
+        },
+        "transcriptSessions": {
+          "default": [],
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "captureMode": {
+                "enum": [
+                  "ambient",
+                  "notification"
+                ],
+                "type": "string"
+              },
+              "createdAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "diarizationState": {
+                "enum": [
+                  "not_requested",
+                  "pending",
+                  "available",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "endedAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "expiresAtMs": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                "type": "string"
+              },
+              "language": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lifecycle": {
+                "enum": [
+                  "active",
+                  "completed",
+                  "interrupted",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              "localNodeId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                "type": "string"
+              },
+              "modelProvenance": {
+                "additionalProperties": false,
+                "properties": {
+                  "modelId": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "provider",
+                  "modelId",
+                  "version"
+                ],
+                "type": "object"
+              },
+              "profileId": {
+                "maxLength": 256,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:@/-]+$",
+                "type": "string"
+              },
+              "startedAtMs": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "terminalReason": {
+                "anyOf": [
+                  {
+                    "maxLength": 512,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "profileId",
+              "localNodeId",
+              "captureMode",
+              "createdAtMs",
+              "startedAtMs",
+              "endedAtMs",
+              "lifecycle",
+              "terminalReason",
+              "expiresAtMs",
+              "language",
+              "modelProvenance",
+              "diarizationState"
+            ],
+            "type": "object"
+          },
+          "maxItems": 5000,
+          "type": "array"
         }
       },
       "required": [
@@ -2435,7 +3075,9 @@
         "memoryItems",
         "localToolStates",
         "peerGrantMetadata",
-        "localAudit"
+        "localAudit",
+        "transcriptSessions",
+        "transcriptSegments"
       ],
       "type": "object"
     },
@@ -2472,6 +3114,18 @@
           "maximum": 50000,
           "minimum": 0,
           "type": "integer"
+        },
+        "transcriptSegments": {
+          "default": 0,
+          "maximum": 100000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transcriptSessions": {
+          "default": 0,
+          "maximum": 5000,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -2480,7 +3134,9 @@
         "memoryItems",
         "localToolStates",
         "peerGrantMetadata",
-        "localAudit"
+        "localAudit",
+        "transcriptSessions",
+        "transcriptSegments"
       ],
       "type": "object"
     },

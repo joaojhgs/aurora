@@ -1,7 +1,7 @@
 {
   "databaseName": "aurora-lightweight.db",
   "formatVersion": 1,
-  "latestVersion": 3,
+  "latestVersion": 4,
   "migrations": [
     {
       "checksum": "de9b1e7272b96401782962188605626abb84e4a722fc801ad585a5db2ca8c43f",
@@ -29,6 +29,15 @@
       "name": "peer_grants_audit",
       "requires_pre_migration_export": false,
       "version": 3
+    },
+    {
+      "checksum": "c6e8881ca051274f008b869be0f36dbc9730c7db5339dfc723661b19a99eaf3c",
+      "file": "0004_transcripts.sql",
+      "ledger_sql": "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (4, 'transcripts', 'c6e8881ca051274f008b869be0f36dbc9730c7db5339dfc723661b19a99eaf3c', CAST(strftime('%s','now') AS INTEGER) * 1000);\nPRAGMA user_version = 4;",
+      "min_app_version": "0.1.0",
+      "name": "transcripts",
+      "requires_pre_migration_export": false,
+      "version": 4
     }
   ]
 }

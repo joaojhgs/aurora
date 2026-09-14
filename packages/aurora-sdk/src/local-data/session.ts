@@ -9,6 +9,8 @@ export interface LocalDataSession extends LocalDataRepositories {
   transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T>
   exportV1(): Promise<LocalDataExportV1>
   importV1(document: LocalDataExportV1): Promise<LocalDataImportResult>
+  /** Mark sessions still active after an unclean process exit as interrupted. */
+  recoverActiveTranscripts(nowMs: number, terminalReason?: string): Promise<import('./repositories.js').TranscriptRecoveryResult>
   close(): Promise<void>
 }
 

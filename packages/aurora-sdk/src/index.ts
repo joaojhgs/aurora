@@ -93,6 +93,7 @@ export {
   AURORA_NODE_CONFIG_VERSION,
   AURORA_NODE_CONFIG_V2_STORAGE_KEY,
   AURORA_NODE_CONFIG_V2_VERSION,
+  AURORA_BACKGROUND_TRANSCRIPTION_POLICY_VERSION,
   AURORA_SPEECH_STAGE_KEYS,
   AuroraNodeConfigValidationError,
   AuroraNodeConfigRevisionConflictError,
@@ -109,6 +110,7 @@ export {
   parseAuroraNodeConfigDocumentV2,
   parseAuroraNodeConfigDocumentWire,
   resolveSpeechStageRouting,
+  resolveBackgroundTranscriptionEffectiveState,
   resolveServiceRouting,
   isRuntimeModuleForNodeConfigModule,
   runtimeModulesForNodeConfigModule,
@@ -120,6 +122,10 @@ export {
 } from './node-config.js'
 export type {
   AuroraNodeConfigDocumentV2,
+  AuroraBackgroundTranscriptionPolicy,
+  AuroraBackgroundTranscriptionCapability,
+  AuroraBackgroundTranscriptionEffectiveReason,
+  AuroraBackgroundTranscriptionEffectiveState,
   AuroraNodeConfigSaveAck,
   AuroraNodeConfigV2Store,
   AuroraSpeechConfigV1,

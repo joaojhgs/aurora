@@ -222,9 +222,9 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
     switch (message.command) {
       case 'open':
         this.session = await this.backend.open(message.profileId, message.localNodeId)
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'status':
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'close':
         await this.session?.close()
         return { closed: true }

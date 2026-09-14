@@ -8,6 +8,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSegmentRecord,
+  parseTranscriptSessionRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type DeleteConversationResult,
@@ -23,7 +25,14 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type DeleteTranscriptSessionResult,
+  type TranscriptAppendResult,
+  type TranscriptLifecycle,
+  type TranscriptRecoveryResult,
+  type TranscriptRetentionResult,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionRecord
 } from '@aurora/client/local-data'
 
 import {
@@ -120,6 +129,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
       this.statusValue = status
       this.client = client
       this.session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
+      await this.session.recoverActiveTranscripts(Date.now())
       return this.session
     } catch (error) {
       await client.close().catch(() => undefined)
@@ -288,6 +298,7 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
   readonly localTools: BrowserSqliteLocalToolStateRepository
   readonly peerGrants: BrowserSqlitePeerGrantRepository
   readonly localAudit: BrowserSqliteLocalAuditRepository
+  readonly transcripts: BrowserSqliteTranscriptRepository
   private closed = false
 
   constructor(
@@ -302,6 +313,7 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
     this.localTools = new BrowserSqliteLocalToolStateRepository(client, txId)
     this.peerGrants = new BrowserSqlitePeerGrantRepository(client, txId)
     this.localAudit = new BrowserSqliteLocalAuditRepository(client, txId)
+    this.transcripts = new BrowserSqliteTranscriptRepository(client, txId)
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -329,6 +341,10 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
   async importV1(document: LocalDataExportV1): Promise<LocalDataImportResult> {
     this.assertOpen()
     return await this.client.importV1(document)
+  }
+
+  async recoverActiveTranscripts(nowMs: number, terminalReason = 'process_restart'): Promise<TranscriptRecoveryResult> {
+    return await this.transcripts.recoverActiveSessions(nowMs, terminalReason)
   }
 
   async close(): Promise<void> {
@@ -434,6 +450,52 @@ class BrowserSqliteLocalAuditRepository {
 
   async listAudit(): Promise<LocalAuditRecord[]> {
     return (await this.client.repositoryOperation<LocalAuditRecord[]>({ kind: 'localAudit.listAudit' }, this.txId)).map(parseLocalAuditRecord)
+  }
+}
+
+class BrowserSqliteTranscriptRepository {
+  constructor(private readonly client: BrowserSqliteWorkerClient, private readonly txId?: string) {}
+
+  async createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.client.repositoryOperation({ kind: 'transcripts.createSession', record: parseTranscriptSessionRecord(record) }, this.txId))
+  }
+
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.client.repositoryOperation({ kind: 'transcripts.startSession', sessionId, startedAtMs }, this.txId))
+  }
+
+  async appendSegment(record: TranscriptSegmentRecord): Promise<TranscriptAppendResult> {
+    const result = await this.client.repositoryOperation<TranscriptAppendResult>({ kind: 'transcripts.appendSegment', record: parseTranscriptSegmentRecord(record) }, this.txId)
+    return { appended: result.appended, record: parseTranscriptSegmentRecord(result.record) }
+  }
+
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord | null>({ kind: 'transcripts.getSession', sessionId }, this.txId)
+    return result === null ? null : parseTranscriptSessionRecord(result)
+  }
+
+  async listSessions(): Promise<TranscriptSessionRecord[]> {
+    return (await this.client.repositoryOperation<TranscriptSessionRecord[]>({ kind: 'transcripts.listSessions' }, this.txId)).map(parseTranscriptSessionRecord)
+  }
+
+  async listSegments(sessionId: string): Promise<TranscriptSegmentRecord[]> {
+    return (await this.client.repositoryOperation<TranscriptSegmentRecord[]>({ kind: 'transcripts.listSegments', sessionId }, this.txId)).map(parseTranscriptSegmentRecord)
+  }
+
+  async finalizeSession(sessionId: string, lifecycle: Exclude<TranscriptLifecycle, 'active'>, endedAtMs: number, terminalReason: string): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.client.repositoryOperation({ kind: 'transcripts.finalizeSession', sessionId, lifecycle, endedAtMs, terminalReason }, this.txId))
+  }
+
+  async recoverActiveSessions(nowMs: number, terminalReason = 'process_restart'): Promise<TranscriptRecoveryResult> {
+    return await this.client.repositoryOperation<TranscriptRecoveryResult>({ kind: 'transcripts.recoverActiveSessions', nowMs, terminalReason }, this.txId)
+  }
+
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    return await this.client.repositoryOperation<DeleteTranscriptSessionResult>({ kind: 'transcripts.deleteSession', sessionId }, this.txId)
+  }
+
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<TranscriptRetentionResult> {
+    return await this.client.repositoryOperation<TranscriptRetentionResult>({ kind: 'transcripts.deleteExpiredSessions', nowMs, limit }, this.txId)
   }
 }
 
@@ -565,6 +627,50 @@ CREATE INDEX idx_aurora_grants_profile_node_claimant_active
 
 CREATE INDEX idx_aurora_audit_profile_node_created
   ON aurora_local_audit (profile_id, local_node_id, created_at_ms DESC);
+`
+  },
+  {
+    version: 4,
+    sql: `PRAGMA foreign_keys = ON;
+
+CREATE TABLE aurora_transcript_sessions (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  local_node_id TEXT NOT NULL,
+  capture_mode TEXT NOT NULL CHECK (capture_mode IN ('ambient', 'notification')),
+  created_at_ms INTEGER NOT NULL,
+  started_at_ms INTEGER NOT NULL,
+  ended_at_ms INTEGER,
+  lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'completed', 'interrupted', 'failed')),
+  terminal_reason TEXT,
+  expires_at_ms INTEGER,
+  language TEXT,
+  model_provenance_json TEXT NOT NULL,
+  diarization_state TEXT NOT NULL CHECK (diarization_state IN ('not_requested', 'pending', 'available', 'unavailable')),
+  CHECK (started_at_ms >= created_at_ms),
+  CHECK (ended_at_ms IS NULL OR ended_at_ms >= started_at_ms),
+  CHECK ((lifecycle = 'active' AND ended_at_ms IS NULL AND terminal_reason IS NULL) OR (lifecycle <> 'active' AND ended_at_ms IS NOT NULL AND terminal_reason IS NOT NULL AND length(trim(terminal_reason)) > 0))
+);
+
+CREATE TABLE aurora_transcript_segments (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES aurora_transcript_sessions(id) ON DELETE CASCADE,
+  sequence INTEGER NOT NULL CHECK (sequence >= 0),
+  start_at_ms INTEGER NOT NULL,
+  end_at_ms INTEGER NOT NULL CHECK (end_at_ms >= start_at_ms),
+  text_envelope_json TEXT NOT NULL,
+  confidence REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+  speaker_id TEXT,
+  speaker_label TEXT,
+  created_at_ms INTEGER NOT NULL,
+  UNIQUE (session_id, sequence)
+);
+
+CREATE INDEX idx_aurora_transcript_sessions_profile_node_created
+  ON aurora_transcript_sessions (profile_id, local_node_id, created_at_ms DESC, id ASC);
+
+CREATE INDEX idx_aurora_transcript_segments_session_order
+  ON aurora_transcript_segments (session_id, sequence ASC, id ASC);
 `
   }
 ])

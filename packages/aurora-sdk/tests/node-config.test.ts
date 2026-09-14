@@ -25,6 +25,7 @@ import {
   sanitizeAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
   runtimeModulesForNodeConfigModule,
+  resolveBackgroundTranscriptionEffectiveState,
   TauriLocalTransport,
   updateAuroraNodeConfigDocumentV2,
   type AuroraNodeConfigDocumentV2,
@@ -167,6 +168,56 @@ describe('Aurora native speech node config v2', () => {
     expect(document.speech.stages.vad.routing).toEqual({ prefer: 'local_only', fallback: 'error' })
     expect(document.speech.sharing).toEqual({ stt: false, tts: false, kws: false, vad: false })
     expect(document.legacyV1Snapshot).toBeNull()
+  })
+
+  it('keeps persisted transcription preference separate from runtime capability and effective state', () => {
+    const document = emptyAuroraNodeConfigDocumentV2(701)
+    expect(document.backgroundTranscription).toEqual({
+      version: 1,
+      enabled: false,
+      ambient: false,
+      notification: false,
+      retentionDays: 30,
+      language: null
+    })
+    expect(resolveBackgroundTranscriptionEffectiveState({
+      ...document.backgroundTranscription,
+      enabled: true,
+      ambient: true,
+      notification: true
+    }, { supported: true, ambient: true, notification: false, reason: null })).toMatchObject({
+      enabled: true,
+      ambient: true,
+      notification: false,
+      reason: 'enabled'
+    })
+    expect(resolveBackgroundTranscriptionEffectiveState({
+      ...document.backgroundTranscription,
+      enabled: true,
+      ambient: true,
+      notification: true
+    }, { supported: false, ambient: false, notification: false, reason: 'foreground_only' })).toMatchObject({
+      enabled: false,
+      reason: 'unsupported',
+      capabilityReason: 'foreground_only'
+    })
+    expect(resolveBackgroundTranscriptionEffectiveState(document.backgroundTranscription, { supported: true, ambient: true, notification: true, reason: null })).toMatchObject({
+      enabled: false,
+      reason: 'disabled_by_preference'
+    })
+  })
+
+  it('migrates an older v2 document with background transcription disabled by default', () => {
+    const current = emptyAuroraNodeConfigDocumentV2(702)
+    const { backgroundTranscription: _backgroundTranscription, ...legacyV2 } = current
+    expect(migrateAuroraNodeConfigDocumentV2(legacyV2, 703).backgroundTranscription).toEqual({
+      version: 1,
+      enabled: false,
+      ambient: false,
+      notification: false,
+      retentionDays: 30,
+      language: null
+    })
   })
 
   it('migrates legacy routing independently and retains a read-only rollback snapshot', () => {

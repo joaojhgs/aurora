@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { searchLocalData } from '../src/local-data/search.js'
 import { MemoryLocalDataBackend, type EncryptedDataEnvelopeV1, type EnvelopeCryptoPort, type LocalDataKeyPurpose } from '../src/local-data/index.js'
-import { conversationFixture, envelopeFixture, memoryFixture, messageFixture } from './fixtures/local-data-fixtures.js'
+import { conversationFixture, envelopeFixture, memoryFixture, messageFixture, transcriptSegmentFixture, transcriptSessionFixture } from './fixtures/local-data-fixtures.js'
 
 const scope = { profileId: 'profile-1', localNodeId: 'node-1' }
 
@@ -59,6 +59,31 @@ describe('local-data product search facade', () => {
       field: 'payload_envelope_json',
       profileId: 'profile-1',
       localNodeId: 'node-1'
+    })
+  })
+
+  it('searches transcript metadata and authorized encrypted segment content without exposing plaintext in metadata', async () => {
+    const crypto = new MapEnvelopeCryptoPort(new Map([[envelopeFixture.keyId, 'private meeting transcript']]))
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    await session.transcripts.createSession(transcriptSessionFixture({ id: 'transcript-alpha' }))
+    await session.transcripts.appendSegment(transcriptSegmentFixture({ id: 'segment-alpha', sessionId: 'transcript-alpha' }))
+
+    const metadata = await searchLocalData(session, { scope, query: 'ambient', nowMs: 2000, domains: ['transcripts'] })
+    expect(metadata.results.some((result) => result.domain === 'transcripts' && result.id === 'transcript-alpha' && result.matchField === 'metadata')).toBe(true)
+    expect(JSON.stringify(metadata.results)).not.toContain('private meeting transcript')
+
+    const content = await searchLocalData(session, {
+      scope,
+      query: 'meeting',
+      nowMs: 2000,
+      domains: ['transcripts'],
+      decrypt: { crypto, authorized: true }
+    })
+    expect(content.results).toMatchObject([{ domain: 'transcripts', id: 'segment-alpha', matchField: 'decrypted_content', matchedTextPreview: 'private meeting transcript' }])
+    expect(JSON.parse(new TextDecoder().decode(crypto.aad[0]))).toMatchObject({
+      table: 'aurora_transcript_segments',
+      recordId: 'segment-alpha',
+      field: 'text_envelope_json'
     })
   })
 
