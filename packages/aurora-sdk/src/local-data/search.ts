@@ -2,7 +2,7 @@ import { LocalDataError } from './backend.js'
 import { buildEnvelopeAad } from './encrypted-envelope.js'
 import type { EnvelopeCryptoPort } from './envelope-crypto-port.js'
 import { compareUtf8 } from './export-v1.js'
-import { localDataIdSchema, type ConversationMessageRecord, type ConversationRecord, type LightweightMemoryRecord } from './records.zod.js'
+import { localDataIdSchema, type ConversationMessageRecord, type ConversationRecord, type LightweightMemoryRecord, type TranscriptSegmentRecord, type TranscriptSessionRecord } from './records.zod.js'
 import type { LocalDataSession } from './session.js'
 import { parseLocalDataBoundary } from './validation.js'
 import {
@@ -11,6 +11,7 @@ import {
   buildMemoryProvenance,
   buildConversationProvenance,
   buildMessageProvenance,
+  buildTranscriptProvenance,
   isExpiredAt,
   localDataHistoryBoundary,
   parseLocalDataScope,
@@ -27,7 +28,7 @@ const MAX_DECRYPT_BYTES = 64 * 1024
 const MAX_TOTAL_DECRYPT_BYTES = 512 * 1024
 const MAX_HIGHLIGHT_BYTES = 256
 
-export type LocalDataSearchDomain = 'conversations' | 'messages' | 'memory'
+export type LocalDataSearchDomain = 'conversations' | 'messages' | 'memory' | 'transcripts'
 export type LocalDataSearchMatchField = 'metadata' | 'decrypted_content'
 
 export interface LocalDataSearchOptions {
@@ -221,6 +222,55 @@ export async function searchLocalData(session: LocalDataSession, options: LocalD
     }
   }
 
+  if (domains.has('transcripts') && checkBounds()) {
+    const sessions = (await session.transcripts.listSessions())
+      .filter((record) => record.profileId === scope.profileId && record.localNodeId === scope.localNodeId)
+      .filter((record) => options.includeExpired === true || !isExpiredAt(record, nowMs))
+      .sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id))
+    for (const record of sessions) {
+      throwIfAborted(options.signal)
+      if (!checkBounds()) break
+      summary.scannedRecords += 1
+      const provenance = buildTranscriptProvenance(record)
+      addMetadataResult(results, query, transcriptSessionMetadata(record), {
+        domain: 'transcripts',
+        id: record.id,
+        conversationId: null,
+        sequence: null,
+        namespace: 'transcripts',
+        provenance
+      })
+      const segments = (await session.transcripts.listSegments(record.id))
+        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+      for (const segment of segments) {
+        throwIfAborted(options.signal)
+        if (!checkBounds()) break
+        summary.scannedRecords += 1
+        addMetadataResult(results, query, transcriptSegmentMetadata(record, segment), {
+          domain: 'transcripts',
+          id: segment.id,
+          conversationId: null,
+          sequence: segment.sequence,
+          namespace: 'transcripts',
+          provenance
+        })
+        if (contentAuthorized) {
+          await addDecryptedResult(options.decrypt?.crypto, summary, results, query, maxDecryptedRecordBytes, maxTotalDecryptedBytes, {
+            envelope: segment.textEnvelope,
+            aad: buildEnvelopeAad({ table: 'aurora_transcript_segments', recordId: segment.id, field: 'text_envelope_json', profileId: record.profileId, localNodeId: record.localNodeId }),
+            domain: 'transcripts',
+            id: segment.id,
+            conversationId: null,
+            sequence: segment.sequence,
+            namespace: 'transcripts',
+            provenance,
+            signal: options.signal
+          })
+        }
+      }
+    }
+  }
+
   const sorted = results.sort(compareResults).slice(0, limit)
   return {
     results: sorted,
@@ -232,7 +282,7 @@ export async function searchLocalData(session: LocalDataSession, options: LocalD
 }
 
 function normalizeDomains(domains: readonly LocalDataSearchDomain[] | undefined): ReadonlySet<LocalDataSearchDomain> {
-  const allowed = new Set<LocalDataSearchDomain>(['conversations', 'messages', 'memory'])
+  const allowed = new Set<LocalDataSearchDomain>(['conversations', 'messages', 'memory', 'transcripts'])
   if (domains === undefined) return allowed
   if (domains.length < 1 || domains.length > allowed.size) {
     throw new LocalDataError('invalid_record', 'Search domains must be a non-empty bounded list', { reason: 'search_domains' })
@@ -268,6 +318,14 @@ function messageMetadata(record: ConversationMessageRecord): string {
 
 function memoryMetadata(record: LightweightMemoryRecord): string {
   return [record.id, record.namespace, record.sourceType, record.sourceId, record.expiresAtMs === null ? 'retained' : 'expires'].filter((value) => value !== null).join(' ')
+}
+
+function transcriptSessionMetadata(record: TranscriptSessionRecord): string {
+  return [record.id, record.profileId, record.localNodeId, record.captureMode, record.lifecycle, record.language, record.diarizationState, record.modelProvenance.provider, record.modelProvenance.modelId, record.modelProvenance.version].filter((value) => value !== null).join(' ')
+}
+
+function transcriptSegmentMetadata(session: TranscriptSessionRecord, record: TranscriptSegmentRecord): string {
+  return [record.id, session.id, String(record.sequence), record.speakerId, record.speakerLabel, session.captureMode, session.lifecycle].filter((value) => value !== null).join(' ')
 }
 
 function addMetadataResult(

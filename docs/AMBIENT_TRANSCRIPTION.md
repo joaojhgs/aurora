@@ -1,136 +1,60 @@
-# Ambient Transcription Feature
+# Ambient Transcription
 
-## Overview
+Aurora's local transcript archive stores bounded, encrypted transcript metadata and
+segments for explicitly enabled capture modes. It does not write audio or plaintext
+transcript text to disk.
 
-Ambient transcription allows Aurora to continuously transcribe audio in the background, creating a log of all spoken conversations in the environment. This is useful for creating daily summaries, searchable transcripts, or meeting notes.
+## Privacy-first defaults
 
-## Current Status
+Background transcription is disabled by default. The persisted node policy contains
+only user preference (`enabled`, capture modes, retention days, and language). Runtime
+capability is discovered separately, and the effective state is enabled only when the
+preference and the current platform capability both allow it.
 
-**⚠️ Note**: As of October 2025, the ambient transcription **logging service** is not yet implemented in the new message bus architecture. The transcription service runs continuously when enabled, but transcriptions are not saved to files.
+Ambient capture should be enabled only with the required consent and visible product
+indicator. Operators must follow local recording and workplace-consent requirements.
 
-The configuration exists in `config.json`, but requires implementation of an `AmbientTranscriptionLogger` service.
+## Archive contract
+
+Each transcript has a profile and local-node scope, capture mode (`ambient` or
+`notification`), lifecycle, retention deadline, language, model provenance, and
+diarization state. Segments are ordered by a per-session sequence and contain an
+encrypted `textEnvelope`; retries with the same segment ID and identical payload are
+idempotent, while conflicting replays are rejected.
+
+The local SDK exposes the same typed repository through memory, IndexedDB, SQLite-WASM
+with OPFS, and the Tauri SQLite bridge. Opening a store recovers active sessions as
+`interrupted` after an unclean exit. Finalization is idempotent, retention deletes
+expired sessions with their segments, and deleting a session cascades to its segments.
+
+Exports/imports include encrypted envelopes, session metadata, ordered segments,
+counts, and collection hashes. Search returns metadata without decryption unless the
+caller supplies an authorized envelope crypto port; decrypted search uses transcript
+segment AAD bound to the profile, local node, record ID, and table/field identity.
 
 ## Configuration
 
-Enable ambient transcription in `config.json`:
+The V2 node configuration persists the following safe default:
 
 ```json
 {
-  "general": {
-    "speech_to_text": {
-      "ambient_transcription": {
-        "enable": true,
-        "chunk_duration": 3.0,
-        "storage_path": "ambient_logs/",
-        "filter_short_transcriptions": true,
-        "min_transcription_length": 10
-      }
-    }
+  "backgroundTranscription": {
+    "version": 1,
+    "enabled": false,
+    "ambient": false,
+    "notification": false,
+    "retentionDays": 30,
+    "language": null
   }
 }
 ```
 
-### Configuration Options
+Capability and effective-state values are runtime-only and are never persisted in
+the node configuration document.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable` | boolean | `true` | Enable continuous transcription |
-| `chunk_duration` | float | `3.0` | Transcribe audio every N seconds |
-| `storage_path` | string | `"ambient_logs/"` | Directory for log files |
-| `filter_short_transcriptions` | boolean | `true` | Skip short transcriptions |
-| `min_transcription_length` | integer | `10` | Minimum characters to log |
+## Related code
 
-## How It Works
-
-### With Wake Word Enabled
-
-```
-┌─────────────────────────────────────────────────┐
-│ Ambient Mode (Continuous)                      │
-│  ├─ Microphone active                          │
-│  ├─ Wake word detection active                 │
-│  ├─ Transcription service RUNNING              │
-│  └─ Transcribing ambient audio every 3s        │
-└─────────────────────────────────────────────────┘
-              ↓ (wake word detected)
-┌─────────────────────────────────────────────────┐
-│ Interactive Mode (STT Session)                 │
-│  ├─ STT session started                        │
-│  ├─ Transcription buffers CLEARED              │
-│  ├─ User speech captured                       │
-│  ├─ Orchestrator processes input               │
-│  └─ TTS responds                                │
-└─────────────────────────────────────────────────┘
-              ↓ (session ends)
-┌─────────────────────────────────────────────────┐
-│ Back to Ambient Mode                           │
-│  └─ Transcription service STILL RUNNING        │
-│     (never paused when ambient mode enabled)   │
-└─────────────────────────────────────────────────┘
-```
-
-### Key Behavior
-
-1. **Continuous Operation**: When ambient transcription is enabled, the transcription service never pauses
-2. **Buffer Clearing**: On wake word detection, audio buffers are cleared to prevent stale audio from being processed
-3. **Session Isolation**: Interactive STT sessions don't interfere with ambient transcription
-
-## Implementation Details
-
-### STT Coordinator Changes
-
-The STT Coordinator service (`app/services/stt_coordinator/service.py`) checks if ambient transcription is enabled:
-
-```python
-# Load configuration
-self._ambient_enabled = config_manager.get(
-    "general.speech_to_text.ambient_transcription.enable",
-    False
-)
-
-# At session end, only pause transcription if ambient mode is disabled
-if not self._ambient_enabled:
-    await self.bus.publish(
-        TranscriptionTopics.CONTROL,
-        TranscriptionControl(action="pause"),
-        event=False
-    )
-```
-
-### Transcription Service Buffer Management
-
-When resuming transcription (after wake word), buffers are cleared:
-
-```python
-elif action == "resume":
-    self._paused = False
-    # Clear audio buffers to avoid processing stale audio
-    with self._buffer_lock:
-        self._audio_buffer.clear()
-        self._speech_segments.clear()
-    self._in_speech = False
-    self._silence_chunks = 0
-```
-
-## Privacy Considerations
-
-### ⚠️ Important
-
-Ambient transcription records **all audio** in the environment:
-
-- **Home use**: May record private conversations
-- **Office use**: May record confidential information
-- **Legal**: Check local recording consent laws
-
-### Recommendations
-
-1. **Inform others**: Let people know recording is active
-2. **Secure storage**: Encrypt the `ambient_logs/` directory
-3. **Regular cleanup**: Delete old logs to minimize data retention
-4. **Disable when not needed**: Toggle off in config when not required
-
-## See Also
-
-- [Message Bus Architecture](MESSAGING_ARCHITECTURE.md)
-- [STT Coordinator Service](../app/services/stt_coordinator/service.py)
-- [Transcription Service](../app/services/stt_transcription/service.py)
+- SDK contract and repositories: `packages/aurora-sdk/src/local-data/`
+- SQLite migration: `packages/aurora-sdk/src/local-data/migrations/sqlite/0004_transcripts.sql`
+- Browser SQLite worker: `packages/aurora-ui/src/local-data/browser-sqlite-worker.ts`
+- Tauri native bridge: `apps/aurora-tauri/src-tauri/src/local_data_native.rs`

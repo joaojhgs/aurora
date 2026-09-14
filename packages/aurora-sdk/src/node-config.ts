@@ -373,6 +373,39 @@ export interface AuroraSpeechConfigV1 {
   }
 }
 
+export const AURORA_BACKGROUND_TRANSCRIPTION_POLICY_VERSION = 1 as const
+
+/** Persisted user intent only. Runtime capability and effective state are never saved. */
+export interface AuroraBackgroundTranscriptionPolicy {
+  version: typeof AURORA_BACKGROUND_TRANSCRIPTION_POLICY_VERSION
+  enabled: boolean
+  ambient: boolean
+  notification: boolean
+  retentionDays: number
+  language: string | null
+}
+
+export interface AuroraBackgroundTranscriptionCapability {
+  supported: boolean
+  ambient: boolean
+  notification: boolean
+  reason: string | null
+}
+
+export type AuroraBackgroundTranscriptionEffectiveReason =
+  | 'enabled'
+  | 'disabled_by_preference'
+  | 'unsupported'
+  | 'no_capture_mode'
+
+export interface AuroraBackgroundTranscriptionEffectiveState {
+  enabled: boolean
+  ambient: boolean
+  notification: boolean
+  reason: AuroraBackgroundTranscriptionEffectiveReason
+  capabilityReason: string | null
+}
+
 export interface AuroraNodeConfigDocumentV2 {
   version: typeof AURORA_NODE_CONFIG_V2_VERSION
   revision: number
@@ -380,6 +413,7 @@ export interface AuroraNodeConfigDocumentV2 {
   services: AuroraNodeConfigDocumentV1['services']
   expose: AuroraNodeConfigDocumentV1['expose']
   speech: AuroraSpeechConfigV1
+  backgroundTranscription: AuroraBackgroundTranscriptionPolicy
   /** Read-only provenance used for an explicit rollback/recovery operation. */
   legacyV1Snapshot?: AuroraNodeConfigDocumentV1 | null
 }
@@ -407,6 +441,15 @@ const V2_STAGE_VALUES = new Set<string>(AURORA_SPEECH_STAGE_KEYS)
 const NETWORK_KIND_VALUES = new Set<AuroraSpeechNetworkKind>(['mesh', 'gateway'])
 const SPEECH_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u
 
+const DEFAULT_BACKGROUND_TRANSCRIPTION: AuroraBackgroundTranscriptionPolicy = {
+  version: AURORA_BACKGROUND_TRANSCRIPTION_POLICY_VERSION,
+  enabled: false,
+  ambient: false,
+  notification: false,
+  retentionDays: 30,
+  language: null
+}
+
 function defaultSpeechStage(stage: AuroraSpeechStage, services: AuroraNodeConfigDocumentV1['services']): AuroraSpeechStageConfig {
   if (stage === 'kws' || stage === 'vad') {
     return { routing: { prefer: 'local_only', fallback: 'error' }, experimentalRemote: false }
@@ -432,13 +475,14 @@ export function emptyAuroraNodeConfigDocumentV2(now = Date.now()): AuroraNodeCon
       sharing: { stt: false, tts: false, kws: false, vad: false },
       limits: { maxAttempts: 2, admissionTimeoutMs: 5_000, finiteDeadlineMs: 60_000 }
     },
+    backgroundTranscription: { ...DEFAULT_BACKGROUND_TRANSCRIPTION },
     legacyV1Snapshot: null
   }
 }
 
 export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNodeConfigDocumentV2 {
   const record = asRecord(document, 'document')
-  assertExactKeys(record, ['version', 'revision', 'updatedAtMs', 'services', 'expose', 'speech', 'legacyV1Snapshot'], 'document')
+  assertExactKeys(record, ['version', 'revision', 'updatedAtMs', 'services', 'expose', 'speech', 'backgroundTranscription', 'legacyV1Snapshot'], 'document')
   if (record.version !== AURORA_NODE_CONFIG_V2_VERSION) {
     throw new AuroraNodeConfigValidationError('document.version', 'must be 2')
   }
@@ -482,6 +526,7 @@ export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNod
   const legacyV1Snapshot = record.legacyV1Snapshot === undefined || record.legacyV1Snapshot === null
     ? null
     : sanitizeAuroraNodeConfigDocument(record.legacyV1Snapshot)
+  const backgroundTranscription = sanitizeBackgroundTranscriptionPolicy(record.backgroundTranscription)
   return {
     version: 2,
     revision: record.revision,
@@ -489,13 +534,19 @@ export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNod
     services: legacy.services,
     expose: legacy.expose,
     speech: { version: 1, stages, sharing, limits: { maxAttempts, admissionTimeoutMs, finiteDeadlineMs } },
+    backgroundTranscription,
     legacyV1Snapshot
   }
 }
 
 export function migrateAuroraNodeConfigDocumentV2(value: unknown, now = Date.now()): AuroraNodeConfigDocumentV2 {
   if (value === null || value === undefined) return emptyAuroraNodeConfigDocumentV2(now)
-  if (isRecord(value) && value.version === AURORA_NODE_CONFIG_V2_VERSION) return sanitizeAuroraNodeConfigDocumentV2(value)
+  if (isRecord(value) && value.version === AURORA_NODE_CONFIG_V2_VERSION) {
+    const migrated = value.backgroundTranscription === undefined
+      ? { ...value, backgroundTranscription: { ...DEFAULT_BACKGROUND_TRANSCRIPTION } }
+      : value
+    return sanitizeAuroraNodeConfigDocumentV2(migrated)
+  }
   const legacy = migrateAuroraNodeConfigDocument(value, now)
   const migrated = emptyAuroraNodeConfigDocumentV2(legacy.updatedAtMs)
   migrated.services = legacy.services
@@ -504,6 +555,19 @@ export function migrateAuroraNodeConfigDocumentV2(value: unknown, now = Date.now
   migrated.speech.stages.stt.routing = { ...legacy.services.stt?.routing ?? migrated.speech.stages.stt.routing }
   migrated.speech.stages.tts.routing = { ...legacy.services.tts?.routing ?? migrated.speech.stages.tts.routing }
   return migrated
+}
+
+export function resolveBackgroundTranscriptionEffectiveState(
+  policy: AuroraBackgroundTranscriptionPolicy,
+  capability: AuroraBackgroundTranscriptionCapability
+): AuroraBackgroundTranscriptionEffectiveState {
+  const requested = sanitizeBackgroundTranscriptionPolicy(policy)
+  if (!requested.enabled) return { enabled: false, ambient: false, notification: false, reason: 'disabled_by_preference', capabilityReason: capability.reason }
+  if (!capability.supported) return { enabled: false, ambient: false, notification: false, reason: 'unsupported', capabilityReason: capability.reason }
+  const ambient = requested.ambient && capability.ambient
+  const notification = requested.notification && capability.notification
+  if (!ambient && !notification) return { enabled: false, ambient: false, notification: false, reason: 'no_capture_mode', capabilityReason: capability.reason }
+  return { enabled: true, ambient, notification, reason: 'enabled', capabilityReason: capability.reason }
 }
 
 export function serializeAuroraNodeConfigDocumentV2(document: AuroraNodeConfigDocumentV2): string {
@@ -589,6 +653,27 @@ export function resolveSpeechStageRouting(input: ResolveSpeechStageRoutingInput)
     throw new AuroraServiceRoutingError({ ...resolution.record, reason: 'exact selector cannot use a local fallback' })
   }
   return { ...resolution, stage: input.stage }
+}
+
+function sanitizeBackgroundTranscriptionPolicy(value: unknown): AuroraBackgroundTranscriptionPolicy {
+  const record = asRecord(value, 'document.backgroundTranscription')
+  assertExactKeys(record, ['version', 'enabled', 'ambient', 'notification', 'retentionDays', 'language'], 'document.backgroundTranscription')
+  if (record.version !== AURORA_BACKGROUND_TRANSCRIPTION_POLICY_VERSION) throw new AuroraNodeConfigValidationError('document.backgroundTranscription.version', 'must be 1')
+  for (const key of ['enabled', 'ambient', 'notification'] as const) {
+    if (typeof record[key] !== 'boolean') throw new AuroraNodeConfigValidationError(`document.backgroundTranscription.${key}`, 'must be boolean')
+  }
+  if (!isBoundedSafeInteger(record.retentionDays, 1, 3650)) throw new AuroraNodeConfigValidationError('document.backgroundTranscription.retentionDays', 'must be between 1 and 3650')
+  if (record.language !== null && record.language !== undefined && (typeof record.language !== 'string' || record.language.length > 64)) {
+    throw new AuroraNodeConfigValidationError('document.backgroundTranscription.language', 'must be a string or null')
+  }
+  return {
+    version: 1,
+    enabled: record.enabled as boolean,
+    ambient: record.ambient as boolean,
+    notification: record.notification as boolean,
+    retentionDays: record.retentionDays as number,
+    language: (record.language ?? null) as string | null
+  }
 }
 
 function sanitizeSpeechStageConfig(value: unknown, stage: AuroraSpeechStage, path: string): AuroraSpeechStageConfig {

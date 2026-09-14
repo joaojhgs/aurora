@@ -76,7 +76,7 @@ export function assertJsonSafety(
     if (current === null || typeof current === 'boolean') {
       bytes += current === null ? 4 : current ? 4 : 5
     } else if (typeof current === 'number') {
-      if (!Number.isFinite(current) || !Number.isSafeInteger(current) || Object.is(current, -0)) {
+      if (!Number.isFinite(current) || Math.abs(current) > Number.MAX_SAFE_INTEGER || Object.is(current, -0)) {
         throwJsonSafetyError(safeBoundaryId, 'unsafe_number')
       }
       bytes += String(current).length

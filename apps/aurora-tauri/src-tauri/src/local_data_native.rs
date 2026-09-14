@@ -23,6 +23,8 @@ const MAX_MEMORY_ITEMS: usize = 50_000;
 const MAX_LOCAL_TOOL_STATES: usize = 10_000;
 const MAX_PEER_GRANT_METADATA: usize = 50_000;
 const MAX_LOCAL_AUDIT: usize = 100_000;
+const MAX_TRANSCRIPT_SESSIONS: usize = 5_000;
+const MAX_TRANSCRIPT_SEGMENTS: usize = 100_000;
 
 const SQLITE_OK: c_int = 0;
 const SQLITE_ROW: c_int = 100;
@@ -164,6 +166,10 @@ struct LocalDataRecordCounts {
     local_tool_states: usize,
     peer_grant_metadata: usize,
     local_audit: usize,
+    #[serde(default)]
+    transcript_sessions: usize,
+    #[serde(default)]
+    transcript_segments: usize,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -175,6 +181,10 @@ struct LocalDataCollectionHashes {
     local_tool_states: String,
     peer_grant_metadata: String,
     local_audit: String,
+    #[serde(default = "empty_collection_hash")]
+    transcript_sessions: String,
+    #[serde(default = "empty_collection_hash")]
+    transcript_segments: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -186,6 +196,10 @@ struct LocalDataRecordCollections {
     local_tool_states: Vec<LocalToolStateRecord>,
     peer_grant_metadata: Vec<PeerGrantMetadataRecord>,
     local_audit: Vec<LocalAuditRecord>,
+    #[serde(default)]
+    transcript_sessions: Vec<TranscriptSessionRecord>,
+    #[serde(default)]
+    transcript_segments: Vec<TranscriptSegmentRecord>,
 }
 
 #[derive(Deserialize)]
@@ -257,6 +271,55 @@ enum LocalDataRepositoryOperation {
     LocalAuditListAudit {
         profile_id: String,
         local_node_id: String,
+    },
+    #[serde(rename = "transcripts.createSession")]
+    TranscriptsCreateSession { record: TranscriptSessionRecord },
+    #[serde(rename = "transcripts.startSession")]
+    TranscriptsStartSession {
+        session_id: String,
+        started_at_ms: i64,
+    },
+    #[serde(rename = "transcripts.appendSegment")]
+    TranscriptsAppendSegment { record: TranscriptSegmentRecord },
+    #[serde(rename = "transcripts.getSession")]
+    TranscriptsGetSession {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+    },
+    #[serde(rename = "transcripts.listSessions")]
+    TranscriptsListSessions {
+        profile_id: String,
+        local_node_id: String,
+    },
+    #[serde(rename = "transcripts.listSegments")]
+    TranscriptsListSegments {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+    },
+    #[serde(rename = "transcripts.finalizeSession")]
+    TranscriptsFinalizeSession {
+        session_id: String,
+        lifecycle: String,
+        ended_at_ms: i64,
+        terminal_reason: String,
+    },
+    #[serde(rename = "transcripts.recoverActiveSessions")]
+    TranscriptsRecoverActiveSessions {
+        profile_id: String,
+        local_node_id: String,
+        now_ms: i64,
+        terminal_reason: Option<String>,
+    },
+    #[serde(rename = "transcripts.deleteSession")]
+    TranscriptsDeleteSession { session_id: String },
+    #[serde(rename = "transcripts.deleteExpiredSessions")]
+    TranscriptsDeleteExpiredSessions {
+        profile_id: String,
+        local_node_id: String,
+        now_ms: i64,
+        limit: i64,
     },
 }
 
@@ -372,6 +435,54 @@ struct LocalAuditRecord {
     correlation_id: Option<String>,
     redacted_detail_json: Value,
     created_at_ms: i64,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+struct TranscriptModelProvenance {
+    provider: Option<String>,
+    model_id: Option<String>,
+    version: Option<String>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+struct TranscriptSessionRecord {
+    id: String,
+    profile_id: String,
+    local_node_id: String,
+    capture_mode: String,
+    created_at_ms: i64,
+    started_at_ms: i64,
+    ended_at_ms: Option<i64>,
+    lifecycle: String,
+    terminal_reason: Option<String>,
+    expires_at_ms: Option<i64>,
+    language: Option<String>,
+    model_provenance: TranscriptModelProvenance,
+    diarization_state: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+struct TranscriptSegmentRecord {
+    id: String,
+    session_id: String,
+    sequence: i64,
+    start_at_ms: i64,
+    end_at_ms: i64,
+    text_envelope: Value,
+    confidence: Option<f64>,
+    speaker_id: Option<String>,
+    speaker_label: Option<String>,
+    created_at_ms: i64,
+}
+
+fn empty_collection_hash() -> String {
+    "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945".to_string()
 }
 
 struct SqliteConnection {
@@ -1248,6 +1359,218 @@ fn run_repository_operation(
                 &[json!(profile_id), json!(local_node_id)],
             )?.into_iter().map(audit_from_row).collect::<Result<Vec<_>, _>>()?))
         }
+        LocalDataRepositoryOperation::TranscriptsCreateSession { record } => {
+            validate_transcript_session_record(&record)?;
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &record.profile_id,
+                &record.local_node_id,
+            )?;
+            ensure_scoped_global_key_available(
+                conn,
+                "aurora_transcript_sessions",
+                "id",
+                &record.id,
+                profile_id,
+                local_node_id,
+            )?;
+            conn.execute(
+                "INSERT INTO aurora_transcript_sessions (id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                &[json!(record.id), json!(record.profile_id), json!(record.local_node_id), json!(record.capture_mode), json!(record.created_at_ms), json!(record.started_at_ms), option_i64(record.ended_at_ms), json!(record.lifecycle), option_string(record.terminal_reason.clone()), option_i64(record.expires_at_ms), option_string(record.language.clone()), json_or_null(Some(json!(record.model_provenance.clone())))?, json!(record.diarization_state)],
+            )?;
+            Ok(
+                serde_json::to_value(record)
+                    .map_err(|error| local_data_error(error.to_string()))?,
+            )
+        }
+        LocalDataRepositoryOperation::TranscriptsStartSession {
+            session_id,
+            started_at_ms,
+        } => {
+            let mut record =
+                transcript_session_by_id(conn, profile_id, local_node_id, &session_id)?
+                    .ok_or_else(|| local_data_error("transcript session not found"))?;
+            if record.lifecycle != "active" {
+                return Err(local_data_error("session_closed"));
+            }
+            validate_safe_int(started_at_ms, "transcript.startedAtMs")?;
+            if started_at_ms < record.created_at_ms {
+                return Err(local_data_error("invalid transcript start time"));
+            }
+            record.started_at_ms = record.started_at_ms.min(started_at_ms);
+            conn.execute("UPDATE aurora_transcript_sessions SET started_at_ms = ? WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[json!(record.started_at_ms), json!(record.id), json!(profile_id), json!(local_node_id)])?;
+            Ok(
+                serde_json::to_value(record)
+                    .map_err(|error| local_data_error(error.to_string()))?,
+            )
+        }
+        LocalDataRepositoryOperation::TranscriptsAppendSegment { record } => {
+            validate_transcript_segment_record(&record, profile_id, local_node_id)?;
+            let session =
+                transcript_session_by_id(conn, profile_id, local_node_id, &record.session_id)?
+                    .ok_or_else(|| local_data_error("transcript session not found"))?;
+            if session.lifecycle != "active" {
+                return Err(local_data_error("session_closed"));
+            }
+            if record.start_at_ms < session.started_at_ms {
+                return Err(local_data_error("transcript segment starts before session"));
+            }
+            if let Some(existing_row) = conn.query("SELECT id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms FROM aurora_transcript_segments WHERE id = ? LIMIT 1", &[json!(record.id)])?.first() {
+                let existing = transcript_segment_from_row(existing_row)?;
+                if serde_json::to_value(&existing).map_err(|error| local_data_error(error.to_string()))? != serde_json::to_value(&record).map_err(|error| local_data_error(error.to_string()))? { return Err(local_data_error("transcript segment replay conflict")); }
+                return Ok(json!({ "appended": false, "record": existing }));
+            }
+            if !conn.query("SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ? LIMIT 1", &[json!(record.session_id), json!(record.sequence)])?.is_empty() { return Err(local_data_error("duplicate transcript sequence")); }
+            conn.execute("INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", &[json!(record.id), json!(record.session_id), json!(record.sequence), json!(record.start_at_ms), json!(record.end_at_ms), json_or_null(Some(record.text_envelope.clone()))?, option_f64(record.confidence), option_string(record.speaker_id.clone()), option_string(record.speaker_label.clone()), json!(record.created_at_ms)])?;
+            Ok(json!({ "appended": true, "record": record }))
+        }
+        LocalDataRepositoryOperation::TranscriptsGetSession {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            Ok(
+                transcript_session_by_id(conn, profile_id, local_node_id, &session_id)?
+                    .map(|record| serde_json::to_value(record).unwrap_or(Value::Null))
+                    .unwrap_or(Value::Null),
+            )
+        }
+        LocalDataRepositoryOperation::TranscriptsListSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            Ok(Value::Array(conn.query("SELECT id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? ORDER BY created_at_ms DESC, id ASC", &[json!(profile_id), json!(local_node_id)])?.into_iter().map(|row| transcript_session_from_row(&row).and_then(|record| serde_json::to_value(record).map_err(|error| local_data_error(error.to_string())))).collect::<Result<Vec<_>, _>>()?))
+        }
+        LocalDataRepositoryOperation::TranscriptsListSegments {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            if transcript_session_by_id(conn, profile_id, local_node_id, &session_id)?.is_none() {
+                return Ok(Value::Array(Vec::new()));
+            }
+            Ok(Value::Array(conn.query("SELECT id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms FROM aurora_transcript_segments WHERE session_id = ? ORDER BY sequence ASC, id ASC", &[json!(session_id)])?.into_iter().map(|row| transcript_segment_from_row(&row).and_then(|record| serde_json::to_value(record).map_err(|error| local_data_error(error.to_string())))).collect::<Result<Vec<_>, _>>()?))
+        }
+        LocalDataRepositoryOperation::TranscriptsFinalizeSession {
+            session_id,
+            lifecycle,
+            ended_at_ms,
+            terminal_reason,
+        } => {
+            if terminal_reason.trim().is_empty() {
+                return Err(local_data_error("transcript terminal reason is required"));
+            }
+            let record = transcript_session_by_id(conn, profile_id, local_node_id, &session_id)?
+                .ok_or_else(|| local_data_error("transcript session not found"))?;
+            if record.lifecycle != "active" {
+                if record.lifecycle == lifecycle
+                    && record.ended_at_ms == Some(ended_at_ms)
+                    && record.terminal_reason.as_deref() == Some(terminal_reason.as_str())
+                {
+                    return Ok(serde_json::to_value(record)
+                        .map_err(|error| local_data_error(error.to_string()))?);
+                }
+                return Err(local_data_error("session_closed"));
+            }
+            let finalized = TranscriptSessionRecord {
+                lifecycle,
+                ended_at_ms: Some(ended_at_ms),
+                terminal_reason: Some(terminal_reason),
+                ..record
+            };
+            validate_transcript_session_record(&finalized)?;
+            conn.execute("UPDATE aurora_transcript_sessions SET ended_at_ms = ?, lifecycle = ?, terminal_reason = ? WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[option_i64(finalized.ended_at_ms), json!(finalized.lifecycle), option_string(finalized.terminal_reason.clone()), json!(finalized.id), json!(profile_id), json!(local_node_id)])?;
+            Ok(serde_json::to_value(finalized)
+                .map_err(|error| local_data_error(error.to_string()))?)
+        }
+        LocalDataRepositoryOperation::TranscriptsRecoverActiveSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            now_ms,
+            terminal_reason,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_safe_int(now_ms, "transcript.nowMs")?;
+            let reason = terminal_reason.unwrap_or_else(|| "process_restart".to_string());
+            if reason.trim().is_empty() {
+                return Err(local_data_error("transcript terminal reason is required"));
+            }
+            validate_optional_text(
+                Some(reason.as_str()),
+                512,
+                "transcript.session.terminalReason",
+            )?;
+            let rows = conn.query("SELECT id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND lifecycle = 'active' ORDER BY id ASC", &[json!(profile_id), json!(local_node_id)])?;
+            for row in &rows {
+                let record = transcript_session_from_row(row)?;
+                conn.execute("UPDATE aurora_transcript_sessions SET ended_at_ms = ?, lifecycle = 'interrupted', terminal_reason = ? WHERE id = ?", &[json!(now_ms.max(record.started_at_ms)), json!(reason), json!(record.id)])?;
+            }
+            Ok(json!({ "interrupted": rows.len() }))
+        }
+        LocalDataRepositoryOperation::TranscriptsDeleteSession { session_id } => {
+            let rows = conn.query("SELECT id FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(session_id), json!(profile_id), json!(local_node_id)])?;
+            if rows.is_empty() {
+                return Ok(json!({ "deleted": false, "deletedSegments": 0 }));
+            }
+            let segments = select_count(
+                conn,
+                "SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ?",
+                &[json!(session_id)],
+            )?;
+            conn.execute("DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[json!(session_id), json!(profile_id), json!(local_node_id)])?;
+            Ok(json!({ "deleted": true, "deletedSegments": segments }))
+        }
+        LocalDataRepositoryOperation::TranscriptsDeleteExpiredSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            now_ms,
+            limit,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_delete_now_ms(now_ms)?;
+            let limit = validate_delete_limit(limit)?.min(MAX_TRANSCRIPT_SESSIONS as i64);
+            let rows = conn.query("SELECT id FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?", &[json!(profile_id), json!(local_node_id), json!(now_ms), json!(limit)])?;
+            let mut deleted_segments = 0_i64;
+            for row in &rows {
+                let id = row_string(row, "id")?;
+                deleted_segments += select_count(
+                    conn,
+                    "SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ?",
+                    &[json!(id)],
+                )?;
+                conn.execute("DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[json!(id), json!(profile_id), json!(local_node_id)])?;
+            }
+            Ok(json!({ "deletedSessions": rows.len(), "deletedSegments": deleted_segments }))
+        }
     }
 }
 
@@ -1439,6 +1762,10 @@ fn import_records(
         "DELETE FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?",
         &[json!(profile_id), json!(local_node_id)],
     )?;
+    conn.execute(
+        "DELETE FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ?",
+        &[json!(profile_id), json!(local_node_id)],
+    )?;
 
     for record in &document.records.conversations {
         run_repository_operation(
@@ -1500,6 +1827,19 @@ fn import_records(
             },
         )?;
     }
+    for record in &document.records.transcript_sessions {
+        run_repository_operation(
+            conn,
+            profile_id,
+            local_node_id,
+            LocalDataRepositoryOperation::TranscriptsCreateSession {
+                record: record.clone(),
+            },
+        )?;
+    }
+    for record in &document.records.transcript_segments {
+        restore_transcript_segment_for_import(conn, profile_id, local_node_id, record)?;
+    }
 
     let imported = export_records(conn, profile_id, local_node_id)?;
     Ok(json!({
@@ -1507,6 +1847,54 @@ fn import_records(
         "recordCounts": record_counts(&imported),
         "collectionHashes": collection_hashes(&imported)?,
     }))
+}
+
+fn restore_transcript_segment_for_import(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+    record: &TranscriptSegmentRecord,
+) -> Result<(), AuroraCommandError> {
+    validate_transcript_segment_record(record, profile_id, local_node_id)?;
+    let session = transcript_session_by_id(conn, profile_id, local_node_id, &record.session_id)?
+        .ok_or_else(|| local_data_error("transcript session not found"))?;
+    if record.start_at_ms < session.started_at_ms {
+        return Err(local_data_error("transcript segment starts before session"));
+    }
+    if !conn
+        .query(
+            "SELECT id FROM aurora_transcript_segments WHERE id = ? LIMIT 1",
+            &[json!(record.id)],
+        )?
+        .is_empty()
+    {
+        return Err(local_data_error("duplicate transcript segment id"));
+    }
+    if !conn
+        .query(
+            "SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ? LIMIT 1",
+            &[json!(record.session_id), json!(record.sequence)],
+        )?
+        .is_empty()
+    {
+        return Err(local_data_error("duplicate transcript sequence"));
+    }
+    conn.execute(
+        "INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        &[
+            json!(record.id),
+            json!(record.session_id),
+            json!(record.sequence),
+            json!(record.start_at_ms),
+            json!(record.end_at_ms),
+            json_or_null(Some(record.text_envelope.clone()))?,
+            option_f64(record.confidence),
+            option_string(record.speaker_id.clone()),
+            option_string(record.speaker_label.clone()),
+            json!(record.created_at_ms),
+        ],
+    )?;
+    Ok(())
 }
 
 fn export_records(
@@ -1521,6 +1909,8 @@ fn export_records(
         "localToolStates": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalToolsListLocalToolStates { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
         "peerGrantMetadata": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::PeerGrantsListPeerGrants { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
         "localAudit": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalAuditListAudit { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
+        "transcriptSessions": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::TranscriptsListSessions { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
+        "transcriptSegments": export_transcript_segments(conn, profile_id, local_node_id)?,
     }))
 }
 
@@ -1573,6 +1963,19 @@ fn ensure_import_global_keys_available(
             local_node_id,
         )?;
     }
+    for record in &document.records.transcript_sessions {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_transcript_sessions",
+            "id",
+            &record.id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    for record in &document.records.transcript_segments {
+        ensure_transcript_segment_id_available(conn, &record.id, profile_id, local_node_id)?;
+    }
     Ok(())
 }
 
@@ -1601,6 +2004,23 @@ fn ensure_message_id_available(
          FROM aurora_messages m
          INNER JOIN aurora_conversations c ON c.id = m.conversation_id
          WHERE m.id = ?
+         LIMIT 1",
+        &[json!(id)],
+    )?;
+    ensure_existing_row_scope(rows.first(), profile_id, local_node_id)
+}
+
+fn ensure_transcript_segment_id_available(
+    conn: &SqliteConnection,
+    id: &str,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let rows = conn.query(
+        "SELECT s.profile_id, s.local_node_id
+         FROM aurora_transcript_segments t
+         INNER JOIN aurora_transcript_sessions s ON s.id = t.session_id
+         WHERE t.id = ?
          LIMIT 1",
         &[json!(id)],
     )?;
@@ -1636,6 +2056,22 @@ fn export_messages(
          ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC",
         &[json!(profile_id), json!(local_node_id)],
     )?.into_iter().map(message_from_row).collect::<Result<Vec<_>, _>>()?))
+}
+
+fn export_transcript_segments(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<Value, AuroraCommandError> {
+    let sessions = conn.query("SELECT id FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? ORDER BY id ASC", &[json!(profile_id), json!(local_node_id)])?;
+    let mut records = Vec::new();
+    for session in sessions {
+        let session_id = row_string(&session, "id")?;
+        for row in conn.query("SELECT id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms FROM aurora_transcript_segments WHERE session_id = ? ORDER BY sequence ASC, id ASC", &[json!(session_id)])? {
+            records.push(transcript_segment_from_row(&row).and_then(|record| serde_json::to_value(record).map_err(|error| local_data_error(error.to_string())))?);
+        }
+    }
+    Ok(Value::Array(records))
 }
 
 fn apply_generated_migrations(conn: &SqliteConnection) -> Result<(), AuroraCommandError> {
@@ -2049,6 +2485,20 @@ fn validate_records(
         records.local_audit.iter().map(|record| record.id.as_str()),
         "duplicate_audit_id",
     )?;
+    let transcript_session_ids = require_unique(
+        records
+            .transcript_sessions
+            .iter()
+            .map(|record| record.id.as_str()),
+        "duplicate_transcript_session_id",
+    )?;
+    let _transcript_segment_ids = require_unique(
+        records
+            .transcript_segments
+            .iter()
+            .map(|record| record.id.as_str()),
+        "duplicate_transcript_segment_id",
+    )?;
     let _tool_keys = require_unique(
         records.local_tool_states.iter().map(|record| {
             format!(
@@ -2104,6 +2554,15 @@ fn validate_records(
             &record.local_node_id,
         )?;
     }
+    for record in &records.transcript_sessions {
+        validate_transcript_session_record(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
 
     let mut message_sequences = HashSet::new();
     for record in &records.messages {
@@ -2113,6 +2572,16 @@ fn validate_records(
         }
         if !message_sequences.insert(format!("{}\0{}", record.conversation_id, record.sequence)) {
             return Err(local_data_error("duplicate_message_sequence"));
+        }
+    }
+    let mut transcript_sequences = HashSet::new();
+    for record in &records.transcript_segments {
+        validate_transcript_segment_record(record, profile_id, local_node_id)?;
+        if !transcript_session_ids.contains(&record.session_id) {
+            return Err(local_data_error("transcript_session_missing"));
+        }
+        if !transcript_sequences.insert(format!("{}\0{}", record.session_id, record.sequence)) {
+            return Err(local_data_error("duplicate_transcript_sequence"));
         }
     }
     Ok(())
@@ -2252,6 +2721,119 @@ fn validate_audit_record(record: &LocalAuditRecord) -> Result<(), AuroraCommandE
     validate_json_object(&record.redacted_detail_json, "audit.redactedDetailJson")
 }
 
+fn validate_transcript_session_record(
+    record: &TranscriptSessionRecord,
+) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "transcript.session.id")?;
+    validate_id(&record.profile_id, "transcript.session.profileId")?;
+    validate_id(&record.local_node_id, "transcript.session.localNodeId")?;
+    if !matches!(record.capture_mode.as_str(), "ambient" | "notification") {
+        return Err(local_data_error("invalid transcript capture mode"));
+    }
+    if !matches!(
+        record.lifecycle.as_str(),
+        "active" | "completed" | "interrupted" | "failed"
+    ) {
+        return Err(local_data_error("invalid transcript lifecycle"));
+    }
+    if !matches!(
+        record.diarization_state.as_str(),
+        "not_requested" | "pending" | "available" | "unavailable"
+    ) {
+        return Err(local_data_error("invalid transcript diarization state"));
+    }
+    validate_safe_int(record.created_at_ms, "transcript.session.createdAtMs")?;
+    validate_safe_int(record.started_at_ms, "transcript.session.startedAtMs")?;
+    if record.started_at_ms < record.created_at_ms {
+        return Err(local_data_error(
+            "transcript startedAtMs before createdAtMs",
+        ));
+    }
+    validate_optional_safe_int(record.ended_at_ms, "transcript.session.endedAtMs")?;
+    validate_optional_safe_int(record.expires_at_ms, "transcript.session.expiresAtMs")?;
+    if let Some(ended_at_ms) = record.ended_at_ms {
+        if ended_at_ms < record.started_at_ms {
+            return Err(local_data_error("transcript endedAtMs before startedAtMs"));
+        }
+    }
+    if record.lifecycle == "active" {
+        if record.ended_at_ms.is_some() || record.terminal_reason.is_some() {
+            return Err(local_data_error("active transcript has terminal fields"));
+        }
+    } else if record.ended_at_ms.is_none()
+        || record
+            .terminal_reason
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+    {
+        return Err(local_data_error("terminal transcript fields missing"));
+    }
+    validate_optional_text(
+        record.language.as_deref(),
+        64,
+        "transcript.session.language",
+    )?;
+    validate_optional_text(
+        record.model_provenance.provider.as_deref(),
+        256,
+        "transcript.session.modelProvenance.provider",
+    )?;
+    validate_optional_text(
+        record.model_provenance.model_id.as_deref(),
+        256,
+        "transcript.session.modelProvenance.modelId",
+    )?;
+    validate_optional_text(
+        record.model_provenance.version.as_deref(),
+        256,
+        "transcript.session.modelProvenance.version",
+    )?;
+    validate_optional_text(
+        record.terminal_reason.as_deref(),
+        512,
+        "transcript.session.terminalReason",
+    )
+}
+
+fn validate_transcript_segment_record(
+    record: &TranscriptSegmentRecord,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "transcript.segment.id")?;
+    validate_id(&record.session_id, "transcript.segment.sessionId")?;
+    validate_safe_int(record.sequence, "transcript.segment.sequence")?;
+    validate_safe_int(record.start_at_ms, "transcript.segment.startAtMs")?;
+    validate_safe_int(record.end_at_ms, "transcript.segment.endAtMs")?;
+    validate_safe_int(record.created_at_ms, "transcript.segment.createdAtMs")?;
+    if record.end_at_ms < record.start_at_ms {
+        return Err(local_data_error("transcript segment end before start"));
+    }
+    if let Some(confidence) = record.confidence {
+        if !confidence.is_finite() || !(0.0..=1.0).contains(&confidence) {
+            return Err(local_data_error("transcript confidence invalid"));
+        }
+    }
+    validate_optional_text(
+        record.speaker_id.as_deref(),
+        256,
+        "transcript.segment.speakerId",
+    )?;
+    validate_optional_text(
+        record.speaker_label.as_deref(),
+        256,
+        "transcript.segment.speakerLabel",
+    )?;
+    validate_envelope(
+        &record.text_envelope,
+        profile_id,
+        local_node_id,
+        "transcript.segment.textEnvelope",
+    )
+}
+
 fn validate_record_counts(document: &LocalDataExportDocument) -> Result<(), AuroraCommandError> {
     let counts = &document.record_counts;
     if counts.conversations != document.records.conversations.len()
@@ -2260,6 +2842,8 @@ fn validate_record_counts(document: &LocalDataExportDocument) -> Result<(), Auro
         || counts.local_tool_states != document.records.local_tool_states.len()
         || counts.peer_grant_metadata != document.records.peer_grant_metadata.len()
         || counts.local_audit != document.records.local_audit.len()
+        || counts.transcript_sessions != document.records.transcript_sessions.len()
+        || counts.transcript_segments != document.records.transcript_segments.len()
     {
         return Err(local_data_error("record_count_mismatch"));
     }
@@ -2284,6 +2868,14 @@ fn validate_collection_hashes(
         "hash.peerGrantMetadata",
     )?;
     validate_hash(&document.collection_hashes.local_audit, "hash.localAudit")?;
+    validate_hash(
+        &document.collection_hashes.transcript_sessions,
+        "hash.transcriptSessions",
+    )?;
+    validate_hash(
+        &document.collection_hashes.transcript_segments,
+        "hash.transcriptSegments",
+    )?;
     let records = serde_json::to_value(&document.records)
         .map_err(|error| local_data_error(error.to_string()))?;
     let hashes = collection_hashes(&records)?;
@@ -2295,6 +2887,8 @@ fn validate_collection_hashes(
             "localToolStates": document.collection_hashes.local_tool_states,
             "peerGrantMetadata": document.collection_hashes.peer_grant_metadata,
             "localAudit": document.collection_hashes.local_audit,
+            "transcriptSessions": document.collection_hashes.transcript_sessions,
+            "transcriptSegments": document.collection_hashes.transcript_segments,
         })
     {
         return Err(local_data_error("collection_hash_mismatch"));
@@ -2311,6 +2905,8 @@ fn validate_collection_sizes(
         || records.local_tool_states.len() > MAX_LOCAL_TOOL_STATES
         || records.peer_grant_metadata.len() > MAX_PEER_GRANT_METADATA
         || records.local_audit.len() > MAX_LOCAL_AUDIT
+        || records.transcript_sessions.len() > MAX_TRANSCRIPT_SESSIONS
+        || records.transcript_segments.len() > MAX_TRANSCRIPT_SEGMENTS
     {
         return Err(local_data_error("collection_size_limit"));
     }
@@ -2533,6 +3129,14 @@ fn validate_json_number(value: &Number, context: &str) -> Result<(), AuroraComma
             return Ok(());
         }
     }
+    if let Some(value) = value.as_f64() {
+        if value.is_finite()
+            && value.abs() <= MAX_SAFE_INTEGER as f64
+            && !(value == 0.0 && value.is_sign_negative())
+        {
+            return Ok(());
+        }
+    }
     Err(local_data_error(format!("{context} unsafe number")))
 }
 
@@ -2707,6 +3311,61 @@ fn audit_from_row(row: Value) -> Result<Value, AuroraCommandError> {
     }))
 }
 
+fn transcript_session_from_row(row: &Value) -> Result<TranscriptSessionRecord, AuroraCommandError> {
+    Ok(TranscriptSessionRecord {
+        id: row_string(row, "id")?,
+        profile_id: row_string(row, "profile_id")?,
+        local_node_id: row_string(row, "local_node_id")?,
+        capture_mode: row_string(row, "capture_mode")?,
+        created_at_ms: row_i64(row, "created_at_ms")?,
+        started_at_ms: row_i64(row, "started_at_ms")?,
+        ended_at_ms: row.get("ended_at_ms").and_then(Value::as_i64),
+        lifecycle: row_string(row, "lifecycle")?,
+        terminal_reason: row
+            .get("terminal_reason")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        expires_at_ms: row.get("expires_at_ms").and_then(Value::as_i64),
+        language: row
+            .get("language")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        model_provenance: serde_json::from_value(parse_json_column(row, "model_provenance_json")?)
+            .map_err(|error| local_data_error(error.to_string()))?,
+        diarization_state: row_string(row, "diarization_state")?,
+    })
+}
+
+fn transcript_segment_from_row(row: &Value) -> Result<TranscriptSegmentRecord, AuroraCommandError> {
+    Ok(TranscriptSegmentRecord {
+        id: row_string(row, "id")?,
+        session_id: row_string(row, "session_id")?,
+        sequence: row_i64(row, "sequence")?,
+        start_at_ms: row_i64(row, "start_at_ms")?,
+        end_at_ms: row_i64(row, "end_at_ms")?,
+        text_envelope: parse_json_column(row, "text_envelope_json")?,
+        confidence: row.get("confidence").and_then(Value::as_f64),
+        speaker_id: row
+            .get("speaker_id")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        speaker_label: row
+            .get("speaker_label")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        created_at_ms: row_i64(row, "created_at_ms")?,
+    })
+}
+
+fn transcript_session_by_id(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+    session_id: &str,
+) -> Result<Option<TranscriptSessionRecord>, AuroraCommandError> {
+    Ok(conn.query("SELECT id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(session_id), json!(profile_id), json!(local_node_id)])?.first().map(transcript_session_from_row).transpose()?)
+}
+
 fn record_counts(records: &Value) -> Value {
     json!({
         "conversations": records_array_len(records, "conversations"),
@@ -2715,6 +3374,8 @@ fn record_counts(records: &Value) -> Value {
         "localToolStates": records_array_len(records, "localToolStates"),
         "peerGrantMetadata": records_array_len(records, "peerGrantMetadata"),
         "localAudit": records_array_len(records, "localAudit"),
+        "transcriptSessions": records_array_len(records, "transcriptSessions"),
+        "transcriptSegments": records_array_len(records, "transcriptSegments"),
     })
 }
 
@@ -2726,6 +3387,8 @@ fn collection_hashes(records: &Value) -> Result<Value, AuroraCommandError> {
         "localToolStates": hash_json(&sorted_collection(records, "localToolStates", compare_local_tool_state))?,
         "peerGrantMetadata": hash_json(&sorted_collection(records, "peerGrantMetadata", compare_by_grant_id))?,
         "localAudit": hash_json(&sorted_collection(records, "localAudit", compare_audit))?,
+        "transcriptSessions": hash_json(&sorted_collection(records, "transcriptSessions", compare_transcript_session))?,
+        "transcriptSegments": hash_json(&sorted_collection(records, "transcriptSegments", compare_transcript_segment))?,
     }))
 }
 
@@ -2768,6 +3431,19 @@ fn compare_local_tool_state(a: &Value, b: &Value) -> std::cmp::Ordering {
 fn compare_audit(a: &Value, b: &Value) -> std::cmp::Ordering {
     value_i64(a, "createdAtMs")
         .cmp(&value_i64(b, "createdAtMs"))
+        .then_with(|| value_string(a, "id").cmp(&value_string(b, "id")))
+}
+
+fn compare_transcript_session(a: &Value, b: &Value) -> std::cmp::Ordering {
+    value_i64(b, "createdAtMs")
+        .cmp(&value_i64(a, "createdAtMs"))
+        .then_with(|| value_string(a, "id").cmp(&value_string(b, "id")))
+}
+
+fn compare_transcript_segment(a: &Value, b: &Value) -> std::cmp::Ordering {
+    value_string(a, "sessionId")
+        .cmp(&value_string(b, "sessionId"))
+        .then_with(|| value_i64(a, "sequence").cmp(&value_i64(b, "sequence")))
         .then_with(|| value_string(a, "id").cmp(&value_string(b, "id")))
 }
 
@@ -2847,6 +3523,13 @@ fn option_string(value: Option<String>) -> Value {
 fn option_i64(value: Option<i64>) -> Value {
     value
         .map(|value| Value::Number(Number::from(value)))
+        .unwrap_or(Value::Null)
+}
+
+fn option_f64(value: Option<f64>) -> Value {
+    value
+        .and_then(Number::from_f64)
+        .map(Value::Number)
         .unwrap_or(Value::Null)
 }
 
@@ -3252,6 +3935,62 @@ mod tests {
         let parsed = validate_import_document(document, "profile-1", "node-1", 3).unwrap();
         let import_result = import_records(&conn, "profile-1", "node-1", &parsed).unwrap();
         assert_eq!(import_result["imported"], json!(true));
+    }
+
+    #[test]
+    fn terminal_transcript_import_restores_segments_and_rolls_back_restore_failures() {
+        let conn = migrated_test_connection();
+        let mut document = valid_import_document_value();
+        document["records"]["transcriptSessions"] = json!([{
+            "id": "transcript-terminal-1",
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "captureMode": "ambient",
+            "createdAtMs": 100,
+            "startedAtMs": 100,
+            "endedAtMs": 200,
+            "lifecycle": "completed",
+            "terminalReason": "capture_complete",
+            "expiresAtMs": null,
+            "language": "en-US",
+            "modelProvenance": { "provider": "test", "modelId": "test-model", "version": "1" },
+            "diarizationState": "not_requested"
+        }]);
+        document["records"]["transcriptSegments"] = json!([{
+            "id": "transcript-segment-1",
+            "sessionId": "transcript-terminal-1",
+            "sequence": 0,
+            "startAtMs": 110,
+            "endAtMs": 120,
+            "textEnvelope": envelope_value(),
+            "confidence": 0.9,
+            "speakerId": null,
+            "speakerLabel": null,
+            "createdAtMs": 120
+        }]);
+        refresh_counts_and_hashes(&mut document);
+        let parsed = validate_import_document(document.clone(), "profile-1", "node-1", 3).unwrap();
+        import_records(&conn, "profile-1", "node-1", &parsed).unwrap();
+        let exported = export_records(&conn, "profile-1", "node-1").unwrap();
+        assert_eq!(
+            exported["transcriptSessions"],
+            document["records"]["transcriptSessions"]
+        );
+        assert_eq!(
+            exported["transcriptSegments"],
+            document["records"]["transcriptSegments"]
+        );
+
+        let before_rollback = exported.clone();
+        let mut invalid = document;
+        invalid["records"]["transcriptSegments"][0]["startAtMs"] = json!(99);
+        refresh_counts_and_hashes(&mut invalid);
+        let parsed_invalid = validate_import_document(invalid, "profile-1", "node-1", 3).unwrap();
+        assert!(import_records(&conn, "profile-1", "node-1", &parsed_invalid).is_err());
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap(),
+            before_rollback
+        );
     }
 
     #[test]

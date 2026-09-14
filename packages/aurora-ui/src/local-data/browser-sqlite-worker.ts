@@ -10,6 +10,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSegmentRecord,
+  parseTranscriptSessionRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type LocalDataBackendKind,
@@ -22,7 +24,12 @@ import {
   type LocalAuditRecord,
   type LocalToolStateRecord,
   type LightweightMemoryRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptLifecycle,
+  type TranscriptRecoveryResult,
+  type TranscriptRetentionResult,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionRecord
 } from '@aurora/client/local-data'
 
 import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs'
@@ -72,6 +79,16 @@ export type BrowserSqliteRepositoryOperation =
   | { readonly kind: 'peerGrants.listPeerGrants' }
   | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
   | { readonly kind: 'localAudit.listAudit' }
+  | { readonly kind: 'transcripts.createSession'; readonly record: TranscriptSessionRecord }
+  | { readonly kind: 'transcripts.startSession'; readonly sessionId: string; readonly startedAtMs: number }
+  | { readonly kind: 'transcripts.appendSegment'; readonly record: TranscriptSegmentRecord }
+  | { readonly kind: 'transcripts.getSession'; readonly sessionId: string }
+  | { readonly kind: 'transcripts.listSessions' }
+  | { readonly kind: 'transcripts.listSegments'; readonly sessionId: string }
+  | { readonly kind: 'transcripts.finalizeSession'; readonly sessionId: string; readonly lifecycle: Exclude<TranscriptLifecycle, 'active'>; readonly endedAtMs: number; readonly terminalReason: string }
+  | { readonly kind: 'transcripts.recoverActiveSessions'; readonly nowMs: number; readonly terminalReason?: string }
+  | { readonly kind: 'transcripts.deleteSession'; readonly sessionId: string }
+  | { readonly kind: 'transcripts.deleteExpiredSessions'; readonly nowMs: number; readonly limit: number }
 
 interface RedactedWorkerError {
   readonly code: string
@@ -84,7 +101,7 @@ interface BrowserSqliteWorkerScope {
   postMessage(response: BrowserSqliteWorkerResponse): void
 }
 
-interface WorkerState {
+interface BrowserSqliteWorkerState {
   db: SqliteDatabase | null
   profileId: string | null
   localNodeId: string | null
@@ -95,6 +112,8 @@ interface WorkerState {
   operationQueue: Promise<unknown>
   cancelled: Set<string>
 }
+
+type WorkerState = BrowserSqliteWorkerState
 
 type SqliteDatabase = {
   exec: (options: string | { sql: string; bind?: readonly unknown[] | Record<string, unknown>; returnValue?: 'resultRows'; rowMode?: 'object' }) => unknown
@@ -474,6 +493,88 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     }
     case 'localAudit.listAudit':
       return selectObjects<AuditRow>(db, 'SELECT * FROM aurora_local_audit WHERE profile_id = ? AND local_node_id = ? ORDER BY created_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToAudit)
+    case 'transcripts.createSession': {
+      const record = parseTranscriptSessionRecord(operation.record)
+      assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+      assertNoSqliteScopedKeyCollision(db, 'aurora_transcript_sessions', 'id', record.id, workerState)
+      run(db, 'INSERT INTO aurora_transcript_sessions (id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', [
+        record.id, record.profileId, record.localNodeId, record.captureMode, record.createdAtMs, record.startedAtMs, record.endedAtMs, record.lifecycle, record.terminalReason, record.expiresAtMs, record.language, JSON.stringify(record.modelProvenance), record.diarizationState
+      ])
+      return record
+    }
+    case 'transcripts.startSession': {
+      const record = requireTranscriptSession(db, workerState, operation.sessionId)
+      if (record.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      if (!Number.isSafeInteger(operation.startedAtMs) || operation.startedAtMs < record.createdAtMs) throw new LocalDataError('invalid_record', 'Transcript start time is invalid')
+      const startedAtMs = Math.min(record.startedAtMs, operation.startedAtMs)
+      run(db, 'UPDATE aurora_transcript_sessions SET started_at_ms = ? WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [startedAtMs, record.id, workerState.profileId, workerState.localNodeId])
+      return rowToTranscriptSession(selectObjects<TranscriptSessionRow>(db, 'SELECT * FROM aurora_transcript_sessions WHERE id = ?;', [record.id])[0]!)
+    }
+    case 'transcripts.appendSegment': {
+      const record = parseTranscriptSegmentRecord(operation.record)
+      const session = requireTranscriptSession(db, workerState, record.sessionId)
+      if (session.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Cannot append to a terminal transcript session')
+      if (record.startAtMs < session.startedAtMs) throw new LocalDataError('invalid_record', 'Transcript segment starts before the session')
+      const existingRow = selectObjects<TranscriptSegmentRow>(db, 'SELECT * FROM aurora_transcript_segments WHERE id = ? LIMIT 1;', [record.id])[0]
+      if (existingRow !== undefined) {
+        const existing = rowToTranscriptSegment(existingRow)
+        if (JSON.stringify(existing) !== JSON.stringify(record)) throw new LocalDataError('invalid_record', 'Transcript segment replay conflicts with the stored segment')
+        return { appended: false, record: existing }
+      }
+      if (selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ?;', [record.sessionId, record.sequence]).length > 0) {
+        throw new LocalDataError('invalid_record', 'Transcript segment sequence must be unique within a session')
+      }
+      insertTranscriptSegment(db, record)
+      return { appended: true, record }
+    }
+    case 'transcripts.getSession': {
+      const row = selectObjects<TranscriptSessionRow>(db, 'SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.sessionId, workerState.profileId, workerState.localNodeId])[0]
+      return row === undefined ? null : rowToTranscriptSession(row)
+    }
+    case 'transcripts.listSessions':
+      return selectObjects<TranscriptSessionRow>(db, 'SELECT * FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? ORDER BY created_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToTranscriptSession)
+    case 'transcripts.listSegments':
+      if (selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.sessionId, workerState.profileId, workerState.localNodeId]).length === 0) return []
+      return selectObjects<TranscriptSegmentRow>(db, 'SELECT * FROM aurora_transcript_segments WHERE session_id = ? ORDER BY sequence ASC, id ASC;', [operation.sessionId]).map(rowToTranscriptSegment)
+    case 'transcripts.finalizeSession': {
+      if (operation.terminalReason.trim().length === 0) throw new LocalDataError('invalid_record', 'Transcript terminal reason is required')
+      const record = requireTranscriptSession(db, workerState, operation.sessionId)
+      if (record.lifecycle !== 'active') {
+        if (record.lifecycle === operation.lifecycle && record.endedAtMs === operation.endedAtMs && record.terminalReason === operation.terminalReason) return record
+        throw new LocalDataError('session_closed', 'Transcript session is already finalized')
+      }
+      const finalized = parseTranscriptSessionRecord({ ...record, lifecycle: operation.lifecycle, endedAtMs: operation.endedAtMs, terminalReason: operation.terminalReason })
+      run(db, 'UPDATE aurora_transcript_sessions SET ended_at_ms = ?, lifecycle = ?, terminal_reason = ? WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [finalized.endedAtMs, finalized.lifecycle, finalized.terminalReason, finalized.id, workerState.profileId, workerState.localNodeId])
+      return finalized
+    }
+    case 'transcripts.recoverActiveSessions': {
+      const active = selectObjects<TranscriptSessionRow>(db, 'SELECT * FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND lifecycle = ? ORDER BY id ASC;', [workerState.profileId, workerState.localNodeId, 'active'])
+      const terminalReason = operation.terminalReason ?? 'process_restart'
+      if (terminalReason.trim().length === 0) throw new LocalDataError('invalid_record', 'Transcript terminal reason is required')
+      for (const row of active) {
+        const record = rowToTranscriptSession(row)
+        const recovered = parseTranscriptSessionRecord({ ...record, lifecycle: 'interrupted', endedAtMs: Math.max(operation.nowMs, record.startedAtMs), terminalReason })
+        run(db, 'UPDATE aurora_transcript_sessions SET ended_at_ms = ?, lifecycle = ?, terminal_reason = ? WHERE id = ?;', [recovered.endedAtMs, recovered.lifecycle, recovered.terminalReason, recovered.id])
+      }
+      return { interrupted: active.length }
+    }
+    case 'transcripts.deleteSession': {
+      const count = selectCount(db, 'SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ? AND EXISTS (SELECT 1 FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?);', [operation.sessionId, operation.sessionId, workerState.profileId, workerState.localNodeId])
+      const session = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.sessionId, workerState.profileId, workerState.localNodeId])
+      if (session.length === 0) return { deleted: false, deletedSegments: 0 }
+      run(db, 'DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.sessionId, workerState.profileId, workerState.localNodeId])
+      return { deleted: true, deletedSegments: count }
+    }
+    case 'transcripts.deleteExpiredSessions': {
+      if (!Number.isSafeInteger(operation.nowMs) || operation.nowMs < 0 || !Number.isSafeInteger(operation.limit) || operation.limit < 1 || operation.limit > 5000) throw new LocalDataError('invalid_record', 'Transcript retention bounds are invalid')
+      const expired = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?;', [workerState.profileId, workerState.localNodeId, operation.nowMs, operation.limit])
+      let deletedSegments = 0
+      for (const row of expired) {
+        deletedSegments += selectCount(db, 'SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ?;', [row.id])
+        run(db, 'DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [row.id, workerState.profileId, workerState.localNodeId])
+      }
+      return { deletedSessions: expired.length, deletedSegments }
+    }
     default:
       return assertNever(operation)
   }
@@ -488,7 +589,9 @@ function exportV1(workerState: WorkerState): LocalDataExportV1 {
     memoryItems: repositories.memory.listMemoryItemsSync(),
     localToolStates: repositories.localTools.listLocalToolStatesSync(),
     peerGrantMetadata: repositories.peerGrants.listPeerGrantsSync(),
-    localAudit: repositories.localAudit.listAuditSync()
+    localAudit: repositories.localAudit.listAuditSync(),
+    transcriptSessions: repositories.transcripts.listSessionsSync(),
+    transcriptSegments: repositories.transcripts.listSegmentsSync()
   }
   return buildLocalDataExportV1({
     sourceBackend: 'sqlite-wasm-opfs',
@@ -519,12 +622,15 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
     run(workerState.db, 'DELETE FROM aurora_memory_items WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
     run(workerState.db, 'DELETE FROM aurora_messages WHERE conversation_id IN (SELECT id FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?);', [workerState.profileId, workerState.localNodeId])
     run(workerState.db, 'DELETE FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
+    run(workerState.db, 'DELETE FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ?;', [workerState.profileId, workerState.localNodeId])
     for (const record of parsed.records.conversations) executeRepositoryOperation(workerState, { kind: 'conversations.upsertConversation', record })
     for (const record of parsed.records.messages) executeRepositoryOperation(workerState, { kind: 'conversations.appendMessage', record })
     for (const record of parsed.records.memoryItems) executeRepositoryOperation(workerState, { kind: 'memory.upsertMemoryItem', record })
     for (const record of parsed.records.localToolStates) executeRepositoryOperation(workerState, { kind: 'localTools.upsertLocalToolState', record })
     for (const record of parsed.records.peerGrantMetadata) executeRepositoryOperation(workerState, { kind: 'peerGrants.upsertPeerGrant', record })
     for (const record of parsed.records.localAudit) executeRepositoryOperation(workerState, { kind: 'localAudit.appendAudit', record })
+    for (const record of parsed.records.transcriptSessions ?? []) executeRepositoryOperation(workerState, { kind: 'transcripts.createSession', record })
+    for (const record of parsed.records.transcriptSegments ?? []) restoreTranscriptSegmentForImport(workerState, record)
     validateForeignKeys(workerState.db)
     exec(workerState.db, 'COMMIT;')
   } catch (error) {
@@ -556,6 +662,13 @@ function createSynchronousRepositories(workerState: WorkerState) {
     },
     localAudit: {
       listAuditSync: () => executeRepositoryOperation(workerState, { kind: 'localAudit.listAudit' }) as LocalAuditRecord[]
+    },
+    transcripts: {
+      listSessionsSync: () => executeRepositoryOperation(workerState, { kind: 'transcripts.listSessions' }) as TranscriptSessionRecord[],
+      listSegmentsSync: () => {
+        const sessions = executeRepositoryOperation(workerState, { kind: 'transcripts.listSessions' }) as TranscriptSessionRecord[]
+        return sessions.flatMap((session) => executeRepositoryOperation(workerState, { kind: 'transcripts.listSegments', sessionId: session.id }) as TranscriptSegmentRecord[])
+      }
     }
   }
 }
@@ -624,6 +737,13 @@ function assertNoSqliteImportScopedKeyCollisions(
     assertRecordIdentity(workerState, record.profileId, record.localNodeId)
     assertNoSqliteScopedKeyCollision(db, 'aurora_local_audit', 'id', record.id, workerState)
   }
+  for (const record of records.transcriptSessions ?? []) {
+    assertRecordIdentity(workerState, record.profileId, record.localNodeId)
+    assertNoSqliteScopedKeyCollision(db, 'aurora_transcript_sessions', 'id', record.id, workerState)
+  }
+  for (const record of records.transcriptSegments ?? []) {
+    assertNoSqliteTranscriptSegmentIdCollision(db, record.id, workerState)
+  }
 }
 
 function assertNoSqliteScopedKeyCollision(
@@ -662,13 +782,30 @@ function assertNoSqliteMessageIdCollision(
   throw new LocalDataError('invalid_record', 'Message IDs must be unique')
 }
 
+function assertNoSqliteTranscriptSegmentIdCollision(
+  db: SqliteDatabase,
+  id: string,
+  workerState: WorkerState & { profileId: string; localNodeId: string }
+): void {
+  const rows = selectObjects<{ profile_id: string; local_node_id: string }>(
+    db,
+    'SELECT sessions.profile_id, sessions.local_node_id FROM aurora_transcript_segments segments INNER JOIN aurora_transcript_sessions sessions ON sessions.id = segments.session_id WHERE segments.id = ? LIMIT 1;',
+    [id]
+  )
+  const existing = rows[0]
+  if (existing !== undefined && (existing.profile_id !== workerState.profileId || existing.local_node_id !== workerState.localNodeId)) {
+    throw scopedKeyCollision()
+  }
+}
+
 function assertDatabaseLocalNodeOwnership(db: SqliteDatabase | null, localNodeId: string): void {
   const checks: Array<{ readonly source: string; readonly sql: string }> = [
     { source: 'conversations', sql: 'SELECT id FROM aurora_conversations WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
     { source: 'memory', sql: 'SELECT id FROM aurora_memory_items WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
     { source: 'local_tools', sql: 'SELECT tool_contract_id FROM aurora_local_tool_state WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
     { source: 'peer_grants', sql: 'SELECT grant_id FROM aurora_peer_grant_metadata WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
-    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' }
+    { source: 'local_audit', sql: 'SELECT id FROM aurora_local_audit WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' },
+    { source: 'transcript_sessions', sql: 'SELECT id FROM aurora_transcript_sessions WHERE local_node_id IS NULL OR local_node_id <> ? LIMIT 1;' }
   ]
   for (const check of checks) {
     if (selectObjects<Record<string, unknown>>(db, check.sql, [localNodeId]).length > 0) {
@@ -683,7 +820,8 @@ export function assertExistingSqliteLocalNodeOwnership(db: SqliteDatabase, local
     { tableName: 'aurora_memory_items', idColumn: 'id' },
     { tableName: 'aurora_local_tool_state', idColumn: 'tool_contract_id' },
     { tableName: 'aurora_peer_grant_metadata', idColumn: 'grant_id' },
-    { tableName: 'aurora_local_audit', idColumn: 'id' }
+    { tableName: 'aurora_local_audit', idColumn: 'id' },
+    { tableName: 'aurora_transcript_sessions', idColumn: 'id' }
   ]
   for (const check of checks) {
     if (!tableExists(db, check.tableName) || !tableHasRows(db, check.tableName)) continue
@@ -832,6 +970,35 @@ interface AuditRow extends Record<string, unknown> {
   created_at_ms: number
 }
 
+interface TranscriptSessionRow extends Record<string, unknown> {
+  id: string
+  profile_id: string
+  local_node_id: string
+  capture_mode: TranscriptSessionRecord['captureMode']
+  created_at_ms: number
+  started_at_ms: number
+  ended_at_ms: number | null
+  lifecycle: TranscriptSessionRecord['lifecycle']
+  terminal_reason: string | null
+  expires_at_ms: number | null
+  language: string | null
+  model_provenance_json: string
+  diarization_state: TranscriptSessionRecord['diarizationState']
+}
+
+interface TranscriptSegmentRow extends Record<string, unknown> {
+  id: string
+  session_id: string
+  sequence: number
+  start_at_ms: number
+  end_at_ms: number
+  text_envelope_json: string
+  confidence: number | null
+  speaker_id: string | null
+  speaker_label: string | null
+  created_at_ms: number
+}
+
 function rowToConversation(row: ConversationRow): ConversationRecord {
   return parseConversationRecord({
     id: row.id,
@@ -917,6 +1084,72 @@ function rowToAudit(row: AuditRow): LocalAuditRecord {
     redactedDetailJson: JSON.parse(row.redacted_detail_json),
     createdAtMs: row.created_at_ms
   })
+}
+
+function rowToTranscriptSession(row: TranscriptSessionRow): TranscriptSessionRecord {
+  return parseTranscriptSessionRecord({
+    id: row.id,
+    profileId: row.profile_id,
+    localNodeId: row.local_node_id,
+    captureMode: row.capture_mode,
+    createdAtMs: row.created_at_ms,
+    startedAtMs: row.started_at_ms,
+    endedAtMs: row.ended_at_ms,
+    lifecycle: row.lifecycle,
+    terminalReason: row.terminal_reason,
+    expiresAtMs: row.expires_at_ms,
+    language: row.language,
+    modelProvenance: JSON.parse(row.model_provenance_json),
+    diarizationState: row.diarization_state
+  })
+}
+
+function rowToTranscriptSegment(row: TranscriptSegmentRow): TranscriptSegmentRecord {
+  return parseTranscriptSegmentRecord({
+    id: row.id,
+    sessionId: row.session_id,
+    sequence: row.sequence,
+    startAtMs: row.start_at_ms,
+    endAtMs: row.end_at_ms,
+    textEnvelope: JSON.parse(row.text_envelope_json),
+    confidence: row.confidence,
+    speakerId: row.speaker_id,
+    speakerLabel: row.speaker_label,
+    createdAtMs: row.created_at_ms
+  })
+}
+
+function restoreTranscriptSegmentForImport(
+  workerState: WorkerState & { db: SqliteDatabase; profileId: string; localNodeId: string },
+  input: TranscriptSegmentRecord
+): TranscriptSegmentRecord {
+  const record = parseTranscriptSegmentRecord(input)
+  const session = requireTranscriptSession(workerState.db, workerState, record.sessionId)
+  if (record.startAtMs < session.startedAtMs) throw new LocalDataError('invalid_record', 'Transcript segment starts before the session')
+  if (selectObjects<{ id: string }>(workerState.db, 'SELECT id FROM aurora_transcript_segments WHERE id = ? LIMIT 1;', [record.id]).length > 0) {
+    throw new LocalDataError('invalid_record', 'Transcript segment IDs must be unique')
+  }
+  if (selectObjects<{ id: string }>(workerState.db, 'SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ?;', [record.sessionId, record.sequence]).length > 0) {
+    throw new LocalDataError('invalid_record', 'Transcript segment sequence must be unique within a session')
+  }
+  insertTranscriptSegment(workerState.db, record)
+  return record
+}
+
+function insertTranscriptSegment(db: SqliteDatabase, record: TranscriptSegmentRecord): void {
+  run(db, 'INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', [
+    record.id, record.sessionId, record.sequence, record.startAtMs, record.endAtMs, JSON.stringify(record.textEnvelope), record.confidence, record.speakerId, record.speakerLabel, record.createdAtMs
+  ])
+}
+
+function requireTranscriptSession(
+  db: SqliteDatabase,
+  workerState: WorkerState & { profileId: string; localNodeId: string },
+  sessionId: string
+): TranscriptSessionRecord {
+  const row = selectObjects<TranscriptSessionRow>(db, 'SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [sessionId, workerState.profileId, workerState.localNodeId])[0]
+  if (row === undefined) throw new LocalDataError('invalid_record', 'Transcript session does not exist')
+  return rowToTranscriptSession(row)
 }
 
 function parseWorkerRequest(value: unknown): BrowserSqliteWorkerRequest {

@@ -8,7 +8,9 @@ import {
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionRecord
 } from '@aurora/client/local-data'
 
 import {
@@ -229,6 +231,100 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await expect(reopenedFirst.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'memory-profile-1' })])
     await expect(reopenedFirst.conversations.listMessages('conversation-profile-2')).resolves.toEqual([])
     await reopenedFirst.close()
+  })
+
+  it('scopes transcript reads, recovery, retention, and cascade deletes by profile and local node', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const first = await openSession(store, leases, 'owner-1', 'profile-1', 'node-1')
+    const firstSession = transcriptSessionFixture({ id: 'transcript-profile-1', expiresAtMs: 9_000 })
+    await first.transcripts.createSession(firstSession)
+    await first.transcripts.appendSegment(transcriptSegmentFixture({ id: 'segment-profile-1', sessionId: firstSession.id }))
+    await first.close()
+
+    const second = await openSession(store, leases, 'owner-2', 'profile-2', 'node-1')
+    expect((await store.load())?.records.transcriptSessions).toEqual([firstSession])
+
+    const expiredSecondSession = transcriptSessionFixture({
+      id: 'transcript-profile-2-expired',
+      profileId: 'profile-2',
+      expiresAtMs: 9_000
+    })
+    await second.transcripts.createSession(expiredSecondSession)
+    await second.transcripts.appendSegment(transcriptSegmentFixture({
+      id: 'segment-profile-2-expired',
+      sessionId: expiredSecondSession.id
+    }))
+    const liveSecondSession = transcriptSessionFixture({
+      id: 'transcript-profile-2-live',
+      profileId: 'profile-2'
+    })
+    await second.transcripts.createSession(liveSecondSession)
+    await second.transcripts.appendSegment(transcriptSegmentFixture({
+      id: 'segment-profile-2-live',
+      sessionId: liveSecondSession.id
+    }))
+
+    await expect(second.transcripts.getSession(firstSession.id)).resolves.toBeNull()
+    await expect(second.transcripts.listSessions()).resolves.toEqual([expiredSecondSession, liveSecondSession])
+    await expect(second.transcripts.listSegments(firstSession.id)).resolves.toEqual([])
+    await expect(second.transcripts.deleteSession(firstSession.id)).resolves.toEqual({ deleted: false, deletedSegments: 0 })
+
+    await expect(second.transcripts.recoverActiveSessions(20_000)).resolves.toEqual({ interrupted: 2 })
+    expect((await store.load())?.records.transcriptSessions).toEqual([
+      firstSession,
+      { ...expiredSecondSession, lifecycle: 'interrupted', endedAtMs: 20_000, terminalReason: 'process_restart' },
+      { ...liveSecondSession, lifecycle: 'interrupted', endedAtMs: 20_000, terminalReason: 'process_restart' }
+    ])
+
+    await expect(second.transcripts.deleteSession(liveSecondSession.id)).resolves.toEqual({ deleted: true, deletedSegments: 1 })
+    await expect(second.transcripts.listSegments(liveSecondSession.id)).resolves.toEqual([])
+    await expect(second.transcripts.deleteExpiredSessions(10_000, 10)).resolves.toEqual({ deletedSessions: 1, deletedSegments: 1 })
+    expect((await store.load())?.records.transcriptSessions).toEqual([firstSession])
+    expect((await store.load())?.records.transcriptSegments).toEqual([transcriptSegmentFixture({ id: 'segment-profile-1', sessionId: firstSession.id })])
+    await second.close()
+  })
+
+  it('publishes IndexedDB sessions only after recovery and cleans up failed opens for retry', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const seedBackend = new BrowserIndexedDbLocalDataBackend({
+      origin: 'https://aurora.example.test',
+      documentStore: store,
+      leaseStore: leases,
+      locks: null,
+      ownerId: 'seed-owner',
+      nowMs: () => 10_000
+    })
+    const seedSession = await seedBackend.open('profile-1', 'node-1')
+    await seedSession.transcripts.createSession(transcriptSessionFixture({ id: 'active-recovery' }))
+    await seedSession.close()
+
+    const backend = new BrowserIndexedDbLocalDataBackend({
+      origin: 'https://aurora.example.test',
+      documentStore: store,
+      leaseStore: leases,
+      locks: null,
+      ownerId: 'retry-owner',
+      nowMs: () => 10_000
+    })
+    store.failNextSave = new Error('injected recovery write failure')
+    await expect(backend.open('profile-1', 'node-1')).rejects.toThrow('injected recovery write failure')
+    await expect(backend.status()).resolves.toMatchObject({ profileId: null, migrationState: 'failed' })
+
+    const heldRecovery = store.holdNextSave()
+    const firstOpen = backend.open('profile-1', 'node-1')
+    await heldRecovery.started
+    const concurrentOpen = backend.open('profile-1', 'node-1')
+    let concurrentResolved = false
+    void concurrentOpen.then(() => { concurrentResolved = true })
+    await Promise.resolve()
+    expect(concurrentResolved).toBe(false)
+    heldRecovery.release()
+    const [firstSession, concurrentSession] = await Promise.all([firstOpen, concurrentOpen])
+    expect(concurrentSession).toBe(firstSession)
+    expect(store.saveCalls).toBeGreaterThanOrEqual(3)
+    await backend.close()
   })
 
   it('deletes only active-profile conversations and bounded expired memory in shared storage', async () => {
@@ -543,6 +639,41 @@ function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAuditReco
     correlationId: 'corr-1',
     redactedDetailJson: { secretsRedacted: true },
     createdAtMs: 1700,
+    ...overrides
+  }
+}
+
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    captureMode: 'ambient',
+    createdAtMs: 1_000,
+    startedAtMs: 1_000,
+    endedAtMs: null,
+    lifecycle: 'active',
+    terminalReason: null,
+    expiresAtMs: null,
+    language: 'en-US',
+    modelProvenance: { provider: 'test', modelId: 'test-model', version: '1' },
+    diarizationState: 'not_requested',
+    ...overrides
+  }
+}
+
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'segment-1',
+    sessionId: 'transcript-1',
+    sequence: 0,
+    startAtMs: 1_000,
+    endAtMs: 1_500,
+    textEnvelope: envelopeFixture,
+    confidence: 0.99,
+    speakerId: null,
+    speakerLabel: null,
+    createdAtMs: 1_500,
     ...overrides
   }
 }

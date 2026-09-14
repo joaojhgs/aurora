@@ -6,7 +6,8 @@ import {
   epochMsSchema,
   type ConversationMessageRecord,
   type ConversationRecord,
-  type LightweightMemoryRecord
+  type LightweightMemoryRecord,
+  type TranscriptSessionRecord
 } from './records.zod.js'
 import { parseLocalDataBoundary } from './validation.js'
 
@@ -134,6 +135,25 @@ export function buildMessageProvenance(record: ConversationMessageRecord, scope:
       ...(record.contentEnvelope === null ? [] : ['contentEnvelope']),
       ...(record.toolEnvelope === null ? [] : ['toolEnvelope'])
     ],
+    historyBoundary: localDataHistoryBoundary()
+  }
+}
+
+export function buildTranscriptProvenance(record: TranscriptSessionRecord): LocalDataProvenance {
+  return {
+    origin: 'local',
+    profileId: record.profileId,
+    localNodeId: record.localNodeId,
+    namespace: 'transcripts',
+    conversationId: null,
+    messageId: null,
+    sourceType: 'transcript_session',
+    sourceId: record.id,
+    createdAtMs: record.createdAtMs,
+    updatedAtMs: record.endedAtMs ?? record.startedAtMs,
+    expiresAtMs: record.expiresAtMs,
+    retention: record.expiresAtMs === null ? 'retained' : 'expires',
+    redactedFields: ['textEnvelope'],
     historyBoundary: localDataHistoryBoundary()
   }
 }

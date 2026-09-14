@@ -5,7 +5,9 @@ import type {
   LightweightMemoryRecord,
   LocalAuditRecord,
   LocalToolStateRecord,
-  PeerGrantMetadataRecord
+  PeerGrantMetadataRecord,
+  TranscriptSegmentRecord,
+  TranscriptSessionRecord
 } from '../../src/local-data/index.js'
 
 export const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
@@ -106,6 +108,41 @@ export function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAu
     correlationId: 'corr-1',
     redactedDetailJson: { secretsRedacted: true },
     createdAtMs: 1700,
+    ...overrides
+  }
+}
+
+export function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-session-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    captureMode: 'ambient',
+    createdAtMs: 1000,
+    startedAtMs: 1000,
+    endedAtMs: null,
+    lifecycle: 'active',
+    terminalReason: null,
+    expiresAtMs: 10_000,
+    language: 'en-US',
+    modelProvenance: { provider: 'local', modelId: 'aurora-stt', version: '1' },
+    diarizationState: 'not_requested',
+    ...overrides
+  }
+}
+
+export function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'transcript-segment-1',
+    sessionId: 'transcript-session-1',
+    sequence: 0,
+    startAtMs: 1000,
+    endAtMs: 1500,
+    textEnvelope: envelopeFixture,
+    confidence: 0.95,
+    speakerId: null,
+    speakerLabel: null,
+    createdAtMs: 1500,
     ...overrides
   }
 }

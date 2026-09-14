@@ -675,6 +675,18 @@ class FakeLocalDataSession implements LocalDataSession {
   readonly localTools = emptyLocalToolRepository();
   readonly peerGrants = new MemoryPeerGrantMetadataRepository();
   readonly localAudit: MemoryLocalAuditRepository;
+  readonly transcripts: LocalDataRepositories['transcripts'] = {
+    createSession: async (record) => record,
+    startSession: async () => { throw new Error("not used"); },
+    appendSegment: async (record) => ({ appended: true, record }),
+    getSession: async () => null,
+    listSessions: async () => [],
+    listSegments: async () => [],
+    finalizeSession: async () => { throw new Error("not used"); },
+    recoverActiveSessions: async () => ({ interrupted: 0 }),
+    deleteSession: async () => ({ deleted: false, deletedSegments: 0 }),
+    deleteExpiredSessions: async () => ({ deletedSessions: 0, deletedSegments: 0 }),
+  };
   closed = false;
 
   constructor(localAudit = new MemoryLocalAuditRepository()) {
@@ -683,6 +695,10 @@ class FakeLocalDataSession implements LocalDataSession {
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     return await work(this);
+  }
+
+  async recoverActiveTranscripts(): Promise<{ interrupted: number }> {
+    return { interrupted: 0 };
   }
 
   async exportV1(): Promise<LocalDataExportV1> {

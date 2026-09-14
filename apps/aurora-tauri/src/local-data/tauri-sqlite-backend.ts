@@ -7,6 +7,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSegmentRecord,
+  parseTranscriptSessionRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type DeleteConversationResult,
@@ -22,7 +24,14 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type DeleteTranscriptSessionResult,
+  type TranscriptAppendResult,
+  type TranscriptLifecycle,
+  type TranscriptRecoveryResult,
+  type TranscriptRetentionResult,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionRecord
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 import { invokeAuroraLocalDataCommand } from './tauri-local-data-invoke.js'
 
@@ -48,6 +57,16 @@ type RepositoryOperation =
   | { readonly kind: 'peerGrants.listPeerGrants'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
   | { readonly kind: 'localAudit.listAudit'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'transcripts.createSession'; readonly record: TranscriptSessionRecord }
+  | { readonly kind: 'transcripts.startSession'; readonly sessionId: string; readonly startedAtMs: number }
+  | { readonly kind: 'transcripts.appendSegment'; readonly record: TranscriptSegmentRecord }
+  | { readonly kind: 'transcripts.getSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.listSessions'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'transcripts.listSegments'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.finalizeSession'; readonly sessionId: string; readonly lifecycle: Exclude<TranscriptLifecycle, 'active'>; readonly endedAtMs: number; readonly terminalReason: string }
+  | { readonly kind: 'transcripts.recoverActiveSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly terminalReason?: string }
+  | { readonly kind: 'transcripts.deleteSession'; readonly sessionId: string }
+  | { readonly kind: 'transcripts.deleteExpiredSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
 
 interface TransactionToken {
   active: boolean
@@ -63,6 +82,7 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
   readonly sqlite = true
   private readonly invokeCommand: (command: string, args: Record<string, unknown>) => Promise<unknown>
   private session: TauriSqliteLocalDataSession | null = null
+  private opening: { readonly profileId: string; readonly localNodeId: string; readonly promise: Promise<LocalDataSession> } | null = null
   private statusValue: LocalDataBackendStatus = {
     kind: 'sqlite-tauri',
     persistent: true,
@@ -83,10 +103,47 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
       }
       return this.session
     }
-    const status = await this.invokeCommand('aurora_local_data_open', { request: { profileId, localNodeId } })
-    this.statusValue = parseStatus(status)
-    this.session = new TauriSqliteLocalDataSession(profileId, localNodeId, this.statusValue.schemaVersion ?? 0, this.invokeCommand)
-    return this.session
+
+    if (this.opening !== null) {
+      if (this.opening.profileId !== profileId || this.opening.localNodeId !== localNodeId) {
+        throw new LocalDataError('identity_mismatch', 'Tauri local data backend is already opening for another identity')
+      }
+      return await this.opening.promise
+    }
+
+    const promise = this.openReady(profileId, localNodeId)
+    this.opening = { profileId, localNodeId, promise }
+    try {
+      return await promise
+    } finally {
+      if (this.opening?.promise === promise) this.opening = null
+    }
+  }
+
+  private async openReady(profileId: string, localNodeId: string): Promise<LocalDataSession> {
+    let nativeOpened = false
+    try {
+      const status = await this.invokeCommand('aurora_local_data_open', { request: { profileId, localNodeId } })
+      nativeOpened = true
+      this.statusValue = parseStatus(status)
+      const provisionalSession = new TauriSqliteLocalDataSession(profileId, localNodeId, this.statusValue.schemaVersion ?? 0, this.invokeCommand)
+      await provisionalSession.recoverActiveTranscripts(Date.now())
+      this.session = provisionalSession
+      return provisionalSession
+    } catch (error) {
+      if (nativeOpened) await this.invokeCommand('aurora_local_data_close', {}).catch(() => undefined)
+      this.session = null
+      this.statusValue = {
+        kind: 'sqlite-tauri',
+        persistent: true,
+        sqlite: true,
+        profileId: null,
+        schemaVersion: null,
+        migrationState: 'failed',
+        ...(error instanceof LocalDataError && error.metadata?.reason === undefined ? {} : { degradedReason: error instanceof LocalDataError ? error.metadata?.reason : 'open_failed' })
+      }
+      throw error
+    }
   }
 
   async status(): Promise<LocalDataBackendStatus> {
@@ -95,6 +152,7 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
   }
 
   async close(): Promise<void> {
+    await this.opening?.promise.catch(() => undefined)
     await this.session?.markClosed()
     this.session = null
     await this.invokeCommand('aurora_local_data_close', {}).catch(() => undefined)
@@ -115,6 +173,7 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
   readonly localTools: TauriLocalToolStateRepository
   readonly peerGrants: TauriPeerGrantRepository
   readonly localAudit: TauriLocalAuditRepository
+  readonly transcripts: TauriTranscriptRepository
   private operationQueue: Promise<unknown> = Promise.resolve()
   private activeTransactionToken: TransactionToken | null = null
   private closed = false
@@ -131,6 +190,7 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
     this.localTools = new TauriLocalToolStateRepository(this)
     this.peerGrants = new TauriPeerGrantRepository(this)
     this.localAudit = new TauriLocalAuditRepository(this)
+    this.transcripts = new TauriTranscriptRepository(this)
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -169,6 +229,10 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
 
   async importV1(document: LocalDataExportV1): Promise<LocalDataImportResult> {
     return await this.withRepositoryAccess(async () => await this.invokeCommand('aurora_local_data_import_v1', { request: { document: parseLocalDataExportV1(document) } }) as LocalDataImportResult)
+  }
+
+  async recoverActiveTranscripts(nowMs: number, terminalReason = 'process_restart'): Promise<TranscriptRecoveryResult> {
+    return await this.transcripts.recoverActiveSessions(nowMs, terminalReason)
   }
 
   async close(): Promise<void> {
@@ -295,6 +359,42 @@ class TauriLocalAuditRepository {
   }
   async listAudit(): Promise<LocalAuditRecord[]> {
     return (await this.session.repositoryOperation<LocalAuditRecord[]>({ kind: 'localAudit.listAudit', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseLocalAuditRecord)
+  }
+}
+
+class TauriTranscriptRepository {
+  constructor(private readonly session: TauriSqliteLocalDataSession) {}
+  async createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.createSession', record: parseTranscriptSessionRecord(record) }))
+  }
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.startSession', sessionId, startedAtMs }))
+  }
+  async appendSegment(record: TranscriptSegmentRecord): Promise<TranscriptAppendResult> {
+    const result = await this.session.repositoryOperation<TranscriptAppendResult>({ kind: 'transcripts.appendSegment', record: parseTranscriptSegmentRecord(record) })
+    return { appended: result.appended, record: parseTranscriptSegmentRecord(result.record) }
+  }
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const result = await this.session.repositoryOperation<TranscriptSessionRecord | null>({ kind: 'transcripts.getSession', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId })
+    return result === null ? null : parseTranscriptSessionRecord(result)
+  }
+  async listSessions(): Promise<TranscriptSessionRecord[]> {
+    return (await this.session.repositoryOperation<TranscriptSessionRecord[]>({ kind: 'transcripts.listSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseTranscriptSessionRecord)
+  }
+  async listSegments(sessionId: string): Promise<TranscriptSegmentRecord[]> {
+    return (await this.session.repositoryOperation<TranscriptSegmentRecord[]>({ kind: 'transcripts.listSegments', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId })).map(parseTranscriptSegmentRecord)
+  }
+  async finalizeSession(sessionId: string, lifecycle: Exclude<TranscriptLifecycle, 'active'>, endedAtMs: number, terminalReason: string): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.finalizeSession', sessionId, lifecycle, endedAtMs, terminalReason }))
+  }
+  async recoverActiveSessions(nowMs: number, terminalReason = 'process_restart'): Promise<TranscriptRecoveryResult> {
+    return await this.session.repositoryOperation<TranscriptRecoveryResult>({ kind: 'transcripts.recoverActiveSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId, nowMs, terminalReason })
+  }
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    return await this.session.repositoryOperation<DeleteTranscriptSessionResult>({ kind: 'transcripts.deleteSession', sessionId })
+  }
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<TranscriptRetentionResult> {
+    return await this.session.repositoryOperation<TranscriptRetentionResult>({ kind: 'transcripts.deleteExpiredSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId, nowMs, limit })
   }
 }
 

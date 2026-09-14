@@ -60,6 +60,49 @@ describe('browser sqlite worker client backend', () => {
     await backend.close()
   })
 
+  it('does not publish browser SQLite sessions before recovery and retries after worker cleanup', async () => {
+    installBrowserStorageProbe()
+    const workers: MemoryProtocolWorker[] = []
+    let failNextRecovery = true
+    let holdNextRecovery = false
+    const backend = new BrowserSqliteLocalDataBackend({
+      createWorker: () => {
+        const worker = new MemoryProtocolWorker()
+        if (failNextRecovery) {
+          worker.failNextRecovery = true
+          failNextRecovery = false
+        } else if (holdNextRecovery) {
+          worker.prepareRecoveryBarrier()
+          holdNextRecovery = false
+        }
+        workers.push(worker)
+        return worker
+      },
+      lock: new GrantedLock(),
+      timeoutMs: 1000,
+      wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm'
+    })
+
+    await expect(backend.open('profile-1', 'node-1')).rejects.toThrow('injected recovery failure')
+    expect(workers[0]?.terminated).toBe(true)
+
+    holdNextRecovery = true
+    const retryOpen = backend.open('profile-1', 'node-1')
+    const retryWorker = await waitForWorker(workers, 1)
+    const recoveryGate = await retryWorker.recoveryStarted
+    const concurrentOpen = backend.open('profile-1', 'node-1')
+    let concurrentResolved = false
+    void concurrentOpen.then(() => { concurrentResolved = true })
+    await Promise.resolve()
+    expect(concurrentResolved).toBe(false)
+    recoveryGate.release()
+    const [retrySession, concurrentSession] = await Promise.all([retryOpen, concurrentOpen])
+    expect(concurrentSession).toBe(retrySession)
+    expect(retryWorker.recoveryCalls).toBe(1)
+    expect(workers).toHaveLength(2)
+    await backend.close()
+  })
+
   it('forwards observable delete repository operations through the typed worker protocol', async () => {
     installBrowserStorageProbe()
     const fakeWorker = new MemoryProtocolWorker()
@@ -204,6 +247,11 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
   onmessage: ((event: MessageEvent<BrowserSqliteWorkerResponse>) => void) | null = null
   onerror: ((event: ErrorEvent) => void) | null = null
   readonly messages: BrowserSqliteWorkerRequest[] = []
+  failNextRecovery = false
+  recoveryCalls = 0
+  terminated = false
+  private recoveryBarrier: { readonly started: Promise<void>; readonly markStarted: () => void; readonly promise: Promise<void>; readonly release: () => void } | null = null
+  recoveryStarted: Promise<{ readonly release: () => void }> = new Promise(() => undefined)
   private backend: LocalDataBackend = new MemoryLocalDataBackend()
   private session: LocalDataSession | null = null
   private snapshot: Awaited<ReturnType<LocalDataSession['exportV1']>> | null = null
@@ -216,15 +264,26 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
     )
   }
 
-  terminate(): void {}
+  terminate(): void {
+    this.terminated = true
+  }
+
+  prepareRecoveryBarrier(): void {
+    let markStarted!: () => void
+    let release!: () => void
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
+    const promise = new Promise<void>((resolve) => { release = resolve })
+    this.recoveryBarrier = { started, markStarted, promise, release }
+    this.recoveryStarted = started.then(() => ({ release }))
+  }
 
   private async handle(message: BrowserSqliteWorkerRequest): Promise<unknown> {
     switch (message.command) {
       case 'open':
         this.session = await this.backend.open(message.profileId, message.localNodeId)
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'status':
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'close':
         await this.session?.close()
         return { closed: true }
@@ -286,6 +345,20 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
         return await session.localAudit.appendAudit(operation.record)
       case 'localAudit.listAudit':
         return await session.localAudit.listAudit()
+      case 'transcripts.recoverActiveSessions': {
+        this.recoveryCalls += 1
+        const barrier = this.recoveryBarrier
+        this.recoveryBarrier = null
+        if (barrier !== null) {
+          barrier.markStarted()
+          await barrier.promise
+        }
+        if (this.failNextRecovery) {
+          this.failNextRecovery = false
+          throw new LocalDataError('unsupported_backend', 'injected recovery failure')
+        }
+        return { interrupted: 0 }
+      }
     }
   }
 
@@ -293,6 +366,15 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
     if (this.session === null) throw new LocalDataError('session_closed', 'session closed')
     return this.session
   }
+}
+
+async function waitForWorker(workers: readonly MemoryProtocolWorker[], index: number): Promise<MemoryProtocolWorker> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const worker = workers[index]
+    if (worker !== undefined) return worker
+    await Promise.resolve()
+  }
+  throw new Error(`worker ${index} was not created`)
 }
 
 function redact(error: unknown): { code: string; message: string; metadata?: { reason?: string } } {
