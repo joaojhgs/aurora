@@ -95,6 +95,12 @@ export interface TauriCommandNames {
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
+  nodeConfigGet: string
+  nodeConfigSet: string
+  nodeConfigDelete: string
+  nodeConfigV2Get: string
+  nodeConfigV2Set: string
+  nodeConfigV2Delete: string
   iosSecureStorageStatus: string
   iosVoiceCredentialSet: string
   iosVoiceCredentialStatus: string
@@ -549,6 +555,12 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
+  nodeConfigGet: 'aurora_node_config_get',
+  nodeConfigSet: 'aurora_node_config_set',
+  nodeConfigDelete: 'aurora_node_config_delete',
+  nodeConfigV2Get: 'aurora_node_config_v2_get',
+  nodeConfigV2Set: 'aurora_node_config_v2_set',
+  nodeConfigV2Delete: 'aurora_node_config_v2_delete',
   iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
   iosVoiceCredentialSet: 'aurora_ios_voice_credential_set',
   iosVoiceCredentialStatus: 'aurora_ios_voice_credential_status',
@@ -879,6 +891,30 @@ export class TauriLocalTransport implements AuroraTransport {
 
   secureStorageDelete(key: string): Promise<SecureStorageWriteResult> {
     return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
+  }
+
+  nodeConfigGet(): Promise<SecureStorageGetResult> {
+    return this.invokeCommand<SecureStorageGetResult>(this.commands.nodeConfigGet)
+  }
+
+  nodeConfigSet(value: string): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigSet, { value })
+  }
+
+  nodeConfigDelete(): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigDelete)
+  }
+
+  nodeConfigV2Get(): Promise<SecureStorageGetResult> {
+    return this.invokeCommand<SecureStorageGetResult>(this.commands.nodeConfigV2Get)
+  }
+
+  nodeConfigV2Set(value: string): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigV2Set, { value })
+  }
+
+  nodeConfigV2Delete(): Promise<SecureStorageWriteResult> {
+    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigV2Delete)
   }
 
   getIosSecureStorageStatus(): Promise<TauriNativeFeatureStatus> {

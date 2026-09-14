@@ -17,6 +17,7 @@
     "aurora-android-native-plugin",
     "aurora-native-permissions",
     "aurora-thin-profile",
+    "aurora-node-config",
     "aurora-thin-peer-credentials",
     "aurora-local-data-storage",
     "aurora-mesh-authority",
