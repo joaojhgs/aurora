@@ -5489,7 +5489,12 @@ describe('AuroraClient', () => {
 
     expect(calls).toHaveLength(1)
     expect(calls[0]?.url).toContain('/api/events/stream?stream=health')
-    expect(calls[0]?.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer stream-session-token' }))
+    expect(calls[0]?.headers).toEqual(expect.objectContaining({
+      Accept: 'text/event-stream',
+      Authorization: 'Bearer stream-session-token',
+      'Cache-Control': 'no-cache'
+    }))
+    expect(calls[0]?.headers?.['content-type']).toBeUndefined()
     expect(calls[0]?.url).not.toContain('stream-session-token')
     expect(events[0]).toEqual(
       expect.objectContaining({

@@ -131,10 +131,13 @@ export class HttpGatewayTransport implements AuroraTransport {
     }
   }
 
-  private headers(extra: Record<string, string> | undefined): Record<string, string> {
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      ...extra
+  private headers(
+    extra: Record<string, string> | undefined,
+    includeContentType = true
+  ): Record<string, string> {
+    const headers: Record<string, string> = { ...extra }
+    if (includeContentType && headers['content-type'] === undefined) {
+      headers['content-type'] = 'application/json'
     }
     if (this.apiKey) headers['X-API-Key'] = this.apiKey
     const bearerToken = this.resolveBearerToken()
@@ -200,7 +203,11 @@ export class HttpGatewayTransport implements AuroraTransport {
   ): AsyncIterable<AuroraEvent<TEventPayload>> {
     const response = await this.fetchImpl(this.streamUrl(request), {
       method: 'GET',
-      headers: this.headers(request.headers),
+      headers: this.headers({
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        ...request.headers
+      }, false),
       signal
     })
     if (!response.ok) {
