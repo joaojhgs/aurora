@@ -13,6 +13,7 @@
     "aurora-native-capability-manifest",
     "aurora-native-permissions",
     "aurora-thin-profile",
+    "aurora-node-config",
     "aurora-thin-peer-credentials",
     "aurora-inbound-verifier-storage",
     "aurora-local-data-storage",

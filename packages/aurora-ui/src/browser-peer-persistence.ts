@@ -97,8 +97,8 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   loadThinProfileDocument(): ThinProfileDocument | null
   saveRuntimeProfileDocument(document: AuroraRuntimeProfileDocumentV2): void
   loadRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 | null
-  saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): void
-  loadNodeConfigDocument(): AuroraNodeConfigDocumentV1 | null
+  saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): Promise<void>
+  loadNodeConfigDocument(): Promise<AuroraNodeConfigDocumentV1 | null>
   getOrCreateLocalStablePeerId(): string
   persistenceStatus(): BrowserPeerPersistenceStatus
 }
@@ -275,23 +275,41 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     return parsed
   }
 
-  saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): void {
+  async saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): Promise<void> {
     this.assertOpen()
-    this.writeMetadata(NODE_CONFIG_DOCUMENT_KEY, serializeAuroraNodeConfigDocument(document))
+    this.assertDurableNodeConfigStorage()
+    const serialized = serializeAuroraNodeConfigDocument(document)
+    await this.writeEncryptedRequired(NODE_CONFIG_DOCUMENT_KEY, JSON.parse(serialized) as AuroraNodeConfigDocumentV1)
+    // Remove the pre-Phase-1 plaintext copy after the encrypted write succeeds.
+    this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
   }
 
-  loadNodeConfigDocument(): AuroraNodeConfigDocumentV1 | null {
+  async loadNodeConfigDocument(): Promise<AuroraNodeConfigDocumentV1 | null> {
     this.assertOpen()
-    const encoded = this.readMetadata(NODE_CONFIG_DOCUMENT_KEY)
-    if (!encoded) return null
-    const parsed = parseAuroraNodeConfigDocument(encoded)
-    if (parsed) {
-      const serialized = serializeAuroraNodeConfigDocument(parsed)
-      if (serialized !== encoded && this.metadataUsable) this.writeMetadata(NODE_CONFIG_DOCUMENT_KEY, serialized)
-      return parsed
+    if (!this.storageUsable || this.storage === null || this.cryptoImpl === null) return null
+    await this.pendingWrites
+    const encrypted = await this.readEncrypted<unknown>(NODE_CONFIG_DOCUMENT_KEY)
+    if (encrypted !== null) {
+      const parsed = parseAuroraNodeConfigDocument(encrypted)
+      if (parsed) return parsed
+      await this.deleteSafely(NODE_CONFIG_DOCUMENT_KEY)
+      return null
     }
+    // Migrate only the old metadata copy, and immediately replace it with an
+    // origin-bound encrypted vault record. New writes never use localStorage.
+    const legacy = this.readMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    if (!legacy) return null
+    const parsed = parseAuroraNodeConfigDocument(legacy)
+    if (!parsed) {
+      this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
+      return null
+    }
+    await this.writeEncryptedRequired(
+      NODE_CONFIG_DOCUMENT_KEY,
+      JSON.parse(serializeAuroraNodeConfigDocument(parsed)) as AuroraNodeConfigDocumentV1,
+    )
     this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
-    return null
+    return parsed
   }
 
   setRoomSecret(ref: string, value: string): void {
@@ -531,9 +549,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   }
 
   private async writeEncryptedRequired(key: string, value: unknown): Promise<void> {
-    try {
-      this.assertDurableInboundVerifierStorage()
-      await this.pendingWrites
+    return await this.enqueueRequiredWrite(async () => {
       this.assertDurableInboundVerifierStorage()
       const storage = this.storage!
       const cryptoImpl = this.cryptoImpl!
@@ -558,10 +574,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       } finally {
         plaintext.fill(0)
       }
-    } catch (error) {
-      this.fallbackToMemory(error)
-      throw error
-    }
+    })
   }
 
   private async readEncryptedRequired<T>(key: string): Promise<T | undefined> {
@@ -591,14 +604,19 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
 
   private async deleteEncryptedRequired(key: string): Promise<void> {
     this.assertDurableInboundVerifierStorage()
-    try {
-      await this.pendingWrites
+    return await this.enqueueRequiredWrite(async () => {
       await this.storage!.delete(key)
       this.markStorageRecovered()
-    } catch (error) {
+    })
+  }
+
+  private async enqueueRequiredWrite(write: () => Promise<void>): Promise<void> {
+    const result = this.pendingWrites.then(write).catch((error) => {
       this.fallbackToMemory(error)
       throw error
-    }
+    })
+    this.pendingWrites = result.catch(() => undefined)
+    return await result
   }
 
   private async vaultKey(): Promise<CryptoKey> {
@@ -705,6 +723,12 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   private assertDurableInboundVerifierStorage(): void {
     if (!this.storageUsable || this.storage === null || this.cryptoImpl === null || this.cryptoImpl.subtle === undefined) {
       throw new Error('Persistent inbound verifier storage is unavailable')
+    }
+  }
+
+  private assertDurableNodeConfigStorage(): void {
+    if (!this.storageUsable || this.storage === null || this.cryptoImpl === null || this.cryptoImpl.subtle === undefined) {
+      throw new Error('Persistent browser node config storage is unavailable')
     }
   }
 }
