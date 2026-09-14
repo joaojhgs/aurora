@@ -101,7 +101,7 @@ interface BrowserSqliteWorkerScope {
   postMessage(response: BrowserSqliteWorkerResponse): void
 }
 
-interface WorkerState {
+interface BrowserSqliteWorkerState {
   db: SqliteDatabase | null
   profileId: string | null
   localNodeId: string | null
@@ -112,6 +112,8 @@ interface WorkerState {
   operationQueue: Promise<unknown>
   cancelled: Set<string>
 }
+
+type WorkerState = BrowserSqliteWorkerState
 
 type SqliteDatabase = {
   exec: (options: string | { sql: string; bind?: readonly unknown[] | Record<string, unknown>; returnValue?: 'resultRows'; rowMode?: 'object' }) => unknown
@@ -522,9 +524,7 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
       if (selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ?;', [record.sessionId, record.sequence]).length > 0) {
         throw new LocalDataError('invalid_record', 'Transcript segment sequence must be unique within a session')
       }
-      run(db, 'INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', [
-        record.id, record.sessionId, record.sequence, record.startAtMs, record.endAtMs, JSON.stringify(record.textEnvelope), record.confidence, record.speakerId, record.speakerLabel, record.createdAtMs
-      ])
+      insertTranscriptSegment(db, record)
       return { appended: true, record }
     }
     case 'transcripts.getSession': {
@@ -630,7 +630,7 @@ function importV1(workerState: WorkerState, document: LocalDataExportV1): unknow
     for (const record of parsed.records.peerGrantMetadata) executeRepositoryOperation(workerState, { kind: 'peerGrants.upsertPeerGrant', record })
     for (const record of parsed.records.localAudit) executeRepositoryOperation(workerState, { kind: 'localAudit.appendAudit', record })
     for (const record of parsed.records.transcriptSessions ?? []) executeRepositoryOperation(workerState, { kind: 'transcripts.createSession', record })
-    for (const record of parsed.records.transcriptSegments ?? []) executeRepositoryOperation(workerState, { kind: 'transcripts.appendSegment', record })
+    for (const record of parsed.records.transcriptSegments ?? []) restoreTranscriptSegmentForImport(workerState, record)
     validateForeignKeys(workerState.db)
     exec(workerState.db, 'COMMIT;')
   } catch (error) {
@@ -741,6 +741,9 @@ function assertNoSqliteImportScopedKeyCollisions(
     assertRecordIdentity(workerState, record.profileId, record.localNodeId)
     assertNoSqliteScopedKeyCollision(db, 'aurora_transcript_sessions', 'id', record.id, workerState)
   }
+  for (const record of records.transcriptSegments ?? []) {
+    assertNoSqliteTranscriptSegmentIdCollision(db, record.id, workerState)
+  }
 }
 
 function assertNoSqliteScopedKeyCollision(
@@ -777,6 +780,22 @@ function assertNoSqliteMessageIdCollision(
     throw scopedKeyCollision()
   }
   throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+}
+
+function assertNoSqliteTranscriptSegmentIdCollision(
+  db: SqliteDatabase,
+  id: string,
+  workerState: WorkerState & { profileId: string; localNodeId: string }
+): void {
+  const rows = selectObjects<{ profile_id: string; local_node_id: string }>(
+    db,
+    'SELECT sessions.profile_id, sessions.local_node_id FROM aurora_transcript_segments segments INNER JOIN aurora_transcript_sessions sessions ON sessions.id = segments.session_id WHERE segments.id = ? LIMIT 1;',
+    [id]
+  )
+  const existing = rows[0]
+  if (existing !== undefined && (existing.profile_id !== workerState.profileId || existing.local_node_id !== workerState.localNodeId)) {
+    throw scopedKeyCollision()
+  }
 }
 
 function assertDatabaseLocalNodeOwnership(db: SqliteDatabase | null, localNodeId: string): void {
@@ -1098,6 +1117,29 @@ function rowToTranscriptSegment(row: TranscriptSegmentRow): TranscriptSegmentRec
     speakerLabel: row.speaker_label,
     createdAtMs: row.created_at_ms
   })
+}
+
+function restoreTranscriptSegmentForImport(
+  workerState: WorkerState & { db: SqliteDatabase; profileId: string; localNodeId: string },
+  input: TranscriptSegmentRecord
+): TranscriptSegmentRecord {
+  const record = parseTranscriptSegmentRecord(input)
+  const session = requireTranscriptSession(workerState.db, workerState, record.sessionId)
+  if (record.startAtMs < session.startedAtMs) throw new LocalDataError('invalid_record', 'Transcript segment starts before the session')
+  if (selectObjects<{ id: string }>(workerState.db, 'SELECT id FROM aurora_transcript_segments WHERE id = ? LIMIT 1;', [record.id]).length > 0) {
+    throw new LocalDataError('invalid_record', 'Transcript segment IDs must be unique')
+  }
+  if (selectObjects<{ id: string }>(workerState.db, 'SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ?;', [record.sessionId, record.sequence]).length > 0) {
+    throw new LocalDataError('invalid_record', 'Transcript segment sequence must be unique within a session')
+  }
+  insertTranscriptSegment(workerState.db, record)
+  return record
+}
+
+function insertTranscriptSegment(db: SqliteDatabase, record: TranscriptSegmentRecord): void {
+  run(db, 'INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);', [
+    record.id, record.sessionId, record.sequence, record.startAtMs, record.endAtMs, JSON.stringify(record.textEnvelope), record.confidence, record.speakerId, record.speakerLabel, record.createdAtMs
+  ])
 }
 
 function requireTranscriptSession(

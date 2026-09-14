@@ -10,7 +10,10 @@ import type {
 
 export class MapBrowserLocalDataDocumentStore implements BrowserIndexedDbDocumentStore {
   private document: StoredBrowserLocalDataDocument | null
+  private nextSaveBarrier: { readonly promise: Promise<void>; readonly markStarted: () => void; readonly release: () => void } | null = null
   readonly saves: StoredBrowserLocalDataDocument[] = []
+  saveCalls = 0
+  failNextSave: Error | null = null
 
   constructor(initial: StoredBrowserLocalDataDocument | null = null) {
     this.document = initial === null ? null : structuredClone(initial)
@@ -21,8 +24,27 @@ export class MapBrowserLocalDataDocumentStore implements BrowserIndexedDbDocumen
   }
 
   async save(document: StoredBrowserLocalDataDocument): Promise<void> {
+    this.saveCalls += 1
+    const barrier = this.nextSaveBarrier
+    this.nextSaveBarrier = null
+    if (barrier !== null) {
+      barrier.markStarted()
+      await barrier.promise
+    }
+    const failure = this.failNextSave
+    this.failNextSave = null
+    if (failure !== null) throw failure
     this.document = structuredClone(document)
     this.saves.push(structuredClone(document))
+  }
+
+  holdNextSave(): { readonly started: Promise<void>; readonly release: () => void } {
+    let markStarted!: () => void
+    let release!: () => void
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
+    const promise = new Promise<void>((resolve) => { release = resolve })
+    this.nextSaveBarrier = { promise, markStarted, release }
+    return { started, release }
   }
 
   async clear(): Promise<void> {

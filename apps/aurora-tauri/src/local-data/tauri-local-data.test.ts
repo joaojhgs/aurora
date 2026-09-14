@@ -98,6 +98,30 @@ describe('Tauri local data adapter', () => {
     expect(bridge.closed).toBe(true)
   })
 
+  it('publishes Tauri sessions only after recovery and retries after recovery cleanup', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    bridge.failNextRecovery = true
+    const backend = new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke })
+
+    await expect(backend.open('profile-1', 'node-1')).rejects.toMatchObject({ code: 'unsupported_backend' })
+    expect(bridge.closed).toBe(true)
+    expect(bridge.transcriptRecoveryRequests).toHaveLength(1)
+
+    const heldRecovery = bridge.holdNextRecovery()
+    const firstOpen = backend.open('profile-1', 'node-1')
+    await heldRecovery.started
+    const concurrentOpen = backend.open('profile-1', 'node-1')
+    let concurrentResolved = false
+    void concurrentOpen.then(() => { concurrentResolved = true })
+    await Promise.resolve()
+    expect(concurrentResolved).toBe(false)
+    heldRecovery.release()
+    const [firstSession, concurrentSession] = await Promise.all([firstOpen, concurrentOpen])
+    expect(concurrentSession).toBe(firstSession)
+    expect(bridge.transcriptRecoveryRequests).toHaveLength(2)
+    await backend.close()
+  })
+
   it('rolls back failed transactions and rejects foreign profile records', async () => {
     const bridge = new FakeTauriLocalDataBridge()
     const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
@@ -316,6 +340,8 @@ class FakeTauriLocalDataBridge {
   private txCounter = 0
   readonly deletedMemoryIds: string[] = []
   readonly transcriptRecoveryRequests: Array<Extract<RepositoryOperation, { readonly kind: 'transcripts.recoverActiveSessions' }>> = []
+  failNextRecovery = false
+  private recoveryBarrier: { readonly started: Promise<void>; readonly markStarted: () => void; readonly promise: Promise<void>; readonly release: () => void } | null = null
 
   readonly invoke = async (command: string, args: Record<string, unknown>): Promise<unknown> => {
     this.calls.push({ command, args })
@@ -380,7 +406,7 @@ class FakeTauriLocalDataBridge {
     }
   }
 
-  private repositoryOperation(operation: RepositoryOperation | undefined): unknown {
+  private async repositoryOperation(operation: RepositoryOperation | undefined): Promise<unknown> {
     if (operation === undefined) throw new Error('missing operation')
     switch (operation.kind) {
       case 'conversations.upsertConversation':
@@ -492,8 +518,29 @@ class FakeTauriLocalDataBridge {
         return this.audit
       case 'transcripts.recoverActiveSessions':
         this.transcriptRecoveryRequests.push(operation)
+        {
+          const barrier = this.recoveryBarrier
+          this.recoveryBarrier = null
+          if (barrier !== null) {
+            barrier.markStarted()
+            await barrier.promise
+          }
+        }
+        if (this.failNextRecovery) {
+          this.failNextRecovery = false
+          throw { code: 'unsupported_backend', message: 'injected recovery failure' }
+        }
         return { interrupted: 0 } satisfies TranscriptRecoveryResult
     }
+  }
+
+  holdNextRecovery(): { readonly started: Promise<void>; readonly release: () => void } {
+    let markStarted!: () => void
+    let release!: () => void
+    const started = new Promise<void>((resolve) => { markStarted = resolve })
+    const promise = new Promise<void>((resolve) => { release = resolve })
+    this.recoveryBarrier = { started, markStarted, promise, release }
+    return { started, release }
   }
 
   private assertScope(value: { profileId: string; localNodeId: string }): void {

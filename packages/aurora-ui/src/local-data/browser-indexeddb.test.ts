@@ -285,6 +285,48 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await second.close()
   })
 
+  it('publishes IndexedDB sessions only after recovery and cleans up failed opens for retry', async () => {
+    const leases = new MapBrowserStorageLeaseStore()
+    const store = new MapBrowserLocalDataDocumentStore()
+    const seedBackend = new BrowserIndexedDbLocalDataBackend({
+      origin: 'https://aurora.example.test',
+      documentStore: store,
+      leaseStore: leases,
+      locks: null,
+      ownerId: 'seed-owner',
+      nowMs: () => 10_000
+    })
+    const seedSession = await seedBackend.open('profile-1', 'node-1')
+    await seedSession.transcripts.createSession(transcriptSessionFixture({ id: 'active-recovery' }))
+    await seedSession.close()
+
+    const backend = new BrowserIndexedDbLocalDataBackend({
+      origin: 'https://aurora.example.test',
+      documentStore: store,
+      leaseStore: leases,
+      locks: null,
+      ownerId: 'retry-owner',
+      nowMs: () => 10_000
+    })
+    store.failNextSave = new Error('injected recovery write failure')
+    await expect(backend.open('profile-1', 'node-1')).rejects.toThrow('injected recovery write failure')
+    await expect(backend.status()).resolves.toMatchObject({ profileId: null, migrationState: 'failed' })
+
+    const heldRecovery = store.holdNextSave()
+    const firstOpen = backend.open('profile-1', 'node-1')
+    await heldRecovery.started
+    const concurrentOpen = backend.open('profile-1', 'node-1')
+    let concurrentResolved = false
+    void concurrentOpen.then(() => { concurrentResolved = true })
+    await Promise.resolve()
+    expect(concurrentResolved).toBe(false)
+    heldRecovery.release()
+    const [firstSession, concurrentSession] = await Promise.all([firstOpen, concurrentOpen])
+    expect(concurrentSession).toBe(firstSession)
+    expect(store.saveCalls).toBeGreaterThanOrEqual(3)
+    await backend.close()
+  })
+
   it('deletes only active-profile conversations and bounded expired memory in shared storage', async () => {
     const leases = new MapBrowserStorageLeaseStore()
     const store = new MapBrowserLocalDataDocumentStore()

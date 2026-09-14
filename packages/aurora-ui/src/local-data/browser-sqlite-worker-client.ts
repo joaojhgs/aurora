@@ -81,6 +81,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
   private readonly wasmAssetUrl: string
   private client: BrowserSqliteWorkerClient | null = null
   private session: BrowserSqliteLocalDataSession | null = null
+  private opening: { readonly profileId: string; readonly localNodeId: string; readonly promise: Promise<LocalDataSession> } | null = null
   private statusValue: LocalDataBackendStatus = {
     kind: 'sqlite-wasm-opfs',
     persistent: true,
@@ -105,6 +106,24 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
       }
       return this.session
     }
+
+    if (this.opening !== null) {
+      if (this.opening.profileId !== profileId || this.opening.localNodeId !== localNodeId) {
+        throw new LocalDataError('identity_mismatch', 'Browser local data backend is already opening for another identity')
+      }
+      return await this.opening.promise
+    }
+
+    const promise = this.openReady(profileId, localNodeId)
+    this.opening = { profileId, localNodeId, promise }
+    try {
+      return await promise
+    } finally {
+      if (this.opening?.promise === promise) this.opening = null
+    }
+  }
+
+  private async openReady(profileId: string, localNodeId: string): Promise<LocalDataSession> {
     const probe = await probeBrowserSqliteOpfs(localNodeId, {
       ...(this.lock === undefined ? {} : { lock: this.lock }),
       workerFactory: this.createWorker,
@@ -127,12 +146,15 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
     try {
       const status = await client.open(profileId, localNodeId, probe.identity, browserSqliteMigrationSql, this.wasmAssetUrl)
       this.statusValue = status
+      const provisionalSession = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
+      await provisionalSession.recoverActiveTranscripts(Date.now())
       this.client = client
-      this.session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
-      await this.session.recoverActiveTranscripts(Date.now())
-      return this.session
+      this.session = provisionalSession
+      return provisionalSession
     } catch (error) {
       await client.close().catch(() => undefined)
+      this.client = null
+      this.session = null
       this.statusValue = {
         ...this.statusValue,
         profileId: null,
@@ -152,6 +174,7 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
   }
 
   async close(): Promise<void> {
+    await this.opening?.promise.catch(() => undefined)
     await this.session?.markClosed()
     this.session = null
     await this.client?.close()

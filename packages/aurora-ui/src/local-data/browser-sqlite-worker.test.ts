@@ -1,14 +1,19 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 import {
   buildLocalDataExportV1,
+  localDataMigrationManifest,
   type ConversationMessageRecord,
   type ConversationRecord,
   type EncryptedDataEnvelopeV1,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
-  type PeerGrantMetadataRecord
+  type LocalDataExportV1,
+  type PeerGrantMetadataRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionRecord
 } from '@aurora/client/local-data'
 
 import {
@@ -17,6 +22,7 @@ import {
   type BrowserSqliteRepositoryOperation,
   type BrowserSqliteWorkerResponse
 } from './browser-sqlite-worker.js'
+import { browserSqliteMigrationSql } from './browser-sqlite-worker-client.js'
 
 describe('browser sqlite worker protocol guardrails', () => {
   it('redacts unknown commands and oversized messages without exposing SQL', async () => {
@@ -232,6 +238,65 @@ describe('browser sqlite worker protocol guardrails', () => {
     }])
     expect(db.snapshot()).toEqual(before)
     expect(db.statements.some(isWriteStatement)).toBe(false)
+  })
+
+  it('restores terminal transcripts and rolls back invalid restore writes on a real SQLite-WASM database', async () => {
+    const sqlite3 = await (sqlite3InitModule as unknown as () => Promise<any>)()
+    const db = new sqlite3.oo1.DB(':memory:')
+    db.exec('PRAGMA foreign_keys = ON;')
+    for (const migration of browserSqliteMigrationSql) db.exec(migration.sql)
+    db.exec("INSERT INTO aurora_database_identity (singleton_id, local_node_id, created_at_ms) VALUES (1, 'node-1', 1);")
+    const workerState = openWorkerState(db, 'profile-1', 'node-1') as never
+    const session = transcriptSessionFixture()
+    const segment = transcriptSegmentFixture({ sessionId: session.id })
+    const document = buildLocalDataExportV1({
+      sourceBackend: 'sqlite-wasm-opfs',
+      schemaVersion: localDataMigrationManifest.latestVersion,
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      exportedAtMs: 2_000,
+      records: {
+        conversations: [],
+        messages: [],
+        memoryItems: [],
+        localToolStates: [],
+        peerGrantMetadata: [],
+        localAudit: [],
+        transcriptSessions: [session],
+        transcriptSegments: [segment]
+      }
+    })
+
+    const importResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage({ id: 'terminal-import', command: 'importV1', document }, (response) => importResponses.push(response), workerState)
+    expect(importResponses[0]?.result).toMatchObject({ ok: true })
+
+    const exportResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage({ id: 'terminal-export', command: 'exportV1' }, (response) => exportResponses.push(response), workerState)
+    const exported = exportResponses[0]?.result
+    if (exported === undefined || !exported.ok) throw new Error('terminal transcript export failed')
+    const exportedValue = exported.value as LocalDataExportV1
+    expect(exportedValue.records.transcriptSessions).toEqual([session])
+    expect(exportedValue.records.transcriptSegments).toEqual([segment])
+
+    const invalidDocument = buildLocalDataExportV1({
+      ...document,
+      records: {
+        ...document.records,
+        transcriptSegments: [transcriptSegmentFixture({ sessionId: session.id, startAtMs: session.startedAtMs - 1 })]
+      }
+    })
+    const beforeRollback = exportedValue.records
+    const rollbackResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage({ id: 'terminal-import-invalid', command: 'importV1', document: invalidDocument }, (response) => rollbackResponses.push(response), workerState)
+    expect(rollbackResponses[0]?.result).toMatchObject({ ok: false, error: { code: 'invalid_record' } })
+
+    const afterRollbackResponses: BrowserSqliteWorkerResponse[] = []
+    await handleBrowserSqliteWorkerMessage({ id: 'terminal-export-after-rollback', command: 'exportV1' }, (response) => afterRollbackResponses.push(response), workerState)
+    const afterRollback = afterRollbackResponses[0]?.result
+    if (afterRollback === undefined || !afterRollback.ok) throw new Error('post-rollback transcript export failed')
+    expect((afterRollback.value as LocalDataExportV1).records).toEqual(beforeRollback)
+    db.close()
   })
 
   it('executes repository deletes through scoped sqlite statements with observable counts', async () => {
@@ -739,6 +804,41 @@ function memoryFixture(overrides: Partial<LightweightMemoryRecord> = {}): Lightw
     createdAtMs: 1300,
     updatedAtMs: 1400,
     expiresAtMs: null,
+    ...overrides
+  }
+}
+
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-terminal-1',
+    profileId: 'profile-1',
+    localNodeId: 'node-1',
+    captureMode: 'ambient',
+    createdAtMs: 1_000,
+    startedAtMs: 1_000,
+    endedAtMs: 2_000,
+    lifecycle: 'completed',
+    terminalReason: 'capture_complete',
+    expiresAtMs: null,
+    language: 'en-US',
+    modelProvenance: { provider: 'test', modelId: 'test-model', version: '1' },
+    diarizationState: 'not_requested',
+    ...overrides
+  }
+}
+
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'transcript-segment-1',
+    sessionId: 'transcript-terminal-1',
+    sequence: 0,
+    startAtMs: 1_100,
+    endAtMs: 1_200,
+    textEnvelope: envelopeFixture,
+    confidence: 0.9,
+    speakerId: null,
+    speakerLabel: null,
+    createdAtMs: 1_200,
     ...overrides
   }
 }

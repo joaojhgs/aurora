@@ -82,6 +82,7 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
   readonly sqlite = true
   private readonly invokeCommand: (command: string, args: Record<string, unknown>) => Promise<unknown>
   private session: TauriSqliteLocalDataSession | null = null
+  private opening: { readonly profileId: string; readonly localNodeId: string; readonly promise: Promise<LocalDataSession> } | null = null
   private statusValue: LocalDataBackendStatus = {
     kind: 'sqlite-tauri',
     persistent: true,
@@ -102,11 +103,47 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
       }
       return this.session
     }
-    const status = await this.invokeCommand('aurora_local_data_open', { request: { profileId, localNodeId } })
-    this.statusValue = parseStatus(status)
-    this.session = new TauriSqliteLocalDataSession(profileId, localNodeId, this.statusValue.schemaVersion ?? 0, this.invokeCommand)
-    await this.session.recoverActiveTranscripts(Date.now())
-    return this.session
+
+    if (this.opening !== null) {
+      if (this.opening.profileId !== profileId || this.opening.localNodeId !== localNodeId) {
+        throw new LocalDataError('identity_mismatch', 'Tauri local data backend is already opening for another identity')
+      }
+      return await this.opening.promise
+    }
+
+    const promise = this.openReady(profileId, localNodeId)
+    this.opening = { profileId, localNodeId, promise }
+    try {
+      return await promise
+    } finally {
+      if (this.opening?.promise === promise) this.opening = null
+    }
+  }
+
+  private async openReady(profileId: string, localNodeId: string): Promise<LocalDataSession> {
+    let nativeOpened = false
+    try {
+      const status = await this.invokeCommand('aurora_local_data_open', { request: { profileId, localNodeId } })
+      nativeOpened = true
+      this.statusValue = parseStatus(status)
+      const provisionalSession = new TauriSqliteLocalDataSession(profileId, localNodeId, this.statusValue.schemaVersion ?? 0, this.invokeCommand)
+      await provisionalSession.recoverActiveTranscripts(Date.now())
+      this.session = provisionalSession
+      return provisionalSession
+    } catch (error) {
+      if (nativeOpened) await this.invokeCommand('aurora_local_data_close', {}).catch(() => undefined)
+      this.session = null
+      this.statusValue = {
+        kind: 'sqlite-tauri',
+        persistent: true,
+        sqlite: true,
+        profileId: null,
+        schemaVersion: null,
+        migrationState: 'failed',
+        ...(error instanceof LocalDataError && error.metadata?.reason === undefined ? {} : { degradedReason: error instanceof LocalDataError ? error.metadata?.reason : 'open_failed' })
+      }
+      throw error
+    }
   }
 
   async status(): Promise<LocalDataBackendStatus> {
@@ -115,6 +152,7 @@ export class TauriSqliteLocalDataBackend implements LocalDataBackend {
   }
 
   async close(): Promise<void> {
+    await this.opening?.promise.catch(() => undefined)
     await this.session?.markClosed()
     this.session = null
     await this.invokeCommand('aurora_local_data_close', {}).catch(() => undefined)

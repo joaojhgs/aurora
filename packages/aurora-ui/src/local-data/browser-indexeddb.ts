@@ -90,6 +90,7 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
   private readonly nowMs: () => number
   private readonly leaseDurationMs: number | undefined
   private session: BrowserIndexedDbLocalDataSession | null = null
+  private opening: { readonly profileId: string; readonly localNodeId: string; readonly promise: Promise<LocalDataSession> } | null = null
   private closed = false
   private lastStatus: LocalDataBackendStatus = {
     kind: 'indexeddb',
@@ -122,6 +123,24 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
       return this.session
     }
 
+    if (this.opening !== null) {
+      if (this.opening.profileId !== canonicalProfileId || this.opening.localNodeId !== canonicalLocalNodeId) {
+        throw new LocalDataError('unsupported_backend', 'Browser local data is already opening for another identity', { reason: 'owner_exists' })
+      }
+      return await this.opening.promise
+    }
+
+    const promise = this.openReady(canonicalProfileId, canonicalLocalNodeId)
+    this.opening = { profileId: canonicalProfileId, localNodeId: canonicalLocalNodeId, promise }
+    try {
+      return await promise
+    } finally {
+      if (this.opening?.promise === promise) this.opening = null
+    }
+  }
+
+  private async openReady(canonicalProfileId: string, canonicalLocalNodeId: string): Promise<LocalDataSession> {
+
     const documentStore = this.injectedDocumentStore ?? new IndexedDbBrowserLocalDataDocumentStore({
       ...(this.indexedDB === undefined ? {} : { indexedDB: this.indexedDB }),
       databaseName: deriveBrowserLocalDataDatabaseName(this.origin, canonicalLocalNodeId)
@@ -141,9 +160,10 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
     const writerLock = await new BrowserStorageLockCoordinator(lockOptions).acquire()
 
     this.lastStatus = { ...this.lastStatus, profileId: canonicalProfileId, migrationState: 'running' }
+    let provisionalSession: BrowserIndexedDbLocalDataSession | null = null
     try {
       const document = await this.openDocument(documentStore, canonicalProfileId, canonicalLocalNodeId)
-      this.session = new BrowserIndexedDbLocalDataSession({
+      provisionalSession = new BrowserIndexedDbLocalDataSession({
         profileId: canonicalProfileId,
         localNodeId: canonicalLocalNodeId,
         schemaVersion: localDataMigrationManifest.latestVersion,
@@ -155,7 +175,9 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
           this.session = null
         }
       })
-      await this.session.recoverActiveTranscripts(this.nowMs())
+      await provisionalSession.recoverActiveTranscripts(this.nowMs())
+      if (this.closed) throw new LocalDataError('session_closed', 'Browser local data backend is closed')
+      this.session = provisionalSession
       this.lastStatus = {
         kind: 'indexeddb',
         persistent: true,
@@ -164,16 +186,21 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
         schemaVersion: localDataMigrationManifest.latestVersion,
         migrationState: 'idle'
       }
-      return this.session
+      return provisionalSession
     } catch (error) {
-      await writerLock.release()
-      await documentStore.close()
+      if (provisionalSession !== null) {
+        await provisionalSession.close().catch(() => undefined)
+      } else {
+        await writerLock.release().catch(() => undefined)
+        await documentStore.close().catch(() => undefined)
+      }
+      this.session = null
       const degradedReason = error instanceof LocalDataError ? error.metadata?.reason : 'open_failed'
       this.lastStatus = {
         kind: 'indexeddb',
         persistent: true,
         sqlite: false,
-        profileId: canonicalProfileId,
+        profileId: null,
         schemaVersion: null,
         migrationState: 'failed',
         ...(degradedReason === undefined ? {} : { degradedReason })
@@ -198,6 +225,7 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
 
   async close(): Promise<void> {
     this.closed = true
+    await this.opening?.promise.catch(() => undefined)
     await this.session?.close()
     this.session = null
   }

@@ -1838,14 +1838,7 @@ fn import_records(
         )?;
     }
     for record in &document.records.transcript_segments {
-        run_repository_operation(
-            conn,
-            profile_id,
-            local_node_id,
-            LocalDataRepositoryOperation::TranscriptsAppendSegment {
-                record: record.clone(),
-            },
-        )?;
+        restore_transcript_segment_for_import(conn, profile_id, local_node_id, record)?;
     }
 
     let imported = export_records(conn, profile_id, local_node_id)?;
@@ -1854,6 +1847,54 @@ fn import_records(
         "recordCounts": record_counts(&imported),
         "collectionHashes": collection_hashes(&imported)?,
     }))
+}
+
+fn restore_transcript_segment_for_import(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+    record: &TranscriptSegmentRecord,
+) -> Result<(), AuroraCommandError> {
+    validate_transcript_segment_record(record, profile_id, local_node_id)?;
+    let session = transcript_session_by_id(conn, profile_id, local_node_id, &record.session_id)?
+        .ok_or_else(|| local_data_error("transcript session not found"))?;
+    if record.start_at_ms < session.started_at_ms {
+        return Err(local_data_error("transcript segment starts before session"));
+    }
+    if !conn
+        .query(
+            "SELECT id FROM aurora_transcript_segments WHERE id = ? LIMIT 1",
+            &[json!(record.id)],
+        )?
+        .is_empty()
+    {
+        return Err(local_data_error("duplicate transcript segment id"));
+    }
+    if !conn
+        .query(
+            "SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ? LIMIT 1",
+            &[json!(record.session_id), json!(record.sequence)],
+        )?
+        .is_empty()
+    {
+        return Err(local_data_error("duplicate transcript sequence"));
+    }
+    conn.execute(
+        "INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        &[
+            json!(record.id),
+            json!(record.session_id),
+            json!(record.sequence),
+            json!(record.start_at_ms),
+            json!(record.end_at_ms),
+            json_or_null(Some(record.text_envelope.clone()))?,
+            option_f64(record.confidence),
+            option_string(record.speaker_id.clone()),
+            option_string(record.speaker_label.clone()),
+            json!(record.created_at_ms),
+        ],
+    )?;
+    Ok(())
 }
 
 fn export_records(
@@ -1932,6 +1973,9 @@ fn ensure_import_global_keys_available(
             local_node_id,
         )?;
     }
+    for record in &document.records.transcript_segments {
+        ensure_transcript_segment_id_available(conn, &record.id, profile_id, local_node_id)?;
+    }
     Ok(())
 }
 
@@ -1960,6 +2004,23 @@ fn ensure_message_id_available(
          FROM aurora_messages m
          INNER JOIN aurora_conversations c ON c.id = m.conversation_id
          WHERE m.id = ?
+         LIMIT 1",
+        &[json!(id)],
+    )?;
+    ensure_existing_row_scope(rows.first(), profile_id, local_node_id)
+}
+
+fn ensure_transcript_segment_id_available(
+    conn: &SqliteConnection,
+    id: &str,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    let rows = conn.query(
+        "SELECT s.profile_id, s.local_node_id
+         FROM aurora_transcript_segments t
+         INNER JOIN aurora_transcript_sessions s ON s.id = t.session_id
+         WHERE t.id = ?
          LIMIT 1",
         &[json!(id)],
     )?;
@@ -3874,6 +3935,62 @@ mod tests {
         let parsed = validate_import_document(document, "profile-1", "node-1", 3).unwrap();
         let import_result = import_records(&conn, "profile-1", "node-1", &parsed).unwrap();
         assert_eq!(import_result["imported"], json!(true));
+    }
+
+    #[test]
+    fn terminal_transcript_import_restores_segments_and_rolls_back_restore_failures() {
+        let conn = migrated_test_connection();
+        let mut document = valid_import_document_value();
+        document["records"]["transcriptSessions"] = json!([{
+            "id": "transcript-terminal-1",
+            "profileId": "profile-1",
+            "localNodeId": "node-1",
+            "captureMode": "ambient",
+            "createdAtMs": 100,
+            "startedAtMs": 100,
+            "endedAtMs": 200,
+            "lifecycle": "completed",
+            "terminalReason": "capture_complete",
+            "expiresAtMs": null,
+            "language": "en-US",
+            "modelProvenance": { "provider": "test", "modelId": "test-model", "version": "1" },
+            "diarizationState": "not_requested"
+        }]);
+        document["records"]["transcriptSegments"] = json!([{
+            "id": "transcript-segment-1",
+            "sessionId": "transcript-terminal-1",
+            "sequence": 0,
+            "startAtMs": 110,
+            "endAtMs": 120,
+            "textEnvelope": envelope_value(),
+            "confidence": 0.9,
+            "speakerId": null,
+            "speakerLabel": null,
+            "createdAtMs": 120
+        }]);
+        refresh_counts_and_hashes(&mut document);
+        let parsed = validate_import_document(document.clone(), "profile-1", "node-1", 3).unwrap();
+        import_records(&conn, "profile-1", "node-1", &parsed).unwrap();
+        let exported = export_records(&conn, "profile-1", "node-1").unwrap();
+        assert_eq!(
+            exported["transcriptSessions"],
+            document["records"]["transcriptSessions"]
+        );
+        assert_eq!(
+            exported["transcriptSegments"],
+            document["records"]["transcriptSegments"]
+        );
+
+        let before_rollback = exported.clone();
+        let mut invalid = document;
+        invalid["records"]["transcriptSegments"][0]["startAtMs"] = json!(99);
+        refresh_counts_and_hashes(&mut invalid);
+        let parsed_invalid = validate_import_document(invalid, "profile-1", "node-1", 3).unwrap();
+        assert!(import_records(&conn, "profile-1", "node-1", &parsed_invalid).is_err());
+        assert_eq!(
+            export_records(&conn, "profile-1", "node-1").unwrap(),
+            before_rollback
+        );
     }
 
     #[test]
