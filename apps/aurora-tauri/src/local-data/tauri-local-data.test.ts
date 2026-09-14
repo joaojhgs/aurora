@@ -11,7 +11,8 @@ import {
   type LocalAuditRecord,
   type LocalDataRepositories,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptRecoveryResult
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 
 import { TauriEnvelopeCryptoPort } from './tauri-envelope-crypto.js'
@@ -35,6 +36,7 @@ type RepositoryOperation =
   | { readonly kind: 'peerGrants.listPeerGrants'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
   | { readonly kind: 'localAudit.listAudit'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'transcripts.recoverActiveSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly terminalReason?: string }
 
 type FakeTauriLocalDataSnapshot = {
   readonly conversations: ConversationRecord[]
@@ -81,8 +83,16 @@ describe('Tauri local data adapter', () => {
       'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation',
+      'aurora_local_data_repository_operation',
       'aurora_local_data_repository_operation'
     ])
+    expect(bridge.transcriptRecoveryRequests).toEqual([{
+      kind: 'transcripts.recoverActiveSessions',
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      nowMs: expect.any(Number),
+      terminalReason: 'process_restart'
+    }])
     expect(JSON.stringify(bridge.calls)).not.toMatch(/"sql"|rawSql|executeSql|sqlite:|python/iu)
     await backend.close()
     expect(bridge.closed).toBe(true)
@@ -305,6 +315,7 @@ class FakeTauriLocalDataBridge {
   private activeTxId: string | null = null
   private txCounter = 0
   readonly deletedMemoryIds: string[] = []
+  readonly transcriptRecoveryRequests: Array<Extract<RepositoryOperation, { readonly kind: 'transcripts.recoverActiveSessions' }>> = []
 
   readonly invoke = async (command: string, args: Record<string, unknown>): Promise<unknown> => {
     this.calls.push({ command, args })
@@ -479,6 +490,9 @@ class FakeTauriLocalDataBridge {
       case 'localAudit.listAudit':
         this.assertScope(operation)
         return this.audit
+      case 'transcripts.recoverActiveSessions':
+        this.transcriptRecoveryRequests.push(operation)
+        return { interrupted: 0 } satisfies TranscriptRecoveryResult
     }
   }
 

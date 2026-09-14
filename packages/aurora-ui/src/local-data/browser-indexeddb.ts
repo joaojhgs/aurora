@@ -780,17 +780,20 @@ export class BrowserTranscriptRepository {
 
   async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
     return await this.session.withRepositoryAccess(this.access, false, () => {
-      const record = (this.session.mutable.transcriptSessions ?? []).find((item) => item.id === sessionId)
+      const record = this.findScopedSession(sessionId)
       return record === undefined ? null : clone(record)
     })
   }
 
   async listSessions(): Promise<TranscriptSessionRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.session.mutable.transcriptSessions ?? []).sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id)))
+    return await this.session.withRepositoryAccess(this.access, false, () => clone((this.session.mutable.transcriptSessions ?? []).filter((record) => this.isScoped(record))).sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id)))
   }
 
   async listSegments(sessionId: string): Promise<TranscriptSegmentRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone((this.session.mutable.transcriptSegments ?? []).filter((item) => item.sessionId === sessionId)).sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id)))
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      if (this.findScopedSession(sessionId) === undefined) return []
+      return clone((this.session.mutable.transcriptSegments ?? []).filter((item) => item.sessionId === sessionId)).sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+    })
   }
 
   async finalizeSession(sessionId: string, lifecycle: Exclude<TranscriptLifecycle, 'active'>, endedAtMs: number, terminalReason: string): Promise<TranscriptSessionRecord> {
@@ -811,7 +814,7 @@ export class BrowserTranscriptRepository {
   async recoverActiveSessions(nowMs: number, terminalReason = 'process_restart'): Promise<TranscriptRecoveryResult> {
     return await this.session.withRepositoryAccess(this.access, true, () => {
       const sessions = this.session.mutable.transcriptSessions ?? []
-      const active = sessions.filter((record) => record.lifecycle === 'active')
+      const active = sessions.filter((record) => record.lifecycle === 'active' && this.isScoped(record))
       for (const record of active) {
         const index = sessions.findIndex((item) => item.id === record.id)
         sessions[index] = parseTranscriptSessionRecord({ ...record, lifecycle: 'interrupted', endedAtMs: Math.max(nowMs, record.startedAtMs), terminalReason })
@@ -822,10 +825,9 @@ export class BrowserTranscriptRepository {
 
   async deleteSession(sessionId: string): Promise<{ deleted: boolean; deletedSegments: number }> {
     return await this.session.withRepositoryAccess(this.access, true, () => {
+      if (this.findScopedSession(sessionId) === undefined) return { deleted: false, deletedSegments: 0 }
       const sessions = this.session.mutable.transcriptSessions ?? []
-      const before = sessions.length
-      this.session.mutable.transcriptSessions = sessions.filter((record) => record.id !== sessionId)
-      if (before === this.session.mutable.transcriptSessions.length) return { deleted: false, deletedSegments: 0 }
+      this.session.mutable.transcriptSessions = sessions.filter((record) => record.id !== sessionId || !this.isScoped(record))
       const segments = this.session.mutable.transcriptSegments ?? []
       this.session.mutable.transcriptSegments = segments.filter((record) => record.sessionId !== sessionId)
       return { deleted: true, deletedSegments: segments.length - this.session.mutable.transcriptSegments.length }
@@ -836,7 +838,7 @@ export class BrowserTranscriptRepository {
     return await this.session.withRepositoryAccess(this.access, true, () => {
       if (!Number.isSafeInteger(nowMs) || nowMs < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 5000) throw new LocalDataError('invalid_record', 'Transcript retention bounds are invalid')
       const sessions = this.session.mutable.transcriptSessions ?? []
-      const expired = sessions.filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= nowMs).sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id)).slice(0, limit)
+      const expired = sessions.filter((record) => this.isScoped(record) && record.expiresAtMs !== null && record.expiresAtMs <= nowMs).sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id)).slice(0, limit)
       const ids = new Set(expired.map((record) => record.id))
       const segments = this.session.mutable.transcriptSegments ?? []
       this.session.mutable.transcriptSessions = sessions.filter((record) => !ids.has(record.id))
@@ -850,6 +852,14 @@ export class BrowserTranscriptRepository {
     if (record === undefined) throw new LocalDataError('invalid_record', 'Transcript session does not exist')
     this.session.assertIdentity(record.profileId, record.localNodeId)
     return record
+  }
+
+  private findScopedSession(sessionId: string): TranscriptSessionRecord | undefined {
+    return (this.session.mutable.transcriptSessions ?? []).find((record) => record.id === sessionId && this.isScoped(record))
+  }
+
+  private isScoped(record: TranscriptSessionRecord): boolean {
+    return record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId
   }
 }
 
