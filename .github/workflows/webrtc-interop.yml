@@ -94,7 +94,7 @@ jobs:
         env:
           WEBRTC_INTEROP_REQUIRE_ALL_BROWSERS: "1"
         run: pnpm test:webrtc:browsers
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: webrtc-interop-e2e
@@ -186,7 +186,7 @@ jobs:
 
       - name: Upload Android native interop report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webrtc-native-android-interop
           path: reports/webrtc-native-android/
