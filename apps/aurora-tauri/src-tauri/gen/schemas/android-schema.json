@@ -681,6 +681,24 @@
           "markdownDescription": "Enables the aurora_thin_profile_set command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_thin_room_secret_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-delete",
+          "markdownDescription": "Enables the aurora_thin_room_secret_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_room_secret_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-get",
+          "markdownDescription": "Enables the aurora_thin_room_secret_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_room_secret_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-set",
+          "markdownDescription": "Enables the aurora_thin_room_secret_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_unsubscribe command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-unsubscribe",
@@ -1411,6 +1429,24 @@
           "type": "string",
           "const": "deny-aurora-thin-profile-set",
           "markdownDescription": "Denies the aurora_thin_profile_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-delete",
+          "markdownDescription": "Denies the aurora_thin_room_secret_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-get",
+          "markdownDescription": "Denies the aurora_thin_room_secret_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-set",
+          "markdownDescription": "Denies the aurora_thin_room_secret_set command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_unsubscribe command without any pre-configured scope.",

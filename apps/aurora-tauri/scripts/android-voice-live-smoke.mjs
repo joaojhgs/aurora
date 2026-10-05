@@ -55,6 +55,30 @@ const RECOVERABLE_BACKGROUND_CAPTURE_ERRORS = new Set([
   'speech_not_detected',
   'speech_timeout',
 ])
+const NATIVE_EVENT_BRIDGE_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_EVENT_BRIDGE_ACCEPTANCE'
+const NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS = 1_500
+const NATIVE_ASSISTANT_EVENT_KINDS = [
+  'assistant.delta',
+  'assistant.completed',
+  'assistant.failed',
+  'assistant.tool.started',
+  'assistant.tool.output',
+  'assistant.tool.completed',
+  'assistant.tool.failed',
+  'voice.turn.started',
+  'voice.turn.transcribing',
+  'voice.turn.requesting',
+  'voice.turn.speaking',
+  'voice.turn.finalized',
+  'voice.turn.failed',
+  'native.events.gap',
+]
+const NATIVE_TERMINAL_EVENT_KINDS = new Set([
+  'assistant.completed',
+  'assistant.failed',
+  'voice.turn.finalized',
+  'voice.turn.failed',
+])
 
 export function parseAdbDevices(output) {
   return String(output)
@@ -282,6 +306,7 @@ export async function runAndroidVoiceLiveSmoke() {
   const appId = process.env.AURORA_ANDROID_APP_ID ?? DEFAULT_APP_ID
   const apk = process.env.AURORA_ANDROID_APK ? resolve(process.env.AURORA_ANDROID_APK) : findApk()
   const context = { adb, serial, appId }
+  const nativeEventBridgeAcceptance = nativeEventBridgeAcceptanceEnabled()
   let fixtures
   let webview
 
@@ -351,7 +376,11 @@ export async function runAndroidVoiceLiveSmoke() {
     launchApp(context)
     webview = await connectInstalledWebview(context)
     invoke = (command, args) => invokeTauri(webview.client, command, args)
-    const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm)
+    const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm, {
+      nativeEventBridge: nativeEventBridgeAcceptance
+        ? ({ active, runTurn }) => proveNativeEventBridgeAcceptance(context, webview, invoke, { active, runTurn })
+        : null,
+    })
 
     webview.close()
     webview = null
@@ -414,6 +443,7 @@ export async function runAndroidVoiceLiveSmoke() {
         notificationVisible: background.notificationVisible,
         wakeLockHeld: background.wakeLockHeld,
         doze: background.doze,
+        ...(background.nativeEventBridge ? { nativeEventBridge: background.nativeEventBridge } : {}),
       },
       notificationStop,
       sticky: { ...sticky, acceptedSamples: resumed.acceptedSamples },
@@ -571,7 +601,7 @@ export function focusedTranscriptionCompleted(baseline, status) {
     && !status?.captureError
 }
 
-async function proveBackgroundVoice(context, invoke, backgroundPcm) {
+async function proveBackgroundVoice(context, invoke, backgroundPcm, { nativeEventBridge = null } = {}) {
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before, { background: true })
   const active = await pollVoiceStatus(
@@ -581,7 +611,11 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm) {
     { allowRecoverableBackgroundErrors: true },
   )
   await armLiveTestPcmIngress(invoke)
-  const completed = await completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: true })
+  const turnRunner = () => completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: true })
+  const observedTurn = nativeEventBridge
+    ? await nativeEventBridge({ active, runTurn: turnRunner })
+    : { completed: await turnRunner(), report: null }
+  const completed = observedTurn.completed
   if (completed.liveOutcome !== 'rearmed' || Number(completed.failedTurns) <= Number(active.failedTurns ?? 0)) {
     throw new Error(`Background local transcription did not re-arm after the optional assistant route was unavailable: ${JSON.stringify(completed)}`)
   }
@@ -608,7 +642,279 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm) {
     notificationVisible,
     wakeLockHeld,
     doze,
+    ...(observedTurn.report ? { nativeEventBridge: observedTurn.report } : {}),
   }
+}
+
+function nativeEventBridgeAcceptanceEnabled() {
+  return process.env[NATIVE_EVENT_BRIDGE_ACCEPTANCE_ENV] === '1'
+}
+
+async function proveNativeEventBridgeAcceptance(context, webview, invoke, { active, runTurn }) {
+  if (!webview?.client) throw new Error('Native event bridge acceptance requires an attached Android WebView.')
+  const beforeSnapshot = await nativeEventSnapshot(invoke)
+  const afterSequence = nativeEventSequenceFromCursor(beforeSnapshot?.lastSequenceId)
+  const collector = await startNativeEventCollector(webview, { afterSequence })
+  let completed
+  let uiHiddenDuringTurn = false
+  try {
+    const turn = runTurn()
+    await sleep(Number(process.env.AURORA_ANDROID_NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS ?? NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS))
+    adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
+    uiHiddenDuringTurn = true
+    completed = await turn
+    launchApp(context)
+    await waitForTauriInvoke(webview.client, Date.now() + Number(process.env.AURORA_ANDROID_WEBVIEW_TIMEOUT_MS ?? DEFAULT_WEBVIEW_TIMEOUT_MS))
+    const liveCollector = await readNativeEventCollector(webview)
+    const replaySnapshot = await nativeEventSnapshot(invoke, { afterSequence })
+    const report = assertNativeEventBridgeProgression({
+      active,
+      completed,
+      beforeSnapshot,
+      liveCollector,
+      replaySnapshot,
+      afterSequence,
+      uiHiddenDuringTurn,
+    })
+    await stopNativeEventCollector(webview, collector)
+    return { completed, report }
+  } catch (error) {
+    await stopNativeEventCollector(webview, collector).catch(() => {})
+    throw error
+  }
+}
+
+async function nativeEventSnapshot(invoke, { afterSequence } = {}) {
+  const request = { kinds: NATIVE_ASSISTANT_EVENT_KINDS }
+  if (afterSequence != null) request.afterSequence = afterSequence
+  return await invoke('aurora_native_event_snapshot', { request })
+}
+
+async function startNativeEventCollector(webview, { afterSequence } = {}) {
+  const request = { source: 'native', kinds: NATIVE_ASSISTANT_EVENT_KINDS, backfill: false }
+  if (afterSequence != null) request.lastSequenceId = `native:${afterSequence}`
+  return await evaluateWebviewJson(webview.client, `(async () => {
+    const invoke = window.__TAURI_INTERNALS__?.invoke;
+    if (typeof invoke !== 'function') throw new Error('tauri_invoke_unavailable');
+    const eventApi = globalThis.__TAURI__?.event ?? globalThis.__TAURI_EVENT__ ?? globalThis.__TAURI__;
+    const listen = eventApi?.listen ?? globalThis.__TAURI_INTERNALS__?.listen;
+    if (typeof listen !== 'function') throw new Error('tauri_event_listen_unavailable');
+    const previous = globalThis.__auroraNativeEventSmoke;
+    if (previous?.unlistenEvents) await previous.unlistenEvents().catch(() => {});
+    if (previous?.unlistenClosed) await previous.unlistenClosed().catch(() => {});
+    if (previous?.descriptor?.subscriptionId) {
+      await invoke('aurora_unsubscribe', { request: { subscriptionId: previous.descriptor.subscriptionId } }).catch(() => {});
+    }
+    const state = {
+      events: [],
+      closed: [],
+      descriptor: null,
+      ready: false,
+      startedAt: Date.now(),
+      errors: [],
+    };
+    globalThis.__auroraNativeEventSmoke = state;
+    const descriptor = await invoke('aurora_subscribe', { request: ${JSON.stringify(request)} });
+    state.descriptor = descriptor;
+    state.unlistenEvents = await listen(descriptor.eventName, (event) => {
+      state.events.push({ receivedAt: Date.now(), payload: event?.payload ?? event ?? null });
+    });
+    state.unlistenClosed = await listen(`${descriptor.eventName}/closed`, (event) => {
+      state.closed.push({ receivedAt: Date.now(), payload: event?.payload ?? event ?? null });
+    });
+    await invoke('aurora_activate_subscription', { request: { subscriptionId: descriptor.subscriptionId } });
+    state.ready = true;
+    return JSON.stringify({
+      ready: state.ready,
+      descriptor: state.descriptor,
+      eventCount: state.events.length,
+      closedCount: state.closed.length,
+    });
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function readNativeEventCollector(webview) {
+  return await evaluateWebviewJson(webview.client, `(async () => {
+    const state = globalThis.__auroraNativeEventSmoke;
+    if (!state) return JSON.stringify({ ready: false, events: [], closed: [], errors: ['collector_missing'] });
+    return JSON.stringify({
+      ready: state.ready === true,
+      descriptor: state.descriptor ?? null,
+      events: state.events ?? [],
+      closed: state.closed ?? [],
+      errors: state.errors ?? [],
+    });
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function stopNativeEventCollector(webview, collector) {
+  if (!webview?.client || !collector?.descriptor?.subscriptionId) return
+  await evaluateWebviewJson(webview.client, `(async () => {
+    const invoke = window.__TAURI_INTERNALS__?.invoke;
+    const state = globalThis.__auroraNativeEventSmoke;
+    if (state?.unlistenEvents) await state.unlistenEvents().catch(() => {});
+    if (state?.unlistenClosed) await state.unlistenClosed().catch(() => {});
+    if (typeof invoke === 'function') {
+      await invoke('aurora_unsubscribe', { request: { subscriptionId: ${JSON.stringify(collector.descriptor.subscriptionId)} } }).catch(() => {});
+    }
+    globalThis.__auroraNativeEventSmoke = null;
+    return JSON.stringify({ stopped: true });
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function evaluateWebviewJson(client, expression, timeoutMs = COMMAND_TIMEOUT_MS) {
+  const response = await client.send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  }, timeoutMs)
+  const raw = response.result?.result?.value
+  if (typeof raw !== 'string') {
+    throw new Error(`WebView evaluation returned no serialized value: ${JSON.stringify(response)}`)
+  }
+  const parsed = parseJson(raw)
+  if (parsed?.ok === false) throw new Error(parsed.error ?? raw)
+  return parsed
+}
+
+function assertNativeEventBridgeProgression({
+  active,
+  completed,
+  beforeSnapshot,
+  liveCollector,
+  replaySnapshot,
+  afterSequence,
+  uiHiddenDuringTurn,
+}) {
+  const liveEvents = normalizeNativeCollectedEvents(liveCollector?.events)
+  const replayEvents = normalizeNativeSnapshotEvents(replaySnapshot?.events)
+  const events = uniqueNativeEvents([...liveEvents, ...replayEvents])
+    .filter((event) => nativeEventSequence(event) == null || afterSequence == null || nativeEventSequence(event) > afterSequence)
+  const subjects = Array.isArray(replaySnapshot?.subjects) ? replaySnapshot.subjects : []
+  const observedKinds = [...new Set(events.map((event) => nativeEventKind(event)).filter(Boolean))].sort()
+  const terminalEvents = events.filter((event) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+  const terminalSubjects = subjects.filter((subject) => subject?.terminal === true || NATIVE_TERMINAL_EVENT_KINDS.has(subject?.kind))
+  const gapEvents = events.filter((event) => nativeEventKind(event) === 'native.events.gap')
+  assertNativeEventSequencesMonotonic(liveEvents, 'live native events')
+  assertNativeEventSequencesMonotonic(replayEvents, 'native replay snapshot events')
+  if (typeof replaySnapshot?.lastSequenceId !== 'string' || replaySnapshot.lastSequenceId.length === 0) {
+    throw new Error(`Native event snapshot did not report a native cursor: ${JSON.stringify(replaySnapshot)}`)
+  }
+  if (gapEvents.length > 0) {
+    throw new Error(`Native event subscription reported a replay gap: ${JSON.stringify(gapEvents.slice(0, 3))}`)
+  }
+  if (events.length === 0 && subjects.length === 0) {
+    throw new Error(`Native event bridge produced no live events or authoritative snapshot subjects after ${beforeSnapshot?.lastSequenceId ?? 'start'}.`)
+  }
+  if (!observedKinds.some((kind) => kind?.startsWith('voice.turn.')) && !subjects.some((subject) => subject?.kind?.startsWith?.('voice.turn.'))) {
+    throw new Error(`Native event bridge did not surface the background voice turn: ${JSON.stringify({ observedKinds, subjects })}`)
+  }
+  if (terminalEvents.length === 0 && terminalSubjects.length === 0) {
+    throw new Error(`Native event bridge did not expose a terminal background turn state: ${JSON.stringify({ observedKinds, subjects })}`)
+  }
+  const duplicatePersistedKeys = duplicateNativePersistedTerminalKeys([...events, ...subjects])
+  if (duplicatePersistedKeys.length > 0) {
+    throw new Error(`Native event bridge reported duplicate persisted terminal results: ${duplicatePersistedKeys.join(', ')}`)
+  }
+  return {
+    enabled: true,
+    baselineLastSequenceId: beforeSnapshot?.lastSequenceId ?? null,
+    replayLastSequenceId: replaySnapshot?.lastSequenceId ?? null,
+    replayComplete: replaySnapshot?.replayComplete === true,
+    uiHiddenDuringTurn,
+    uiReopened: true,
+    liveEventCount: liveEvents.length,
+    replayEventCount: replayEvents.length,
+    subjectCount: subjects.length,
+    observedKinds,
+    terminalKinds: [...new Set(terminalEvents.map((event) => nativeEventKind(event)).filter(Boolean))].sort(),
+    terminalSubjectCount: terminalSubjects.length,
+    backgroundOutcome: completed?.liveOutcome ?? null,
+    baselineGeneration: active?.sessionGeneration ?? null,
+    completedGeneration: completed?.sessionGeneration ?? null,
+    duplicatePersistedResult: false,
+    ttsReplayMeasured: false,
+    ttsReplayUnsupportedReason: 'The Android live smoke can assert native event and persisted-result identity; it does not instrument physical audio playback counts.',
+  }
+}
+
+function normalizeNativeCollectedEvents(entries) {
+  if (!Array.isArray(entries)) return []
+  return entries.map((entry) => normalizeNativeEventPayload(entry?.payload ?? entry)).filter(Boolean)
+}
+
+function normalizeNativeSnapshotEvents(entries) {
+  if (!Array.isArray(entries)) return []
+  return entries.map((entry) => normalizeNativeEventPayload(entry)).filter(Boolean)
+}
+
+function normalizeNativeEventPayload(payload) {
+  const event = payload?.event ?? payload?.payload?.event ?? payload?.payload ?? payload
+  if (!event || typeof event !== 'object') return null
+  return event
+}
+
+function uniqueNativeEvents(events) {
+  const seen = new Set()
+  const unique = []
+  for (const event of events) {
+    const key = nativeEventIdentity(event)
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(event)
+  }
+  return unique
+}
+
+function nativeEventIdentity(event) {
+  return String(event?.id ?? event?.eventId ?? event?.sequence ?? JSON.stringify(event))
+}
+
+function nativeEventKind(event) {
+  return event?.kind ?? event?.eventKind ?? event?.payload?.kind ?? null
+}
+
+function nativeEventSequence(event) {
+  const direct = Number(event?.sequence ?? event?.sequenceId ?? event?.sequence_id)
+  if (Number.isFinite(direct)) return direct
+  return nativeEventSequenceFromCursor(event?.id ?? event?.eventId ?? event?.lastSequenceId)
+}
+
+function nativeEventSequenceFromCursor(cursor) {
+  const match = typeof cursor === 'string' ? /^native:(\d+)$/u.exec(cursor) : null
+  if (!match) return null
+  const value = Number(match[1])
+  return Number.isFinite(value) ? value : null
+}
+
+function assertNativeEventSequencesMonotonic(events, label) {
+  let previous = null
+  for (const event of events) {
+    const sequence = nativeEventSequence(event)
+    if (sequence == null) continue
+    if (previous != null && sequence < previous) {
+      throw new Error(`${label} regressed from sequence ${previous} to ${sequence}.`)
+    }
+    previous = sequence
+  }
+}
+
+function duplicateNativePersistedTerminalKeys(items) {
+  const counts = new Map()
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    const kind = nativeEventKind(item)
+    const payload = item?.payload && typeof item.payload === 'object' ? item.payload : item
+    if (payload?.persisted !== true || !NATIVE_TERMINAL_EVENT_KINDS.has(kind)) continue
+    const key = [
+      payload.conversationId ?? payload.conversation_id ?? 'conversation:unknown',
+      payload.generation ?? item.generation ?? 'generation:unknown',
+      payload.requestId ?? payload.request_id ?? payload.correlationId ?? payload.correlation_id ?? item.id ?? 'request:unknown',
+      kind,
+    ].map((value) => String(value)).join('|')
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key)
 }
 
 async function proveNotificationStop(context, invoke) {

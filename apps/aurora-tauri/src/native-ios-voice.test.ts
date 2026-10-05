@@ -112,4 +112,51 @@ describe("createTauriNativeIosVoicePort", () => {
     ).rejects.toThrow("Native iOS voice start request is invalid.");
     expect(callNative).not.toHaveBeenCalled();
   });
+
+  it("fails closed when the native provider is unavailable at start", async () => {
+    const callNative = vi.fn<NativeCommand>(async (command) => {
+      if (command === "aurora_ios_voice_foreground_capture_start") {
+        return { available: false, reason: "required_task_pack_unavailable" };
+      }
+      return { available: false, running: false, reason: "required_task_pack_unavailable" };
+    });
+    const port = createTauriNativeIosVoicePort(callNative);
+
+    await expect(port.start({ remoteAudioConsent: false })).resolves.toMatchObject({
+      available: false,
+      phase: "unavailable",
+      running: false,
+      reasonCode: "required_task_pack_unavailable",
+      redacted: true,
+    });
+    expect(callNative).toHaveBeenNthCalledWith(1, "aurora_ios_voice_foreground_capture_start", {
+      request: { remoteAudioConsent: false },
+    });
+  });
+
+  it("clears readiness when a running native provider is revoked during finish", async () => {
+    let revoked = false;
+    const callNative = vi.fn<NativeCommand>(async (command) => {
+      if (command === "aurora_ios_voice_foreground_capture_finish") revoked = true;
+      if (command === "aurora_ios_voice_foreground_capture_status") {
+        return revoked
+          ? { available: false, running: false, reason: "voice_provider_revoked" }
+          : { available: true, running: true };
+      }
+      return { available: !revoked, running: !revoked, reason: revoked ? "voice_provider_revoked" : undefined };
+    });
+    const port = createTauriNativeIosVoicePort(callNative);
+
+    await expect(port.start({ remoteAudioConsent: true })).resolves.toMatchObject({
+      available: true,
+      phase: "listening",
+    });
+    await expect(port.finish()).resolves.toMatchObject({
+      available: false,
+      phase: "unavailable",
+      running: false,
+      reasonCode: "voice_provider_revoked",
+      redacted: true,
+    });
+  });
 });

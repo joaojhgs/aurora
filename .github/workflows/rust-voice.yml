@@ -1,6 +1,14 @@
 name: Rust Voice Runtime
 
 on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "rust/**"
+      - "tools/voice-runtime/ios-audio-spike/native/**"
+      - "tools/voice-runtime/android-audio-spike/native/**"
+      - "Makefile"
+      - ".github/workflows/rust-voice.yml"
   pull_request:
     paths:
       - "rust/**"
@@ -13,7 +21,7 @@ on:
 permissions:
   contents: read
 
-# Keep only the newest PR commit; non-PR events use a unique run-id fallback.
+# Keep only the newest PR commit; branch and manual runs use a unique run-id fallback.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true

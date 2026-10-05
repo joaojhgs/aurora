@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora-mesh-parity-implementation** (29830 symbols, 105580 relationships, 300 execution flows).
+This project is indexed by GitNexus as **aurora** (28739 symbols, 103319 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 
