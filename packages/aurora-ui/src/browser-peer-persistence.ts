@@ -138,6 +138,7 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   private readonly now: () => number
   private keyPromise: Promise<CryptoKey> | null = null
   private pendingWrites: Promise<void> = Promise.resolve()
+  private pendingLegacyNodeConfigSaves: Promise<void> = Promise.resolve()
   private readonly nodeConfigV2Listeners = new Set<(revision: number | null) => void>()
   private nodeConfigV2Channel: BroadcastChannel | null = null
   private closed = false
@@ -315,8 +316,12 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
       // Remove the pre-Phase-1 plaintext copy after the encrypted write succeeds.
       this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
     }
-    if (globalThis.navigator?.locks) await this.withNodeConfigV2Lock(saveLegacy)
-    else await saveLegacy()
+    const result = this.pendingLegacyNodeConfigSaves.then(async () => {
+      if (globalThis.navigator?.locks) await this.withNodeConfigV2Lock(saveLegacy)
+      else await saveLegacy()
+    })
+    this.pendingLegacyNodeConfigSaves = result.catch(() => undefined)
+    await result
   }
 
   async loadNodeConfigDocument(): Promise<AuroraNodeConfigDocumentV1 | null> {

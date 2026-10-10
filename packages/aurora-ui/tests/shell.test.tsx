@@ -2754,7 +2754,13 @@ describe('Aurora production shell', () => {
         <MeshPeersView
           snapshot={snapshot}
           route={meshRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            transportKind: 'http',
+            nodeMode: 'remote-console',
+            runtimeTier: 'none',
+          })}
           canManageLocalServiceConfiguration={false}
+          canManageMeshInvites={false}
           thinPeerSnapshot={thinPeerSnapshot}
           onConfirmThinPairing={onConfirmThinPairing}
           onRejectThinPairing={onRejectThinPairing}

@@ -1506,7 +1506,13 @@ export function AuroraTauriApp({
   }
 
   return (
-    <AuroraQueryProvider client={runtime.client} surfaceProfile={surfaceProfile} queryClient={queryClient} queryScope={queryScope}>
+    <AuroraQueryProvider
+      client={runtime.client}
+      surfaceProfile={surfaceProfile}
+      queryClient={queryClient}
+      queryScope={queryScope}
+      nativeSpeechPolicyPort={runtime.nativeSpeechPolicyPort}
+    >
       <>
         <TauriRuntimeStateBridge surfaceProfile={surfaceProfile} />
         <TauriShellStateBridge

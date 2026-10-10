@@ -164,7 +164,7 @@ describe('fresh Android and Python pairing helper', () => {
             return { result: { result: { value: attempt > 0 } } }
           }
         }
-        if (expression.includes('Connect device') || expression.includes('Join from an invite') || expression.includes('#mesh-join-invite') || expression.includes('Apply invite')) return { result: { result: { value: true } } }
+        if (expression.includes('Connect device') || expression.includes('Join from an invite') || expression.includes('#mesh-join-invite') || expression.includes('Apply invite') || expression.includes('Invite applied')) return { result: { result: { value: true } } }
         if (expression.includes('[role="dialog"]')) return { result: { result: { value: 'AB-CD' } } }
         throw new Error(`Unexpected CDP expression: ${expression}`)
       }),

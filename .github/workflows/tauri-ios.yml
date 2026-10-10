@@ -164,7 +164,10 @@ jobs:
         run: python tools/local-inference/build_llama_native.py --target ios-simulator-arm64 --jobs 2
 
       - name: Configure pinned iOS offline assistant runtime
-        run: echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-simulator-arm64" >> "$GITHUB_ENV"
+        run: |
+          test -f tools/local-inference/build_llama_native.py
+          test -f tools/local-inference/llama.cpp.lock.json
+          echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-simulator-arm64" >> "$GITHUB_ENV"
 
       - name: Run iOS CI harness regression tests
         run: >-

@@ -473,9 +473,7 @@ function androidBarcodeScannerCancellationIntegration() {
     generatedTauriSettingsPath && existsSync(generatedTauriSettingsPath)
   )
   const settingsUseVendor = settingsExists
-    ? readFileSync(generatedTauriSettingsPath, 'utf8').includes(
-        resolve(vendorBarcodeScannerDir, 'android')
-      )
+    ? androidBarcodeScannerSettingsUseVendor()
     : null
   const matched = missing.length === 0
     && dependencyUsesVendor
@@ -499,6 +497,34 @@ function androidBarcodeScannerCancellationIntegration() {
       settingsUseVendor,
       matched
     }
+  }
+}
+
+function androidBarcodeScannerSettingsUseVendor() {
+  const settings = readFileSync(generatedTauriSettingsPath, 'utf8')
+  const scannerProjects = [...settings.matchAll(
+    /^[ \t]*project\(["']:tauri-plugin-barcode-scanner["']\)\.projectDir\s*=\s*new File\(["']([^"']+)["']\)[ \t]*$/gm
+  )]
+  if (scannerProjects.length !== 1) return false
+  const canonicalDir = resolve(vendorBarcodeScannerDir, 'android')
+  const projectDir = resolve(scannerProjects[0][1])
+  if (projectDir === canonicalDir) return true
+  const stagedDir = resolve(generatedAndroidProject, 'aurora-kotlin-compat/tauri-plugin-barcode-scanner')
+  if (projectDir !== stagedDir) return false
+  try {
+    const manifest = readJson(join(generatedAndroidProject, '.aurora-kotlin-compat-sources.json'))
+    const source = manifest.sources?.['tauri-plugin-barcode-scanner']
+    if (manifest.version !== 1 || typeof source !== 'string' || resolve(source) !== canonicalDir) return false
+    const canonicalMain = join(canonicalDir, 'src/main')
+    const stagedMain = join(stagedDir, 'src/main')
+    const canonicalFiles = sourceFiles(canonicalMain).map((file) => pathRelative(canonicalMain, file))
+    const stagedFiles = sourceFiles(stagedMain).map((file) => pathRelative(stagedMain, file))
+    return canonicalFiles.length > 0
+      && canonicalFiles.length === stagedFiles.length
+      && canonicalFiles.every((file, index) => file === stagedFiles[index]
+        && readFileSync(join(canonicalMain, file)).equals(readFileSync(join(stagedMain, file))))
+  } catch {
+    return false
   }
 }
 

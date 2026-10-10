@@ -3,16 +3,12 @@ import {
   iosVoiceMainFlowCounters,
   pushIosVoiceMainFlowPcm,
 } from './native-ios-voice'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
-import { TauriLocalTransport } from '@aurora/client'
-import { LocalInferenceClient } from '@aurora/client/local-inference'
+import { createIosVoiceMainFlowAdapter, type IosVoiceMainFlowAdapter } from './aurora-client'
 import {
   emptyRuntimeProfileDocument,
   parseRuntimeProfileDocument,
   serializeRuntimeProfileDocument,
 } from '@aurora/ui/runtime-profile'
-import { createTauriNativeSpeechCatalogPort } from './native-speech-catalog'
 
 type LoopbackRun = { nonce: string; wavBase64: string; simulatorArchitecture: 'arm64' | 'x86_64' }
 type LoopbackResult = {
@@ -48,28 +44,25 @@ export function installIosVoiceMainFlow(controlOriginValue: string | undefined):
   const controlOrigin = validateLoopbackOrigin(controlOriginValue)
   if (!controlOrigin) return
   started = true
-  void pollForRun(controlOrigin)
+  const adapter = createIosVoiceMainFlowAdapter()
+  if (!adapter) return
+  void pollForRun(controlOrigin, adapter)
 }
 
-async function pollForRun(origin: string): Promise<void> {
+async function pollForRun(origin: string, adapter: IosVoiceMainFlowAdapter): Promise<void> {
   const deadline = Date.now() + 2_100_000
   while (Date.now() < deadline) {
-    let response: Response
+    let delivery: Awaited<ReturnType<IosVoiceMainFlowAdapter['pollRun']>>
     try {
-      response = await fetch(`${origin}/run`, {
-        method: 'GET',
-        headers: { 'X-Aurora-Ios-Voice-Test': '1' },
-        cache: 'no-store',
-        credentials: 'omit',
-      })
+      delivery = await adapter.pollRun(origin)
     } catch {
       await delay(500)
       continue
     }
-    if (response.status === 204) { await delay(500); continue }
-    if (!response.ok) return
+    if (delivery.kind === 'idle') { await delay(500); continue }
+    if (delivery.kind !== 'run') return
     try {
-      await executeRun(origin, validateRun(await response.json()))
+      await executeRun(origin, validateRun(delivery.payload), adapter)
     } catch {
       return
     }
@@ -77,7 +70,7 @@ async function pollForRun(origin: string): Promise<void> {
   }
 }
 
-async function executeRun(origin: string, run: LoopbackRun): Promise<void> {
+async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMainFlowAdapter): Promise<void> {
   let thread: HTMLElement | null = null
   let baselineItems = 0
   let result: LoopbackResult = {
@@ -101,7 +94,7 @@ async function executeRun(origin: string, run: LoopbackRun): Promise<void> {
   try {
     const setupDeadline = overallDeadline - 480_000
     result.stage = 'profile_setup'
-    ownership = await prepareOfflineSetup(run.simulatorArchitecture, setupDeadline, (captured) => { ownership = captured })
+    ownership = await prepareOfflineSetup(adapter, run.simulatorArchitecture, setupDeadline, (captured) => { ownership = captured })
     result.profileCreated = true
     result.stage = 'profile_created'
     result.stage = 'speech_setup'
@@ -169,14 +162,14 @@ async function executeRun(origin: string, run: LoopbackRun): Promise<void> {
       if (!cleanup.ok) result.status = 'failed'
     }
     if (result.status !== 'passed' && result.cancelled) result.stage = 'cancelled'
-    await postResult(origin, result)
+    await adapter.postResult(origin, result)
   }
 }
 
 type OfflineSetupOwnership = {
-  readonly transport: TauriLocalTransport
-  readonly inference: LocalInferenceClient
-  readonly speech: ReturnType<typeof createTauriNativeSpeechCatalogPort>
+  readonly adapter: IosVoiceMainFlowAdapter
+  readonly inference: IosVoiceMainFlowAdapter["inference"]
+  readonly speech: IosVoiceMainFlowAdapter["speech"]
   readonly originalProfileValue: string
   readonly originalProfileWasNull: boolean
   readonly originalMode: string | null
@@ -189,28 +182,27 @@ type OfflineSetupOwnership = {
   selectedSttPackId: string | null
 }
 
-async function prepareOfflineSetup(simulatorArchitecture: 'arm64' | 'x86_64', deadline: number, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
-  const transport = new TauriLocalTransport({ invoke, listen })
-  const profileValue = await invoke<{ value?: unknown }>('aurora_thin_profile_get')
+async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorArchitecture: 'arm64' | 'x86_64', deadline: number, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
+  const profileValue = await adapter.getProfile()
   const originalProfileWasNull = profileValue.value == null
   const originalProfileValue = originalProfileWasNull
     ? serializeRuntimeProfileDocument(emptyRuntimeProfileDocument())
     : requireCanonicalEmptyProfile(profileValue.value)
   const [mode, tier] = await Promise.all([
-    transport.secureStorageGet('aurora.session.onboarding-mode'),
-    transport.secureStorageGet('aurora.session.runtime-tier'),
+    adapter.getPreference('onboarding-mode'),
+    adapter.getPreference('runtime-tier'),
   ])
-  const inference = new LocalInferenceClient((command, args) => invoke(command, args))
+  const inference = adapter.inference
   const model = await inference.modelStatus('chat-qwen3-0b8')
   if (model.state !== 'absent' && model.state !== 'ready') throw new Error('model_not_owned')
-  const speech = createTauriNativeSpeechCatalogPort({ platform: 'ios', transport })
+  const speech = adapter.speech
   const catalog = await speech.listCatalog()
   if (catalog.state !== 'ready' || !catalog.items.some((item) => item.task === 'stt')) {
     throw new Error('speech_catalog_unavailable')
   }
   const initialSpeechCache = new Map(catalog.items.map((item) => [`${item.task}:${item.packId}`, item.cached === true]))
   const ownership: OfflineSetupOwnership = {
-    transport,
+    adapter,
     inference,
     speech,
     originalProfileValue,
@@ -242,7 +234,7 @@ async function prepareOfflineSetup(simulatorArchitecture: 'arm64' | 'x86_64', de
   continueButton.click()
   await waitFor(async () => {
     try {
-      const current = await invoke<{ value?: unknown }>('aurora_thin_profile_get')
+      const current = await ownership.adapter.getProfile()
       const document = parseRuntimeProfileDocument(typeof current.value === 'string' ? current.value : null)
       const activeProfileId = document?.activeProfileId
       const active = document?.profiles.find((profile) => profile.id === activeProfileId)
@@ -264,7 +256,7 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
   await openSettings()
   const catalog = await ownership.speech.listCatalog()
   if (catalog.state !== 'ready') throw new Error('speech_catalog_unavailable')
-  const rawValue = await ownership.transport.listIosVoicePacks()
+  const rawValue = await ownership.adapter.listIosVoicePacks()
   const rawEntries = Array.isArray(rawValue) ? rawValue : []
   const supportedFamilies = new Set(['silero_vad', 'zipformer', 'whisper', 'vits_piper', 'pockettts'])
   const compatible = rawEntries.filter((value): value is Record<string, unknown> => {
@@ -336,7 +328,7 @@ async function chooseSpeechOption(label: string, optionLabel: string, deadline: 
 }
 
 async function readOwnedProfile(ownership: OfflineSetupOwnership) {
-  const result = await invoke<{ value?: unknown }>('aurora_thin_profile_get')
+  const result = await ownership.adapter.getProfile()
   const document = parseRuntimeProfileDocument(typeof result.value === 'string' ? result.value : null)
   const active = document?.profiles.find((profile) => profile.id === ownership.createdProfileId)
   if (!active || document?.activeProfileId !== ownership.createdProfileId || document.profiles.length !== 1) {
@@ -352,7 +344,7 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
   let runtimeDisposed = false
   try {
     if (Date.now() >= deadline) throw new Error('cleanup_timeout')
-    const current = await invoke<{ value?: unknown }>('aurora_thin_profile_get')
+    const current = await ownership.adapter.getProfile()
     const document = parseRuntimeProfileDocument(typeof current.value === 'string' ? current.value : null)
     if (!ownership.createdProfileId
       && (current.value == null || (document?.profiles.length === 0 && document.activeProfileId === null))) {
@@ -373,24 +365,24 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
       await disposeRuntime()
       runtimeDisposed = true
       if (Date.now() >= deadline) throw new Error('cleanup_timeout')
-      const saved = await invoke<{ ok?: boolean }>('aurora_thin_profile_set', { value: ownership.originalProfileValue })
+      const saved = await ownership.adapter.setProfile(ownership.originalProfileValue)
       if (saved.ok !== true) throw new Error('profile_restore_failed')
-      const restored = await invoke<{ value?: unknown }>('aurora_thin_profile_get')
+      const restored = await ownership.adapter.getProfile()
       const restoredDocument = parseRuntimeProfileDocument(typeof restored.value === 'string' ? restored.value : null)
       profileRestored = restoredDocument?.profiles.length === 0 && restoredDocument.activeProfileId === null
         && (ownership.originalProfileWasNull || restored.value === ownership.originalProfileValue)
     }
     if (!profileRestored) throw new Error('profile_restore_failed')
     const modeSaved = ownership.originalMode === null
-      ? await ownership.transport.secureStorageDelete('aurora.session.onboarding-mode')
-      : await ownership.transport.secureStorageSet('aurora.session.onboarding-mode', ownership.originalMode)
+      ? await ownership.adapter.deletePreference('onboarding-mode')
+      : await ownership.adapter.setPreference('onboarding-mode', ownership.originalMode)
     const tierSaved = ownership.originalTier === null
-      ? await ownership.transport.secureStorageDelete('aurora.session.runtime-tier')
-      : await ownership.transport.secureStorageSet('aurora.session.runtime-tier', ownership.originalTier)
+      ? await ownership.adapter.deletePreference('runtime-tier')
+      : await ownership.adapter.setPreference('runtime-tier', ownership.originalTier)
     if (!modeSaved.ok || !tierSaved.ok) throw new Error('preference_restore_failed')
     const [mode, tier] = await Promise.all([
-      ownership.transport.secureStorageGet('aurora.session.onboarding-mode'),
-      ownership.transport.secureStorageGet('aurora.session.runtime-tier'),
+      ownership.adapter.getPreference('onboarding-mode'),
+      ownership.adapter.getPreference('runtime-tier'),
     ])
     preferencesRestored = (mode.value ?? null) === ownership.originalMode && (tier.value ?? null) === ownership.originalTier
     if (!preferencesRestored) throw new Error('preference_restore_failed')
@@ -505,16 +497,6 @@ function remaining(deadline: number, maximumMs: number): number {
   const value = Math.min(maximumMs, deadline - Date.now())
   if (value <= 0) throw new Error('main_flow_timeout')
   return value
-}
-
-async function postResult(origin: string, result: LoopbackResult): Promise<void> {
-  await fetch(`${origin}/result`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Aurora-Ios-Voice-Test': '1' },
-    body: JSON.stringify(result),
-    cache: 'no-store',
-    credentials: 'omit',
-  }).catch(() => undefined)
 }
 
 function validateLoopbackOrigin(value: string | undefined): string | null {

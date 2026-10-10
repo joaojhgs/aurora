@@ -6,7 +6,6 @@ import {
   defaultBackgroundTranscriptionPolicy,
   resolveBackgroundTranscriptionState,
   resolveSpeechStageRouting,
-  TauriLocalTransport,
   type AssistantRoutePolicy,
   type AndroidBackgroundTranscriptionStatus,
   type AuroraBackgroundTranscriptionPolicy,
@@ -17,6 +16,7 @@ import {
   type BackgroundTranscriptionState,
 } from '@aurora/client'
 import type { AuroraSurfaceProfile } from './platform-surface'
+import { useNativeSpeechPolicyPort, type NativeSpeechPolicyPort } from './query'
 import type { RouteAvailability, RouteProviderCandidate } from './shell-data'
 import { isRemoteRouteCandidate, routePolicyFromRoute } from './assistant-execution-routing'
 
@@ -121,7 +121,7 @@ export function resolveNativeSpeechRoutePolicy(input: {
   const { config, stage, route, surface } = input
   const localAvailable = stage === 'stt'
     ? surface.localSpeechPack.canRunLocalStt
-    : surface.localSpeechPack.canRunLocalTts
+    : surface.usesLocalSidecar || surface.localSpeechPack.canRunLocalTts
   const resolution = resolveSpeechStageRouting({
     stage,
     config,
@@ -221,6 +221,7 @@ export function useNativeSpeechPolicy(
   scopeKey = '',
 ): NativeSpeechPolicyController {
   const enabled = nativeSpeechPolicyAvailable(surface)
+  const nativeSpeechPolicyPort = useNativeSpeechPolicyPort()
   const isAndroid = surface?.isAndroid === true
   const isIos = surface?.isIos === true
   const surfaceKind = surface?.physicalKind ?? null
@@ -281,7 +282,7 @@ export function useNativeSpeechPolicy(
     scopeKey: string
     generation: number
     store: ReturnType<typeof createAuroraNativeNodeConfigStore>
-    transport: TauriLocalTransport
+    transport: NativeSpeechPolicyPort
   } | null>(null)
   const document = documentEntry?.scopeKey === scopeKey
     && documentEntry.generation === scopeGenerationRef.current.generation
@@ -353,7 +354,8 @@ export function useNativeSpeechPolicy(
     setState('loading')
     setMessage(null)
     try {
-      const transport = new TauriLocalTransport()
+      if (!nativeSpeechPolicyPort) throw new Error('Native speech policy port is unavailable.')
+      const transport = nativeSpeechPolicyPort
       const store = createAuroraNativeNodeConfigStore(transport)
       storeRef.current = { scopeKey, generation: scopeGeneration, store, transport }
       const documentReady = waitForNativeNodeConfigDocument(readiness.signal, () => {
@@ -501,7 +503,7 @@ export function useNativeSpeechPolicy(
       active = false
       readiness.abort()
     }
-  }, [enabled, isAndroid, isIos, scopeKey, surfaceKind])
+  }, [enabled, isAndroid, isIos, nativeSpeechPolicyPort, scopeKey, surfaceKind])
 
   const changeChoice = useCallback((stage: 'stt' | 'tts', choice: SpeechRoutingChoice) => {
     if (stage === 'stt') setSttChoice(choice)
@@ -533,7 +535,7 @@ export function useNativeSpeechPolicy(
     const operation = ++statusSequenceRef.current
     statusOperationRef.current = operation
     try {
-      await entry.transport.requestAndroidPermission('microphone')
+      await entry.transport.requestMicrophonePermission()
       if (!isCurrent() || operation !== statusSequenceRef.current) return
       const acknowledged = acknowledgedDocumentRef.current
       if (!acknowledged || acknowledged.scopeKey !== scopeKey || acknowledged.generation !== scopeGeneration) return

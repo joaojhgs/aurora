@@ -4,7 +4,6 @@ import type {
   NativeCapabilityManifest,
   TauriSidecarStatus,
 } from "@aurora/client";
-import { listen } from "@tauri-apps/api/event";
 import type {
   EnvelopeCryptoPort,
   JsonValue as LocalDataJsonValue,
@@ -296,16 +295,16 @@ export async function createTauriMeshNodeServices(
     localToolApprovals = approvalController;
     let scheduleProviderRefresh: (() => void) | undefined;
     let policyChangedBeforeProviderReady = false;
-    try {
-      const subscribe = options.subscribeNativeNodeConfigPolicyChanges
-        ?? ((listener: () => void) => listen("aurora-node-config-policy-changed", listener));
-      unsubscribeNodeConfigPolicy = await subscribe(() => {
-        if (scheduleProviderRefresh) scheduleProviderRefresh();
-        else policyChangedBeforeProviderReady = true;
-      });
-    } catch {
-      // Without the change signal, a cached capability snapshot could outlive
-      // the policy that authorized it. Keep tooling available without speech.
+    if (options.subscribeNativeNodeConfigPolicyChanges) {
+      try {
+        unsubscribeNodeConfigPolicy = await options.subscribeNativeNodeConfigPolicyChanges(() => {
+          if (scheduleProviderRefresh) scheduleProviderRefresh();
+          else policyChangedBeforeProviderReady = true;
+        });
+      } catch {
+        // Without the change signal, a cached capability snapshot could outlive
+        // the policy that authorized it. Keep tooling available without speech.
+      }
     }
     const speechHost = unsubscribeNodeConfigPolicy
       ? await createRefreshableTauriNativeSpeechHost(options.invokeCommand, localPeerId)

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, createElement } from 'react'
+import { act, createElement, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { emptyAuroraNodeConfigDocumentV2, TauriLocalTransport, type AuroraNodeConfigDocumentV2 } from '@aurora/client'
+import { AuroraClient, emptyAuroraNodeConfigDocumentV2, MockAuroraTransport, TauriLocalTransport, type AuroraNodeConfigDocumentV2 } from '@aurora/client'
+import { AuroraQueryProvider, type NativeSpeechPolicyPort } from './query'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from './platform-surface'
 import type { RouteAvailability } from './shell-data'
 import {
@@ -157,7 +158,7 @@ describe('native speech policy routing', () => {
       roots.push(root)
       const android = getAuroraSurfaceProfile({ transportKind: 'native-mobile', nativePlatform: 'android', nodeMode: 'mesh-node' })
       await act(async () => {
-        root.render(createElement(PolicyHarness, { scopeKey: 'android-profile-a', surface: android, onPolicy: (value) => { policyRef.current = value } }))
+        root.render(createElement(NativeSpeechPolicyTestProvider, null, createElement(PolicyHarness, { scopeKey: 'android-profile-a', surface: android, onPolicy: (value) => { policyRef.current = value } })))
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
       if (!policyRef.current) throw new Error('Speech policy hook did not mount')
@@ -206,11 +207,11 @@ describe('native speech policy routing', () => {
 
       await act(async () => { policyRef.current!.changeBackgroundTranscription({ notification: true, retentionDays: 90 }) })
       await act(async () => {
-        root.render(createElement(PolicyHarness, {
+        root.render(createElement(NativeSpeechPolicyTestProvider, null, createElement(PolicyHarness, {
           scopeKey: 'android-profile-a',
           surface: getAuroraSurfaceProfile({ transportKind: 'native-mobile', nativePlatform: 'android', nodeMode: 'mesh-node' }),
           onPolicy: (value) => { policyRef.current = value },
-        }))
+        })))
         await new Promise((resolve) => setTimeout(resolve, 0))
       })
       expect(policyRef.current!.backgroundTranscription).toMatchObject({ notification: true, ambient: false, retentionDays: 90 })
@@ -269,10 +270,10 @@ describe('native speech policy routing', () => {
     const root = createRoot(container)
     roots.push(root)
     await act(async () => {
-      root.render(createElement('div', null,
+      root.render(createElement(NativeSpeechPolicyTestProvider, null, createElement('div', null,
         createElement(PolicyHarness, { scopeKey: 'scope-a', surface: localSurface(), onPolicy: (policy) => { policies.settings = policy } }),
         createElement(PolicyHarness, { scopeKey: 'scope-a', surface: localSurface(), onPolicy: (policy) => { policies.assistant = policy } }),
-      ))
+      )))
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     if (!policies.settings || !policies.assistant) throw new Error('Speech policy hooks did not mount')
@@ -322,6 +323,27 @@ function localSurface(): AuroraSurfaceProfile {
     canManageNativeSpeechPolicy: true,
     localSpeechPack: { canRunLocalStt: true, canRunLocalTts: true },
   } as AuroraSurfaceProfile
+}
+
+function NativeSpeechPolicyTestProvider({ children }: { children: ReactNode }) {
+  const [binding] = useState(() => {
+    const transport = new TauriLocalTransport()
+    const nativeSpeechPolicyPort: NativeSpeechPolicyPort = {
+      nodeConfigPolicyRead: (documentToken) => transport.nodeConfigPolicyRead(documentToken),
+      nodeConfigPolicyCompareAndSwap: (request) => transport.nodeConfigPolicyCompareAndSwap(request),
+      getAndroidVoiceForegroundServiceStatus: () => transport.getAndroidVoiceForegroundServiceStatus(),
+      synchronizeAndroidBackgroundTranscription: () => transport.synchronizeAndroidBackgroundTranscription(),
+      requestMicrophonePermission: () => transport.requestAndroidPermission('microphone'),
+    }
+    return {
+      client: new AuroraClient({ transport: new MockAuroraTransport() }),
+      nativeSpeechPolicyPort,
+    }
+  })
+  return createElement(
+    AuroraQueryProvider,
+    { client: binding.client, nativeSpeechPolicyPort: binding.nativeSpeechPolicyPort, children },
+  )
 }
 
 function PolicyHarness({

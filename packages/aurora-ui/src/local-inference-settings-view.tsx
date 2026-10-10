@@ -17,14 +17,14 @@ export interface LocalInferenceSettingsViewProps {
 export function LocalInferenceSettingsView({ client, modelId, enabled, onEnabledChange }: LocalInferenceSettingsViewProps) {
   const [status, setStatus] = useState<LocalInferenceModelStatus | null>(null)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   useEffect(() => {
     let current = true
     setStatus(null)
-    setError(null)
+    setNotice(null)
     void client.modelStatus(modelId).then(
       (next) => { if (current) setStatus(next) },
-      () => { if (current) setError('Offline answers are unavailable on this device right now.') },
+      () => { if (current) setNotice('Offline answers are unavailable on this device right now.') },
     )
     return () => { current = false }
   }, [client, modelId])
@@ -32,11 +32,11 @@ export function LocalInferenceSettingsView({ client, modelId, enabled, onEnabled
   async function perform(action: () => Promise<void>) {
     if (busy) return
     setBusy(true)
-    setError(null)
+    setNotice(null)
     try {
       await action()
     } catch {
-      setError('This change could not be completed. Try again when this device has enough space and a working connection.')
+      setNotice('This change could not be completed. Try again when this device has enough space and a working connection.')
     } finally {
       setBusy(false)
     }
@@ -59,7 +59,7 @@ export function LocalInferenceSettingsView({ client, modelId, enabled, onEnabled
           </FieldContent>
           <Switch id="offline-assistant-enabled" label="Use offline answers" checked={enabled} disabled={busy || (!downloaded && !enabled)} onChange={(value) => { void perform(() => onEnabledChange(value)) }} />
         </Field>
-        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+        {notice ? <Alert variant="destructive"><AlertDescription>{notice}</AlertDescription></Alert> : null}
         <div className="flex flex-wrap gap-2">
           {!downloaded ? (
             <Button disabled={busy || !status || status.state === 'incompatible'} onClick={() => { void perform(async () => { setStatus(await client.downloadModel(modelId)) }) }}>

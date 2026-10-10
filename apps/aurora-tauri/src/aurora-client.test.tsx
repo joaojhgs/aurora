@@ -1649,6 +1649,7 @@ function routesByGroup(routeIds: Set<string>) {
 describe("Aurora Tauri runtime wrapper", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     delete (window as typeof window & { __TAURI__?: unknown }).__TAURI__;
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     window.history.replaceState({}, "", "/");

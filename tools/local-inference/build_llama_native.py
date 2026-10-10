@@ -94,6 +94,79 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def resolve_archive_tool(build: Path) -> str:
+    cache = build / "CMakeCache.txt"
+    configured: list[str] = []
+    if cache.is_file():
+        try:
+            cache_lines = cache.read_text(encoding="utf-8", errors="strict").splitlines()
+        except (OSError, UnicodeError) as exc:
+            raise NativeBuildError("configured archive tool could not be read") from exc
+        for line in cache_lines:
+            if line.startswith(("CMAKE_AR:FILEPATH=", "CMAKE_AR:STRING=")):
+                configured.append(line.split("=", 1)[1])
+    if len(configured) > 1:
+        raise NativeBuildError("configured archive tool is ambiguous")
+    if configured:
+        candidate = Path(configured[0])
+        if not candidate.is_file() or not os.access(candidate, os.X_OK):
+            raise NativeBuildError("configured archive tool is unavailable")
+        return str(candidate)
+    candidate = shutil.which("llvm-ar") or shutil.which("ar")
+    if candidate is None:
+        raise NativeBuildError("platform archive tool is unavailable")
+    return candidate
+
+
+def static_archives_have_same_objects(left: Path, right: Path, archive_tool: str) -> bool:
+    """Compare ordered archive members and member bytes without extracting either archive."""
+    if any(path.is_symlink() or not path.is_file() for path in (left, right)):
+        raise NativeBuildError("static archive comparison requires regular files")
+
+    def list_members(archive: Path) -> list[str]:
+        try:
+            result = subprocess.run(
+                [archive_tool, "t", str(archive)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+        except (OSError, UnicodeError, subprocess.CalledProcessError) as exc:
+            raise NativeBuildError("platform archive member listing failed") from exc
+        members = result.stdout.splitlines()
+        if not members or any(not member or "\x00" in member for member in members):
+            raise NativeBuildError("platform archive member listing was invalid")
+        if len(members) != len(set(members)):
+            raise NativeBuildError("static archive contains ambiguous duplicate member names")
+        return members
+
+    left_members = list_members(left)
+    right_members = list_members(right)
+    if left_members != right_members:
+        return False
+
+    # These names identify archive indexes rather than object payloads. Their
+    # bytes may be rewritten by ranlib during installation; ordered membership
+    # remains checked above.
+    index_members = {"/", "/SYM64/", "__.SYMDEF", "__.SYMDEF SORTED"}
+    for member in left_members:
+        if member in index_members:
+            continue
+        try:
+            left_data = subprocess.run(
+                [archive_tool, "p", str(left), member], check=True, capture_output=True
+            ).stdout
+            right_data = subprocess.run(
+                [archive_tool, "p", str(right), member], check=True, capture_output=True
+            ).stdout
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise NativeBuildError("platform archive member extraction failed") from exc
+        if hashlib.sha256(left_data).digest() != hashlib.sha256(right_data).digest():
+            return False
+    return True
+
+
 def ensure_bounded(path: Path, root: Path, label: str) -> Path:
     resolved = path.resolve()
     resolved_root = root.resolve()
@@ -433,7 +506,13 @@ def stage_runtime(
             installed_library = installed_by_name.get(name)
             if installed_library is not None:
                 if sha256_file(installed_library) != sha256_file(build_library):
-                    raise NativeBuildError(f"installed and build-tree copies conflict for {name}")
+                    archive_tool = resolve_archive_tool(build)
+                    if not static_archives_have_same_objects(
+                        installed_library, build_library, archive_tool
+                    ):
+                        raise NativeBuildError(
+                            f"installed and build-tree copies conflict for {name}"
+                        )
                 continue
             build_libraries.append(build_library)
         libraries_by_name = {

@@ -102,7 +102,8 @@ import {
 } from "./mesh-session-link";
 import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
 import { createTauriLocalAssistantRouter } from "./tauri-local-inference";
-import type { LocalInferenceClient } from "@aurora/client/local-inference";
+import type { NativeSpeechPolicyPort } from "@aurora/ui/query";
+import { LocalInferenceClient } from "@aurora/client/local-inference";
 import {
   createTauriMeshNodeServices,
   type EnabledTauriMeshNodeServices,
@@ -197,6 +198,7 @@ export interface AuroraTauriRuntime {
   nativeVoice?: NativeDesktopVoicePort | undefined;
   nativeMobileVoice?: NativeMobileVoicePort | undefined;
   localSpeechCatalog?: TauriNativeSpeechCatalogPort | undefined;
+  nativeSpeechPolicyPort?: NativeSpeechPolicyPort | undefined;
   thinProfileConfigured: boolean;
   requiresOnboarding: boolean;
   pendingThinInviteText: string | null;
@@ -472,6 +474,90 @@ export interface AuroraOverlayCommandStatus {
 
 const ONBOARDING_MODE_KEY = "aurora.session.onboarding-mode";
 const ONBOARDING_RUNTIME_TIER_KEY = "aurora.session.runtime-tier";
+
+type IosVoiceMainFlowPreference = "onboarding-mode" | "runtime-tier";
+export type IosVoiceMainFlowControlResult = {
+  nonce: string;
+  status: "passed" | "failed";
+  stage: string;
+  chunks: number;
+  samples: number;
+  transcriptReceived: boolean;
+  assistantFinalRendered: boolean;
+  cancelled: boolean;
+  profileCreated: boolean;
+  speechReady: boolean;
+  modelReady: boolean;
+  profileRestored: boolean;
+  preferencesRestored: boolean;
+  ownedAssetsRemoved: boolean;
+};
+
+/** Narrow Tauri boundary for the explicitly enabled iOS voice main-flow harness. */
+export interface IosVoiceMainFlowAdapter {
+  getProfile: () => Promise<{ value?: unknown }>;
+  setProfile: (value: string) => Promise<{ ok?: boolean }>;
+  getPreference: (key: IosVoiceMainFlowPreference) => ReturnType<TauriLocalTransport["secureStorageGet"]>;
+  setPreference: (key: IosVoiceMainFlowPreference, value: string) => ReturnType<TauriLocalTransport["secureStorageSet"]>;
+  deletePreference: (key: IosVoiceMainFlowPreference) => ReturnType<TauriLocalTransport["secureStorageDelete"]>;
+  listIosVoicePacks: () => ReturnType<TauriLocalTransport["listIosVoicePacks"]>;
+  readonly inference: LocalInferenceClient;
+  readonly speech: TauriNativeSpeechCatalogPort;
+  pollRun: (origin: string) => Promise<{ kind: "idle" | "unavailable" | "run"; payload?: unknown }>;
+  postResult: (origin: string, result: IosVoiceMainFlowControlResult) => Promise<void>;
+}
+
+/**
+ * Creates the existing native boundaries used by the dedicated iOS debug flow.
+ * This is intentionally unavailable in normal bundles and exposes no generic
+ * invoke, request, or transport escape hatch to the harness.
+ */
+export function createIosVoiceMainFlowAdapter(): IosVoiceMainFlowAdapter | null {
+  if (import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST !== "1" || !isIosTauriRuntime()) return null;
+  const transport = new TauriLocalTransport({ invoke, listen });
+  const inference = new LocalInferenceClient((command, args) => invoke(command, args));
+  const speech = createTauriNativeSpeechCatalogPort({ platform: "ios", transport });
+  const preferenceKey = (key: IosVoiceMainFlowPreference) =>
+    key === "onboarding-mode" ? ONBOARDING_MODE_KEY : ONBOARDING_RUNTIME_TIER_KEY;
+  const requireLoopbackOrigin = (value: string): string => {
+    const url = new URL(value);
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+      || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+      throw new Error("invalid_loopback_origin");
+    }
+    return url.origin;
+  };
+  return {
+    getProfile: () => invoke<{ value?: unknown }>("aurora_thin_profile_get"),
+    setProfile: (value) => invoke<{ ok?: boolean }>("aurora_thin_profile_set", { value }),
+    getPreference: (key) => transport.secureStorageGet(preferenceKey(key)),
+    setPreference: (key, value) => transport.secureStorageSet(preferenceKey(key), value),
+    deletePreference: (key) => transport.secureStorageDelete(preferenceKey(key)),
+    listIosVoicePacks: () => transport.listIosVoicePacks(),
+    inference,
+    speech,
+    pollRun: async (origin) => {
+      const response = await fetch(`${requireLoopbackOrigin(origin)}/run`, {
+        method: "GET",
+        headers: { "X-Aurora-Ios-Voice-Test": "1" },
+        cache: "no-store",
+        credentials: "omit",
+      });
+      if (response.status === 204) return { kind: "idle" };
+      if (!response.ok) return { kind: "unavailable" };
+      return { kind: "run", payload: await response.json() };
+    },
+    postResult: async (origin, result) => {
+      await fetch(`${requireLoopbackOrigin(origin)}/result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Aurora-Ios-Voice-Test": "1" },
+        body: JSON.stringify(result),
+        cache: "no-store",
+        credentials: "omit",
+      }).catch(() => undefined);
+    },
+  };
+}
 const DEFAULT_THIN_CONNECTION_MODE: AuroraThinConnectionMode = "http-only";
 export const ANDROID_NATIVE_PLUGIN_NAME = "aurora-native";
 export const ANDROID_LIFECYCLE_EVENT = "aurora://android-lifecycle";
@@ -701,6 +787,15 @@ export function createAuroraTauriRuntime({
         transport: nativeTransport,
       })
     : undefined;
+  const nativeSpeechPolicyPort: NativeSpeechPolicyPort | undefined = nativeTransport
+    ? {
+        nodeConfigPolicyRead: (documentToken) => nativeTransport.nodeConfigPolicyRead(documentToken),
+        nodeConfigPolicyCompareAndSwap: (request) => nativeTransport.nodeConfigPolicyCompareAndSwap(request),
+        getAndroidVoiceForegroundServiceStatus: () => nativeTransport.getAndroidVoiceForegroundServiceStatus(),
+        synchronizeAndroidBackgroundTranscription: () => nativeTransport.synchronizeAndroidBackgroundTranscription(),
+        requestMicrophonePermission: () => nativeTransport.requestAndroidPermission("microphone"),
+      }
+    : undefined;
   const resolvedLocalSpeechPackActivator =
     localSpeechPackActivator ??
     (localSpeechCatalog
@@ -833,6 +928,7 @@ export function createAuroraTauriRuntime({
           localData: injectedLocalData ?? localDataRuntime(meshNodeServices),
           nativeMobileVoice,
           localSpeechCatalog,
+          nativeSpeechPolicyPort,
           thinProfileConfigured: runtimeProfileConfigured,
           requiresOnboarding: !runtimeProfileConfigured,
           pendingThinInviteText: thinInviteText,
@@ -895,6 +991,7 @@ export function createAuroraTauriRuntime({
           "Tauri secure storage for mobile native mode preference",
         ),
         localSpeechCatalog,
+        nativeSpeechPolicyPort,
         sidecarStatus: async () => null,
         startSidecar: async () => null,
         stopSidecar: async () => null,
@@ -991,6 +1088,7 @@ export function createAuroraTauriRuntime({
         localData: injectedLocalData ?? localDataRuntime(meshNodeServices),
         nativeVoice,
         localSpeechCatalog,
+        nativeSpeechPolicyPort,
         thinProfileConfigured: runtimeProfileConfigured,
         requiresOnboarding: !runtimeProfileConfigured,
         pendingThinInviteText: thinInviteText,
@@ -1048,6 +1146,7 @@ export function createAuroraTauriRuntime({
       runtimeTier,
       nativeVoice,
       localSpeechCatalog,
+      nativeSpeechPolicyPort,
       thinProfileController,
       requiresOnboarding: !runtimeProfileConfigured,
       pendingThinInviteText: null,
@@ -1455,6 +1554,8 @@ async function composeTauriMeshNodeServices(
     rolloutFlags: tauriWebRtcRolloutFlags(),
     nativeTransport: new TauriLocalTransport({ invoke, listen }),
     invokeCommand: invoke,
+    subscribeNativeNodeConfigPolicyChanges: (listener) =>
+      listen("aurora-node-config-policy-changed", () => listener()),
   });
 }
 

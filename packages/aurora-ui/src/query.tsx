@@ -1,7 +1,12 @@
 'use client'
 
 import { QueryClient, QueryClientProvider, type QueryClientConfig } from '@tanstack/react-query'
-import type { AuroraClient } from '@aurora/client'
+import type {
+  AndroidNativePermissionRequestResult,
+  AndroidVoiceForegroundServiceStatus,
+  AuroraClient,
+  AuroraNativeNodeConfigTransport,
+} from '@aurora/client'
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import type { AuroraSurfaceProfile } from './platform-surface'
 import { useAssistantStreamStore } from './state/assistant-stream-store'
@@ -203,6 +208,13 @@ function useAuroraAuthScopeKey(client: AuroraClient): string {
   )
 }
 
+export interface NativeSpeechPolicyPort extends AuroraNativeNodeConfigTransport {
+  getAndroidVoiceForegroundServiceStatus(): Promise<AndroidVoiceForegroundServiceStatus>
+  synchronizeAndroidBackgroundTranscription(): Promise<AndroidVoiceForegroundServiceStatus>
+  requestMicrophonePermission(): Promise<AndroidNativePermissionRequestResult>
+}
+
+const NativeSpeechPolicyPortContext = createContext<NativeSpeechPolicyPort | null>(null)
 const AuroraClientContext = createContext<AuroraClient | null>(null)
 const AuroraQueryScopeContext = createContext(false)
 const AuroraQueryScopeKeyContext = createContext<AuroraQueryScopeKey>(['aurora', 'unscoped'])
@@ -259,10 +271,11 @@ export interface AuroraQueryProviderProps {
   surfaceProfile?: AuroraSurfaceProfile | null
   queryClient?: QueryClient
   queryScope?: AuroraQueryScopeInput | null
+  nativeSpeechPolicyPort?: NativeSpeechPolicyPort | null
   children: ReactNode
 }
 
-export function AuroraQueryProvider({ client, surfaceProfile = null, queryClient, queryScope = null, children }: AuroraQueryProviderProps) {
+export function AuroraQueryProvider({ client, surfaceProfile = null, queryClient, queryScope = null, nativeSpeechPolicyPort = null, children }: AuroraQueryProviderProps) {
   clientScopeInputs.set(client, queryScope ?? {})
   const authScopeKey = useAuroraAuthScopeKey(client)
   const authSnapshot = useMemo(() => client.auth.snapshot(), [authScopeKey, client])
@@ -298,15 +311,21 @@ export function AuroraQueryProvider({ client, surfaceProfile = null, queryClient
 
   return (
     <AuroraClientContext.Provider value={client}>
-      <QueryClientProvider client={ownedQueryClient}>
-        <AuroraQueryScopeContext.Provider value={true}>
-          <AuroraQueryScopeKeyContext.Provider value={scopeKey}>
-            <AuroraStateScopeIdContext.Provider value={scopeId}>{children}</AuroraStateScopeIdContext.Provider>
-          </AuroraQueryScopeKeyContext.Provider>
-        </AuroraQueryScopeContext.Provider>
-      </QueryClientProvider>
+      <NativeSpeechPolicyPortContext.Provider value={nativeSpeechPolicyPort}>
+        <QueryClientProvider client={ownedQueryClient}>
+          <AuroraQueryScopeContext.Provider value={true}>
+            <AuroraQueryScopeKeyContext.Provider value={scopeKey}>
+              <AuroraStateScopeIdContext.Provider value={scopeId}>{children}</AuroraStateScopeIdContext.Provider>
+            </AuroraQueryScopeKeyContext.Provider>
+          </AuroraQueryScopeContext.Provider>
+        </QueryClientProvider>
+      </NativeSpeechPolicyPortContext.Provider>
     </AuroraClientContext.Provider>
   )
+}
+
+export function useNativeSpeechPolicyPort(): NativeSpeechPolicyPort | null {
+  return useContext(NativeSpeechPolicyPortContext)
 }
 
 export function useAuroraQueryScope(): boolean {

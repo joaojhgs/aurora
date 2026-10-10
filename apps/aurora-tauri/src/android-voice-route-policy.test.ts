@@ -208,7 +208,7 @@ describe('Android native voice route policy', () => {
     const voiceStore = repoText(voiceStorePath)
 
     for (const invariant of [
-      'syncNativeVoiceRoute()',
+      'syncNativeVoiceRoute(confirmedProfile)',
       'voiceRouteCandidate',
       'loadUnexpiredThinPeerCredential',
       'AuroraVoiceNativeConfigStore.setRoute(activity, gateway, bearer)',
@@ -386,7 +386,7 @@ describe('Android native voice route policy', () => {
     )
 
     expect(onStartBody).toContain('val explicitBackgroundStart = intent?.action == ACTION_START_BACKGROUND')
-    expect(onStartBody).toContain('val stickyRestart = intent == null && persistedBackgroundRequest')
+    expect(onStartBody).toContain('val stickyRestart = (intent == null || backgroundRestoreStart) && persistedBackgroundRequest')
     expect(onStartBody).toContain('if (intent == null && !stickyRestart)')
     expect(onStartBody).toContain('val durableBackgroundSession = explicitBackgroundStart || stickyRestart ||')
     expect(onStartBody).toContain('val backgroundSession = durableBackgroundSession')
@@ -446,10 +446,10 @@ describe('Android native voice route policy', () => {
     expect(plugin).toContain('clearBackgroundStopOnNextResume = true')
     expect(pluginAutoStartBody).toContain('getBoolean("backgroundStartable")')
     expect(pluginAutoStartBody).toContain('backgroundStoppedByUser(activity)')
-    expect(pluginAutoStartBody).toContain('ACTION_START_BACKGROUND')
+    expect(pluginAutoStartBody).toContain('ACTION_RESTORE_BACKGROUND')
     expect(pluginAutoStartBody).toContain('ContextCompat.startForegroundService(activity, intent)')
     expect(plugin).toContain('scheduleBackgroundVoiceAutoStart()')
-    expect(foregroundService).toContain('action = ACTION_STOP_BY_USER')
+    expect(foregroundService).toContain('action = if (transcriptionOnly) ACTION_STOP_TRANSCRIPTION else ACTION_STOP_BY_USER')
     expect(foregroundService).toContain('VOICE_BACKGROUND_STOPPED_BY_USER_KEY')
     expect(foregroundService).not.toContain('override fun onTrimMemory')
   })
@@ -602,7 +602,7 @@ describe('Android native voice route policy', () => {
       androidAudio.indexOf('Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreateWithPackSelection'),
       androidAudio.indexOf('Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeStart'),
     )
-    expect(nativeCreateBody).toContain('AndroidVoiceSessionConfig::with_local_pack_selection')
+    expect(nativeCreateBody).toContain('AndroidVoiceSessionConfig::with_pack_selection_for_route')
     expect(nativeCreateBody).toContain('AndroidVoiceSession::new(config, 8, 4_096, 16)')
   })
 
@@ -1194,10 +1194,10 @@ describe('Android native voice route policy', () => {
     )
 
     expect(statusCommandBody).toContain('voiceForegroundServiceStatusWithRouteSync()')
-    expect(startCommandBody).toContain('syncNativeVoiceRoute()')
+    expect(startCommandBody).toContain('syncNativeVoiceRoute(confirmedProfile)')
     expect(startCommandBody).toContain('AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)')
     expect(startCommandBody).toContain('val status = voiceForegroundServiceStatusObject()')
-    expect(startCommandBody.indexOf('syncNativeVoiceRoute()')).toBeLessThan(
+    expect(startCommandBody.indexOf('syncNativeVoiceRoute(confirmedProfile)')).toBeLessThan(
       startCommandBody.indexOf('AuroraVoiceNativeConfigStore.setRemoteAudioConsent'),
     )
     expect(startCommandBody).toContain('ret.put("status", voiceForegroundServiceStatusWithRouteSync())')
@@ -1224,8 +1224,8 @@ describe('Android native voice route policy', () => {
   it('does not make route provisioning a role selector', () => {
     const kotlin = repoText(kotlinPath)
     const syncBody = kotlin.slice(
-      kotlin.indexOf('private fun syncNativeVoiceRoute()'),
-      kotlin.indexOf('private fun voiceRouteCandidate', kotlin.indexOf('private fun syncNativeVoiceRoute()')),
+      kotlin.indexOf('private fun syncNativeVoiceRoute('),
+      kotlin.indexOf('private fun voiceRouteCandidate', kotlin.indexOf('private fun syncNativeVoiceRoute(')),
     )
 
     expect(kotlin).toContain('activeProfileId')
@@ -1246,10 +1246,10 @@ describe('Android native voice route policy', () => {
       ),
     )
     const syncBody = kotlin.slice(
-      kotlin.indexOf('private fun syncNativeVoiceRoute()'),
+      kotlin.indexOf('private fun syncNativeVoiceRoute('),
       kotlin.indexOf(
         'private fun voiceRouteCandidate',
-        kotlin.indexOf('private fun syncNativeVoiceRoute()'),
+        kotlin.indexOf('private fun syncNativeVoiceRoute('),
       ),
     )
 

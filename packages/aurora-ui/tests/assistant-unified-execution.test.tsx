@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -8,6 +8,8 @@ import {
   ORCHESTRATOR_METHODS,
   ORCHESTRATOR_MODEL_METHODS,
   modelRuntimeCatalogFixture,
+  emptyAuroraNodeConfigDocumentV2,
+  serializeAuroraNodeConfigDocumentV2,
   type AuroraStreamRequest,
   type AuroraTransportRequest,
   type ToolApprovalConfirmRequest,
@@ -29,6 +31,8 @@ import {
 } from '@aurora/client/local-data'
 
 import { AssistantView } from '../src/assistant-view'
+import { AuroraQueryProvider, useAuroraStateScopeId, type NativeSpeechPolicyPort } from '../src/query'
+import { useNativeSpeechPolicy, type NativeSpeechPolicyState } from '../src/native-speech-policy'
 import type { LightweightAssistantDependencies } from '../src/local-assistant/lightweight-assistant'
 import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from '../src/platform-surface'
@@ -36,10 +40,12 @@ import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
 const scope = Object.freeze({ profileId: 'profile-unified', localNodeId: 'node-unified' })
+let originalDocumentTokenDescriptor: PropertyDescriptor | undefined
 
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   Element.prototype.scrollIntoView = () => undefined
+  originalDocumentTokenDescriptor = Object.getOwnPropertyDescriptor(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__')
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -53,6 +59,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
   Reflect.deleteProperty(window.URL, 'createObjectURL')
   Reflect.deleteProperty(window.URL, 'revokeObjectURL')
+  if (originalDocumentTokenDescriptor) {
+    Object.defineProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__', originalDocumentTokenDescriptor)
+  } else {
+    Reflect.deleteProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__')
+  }
 })
 
 describe('unified Assistant execution controls', () => {
@@ -210,6 +221,35 @@ describe('unified Assistant execution controls', () => {
 
   it('keeps desktop-local read-aloud on the Python-owned speaker path', async () => {
     const playbackPayloads: unknown[] = []
+    let observedPolicyState: NativeSpeechPolicyState = 'loading'
+    const observePolicyState = (state: NativeSpeechPolicyState) => { observedPolicyState = state }
+    const documentToken = 'a'.repeat(64)
+    const scopedPolicy = emptyAuroraNodeConfigDocumentV2(1)
+    Object.defineProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__', {
+      configurable: true,
+      value: documentToken,
+    })
+    const nativeSpeechPolicyPort: NativeSpeechPolicyPort = {
+      async nodeConfigPolicyRead(token) {
+        expect(token).toBe(documentToken)
+        return {
+          documentJson: serializeAuroraNodeConfigDocumentV2(scopedPolicy),
+          draftHandle: 'b'.repeat(64),
+        }
+      },
+      async nodeConfigPolicyCompareAndSwap() {
+        throw new Error('Policy save is not part of this read-aloud fixture.')
+      },
+      async getAndroidVoiceForegroundServiceStatus() {
+        throw new Error('Android status is not used by this desktop fixture.')
+      },
+      async synchronizeAndroidBackgroundTranscription() {
+        throw new Error('Android synchronization is not used by this desktop fixture.')
+      },
+      async requestMicrophonePermission() {
+        throw new Error('Microphone permissions are not used by this desktop fixture.')
+      },
+    }
     const provider: LightweightAssistantProvider = {
       async complete() {
         return { type: 'message', content: 'Read this response on the desktop speaker.' }
@@ -229,10 +269,13 @@ describe('unified Assistant execution controls', () => {
         nodeMode: 'mesh-node',
         runtimeTier: 'python-full',
       }),
+      nativeSpeechPolicyPort,
+      onNativeSpeechPolicyState: observePolicyState,
     })
 
     await enterPrompt(container, 'read locally')
     await waitUntil(() => container.textContent?.includes('Read this response on the desktop speaker.') === true)
+    await waitUntil(() => observedPolicyState === 'ready')
     const readAloud = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === 'Read aloud')
     if (!readAloud) throw new Error('missing read-aloud action')
@@ -1172,6 +1215,8 @@ async function renderUnifiedAssistant(
     envelopeCrypto?: EnvelopeCryptoPort
     surfaceProfile?: AuroraSurfaceProfile
     nativeMobileVoice?: NativeMobileVoicePort
+    nativeSpeechPolicyPort?: NativeSpeechPolicyPort
+    onNativeSpeechPolicyState?: (state: NativeSpeechPolicyState) => void
   } = {},
 ): Promise<HTMLElement> {
   client.auth.setApiKeySystem()
@@ -1190,7 +1235,7 @@ async function renderUnifiedAssistant(
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(
+    const assistant = (
       <AssistantView
         client={client}
         route={connectedRoute()}
@@ -1203,11 +1248,39 @@ async function renderUnifiedAssistant(
         initialSession={{ sessionId: null, messages: [] }}
       />
     )
+    root.render(overrides.nativeSpeechPolicyPort
+      ? <AuroraQueryProvider
+          client={client}
+          surfaceProfile={overrides.surfaceProfile ?? null}
+          nativeSpeechPolicyPort={overrides.nativeSpeechPolicyPort}
+        >
+          {assistant}
+          {overrides.onNativeSpeechPolicyState
+            ? <NativeSpeechPolicyReadinessObserver
+                surfaceProfile={overrides.surfaceProfile ?? null}
+                onState={overrides.onNativeSpeechPolicyState}
+              />
+            : null}
+        </AuroraQueryProvider>
+      : assistant)
     await Promise.resolve()
     await Promise.resolve()
   })
   await waitUntil(() => document.querySelector('[aria-label="Model: Configured default"]') !== null)
   return container
+}
+
+function NativeSpeechPolicyReadinessObserver({
+  surfaceProfile,
+  onState,
+}: {
+  surfaceProfile: AuroraSurfaceProfile | null
+  onState: (state: NativeSpeechPolicyState) => void
+}) {
+  const scopeId = useAuroraStateScopeId()
+  const policy = useNativeSpeechPolicy(surfaceProfile, scopeId)
+  useEffect(() => { onState(policy.state) }, [onState, policy.state])
+  return null
 }
 
 function idSequence(): () => string {

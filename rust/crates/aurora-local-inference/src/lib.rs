@@ -6,23 +6,33 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+#[cfg(feature = "native-llamacpp")]
 use sha2::{Digest, Sha256};
 #[cfg(feature = "native-llamacpp")]
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "native-llamacpp")]
 use std::fs::File;
+#[cfg(feature = "native-llamacpp")]
 use std::io::{Read, Seek};
 use std::path::{Component, Path, PathBuf};
-use std::sync::{mpsc, Arc, Mutex, RwLock};
+use std::sync::Arc;
+#[cfg(feature = "native-llamacpp")]
+use std::sync::{mpsc, Mutex, RwLock};
 use thiserror::Error;
+#[cfg(feature = "native-llamacpp")]
 use tokio::sync::oneshot;
 
 const MAX_MODEL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+#[cfg(feature = "native-llamacpp")]
 const MAX_REQUEST_BYTES: usize = 128 * 1024;
+#[cfg(feature = "native-llamacpp")]
 const MAX_MESSAGE_COUNT: usize = 64;
+#[cfg(feature = "native-llamacpp")]
 const MAX_TOOL_COUNT: usize = 32;
+#[cfg(feature = "native-llamacpp")]
 const MAX_TOOL_SCHEMA_BYTES: usize = 16 * 1024;
+#[cfg(feature = "native-llamacpp")]
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
-const DEFAULT_CONTEXT_TOKENS: u32 = 4096;
 const MAX_CONTEXT_TOKENS: u32 = 8192;
 const MAX_OUTPUT_TOKENS: u32 = 1024;
 #[cfg(feature = "native-llamacpp")]
@@ -240,9 +250,11 @@ pub struct LocalInferenceState {
 
 struct Inner {
     config: LocalInferenceConfig,
+    #[cfg(feature = "native-llamacpp")]
     native_backend: Arc<RwLock<Option<Arc<dyn NativeInferenceBackend>>>>,
     #[cfg(feature = "native-llamacpp")]
     sender: mpsc::SyncSender<WorkerCommand>,
+    #[cfg(feature = "native-llamacpp")]
     session: Mutex<Option<SessionState>>,
     #[cfg(feature = "native-llamacpp")]
     operations: Mutex<HashMap<(String, String), Arc<BridgeCancel>>>,
@@ -250,6 +262,7 @@ struct Inner {
     pending_cancellations: Mutex<HashSet<(String, String)>>,
 }
 
+#[cfg(feature = "native-llamacpp")]
 #[derive(Clone)]
 struct SessionState {
     session_id: String,
@@ -735,11 +748,7 @@ impl LocalInferenceState {
     pub fn new(config: LocalInferenceConfig) -> Result<Self, LocalInferenceError> {
         validate_config(&config)?;
         Ok(Self {
-            inner: Arc::new(Inner {
-                config,
-                native_backend: Arc::new(RwLock::new(None)),
-                session: Mutex::new(None),
-            }),
+            inner: Arc::new(Inner { config }),
         })
     }
 
@@ -841,6 +850,7 @@ fn find_model<'a>(
         .ok_or(LocalInferenceError::ModelUnavailable)
 }
 
+#[cfg(feature = "native-llamacpp")]
 fn model_path(
     config: &LocalInferenceConfig,
     model: &TrustedModelDescriptor,
@@ -873,6 +883,7 @@ fn validate_identifier(value: &str) -> Result<(), LocalInferenceError> {
     Ok(())
 }
 
+#[cfg(feature = "native-llamacpp")]
 fn verify_model_file(
     path: &Path,
     model: &TrustedModelDescriptor,
@@ -921,6 +932,7 @@ fn verify_model_file(
     Ok(())
 }
 
+#[cfg(feature = "native-llamacpp")]
 fn validate_request(
     request: &CompletionRequest,
     model: &TrustedModelDescriptor,
@@ -1004,6 +1016,7 @@ fn validate_request(
     Ok(())
 }
 
+#[cfg(feature = "native-llamacpp")]
 fn native_surface() -> &'static str {
     if cfg!(target_os = "android") {
         "android"
@@ -1014,6 +1027,7 @@ fn native_surface() -> &'static str {
     }
 }
 
+#[cfg(feature = "native-llamacpp")]
 fn validate_schema_depth(value: &Value, depth: usize) -> bool {
     if depth > 16 {
         return false;
