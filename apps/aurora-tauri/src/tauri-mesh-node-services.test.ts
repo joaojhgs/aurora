@@ -675,6 +675,18 @@ class FakeLocalDataSession implements LocalDataSession {
   readonly localTools = emptyLocalToolRepository();
   readonly peerGrants = new MemoryPeerGrantMetadataRepository();
   readonly localAudit: MemoryLocalAuditRepository;
+  readonly transcripts: LocalDataSession["transcripts"] = {
+    createSession: async () => { throw new Error("not used"); },
+    startSession: async () => { throw new Error("not used"); },
+    appendSegment: async () => { throw new Error("not used"); },
+    getSession: async () => { throw new Error("not used"); },
+    listSessions: async () => { throw new Error("not used"); },
+    listSegments: async () => { throw new Error("not used"); },
+    finalizeSession: async () => { throw new Error("not used"); },
+    recoverActiveSessions: async () => { throw new Error("not used"); },
+    deleteSession: async () => { throw new Error("not used"); },
+    deleteExpiredSessions: async () => { throw new Error("not used"); },
+  };
   closed = false;
 
   constructor(localAudit = new MemoryLocalAuditRepository()) {

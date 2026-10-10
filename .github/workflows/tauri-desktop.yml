@@ -370,7 +370,7 @@ jobs:
           pnpm --filter @aurora/ui build
 
       - name: Install the official Tauri WebDriver bridge
-        run: cargo install tauri-driver --locked
+        run: cargo install tauri-driver --version 2.0.6 --locked
 
       - name: Run the Python-free desktop client against the real Python peer
         run: pnpm test:desktop-client:live
