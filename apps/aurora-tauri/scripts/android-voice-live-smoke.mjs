@@ -2312,7 +2312,8 @@ async function tapNotificationStop(context) {
 }
 
 export function parseUiAutomatorCapture({ status, stdout = '', stderr = '', error = null }) {
-  const hierarchy = String(stdout)
+  const captured = String(stdout)
+  const hierarchy = captured.replace(/UI hierchary dumped to: \/dev\/tty\r?\n?$/u, '')
   const diagnostic = {
     exitCode: status,
     stdout: String(stdout),
