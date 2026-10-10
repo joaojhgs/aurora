@@ -67,6 +67,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Set up Python interop peer
         uses: actions/setup-python@v5
@@ -160,6 +162,14 @@ jobs:
         run: |
           echo "AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/arm64-v8a" >> "$GITHUB_ENV"
           echo "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/x86_64" >> "$GITHUB_ENV"
+
+      - name: Build pinned Android offline assistant runtime
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          python tools/local-inference/build_llama_native.py --target android-arm64 --jobs 2
+          python tools/local-inference/build_llama_native.py --target android-x86_64 --jobs 2
+          echo "AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/android-arm64" >> "$GITHUB_ENV"
+          echo "AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/android-x86_64" >> "$GITHUB_ENV"
 
       - name: Build Android client x86_64 debug APK for CI
         run: pnpm --filter @aurora/tauri-ui android:build:client:apk:x86_64
