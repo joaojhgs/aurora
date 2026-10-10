@@ -59,7 +59,7 @@ try {
   run(process.execPath, [voiceScript, '--udid', selectedUdid, '--app-path', appPath], {
     ...env,
     AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN: controlOrigin,
-  })
+  }, 46 * 60_000)
 } finally {
   if (!selectedUdid) {
     try {
