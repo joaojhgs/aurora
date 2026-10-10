@@ -736,7 +736,7 @@ setsid env \
   AURORA_HOSTED_PEER_EXPECTED_CHECKOUT_ROOT="$ROOT" \
   PYTHONPATH="$ROOT:$TEST_HOOK_DIR${PYTHONPATH:+:$PYTHONPATH}" \
   PYTHONUNBUFFERED=1 \
-  /home/developer/projects/aurora/.venv/bin/python main.py >"$PYTHON_LOG" 2>&1 &
+  "$ROOT/.venv/bin/python" main.py >"$PYTHON_LOG" 2>&1 &
 PYTHON_PID=$!
 echo "hosted peer python process launched: pid=$PYTHON_PID" >&2
 
