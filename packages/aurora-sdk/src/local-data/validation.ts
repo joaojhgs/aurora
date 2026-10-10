@@ -14,6 +14,12 @@ export interface JsonSafetyLimits {
   maxStringBytes: number
 }
 
+export type LocalDataNumericPathPolicy = 'transcript_segment' | 'transcript_collections' | 'transcript_export_v1'
+
+export interface LocalDataBoundaryOptions {
+  numericPathPolicy?: LocalDataNumericPathPolicy
+}
+
 export const localDataJsonSafetyLimits: JsonSafetyLimits = Object.freeze({
   maxDepth: 32,
   maxNodes: 200_000,
@@ -27,9 +33,14 @@ export const nonNegativeSafeIntSchema = z.number().int().safe().nonnegative().re
   message: 'negative zero is not valid JSON state'
 })
 
-export function parseLocalDataBoundary<T>(schema: ZodType<T>, value: unknown, boundaryId: string): T {
+export function parseLocalDataBoundary<T>(
+  schema: ZodType<T>,
+  value: unknown,
+  boundaryId: string,
+  options: LocalDataBoundaryOptions = {}
+): T {
   const safeBoundaryId = normalizeBoundaryId(boundaryId)
-  assertJsonSafety(value, safeBoundaryId)
+  assertJsonSafety(value, safeBoundaryId, localDataJsonSafetyLimits, options.numericPathPolicy)
   const result = schema.safeParse(value)
   if (result.success) return result.data
   throw new LocalDataError('invalid_record', `Invalid local data boundary: ${safeBoundaryId}`, {
@@ -55,13 +66,14 @@ export function isJsonRoundTripStable(value: unknown): boolean {
 export function assertJsonSafety(
   value: unknown,
   boundaryId: string,
-  limits: JsonSafetyLimits = localDataJsonSafetyLimits
+  limits: JsonSafetyLimits = localDataJsonSafetyLimits,
+  numericPathPolicy?: LocalDataNumericPathPolicy
 ): void {
   const safeBoundaryId = normalizeBoundaryId(boundaryId)
   let nodes = 0
   let bytes = 0
   const active = new Set<object>()
-  const stack: Array<{ value: unknown; depth: number; leaving?: boolean }> = [{ value, depth: 0 }]
+  const stack: Array<{ value: unknown; depth: number; path: readonly (string | number)[]; leaving?: boolean }> = [{ value, depth: 0, path: [] }]
   while (stack.length > 0) {
     const item = stack.pop()
     if (item === undefined) break
@@ -76,7 +88,10 @@ export function assertJsonSafety(
     if (current === null || typeof current === 'boolean') {
       bytes += current === null ? 4 : current ? 4 : 5
     } else if (typeof current === 'number') {
-      if (!Number.isFinite(current) || !Number.isSafeInteger(current) || Object.is(current, -0)) {
+      const transcriptConfidence = isTranscriptConfidencePath(item.path, numericPathPolicy)
+      const safeInteger = Number.isSafeInteger(current)
+      const boundedConfidence = transcriptConfidence && current >= 0 && current <= 1
+      if (!Number.isFinite(current) || (!safeInteger && !boundedConfidence) || Object.is(current, -0)) {
         throwJsonSafetyError(safeBoundaryId, 'unsafe_number')
       }
       bytes += String(current).length
@@ -89,9 +104,9 @@ export function assertJsonSafety(
       active.add(current)
       if (current.length > limits.maxArrayItems) throwJsonSafetyError(safeBoundaryId, 'max_array_items')
       bytes += current.length + 2
-      stack.push({ value: current, depth: item.depth, leaving: true })
+      stack.push({ value: current, depth: item.depth, path: item.path, leaving: true })
       for (let index = current.length - 1; index >= 0; index -= 1) {
-        stack.push({ value: current[index], depth: item.depth + 1 })
+        stack.push({ value: current[index], depth: item.depth + 1, path: [...item.path, index] })
       }
     } else if (typeof current === 'object') {
       if (active.has(current)) throwJsonSafetyError(safeBoundaryId, 'cycle')
@@ -100,20 +115,34 @@ export function assertJsonSafety(
       const entries = Object.entries(current as Record<string, unknown>)
       if (entries.length > limits.maxObjectKeys) throwJsonSafetyError(safeBoundaryId, 'max_object_keys')
       bytes += entries.length + 2
-      stack.push({ value: current, depth: item.depth, leaving: true })
+      stack.push({ value: current, depth: item.depth, path: item.path, leaving: true })
       for (let index = entries.length - 1; index >= 0; index -= 1) {
         const [key, child] = entries[index] ?? ['', undefined]
         const keyBytes = new TextEncoder().encode(key).byteLength
         if (key.length < 1 || keyBytes > 256) throwJsonSafetyError(safeBoundaryId, 'unsafe_key')
         bytes += keyBytes + 3
         if (child === undefined) throwJsonSafetyError(safeBoundaryId, 'undefined_value')
-        stack.push({ value: child, depth: item.depth + 1 })
+        stack.push({ value: child, depth: item.depth + 1, path: [...item.path, key] })
       }
     } else {
       throwJsonSafetyError(safeBoundaryId, 'unsupported_type')
     }
     if (bytes > limits.maxBytes) throwJsonSafetyError(safeBoundaryId, 'max_bytes')
   }
+}
+
+function isTranscriptConfidencePath(path: readonly (string | number)[], policy?: LocalDataNumericPathPolicy): boolean {
+  if (policy === 'transcript_segment') {
+    return path.length === 1 && path[0] === 'confidence'
+  }
+  if (policy === 'transcript_collections') {
+    return path.length === 3 && path[0] === 'transcriptSegments' && typeof path[1] === 'number' && path[2] === 'confidence'
+  }
+  if (policy === 'transcript_export_v1') {
+    return path.length === 4 && path[0] === 'records' && path[1] === 'transcriptSegments'
+      && typeof path[2] === 'number' && path[3] === 'confidence'
+  }
+  return false
 }
 
 function normalizeBoundaryId(boundaryId: string): string {

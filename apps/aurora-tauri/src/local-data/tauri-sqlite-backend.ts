@@ -9,6 +9,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSessionRecord,
+  parseTranscriptSegmentRecord,
   type ConversationMessageRecord,
   type ConversationListQuery,
   type ConversationRecord,
@@ -26,7 +28,19 @@ import {
   type LocalDataSession,
   type LocalToolStateRecord,
   type MessageListQuery,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionListQuery,
+  type TranscriptSegmentListQuery,
+  type FinalizeTranscriptSessionInput,
+  type AppendTranscriptSegmentResult,
+  type RecoverTranscriptSessionsResult,
+  type DeleteTranscriptSessionResult,
+  type DeleteExpiredTranscriptSessionsResult,
+  LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 import {
   LOCAL_DATA_CONVERSATION_ID_SET_MAX,
@@ -60,6 +74,16 @@ type RepositoryOperation =
   | { readonly kind: 'peerGrants.listPeerGrants'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
   | { readonly kind: 'localAudit.listAudit'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'transcripts.createSession'; readonly record: TranscriptSessionRecord }
+  | { readonly kind: 'transcripts.startSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string; readonly startedAtMs: number }
+  | { readonly kind: 'transcripts.appendSegment'; readonly record: TranscriptSegmentRecord }
+  | { readonly kind: 'transcripts.getSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.listSessions'; readonly profileId: string; readonly localNodeId: string; readonly options?: TranscriptSessionListQuery }
+  | { readonly kind: 'transcripts.listSegments'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string; readonly options?: TranscriptSegmentListQuery }
+  | { readonly kind: 'transcripts.finalizeSession'; readonly profileId: string; readonly localNodeId: string; readonly input: FinalizeTranscriptSessionInput }
+  | { readonly kind: 'transcripts.recoverActiveSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly terminalReason?: string }
+  | { readonly kind: 'transcripts.deleteSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.deleteExpiredSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
 
 interface TransactionToken {
   active: boolean
@@ -127,6 +151,7 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
   readonly localTools: TauriLocalToolStateRepository
   readonly peerGrants: TauriPeerGrantRepository
   readonly localAudit: TauriLocalAuditRepository
+  readonly transcripts: TauriTranscriptArchiveRepository
   private operationQueue: Promise<unknown> = Promise.resolve()
   private activeTransactionToken: TransactionToken | null = null
   private closed = false
@@ -143,6 +168,7 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
     this.localTools = new TauriLocalToolStateRepository(this)
     this.peerGrants = new TauriPeerGrantRepository(this)
     this.localAudit = new TauriLocalAuditRepository(this)
+    this.transcripts = new TauriTranscriptArchiveRepository(this)
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -366,6 +392,74 @@ class TauriLocalAuditRepository {
   async listAudit(): Promise<LocalAuditRecord[]> {
     return (await this.session.repositoryOperation<LocalAuditRecord[]>({ kind: 'localAudit.listAudit', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseLocalAuditRecord)
   }
+}
+
+class TauriTranscriptArchiveRepository {
+  constructor(private readonly session: TauriSqliteLocalDataSession) {}
+
+  async createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.createSession', record: parseTranscriptSessionRecord(record) }))
+  }
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    const id = validateTranscriptId(sessionId)
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.startSession', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId: id, startedAtMs: validateTranscriptTimestamp(startedAtMs, 'transcript_started_at') }))
+  }
+  async appendSegment(record: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult> {
+    const result = await this.session.repositoryOperation<AppendTranscriptSegmentResult>({ kind: 'transcripts.appendSegment', record: parseTranscriptSegmentRecord(record) })
+    return { appended: result.appended, record: parseTranscriptSegmentRecord(result.record) }
+  }
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const record = await this.session.repositoryOperation<TranscriptSessionRecord | null>({ kind: 'transcripts.getSession', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId: validateTranscriptId(sessionId) })
+    return record === null ? null : parseTranscriptSessionRecord(record)
+  }
+  async listSessions(options?: TranscriptSessionListQuery): Promise<TranscriptSessionRecord[]> {
+    validateTranscriptSessionQuery(options)
+    return (await this.session.repositoryOperation<TranscriptSessionRecord[]>({ kind: 'transcripts.listSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId, ...(options === undefined ? {} : { options }) })).map(parseTranscriptSessionRecord)
+  }
+  async listSegments(sessionId: string, options?: TranscriptSegmentListQuery): Promise<TranscriptSegmentRecord[]> {
+    validateTranscriptSegmentQuery(options)
+    return (await this.session.repositoryOperation<TranscriptSegmentRecord[]>({ kind: 'transcripts.listSegments', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId: validateTranscriptId(sessionId), ...(options === undefined ? {} : { options }) })).map(parseTranscriptSegmentRecord)
+  }
+  async finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord> {
+    validateTranscriptId(input.sessionId)
+    if (input.lifecycle !== 'completed' && input.lifecycle !== 'interrupted' && input.lifecycle !== 'failed') queryError('transcript_lifecycle')
+    validateTranscriptTimestamp(input.endedAtMs, 'transcript_ended_at')
+    return parseTranscriptSessionRecord(await this.session.repositoryOperation({ kind: 'transcripts.finalizeSession', profileId: this.session.profileId, localNodeId: this.session.localNodeId, input }))
+  }
+  async recoverActiveSessions(nowMs: number, terminalReason?: string): Promise<RecoverTranscriptSessionsResult> {
+    validateTranscriptTimestamp(nowMs, 'transcript_recovery_now')
+    return await this.session.repositoryOperation({ kind: 'transcripts.recoverActiveSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId, nowMs, ...(terminalReason === undefined ? {} : { terminalReason }) })
+  }
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    return await this.session.repositoryOperation({ kind: 'transcripts.deleteSession', profileId: this.session.profileId, localNodeId: this.session.localNodeId, sessionId: validateTranscriptId(sessionId) })
+  }
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult> {
+    validateTranscriptTimestamp(nowMs, 'transcript_delete_now')
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT) queryError('transcript_delete_limit')
+    return await this.session.repositoryOperation({ kind: 'transcripts.deleteExpiredSessions', profileId: this.session.profileId, localNodeId: this.session.localNodeId, nowMs, limit })
+  }
+}
+
+function validateTranscriptId(value: string): string {
+  return parseLocalDataBoundary(localDataIdSchema, value, 'transcript.session_id')
+}
+
+function validateTranscriptTimestamp(value: number, reason: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) queryError(reason)
+  return value
+}
+
+function validateTranscriptSessionQuery(options?: TranscriptSessionListQuery): void {
+  if (options?.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX)) queryError('transcript_session_limit')
+  if (options?.cursor !== undefined) {
+    validateTranscriptTimestamp(options.cursor.createdAtMs, 'transcript_session_cursor_created_at')
+    validateTranscriptId(options.cursor.id)
+  }
+}
+
+function validateTranscriptSegmentQuery(options?: TranscriptSegmentListQuery): void {
+  if (options?.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX)) queryError('transcript_segment_limit')
+  if (options?.afterSequence !== undefined && (!Number.isSafeInteger(options.afterSequence) || options.afterSequence < 0 || Object.is(options.afterSequence, -0))) queryError('transcript_segment_after_sequence')
 }
 
 function parseStatus(value: unknown): LocalDataBackendStatus {

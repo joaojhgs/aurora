@@ -10,9 +10,21 @@ import {
   type LocalDataRepositories,
   type ConversationListQuery,
   type MessageListQuery,
+  type TranscriptSessionListQuery,
+  type TranscriptSegmentListQuery,
+  type FinalizeTranscriptSessionInput,
+  type AppendTranscriptSegmentResult,
+  type RecoverTranscriptSessionsResult,
+  type DeleteTranscriptSessionResult,
+  type DeleteExpiredTranscriptSessionsResult,
   LOCAL_DATA_CONVERSATION_QUERY_MAX,
   LOCAL_DATA_MESSAGE_QUERY_MAX,
   LOCAL_DATA_CONVERSATION_ID_SET_MAX,
+  LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT,
+  LOCAL_DATA_TRANSCRIPT_SESSION_LIMIT,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_LIMIT,
   type MutableLocalDataCollections
 } from './repositories.js'
 import {
@@ -22,6 +34,9 @@ import {
   parseLocalAuditRecord,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSessionRecord,
+  parseTranscriptSegmentRecord,
+  transcriptTerminalLifecycleSchema,
   type ConversationMessageRecord,
   type ConversationRecord,
   type LightweightMemoryRecord,
@@ -29,11 +44,14 @@ import {
   type LocalDataRecordCollections,
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord,
   localDataIdSchema
 } from './records.zod.js'
 import { assertOpen, type LocalDataSession } from './session.js'
 import type { LocalDataScope } from './provenance.js'
 import { parseLocalDataBoundary } from './validation.js'
+import { localDataMigrationManifest } from './migration-manifest.js'
 
 export interface MemoryLocalDataBackendOptions {
   nowMs?: () => number
@@ -51,7 +69,7 @@ export class MemoryLocalDataBackend implements LocalDataBackend {
 
   constructor(options: MemoryLocalDataBackendOptions = {}) {
     this.nowMs = options.nowMs ?? (() => Date.now())
-    this.schemaVersion = options.schemaVersion ?? 3
+    this.schemaVersion = options.schemaVersion ?? localDataMigrationManifest.latestVersion
   }
 
   async open(profileId: string, localNodeId: string): Promise<LocalDataSession> {
@@ -109,6 +127,7 @@ class MemoryLocalDataSession implements LocalDataSession {
   readonly localTools: MemoryLocalToolStateRepository
   readonly peerGrants: MemoryPeerGrantMetadataRepository
   readonly localAudit: MemoryLocalAuditRepository
+  readonly transcripts: MemoryTranscriptArchiveRepository
   private readonly nowMs: () => number
   private readonly closeBackendSession: () => void
   private collections: MutableLocalDataCollections
@@ -128,6 +147,7 @@ class MemoryLocalDataSession implements LocalDataSession {
     this.localTools = new MemoryLocalToolStateRepository(this, { kind: 'queued' })
     this.peerGrants = new MemoryPeerGrantMetadataRepository(this, { kind: 'queued' })
     this.localAudit = new MemoryLocalAuditRepository(this, { kind: 'queued' })
+    this.transcripts = new MemoryTranscriptArchiveRepository(this, { kind: 'queued' })
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -232,7 +252,8 @@ class MemoryLocalDataSession implements LocalDataSession {
       memory: new MemoryLightweightMemoryRepository(this, access),
       localTools: new MemoryLocalToolStateRepository(this, access),
       peerGrants: new MemoryPeerGrantMetadataRepository(this, access),
-      localAudit: new MemoryLocalAuditRepository(this, access)
+      localAudit: new MemoryLocalAuditRepository(this, access),
+      transcripts: new MemoryTranscriptArchiveRepository(this, access)
     }
   }
 
@@ -502,6 +523,184 @@ class MemoryLocalAuditRepository {
   }
 }
 
+class MemoryTranscriptArchiveRepository {
+  constructor(
+    private readonly session: MemoryLocalDataSession,
+    private readonly access: RepositoryAccess
+  ) {}
+
+  async createSession(input: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const record = parseTranscriptSessionRecord(input)
+      this.session.assertIdentity(record.profileId, record.localNodeId)
+      if (record.lifecycle !== 'active') {
+        throw transcriptError('transcript_create_requires_active')
+      }
+      if (this.session.mutable.transcriptSessions.some((item) => item.id === record.id)) {
+        throw transcriptError('duplicate_transcript_session_id')
+      }
+      if (this.session.mutable.transcriptSessions.length >= LOCAL_DATA_TRANSCRIPT_SESSION_LIMIT) throw transcriptError('transcript_session_limit')
+      this.session.mutable.transcriptSessions.push(record)
+      return clone(record)
+    })
+  }
+
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, sessionId, 'transcript.session_id')
+      const start = requireRepositoryTimestamp(startedAtMs, 'transcript_started_at')
+      const existing = this.findSession(id)
+      if (existing === undefined) throw transcriptError('transcript_session_missing')
+      if (existing.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      if (start < existing.createdAtMs) throw transcriptError('transcript_started_before_created')
+      const updated = parseTranscriptSessionRecord({ ...existing, startedAtMs: Math.min(existing.startedAtMs, start) })
+      this.replaceSession(existing.id, updated)
+      return clone(updated)
+    })
+  }
+
+  async appendSegment(input: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const record = parseTranscriptSegmentRecord(input)
+      const parent = this.findSession(record.sessionId)
+      if (parent === undefined) throw transcriptError('transcript_session_missing')
+      if (record.startAtMs < parent.startedAtMs) throw transcriptError('transcript_segment_before_session')
+
+      const existing = this.session.mutable.transcriptSegments.find((item) => item.id === record.id)
+      if (existing !== undefined) {
+        if (JSON.stringify(existing) === JSON.stringify(record)) return { appended: false, record: clone(existing) }
+        throw transcriptError('transcript_segment_replay_conflict')
+      }
+      if (parent.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      if (this.session.mutable.transcriptSegments.some((item) => item.sessionId === record.sessionId && item.sequence === record.sequence)) {
+        throw transcriptError('duplicate_transcript_sequence')
+      }
+      if (this.session.mutable.transcriptSegments.length >= LOCAL_DATA_TRANSCRIPT_SEGMENT_LIMIT) throw transcriptError('transcript_segment_limit')
+      this.session.mutable.transcriptSegments.push(record)
+      return { appended: true, record: clone(record) }
+    })
+  }
+
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, sessionId, 'transcript.session_id')
+      const record = this.findSession(id)
+      return record === undefined ? null : clone(record)
+    })
+  }
+
+  async listSessions(options: TranscriptSessionListQuery = {}): Promise<TranscriptSessionRecord[]> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const limit = options.limit === undefined ? 100 : requireRepositoryLimit(options.limit, LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX, 'transcript_session_limit')
+      const cursor = options.cursor
+      if (cursor !== undefined) {
+        requireRepositoryTimestamp(cursor.createdAtMs, 'transcript_session_cursor_created_at')
+        parseLocalDataBoundary(localDataIdSchema, cursor.id, 'transcript_session_cursor_id')
+      }
+      return this.session.mutable.transcriptSessions
+        .filter((record) => record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+        .sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id))
+        .filter((record) => cursor === undefined || record.createdAtMs < cursor.createdAtMs || (record.createdAtMs === cursor.createdAtMs && compareUtf8(record.id, cursor.id) > 0))
+        .slice(0, limit)
+        .map(clone)
+    })
+  }
+
+  async listSegments(sessionId: string, options: TranscriptSegmentListQuery = {}): Promise<TranscriptSegmentRecord[]> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, sessionId, 'transcript.session_id')
+      if (this.findSession(id) === undefined) return []
+      const limit = options.limit === undefined ? 500 : requireRepositoryLimit(options.limit, LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX, 'transcript_segment_limit')
+      const afterSequence = options.afterSequence === undefined
+        ? undefined
+        : requireRepositorySequence(options.afterSequence, 'transcript_segment_after_sequence')
+      return this.session.mutable.transcriptSegments
+        .filter((record) => record.sessionId === id && (afterSequence === undefined || record.sequence > afterSequence))
+        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+        .slice(0, limit)
+        .map(clone)
+    })
+  }
+
+  async finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const sessionId = parseLocalDataBoundary(localDataIdSchema, input.sessionId, 'transcript.session_id')
+      const lifecycle = parseLocalDataBoundary(transcriptTerminalLifecycleSchema, input.lifecycle, 'transcript.lifecycle')
+      const endedAtMs = requireRepositoryTimestamp(input.endedAtMs, 'transcript_ended_at')
+      const terminalReason = parseTranscriptTerminalReason(input.terminalReason)
+      const existing = this.findSession(sessionId)
+      if (existing === undefined) throw transcriptError('transcript_session_missing')
+      if (existing.lifecycle !== 'active') {
+        if (existing.lifecycle === lifecycle && existing.endedAtMs === endedAtMs && existing.terminalReason === terminalReason) return clone(existing)
+        throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      }
+      const updated = parseTranscriptSessionRecord({ ...existing, lifecycle, endedAtMs, terminalReason })
+      this.replaceSession(existing.id, updated)
+      return clone(updated)
+    })
+  }
+
+  async recoverActiveSessions(nowMs: number, terminalReason = 'process_restart'): Promise<RecoverTranscriptSessionsResult> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const endedAtMs = requireRepositoryTimestamp(nowMs, 'transcript_recovery_now')
+      const reason = parseTranscriptTerminalReason(terminalReason)
+      let interrupted = 0
+      for (const record of this.session.mutable.transcriptSessions) {
+        if (record.profileId !== this.session.profileId || record.localNodeId !== this.session.localNodeId || record.lifecycle !== 'active') continue
+        const updated = parseTranscriptSessionRecord({
+          ...record,
+          endedAtMs: Math.max(endedAtMs, record.startedAtMs),
+          lifecycle: 'interrupted',
+          terminalReason: reason
+        })
+        this.replaceSession(record.id, updated)
+        interrupted += 1
+      }
+      return { interrupted }
+    })
+  }
+
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, sessionId, 'transcript.session_id')
+      const index = this.session.mutable.transcriptSessions.findIndex((record) => record.id === id)
+      if (index < 0) return { deleted: false, deletedSegments: 0 }
+      this.session.mutable.transcriptSessions.splice(index, 1)
+      const before = this.session.mutable.transcriptSegments.length
+      this.session.mutable.transcriptSegments = this.session.mutable.transcriptSegments.filter((record) => record.sessionId !== id)
+      return { deleted: true, deletedSegments: before - this.session.mutable.transcriptSegments.length }
+    })
+  }
+
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const cutoffMs = requireRepositoryTimestamp(nowMs, 'transcript_delete_now')
+      const normalizedLimit = requireRepositoryLimit(limit, LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT, 'transcript_delete_limit')
+      const expiredIds = this.session.mutable.transcriptSessions
+        .filter((record) => record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+        .filter((record) => record.expiresAtMs !== null && record.expiresAtMs <= cutoffMs)
+        .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
+        .slice(0, normalizedLimit)
+        .map((record) => record.id)
+      const expired = new Set(expiredIds)
+      this.session.mutable.transcriptSessions = this.session.mutable.transcriptSessions.filter((record) => !expired.has(record.id))
+      const before = this.session.mutable.transcriptSegments.length
+      this.session.mutable.transcriptSegments = this.session.mutable.transcriptSegments.filter((record) => !expired.has(record.sessionId))
+      return { deletedSessions: expired.size, deletedSegments: before - this.session.mutable.transcriptSegments.length }
+    })
+  }
+
+  private findSession(sessionId: string): TranscriptSessionRecord | undefined {
+    return this.session.mutable.transcriptSessions.find((record) => record.id === sessionId)
+  }
+
+  private replaceSession(sessionId: string, record: TranscriptSessionRecord): void {
+    const index = this.session.mutable.transcriptSessions.findIndex((item) => item.id === sessionId)
+    if (index < 0) throw transcriptError('transcript_session_missing')
+    this.session.mutable.transcriptSessions[index] = record
+  }
+}
+
 function upsert<T>(items: T[], record: T, predicate: (item: T) => boolean): void {
   const index = items.findIndex(predicate)
   if (index === -1) {
@@ -550,6 +749,17 @@ function requireRepositorySequence(value: number, reason: string): number {
   return value
 }
 
+function parseTranscriptTerminalReason(value: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 512) {
+    throw transcriptError('transcript_terminal_reason')
+  }
+  return value
+}
+
+function transcriptError(reason: string): LocalDataError {
+  return new LocalDataError('invalid_record', 'Transcript archive operation is invalid', { reason })
+}
+
 function normalizeConversationIds(conversationIds: readonly string[] | undefined): Set<string> | undefined {
   if (conversationIds === undefined) return undefined
   if (conversationIds.length > LOCAL_DATA_CONVERSATION_ID_SET_MAX) {
@@ -567,16 +777,20 @@ function validateImportedCollections(records: LocalDataRecordCollections, profil
   const toolStateKeys = requireUnique(records.localToolStates.map((record) => `${record.profileId}\u0000${record.localNodeId}\u0000${record.toolContractId}`), 'duplicate_tool_state')
   const grantIds = requireUnique(records.peerGrantMetadata.map((record) => record.grantId), 'duplicate_grant_id')
   const auditIds = requireUnique(records.localAudit.map((record) => record.id), 'duplicate_audit_id')
+  const transcriptSessionIds = requireUnique(records.transcriptSessions.map((record) => record.id), 'duplicate_transcript_session_id')
+  const transcriptSegmentIds = requireUnique(records.transcriptSegments.map((record) => record.id), 'duplicate_transcript_segment_id')
   void messageIds
   void memoryIds
   void toolStateKeys
   void grantIds
   void auditIds
+  void transcriptSegmentIds
   for (const record of records.conversations) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.memoryItems) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.localToolStates) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.peerGrantMetadata) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.localAudit) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
+  for (const record of records.transcriptSessions) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   const messageSequences = new Set<string>()
   for (const record of records.messages) {
     if (!conversationIds.has(record.conversationId)) {
@@ -587,6 +801,15 @@ function validateImportedCollections(records: LocalDataRecordCollections, profil
       throw new LocalDataError('invalid_record', 'Imported message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
     }
     messageSequences.add(sequenceKey)
+  }
+  const transcriptSequences = new Set<string>()
+  for (const record of records.transcriptSegments) {
+    if (!transcriptSessionIds.has(record.sessionId)) {
+      throw transcriptError('transcript_segment_session_missing')
+    }
+    const sequenceKey = `${record.sessionId}\u0000${record.sequence}`
+    if (transcriptSequences.has(sequenceKey)) throw transcriptError('duplicate_transcript_sequence')
+    transcriptSequences.add(sequenceKey)
   }
 }
 

@@ -12,7 +12,7 @@ pub struct LocalDataMigration {
 }
 
 pub const LOCAL_DATA_DATABASE_NAME: &str = "aurora-lightweight.db";
-pub const LOCAL_DATA_LATEST_VERSION: u32 = 3;
+pub const LOCAL_DATA_LATEST_VERSION: u32 = 4;
 pub const LOCAL_DATA_MIGRATIONS: &[LocalDataMigration] = &[
     LocalDataMigration {
         version: 1,
@@ -37,5 +37,13 @@ pub const LOCAL_DATA_MIGRATIONS: &[LocalDataMigration] = &[
         checksum: "7cac8a3ce58f55c519b6ec43107b08072afe074c12252c1aae7461feef6857a4",
         sql: include_str!("../../../../../packages/aurora-sdk/src/local-data/migrations/sqlite/0003_peer_grants_audit.sql"),
         ledger_sql: "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (3, 'peer_grants_audit', '7cac8a3ce58f55c519b6ec43107b08072afe074c12252c1aae7461feef6857a4', CAST(strftime('%s','now') AS INTEGER) * 1000);\nPRAGMA user_version = 3;",
+    },
+    LocalDataMigration {
+        version: 4,
+        name: "transcript_archive",
+        file: "0004_transcript_archive.sql",
+        checksum: "5171dbaca12ca27e6dfea043f5a4ac0afdab66c18e528da3fd590c5cb7dae8ad",
+        sql: include_str!("../../../../../packages/aurora-sdk/src/local-data/migrations/sqlite/0004_transcript_archive.sql"),
+        ledger_sql: "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (4, 'transcript_archive', '5171dbaca12ca27e6dfea043f5a4ac0afdab66c18e528da3fd590c5cb7dae8ad', CAST(strftime('%s','now') AS INTEGER) * 1000);\nPRAGMA user_version = 4;",
     },
 ];

@@ -15,7 +15,9 @@ export const localDataCollectionLimits = Object.freeze({
   memoryItems: 50_000,
   localToolStates: 10_000,
   peerGrantMetadata: 50_000,
-  localAudit: 100_000
+  localAudit: 100_000,
+  transcriptSessions: 5_000,
+  transcriptSegments: 100_000
 })
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
@@ -133,13 +135,77 @@ export const localAuditRecordSchema = z.object({
   createdAtMs: epochMsSchema
 }).strict()
 
+export const transcriptCaptureModeSchema = z.enum(['ambient', 'notification'])
+export const transcriptLifecycleSchema = z.enum(['active', 'completed', 'interrupted', 'failed'])
+export const transcriptDiarizationStateSchema = z.enum(['not_requested', 'pending', 'partial', 'available', 'unavailable'])
+export const transcriptTerminalLifecycleSchema = z.enum(['completed', 'interrupted', 'failed'])
+
+export const transcriptModelProvenanceSchema = z.object({
+  provider: z.string().max(256).nullable(),
+  modelId: z.string().max(256).nullable(),
+  version: z.string().max(256).nullable()
+}).strict()
+
+export const transcriptSessionRecordSchema = z.object({
+  id: localDataIdSchema,
+  profileId: localDataIdSchema,
+  localNodeId: localDataIdSchema,
+  captureMode: transcriptCaptureModeSchema,
+  createdAtMs: epochMsSchema,
+  startedAtMs: epochMsSchema,
+  endedAtMs: epochMsSchema.nullable(),
+  lifecycle: transcriptLifecycleSchema,
+  terminalReason: z.string().max(512).nullable(),
+  expiresAtMs: epochMsSchema.nullable(),
+  language: z.string().max(64).nullable(),
+  modelProvenance: transcriptModelProvenanceSchema,
+  diarizationState: transcriptDiarizationStateSchema
+}).strict().superRefine((record, context) => {
+  if (record.startedAtMs < record.createdAtMs) {
+    context.addIssue({ code: 'custom', message: 'startedAtMs cannot be before createdAtMs', path: ['startedAtMs'] })
+  }
+  if (record.endedAtMs !== null && record.endedAtMs < record.startedAtMs) {
+    context.addIssue({ code: 'custom', message: 'endedAtMs cannot be before startedAtMs', path: ['endedAtMs'] })
+  }
+  if (record.expiresAtMs !== null && record.expiresAtMs < record.createdAtMs) {
+    context.addIssue({ code: 'custom', message: 'expiresAtMs cannot be before createdAtMs', path: ['expiresAtMs'] })
+  }
+  if (record.lifecycle === 'active') {
+    if (record.endedAtMs !== null) context.addIssue({ code: 'custom', message: 'active sessions cannot have endedAtMs', path: ['endedAtMs'] })
+    if (record.terminalReason !== null) context.addIssue({ code: 'custom', message: 'active sessions cannot have terminalReason', path: ['terminalReason'] })
+  } else {
+    if (record.endedAtMs === null) context.addIssue({ code: 'custom', message: 'terminal sessions require endedAtMs', path: ['endedAtMs'] })
+    if (record.terminalReason === null || record.terminalReason.trim().length === 0) {
+      context.addIssue({ code: 'custom', message: 'terminal sessions require a reason', path: ['terminalReason'] })
+    }
+  }
+})
+
+export const transcriptSegmentRecordSchema = z.object({
+  id: localDataIdSchema,
+  sessionId: localDataIdSchema,
+  sequence: nonNegativeSafeIntSchema,
+  startAtMs: epochMsSchema,
+  endAtMs: epochMsSchema,
+  textEnvelope: encryptedDataEnvelopeV1Schema,
+  confidence: z.number().finite().min(0).max(1).nullable(),
+  speakerId: z.string().max(256).nullable(),
+  speakerLabel: z.string().max(256).nullable(),
+  createdAtMs: epochMsSchema
+}).strict().refine((record) => record.endAtMs >= record.startAtMs, {
+  message: 'endAtMs cannot be before startAtMs',
+  path: ['endAtMs']
+})
+
 export const localDataRecordCollectionsSchema = z.object({
   conversations: z.array(conversationRecordSchema).max(localDataCollectionLimits.conversations),
   messages: z.array(conversationMessageRecordSchema).max(localDataCollectionLimits.messages),
   memoryItems: z.array(lightweightMemoryRecordSchema).max(localDataCollectionLimits.memoryItems),
   localToolStates: z.array(localToolStateRecordSchema).max(localDataCollectionLimits.localToolStates),
   peerGrantMetadata: z.array(peerGrantMetadataRecordSchema).max(localDataCollectionLimits.peerGrantMetadata),
-  localAudit: z.array(localAuditRecordSchema).max(localDataCollectionLimits.localAudit)
+  localAudit: z.array(localAuditRecordSchema).max(localDataCollectionLimits.localAudit),
+  transcriptSessions: z.array(transcriptSessionRecordSchema).max(localDataCollectionLimits.transcriptSessions).default([]),
+  transcriptSegments: z.array(transcriptSegmentRecordSchema).max(localDataCollectionLimits.transcriptSegments).default([])
 }).strict()
 
 export type ConversationRecord = z.infer<typeof conversationRecordSchema>
@@ -148,6 +214,13 @@ export type LightweightMemoryRecord = z.infer<typeof lightweightMemoryRecordSche
 export type LocalToolStateRecord = z.infer<typeof localToolStateRecordSchema>
 export type PeerGrantMetadataRecord = z.infer<typeof peerGrantMetadataRecordSchema>
 export type LocalAuditRecord = z.infer<typeof localAuditRecordSchema>
+export type TranscriptCaptureMode = z.infer<typeof transcriptCaptureModeSchema>
+export type TranscriptLifecycle = z.infer<typeof transcriptLifecycleSchema>
+export type TranscriptTerminalLifecycle = z.infer<typeof transcriptTerminalLifecycleSchema>
+export type TranscriptDiarizationState = z.infer<typeof transcriptDiarizationStateSchema>
+export type TranscriptModelProvenance = z.infer<typeof transcriptModelProvenanceSchema>
+export type TranscriptSessionRecord = z.infer<typeof transcriptSessionRecordSchema>
+export type TranscriptSegmentRecord = z.infer<typeof transcriptSegmentRecordSchema>
 export type LocalDataRecordCollections = z.infer<typeof localDataRecordCollectionsSchema>
 
 export function parseConversationRecord(value: unknown): ConversationRecord {
@@ -174,6 +247,18 @@ export function parseLocalAuditRecord(value: unknown): LocalAuditRecord {
   return parseLocalDataBoundary(localAuditRecordSchema, value, 'record.local_audit')
 }
 
+export function parseTranscriptSessionRecord(value: unknown): TranscriptSessionRecord {
+  return parseLocalDataBoundary(transcriptSessionRecordSchema, value, 'record.transcript_session')
+}
+
+export function parseTranscriptSegmentRecord(value: unknown): TranscriptSegmentRecord {
+  return parseLocalDataBoundary(transcriptSegmentRecordSchema, value, 'record.transcript_segment', {
+    numericPathPolicy: 'transcript_segment'
+  })
+}
+
 export function parseLocalDataRecordCollections(value: unknown): LocalDataRecordCollections {
-  return parseLocalDataBoundary(localDataRecordCollectionsSchema, value, 'records.collections')
+  return parseLocalDataBoundary(localDataRecordCollectionsSchema, value, 'records.collections', {
+    numericPathPolicy: 'transcript_collections'
+  })
 }

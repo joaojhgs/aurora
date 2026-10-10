@@ -13,7 +13,9 @@ import {
   type LocalDataRepositories,
   type LocalToolStateRecord,
   type MessageListQuery,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 
 import { TauriEnvelopeCryptoPort } from './tauri-envelope-crypto.js'
@@ -40,6 +42,16 @@ type RepositoryOperation =
   | { readonly kind: 'peerGrants.listPeerGrants'; readonly profileId: string; readonly localNodeId: string }
   | { readonly kind: 'localAudit.appendAudit'; readonly record: LocalAuditRecord }
   | { readonly kind: 'localAudit.listAudit'; readonly profileId: string; readonly localNodeId: string }
+  | { readonly kind: 'transcripts.createSession'; readonly record: TranscriptSessionRecord }
+  | { readonly kind: 'transcripts.startSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string; readonly startedAtMs: number }
+  | { readonly kind: 'transcripts.appendSegment'; readonly record: TranscriptSegmentRecord }
+  | { readonly kind: 'transcripts.getSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.listSessions'; readonly profileId: string; readonly localNodeId: string; readonly options?: { limit?: number; cursor?: { createdAtMs: number; id: string } } }
+  | { readonly kind: 'transcripts.listSegments'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string; readonly options?: { limit?: number; afterSequence?: number } }
+  | { readonly kind: 'transcripts.finalizeSession'; readonly profileId: string; readonly localNodeId: string; readonly input: { sessionId: string; lifecycle: 'completed' | 'interrupted' | 'failed'; endedAtMs: number; terminalReason: string } }
+  | { readonly kind: 'transcripts.recoverActiveSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly terminalReason?: string }
+  | { readonly kind: 'transcripts.deleteSession'; readonly profileId: string; readonly localNodeId: string; readonly sessionId: string }
+  | { readonly kind: 'transcripts.deleteExpiredSessions'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
 
 type FakeTauriLocalDataSnapshot = {
   readonly conversations: ConversationRecord[]
@@ -48,6 +60,8 @@ type FakeTauriLocalDataSnapshot = {
   readonly tools: LocalToolStateRecord[]
   readonly grants: PeerGrantMetadataRecord[]
   readonly audit: LocalAuditRecord[]
+  readonly transcriptSessions: TranscriptSessionRecord[]
+  readonly transcriptSegments: TranscriptSegmentRecord[]
 }
 
 describe('Tauri local data adapter', () => {
@@ -102,6 +116,27 @@ describe('Tauri local data adapter', () => {
     })).rejects.toThrow(/rollback/u)
     await expect(session.memory.listMemoryItems()).resolves.toEqual([])
     await expect(session.memory.upsertMemoryItem(memoryFixture({ profileId: 'profile-2' }))).rejects.toMatchObject({ code: 'identity_mismatch' })
+  })
+
+  it('routes transcript archive operations through scoped native commands with immutable retry semantics', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    const archive = transcriptSessionFixture()
+    const segment = transcriptSegmentFixture()
+    await expect(session.transcripts.createSession(archive)).resolves.toEqual(archive)
+    await expect(session.transcripts.appendSegment(segment)).resolves.toEqual({ appended: true, record: segment })
+    await expect(session.transcripts.finalizeSession({ sessionId: archive.id, lifecycle: 'completed', endedAtMs: 1200, terminalReason: 'finished' })).resolves.toMatchObject({ lifecycle: 'completed' })
+    await expect(session.transcripts.appendSegment(segment)).resolves.toEqual({ appended: false, record: segment })
+    await expect(session.transcripts.appendSegment(transcriptSegmentFixture({ id: 'segment-2', sequence: 1 }))).rejects.toMatchObject({ code: 'invalid_record' })
+    await expect(session.transcripts.listSegments(archive.id)).resolves.toEqual([segment])
+    const operationCalls = bridge.calls
+      .filter((call) => call.command === 'aurora_local_data_repository_operation')
+      .map((call) => (call.args.request as { operation: RepositoryOperation }).operation.kind)
+    expect(operationCalls).toEqual([
+      'transcripts.createSession', 'transcripts.appendSegment', 'transcripts.finalizeSession',
+      'transcripts.appendSegment', 'transcripts.appendSegment', 'transcripts.listSegments'
+    ])
+    await session.close()
   })
 
   it('deletes conversations with scoped cascade counts and keeps foreign-profile rows', async () => {
@@ -306,6 +341,8 @@ class FakeTauriLocalDataBridge {
   private tools: LocalToolStateRecord[] = []
   private grants: PeerGrantMetadataRecord[] = []
   private audit: LocalAuditRecord[] = []
+  private transcriptSessions: TranscriptSessionRecord[] = []
+  private transcriptSegments: TranscriptSegmentRecord[] = []
   private snapshot: FakeTauriLocalDataSnapshot | null = null
   private activeTxId: string | null = null
   private txCounter = 0
@@ -336,7 +373,9 @@ class FakeTauriLocalDataBridge {
         memory: this.memory,
         tools: this.tools,
         grants: this.grants,
-        audit: this.audit
+        audit: this.audit,
+        transcriptSessions: this.transcriptSessions,
+        transcriptSegments: this.transcriptSegments
       })
       return { txId: this.activeTxId, begun: true }
     }
@@ -501,6 +540,70 @@ class FakeTauriLocalDataBridge {
       case 'localAudit.listAudit':
         this.assertScope(operation)
         return this.audit
+      case 'transcripts.createSession':
+        this.assertScope(operation.record)
+        if (operation.record.lifecycle !== 'active') throw { code: 'invalid_record' }
+        this.transcriptSessions.push(operation.record)
+        return operation.record
+      case 'transcripts.startSession': {
+        this.assertScope(operation)
+        const index = this.transcriptSessions.findIndex((record) => record.id === operation.sessionId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+        const prior = this.transcriptSessions[index]
+        if (prior === undefined || prior.lifecycle !== 'active') throw { code: 'invalid_record' }
+        const updated = { ...prior, startedAtMs: Math.min(prior.startedAtMs, operation.startedAtMs) }
+        this.transcriptSessions[index] = updated
+        return updated
+      }
+      case 'transcripts.appendSegment': {
+        const parent = this.transcriptSessions.find((record) => record.id === operation.record.sessionId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+        if (parent === undefined) throw { code: 'invalid_record' }
+        const prior = this.transcriptSegments.find((record) => record.id === operation.record.id)
+        if (prior !== undefined) {
+          if (JSON.stringify(prior) === JSON.stringify(operation.record)) return { appended: false, record: prior }
+          throw { code: 'invalid_record' }
+        }
+        if (parent.lifecycle !== 'active') throw { code: 'invalid_record' }
+        if (this.transcriptSegments.some((record) => record.sessionId === operation.record.sessionId && record.sequence === operation.record.sequence)) throw { code: 'invalid_record' }
+        this.transcriptSegments.push(operation.record)
+        return { appended: true, record: operation.record }
+      }
+      case 'transcripts.getSession':
+        this.assertScope(operation)
+        return this.transcriptSessions.find((record) => record.id === operation.sessionId && record.profileId === this.profileId && record.localNodeId === this.localNodeId) ?? null
+      case 'transcripts.listSessions':
+        this.assertScope(operation)
+        return this.transcriptSessions.filter((record) => record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+          .sort((a, b) => b.createdAtMs - a.createdAtMs || a.id.localeCompare(b.id))
+          .filter((record) => operation.options?.cursor === undefined || record.createdAtMs < operation.options.cursor.createdAtMs || (record.createdAtMs === operation.options.cursor.createdAtMs && record.id > operation.options.cursor.id))
+          .slice(0, operation.options?.limit ?? 100)
+      case 'transcripts.listSegments':
+        this.assertScope(operation)
+        return this.transcriptSegments.filter((record) => record.sessionId === operation.sessionId && (operation.options?.afterSequence === undefined || record.sequence > operation.options.afterSequence))
+          .sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id)).slice(0, operation.options?.limit ?? 500)
+      case 'transcripts.finalizeSession': {
+        this.assertScope(operation)
+        const index = this.transcriptSessions.findIndex((record) => record.id === operation.input.sessionId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+        const prior = this.transcriptSessions[index]
+        if (prior === undefined) throw { code: 'invalid_record' }
+        const updated: TranscriptSessionRecord = { ...prior, lifecycle: operation.input.lifecycle, endedAtMs: operation.input.endedAtMs, terminalReason: operation.input.terminalReason }
+        this.transcriptSessions[index] = updated
+        return updated
+      }
+      case 'transcripts.recoverActiveSessions':
+        this.assertScope(operation)
+        return { interrupted: 0 }
+      case 'transcripts.deleteSession': {
+        this.assertScope(operation)
+        const prior = this.transcriptSessions.find((record) => record.id === operation.sessionId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+        if (prior === undefined) return { deleted: false, deletedSegments: 0 }
+        this.transcriptSessions = this.transcriptSessions.filter((record) => record !== prior)
+        const before = this.transcriptSegments.length
+        this.transcriptSegments = this.transcriptSegments.filter((record) => record.sessionId !== prior.id)
+        return { deleted: true, deletedSegments: before - this.transcriptSegments.length }
+      }
+      case 'transcripts.deleteExpiredSessions':
+        this.assertScope(operation)
+        return { deletedSessions: 0, deletedSegments: 0 }
     }
   }
 
@@ -565,6 +668,20 @@ function peerGrantFixture(overrides: Partial<PeerGrantMetadataRecord> = {}): Pee
 }
 function auditFixture(overrides: Partial<LocalAuditRecord> = {}): LocalAuditRecord {
   return { id: 'audit-1', profileId: 'profile-1', localNodeId: 'node-1', peerId: null, action: 'read', decision: 'allow', resultStatus: 'success', connectionEpoch: null, methodId: null, toolContractId: null, correlationId: null, redactedDetailJson: {}, createdAtMs: 8, ...overrides }
+}
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-1', profileId: 'profile-1', localNodeId: 'node-1', captureMode: 'ambient',
+    createdAtMs: 1000, startedAtMs: 1000, endedAtMs: null, lifecycle: 'active', terminalReason: null,
+    expiresAtMs: 86_401_000, language: 'en', modelProvenance: { provider: 'local', modelId: 'stt-small', version: null },
+    diarizationState: 'not_requested', ...overrides
+  }
+}
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'segment-1', sessionId: 'transcript-1', sequence: 0, startAtMs: 1001, endAtMs: 1100,
+    textEnvelope: envelopeFixture, confidence: 0.9, speakerId: null, speakerLabel: null, createdAtMs: 1100, ...overrides
+  }
 }
 
 function upsert<T extends { id?: string; grantId?: string; toolContractId?: string }>(records: T[], next: T): void {

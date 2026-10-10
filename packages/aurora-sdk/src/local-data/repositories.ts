@@ -5,7 +5,10 @@ import type {
   LocalAuditRecord,
   LocalDataRecordCollections,
   LocalToolStateRecord,
-  PeerGrantMetadataRecord
+  PeerGrantMetadataRecord,
+  TranscriptLifecycle,
+  TranscriptSessionRecord,
+  TranscriptSegmentRecord
 } from './records.zod.js'
 import type { LocalDataScope } from './provenance.js'
 
@@ -84,12 +87,73 @@ export interface LocalAuditRepository {
   listAudit(): Promise<LocalAuditRecord[]>
 }
 
+export interface TranscriptArchiveRepository {
+  createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord>
+  startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord>
+  appendSegment(record: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult>
+  getSession(sessionId: string): Promise<TranscriptSessionRecord | null>
+  listSessions(options?: TranscriptSessionListQuery): Promise<TranscriptSessionRecord[]>
+  listSegments(sessionId: string, options?: TranscriptSegmentListQuery): Promise<TranscriptSegmentRecord[]>
+  finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord>
+  recoverActiveSessions(nowMs: number, terminalReason?: string): Promise<RecoverTranscriptSessionsResult>
+  deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult>
+  deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult>
+}
+
+export interface TranscriptSessionCursor {
+  readonly createdAtMs: number
+  readonly id: string
+}
+
+export interface TranscriptSessionListQuery {
+  readonly limit?: number
+  readonly cursor?: TranscriptSessionCursor
+}
+
+export interface TranscriptSegmentListQuery {
+  readonly limit?: number
+  readonly afterSequence?: number
+}
+
+export interface FinalizeTranscriptSessionInput {
+  readonly sessionId: string
+  readonly lifecycle: Extract<TranscriptLifecycle, 'completed' | 'interrupted' | 'failed'>
+  readonly endedAtMs: number
+  readonly terminalReason: string
+}
+
+export interface AppendTranscriptSegmentResult {
+  readonly appended: boolean
+  readonly record: TranscriptSegmentRecord
+}
+
+export interface RecoverTranscriptSessionsResult {
+  readonly interrupted: number
+}
+
+export interface DeleteTranscriptSessionResult {
+  readonly deleted: boolean
+  readonly deletedSegments: number
+}
+
+export interface DeleteExpiredTranscriptSessionsResult {
+  readonly deletedSessions: number
+  readonly deletedSegments: number
+}
+
+export const LOCAL_DATA_TRANSCRIPT_SESSION_LIMIT = 5_000
+export const LOCAL_DATA_TRANSCRIPT_SEGMENT_LIMIT = 100_000
+export const LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT = 1_000
+export const LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX = 500
+export const LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX = 2_000
+
 export interface LocalDataRepositories {
   readonly conversations: ConversationRepository
   readonly memory: LightweightMemoryRepository
   readonly localTools: LocalToolStateRepository
   readonly peerGrants: PeerGrantMetadataRepository
   readonly localAudit: LocalAuditRepository
+  readonly transcripts: TranscriptArchiveRepository
 }
 
 export interface MutableLocalDataCollections extends LocalDataRecordCollections {
@@ -99,6 +163,8 @@ export interface MutableLocalDataCollections extends LocalDataRecordCollections 
   localToolStates: LocalToolStateRecord[]
   peerGrantMetadata: PeerGrantMetadataRecord[]
   localAudit: LocalAuditRecord[]
+  transcriptSessions: TranscriptSessionRecord[]
+  transcriptSegments: TranscriptSegmentRecord[]
 }
 
 export function emptyLocalDataCollections(): MutableLocalDataCollections {
@@ -108,7 +174,9 @@ export function emptyLocalDataCollections(): MutableLocalDataCollections {
     memoryItems: [],
     localToolStates: [],
     peerGrantMetadata: [],
-    localAudit: []
+    localAudit: [],
+    transcriptSessions: [],
+    transcriptSegments: []
   }
 }
 
@@ -119,6 +187,8 @@ export function cloneLocalDataCollections(collections: LocalDataRecordCollection
     memoryItems: collections.memoryItems.map((record) => structuredClone(record)),
     localToolStates: collections.localToolStates.map((record) => structuredClone(record)),
     peerGrantMetadata: collections.peerGrantMetadata.map((record) => structuredClone(record)),
-    localAudit: collections.localAudit.map((record) => structuredClone(record))
+    localAudit: collections.localAudit.map((record) => structuredClone(record)),
+    transcriptSessions: collections.transcriptSessions.map((record) => structuredClone(record)),
+    transcriptSegments: collections.transcriptSegments.map((record) => structuredClone(record))
   }
 }

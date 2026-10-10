@@ -17,8 +17,8 @@ import {
 describe('local-data SQLite migration manifest', () => {
   it('is contiguous, forward-only, checksummed, and tied to the lightweight database', () => {
     expect(localDataMigrationManifest.databaseName).toBe('aurora-lightweight.db')
-    expect(localDataMigrationManifest.latestVersion).toBe(3)
-    expect(localDataMigrationManifest.migrations.map((migration) => migration.version)).toEqual([1, 2, 3])
+    expect(localDataMigrationManifest.latestVersion).toBe(4)
+    expect(localDataMigrationManifest.migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4])
     expect(localDataMigrationManifest.migrations.every((migration) => migration.ledger_sql.includes('aurora_schema_migrations'))).toBe(true)
     expect(localDataMigrationManifest.migrations.every((migration) => migration.ledger_sql.includes("CAST(strftime('%s','now') AS INTEGER) * 1000"))).toBe(true)
     expect(localDataMigrationManifest.migrations.every((migration) => migration.ledger_sql.includes(`PRAGMA user_version = ${migration.version}`))).toBe(true)
@@ -36,7 +36,7 @@ describe('local-data SQLite migration manifest', () => {
   it('fails closed for tampered manifests and stored prior checksums', () => {
     expect(() => validateLocalDataMigrationManifest({
       ...localDataMigrationManifest,
-      latestVersion: 4
+      latestVersion: 5
     })).toThrow(/latestVersion/u)
     expect(() => validateLocalDataMigrationManifest({
       ...localDataMigrationManifest,

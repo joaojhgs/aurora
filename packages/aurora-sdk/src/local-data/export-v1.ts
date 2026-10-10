@@ -11,6 +11,8 @@ import {
 } from './records.zod.js'
 import { assertJsonSafety, parseLocalDataBoundary } from './validation.js'
 
+const EMPTY_COLLECTION_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945'
+
 export type LocalDataTransferState = 'not_started' | 'copying' | 'verifying' | 'committed' | 'failed'
 
 export const localDataBackendKindSchema = z.enum(['sqlite-wasm-opfs', 'sqlite-tauri', 'indexeddb', 'memory'])
@@ -20,7 +22,9 @@ export const localDataRecordCountsSchema = z.object({
   memoryItems: z.number().int().safe().nonnegative().max(localDataCollectionLimits.memoryItems).refine((value) => !Object.is(value, -0)),
   localToolStates: z.number().int().safe().nonnegative().max(localDataCollectionLimits.localToolStates).refine((value) => !Object.is(value, -0)),
   peerGrantMetadata: z.number().int().safe().nonnegative().max(localDataCollectionLimits.peerGrantMetadata).refine((value) => !Object.is(value, -0)),
-  localAudit: z.number().int().safe().nonnegative().max(localDataCollectionLimits.localAudit).refine((value) => !Object.is(value, -0))
+  localAudit: z.number().int().safe().nonnegative().max(localDataCollectionLimits.localAudit).refine((value) => !Object.is(value, -0)),
+  transcriptSessions: z.number().int().safe().nonnegative().max(localDataCollectionLimits.transcriptSessions).refine((value) => !Object.is(value, -0)).default(0),
+  transcriptSegments: z.number().int().safe().nonnegative().max(localDataCollectionLimits.transcriptSegments).refine((value) => !Object.is(value, -0)).default(0)
 }).strict()
 export const localDataCollectionHashesSchema = z.object({
   conversations: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -28,7 +32,9 @@ export const localDataCollectionHashesSchema = z.object({
   memoryItems: z.string().regex(/^[a-f0-9]{64}$/u),
   localToolStates: z.string().regex(/^[a-f0-9]{64}$/u),
   peerGrantMetadata: z.string().regex(/^[a-f0-9]{64}$/u),
-  localAudit: z.string().regex(/^[a-f0-9]{64}$/u)
+  localAudit: z.string().regex(/^[a-f0-9]{64}$/u),
+  transcriptSessions: z.string().regex(/^[a-f0-9]{64}$/u).default(EMPTY_COLLECTION_HASH),
+  transcriptSegments: z.string().regex(/^[a-f0-9]{64}$/u).default(EMPTY_COLLECTION_HASH)
 }).strict()
 export const localDataExportV1Schema = z.object({
   version: z.literal(1),
@@ -62,7 +68,7 @@ export function buildLocalDataExportV1(input: {
   records: LocalDataRecordCollections
 }): LocalDataExportV1 {
   const records = parseLocalDataRecordCollections(input.records)
-  assertJsonSafety(records, 'records.collections')
+  assertJsonSafety(records, 'records.collections', undefined, 'transcript_collections')
   return parseLocalDataBoundary(localDataExportV1Schema, {
     version: 1,
     sourceBackend: input.sourceBackend,
@@ -74,12 +80,14 @@ export function buildLocalDataExportV1(input: {
     recordCounts: countLocalDataRecords(records),
     collectionHashes: hashLocalDataCollections(records),
     records: sortLocalDataRecords(records)
-  }, 'export.v1')
+  }, 'export.v1', { numericPathPolicy: 'transcript_export_v1' })
 }
 
 export function parseLocalDataExportV1(value: unknown): LocalDataExportV1 {
-  assertJsonSafety(value, 'export.v1')
-  const parsed = parseLocalDataBoundary(localDataExportV1Schema, value, 'export.v1')
+  assertJsonSafety(value, 'export.v1', undefined, 'transcript_export_v1')
+  const parsed = parseLocalDataBoundary(localDataExportV1Schema, value, 'export.v1', {
+    numericPathPolicy: 'transcript_export_v1'
+  })
   const counts = countLocalDataRecords(parsed.records)
   const hashes = hashLocalDataCollections(parsed.records)
   if (JSON.stringify(counts) !== JSON.stringify(parsed.recordCounts)) {
@@ -98,7 +106,9 @@ export function countLocalDataRecords(records: LocalDataRecordCollections): Loca
     memoryItems: records.memoryItems.length,
     localToolStates: records.localToolStates.length,
     peerGrantMetadata: records.peerGrantMetadata.length,
-    localAudit: records.localAudit.length
+    localAudit: records.localAudit.length,
+    transcriptSessions: records.transcriptSessions.length,
+    transcriptSegments: records.transcriptSegments.length
   }
 }
 
@@ -110,7 +120,9 @@ export function hashLocalDataCollections(records: LocalDataRecordCollections): L
     memoryItems: hashJson(sorted.memoryItems),
     localToolStates: hashJson(sorted.localToolStates),
     peerGrantMetadata: hashJson(sorted.peerGrantMetadata),
-    localAudit: hashJson(sorted.localAudit)
+    localAudit: hashJson(sorted.localAudit),
+    transcriptSessions: hashJson(sorted.transcriptSessions),
+    transcriptSegments: hashJson(sorted.transcriptSegments)
   }
 }
 
@@ -121,7 +133,9 @@ export function sortLocalDataRecords(records: LocalDataRecordCollections): Local
     memoryItems: [...records.memoryItems].sort(byId),
     localToolStates: [...records.localToolStates].sort((a, b) => compareUtf8(a.profileId, b.profileId) || compareUtf8(a.localNodeId, b.localNodeId) || compareUtf8(a.toolContractId, b.toolContractId)),
     peerGrantMetadata: [...records.peerGrantMetadata].sort((a, b) => compareUtf8(a.grantId, b.grantId)),
-    localAudit: [...records.localAudit].sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.id, b.id))
+    localAudit: [...records.localAudit].sort((a, b) => a.createdAtMs - b.createdAtMs || compareUtf8(a.id, b.id)),
+    transcriptSessions: [...records.transcriptSessions].sort((a, b) => compareUtf8(a.id, b.id)),
+    transcriptSegments: [...records.transcriptSegments].sort((a, b) => compareUtf8(a.sessionId, b.sessionId) || a.sequence - b.sequence || compareUtf8(a.id, b.id))
   }
 }
 
