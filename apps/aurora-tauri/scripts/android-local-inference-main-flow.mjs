@@ -7,11 +7,14 @@ import { connectInstalledWebview, invokeTauri, resolveAndroidDeviceSerial } from
 
 const APP_ID = process.env.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
 const MODEL_ID = 'chat-qwen3-0b8'
-const MODEL_DOWNLOAD_TIMEOUT_MS = 35 * 60_000
-const ASSISTANT_TURN_TIMEOUT_MS = 8 * 60_000
+const MODEL_DOWNLOAD_TIMEOUT_MS = 600_000
+const ASSISTANT_TURN_TIMEOUT_MS = 180_000
 const PROFILE_TIMEOUT_MS = 30_000
 const POLL_INTERVAL_MS = 500
-const PROMPT = "Show one local notification titled 'Aurora offline flow' with the message 'PER-284 offline tool check'. After I approve it, tell me when it is done."
+const PROMPT = 'What is 2 + 2? Answer with just the number.'
+const EMPTY_PROFILE = JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
+const MODE_KEY = 'aurora.session.onboarding-mode'
+const TIER_KEY = 'aurora.session.runtime-tier'
 
 export async function runAndroidLocalInferenceMainFlow({
   adb = process.env.ADB ?? 'adb',
@@ -19,7 +22,6 @@ export async function runAndroidLocalInferenceMainFlow({
   appId = APP_ID,
   modelDownloadTimeoutMs = MODEL_DOWNLOAD_TIMEOUT_MS,
   assistantTurnTimeoutMs = ASSISTANT_TURN_TIMEOUT_MS,
-  allowRunOwnedEmptyThread = false,
 } = {}) {
   if (process.env.AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW !== '1') {
     throw new Error('Set AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW=1 after Root grants the Android validation reservation.')
@@ -29,20 +31,18 @@ export async function runAndroidLocalInferenceMainFlow({
   let webview
   let releaseDeviceLock
   let originalProfileValue
-  let originalProfile
-  let originalProfileId
-  let originalLocalNodeId
-  let originalLocalInferenceEnabled
+  let originalMode
+  let originalTier
   let originalNetwork
+  let profileCreated = false
+  let profileCreateReadback
   let modelDownloadedByRun = false
+  let networkOffline = false
   let result
-  let offlineApplied = false
-  let success = false
   let primaryError
 
   try {
-    const devices = run(adb, ['devices', '-l'])
-    serial = resolveAndroidDeviceSerial(devices, serial)
+    serial = resolveAndroidDeviceSerial(run(adb, ['devices', '-l']), serial)
     context = { adb, serial, appId }
     releaseDeviceLock = await acquireAndroidSmokeLock({
       lockPath: resolveAndroidSmokeLockPath(serial),
@@ -51,157 +51,227 @@ export async function runAndroidLocalInferenceMainFlow({
     run(adb, ['-s', serial, 'wait-for-device'], { timeout: 60_000 })
     await waitForApp(context)
     webview = await connectInstalledWebview(context)
-    await installInvokeRecorder(webview.client)
 
     const stored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
     originalProfileValue = typeof stored?.value === 'string' ? stored.value : null
-    originalProfile = parseRuntimeProfile(originalProfileValue)
-    const active = originalProfile?.profiles?.find((item) => item.id === originalProfile.activeProfileId)
-    if (!active || active.nodeMode !== 'mesh-node' || active.runtimeTier !== 'lightweight-ts') {
-      throw new Error('PER-284 prerequisite missing: the persisted active profile must be mesh-node with lightweight-ts runtime.')
+    const originalProfile = parseRuntimeProfile(originalProfileValue)
+    if (originalProfileValue !== null
+      && (!originalProfile || originalProfile.version !== 2 || originalProfile.profiles.length !== 0 || originalProfile.activeProfileId !== null)) {
+      throw new Error('Refusing onboarding because the current Android profile is not canonical empty.')
     }
-    if (typeof active.id !== 'string' || typeof active.localNode?.stablePeerId !== 'string') {
-      throw new Error('PER-284 prerequisite missing: the active profile identity is incomplete.')
-    }
-    originalProfileId = active.id
-    originalLocalNodeId = active.localNode.stablePeerId
-    originalLocalInferenceEnabled = active.localNode?.enabledCapabilityPacks?.includes('local-inference') === true
+    const [mode, tier] = await Promise.all([
+      invokeTauri(webview.client, 'aurora_secure_storage_get', { key: MODE_KEY }),
+      invokeTauri(webview.client, 'aurora_secure_storage_get', { key: TIER_KEY }),
+    ])
+    originalMode = typeof mode?.value === 'string' ? mode.value : null
+    originalTier = typeof tier?.value === 'string' ? tier.value : null
     originalNetwork = await readNetworkState(webview.client)
-    if (!originalNetwork.online) throw new Error('PER-284 prerequisite missing: packaged WebView must be online for the trusted model download.')
 
-    const beforeEnvelope = await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID })
-    const before = beforeEnvelope?.data
-    if (before?.state !== 'absent') {
-      throw new Error(`PER-284 needs a fresh trusted-model download; ${MODEL_ID} is currently ${before?.state ?? 'unavailable'}. Preserve the existing download and use a clean app-private model state.`)
+    await createOfflineProfileThroughOnboarding(webview.client)
+    profileCreated = true
+    profileCreateReadback = await waitForOfflineProfile(webview.client)
+    webview = await restartApp(context, webview)
+    const restartedProfile = await waitForOfflineProfile(webview.client)
+    if (restartedProfile.activeProfileId !== profileCreateReadback.activeProfileId
+      || restartedProfile.activeLocalNodeId !== profileCreateReadback.activeLocalNodeId) {
+      throw new Error('The owned offline profile identity changed.')
+    }
+
+    const catalog = await invokeTauri(webview.client, 'aurora_local_inference_catalog')
+    const model = catalog?.data?.find((entry) => entry?.modelId === MODEL_ID)
+    if (catalog?.ok !== true || model?.capabilities?.chat !== true) {
+      throw new Error(`The production-selected Android model ${MODEL_ID} is not available in the native catalog.`)
+    }
+    const initialStatus = await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID })
+    const state = initialStatus?.data?.state
+    if (initialStatus?.ok !== true || !['ready', 'absent'].includes(state)) {
+      throw new Error(`The selected Android model is in an unsupported state (${state ?? 'unknown'}); preserving it.`)
     }
 
     await openSettings(webview.client)
-    const settings = await waitForModelStatus(webview.client, 'absent', 30_000)
-    if (!settings.ready) throw new Error('PER-284 prerequisite missing: assistant device settings did not become available.')
-    if (originalLocalInferenceEnabled) await setOfflineAnswers(webview.client, false)
-
-    const downloadStartedAt = Date.now()
-    await clickExact(webview.client, 'button', 'Download offline answers')
-    await waitForModelStatus(webview.client, 'ready', modelDownloadTimeoutMs, 2_000)
-    const downloadElapsedMs = Date.now() - downloadStartedAt
-    if ((await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID }))?.data?.state !== 'ready') {
-      throw new Error('The trusted offline model did not pass native verification after its download.')
+    if (state === 'absent') {
+      await waitForVisibleEnabledControl(webview.client, 'Download offline answers')
+      await clickExact(webview.client, 'button', 'Download offline answers')
+      await waitForModelStatus(webview.client, 'ready', modelDownloadTimeoutMs, 2_000)
+      modelDownloadedByRun = true
     }
-    modelDownloadedByRun = true
+    const ready = await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID })
+    if (ready?.ok !== true || ready?.data?.state !== 'ready') {
+      throw new Error('The selected model did not pass native readiness status after Settings setup.')
+    }
     await setOfflineAnswers(webview.client, true)
-    await assertLocalInferenceOptIn(webview.client, true)
+    const settingsProfile = await assertOfflineProfile(webview.client)
+    if (settingsProfile.activeProfileId !== profileCreateReadback.activeProfileId
+      || settingsProfile.activeLocalNodeId !== profileCreateReadback.activeLocalNodeId) {
+      throw new Error('The owned offline profile identity changed.')
+    }
 
-    offlineApplied = true
     await setOfflineNetwork(webview.client, true)
-    await waitFor(webview.client, async () => (await readNetworkState(webview.client)).online === false, 10_000, 'scoped packaged WebView offline state')
+    networkOffline = true
+    await waitFor(webview.client, async () => (await readNetworkState(webview.client)).online === false,
+      10_000, 'scoped packaged WebView offline state')
     await openAssistant(webview.client)
-    await startNewConversation(webview.client, { allowRunOwnedEmptyThread })
+    await startNewConversation(webview.client)
     await submitPrompt(webview.client, PROMPT)
+    const firstAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, assistantTurnTimeoutMs)
 
-    const proposal = await waitForApprovalProposal(webview.client, assistantTurnTimeoutMs)
-    if (proposal.pendingCards !== 1 || proposal.approveOnceButtons !== 1 || !/action needs approval/iu.test(proposal.text)) {
-      throw new Error(`Expected exactly one local action waiting for one-time approval; found ${JSON.stringify(proposal)}`)
-    }
-    await clickExact(webview.client, 'button', 'Approve once')
+    await waitForVisibleEnabledControl(webview.client, 'Open conversations')
+    await clickVisibleText(webview.client, 'Open conversations')
+    await waitFor(webview.client, async () => evaluate(webview.client, `(() => {
+      const list = document.querySelector('ul[aria-label="Assistant conversation list"]');
+      return Boolean(list && list.querySelectorAll('button[aria-current="true"]').length === 1);
+    })()`), 30_000, 'saved active conversation in history')
+    await clickSelector(webview.client, 'ul[aria-label="Assistant conversation list"] button[aria-current="true"]')
+    const savedAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, 30_000)
+    if (savedAnswer !== firstAnswer) throw new Error('The reopened conversation did not preserve the same assistant answer.')
 
-    const final = await waitForAssistantFinal(webview.client, assistantTurnTimeoutMs)
-    const observed = await readInvokeRecorder(webview.client)
-    const completions = observed.filter((entry) => entry.command === 'aurora_local_inference_complete')
-    const downloads = observed.filter((entry) => entry.command === 'aurora_local_inference_download_model')
-    const notifications = observed.filter((entry) => entry.command === 'aurora_native_show_notification')
-    if (downloads.length !== 1 || downloads[0]?.ok !== true) {
-      throw new Error(`Expected one successful product trusted-model download; observed ${downloads.length}.`)
-    }
-    if (completions.length < 2) {
-      throw new Error(`The product did not route both the action and final reply through native local inference (${completions.length} completion calls).`)
-    }
-    if (completions.some((entry) => entry.online !== false)) {
-      throw new Error('At least one native local-inference completion started while the packaged WebView was online.')
-    }
-    if (!completions.some((entry) => entry.type === 'tool_calls') || !completions.some((entry) => entry.type === 'message')) {
-      throw new Error('The local model did not return both a tool proposal and a final message through the native completion path.')
-    }
-    if (notifications.length !== 1 || notifications[0]?.ok !== true || notifications[0]?.online !== false) {
-      throw new Error(`Expected exactly one approved local notification action; observed ${notifications.length}.`)
-    }
-    if (!final.assistantText || !/done|shown|notification/iu.test(final.assistantText)) {
-      throw new Error(`The product did not render a final assistant reply after approval: ${JSON.stringify(final)}`)
-    }
-    success = true
     result = {
       ok: true,
       device: { serial, appId },
-      model: { id: MODEL_ID, state: 'ready', downloadElapsedMs },
+      profile: { createdThroughOnboarding: true, nodeMode: 'mesh-node', runtimeTier: 'lightweight-ts', packs: ['local-inference'], membership: false },
+      model: { id: MODEL_ID, state: 'ready', preexisting: !modelDownloadedByRun, downloadedThroughSettings: modelDownloadedByRun },
       offline: { scope: 'packaged WebView CDP target', enabled: true },
-      localInferenceCompletionCalls: completions.length,
-      approvedLocalToolCalls: notifications.length,
-      approval: 'Approve once',
-      finalAssistantReply: final.assistantText,
-      profile: { nodeMode: active.nodeMode, runtimeTier: active.runtimeTier, optedIn: true },
+      turn: { prompt: PROMPT, answer: firstAnswer, tools: [] },
+      savedConversationReadback: true,
+      originalProfile: { canonicalEmpty: true, rawValueWasNull: originalProfileValue === null },
     }
   } catch (error) {
     primaryError = error
     throw error
   } finally {
     const cleanupErrors = []
-    if (offlineApplied && webview?.client) {
+    if (networkOffline && webview?.client) {
       try {
         await setOfflineNetwork(webview.client, originalNetwork)
-        offlineApplied = false
+        networkOffline = false
       } catch (error) { cleanupErrors.push(error) }
     }
-    if (originalProfile && typeof originalLocalInferenceEnabled === 'boolean' && webview?.client) {
+    if (profileCreated && webview?.client) {
       try {
-        await assertOriginalProfileIdentity(webview.client, originalProfileId, originalLocalNodeId)
-        if (modelDownloadedByRun) {
-          // Saving this Settings value rebuilds the product runtime and awaits its local session teardown.
-          await restoreLocalInferenceOptIn(webview.client, false, originalProfileId, originalLocalNodeId)
-          await assertOriginalProfileIdentity(webview.client, originalProfileId, originalLocalNodeId)
-          await waitForProductSessionsReleased(webview.client)
-          if (originalLocalInferenceEnabled) {
-            await restoreLocalInferenceOptIn(webview.client, true, originalProfileId, originalLocalNodeId)
-            await assertOriginalProfileIdentity(webview.client, originalProfileId, originalLocalNodeId)
-            const deleted = await invokeTauri(webview.client, 'aurora_local_inference_delete_model', { modelId: MODEL_ID })
-            if (deleted?.ok !== true || deleted?.data?.state !== 'absent') {
-              throw new Error(`The run-owned trusted model could not be removed: ${JSON.stringify(deleted)}`)
-            }
-          } else {
-            await assertOriginalProfileIdentity(webview.client, originalProfileId, originalLocalNodeId)
-            await waitForVisibleEnabledControl(webview.client, 'Remove download')
-            await clickExact(webview.client, 'button', 'Remove download')
-          }
-          await waitForModelStatus(webview.client, 'absent', 30_000)
-        } else {
-          await restoreLocalInferenceOptIn(webview.client, originalLocalInferenceEnabled, originalProfileId, originalLocalNodeId)
+        const ownedReadback = profileCreateReadback ?? await waitForOfflineProfile(webview.client)
+        const currentProfile = await invokeTauri(webview.client, 'aurora_thin_profile_get')
+        const owned = parseRuntimeProfile(currentProfile?.value)
+        const active = owned?.profiles?.find((item) => item.id === owned.activeProfileId)
+        if (!active || active.id !== ownedReadback.activeProfileId
+          || active.localNode?.stablePeerId !== ownedReadback.activeLocalNodeId
+          || active.nodeMode !== 'mesh-node' || active.runtimeTier !== 'lightweight-ts'
+          || active.homeConnection || active.localNode?.meshMembership
+          || stablePacks(active.localNode?.enabledCapabilityPacks) !== 'local-inference') {
+          throw new Error('Refusing cleanup because the active profile no longer matches this run-owned offline profile.')
         }
-        await assertLocalInferenceOptIn(webview.client, originalLocalInferenceEnabled)
-        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
-        const restoredProfile = parseRuntimeProfile(restored?.value)
-        const restoredActive = restoredProfile?.profiles?.find((item) => item.id === restoredProfile.activeProfileId)
-        if (!restoredActive
-          || restoredActive.id !== originalProfileId
-          || restoredActive.localNode?.stablePeerId !== originalLocalNodeId
-          || restoredActive.nodeMode !== 'mesh-node'
-          || restoredActive.runtimeTier !== 'lightweight-ts') {
-          throw new Error('The original Android runtime profile could not be restored.')
+        webview = await restartApp(context, webview)
+        const restoreValue = originalProfileValue ?? EMPTY_PROFILE
+        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: restoreValue })
+        if (restored?.ok !== true) throw new Error('The original canonical-empty profile could not be restored.')
+        await restoreSecureValue(webview.client, MODE_KEY, originalMode)
+        await restoreSecureValue(webview.client, TIER_KEY, originalTier)
+        const [restoredMode, restoredTier] = await Promise.all([
+          invokeTauri(webview.client, 'aurora_secure_storage_get', { key: MODE_KEY }),
+          invokeTauri(webview.client, 'aurora_secure_storage_get', { key: TIER_KEY }),
+        ])
+        if ((restoredMode?.value ?? null) !== originalMode || (restoredTier?.value ?? null) !== originalTier) {
+          throw new Error('Original Android onboarding preferences did not pass readback.')
         }
-        if (stableProfile(restoredProfile) !== stableProfile(originalProfile)) {
-          throw new Error('The Android runtime profile did not return to its original persisted state.')
+        webview = await restartApp(context, webview)
+        const profileReadback = await invokeTauri(webview.client, 'aurora_thin_profile_get')
+        const profile = parseRuntimeProfile(profileReadback?.value)
+        if (profile?.profiles?.length !== 0 || profile.activeProfileId !== null
+          || (originalProfileValue !== null && profileReadback?.value !== originalProfileValue)) {
+          throw new Error('The restored canonical-empty profile did not survive a fresh app launch.')
         }
+        if (result) result.restoration = { canonicalEmptyProfile: true, preferences: true, newlyProvisionedModelPreserved: modelDownloadedByRun }
       } catch (error) { cleanupErrors.push(error) }
     }
     try { webview?.close() } catch (error) { cleanupErrors.push(error) }
     try { releaseDeviceLock?.() } catch (error) { cleanupErrors.push(error) }
     if (primaryError && cleanupErrors.length) {
-      throw new AggregateError([primaryError, ...cleanupErrors], 'PER-284 main flow failed and cleanup also failed.')
+      throw new AggregateError([primaryError, ...cleanupErrors], 'Android offline main flow failed and cleanup also failed.')
     }
     if (!primaryError && cleanupErrors.length) {
-      throw new AggregateError(cleanupErrors, 'PER-284 main-flow cleanup failed.')
+      throw new AggregateError(cleanupErrors, 'Android offline main-flow cleanup failed.')
     }
-    if (!success && !primaryError) throw new Error('PER-284 main flow did not reach a terminal result.')
+    if (!result && !primaryError) throw new Error('Android offline main flow did not reach a terminal result.')
   }
   console.log(JSON.stringify(result, null, 2))
   return result
+}
+
+async function createOfflineProfileThroughOnboarding(client) {
+  await waitFor(client, async () => evaluate(client, `(() => {
+    const step = document.querySelector('[data-step="detect"]');
+    return Boolean(step && step.getClientRects().length);
+  })()`), 30_000, 'device setup onboarding')
+  const selected = await evaluate(client, `(() => {
+    const radio = document.querySelector('button[role="radio"][title="Make this device available"]');
+    if (!radio || radio.disabled || radio.getAttribute('aria-disabled') === 'true') return false;
+    if (radio.getAttribute('aria-checked') !== 'true') radio.click();
+    return true;
+  })()`)
+  if (!selected) throw new Error('The product could not select “Make this device available”.')
+  await waitFor(client, async () => evaluate(client, `(() => {
+    const step = document.querySelector('[data-step="detect"]');
+    const button = [...(step?.querySelectorAll('button') ?? [])]
+      .find((item) => item.innerText?.trim() === 'Continue' && !item.disabled
+        && item.getAttribute('aria-disabled') !== 'true' && item.getClientRects().length > 0);
+    if (!button) return false;
+    button.click();
+    return true;
+  })()`), 30_000, 'enabled setup Continue')
+  await waitFor(client, async () => evaluate(client, `Boolean(document.querySelector('[data-step="setup"]'))`), 30_000, 'device setup choice')
+  await waitForVisibleEnabledControl(client, 'Continue on this device')
+  await clickVisibleText(client, 'Continue on this device')
+}
+
+async function waitForOfflineProfile(client) {
+  return waitFor(client, async () => {
+    const stored = await invokeTauri(client, 'aurora_thin_profile_get')
+    const profile = parseRuntimeProfile(stored?.value)
+    const active = profile?.profiles?.find((item) => item.id === profile.activeProfileId)
+    if (!active || profile.profiles.length !== 1 || active.nodeMode !== 'mesh-node'
+      || active.runtimeTier !== 'lightweight-ts' || active.homeConnection
+      || active.localNode?.meshMembership || stablePacks(active.localNode?.enabledCapabilityPacks) !== 'local-inference'
+      || typeof active.localNode?.stablePeerId !== 'string') return false
+    return { activeProfileId: active.id, activeLocalNodeId: active.localNode.stablePeerId }
+  }, PROFILE_TIMEOUT_MS, 'saved local-only Android profile')
+}
+
+async function assertOfflineProfile(client) {
+  const profile = await waitForOfflineProfile(client)
+  return profile
+}
+
+function stablePacks(packs) {
+  return Array.isArray(packs) ? [...packs].sort().join(',') : ''
+}
+
+async function restoreSecureValue(client, key, value) {
+  const command = value === null ? 'aurora_secure_storage_delete' : 'aurora_secure_storage_set'
+  const args = value === null ? { key } : { key, value }
+  const restored = await invokeTauri(client, command, args)
+  if (restored?.ok !== true) throw new Error('An original Android onboarding preference could not be restored.')
+}
+
+async function restartApp(context, currentWebview) {
+  try { currentWebview?.close() } catch { /* Always attempt a fresh process. */ }
+  run(context.adb, ['-s', context.serial, 'shell', 'am', 'force-stop', '--user', 'current', context.appId])
+  run(context.adb, ['-s', context.serial, 'shell', 'am', 'start', '--user', 'current', '-W', '-n', `${context.appId}/.MainActivity`], { timeout: 60_000 })
+  await waitForApp(context)
+  return connectInstalledWebview(context)
+}
+
+async function waitForPureAssistantAnswer(client, prompt, timeoutMs) {
+  return waitFor(client, async () => evaluate(client, `(() => {
+    const items = [...document.querySelectorAll('[data-slot="message-scroller-item"]')];
+    const answerItem = [...items].reverse().find((item) => [...item.querySelectorAll('span.sr-only')]
+      .some((status) => status.textContent?.trim() === 'Aurora · sent'));
+    if (!answerItem || answerItem.querySelector('[role="status"][aria-busy="true"]')) return false;
+    const answer = answerItem.querySelector('p')?.textContent?.trim() ?? '';
+    const allText = items.map((item) => item.innerText ?? '').join(' ');
+    if (!allText.includes(${JSON.stringify(prompt)}) || !/^4[.!]?$/.test(answer)) return false;
+    if (answerItem.querySelector('[aria-label="Assistant tool call cards"]')
+      || document.querySelector('[aria-label="Assistant tool call cards"]')) return false;
+    return answer;
+  })()`), timeoutMs, 'tools-empty on-device answer and rendered history')
 }
 
 async function openSettings(client) {
@@ -216,8 +286,7 @@ async function openAssistant(client) {
   await waitFor(client, async () => await evaluate(client, "Boolean(document.querySelector('#assistant-prompt'))"), 30_000, 'assistant conversation')
 }
 
-async function startNewConversation(client, { allowRunOwnedEmptyThread = false } = {}) {
-  if (allowRunOwnedEmptyThread && await hasVisibleEmptyWritableAssistantThread(client)) return
+async function startNewConversation(client) {
   const direct = await evaluate(client, `(() => [...document.querySelectorAll('button')]
     .some((item) => item.getAttribute('aria-label') === 'New conversation' && item.getClientRects().length > 0))()`)
   if (!direct) {
@@ -230,21 +299,6 @@ async function startNewConversation(client, { allowRunOwnedEmptyThread = false }
     const input = document.querySelector('#assistant-prompt');
     return Boolean(input && !input.disabled && !input.readOnly);
   })()`), 30_000, 'new conversation composer')
-}
-
-async function hasVisibleEmptyWritableAssistantThread(client) {
-  return evaluate(client, `(() => {
-    const input = document.querySelector('#assistant-prompt');
-    const threadItems = [...document.querySelectorAll('[data-message-id]')];
-    const visible = (element) => Boolean(element && element.getClientRects().length > 0
-      && getComputedStyle(element).display !== 'none'
-      && getComputedStyle(element).visibility !== 'hidden');
-    return Boolean(input && visible(input) && !input.disabled && !input.readOnly
-      && input.value.trim() === ''
-      && threadItems.length === 1
-      && threadItems[0].getAttribute('data-message-id') === 'assistant-empty'
-      && visible(threadItems[0]));
-  })()`)
 }
 
 async function waitForVisibleEnabledControl(client, text) {
@@ -290,11 +344,6 @@ async function waitForOfflineAnswersReady(client, expected, label) {
   })()`), 30_000, label)
 }
 
-async function restoreLocalInferenceOptIn(client, enabled, profileId, localNodeId) {
-  await openSettings(client)
-  await assertOriginalProfileIdentity(client, profileId, localNodeId)
-  await setOfflineAnswers(client, enabled)
-}
 
 async function readOfflineAnswers(client) {
   return evaluate(client, `(() => {
@@ -304,42 +353,8 @@ async function readOfflineAnswers(client) {
   })()`)
 }
 
-async function assertLocalInferenceOptIn(client, enabled) {
-  await waitFor(client, async () => {
-    const stored = await invokeTauri(client, 'aurora_thin_profile_get')
-    const profile = parseRuntimeProfile(stored?.value)
-    const active = profile?.profiles?.find((item) => item.id === profile.activeProfileId)
-    return active?.nodeMode === 'mesh-node'
-      && active?.runtimeTier === 'lightweight-ts'
-      && (active?.localNode?.enabledCapabilityPacks?.includes('local-inference') === true) === enabled
-  }, PROFILE_TIMEOUT_MS, `persisted local inference ${enabled ? 'opt-in' : 'opt-out'}`)
-}
 
-async function assertOriginalProfileIdentity(client, profileId, localNodeId) {
-  const stored = await invokeTauri(client, 'aurora_thin_profile_get')
-  const profile = parseRuntimeProfile(stored?.value)
-  const active = profile?.profiles?.find((item) => item.id === profile.activeProfileId)
-  if (active?.id !== profileId || active.localNode?.stablePeerId !== localNodeId) {
-    throw new Error('Refusing Android cleanup because the active profile or local node changed during the main flow.')
-  }
-}
 
-async function waitForProductSessionsReleased(client) {
-  await waitFor(client, async () => {
-    const calls = await readInvokeRecorder(client)
-    const created = new Set(calls
-      .filter((entry) => (
-        ['aurora_local_inference_session_create', 'aurora_local_inference_complete'].includes(entry.command)
-        && entry.ok
-        && entry.sessionId
-      ))
-      .map((entry) => entry.sessionId))
-    const destroyed = new Set(calls
-      .filter((entry) => entry.command === 'aurora_local_inference_session_destroy' && entry.ok && entry.sessionId)
-      .map((entry) => entry.sessionId))
-    return [...created].every((sessionId) => destroyed.has(sessionId))
-  }, PROFILE_TIMEOUT_MS, 'product local-inference session release')
-}
 
 async function waitForModelStatus(client, expected, timeoutMs, pollIntervalMs = POLL_INTERVAL_MS) {
   return waitFor(client, async () => {
@@ -361,8 +376,8 @@ async function readNetworkState(client) {
 }
 
 async function setOfflineNetwork(client, state) {
-  const offline = state === true
   const baseline = typeof state === 'object' && state !== null ? state : null
+  const offline = state === true || baseline?.online === false
   const response = await client.send('Network.enable', {}, 5_000)
   void response
   await client.send('Network.emulateNetworkConditions', {
@@ -394,62 +409,9 @@ async function submitPrompt(client, prompt) {
   await clickSelector(client, '[data-aurora-part="assistant-composer-send"]')
 }
 
-async function waitForApprovalProposal(client, timeoutMs) {
-  return waitFor(client, async () => {
-    const value = await evaluate(client, `(() => {
-      const text = document.body?.innerText ?? '';
-      const buttons = [...document.querySelectorAll('[aria-label="Assistant action approval choices"] button')];
-      const pendingCards = [...document.querySelectorAll('[aria-label="Assistant action status"]')]
-        .filter((card) => card.innerText.includes('Needs approval')).length;
-      return { text: text.slice(-5000), pendingCards, approveOnceButtons: buttons.filter((button) => button.innerText.trim() === 'Approve once').length };
-    })()`)
-    return value.pendingCards > 0 ? value : false
-  }, timeoutMs, 'one local action approval proposal')
-}
 
-async function waitForAssistantFinal(client, timeoutMs) {
-  return waitFor(client, async () => {
-    const value = await evaluate(client, `(() => {
-      const messages = [...document.querySelectorAll('span.sr-only')]
-        .filter((item) => item.textContent?.startsWith('Aurora · sent'))
-        .map((item) => {
-          let parent = item.parentElement;
-          while (parent && !parent.querySelector('p')) parent = parent.parentElement;
-          return parent?.querySelector('p')?.textContent?.trim() ?? '';
-        }).filter(Boolean);
-      const pending = [...document.querySelectorAll('[role="status"][aria-busy="true"]')].length > 0;
-      return { assistantText: messages.at(-1) ?? '', pending };
-    })()`)
-    return value.assistantText && !value.pending ? value : false
-  }, timeoutMs, 'final assistant reply after local approval')
-}
 
-async function installInvokeRecorder(client) {
-  await evaluate(client, `(() => {
-    const internals = window.__TAURI_INTERNALS__;
-    if (!internals || typeof internals.invoke !== 'function') throw new Error('tauri_invoke_unavailable');
-    if (window.__auroraOfflineMainFlow) return true;
-    const original = internals.invoke.bind(internals);
-    const calls = [];
-    internals.invoke = async (command, args) => {
-      const sessionId = typeof args?.sessionId === 'string' ? args.sessionId : null;
-      try {
-        const result = await original(command, args);
-        calls.push({ command, ok: result?.ok ?? true, sessionId, state: result?.data?.state ?? null, type: result?.data?.type ?? null, online: navigator.onLine });
-        return result;
-      } catch (error) {
-        calls.push({ command, ok: false, sessionId });
-        throw error;
-      }
-    };
-    window.__auroraOfflineMainFlow = { calls };
-    return true;
-  })()`)
-}
 
-async function readInvokeRecorder(client) {
-  return evaluate(client, 'window.__auroraOfflineMainFlow?.calls ?? []')
-}
 
 async function clickVisibleText(client, text) {
   const clicked = await evaluate(client, `(() => {
@@ -533,20 +495,6 @@ function parseRuntimeProfile(value) {
   } catch { return null }
 }
 
-function stableProfile(value) {
-  if (value == null) return null
-  const normalize = (item) => {
-    if (Array.isArray(item)) return item.map(normalize)
-    if (!item || typeof item !== 'object') return item
-    return Object.fromEntries(Object.keys(item).sort().map((key) => [
-      key,
-      key === 'enabledCapabilityPacks' && Array.isArray(item[key])
-        ? [...item[key]].sort()
-        : normalize(item[key]),
-    ]))
-  }
-  return JSON.stringify(normalize(value))
-}
 
 function adb(context, args, allowFailure = false) {
   return run(context.adb, ['-s', context.serial, ...args], { allowFailure })
