@@ -2182,6 +2182,42 @@ function createRuntimeBackedThinProfileController(
       const id = globalThis.crypto?.randomUUID?.();
       if (!id) throw new Error("A secure on-device profile identifier is unavailable");
       const suffix = id.toLowerCase();
+      const localDataIdentity = await invoke<{
+        databaseExists?: unknown;
+        identityTablePresent?: unknown;
+        databaseLocalNodeId?: unknown;
+        schemaVersion?: unknown;
+        sqliteObjectCount?: unknown;
+      }>("aurora_local_data_inspect_identity");
+      if (
+        typeof localDataIdentity.databaseExists !== "boolean"
+        || typeof localDataIdentity.identityTablePresent !== "boolean"
+      ) {
+        throw new Error("This device's saved data identity could not be read");
+      }
+      const persistedLocalNodeId = localDataIdentity.databaseExists
+        && localDataIdentity.identityTablePresent === true
+        && typeof localDataIdentity.databaseLocalNodeId === "string"
+        ? localDataIdentity.databaseLocalNodeId
+        : null;
+      const pristineDatabase = localDataIdentity.databaseExists
+        && localDataIdentity.identityTablePresent === false
+        && localDataIdentity.databaseLocalNodeId === null
+        && localDataIdentity.schemaVersion === 0
+        && localDataIdentity.sqliteObjectCount === 0;
+      if (
+        localDataIdentity.databaseExists
+        && persistedLocalNodeId === null
+        && !pristineDatabase
+        || !localDataIdentity.databaseExists
+          && (localDataIdentity.identityTablePresent === true
+            || localDataIdentity.databaseLocalNodeId !== null)
+        || persistedLocalNodeId !== null
+          && !/^[A-Za-z0-9_.:@\/-]{1,160}$/u.test(persistedLocalNodeId)
+      ) {
+        throw new Error("This device's saved data identity needs attention");
+      }
+      const stablePeerId = persistedLocalNodeId ?? `aurora-local-${suffix}`;
       const offlineProfile = sanitizeRuntimeProfile(
         {
           version: 2,
@@ -2191,7 +2227,7 @@ function createRuntimeBackedThinProfileController(
           runtimeTier: "lightweight-ts",
           localNode: {
             nodeName: "Aurora on this device",
-            stablePeerId: `aurora-local-${suffix}`,
+            stablePeerId,
             enabledCapabilityPacks: ["local-inference"],
           },
         },
