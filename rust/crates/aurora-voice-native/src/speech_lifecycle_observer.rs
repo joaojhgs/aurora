@@ -4,7 +4,9 @@
 //! persistence/exporter behavior. With no installed observer, emission returns
 //! before reading the clock or allocating a record.
 
-use aurora_voice_core::{SpeechLifecycleEventKind, SpeechLifecycleEventV1, SpeechLifecycleOutcome};
+use aurora_voice_core::SpeechLifecycleEventV1;
+#[cfg(test)]
+use aurora_voice_core::{SpeechLifecycleEventKind, SpeechLifecycleOutcome};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -16,9 +18,13 @@ use std::collections::VecDeque;
 #[cfg(test)]
 use std::sync::Mutex;
 
+#[cfg(test)]
 const MAX_TEST_EVENTS: usize = 512;
+#[cfg(test)]
 const MAX_TEST_BYTES: usize = 256 * 1024;
+#[cfg(test)]
 const RESERVED_EVENT_CAPACITY: usize = 32;
+#[cfg(test)]
 const RESERVED_BYTE_CAPACITY: usize = 16 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -33,6 +39,7 @@ pub struct NativeSpeechLifecycleRecordV1 {
 }
 
 pub trait NativeSpeechLifecycleObserver: Send + Sync {
+    #[allow(clippy::result_unit_err)]
     fn observe(&self, event: NativeSpeechLifecycleRecordV1) -> Result<(), ()>;
 }
 
@@ -190,6 +197,7 @@ impl NativeSpeechLifecycleObserver for BoundedSpeechLifecycleTestSink {
     }
 }
 
+#[cfg(test)]
 fn is_reserved(event: SpeechLifecycleEventKind) -> bool {
     matches!(
         event,

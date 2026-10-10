@@ -575,7 +575,7 @@ public final class AuroraNativePlugin: Plugin {
   @objc public func iosVoiceLiveTestPushPcm(_ invoke: Invoke) throws {
     let args = try invoke.parseArgs(AuroraIOSVoiceFixturePcmArgs.self)
     guard !args.samples.isEmpty, args.samples.count <= 4096,
-      args.samples.allSatisfy { $0.isFinite } else {
+      args.samples.allSatisfy({ $0.isFinite }) else {
       invoke.reject("fixture_pcm_invalid")
       return
     }

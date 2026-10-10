@@ -217,6 +217,7 @@ pub struct NativeMeshTtsConfig {
 }
 
 impl NativeMeshTtsConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         route: RouteTtsBinding,
         peer_id: impl Into<String>,

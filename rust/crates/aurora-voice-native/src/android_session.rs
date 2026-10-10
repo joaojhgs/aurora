@@ -1207,6 +1207,7 @@ fn android_stage_language(
     }
 }
 
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 fn android_gateway_fallback_allowed(
     stage: &aurora_voice_core::node_policy::SpeechStageConfig,
 ) -> bool {
@@ -2547,7 +2548,6 @@ impl AndroidTranscriptionSession {
         let worker_cancellation = Arc::clone(&active_cancellation);
         let worker_ingress = ingress.clone();
         let worker_transcript = Arc::clone(&transcript);
-        let worker_control = control.clone();
         let worker = thread::Builder::new()
             .name("aurora-android-transcription".to_owned())
             .spawn(move || {
@@ -2618,7 +2618,7 @@ impl AndroidTranscriptionSession {
                                 generation.0,
                                 None,
                             );
-                            if let Err(error) = runtime.block_on(input.start(lease.clone())) {
+                            if runtime.block_on(input.start(lease.clone())).is_err() {
                                 set_transcription_status(
                                     &worker_status,
                                     AndroidTranscriptionPhase::Failed,
@@ -2659,7 +2659,7 @@ impl AndroidTranscriptionSession {
                                     }
                                     (AndroidTranscriptionPhase::Completed, None)
                                 }
-                                Err(error) if matches!(error, VoiceCoreError::Cancelled) => {
+                                Err(VoiceCoreError::Cancelled) => {
                                     (AndroidTranscriptionPhase::Failed, Some("cancelled"))
                                 }
                                 Err(_) => (

@@ -135,7 +135,7 @@ public final class AuroraIOSVoiceCapture {
   public func pushFixturePCM(_ samples: [Float]) throws -> UInt64 {
     guard let state else { throw AuroraIOSVoiceCaptureError.nativeStateUnavailable }
     guard fixtureIngressEnabled, !running, !samples.isEmpty,
-      samples.count <= Int(maxChunkSamples), samples.allSatisfy { $0.isFinite }
+      samples.count <= Int(maxChunkSamples), samples.allSatisfy({ $0.isFinite })
     else { throw AuroraIOSVoiceCaptureError.captureStartFailed }
     sequenceLock.lock()
     defer { sequenceLock.unlock() }

@@ -20,12 +20,10 @@ use aurora_voice_core::{
     RedactedSnapshot, RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechLifecycleEventV1,
     SpeechTransport, TimestampMicros, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
 };
+#[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
-    FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope, ModelPackError,
-    ModelStoreScope, PackTask, RouteFiniteSttBinding, RouteTtsBinding, TtsSynthesisPort,
-    TtsSynthesisProviderBinding, TtsSynthesisResult, TtsVoiceCatalog, MAX_FINITE_STT_SAMPLES,
-    VAD_SAMPLE_RATE_HZ,
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttProviderBinding,
+    FiniteSttResult, TtsSynthesisProviderBinding, TtsSynthesisResult,
 };
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{
@@ -33,6 +31,11 @@ use aurora_voice_engine::{
     KwsFrameResult, KwsStreamProvider, ResourceReport, SpeechSegment, StreamResetReason,
     StreamingAudioFrame, TaskCapability, TaskProvider, TaskReadiness, VadAcceptResult,
     VadStreamProvider,
+};
+use aurora_voice_engine::{
+    FiniteSttPort, FiniteSttRouteScope, ModelPackError, ModelStoreScope, PackTask,
+    RouteFiniteSttBinding, RouteTtsBinding, TtsSynthesisPort, TtsVoiceCatalog,
+    MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
 };
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{KwsConfig, TaskPackBinding, VadConfig, VoiceTask};
@@ -2354,7 +2357,7 @@ fn finish_status(
             Ok(_) => status.completed_turns = status.completed_turns.saturating_add(1),
             Err(error) => {
                 status.failed_turns = status.failed_turns.saturating_add(1);
-                status.last_error = Some(error_code(&error).to_owned());
+                status.last_error = Some(error_code(error).to_owned());
             }
         }
     }

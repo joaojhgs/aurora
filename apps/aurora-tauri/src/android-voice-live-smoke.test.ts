@@ -523,6 +523,21 @@ describe('Android packaged voice live smoke harness', () => {
     expect(valid.ok).toBe(true)
     expect(valid.hierarchy).toContain('<hierarchy>')
 
+    const xmlWithPlatformNotice = '<?xml version="1.0" encoding="UTF-8"?><hierarchy><node /></hierarchy>'
+    const validWithPlatformNotice = module.parseUiAutomatorCapture({
+      status: 0,
+      stdout: `${xmlWithPlatformNotice}UI hierchary dumped to: /dev/tty\n`,
+    })
+    expect(validWithPlatformNotice).toEqual({
+      ok: true,
+      hierarchy: xmlWithPlatformNotice,
+      diagnostic: {
+        exitCode: 0,
+        stdout: `${xmlWithPlatformNotice}UI hierchary dumped to: /dev/tty\n`,
+        stderr: '',
+      },
+    })
+
     const invalidXml = module.parseUiAutomatorCapture({
       status: 0,
       stdout: 'java.lang.IllegalStateException: UiAutomationService already registered!',
