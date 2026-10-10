@@ -164,6 +164,7 @@ jobs:
           echo "AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR=${{ runner.temp }}/aurora-sherpa-android/runtime/x86_64" >> "$GITHUB_ENV"
 
       - name: Build pinned Android offline assistant runtime
+        if: hashFiles('rust/crates/aurora-local-inference/Cargo.toml') != ''
         run: |
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
           python tools/local-inference/build_llama_native.py --target android-arm64 --jobs 2
