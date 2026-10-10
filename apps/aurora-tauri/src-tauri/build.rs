@@ -13,7 +13,7 @@ fn main() {
         link_ios_aurora_native_plugin().expect("failed to link Aurora iOS native plugin");
     }
 
-    let mut commands = vec![
+    static COMMANDS: &[&str] = &[
         "aurora_local_inference_engines",
         "aurora_local_inference_catalog",
         "aurora_local_inference_model_status",
@@ -127,17 +127,17 @@ fn main() {
         "aurora_local_file_pick",
         "aurora_secure_file_handle_open",
         "aurora_shutdown",
+        "aurora_ios_voice_live_test_start",
+        "aurora_ios_voice_live_test_push_pcm",
     ];
-    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios")
-        && std::env::var_os("CARGO_FEATURE_IOS_VOICE_LIVE_TEST").is_some()
-    {
-        commands.push("aurora_ios_voice_live_test_start");
-        commands.push("aurora_ios_voice_live_test_push_pcm");
-    }
+    let include_ios_live_test = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios")
+        && std::env::var_os("CARGO_FEATURE_IOS_VOICE_LIVE_TEST").is_some();
+    let command_count = COMMANDS.len() - if include_ios_live_test { 0 } else { 2 };
+    let commands: &'static [&'static str] = &COMMANDS[..command_count];
 
     tauri_build::try_build(
         tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(&commands)),
+            .app_manifest(tauri_build::AppManifest::new().commands(commands)),
     )
     .expect("failed to build Aurora Tauri manifest");
 }
