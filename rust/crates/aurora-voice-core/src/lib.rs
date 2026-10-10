@@ -1685,6 +1685,7 @@ where
         self.lifecycle_config_revision = revision;
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn observe_speech_lifecycle(
         &mut self,
         lease: &VoiceCaptureLease,

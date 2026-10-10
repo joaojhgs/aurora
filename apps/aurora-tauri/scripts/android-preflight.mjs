@@ -82,9 +82,11 @@ const checks = [
   check('android-client-aab-proof-command', packageJson.scripts?.['android:verify:client:aab']?.includes('assert-android-client-artifact-clean.mjs --kind aab'), packageJson.scripts?.['android:verify:client:aab'] ?? 'missing'),
   check('android-thin-aab-proof-alias', packageJson.scripts?.['android:verify:thin:aab'] === 'pnpm android:verify:client:aab', packageJson.scripts?.['android:verify:thin:aab'] ?? 'missing'),
   check('android-client-and-thin-scripts-python-free', clientAndThinScriptsPythonFree(packageJson.scripts ?? {}), 'all *:client and *:thin scripts avoid uv/python/prepare-sidecar'),
+  check('android-prepare-native-plugin-script', packageJson.scripts?.['android:prepare-native-plugin'] === 'node ./scripts/install-android-native-plugin.mjs --prepare', packageJson.scripts?.['android:prepare-native-plugin'] ?? 'missing'),
   check('android-sync-native-plugin-script', packageJson.scripts?.['android:sync-native-plugin'] === 'node ./scripts/install-android-native-plugin.mjs', packageJson.scripts?.['android:sync-native-plugin'] ?? 'missing'),
-  check('android-init-syncs-native-plugin', packageJson.scripts?.['android:init']?.includes('android:sync-native-plugin'), packageJson.scripts?.['android:init'] ?? 'missing'),
-  check('android-preflight-syncs-native-plugin', ['android:preflight', 'android:preflight:ci', 'android:preflight:strict'].every((name) => packageJson.scripts?.[name]?.includes('android:sync-native-plugin')), 'android preflight package scripts run android:sync-native-plugin before node ./scripts/android-preflight.mjs'),
+  check('android-init-prepares-native-plugin', packageJson.scripts?.['android:init']?.includes('android:prepare-native-plugin'), packageJson.scripts?.['android:init'] ?? 'missing'),
+  check('android-preflight-prepares-native-plugin', ['android:preflight', 'android:preflight:ci'].every((name) => packageJson.scripts?.[name]?.includes('android:prepare-native-plugin')), 'non-strict Android preflight scripts prepare plugin scaffolding before Cargo'),
+  check('android-preflight-strict-syncs-native-plugin', packageJson.scripts?.['android:preflight:strict']?.includes('android:sync-native-plugin'), packageJson.scripts?.['android:preflight:strict'] ?? 'missing'),
   check(
     'generated-android-project',
     Boolean(generatedAndroidProject),
@@ -204,6 +206,21 @@ const deviceMatrix = [
   ])
 ]
 
+const observedGeneratedSettings = Boolean(generatedTauriSettingsPath && existsSync(generatedTauriSettingsPath))
+const androidDependencyProjectValidation = {
+  phase: observedGeneratedSettings ? 'generated-settings-observed-pre-cargo' : 'pre-cargo-scaffold',
+  complete: false,
+  status: observedGeneratedSettings
+    ? (barcodeScannerCancellation.report.settingsUseVendor ? 'generated-vendor-source-verified' : 'generated-vendor-source-blocked')
+    : 'deferred-until-tauri-cargo-build',
+  requiredBeforeGradle: true,
+  observedSettingsFile: observedGeneratedSettings,
+  strictThreeProjectSync: 'required-in-build-rs-after-tauri_build',
+  detail: observedGeneratedSettings
+    ? 'Generated barcode settings/source parity is checked now; build.rs still performs the strict three-project sync after tauri_build::try_build and before Gradle.'
+    : 'Pre-Cargo preflight covers the prepared scaffold. Generated project paths and vendored barcode source parity are checked after tauri_build::try_build and before Gradle.',
+}
+
 const report = {
   generatedAt: new Date().toISOString(),
   packageName: packageJson.name,
@@ -215,6 +232,7 @@ const report = {
   nativeResourceParity: resourceParity.report,
   nativeManifestIntegration: manifestIntegration.report,
   barcodeScannerCancellation: barcodeScannerCancellation.report,
+  androidDependencyProjectValidation,
   commands: expectedCommands,
   checks,
   signing: {
@@ -240,6 +258,9 @@ writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
 const failed = checks.filter((item) => item.required && item.status === 'blocked')
 console.log(`Android preflight report: ${relative(reportPath)}`)
 console.log(`Checks: ${checks.filter((item) => item.status === 'passed').length} passed, ${checks.filter((item) => item.status === 'blocked').length} blocked`)
+if (androidDependencyProjectValidation.status === 'deferred-until-tauri-cargo-build') {
+  console.log(`Android dependency project validation: ${androidDependencyProjectValidation.status}`)
+}
 
 if (failed.length > 0) {
   console.error(`Android preflight failed: ${failed.map((item) => item.id).join(', ')}`)

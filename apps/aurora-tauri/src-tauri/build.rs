@@ -140,6 +140,57 @@ fn main() {
             .app_manifest(tauri_build::AppManifest::new().commands(commands)),
     )
     .expect("failed to build Aurora Tauri manifest");
+
+    sync_generated_android_kotlin_projects()
+        .expect("failed to synchronize generated Aurora Android dependency projects");
+}
+
+fn sync_generated_android_kotlin_projects() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("android") {
+        return Ok(());
+    }
+    let Some(generated_project) = std::env::var_os("TAURI_ANDROID_PROJECT_PATH") else {
+        return Ok(());
+    };
+
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "CARGO_MANIFEST_DIR is unavailable",
+        )
+    })?;
+    let manifest_path = Path::new(&manifest_dir);
+    let app_dir = manifest_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Cargo manifest directory has no application parent",
+        )
+    })?;
+    let project_path = PathBuf::from(generated_project);
+    let generated_project = if project_path.is_absolute() {
+        project_path
+    } else {
+        manifest_path.join(project_path)
+    };
+    let installer = app_dir.join("scripts/install-android-native-plugin.mjs");
+    let node = std::env::var_os("NODE").unwrap_or_else(|| "node".into());
+    println!("cargo:rerun-if-changed={}", installer.display());
+    let status = Command::new(node)
+        .arg(installer)
+        .arg("--sync-generated-projects")
+        .current_dir(app_dir)
+        .env("AURORA_ANDROID_GENERATED_PROJECT_DIR", generated_project)
+        .status()?;
+    if !status.success() {
+        return Err(std::io::Error::other(format!(
+            "Android dependency-project synchronization exited with {status}"
+        ))
+        .into());
+    }
+    Ok(())
 }
 
 /// Turns the platform list above into the single `aurora_native_webrtc` cfg that

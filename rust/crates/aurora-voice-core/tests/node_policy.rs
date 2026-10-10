@@ -17,20 +17,21 @@ fn empty_v2_value() -> Value {
 fn background_transcription_migrates_off_and_preserves_revisioned_preferences() {
     let mut old = empty_v2_value();
     old.as_object_mut()
-        .unwrap()
+        .expect("node config is an object")
         .remove("backgroundTranscription");
-    let migrated = validate_node_config_document_v2_value(old).unwrap();
+    let migrated = validate_node_config_document_v2_value(old).expect("old config migrates");
     assert!(!migrated.background_transcription.enabled);
     assert!(!migrated.background_transcription.ambient);
     assert!(!migrated.background_transcription.notification);
     assert_eq!(migrated.background_transcription.retention_days, 30);
     assert_eq!(migrated.revision, 1);
-    let mut draft = serde_json::to_value(&migrated).unwrap();
+    let mut draft = serde_json::to_value(&migrated).expect("config is serializable");
     draft["backgroundTranscription"]["enabled"] = json!(true);
     draft["backgroundTranscription"]["ambient"] = json!(true);
     draft["backgroundTranscription"]["retentionDays"] = json!(14);
     draft["revision"] = json!(2);
-    let saved = update_node_config_document_v2(&migrated, draft.clone(), 1, 200).unwrap();
+    let saved = update_node_config_document_v2(&migrated, draft.clone(), 1, 200)
+        .expect("valid background preferences are saved");
     assert!(saved.background_transcription.ambient);
     assert_eq!(saved.background_transcription.retention_days, 14);
     assert!(update_node_config_document_v2(&saved, draft, 1, 300).is_err());
@@ -48,8 +49,8 @@ fn background_transcription_rejects_invalid_retention_and_runtime_facts() {
         let mut value = empty_v2_value();
         value["backgroundTranscription"]
             .as_object_mut()
-            .unwrap()
-            .extend(patch.as_object().unwrap().clone());
+            .expect("background preferences are an object")
+            .extend(patch.as_object().expect("test patch is an object").clone());
         assert!(validate_node_config_document_v2_value(value).is_err());
     }
 }

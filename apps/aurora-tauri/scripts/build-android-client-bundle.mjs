@@ -97,7 +97,7 @@ try {
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
   run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])
-  run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)
+  run('pnpm', ['android:prepare-native-plugin'], nativeSpeechBuild.env)
   cleanAndroidBuildOutputs()
 
   const buildArgs = ['tauri', 'android', 'build']

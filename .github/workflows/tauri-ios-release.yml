@@ -151,7 +151,10 @@ jobs:
 
       - name: Configure pinned device offline assistant runtime
         if: inputs.app_store_dry_run == 'true'
-        run: echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-arm64" >> "$GITHUB_ENV"
+        run: |
+          test -f .artifacts/local-inference/runtime/ios-arm64/aurora-llama-runtime.json
+          echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-arm64" >> "$GITHUB_ENV"
+          echo "CARGO_AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-arm64" >> "$GITHUB_ENV"
 
       - name: Build Tauri workspace dependencies
         run: |

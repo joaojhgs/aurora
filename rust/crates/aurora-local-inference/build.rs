@@ -10,6 +10,7 @@ const SOURCE_SHA: &str = "03fb04316eb32a7b7347004a79a8dd60531c02f5a064d853fed3b5
 
 fn main() {
     println!("cargo:rerun-if-env-changed=AURORA_LLAMA_CPP_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_AURORA_LLAMA_CPP_LIB_DIR");
     println!("cargo:rerun-if-changed=native/bridge.cpp");
     println!("cargo:rerun-if-changed=native/bridge.h");
     if env::var_os("CARGO_FEATURE_NATIVE_LLAMACPP").is_none() {
@@ -25,11 +26,15 @@ fn main() {
     };
     if let Some(key) = target_env {
         println!("cargo:rerun-if-env-changed={key}");
+        println!("cargo:rerun-if-env-changed=CARGO_{key}");
     }
     let root = PathBuf::from(
         target_env
-            .and_then(env::var_os)
-            .or_else(|| env::var_os("AURORA_LLAMA_CPP_LIB_DIR"))
+            .and_then(|key| env::var_os(key).or_else(|| env::var_os(format!("CARGO_{key}"))))
+            .or_else(|| {
+                env::var_os("AURORA_LLAMA_CPP_LIB_DIR")
+                    .or_else(|| env::var_os("CARGO_AURORA_LLAMA_CPP_LIB_DIR"))
+            })
             .expect(
                 "Build the pinned runtime with tools/local-inference/build_llama_native.py first",
             ),

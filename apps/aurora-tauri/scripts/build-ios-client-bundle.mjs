@@ -47,7 +47,10 @@ try {
   // Tauri uses a fixed simulator archive path. A preceding baseline build can
   // leave Aurora.app there and make the client build's final rename fail.
   rmSync(appleBuildRoot, { recursive: true, force: true })
-  run('pnpm', buildArgs, llamaRuntimeBuild.env)
+  run('pnpm', buildArgs, {
+    ...llamaRuntimeBuild.env,
+    CARGO_AURORA_LLAMA_CPP_LIB_DIR: llamaRuntimeBuild.env.AURORA_LLAMA_CPP_LIB_DIR,
+  })
 
   mkdirSync(reportDir, { recursive: true })
   writeAtomicJson(buildProvenancePath, {

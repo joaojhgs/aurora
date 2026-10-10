@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
 const genAndroidDir = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
@@ -60,33 +60,49 @@ const generatedRustLibrary = 'libaurora_tauri_lib.so'
 const sherpaTtsDisabledMarker = Buffer.from(
   'TTS is not enabled. Please rebuild sherpa-onnx',
 )
+const modes = process.argv.slice(2)
+if (modes.length > 1 || (modes.length === 1 && !['--prepare', '--sync-generated-projects'].includes(modes[0]))) {
+  throw new Error('Usage: install-android-native-plugin.mjs [--prepare|--sync-generated-projects]')
+}
+const mode = modes[0] ?? 'full'
 
 if (!existsSync(appManifestPath)) {
   throw new Error('Tauri Android project is missing. Run android:init before installing the Aurora native plugin.')
 }
 
-syncCanonicalLiteRtDependency()
-syncCanonicalKotlinCompilerPlugin()
-syncCanonicalKotlinCompilerOptions()
-syncIncludedAndroidKotlinProjects()
+if (mode === '--sync-generated-projects') {
+  verifyVendorBarcodeScannerSource()
+  syncIncludedAndroidKotlinProjects()
+  console.log('Synchronized the three generated Tauri Android Kotlin dependency projects.')
+} else {
+  syncCanonicalLiteRtDependency()
+  syncCanonicalKotlinCompilerPlugin()
+  syncCanonicalKotlinCompilerOptions()
 
-// The Tauri scaffold persists generated sources between runs. Reconcile the
-// whole plugin directory before copying so removed canonical sources cannot
-// remain as stale generated classes and fail the parity preflight.
-rmSync(generatedPluginSourceDir, { recursive: true, force: true })
-mkdirSync(generatedPluginSourceDir, { recursive: true })
-cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
-syncAuroraAndroidNativeResources()
-syncCanonicalAndroidLauncherIcons()
-verifyVendorBarcodeScannerSource()
-syncNativeSpeechLibraries()
+  // The Tauri scaffold persists generated sources between runs. Reconcile the
+  // whole plugin directory before copying so removed canonical sources cannot
+  // remain as stale generated classes and fail the parity preflight.
+  rmSync(generatedPluginSourceDir, { recursive: true, force: true })
+  mkdirSync(generatedPluginSourceDir, { recursive: true })
+  cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
+  syncAuroraAndroidNativeResources()
+  syncCanonicalAndroidLauncherIcons()
+  verifyVendorBarcodeScannerSource()
+  syncNativeSpeechLibraries()
 
-patchFile(appManifestPath, (content) => mergePluginManifest(content))
-if (existsSync(mainActivityPath)) {
-  patchFile(mainActivityPath, (content) => addMainActivityImeInsets(content))
+  if (mode !== '--prepare') syncIncludedAndroidKotlinProjects()
+
+  patchFile(appManifestPath, (content) => mergePluginManifest(content))
+  if (existsSync(mainActivityPath)) {
+    patchFile(mainActivityPath, (content) => addMainActivityImeInsets(content))
+  }
+
+  console.log(
+    mode === '--prepare'
+      ? 'Prepared Aurora Android native plugin scaffold; generated dependency-project synchronization runs after the Tauri Rust build.'
+      : 'Installed Aurora Android native plugin source into src-tauri/gen/android.',
+  )
 }
-
-console.log('Installed Aurora Android native plugin source into src-tauri/gen/android.')
 
 function syncCanonicalLiteRtDependency() {
   const canonicalBuild = readFileSync(canonicalPluginBuildGradlePath, 'utf8')
@@ -212,10 +228,11 @@ function syncIncludedAndroidKotlinProjects() {
 
   const settings = readFileSync(generatedTauriSettingsGradlePath, 'utf8')
   const projectDirLine =
-    /^([ \t]*project\(["']:(tauri-android|tauri-plugin-barcode-scanner|tauri-plugin-deep-link)["']\)\.projectDir\s*=\s*new File\(["'])([^"']+)(["']\)[ \t]*)$/gm
+    /^([ \t]*project\(["']:)([^"']+)(["']\)\.projectDir\s*=\s*new File\(["'])([^"']+)(["']\)[ \t]*)$/gm
   const projectLines = [...settings.matchAll(projectDirLine)]
   const byName = new Map(projectLines.map((match) => [match[2], match]))
   if (projectLines.length !== includedAndroidKotlinProjects.length ||
+      byName.size !== includedAndroidKotlinProjects.length ||
       includedAndroidKotlinProjects.some((name) => !byName.has(name))) {
     throw new Error(`Generated Tauri Android settings must contain exactly the three known dependency project paths: ${generatedTauriSettingsGradlePath}`)
   }
@@ -235,7 +252,7 @@ function syncIncludedAndroidKotlinProjects() {
 
   const plannedProjects = includedAndroidKotlinProjects.map((name) => {
     const settingsMatch = byName.get(name)
-    const settingsPath = resolve(settingsMatch[3])
+    const settingsPath = resolve(settingsMatch[4])
     const stageDir = resolve(generatedAndroidKotlinCompatDir, name)
     const isStaged = settingsPath === stageDir
     const generatedRelativePath = relative(genAndroidDir, settingsPath)
@@ -271,6 +288,11 @@ function syncIncludedAndroidKotlinProjects() {
     return { name, sourceDir, stageDir, migratedBuild }
   })
 
+  const barcodeScannerProject = plannedProjects.find(({ name }) => name === 'tauri-plugin-barcode-scanner')
+  if (!barcodeScannerProject || resolve(barcodeScannerProject.sourceDir) !== resolve(vendorBarcodeScannerAndroidDir)) {
+    throw new Error(`Generated barcode scanner project must resolve to the vendored Android source: ${vendorBarcodeScannerAndroidDir}`)
+  }
+
   // Validate every source/build script before replacing any generated copy.
   for (const project of plannedProjects) {
     rmSync(project.stageDir, { recursive: true, force: true })
@@ -286,12 +308,38 @@ function syncIncludedAndroidKotlinProjects() {
     writeFileSync(resolve(project.stageDir, 'build.gradle.kts'), project.migratedBuild)
   }
 
+  const canonicalMain = resolve(vendorBarcodeScannerAndroidDir, 'src/main')
+  const stagedMain = resolve(generatedAndroidKotlinCompatDir, 'tauri-plugin-barcode-scanner/src/main')
+  const canonicalFiles = sourceFiles(canonicalMain).map((file) => relative(canonicalMain, file))
+  const stagedFiles = sourceFiles(stagedMain).map((file) => relative(stagedMain, file))
+  if (!canonicalFiles.length || canonicalFiles.length !== stagedFiles.length ||
+      !canonicalFiles.every((file, index) => file === stagedFiles[index] &&
+        readFileSync(resolve(canonicalMain, file)).equals(readFileSync(resolve(stagedMain, file))))) {
+    throw new Error('Generated barcode scanner source differs from the canonical vendored source.')
+  }
+
   const sources = Object.fromEntries(plannedProjects.map(({ name, sourceDir }) => [name, sourceDir]))
   writeFileSync(generatedAndroidKotlinCompatManifestPath, `${JSON.stringify({ version: 1, sources }, null, 2)}\n`)
   patchFile(generatedTauriSettingsGradlePath, (content) => content.replace(
     projectDirLine,
-    (_line, prefix, name, _previousPath, suffix) => `${prefix}${resolve(generatedAndroidKotlinCompatDir, name)}${suffix}`,
+    (_line, prefix, name, projectSuffix, _previousPath, pathSuffix) => `${prefix}${name}${projectSuffix}${resolve(generatedAndroidKotlinCompatDir, name)}${pathSuffix}`,
   ))
+}
+
+function sourceFiles(root) {
+  if (!existsSync(root)) return []
+  const files = []
+  const stack = [root]
+  while (stack.length) {
+    const current = stack.pop()
+    const stat = statSync(current)
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(current)) stack.push(join(current, child))
+    } else if (stat.isFile()) {
+      files.push(current)
+    }
+  }
+  return files.sort()
 }
 
 function syncAuroraAndroidNativeResources() {
