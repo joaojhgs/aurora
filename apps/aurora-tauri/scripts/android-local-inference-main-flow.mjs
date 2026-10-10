@@ -13,8 +13,6 @@ const PROFILE_TIMEOUT_MS = 30_000
 const POLL_INTERVAL_MS = 500
 const PROMPT = 'What is 2 + 2? Answer with just the number.'
 const EMPTY_PROFILE = JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
-const MODE_KEY = 'aurora.session.onboarding-mode'
-const TIER_KEY = 'aurora.session.runtime-tier'
 
 export async function runAndroidLocalInferenceMainFlow({
   adb = process.env.ADB ?? 'adb',
@@ -59,12 +57,13 @@ export async function runAndroidLocalInferenceMainFlow({
       && (!originalProfile || originalProfile.version !== 2 || originalProfile.profiles.length !== 0 || originalProfile.activeProfileId !== null)) {
       throw new Error('Refusing onboarding because the current Android profile is not canonical empty.')
     }
-    const [mode, tier] = await Promise.all([
-      invokeTauri(webview.client, 'aurora_secure_storage_get', { key: MODE_KEY }),
-      invokeTauri(webview.client, 'aurora_secure_storage_get', { key: TIER_KEY }),
-    ])
-    originalMode = typeof mode?.value === 'string' ? mode.value : null
-    originalTier = typeof tier?.value === 'string' ? tier.value : null
+    // Android persists this selection in the active runtime profile; it has no
+    // separate secure-storage preference surface in the packaged capability set.
+    const originalActiveProfile = originalProfile?.profiles?.find(
+      (candidate) => candidate.id === originalProfile.activeProfileId,
+    )
+    originalMode = originalActiveProfile?.nodeMode ?? null
+    originalTier = originalActiveProfile?.runtimeTier ?? null
     originalNetwork = await readNetworkState(webview.client)
 
     await createOfflineProfileThroughOnboarding(webview.client)
@@ -163,21 +162,20 @@ export async function runAndroidLocalInferenceMainFlow({
         const restoreValue = originalProfileValue ?? EMPTY_PROFILE
         const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: restoreValue })
         if (restored?.ok !== true) throw new Error('The original canonical-empty profile could not be restored.')
-        await restoreSecureValue(webview.client, MODE_KEY, originalMode)
-        await restoreSecureValue(webview.client, TIER_KEY, originalTier)
-        const [restoredMode, restoredTier] = await Promise.all([
-          invokeTauri(webview.client, 'aurora_secure_storage_get', { key: MODE_KEY }),
-          invokeTauri(webview.client, 'aurora_secure_storage_get', { key: TIER_KEY }),
-        ])
-        if ((restoredMode?.value ?? null) !== originalMode || (restoredTier?.value ?? null) !== originalTier) {
-          throw new Error('Original Android onboarding preferences did not pass readback.')
-        }
         webview = await restartApp(context, webview)
         const profileReadback = await invokeTauri(webview.client, 'aurora_thin_profile_get')
         const profile = parseRuntimeProfile(profileReadback?.value)
         if (profile?.profiles?.length !== 0 || profile.activeProfileId !== null
           || (originalProfileValue !== null && profileReadback?.value !== originalProfileValue)) {
           throw new Error('The restored canonical-empty profile did not survive a fresh app launch.')
+        }
+        const restoredActiveProfile = profile?.profiles?.find(
+          (candidate) => candidate.id === profile.activeProfileId,
+        )
+        const restoredMode = restoredActiveProfile?.nodeMode ?? null
+        const restoredTier = restoredActiveProfile?.runtimeTier ?? null
+        if (restoredMode !== originalMode || restoredTier !== originalTier) {
+          throw new Error('Original Android onboarding preferences did not pass profile readback.')
         }
         if (result) result.restoration = { canonicalEmptyProfile: true, preferences: true, newlyProvisionedModelPreserved: modelDownloadedByRun }
       } catch (error) { cleanupErrors.push(error) }
@@ -242,13 +240,6 @@ async function assertOfflineProfile(client) {
 
 function stablePacks(packs) {
   return Array.isArray(packs) ? [...packs].sort().join(',') : ''
-}
-
-async function restoreSecureValue(client, key, value) {
-  const command = value === null ? 'aurora_secure_storage_delete' : 'aurora_secure_storage_set'
-  const args = value === null ? { key } : { key, value }
-  const restored = await invokeTauri(client, command, args)
-  if (restored?.ok !== true) throw new Error('An original Android onboarding preference could not be restored.')
 }
 
 async function restartApp(context, currentWebview) {
